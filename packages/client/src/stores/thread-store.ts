@@ -36,6 +36,7 @@ import type {
   ThreadStage,
   WaitingReason,
   AgentModel,
+  EffortLevel,
   PermissionMode,
 } from '@funny/shared';
 import { create } from 'zustand';
@@ -198,6 +199,7 @@ export interface ThreadState {
     model?: AgentModel,
     permissionMode?: PermissionMode,
     fileReferences?: { path: string; type?: 'file' | 'folder' }[],
+    effort?: EffortLevel,
   ) => void;
   rollbackOptimisticMessage: (threadId: string) => void;
   loadOlderMessages: () => Promise<void>;
@@ -786,7 +788,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     api.deleteThread(threadId);
   },
 
-  appendOptimisticMessage: (threadId, content, images, model, permissionMode, fileReferences) => {
+  appendOptimisticMessage: (
+    threadId,
+    content,
+    images,
+    model,
+    permissionMode,
+    fileReferences,
+    effort,
+  ) => {
     // Operate on the unified payload map so this works from the right pane
     // AND from any live column — anywhere the thread is currently loaded.
     const entry = get().threadDataById[threadId];
@@ -828,6 +838,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       timestamp: new Date().toISOString(),
       model,
       permissionMode,
+      effort,
     };
 
     // For idle threads (backlog/planning), a draft user message already exists —

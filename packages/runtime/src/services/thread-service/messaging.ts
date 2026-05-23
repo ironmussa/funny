@@ -232,6 +232,7 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
         images: params.images?.length ? JSON.stringify(params.images) : null,
         model: effectiveModel,
         permissionMode: effectivePermission,
+        effort: params.effort ?? null,
       });
       hasDraftMessage = true;
     }

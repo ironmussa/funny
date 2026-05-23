@@ -135,6 +135,7 @@ export class AgentLifecycleManager {
         images: images ? JSON.stringify(images) : null,
         model,
         permissionMode,
+        effort,
       });
     }
 

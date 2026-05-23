@@ -1180,6 +1180,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('threads', 'is_scratch', 'INTEGER NOT NULL', '0');
     },
   },
+  {
+    // Capture the effort/reasoning level the user picked at send-time so the
+    // message bubble can show it as a chip alongside model + permission mode.
+    name: '054_messages_effort',
+    async up() {
+      await ctx().addColumn('messages', 'effort', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

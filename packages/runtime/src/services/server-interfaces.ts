@@ -45,6 +45,7 @@ export interface IMessageRepository {
     images?: string | null;
     model?: string | null;
     permissionMode?: string | null;
+    effort?: string | null;
     author?: string | null;
   }): string | Promise<string>;
   updateMessage(id: string, content: string): void | Promise<void>;

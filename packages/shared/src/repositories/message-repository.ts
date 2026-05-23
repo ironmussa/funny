@@ -198,6 +198,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     images?: string | null;
     model?: string | null;
     permissionMode?: string | null;
+    effort?: string | null;
     author?: string | null;
   }): Promise<string> {
     const id = nanoid();
@@ -210,6 +211,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         images: data.images ?? null,
         model: data.model ?? null,
         permissionMode: data.permissionMode ?? null,
+        effort: data.effort ?? null,
         author: data.author ?? null,
         timestamp: new Date().toISOString(),
       }),

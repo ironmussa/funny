@@ -112,6 +112,7 @@ export const ThreadColumn = memo(function ThreadColumn({
         provider?: string;
         model: string;
         mode: string;
+        effort?: string;
         fileReferences?: { path: string; type?: 'file' | 'folder' }[];
         symbolReferences?: {
           path: string;
@@ -136,6 +137,7 @@ export const ThreadColumn = memo(function ThreadColumn({
             opts.model as any,
             opts.mode as any,
             opts.fileReferences,
+            opts.effort as any,
           );
       });
       const { allowedTools, disallowedTools } = deriveToolLists(
@@ -148,6 +150,7 @@ export const ThreadColumn = memo(function ThreadColumn({
           provider: opts.provider || undefined,
           model: opts.model || undefined,
           permissionMode: opts.mode || undefined,
+          effort: opts.effort || undefined,
           allowedTools,
           disallowedTools,
           fileReferences: opts.fileReferences,

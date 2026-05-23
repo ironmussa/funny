@@ -1,4 +1,4 @@
-import type { AgentModel, PermissionMode } from '@funny/shared';
+import type { AgentModel, EffortLevel, PermissionMode } from '@funny/shared';
 import { ChevronRight, ChevronDown, GitBranch, Undo2, RotateCcw, MoreVertical } from 'lucide-react';
 import { useState, useRef, useLayoutEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
+import { EFFORT_LEVELS } from '@/lib/providers';
 import { resolveModelLabel, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +29,8 @@ export interface UserMessageCardProps {
   model?: AgentModel;
   /** Permission mode active when the message was sent */
   permissionMode?: PermissionMode;
+  /** Reasoning/effort level active when the message was sent */
+  effort?: EffortLevel;
   /** ISO timestamp */
   timestamp?: string;
   /** Click handler (e.g. scroll to section) */
@@ -248,6 +251,7 @@ export function UserMessageCard({
   images,
   model,
   permissionMode,
+  effort,
   timestamp,
   onClick,
   onImageClick,
@@ -387,6 +391,12 @@ export function UserMessageCard({
               className="h-4 border-background/20 bg-background/10 px-1.5 py-0 text-[10px] font-medium text-background/60"
             >
               {resolveModelLabel(model, t)}
+              {effort && (
+                <>
+                  {' · '}
+                  {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
+                </>
+              )}
             </Badge>
           )}
           {permissionMode && (

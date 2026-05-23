@@ -83,7 +83,7 @@ export function useThreadHandlers(refs: Refs) {
       if (threadIsRunning && followUpMode === 'ask') {
         refs.pendingSendRef.current = {
           prompt,
-          payload: buildSendMessagePayload(opts, toolPermissions, { includeEffort: false }),
+          payload: buildSendMessagePayload(opts, toolPermissions),
           rawOpts: opts,
           images,
         };
@@ -105,6 +105,7 @@ export function useThreadHandlers(refs: Refs) {
             opts.model as any,
             opts.mode as any,
             opts.fileReferences,
+            opts.effort as any,
           );
       }
       requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
@@ -136,6 +137,7 @@ export function useThreadHandlers(refs: Refs) {
             pending.rawOpts.model as any,
             pending.rawOpts.mode as any,
             pending.rawOpts.fileReferences,
+            pending.rawOpts.effort as any,
           );
       }
       requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());

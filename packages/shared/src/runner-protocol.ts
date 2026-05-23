@@ -249,6 +249,7 @@ export interface DataInsertMessage {
     images?: string | null;
     model?: string | null;
     permissionMode?: string | null;
+    effort?: string | null;
     author?: string | null;
   };
 }

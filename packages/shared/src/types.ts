@@ -309,6 +309,8 @@ export interface Message {
   model?: AgentModel;
   /** Permission mode used when this user message was sent */
   permissionMode?: PermissionMode;
+  /** Reasoning/effort level used when this user message was sent */
+  effort?: EffortLevel;
   /** Agent name, pipeline name, or user identifier that produced this message */
   author?: string;
 }

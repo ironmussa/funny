@@ -46,6 +46,7 @@ export const insertMessage = (data: {
   images?: string | null;
   model?: string | null;
   permissionMode?: string | null;
+  effort?: string | null;
   author?: string | null;
 }) => getServices().threads.insertMessage(data);
 export const updateMessage = (id: string, content: string) =>

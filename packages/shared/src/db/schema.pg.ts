@@ -124,6 +124,7 @@ export const messages = pgTable('messages', {
   images: text('images'),
   model: text('model'),
   permissionMode: text('permission_mode'),
+  effort: text('effort'),
   author: text('author'),
   timestamp: text('timestamp').notNull(),
 });

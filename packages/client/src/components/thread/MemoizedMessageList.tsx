@@ -770,6 +770,7 @@ export const MemoizedMessageList = memo(
               images={msg.images}
               model={msg.model}
               permissionMode={msg.permissionMode}
+              effort={msg.effort}
               timestamp={msg.timestamp}
               onClick={() => {
                 const section = scrollRef.current?.querySelector(

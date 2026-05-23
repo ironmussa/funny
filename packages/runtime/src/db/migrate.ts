@@ -922,6 +922,14 @@ const migrations: Migration[] = [
       await addColumn('threads', 'is_scratch', 'INTEGER NOT NULL', '0');
     },
   },
+  {
+    // Capture the effort/reasoning level the user picked at send-time so the
+    // message bubble can show it as a chip alongside model + permission mode.
+    name: '058_messages_effort',
+    async up() {
+      await addColumn('messages', 'effort', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

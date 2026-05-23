@@ -68,6 +68,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
           opts.model as any,
           opts.mode as any,
           opts.fileReferences,
+          opts.effort as any,
         );
       const { allowedTools, disallowedTools } = deriveToolLists(
         useSettingsStore.getState().toolPermissions,

@@ -93,6 +93,7 @@ export function createTestDb() {
       images TEXT,
       model TEXT,
       permission_mode TEXT,
+      effort TEXT,
       author TEXT,
       timestamp TEXT NOT NULL
     )

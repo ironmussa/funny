@@ -102,6 +102,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
       provider?: string;
       model: string;
       mode: string;
+      effort?: string;
       fileReferences?: { path: string; type?: 'file' | 'folder' }[];
       symbolReferences?: {
         path: string;
@@ -126,6 +127,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
         opts.model as any,
         opts.mode as any,
         opts.fileReferences,
+        opts.effort as any,
       );
     const result = await api.sendMessage(
       activeThread.id,
@@ -134,6 +136,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
         provider: opts.provider || undefined,
         model: opts.model || undefined,
         permissionMode: opts.mode || undefined,
+        effort: opts.effort || undefined,
       },
       images,
     );

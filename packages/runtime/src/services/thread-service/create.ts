@@ -318,6 +318,9 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
         role: 'user',
         content: stripInlineReferencedContent(storedContent),
         images: params.images?.length ? JSON.stringify(params.images) : null,
+        model: params.model ?? null,
+        permissionMode: params.permissionMode ?? null,
+        effort: params.effort ?? null,
       });
     }
 
@@ -664,6 +667,9 @@ async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
     role: 'user',
     content: params.prompt,
     images: params.images?.length ? JSON.stringify(params.images) : null,
+    model: params.model ?? null,
+    permissionMode: params.permissionMode ?? null,
+    effort: params.effort ?? null,
   });
 
   threadEventBus.emit('thread:created', {

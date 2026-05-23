@@ -205,6 +205,98 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(state.threadDataById[THREAD_ID].compactionEvents).toHaveLength(1);
   });
 
+  test('handleWSMessage does NOT duplicate user msg already present in payload tail', () => {
+    // Regression: bug 4 — visual duplicate of the dequeued message.
+    // The server `startAgent` path inserts the user message into the DB, so
+    // a thread refresh may already have it in the payload tail. The buffer
+    // injection MUST tail-check by content to avoid rendering it twice.
+    const userContent = 'Also PAR-007 and PAR-008';
+    const state = makeState({
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [
+            // Server-loaded user message (e.g. from DB refresh) — already shows
+            // the dequeued content.
+            { id: 'm-user', role: 'user', content: userContent, threadId: THREAD_ID },
+          ],
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    // Queue update arrives with the dequeued content (server emits this AFTER
+    // it inserts to DB, so a refresh may have already pulled in the message).
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    // Agent emits its assistant response.
+    handleWSMessage(get, set, THREAD_ID, {
+      messageId: 'm-asst',
+      role: 'assistant',
+      content: 'Let me run those tests.',
+    });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userMsgs = msgs.filter((m: any) => m.role === 'user' && m.content === userContent);
+    expect(userMsgs).toHaveLength(1);
+  });
+
+  test('handleWSMessage does NOT inject buffer when incoming role is user', () => {
+    // Regression: bug 4 — when the agent:message event is itself a user
+    // message (ingest-mapper / external sources), the buffer injection used
+    // to fire and produce a second user message right next to it.
+    const userContent = 'Also PAR-007 and PAR-008';
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    handleWSMessage(get, set, THREAD_ID, {
+      role: 'user',
+      content: userContent,
+    });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userMsgs = msgs.filter((m: any) => m.role === 'user' && m.content === userContent);
+    expect(userMsgs).toHaveLength(1);
+  });
+
+  test('handleWSResult orphan flush deduplicates against existing tail user msg', () => {
+    // Regression: bug 4 — orphan flush must also dedupe by content. If the
+    // user message is already in the payload (e.g. from a DB refresh that
+    // raced with the failed agent run), flushing again would duplicate.
+    const userContent = 'Also PAR-007 and PAR-008';
+    const state = makeState({
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [{ id: 'm-user', role: 'user', content: userContent, threadId: THREAD_ID }],
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    handleWSResult(get, set, THREAD_ID, { status: 'failed', cost: 0, duration: 1 });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userMsgs = msgs.filter((m: any) => m.role === 'user' && m.content === userContent);
+    expect(userMsgs).toHaveLength(1);
+  });
+
   test('handleWSResult flushes orphaned dequeued message into thread payload', () => {
     // Regression: bug 3a — when a queue:update arrives with a dequeuedMessage
     // but the next agent:message never lands (agent failed immediately after

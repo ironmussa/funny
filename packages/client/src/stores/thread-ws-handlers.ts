@@ -129,6 +129,26 @@ interface DequeuedMessageBuffer {
 }
 const pendingDequeuedMessages = new Map<string, DequeuedMessageBuffer>();
 
+/**
+ * True when the tail of `messages` already contains a user message with the
+ * same content as the buffer entry — meaning the server-loaded payload
+ * already shows this dequeued message, so injecting again would duplicate.
+ * Scans from the end and stops at the first non-user message so we don't
+ * match against unrelated earlier user turns with coincidentally identical
+ * content.
+ */
+function tailHasUserMessage(
+  messages: Array<{ role: string; content: string }>,
+  content: string,
+): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'user') return false;
+    if (m.content === content) return true;
+  }
+  return false;
+}
+
 // ── Init ────────────────────────────────────────────────────────
 
 export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentInitInfo): void {
@@ -192,21 +212,29 @@ export function handleWSMessage(
         }
       }
 
-      // If there's a buffered dequeued user message, prepend it before this
-      // assistant message so the user message appears in the correct position.
-      // This now works for any hydrated thread (was previously limited to active).
+      // If there's a buffered dequeued user message AND the current event is
+      // an assistant message, prepend the user message so it appears in the
+      // correct position. Skip injection when:
+      //   - the incoming message is itself the user message (would double it)
+      //   - the tail of the payload already shows a user message with the
+      //     same content (server-loaded duplicate, e.g. after a thread
+      //     refresh; bug 4 — visual duplicate of the dequeued message)
       const dequeuedMsg = pendingDequeuedMessages.get(threadId);
       const extraMessages: typeof t.messages = [];
-      if (dequeuedMsg) {
+      if (dequeuedMsg && data.role === 'assistant') {
+        // Always clear the buffer once an assistant message arrives — even if
+        // we skip injection — so a stale entry can't leak into a future turn.
         pendingDequeuedMessages.delete(threadId);
-        extraMessages.push({
-          id: crypto.randomUUID(),
-          threadId,
-          role: 'user' as MessageRole,
-          content: dequeuedMsg.content,
-          images: dequeuedMsg.images,
-          timestamp: new Date().toISOString(),
-        });
+        if (!tailHasUserMessage(t.messages, dequeuedMsg.content)) {
+          extraMessages.push({
+            id: crypto.randomUUID(),
+            threadId,
+            role: 'user' as MessageRole,
+            content: dequeuedMsg.content,
+            images: dequeuedMsg.images,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
       const newMsg = {
@@ -568,26 +596,31 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // turn's first agent:message — but if the next agent fails before emitting
   // any message, the buffer leaks and would inject into a future, unrelated
   // turn. Inject it now as a user message so the user sees what was dequeued,
-  // and clear the buffer so it can't contaminate later.
+  // and clear the buffer so it can't contaminate later. Skip injection if the
+  // payload tail already has a matching user message (bug 4 — duplicate when
+  // the server-inserted message is already loaded).
   const orphaned = pendingDequeuedMessages.get(threadId);
   if (orphaned) {
     pendingDequeuedMessages.delete(threadId);
     if (isHydrated(get(), threadId)) {
       set((s) =>
-        mutations.applyThreadDataPatch(s, threadId, (t) => ({
-          ...t,
-          messages: [
-            ...t.messages,
-            {
-              id: crypto.randomUUID(),
-              threadId,
-              role: 'user' as MessageRole,
-              content: orphaned.content,
-              images: orphaned.images,
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        })),
+        mutations.applyThreadDataPatch(s, threadId, (t) => {
+          if (tailHasUserMessage(t.messages, orphaned.content)) return t;
+          return {
+            ...t,
+            messages: [
+              ...t.messages,
+              {
+                id: crypto.randomUUID(),
+                threadId,
+                role: 'user' as MessageRole,
+                content: orphaned.content,
+                images: orphaned.images,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          };
+        }),
       );
     }
   }

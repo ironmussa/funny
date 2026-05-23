@@ -102,7 +102,21 @@ export function usePromptInputState({
 
   // Read queuedCount via context — single-thread view resolves to activeThread,
   // grid columns resolve to their column-local thread.
-  const storeQueuedCount = useThreadSelector((t) => t?.queuedCount ?? 0);
+  //
+  // Source of truth: `queuedCountByThread` (persistent across thread switches
+  // and payload unloads). Payload-level `queuedCount` is only updated when the
+  // thread is hydrated in `threadDataById`, so a `queue:update` for a thread
+  // that was unloaded would silently drop. The persistent map always reflects
+  // the latest server state.
+  const contextThreadId = useThreadId();
+  const effectiveThreadId = contextThreadId;
+  const storeQueuedCount = useThreadStore((s) =>
+    effectiveThreadId
+      ? (s.queuedCountByThread[effectiveThreadId] ??
+        s.threadDataById[effectiveThreadId]?.queuedCount ??
+        0)
+      : 0,
+  );
   const queuedCount = storeQueuedCount > 0 ? storeQueuedCount : queuedCountProp;
 
   // ── Project defaults ──
@@ -469,8 +483,6 @@ export function usePromptInputState({
   }, [selectedProjectId, projects]);
 
   // ── Queue fetching ──
-  const contextThreadId = useThreadId();
-  const effectiveThreadId = contextThreadId;
   const lastQueueFetchRef = useRef<{ threadId: string; queuedCount: number } | null>(null);
   // Stable ref for effectiveThreadId — used by queue handlers and draft persistence
   // to avoid recreating callbacks on every thread switch.
@@ -485,6 +497,16 @@ export function usePromptInputState({
       return;
     }
 
+    // Switched to a different thread than the last fetch — clear the previous
+    // thread's queue immediately so we never render its messages under the
+    // new thread while the fetch is in flight. Without this the local
+    // `queuedMessages` state persists across thread switches and contaminates
+    // the new thread's input bar.
+    const lastFetch = lastQueueFetchRef.current;
+    if (lastFetch && lastFetch.threadId !== effectiveThreadId) {
+      setQueuedMessages((prev) => (prev.length === 0 ? prev : []));
+    }
+
     // When queuedCount is 0, clear locally without hitting the API.
     if (queuedCount === 0) {
       setQueuedMessages((prev) => (prev.length === 0 ? prev : []));
@@ -497,9 +519,9 @@ export function usePromptInputState({
     // (prevents StrictMode double-fire from issuing duplicate requests)
     const key = { threadId: effectiveThreadId, queuedCount };
     if (
-      lastQueueFetchRef.current &&
-      lastQueueFetchRef.current.threadId === key.threadId &&
-      lastQueueFetchRef.current.queuedCount === key.queuedCount
+      lastFetch &&
+      lastFetch.threadId === key.threadId &&
+      lastFetch.queuedCount === key.queuedCount
     ) {
       queueLog.debug('queue effect: skipped (dedup)', {
         threadId: effectiveThreadId,

@@ -5,6 +5,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { PromptInput } from '@/components/PromptInput';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
+import { ThreadProvider } from '@/stores/thread-context';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -314,6 +316,101 @@ describe('PromptInput', () => {
     await waitFor(() => {
       expect(api.cancelQueuedMessage).toHaveBeenCalledWith('thread-1', 'q1');
       expect(screen.queryByText('Borrar este mensaje')).toBeNull();
+    });
+  });
+
+  test('regression bug 2: switching threads clears the previous thread queue immediately', async () => {
+    // Seed two threads with distinct queues. Without the fix, the local
+    // queuedMessages state would carry from thread A into thread B's render
+    // window before the new fetch resolves, briefly showing A's messages
+    // under B's input bar.
+    useThreadStore.setState({
+      queuedCountByThread: { 'thread-a': 1, 'thread-b': 1 },
+    } as any);
+
+    vi.mocked(api.listQueue).mockImplementation((tid: string) => {
+      if (tid === 'thread-a') {
+        return okAsync([
+          {
+            id: 'qa',
+            threadId: 'thread-a',
+            content: 'mensaje SOLO de A',
+            sortOrder: 0,
+            createdAt: '',
+          },
+        ]);
+      }
+      if (tid === 'thread-b') {
+        // Defer B's fetch so we can observe the intermediate render state.
+        return new Promise(() => {}) as any;
+      }
+      return okAsync([]);
+    });
+
+    // Controlled threadId via a stateful host so rerender swaps the provider
+    // without remounting Router/TooltipProvider (which can't be nested).
+    function Host({ threadId }: { threadId: string }) {
+      return (
+        <ThreadProvider threadId={threadId}>
+          <PromptInput onSubmit={vi.fn()} queuedCount={1} />
+        </ThreadProvider>
+      );
+    }
+
+    const { rerender } = renderWithProviders(<Host threadId="thread-a" />, {
+      threadId: 'thread-a',
+    });
+
+    await waitFor(() => expect(screen.getByText('mensaje SOLO de A')).toBeInTheDocument());
+
+    // Switch to thread B — its fetch is pending, so the previous thread's
+    // messages must NOT remain visible during the transition.
+    rerender(<Host threadId="thread-b" />);
+
+    await waitFor(() => expect(screen.queryByText('mensaje SOLO de A')).toBeNull());
+  });
+
+  test('regression bug 1: queue stays visible after switching away and back to a thread', async () => {
+    // queuedCountByThread is the persistent source of truth — even if the
+    // payload's queuedCount field is stale/missing (because the thread was
+    // unloaded from threadDataById), the queue must still render when we
+    // come back.
+    useThreadStore.setState({
+      queuedCountByThread: { 'thread-a': 2 },
+      // Intentionally leave threadDataById empty so the payload path
+      // returns 0; the fallback to queuedCountByThread must kick in.
+      threadDataById: {},
+    } as any);
+
+    vi.mocked(api.listQueue).mockReturnValue(
+      okAsync([
+        {
+          id: 'qa1',
+          threadId: 'thread-a',
+          content: 'cola persistida 1',
+          sortOrder: 0,
+          createdAt: '',
+        },
+        {
+          id: 'qa2',
+          threadId: 'thread-a',
+          content: 'cola persistida 2',
+          sortOrder: 1,
+          createdAt: '',
+        },
+      ]),
+    );
+
+    // Caller passes queuedCount=0 (e.g. because activeThread doesn't have it)
+    // — the hook must still discover the count via queuedCountByThread and
+    // render the queue.
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={0} />, {
+      threadId: 'thread-a',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('cola persistida 1')).toBeInTheDocument();
+      expect(screen.getByText('cola persistida 2')).toBeInTheDocument();
     });
   });
 });

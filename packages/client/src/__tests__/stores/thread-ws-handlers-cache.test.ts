@@ -49,6 +49,7 @@ const {
   handleWSStatus,
   handleWSResult,
   handleWSCompactBoundary,
+  handleWSQueueUpdate,
 } = await import('@/stores/thread-ws-handlers');
 
 const THREAD_ID = 'thread-active';
@@ -202,6 +203,40 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(0);
     expect(state.threadDataById[THREAD_ID].contextUsage.cumulativeInputTokens).toBe(0);
     expect(state.threadDataById[THREAD_ID].compactionEvents).toHaveLength(1);
+  });
+
+  test('handleWSResult flushes orphaned dequeued message into thread payload', () => {
+    // Regression: bug 3a — when a queue:update arrives with a dequeuedMessage
+    // but the next agent:message never lands (agent failed immediately after
+    // dequeue), the pendingDequeuedMessages buffer used to leak and inject
+    // into an unrelated future turn. handleWSResult must flush it now.
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+
+    // Server emits queue:update with the dequeued message just before the
+    // new agent run starts.
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: 'ghost message from the queue',
+    });
+
+    // Agent fails before emitting any agent:message — only a result event.
+    handleWSResult(get, set, THREAD_ID, { status: 'failed', cost: 0, duration: 1 });
+
+    const messages = state.threadDataById[THREAD_ID].messages;
+    const userMsg = messages.find((m: any) => m.role === 'user');
+    expect(userMsg).toBeDefined();
+    expect(userMsg.content).toBe('ghost message from the queue');
+
+    // A subsequent unrelated agent:message must NOT re-inject the same content
+    // (buffer was cleared by handleWSResult).
+    handleWSMessage(get, set, THREAD_ID, {
+      role: 'assistant',
+      content: 'response to a new, unrelated turn',
+    });
+    const userMsgs = state.threadDataById[THREAD_ID].messages.filter((m: any) => m.role === 'user');
+    expect(userMsgs).toHaveLength(1);
   });
 
   test('handleWSResult updates a scratch thread via threadsById', () => {

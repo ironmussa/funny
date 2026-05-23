@@ -563,6 +563,35 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   set({ ...sidebarPatch, ...payloadPatch } as any);
 
+  // Flush any orphaned dequeued message for this thread. The buffer is set by
+  // a `queue:update` event between the previous turn's result and the next
+  // turn's first agent:message — but if the next agent fails before emitting
+  // any message, the buffer leaks and would inject into a future, unrelated
+  // turn. Inject it now as a user message so the user sees what was dequeued,
+  // and clear the buffer so it can't contaminate later.
+  const orphaned = pendingDequeuedMessages.get(threadId);
+  if (orphaned) {
+    pendingDequeuedMessages.delete(threadId);
+    if (isHydrated(get(), threadId)) {
+      set((s) =>
+        mutations.applyThreadDataPatch(s, threadId, (t) => ({
+          ...t,
+          messages: [
+            ...t.messages,
+            {
+              id: crypto.randomUUID(),
+              threadId,
+              role: 'user' as MessageRole,
+              content: orphaned.content,
+              images: orphaned.images,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        })),
+      );
+    }
+  }
+
   // If the thread the user is currently viewing just finished, mark it as read
   // so it doesn't show an unread blue dot in the sidebar.
   if (

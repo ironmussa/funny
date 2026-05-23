@@ -47,9 +47,19 @@ export class NodePtyBackend implements PtyBackend {
     if (this.helperProcess && !this.helperProcess.killed) return;
 
     const helperPath = join(import.meta.dir, 'pty-helper.mjs');
-    log.info('Spawning PTY helper process (node-pty)', { namespace: 'pty-node-pty', helperPath });
+    // Helper MUST run under Node, not Bun. node-pty's N-API bindings load
+    // under Bun, but interactive PTYs (no `-c` one-shot) get SIGHUP'd as
+    // soon as the helper child is spawned — verified on Linux + Bun 1.3.10.
+    // Likely a difference in how Bun's child_process inherits the controlling
+    // tty / keeps stdin alive. Override with PTY_HELPER_RUNTIME if needed.
+    const runtime = process.env.PTY_HELPER_RUNTIME || 'node';
+    log.info('Spawning PTY helper process (node-pty)', {
+      namespace: 'pty-node-pty',
+      helperPath,
+      runtime,
+    });
 
-    this.helperProcess = spawn('node', [helperPath], {
+    this.helperProcess = spawn(runtime, [helperPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });

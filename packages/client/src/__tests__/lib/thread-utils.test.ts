@@ -13,7 +13,9 @@ import {
 const t = (key: string, opts?: any) => (opts ? `${key}:${JSON.stringify(opts)}` : key);
 
 describe('statusConfig', () => {
-  const allStatuses: ThreadStatus[] = [
+  // Includes both real ThreadStatus values and the client-derived
+  // 'runner_offline' pseudo-status that statusConfig + getStatusLabels expose.
+  const allStatuses: (ThreadStatus | 'runner_offline')[] = [
     'setting_up',
     'idle',
     'pending',
@@ -23,6 +25,7 @@ describe('statusConfig', () => {
     'failed',
     'stopped',
     'interrupted',
+    'runner_offline',
   ];
 
   test('has an entry for every ThreadStatus', () => {
@@ -258,7 +261,7 @@ describe('gitSyncStateConfig', () => {
 });
 
 describe('getStatusLabels', () => {
-  const allStatuses: ThreadStatus[] = [
+  const allStatuses: (ThreadStatus | 'runner_offline')[] = [
     'setting_up',
     'idle',
     'pending',
@@ -268,6 +271,7 @@ describe('getStatusLabels', () => {
     'failed',
     'stopped',
     'interrupted',
+    'runner_offline',
   ];
 
   test('returns a label for every ThreadStatus', () => {

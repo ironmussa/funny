@@ -55,7 +55,6 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
         >
           <CollapsibleTrigger
             data-testid="sidebar-scratch-toggle"
-            aria-label={t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })}
             className="flex min-w-0 flex-1 cursor-pointer items-center gap-0 px-2 py-1 text-left text-xs"
           >
             <span className="-ml-0.5 flex-shrink-0 rounded p-0.5">
@@ -68,6 +67,9 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
             </span>
             <span className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5">
               <NotebookPen className="icon-sm flex-shrink-0 text-muted-foreground" />
+              <span className="truncate text-sm font-medium">
+                {t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })}
+              </span>
             </span>
           </CollapsibleTrigger>
           <div className="mr-2 flex items-center gap-0.5">

@@ -1,0 +1,48 @@
+# Rock project configuration.
+#
+# `[[exempt]]` blocks remove a file from the named metric(s) without
+# excluding it from the scan. Use for files whose shape is intentional
+# and would only get worse if "fixed" to satisfy the linter.
+
+# ── Depth exemptions ────────────────────────────────────────────────
+#
+# The runtime has a layered bootstrap: index → app/* → handler-registry
+# → handlers → services → pipelines → core. Each layer does real work;
+# `rock depth`'s `whatif` simulator misleadingly suggests "removing"
+# some of them would shorten chains, but in reality the work would just
+# get pulled up into a caller (hurting equality + file-size limits).
+
+[[exempt]]
+path = "packages/runtime/src/app/init-runtime.ts"
+metrics = ["depth"]
+reason = "Extracted from index.ts on purpose so the entry file doesn't import 11+ services directly. Re-inlining would defeat the extraction and bloat the bootstrap file."
+
+[[exempt]]
+path = "packages/runtime/src/app/register-routes.ts"
+metrics = ["depth"]
+reason = "Extracted from index.ts on purpose so the entry file doesn't import 14 route modules directly. Re-inlining would defeat the extraction."
+
+[[exempt]]
+path = "packages/runtime/src/services/handlers/handler-registry.ts"
+metrics = ["depth"]
+reason = "Central event-bus wiring is the intentional pattern. Alternative (self-registration via side effects on import) is anti-pattern: hides wiring, breaks testability, makes order-sensitive."
+
+[[exempt]]
+path = "packages/runtime/src/services/git-workflow-service.ts"
+metrics = ["depth"]
+reason = "270 lines of real workflow orchestration (progress emission, hook loading, pipeline selection, error handling). Whatif says removing drops max_depth 25→23, but the file is coordinator logic — inlining into 2 callers would balloon them and duplicate ~200 lines."
+
+[[exempt]]
+path = "packages/runtime/src/services/pipeline-adapter.ts"
+metrics = ["depth"]
+reason = "580-line bridge between @funny/pipelines interfaces (ActionProvider/ProgressReporter) and runtime services. Distinct concern; cannot be inlined without breaking the decoupled-package boundary."
+
+[[exempt]]
+path = "packages/runtime/src/services/pipeline-manager.ts"
+metrics = ["depth"]
+reason = "569 lines of pipeline CRUD + auto-review trigger + helpers. Could be split FURTHER (not merged) — flagging it as a depth offender is misleading."
+
+[[exempt]]
+path = "packages/runtime/src/services/git-pipelines.ts"
+metrics = ["depth"]
+reason = "1238 lines of declarative pipeline definitions for every git action. Only consumer is git-workflow-service, but merging would create a ~1500-line file and tank the equality + max_file_lines metrics."

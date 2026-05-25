@@ -1,0 +1,52 @@
+# Rock architectural rules.
+# See https://github.com/.../rock for the full reference.
+
+[limits]
+max_cycles = 0
+max_coupling = 15
+max_fan_out = 25
+max_cyclomatic_complexity = 20
+max_file_lines = 500
+min_score = 7000
+
+[layers]
+order = ["infra", "domain", "app", "ui"]
+
+[layers.mapping]
+infra = ["src/db", "src/api", "src/config"]
+domain = ["src/models", "src/services"]
+app = ["src/controllers", "src/handlers"]
+ui = ["src/components", "src/pages", "src/hooks"]
+
+[[layers.deny]]
+from = "ui"
+to = "infra"
+message = "UI cannot import from infra layer directly"
+
+[[layers.deny]]
+from = "domain"
+to = "ui"
+message = "Domain layer must not depend on UI"
+
+[[boundaries]]
+module = "src/payments"
+allow_imports_from = ["src/models", "src/config"]
+message = "Payments module only allows imports from models and config"
+
+[ignore]
+paths = [
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/*.spec.ts",
+  "**/*.spec.tsx",
+  "**/__tests__/**",
+  "**/test-utils/**",
+  "**/e2e/**",
+  "packages/chrome-extension/src/content.ts",
+  "packages/native-git/**",
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/target/**",
+  "**/.next/**",
+]

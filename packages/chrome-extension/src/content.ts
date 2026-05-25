@@ -10,6 +10,14 @@
  * Uses Shadow DOM to isolate styles from the host page.
  */
 
+import {
+  cssSelectorFull,
+  formatAccessibility,
+  formatStyles,
+  getFullPath,
+  getNearbyElements,
+  getNearbyText,
+} from '@funny/shared/dom/extract';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 
 // ---------------------------------------------------------------------------
@@ -271,136 +279,9 @@ function getComponentTree(el: Element): string {
   return componentTreeCache.get(el) || '';
 }
 
-function getCSSSelector(el: Element): string {
-  const parts: string[] = [];
-  let current: Element | null = el;
-  while (current && current !== document.body && current !== document.documentElement) {
-    let selector = current.tagName.toLowerCase();
-    if (current.id) {
-      selector += `#${current.id}`;
-      parts.unshift(selector);
-      break;
-    }
-    if (current.className && typeof current.className === 'string') {
-      const classes = current.className
-        .trim()
-        .split(/\s+/)
-        .filter((c) => c && !c.startsWith('funny-'))
-        .slice(0, 2);
-      if (classes.length) selector += `.${classes.join('.')}`;
-    }
-    // Add nth-of-type if needed for disambiguation
-    const parent = current.parentElement;
-    if (parent) {
-      const siblings = Array.from(parent.children).filter((c) => c.tagName === current!.tagName);
-      if (siblings.length > 1) {
-        const idx = siblings.indexOf(current) + 1;
-        selector += `:nth-of-type(${idx})`;
-      }
-    }
-    parts.unshift(selector);
-    current = current.parentElement;
-  }
-  return parts.join(' > ');
-}
-
-function getComputedStylesSummary(el: Element): string {
-  const cs = window.getComputedStyle(el);
-  const props = [
-    'display',
-    'position',
-    'width',
-    'height',
-    'margin',
-    'padding',
-    'font-family',
-    'font-size',
-    'font-weight',
-    'line-height',
-    'color',
-    'background-color',
-    'border',
-    'border-radius',
-    'opacity',
-    'overflow',
-    'flex-direction',
-    'justify-content',
-    'align-items',
-    'gap',
-  ];
-  return props
-    .map((p) => {
-      const v = cs.getPropertyValue(p);
-      if (
-        !v ||
-        v === 'none' ||
-        v === 'normal' ||
-        v === 'auto' ||
-        v === '0px' ||
-        v === 'rgba(0, 0, 0, 0)'
-      )
-        return null;
-      return `${p}: ${v}`;
-    })
-    .filter(Boolean)
-    .join('; ');
-}
-
-function getAccessibilityInfo(el: Element): string {
-  const info: string[] = [];
-  const role = el.getAttribute('role');
-  if (role) info.push(`role="${role}"`);
-  const ariaLabel = el.getAttribute('aria-label');
-  if (ariaLabel) info.push(`aria-label="${ariaLabel}"`);
-  const ariaDescribedby = el.getAttribute('aria-describedby');
-  if (ariaDescribedby) info.push(`aria-describedby="${ariaDescribedby}"`);
-  const tabindex = el.getAttribute('tabindex');
-  if (tabindex) info.push(`tabindex="${tabindex}"`);
-  const alt = el.getAttribute('alt');
-  if (alt) info.push(`alt="${alt}"`);
-  return info.join(', ') || 'none';
-}
-
-function getNearbyText(el: Element): string {
-  const texts: string[] = [];
-  const prev = el.previousElementSibling;
-  if (prev?.textContent?.trim()) texts.push(prev.textContent.trim().slice(0, 40));
-  const own = el.textContent?.trim();
-  if (own) texts.push(own.slice(0, 60));
-  const next = el.nextElementSibling;
-  if (next?.textContent?.trim()) texts.push(next.textContent.trim().slice(0, 40));
-  return texts.join(' | ') || 'none';
-}
-
-function getFullPath(el: Element): string {
-  const parts: string[] = [];
-  let current: Element | null = el;
-  while (current && current !== document.documentElement) {
-    parts.unshift(current.tagName.toLowerCase());
-    current = current.parentElement;
-  }
-  return parts.join(' > ');
-}
-
-function getNearbyElements(el: Element): string {
-  const items: string[] = [];
-  const prev = el.previousElementSibling;
-  if (prev)
-    items.push(
-      `prev: ${prev.tagName.toLowerCase()}${prev.className && typeof prev.className === 'string' ? '.' + prev.className.split(/\s+/)[0] : ''}`,
-    );
-  const next = el.nextElementSibling;
-  if (next)
-    items.push(
-      `next: ${next.tagName.toLowerCase()}${next.className && typeof next.className === 'string' ? '.' + next.className.split(/\s+/)[0] : ''}`,
-    );
-  const parent = el.parentElement;
-  if (parent)
-    items.push(
-      `parent: ${parent.tagName.toLowerCase()}${parent.className && typeof parent.className === 'string' ? '.' + parent.className.split(/\s+/)[0] : ''} (${parent.children.length} children)`,
-    );
-  return items.join(', ') || 'none';
-}
+// CSS selector, computed-style + accessibility formatters, nearby-text / path
+// helpers live in `@funny/shared/dom/extract` — single source of truth shared
+// with the in-app browser panel. See top-of-file imports.
 
 // ---------------------------------------------------------------------------
 // Hover highlight
@@ -747,7 +628,7 @@ function populateElementDetails(el: Element) {
   const tag = el.tagName.toLowerCase();
   const classes = (typeof el.className === 'string' ? el.className : '').trim();
   const component = getComponentTree(el);
-  const a11y = getAccessibilityInfo(el);
+  const a11y = formatAccessibility(el);
 
   // Selector
   (popover.querySelector('.popover-detail-selector') as HTMLElement).textContent =
@@ -1015,7 +896,7 @@ function buildElementData(el: Element): ElementData {
   const rect = el.getBoundingClientRect();
   return {
     element: el.tagName.toLowerCase(),
-    elementPath: getCSSSelector(el),
+    elementPath: cssSelectorFull(el, { excludeClassPrefix: 'funny-' }),
     elementName: getElementName(el),
     x: Math.round(((rect.left + rect.width / 2) / window.innerWidth) * 100 * 10) / 10,
     y: Math.round(rect.top + window.scrollY),
@@ -1027,8 +908,8 @@ function buildElementData(el: Element): ElementData {
     },
     componentTree: getComponentTree(el),
     cssClasses: (typeof el.className === 'string' ? el.className : '').trim(),
-    computedStyles: getComputedStylesSummary(el),
-    accessibility: getAccessibilityInfo(el),
+    computedStyles: formatStyles(el),
+    accessibility: formatAccessibility(el),
     nearbyText: getNearbyText(el),
     isFixed: ['fixed', 'sticky'].includes(window.getComputedStyle(el).position),
     fullPath: getFullPath(el),

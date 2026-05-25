@@ -28,7 +28,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
   const scratchThreads = useScratchThreads();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const startNewScratchThread = useUIStore((s) => s.startNewScratchThread);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const visibleThreads = useMemo(
     () => scratchThreads.slice(0, QUICK_CHATS_VISIBLE),

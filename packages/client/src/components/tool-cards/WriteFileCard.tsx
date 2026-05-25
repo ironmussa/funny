@@ -1,5 +1,5 @@
 import { Check, ChevronRight, Copy, Eye, FileText, FileCode2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MessageContent } from '@/components/thread/MessageContent';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { ensureLanguage, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -43,6 +44,22 @@ export function WriteFileCard({
   const isMarkdown = MARKDOWN_EXTS.has(ext);
   const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
   const [copied, copy] = useCopyToClipboard();
+
+  const hljsLang = ext ? extToHljsLang(ext) : 'plaintext';
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  useEffect(() => {
+    if (content == null || !hljsLang || hljsLang === 'plaintext') {
+      setHighlighted(null);
+      return;
+    }
+    let cancelled = false;
+    ensureLanguage(hljsLang).then(() => {
+      if (!cancelled) setHighlighted(highlightCode(content, hljsLang));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [content, hljsLang]);
 
   return (
     <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
@@ -170,6 +187,13 @@ export function WriteFileCard({
               <div className="px-3 py-2">
                 <MessageContent content={content} />
               </div>
+            ) : highlighted ? (
+              <pre className="code-viewer whitespace-pre-wrap break-all px-3 py-2 font-mono text-sm leading-relaxed text-foreground/80">
+                <code
+                  className={`hljs language-${hljsLang}`}
+                  dangerouslySetInnerHTML={{ __html: highlighted }}
+                />
+              </pre>
             ) : (
               <pre className="whitespace-pre-wrap break-all px-3 py-2 font-mono text-sm leading-relaxed text-foreground/80">
                 {content}

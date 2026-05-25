@@ -48,6 +48,7 @@ export const UnifiedRow = memo(function UnifiedRow({
       className={cn(
         'flex font-mono text-[length:var(--diff-font-size)]',
         wrap ? 'items-start' : 'items-center',
+        selectable && 'pl-1',
       )}
       style={
         wrap

@@ -621,13 +621,23 @@ export const VirtualDiff = memo(function VirtualDiff({
         onMouseDown={selectable ? handleDragMouseDown : undefined}
         onMouseMove={selectable ? handleDragMouseMove : undefined}
         onMouseUp={selectable ? handleDragMouseUp : undefined}
+        onClickCapture={
+          selectable
+            ? (e) => {
+                const target = e.target as HTMLElement;
+                if (target.closest('[data-gutter]')) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }
+              }
+            : undefined
+        }
       >
         {/* Sticky hunk header overlay */}
         {stickyHunk && (
           <div
             className={cn(
-              'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-[length:var(--diff-font-size)] text-muted-foreground backdrop-blur-sm border-b border-border/50',
-              selectable ? 'pr-2' : 'px-2',
+              'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-[length:var(--diff-font-size)] text-muted-foreground backdrop-blur-sm border-b border-border/50 px-1',
             )}
             style={{ height: rowHeight, marginBottom: -rowHeight }}
             data-testid="diff-sticky-hunk"
@@ -693,8 +703,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                 ) : row.type === 'hunk' ? (
                   <div
                     className={cn(
-                      'flex select-none items-center bg-accent font-mono text-[length:var(--diff-font-size)] text-muted-foreground',
-                      selectable ? 'pr-2' : 'px-2',
+                      'flex select-none items-center bg-accent font-mono text-[length:var(--diff-font-size)] text-muted-foreground px-1',
                     )}
                     style={{ height: rowHeight }}
                   >
@@ -727,8 +736,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                 ) : row.type === 'fold' ? (
                   <button
                     className={cn(
-                      'flex w-full select-none items-center bg-muted/50 font-mono text-[length:var(--diff-font-size)] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground',
-                      selectable ? 'pr-2' : 'px-2',
+                      'flex w-full select-none items-center bg-muted/50 font-mono text-[length:var(--diff-font-size)] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
                     )}
                     style={{ height: rowHeight }}
                     onClick={() => toggleFold(row.sectionIdx)}

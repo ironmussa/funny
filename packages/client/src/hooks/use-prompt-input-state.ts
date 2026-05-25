@@ -189,6 +189,7 @@ export function usePromptInputState({
   const activeThreadContextTokens = useThreadSelector(
     (t) => t?.contextUsage?.cumulativeInputTokens ?? 0,
   );
+  const activeThreadLastEffort = useThreadSelector((t) => t?.lastUserMessage?.effort);
   const contextMaxTokens =
     activeThreadProvider && activeThreadModel
       ? getModelContextWindow(activeThreadProvider, activeThreadModel)
@@ -363,6 +364,12 @@ export function usePromptInputState({
       setUnifiedModel(`${defaultProvider}:${defaultModel}`);
     }
   }, [isNewThread, activeThreadProvider, activeThreadModel, defaultProvider, defaultModel]);
+
+  useEffect(() => {
+    if (!isNewThread && activeThreadLastEffort) {
+      setEffort(activeThreadLastEffort);
+    }
+  }, [isNewThread, activeThreadLastEffort]);
 
   // ── Fetch branches ──
   const effectiveProjectId = propProjectId || useProjectStore.getState().selectedProjectId;

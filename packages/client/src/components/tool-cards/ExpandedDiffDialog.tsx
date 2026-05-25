@@ -435,52 +435,54 @@ export function ExpandedDiffDialog({
               {filePath}
             </span>
           </DialogTitle>
-          <ToggleGroup
-            type="single"
-            size="sm"
-            value={viewMode}
-            onValueChange={handleViewModeChange}
-            disabled={isPending || isOneSided}
-            className="flex-shrink-0 gap-0 rounded-md border border-border"
-            data-testid="diff-view-mode-group"
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ToggleGroupItem
-                  value="unified"
-                  className="rounded-none rounded-l-md border-0 px-1.5 data-[state=on]:bg-accent"
-                  data-testid="diff-view-mode-unified"
-                >
-                  <RectangleVertical className="icon-base" />
-                </ToggleGroupItem>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Unified</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ToggleGroupItem
-                  value="split"
-                  className="rounded-none border-x border-border px-1.5 data-[state=on]:bg-accent"
-                  data-testid="diff-view-mode-split"
-                >
-                  <Columns2 className="icon-base" />
-                </ToggleGroupItem>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Split</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ToggleGroupItem
-                  value="three-pane"
-                  className="rounded-none rounded-r-md border-0 px-1.5 data-[state=on]:bg-accent"
-                  data-testid="diff-view-mode-three-pane"
-                >
-                  <Columns3 className="icon-base" />
-                </ToggleGroupItem>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Three-pane</TooltipContent>
-            </Tooltip>
-          </ToggleGroup>
+          {!isOneSided && (
+            <ToggleGroup
+              type="single"
+              size="sm"
+              value={viewMode}
+              onValueChange={handleViewModeChange}
+              disabled={isPending}
+              className="flex-shrink-0 gap-0 rounded-md border border-border"
+              data-testid="diff-view-mode-group"
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value="unified"
+                    className="rounded-none rounded-l-md border-0 px-1.5 data-[state=on]:bg-accent"
+                    data-testid="diff-view-mode-unified"
+                  >
+                    <RectangleVertical className="icon-base" />
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Unified</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value="split"
+                    className="rounded-none border-x border-border px-1.5 data-[state=on]:bg-accent"
+                    data-testid="diff-view-mode-split"
+                  >
+                    <Columns2 className="icon-base" />
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Split</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem
+                    value="three-pane"
+                    className="rounded-none rounded-r-md border-0 px-1.5 data-[state=on]:bg-accent"
+                    data-testid="diff-view-mode-three-pane"
+                  >
+                    <Columns3 className="icon-base" />
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Three-pane</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -938,52 +940,54 @@ export function ExpandedDiffView({
         >
           {filePath}
         </span>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          value={viewMode}
-          onValueChange={handleViewModeChange}
-          disabled={isPending || isOneSided}
-          className="flex-shrink-0 gap-0 rounded-md border border-border"
-          data-testid="diff-view-view-mode-group"
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value="unified"
-                className="rounded-none rounded-l-md border-0 px-1.5 data-[state=on]:bg-accent"
-                data-testid="diff-view-view-mode-unified"
-              >
-                <RectangleVertical className="icon-base" />
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Unified</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value="split"
-                className="rounded-none border-x border-border px-1.5 data-[state=on]:bg-accent"
-                data-testid="diff-view-view-mode-split"
-              >
-                <Columns2 className="icon-base" />
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Split</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value="three-pane"
-                className="rounded-none rounded-r-md border-0 px-1.5 data-[state=on]:bg-accent"
-                data-testid="diff-view-view-mode-three-pane"
-              >
-                <Columns3 className="icon-base" />
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Three-pane</TooltipContent>
-          </Tooltip>
-        </ToggleGroup>
+        {!isOneSided && (
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={viewMode}
+            onValueChange={handleViewModeChange}
+            disabled={isPending}
+            className="flex-shrink-0 gap-0 rounded-md border border-border"
+            data-testid="diff-view-view-mode-group"
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem
+                  value="unified"
+                  className="rounded-none rounded-l-md border-0 px-1.5 data-[state=on]:bg-accent"
+                  data-testid="diff-view-view-mode-unified"
+                >
+                  <RectangleVertical className="icon-base" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Unified</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem
+                  value="split"
+                  className="rounded-none border-x border-border px-1.5 data-[state=on]:bg-accent"
+                  data-testid="diff-view-view-mode-split"
+                >
+                  <Columns2 className="icon-base" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Split</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem
+                  value="three-pane"
+                  className="rounded-none rounded-r-md border-0 px-1.5 data-[state=on]:bg-accent"
+                  data-testid="diff-view-view-mode-three-pane"
+                >
+                  <Columns3 className="icon-base" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Three-pane</TooltipContent>
+            </Tooltip>
+          </ToggleGroup>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

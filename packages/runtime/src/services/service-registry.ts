@@ -5,8 +5,8 @@
  *
  * Module-level singleton that holds the RuntimeServiceProvider.
  *
- * `setServices()` is called during `createRuntimeApp().init()` with the
- * runner service provider that proxies all data to the central server.
+ * `setServices()` is called during runtime bootstrap (in initRuntime) with
+ * the runner service provider that proxies all data to the central server.
  * All runtime services and route handlers import `getServices()` to
  * access data — they never touch the database directly.
  *
@@ -37,7 +37,7 @@ export function getServices(): RuntimeServiceProvider {
   if (!_services) {
     throw new Error(
       'RuntimeServiceProvider has not been set. ' +
-        'Ensure createRuntimeApp().init() is called with a services option before handling requests.',
+        'Ensure initRuntime() is called during runtime bootstrap before handling requests.',
     );
   }
   return _services;

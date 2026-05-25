@@ -20,7 +20,16 @@ if (process.platform === 'win32') {
   await import('./kill-port.js');
 }
 
-import { createRuntimeApp } from './app.js';
+import { existsSync } from 'fs';
+import { join, resolve } from 'path';
+
+import { Hono } from 'hono';
+import { serveStatic } from 'hono/bun';
+
+import { initRuntime } from './app/init-runtime.js';
+import { registerRoutes } from './app/register-routes.js';
+import { setupMiddleware } from './app/setup-middleware.js';
+import { registerSystemRoutes } from './app/system-routes.js';
 import { log } from './lib/logger.js';
 import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 
@@ -45,9 +54,25 @@ if (!process.env.TEAM_SERVER_URL) {
 
 const port = Number(process.env.RUNNER_PORT) || 3003;
 const host = process.env.RUNNER_HOST || '0.0.0.0';
+const clientPort = Number(process.env.CLIENT_PORT) || 5173;
+const corsOrigin = process.env.CORS_ORIGIN;
 
-// Create the runtime app — stateless runner that proxies data to the server
-const runtime = await createRuntimeApp({});
+// Resolve client dist directory (works both in dev and when installed via npm)
+const clientDistDir = resolve(import.meta.dir, '..', '..', 'client', 'dist');
+
+// Build the Hono app with all routes and middleware.
+const app = new Hono();
+setupMiddleware(app, { clientPort, corsOrigin });
+registerSystemRoutes(app);
+registerRoutes(app);
+
+if (existsSync(clientDistDir)) {
+  app.use('/*', serveStatic({ root: clientDistDir }));
+  app.get('*', async (c) => {
+    return c.html(await Bun.file(join(clientDistDir, 'index.html')).text());
+  });
+  log.info('Serving static files', { namespace: 'server', dir: clientDistDir });
+}
 
 // Clean up previous instance on bun --watch restarts.
 const prev = (globalThis as any).__bunServer;
@@ -59,14 +84,14 @@ if (prev) {
 }
 
 // Initialize (service provider, handlers, team mode connection)
-await runtime.init();
+await initRuntime(app);
 
 const server = Bun.serve({
   port,
   hostname: host,
   reusePort: true,
   fetch(req: Request) {
-    return runtime.app.fetch(req);
+    return app.fetch(req);
   },
 });
 

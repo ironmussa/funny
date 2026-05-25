@@ -26,7 +26,7 @@ vi.mock('../../services/agent-runner.js', () => ({
   startAgent: vi.fn(),
   isAgentRunning: vi.fn(() => false),
 }));
-vi.mock('../../services/thread-service.js', () => ({
+vi.mock('../../services/thread-service/create.js', () => ({
   createAndStartThread: vi.fn(),
 }));
 vi.mock('../../services/ws-broker.js', () => ({

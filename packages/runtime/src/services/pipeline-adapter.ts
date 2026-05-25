@@ -43,11 +43,9 @@ import {
 import { pipelineApprovalStore } from './pipeline-approval-store.js';
 import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
-import {
-  createAndStartThread,
-  emitThreadUpdated,
-  updateThread as updateThreadService,
-} from './thread-service.js';
+import { createAndStartThread } from './thread-service/create.js';
+import { emitThreadUpdated } from './thread-service/helpers.js';
+import { updateThread as updateThreadService } from './thread-service/update.js';
 import { emitWorkflowEvent } from './workflow-event-helpers.js';
 import { wsBroker } from './ws-broker.js';
 

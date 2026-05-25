@@ -20,21 +20,19 @@ import { metric } from '../lib/telemetry.js';
 import { requestSpan } from '../middleware/tracing.js';
 import { getServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
+import { createIdleThread, createAndStartThread } from '../services/thread-service/create.js';
+import { forkThread } from '../services/thread-service/fork.js';
+import { ThreadServiceError } from '../services/thread-service/helpers.js';
 import {
-  createIdleThread,
-  createAndStartThread,
-  forkThread,
-  forkAndRewind,
-  rewindCode,
   sendMessage,
   stopThread,
   approveToolCall,
   cancelQueuedMessage,
   updateQueuedMessage as updateQueuedMessageService,
-  convertToWorktree,
-  uploadFile,
-  ThreadServiceError,
-} from '../services/thread-service.js';
+} from '../services/thread-service/messaging.js';
+import { forkAndRewind, rewindCode } from '../services/thread-service/rewind.js';
+import { convertToWorktree } from '../services/thread-service/update.js';
+import { uploadFile } from '../services/thread-service/upload.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireThread } from '../utils/route-helpers.js';

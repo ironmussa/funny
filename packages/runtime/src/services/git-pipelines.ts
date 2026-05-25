@@ -65,7 +65,7 @@ import {
 import { getServices } from './service-registry.js';
 import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
-import { createAndStartThread } from './thread-service.js';
+import { createAndStartThread } from './thread-service/create.js';
 import { emitWorkflowEvent } from './workflow-event-helpers.js';
 
 // ── Unified pipeline context ─────────────────────────────────

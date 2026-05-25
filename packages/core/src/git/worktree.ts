@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from 'fs';
 import { mkdir, rm, stat } from 'fs/promises';
 import { resolve, dirname, basename, normalize, join } from 'path';
 
-import type { SetupProgressFn } from '@funny/core/ports';
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
+import type { SetupProgressFn } from '../ports/setup-progress.js';
 import { git } from './base.js';
 import { gitRead, gitWrite } from './process.js';
 

@@ -15,18 +15,14 @@ export { readProjectConfig } from './config-reader.js';
 export { readProcfile } from './procfile-reader.js';
 export { isPortAvailable, findAvailablePort, allocatePorts } from './port-allocator.js';
 export { copyAndOverrideEnv, readAllocatedPorts } from './env-writer.js';
+export type { SetupProgressFn } from './setup-progress.js';
+
+import type { SetupProgressFn } from './setup-progress.js';
 
 export interface SetupWorktreeResult {
   ports: Awaited<ReturnType<typeof allocatePorts>>;
   postCreateErrors: string[];
 }
-
-export type SetupProgressFn = (
-  step: string,
-  label: string,
-  status: 'running' | 'completed' | 'failed',
-  error?: string,
-) => void;
 
 /**
  * Full worktree setup: allocate ports, copy .env files, run postCreate commands.

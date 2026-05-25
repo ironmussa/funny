@@ -105,6 +105,52 @@ export class ChromeSession extends EventEmitter {
     this.emit('log', `Navigated to ${url}`);
   }
 
+  /**
+   * Walk the navigation history by `offset` entries (negative = back,
+   * positive = forward). Returns `false` when there is no entry at that
+   * offset (e.g. trying to go back from the first entry).
+   *
+   * Uses CDP `Page.getNavigationHistory` + `Page.navigateToHistoryEntry`
+   * instead of `Runtime.evaluate('history.back()')` because pages can shadow
+   * `window.history` and SPAs sometimes intercept the popstate event without
+   * actually navigating, leaving the user stuck.
+   */
+  async goHistory(offset: number): Promise<boolean> {
+    if (!this.client) throw new Error('Not connected');
+    const { currentIndex, entries } = await this.client.Page.getNavigationHistory();
+    const target = currentIndex + offset;
+    if (target < 0 || target >= entries.length) return false;
+    await this.client.Page.navigateToHistoryEntry({ entryId: entries[target].id });
+    return true;
+  }
+
+  async reload(): Promise<void> {
+    if (!this.client) throw new Error('Not connected');
+    await this.client.Page.reload({});
+  }
+
+  /**
+   * Force the page-level viewport to a fixed size via
+   * `Emulation.setDeviceMetricsOverride`. Without this the viewport is
+   * derived from the OS window size minus any browser chrome (window borders,
+   * scrollbars, etc.), so screencast frames don't exactly match the
+   * `maxWidth × maxHeight` the client uses for coordinate translation — and
+   * clicks land off-target.
+   *
+   * Call this BEFORE `navigate()` so the initial page load already lays out
+   * against the intended viewport.
+   */
+  async setViewport(width: number, height: number, deviceScaleFactor = 1): Promise<void> {
+    if (!this.client) throw new Error('Not connected');
+    await this.client.Emulation.setDeviceMetricsOverride({
+      width,
+      height,
+      deviceScaleFactor,
+      mobile: false,
+    });
+    this.emit('log', `Viewport set to ${width}x${height}@${deviceScaleFactor}x`);
+  }
+
   async execute(expression: string): Promise<unknown> {
     if (!this.client) throw new Error('Not connected');
     const result = await this.client.Runtime.evaluate({

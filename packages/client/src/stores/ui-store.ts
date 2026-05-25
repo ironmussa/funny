@@ -69,6 +69,8 @@ interface UIState {
   } | null;
   /** Pre-fill context for creating a thread from a GitHub issue */
   newThreadIssueContext: { prompt: string; branchName: string; title: string } | null;
+  /** Pre-fill prompt for compose mode coming from external sources (e.g. Tauri annotator). */
+  composePrefillPrompt: string | null;
   commandPaletteOpen: boolean;
   fileSearchOpen: boolean;
   keyboardShortcutsOpen: boolean;
@@ -121,6 +123,8 @@ interface UIState {
     issueContext: { prompt: string; branchName: string; title: string },
   ) => void;
   clearIssueContext: () => void;
+  /** Set the prefill prompt used by the next compose mount (cleared after pickup). */
+  setComposePrefillPrompt: (prompt: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -191,6 +195,7 @@ export const useUIStore = create<UIState>((set) => ({
   })(),
   kanbanContext: null,
   newThreadIssueContext: null,
+  composePrefillPrompt: null,
   commandPaletteOpen: false,
   fileSearchOpen: false,
   keyboardShortcutsOpen: false,
@@ -545,6 +550,8 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   clearIssueContext: () => set({ newThreadIssueContext: null }),
+
+  setComposePrefillPrompt: (prompt) => set({ composePrefillPrompt: prompt }),
 }));
 
 // Reset transient UI panes whenever a thread is selected.

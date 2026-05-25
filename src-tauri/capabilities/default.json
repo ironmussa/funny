@@ -1,7 +1,7 @@
 {
   "identifier": "default",
-  "description": "Capability for the main window and preview browser",
-  "windows": ["main", "preview-browser"],
+  "description": "Capability for the main window, preview browser, and annotator",
+  "windows": ["main", "preview-browser", "annotator"],
   "permissions": [
     "core:default",
     "core:window:allow-create",

@@ -66,6 +66,17 @@ export function NewThreadInput({
   const activeDesignId = useUIStore((s) => s.activeDesignId);
   const issueContext = useUIStore((s) => s.newThreadIssueContext);
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);
+  const composePrefillPrompt = useUIStore((s) => s.composePrefillPrompt);
+  const setComposePrefillPrompt = useUIStore((s) => s.setComposePrefillPrompt);
+  // One-shot: capture the prefill at mount time, then clear it from the store
+  // so it doesn't bleed into the next compose. The captured value is what
+  // gets passed to PromptInput as initialPrompt.
+  const initialPrefillRef = useRef(composePrefillPrompt);
+  useEffect(() => {
+    if (composePrefillPrompt !== null) setComposePrefillPrompt(null);
+    // Run once at mount; do NOT re-run when the store value flips back to null.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const cancelNewThreadGlobal = useUIStore((s) => s.cancelNewThread);
   const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -390,13 +401,21 @@ export function NewThreadInput({
           </div>
         )}
         <PromptInput
-          key={issueContext ? `${effectiveProjectId}-issue` : effectiveProjectId}
+          key={
+            issueContext
+              ? `${effectiveProjectId}-issue`
+              : initialPrefillRef.current
+                ? `${effectiveProjectId}-prefill-${initialPrefillRef.current.length}`
+                : effectiveProjectId
+          }
           onSubmit={handleCreate}
           loading={creating}
           isNewThread
           showBacklog
           projectId={effectiveProjectId || undefined}
-          initialPrompt={issueContext?.prompt ?? restoredPrompt ?? undefined}
+          initialPrompt={
+            issueContext?.prompt ?? initialPrefillRef.current ?? restoredPrompt ?? undefined
+          }
           onContentChange={handleContentChange}
           onWorktreeModeChange={setIsWorktreeMode}
         />

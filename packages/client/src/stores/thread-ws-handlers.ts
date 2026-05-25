@@ -29,8 +29,9 @@ import {
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
 import { useThreadReadStore } from './thread-read-store';
+import type { ThreadState } from './thread-state';
 import { bufferWSEvent, getNavigate, getProjectIdForThread } from './thread-store-internals';
-import type { AgentInitInfo, ThreadState } from './thread-types';
+import type { AgentInitInfo } from './thread-types';
 
 const wsLog = createClientLogger('ws-handlers');
 

@@ -1,6 +1,6 @@
 import type { Thread } from '@funny/shared';
 
-import type { ThreadState } from './thread-store';
+import type { ThreadState } from './thread-state';
 import type { ThreadWithMessages } from './thread-types';
 
 /**

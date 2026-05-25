@@ -7,9 +7,9 @@
  *
  * Only types belong here. No values, no side effects.
  *
- * `ThreadState` itself lives in `thread-store.ts` (it grew to include the full
- * action surface); re-exported from here so existing `import type { ThreadState }
- * from './thread-types'` paths keep working without churn.
+ * `ThreadState` (the full Zustand state + action surface) lives in
+ * `./thread-state.ts` — also extracted to keep this file free of edges
+ * back to `thread-store.ts`.
  */
 
 import type { Thread, Message, ThreadEvent, WaitingReason } from '@funny/shared';
@@ -18,7 +18,6 @@ import type { ContextUsage } from '@/lib/context-usage-types';
 import type { GitProgressStep } from '@/lib/git-progress-types';
 
 export type { ContextUsage };
-export type { ThreadState } from './thread-store';
 
 export interface AgentInitInfo {
   tools: string[];

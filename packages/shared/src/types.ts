@@ -104,6 +104,28 @@ export type {
 } from './types/test.js';
 
 export type {
+  BrowserSessionInputKind,
+  BrowserSessionClosedReason,
+  BrowserSessionNavAction,
+  WSBrowserSessionOpenData,
+  WSBrowserSessionNavigateData,
+  WSBrowserSessionNavData,
+  WSBrowserSessionInputData,
+  WSBrowserSessionInspectAtData,
+  WSBrowserSessionInspectRectData,
+  WSBrowserSessionScreenshotData,
+  WSBrowserSessionExecuteData,
+  WSBrowserSessionHeartbeatData,
+  WSBrowserSessionCloseData,
+  WSBrowserSessionReadyData,
+  WSBrowserSessionFrameData,
+  WSBrowserSessionResultData,
+  WSBrowserSessionConsoleData,
+  WSBrowserSessionErrorData,
+  WSBrowserSessionClosedData,
+} from './types/browser-session.js';
+
+export type {
   FunnyPortGroup,
   FunnyProcessConfig,
   FunnyAutomationConfig,
@@ -604,7 +626,24 @@ export type WSEvent =
   | { type: 'test:console'; threadId: string; data: WSTestConsoleData }
   | { type: 'test:network'; threadId: string; data: WSTestNetworkData }
   | { type: 'test:error'; threadId: string; data: WSTestErrorData }
-  | { type: 'test:action'; threadId: string; data: WSTestActionData };
+  | { type: 'test:action'; threadId: string; data: WSTestActionData }
+  // ─── Browser annotator panel (CDP-driven Chromium sessions) ─────────────
+  | { type: 'browser-session:open'; threadId: ''; data: WSBrowserSessionOpenData }
+  | { type: 'browser-session:navigate'; threadId: ''; data: WSBrowserSessionNavigateData }
+  | { type: 'browser-session:nav'; threadId: ''; data: WSBrowserSessionNavData }
+  | { type: 'browser-session:input'; threadId: ''; data: WSBrowserSessionInputData }
+  | { type: 'browser-session:inspect-at'; threadId: ''; data: WSBrowserSessionInspectAtData }
+  | { type: 'browser-session:inspect-rect'; threadId: ''; data: WSBrowserSessionInspectRectData }
+  | { type: 'browser-session:screenshot'; threadId: ''; data: WSBrowserSessionScreenshotData }
+  | { type: 'browser-session:execute'; threadId: ''; data: WSBrowserSessionExecuteData }
+  | { type: 'browser-session:heartbeat'; threadId: ''; data: WSBrowserSessionHeartbeatData }
+  | { type: 'browser-session:close'; threadId: ''; data: WSBrowserSessionCloseData }
+  | { type: 'browser-session:ready'; threadId: ''; data: WSBrowserSessionReadyData }
+  | { type: 'browser-session:frame'; threadId: ''; data: WSBrowserSessionFrameData }
+  | { type: 'browser-session:result'; threadId: ''; data: WSBrowserSessionResultData }
+  | { type: 'browser-session:console'; threadId: ''; data: WSBrowserSessionConsoleData }
+  | { type: 'browser-session:error'; threadId: ''; data: WSBrowserSessionErrorData }
+  | { type: 'browser-session:closed'; threadId: ''; data: WSBrowserSessionClosedData };
 
 export interface WSOrgMemberData {
   organizationId: string;
@@ -713,6 +752,24 @@ export interface CreatePRRequest {
 
 // Imports needed by local type aliases — pulled in from split modules.
 import type { TeamRole } from './types/auth.js';
+import type {
+  WSBrowserSessionOpenData,
+  WSBrowserSessionNavigateData,
+  WSBrowserSessionNavData,
+  WSBrowserSessionInputData,
+  WSBrowserSessionInspectAtData,
+  WSBrowserSessionInspectRectData,
+  WSBrowserSessionScreenshotData,
+  WSBrowserSessionExecuteData,
+  WSBrowserSessionHeartbeatData,
+  WSBrowserSessionCloseData,
+  WSBrowserSessionReadyData,
+  WSBrowserSessionFrameData,
+  WSBrowserSessionResultData,
+  WSBrowserSessionConsoleData,
+  WSBrowserSessionErrorData,
+  WSBrowserSessionClosedData,
+} from './types/browser-session.js';
 import type { WSGitStatusData, WSGitWorkflowProgressData } from './types/git.js';
 import type {
   WSPipelineRunStartedData,

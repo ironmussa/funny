@@ -307,6 +307,39 @@ funny includes a dedicated mobile view that automatically activates on screens n
 
 The sidebar automatically converts to a slide-out drawer on mobile via the shadcn/ui Sheet component.
 
+## Browser Annotator Panel
+
+A side panel that lets you load any URL, mark it up visually (pin / region / draw), and send the annotations as a new thread to a Claude agent. **The panel is per-project** — open it from the `AppWindow` icon in the project header (next to Terminal / Review / Tests). Sends go to the project you opened it from; there's no project selector inside the panel.
+
+**How it works:** the runner spawns a real Chromium subprocess via Playwright's bundled binary and streams JPEG frames via [CDP `Page.startScreencast`](https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-startScreencast) to a `<canvas>`. Loads **any URL** (no X-Frame-Options limit). Input (mouse / keyboard) is forwarded via `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent`. DOM inspection (selector / test-id / component name / computed styles) runs in the page context via `Runtime.evaluate` using helpers from [`@funny/shared/dom/extract`](packages/shared/src/dom/extract.ts) — the same source the Chrome extension consumes.
+
+**Setup:**
+
+```bash
+# If Playwright's executablePath resolves inside a sandbox (e.g. VSCode flatpak),
+# point at the real Chromium binary location:
+PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright
+
+# Make sure Chromium is installed:
+bunx playwright install chromium
+```
+
+**Tools:**
+
+- **Browse** — click / type / scroll forwarded to the embedded page via CDP
+- **Pin** — single-click marker with a note, captures the DOM element under the cursor
+- **Region** — drag a rectangle, captures every element that intersects
+- **Draw** — 5-color free-hand annotations
+- 🏷 **Show test-ids** — overlays every `[data-testid]` with a label badge
+- ⏸ **Pause animations** — freezes CSS / Web Animations in the embedded page
+- 🔍 **Inspect mode** — hover shows selector / testid / component name / dimensions; same affordance is active under the Pin tool so you see what you'll capture before clicking
+- 📷 **Screenshot viewport** — copies the current frame as PNG to the clipboard
+- ⏪ **Back / Forward / Reload** — run `history.back/forward()` / `location.reload()` in the page context
+
+**Send** → creates a thread with the URL + annotations as the first message + draw image attached. Annotations are formatted via [`browser-panel-markdown.ts`](packages/client/src/lib/browser-panel-markdown.ts).
+
+The CDP implementation lives in [`packages/runtime/src/services/browser-session-manager.ts`](packages/runtime/src/services/browser-session-manager.ts) (runner side) and [`packages/client/src/components/browser-panel/`](packages/client/src/components/browser-panel/) (client side). Background and design decisions: [`openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/`](openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/). Screenshot follow-ups for non-CDP contexts: [`docs/browser-panel-screenshot.md`](docs/browser-panel-screenshot.md).
+
 ## Development
 
 ```bash

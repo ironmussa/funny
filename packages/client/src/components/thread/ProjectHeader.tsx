@@ -1,5 +1,6 @@
 import type { StartupCommand, Message, ToolCall, ThreadStage } from '@funny/shared';
 import {
+  AppWindow,
   GitCompare,
   GitFork,
   GitBranch,
@@ -79,6 +80,7 @@ import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
@@ -751,6 +753,11 @@ export const ProjectHeader = memo(function ProjectHeader({
   const panelVisibleByProject = useTerminalStore((s) => s.panelVisibleByProject);
   const setPanelVisible = useTerminalStore((s) => s.setPanelVisible);
   const addTab = useTerminalStore((s) => s.addTab);
+  // Browser annotator panel — subscribe unconditionally at the top of the
+  // component so the JSX below can read these values without violating
+  // rules-of-hooks (the icon is inside a conditional render branch).
+  const browserPanelOpen = useBrowserPanelStore((s) => s.open);
+  const toggleBrowserPanel = useBrowserPanelStore((s) => s.togglePanel);
   const terminalPanelVisible = selectedProjectId
     ? (panelVisibleByProject[selectedProjectId] ?? false)
     : false;
@@ -1000,6 +1007,25 @@ export const ProjectHeader = memo(function ProjectHeader({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('preview.openPreview')}</TooltipContent>
+              </Tooltip>
+            )}
+            {selectedProjectId && !activeThreadIsScratch && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    data-testid="header-browser-panel"
+                    aria-pressed={browserPanelOpen}
+                    onClick={() => toggleBrowserPanel()}
+                    className={browserPanelOpen ? 'text-foreground' : 'text-muted-foreground'}
+                  >
+                    <AppWindow className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('projectHeader.browserPanel', 'Browser annotator')}
+                </TooltipContent>
               </Tooltip>
             )}
             {!hideTerminal && !activeThreadIsScratch && (

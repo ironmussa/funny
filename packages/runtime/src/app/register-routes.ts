@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import { mutationRateLimit } from '../middleware/rate-limit.js';
 import { automationRoutes } from '../routes/automations.js';
 import browseRoutes from '../routes/browse.js';
+import { browserSessionRoutes } from '../routes/browser-session.js';
 import { designProjectRoutes } from '../routes/designs.js';
 import filesRoutes from '../routes/files.js';
 import { gitRoutes } from '../routes/git.js';
@@ -43,4 +44,5 @@ export function registerRoutes(app: Hono): void {
   app.route('/api/pipelines', pipelineRuntimeRoutes);
   app.route('/api/orchestrator', orchestratorRuntimeRoutes);
   app.route('/api/projects', designProjectRoutes);
+  app.route('/api/browser-session', browserSessionRoutes);
 }

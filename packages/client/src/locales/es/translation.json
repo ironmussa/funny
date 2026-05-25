@@ -45,7 +45,8 @@
     "noProjects": "No hay proyectos. Presiona + para agregar uno.",
     "analytics": "Analíticas",
     "githubIssues": "GitHub Issues",
-    "viewDesigns": "Ver diseños"
+    "viewDesigns": "Ver diseños",
+    "browser_panel": "Anotador del navegador"
   },
   "createDesign": {
     "title": "Crear diseño",

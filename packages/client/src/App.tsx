@@ -9,12 +9,14 @@ import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
+import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
 import { canDoGitOps } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
@@ -126,6 +128,9 @@ const CircuitBreakerDialog = lazy(() =>
 const MonacoEditorDialog = lazy(() =>
   import('@/components/MonacoEditorDialog').then((m) => ({ default: m.MonacoEditorDialog })),
 );
+const BrowserPanel = lazy(() =>
+  import('@/components/browser-panel/BrowserPanel').then((m) => ({ default: m.BrowserPanel })),
+);
 
 export function App() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
@@ -179,6 +184,22 @@ export function App() {
       const deltaVw = (deltaPx / window.innerWidth) * 100;
       // Dragging the handle right shrinks the right pane
       setReviewPaneWidth(dragStartWidthVw.current - deltaVw);
+    },
+  });
+
+  // --- Browser annotator panel layout ---
+  const browserPanelOpen = useBrowserPanelStore((s) => s.open);
+  const browserPanelWidth = useBrowserPanelStore((s) => s.browserPanelWidth);
+  const setBrowserPanelWidth = useBrowserPanelStore((s) => s.setBrowserPanelWidth);
+  const dragStartBrowserWidthPx = useRef(0);
+  const browserResize = useResizeHandle({
+    direction: 'horizontal',
+    onResizeStart: () => {
+      dragStartBrowserWidthPx.current = useBrowserPanelStore.getState().browserPanelWidth;
+    },
+    onResize: (deltaPx) => {
+      // Handle sits on the LEFT edge of the panel: dragging left → panel grows.
+      setBrowserPanelWidth(dragStartBrowserWidthPx.current - deltaPx);
     },
   });
 
@@ -241,6 +262,7 @@ export function App() {
   }, []);
   useGlobalShortcuts(toggleCommandPalette, toggleFileSearch);
   useThreadHistoryTracker();
+  useTauriAnnotatorEvents();
 
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
@@ -310,6 +332,32 @@ export function App() {
               </Suspense>
             </SidebarInset>
           </div>
+
+          {/* Browser annotator panel — sibling to SidebarInset. Handle on its
+              left edge resizes the panel; width persists to localStorage. */}
+          {browserPanelOpen && !isFullScreenView && (
+            <>
+              <ResizeHandle
+                direction="horizontal"
+                resizing={browserResize.resizing}
+                onPointerDown={browserResize.handlePointerDown}
+                onPointerMove={browserResize.handlePointerMove}
+                onPointerUp={browserResize.handlePointerUp}
+                data-testid="browser-panel-resize-handle"
+              />
+              <div
+                className={cn(
+                  'min-w-0 flex-shrink-0 overflow-hidden border-l border-border bg-card',
+                  !browserResize.resizing && 'transition-[width] duration-200 ease-linear',
+                )}
+                style={{ width: `${browserPanelWidth}px` }}
+              >
+                <Suspense fallback={null}>
+                  <BrowserPanel />
+                </Suspense>
+              </div>
+            </>
+          )}
 
           {/* Resize handle between center and right pane — only when right pane is shown */}
           {rightPaneVisible && (

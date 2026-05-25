@@ -12,6 +12,7 @@ import { getServices, setServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
 import { wsBroker } from '../services/ws-broker.js';
 import { logProviderStatus } from '../utils/provider-detection.js';
+import { handleBrowserSessionMessage } from './browser-session-message-handler.js';
 import { handlePtyMessage } from './pty-message-handler.js';
 
 /**
@@ -88,6 +89,10 @@ export async function initRuntime(app: Hono): Promise<void> {
   setBrowserWSHandler(async (userId, data, respond) => {
     const parsed = data as { type: string; data: any };
     if (!parsed?.type) return;
+    if (parsed.type.startsWith('browser-session:')) {
+      handleBrowserSessionMessage(parsed.type, parsed.data, userId);
+      return;
+    }
     handlePtyMessage(parsed.type, parsed.data, userId, (msg) => respond(msg));
   });
   await initTeamMode(process.env.TEAM_SERVER_URL!);

@@ -14,6 +14,7 @@ import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { getNavigate } from '@/stores/thread-store-internals';
 
+import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
 
 const wsLog = createClientLogger('ws');
@@ -428,6 +429,14 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
     case 'test:action':
       dispatchTestEvent(type, data);
       break;
+    case 'browser-session:frame':
+    case 'browser-session:ready':
+    case 'browser-session:result':
+    case 'browser-session:console':
+    case 'browser-session:error':
+    case 'browser-session:closed':
+      dispatchBrowserSessionEvent(type, data);
+      break;
     case 'clone:progress':
       window.dispatchEvent(new CustomEvent('clone:progress', { detail: data }));
       break;
@@ -649,6 +658,12 @@ const ALL_EVENT_TYPES = [
   'native-git:build_output',
   'native-git:build_status',
   'runner:status',
+  'browser-session:ready',
+  'browser-session:frame',
+  'browser-session:result',
+  'browser-session:console',
+  'browser-session:error',
+  'browser-session:closed',
 ];
 
 // Tracks Socket.IO listeners we attached, so HMR (or any future dispose path)

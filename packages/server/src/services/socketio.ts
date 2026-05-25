@@ -187,6 +187,9 @@ function setupBrowserNamespace(): void {
     setupBrowserPtyHandlers(socket, userId);
     setupBrowserPtyListRpc(socket, userId);
 
+    // Handle browser annotator panel WS messages
+    setupBrowserSessionHandlers(socket, userId);
+
     socket.on('disconnect', (reason) => {
       clearSocketRate(socket.id);
       log.info('Browser client disconnected', {
@@ -352,6 +355,59 @@ function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
         const runnerId = await rm.findAnyRunnerForUser(userId);
         await forwardToRunner(runnerId);
       }
+    });
+  }
+}
+
+/**
+ * Set up browser-session command forwarding from the browser socket to the
+ * user's runner. These messages are panel-scoped (no projectId), so we route
+ * to any runner owned by the requesting user — same as the no-projectId
+ * branch of `setupBrowserPtyHandlers`. See `packages/runtime/src/services/
+ * browser-session-manager.ts` for the runner-side implementation.
+ */
+function setupBrowserSessionHandlers(socket: Socket, userId: string): void {
+  const events = [
+    'browser-session:open',
+    'browser-session:navigate',
+    'browser-session:nav',
+    'browser-session:input',
+    'browser-session:inspect-at',
+    'browser-session:inspect-rect',
+    'browser-session:screenshot',
+    'browser-session:execute',
+    'browser-session:heartbeat',
+    'browser-session:close',
+  ];
+
+  for (const eventName of events) {
+    socket.on(eventName, async (data: unknown) => {
+      if (isRateLimited(socket.id)) return;
+      if (data != null && (typeof data !== 'object' || Array.isArray(data))) return;
+      const payload = (data ?? {}) as Record<string, unknown>;
+
+      const rm = await import('./runner-manager.js');
+      const runnerId = await rm.findAnyRunnerForUser(userId);
+      if (!runnerId) {
+        log.warn('No runner for browser-session', {
+          namespace: 'socketio',
+          event: eventName,
+          userId,
+        });
+        return;
+      }
+
+      const wsRelay = await import('./ws-relay.js');
+      const socketId = wsRelay.getRunnerSocketId(runnerId);
+      if (!socketId) return;
+
+      getIO()
+        .of('/runner')
+        .to(socketId)
+        .emit('central:browser_ws', {
+          userId,
+          data: { type: eventName, data: payload },
+        });
     });
   }
 }

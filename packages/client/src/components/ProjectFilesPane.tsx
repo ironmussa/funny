@@ -1,12 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
-import {
-  FolderMinus,
-  FolderOpen,
-  FolderTree,
-  Loader2,
-  PanelRightClose,
-  RefreshCw,
-} from 'lucide-react';
+import { FolderMinus, FolderOpen, Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -55,7 +48,6 @@ function saveCollapsed(basePath: string | undefined, set: Set<string>): void {
 
 export function ProjectFilesPane() {
   const { t } = useTranslation();
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const designViewDesignId = useUIStore((s) => s.designViewDesignId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -177,27 +169,6 @@ export function ProjectFilesPane() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex h-12 flex-shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-2">
-        <div className="flex min-w-0 items-center gap-2 px-1 text-sm font-medium">
-          <FolderTree className="icon-base flex-shrink-0 text-muted-foreground" />
-          <span className="truncate">{t('projectFiles.title', 'Project Files')}</span>
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setReviewPaneOpen(false)}
-              data-testid="project-files-close"
-              className="text-muted-foreground"
-            >
-              <PanelRightClose className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{t('review.close', 'Close')}</TooltipContent>
-        </Tooltip>
-      </div>
-
       <div className="flex flex-shrink-0 items-center gap-0.5 border-b border-border px-2 py-1">
         <Tooltip>
           <TooltipTrigger asChild>

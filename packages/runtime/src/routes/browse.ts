@@ -331,54 +331,6 @@ app.post('/open-in-editor', async (c) => {
   }
 });
 
-// Open terminal at directory
-app.post('/open-terminal', async (c) => {
-  const body = await c.req.json<{ path?: string; threadId?: string }>();
-  const userId = c.get('userId') as string;
-  const resolved = await resolveBodyPath(body, userId);
-  if (resolved instanceof Response) return resolved;
-  const dirPath = resolved;
-
-  // Normalize and resolve the path to its absolute form
-  const normalizedPath = normalize(resolve(dirPath));
-
-  // Validate directory exists before opening
-  if (!existsSync(normalizedPath)) {
-    return c.json({ error: 'Directory does not exist' }, 404);
-  }
-
-  try {
-    const stat = statSync(normalizedPath);
-    if (!stat.isDirectory()) {
-      return c.json({ error: 'Path is not a directory' }, 400);
-    }
-  } catch {
-    return c.json({ error: 'Cannot access directory' }, 500);
-  }
-
-  const os = platform();
-  let cmd: string;
-  let args: string[];
-
-  if (os === 'win32') {
-    cmd = 'cmd';
-    args = ['/c', 'start', 'cmd'];
-  } else if (os === 'darwin') {
-    cmd = 'open';
-    args = ['-a', 'Terminal', dirPath];
-  } else {
-    cmd = 'x-terminal-emulator';
-    args = ['--working-directory', dirPath];
-  }
-
-  Bun.spawn([cmd, ...args], {
-    cwd: dirPath,
-    stdio: ['ignore', 'ignore', 'ignore'],
-  });
-
-  return c.json({ ok: true });
-});
-
 /** Simple fuzzy match: all characters of the query appear in order within the text */
 function fuzzyMatch(text: string, query: string): boolean {
   let qi = 0;

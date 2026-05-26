@@ -10,7 +10,6 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { NewThreadInput } from './thread/NewThreadInput';
-import { ProjectHeader } from './thread/ProjectHeader';
 import { ThreadChatView } from './thread/ThreadChatView';
 import { ThreadIdleStarter } from './thread/ThreadIdleStarter';
 import { WorktreeSetupProgress } from './WorktreeSetupProgress';
@@ -39,11 +38,11 @@ export function ThreadView() {
     );
   }
 
-  // Show new thread input when a project's "+" was clicked
+  // Show new thread input when a project's "+" was clicked. ProjectHeader
+  // is rendered at the app shell level (top edge group), so no header here.
   if (newThreadProjectId && !selectedThreadId) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <ProjectHeader />
         <NewThreadInput />
       </div>
     );
@@ -53,7 +52,6 @@ export function ThreadView() {
     if (selectedProjectId && hasProjects) {
       return (
         <div className="flex h-full min-w-0 flex-1 flex-col">
-          <ProjectHeader />
           <NewThreadInput />
         </div>
       );
@@ -88,7 +86,6 @@ export function ThreadView() {
   if (!activeThread) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        {selectedProjectId && <ProjectHeader />}
         <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
           <div className="flex w-full max-w-md flex-col items-center justify-center gap-4">
             <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
@@ -102,7 +99,6 @@ export function ThreadView() {
   if (activeThread.status === 'setting_up') {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <ProjectHeader />
         <div className="flex flex-1 items-center justify-center px-4">
           <WorktreeSetupProgress steps={activeThread.setupProgress ?? []} />
         </div>

@@ -397,30 +397,66 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex min-h-0 flex-1 flex-col">
-        {loading && prs.length === 0 ? (
-          <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-            <Loader2 className="icon-sm animate-spin" />
-            {t('review.pullRequests.loading', 'Loading pull requests\u2026')}
-          </div>
-        ) : error ? (
-          <EmptyState
-            title={error}
-            action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={refresh}
-                className="gap-1.5"
-                data-testid="prs-retry"
-              >
-                <RefreshCw className="icon-xs" />
-                {t('common.retry', 'Retry')}
-              </Button>
-            }
-          />
-        ) : branchFocusMode ? (
-          currentBranchPRs.length > 0 ? (
+      {loading && prs.length === 0 ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
+          <Loader2 className="icon-sm animate-spin" />
+          {t('review.pullRequests.loading', 'Loading pull requests\u2026')}
+        </div>
+      ) : error ? (
+        <EmptyState
+          title={error}
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refresh}
+              className="gap-1.5"
+              data-testid="prs-retry"
+            >
+              <RefreshCw className="icon-xs" />
+              {t('common.retry', 'Retry')}
+            </Button>
+          }
+        />
+      ) : branchFocusMode && currentBranchPRs.length === 0 ? (
+        <EmptyState
+          testId="prs-branch-empty"
+          icon={GitPullRequest}
+          title={t('review.pullRequests.noPRForBranch', 'No pull request for this branch yet')}
+          description={
+            currentBranch ? (
+              <span className="font-mono">
+                <bdi>{currentBranch}</bdi>
+              </span>
+            ) : undefined
+          }
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewAll(true)}
+              className="gap-1.5 text-xs"
+              data-testid="prs-view-all-cta"
+            >
+              <List className="icon-xs" />
+              {t('review.pullRequests.viewAll', 'View all pull requests')}
+            </Button>
+          }
+        />
+      ) : !branchFocusMode && prs.length === 0 ? (
+        <EmptyState
+          icon={GitPullRequest}
+          title={
+            state === 'open'
+              ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
+              : state === 'closed'
+                ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
+                : t('review.pullRequests.noPRs', 'No pull requests')
+          }
+        />
+      ) : (
+        <ScrollArea className="flex min-h-0 flex-1 flex-col">
+          {branchFocusMode ? (
             <div className="flex flex-col">
               {currentBranchPRs.map((pr) => (
                 <PinnedPRCard
@@ -432,106 +468,70 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               ))}
             </div>
           ) : (
-            <EmptyState
-              testId="prs-branch-empty"
-              icon={GitPullRequest}
-              title={t('review.pullRequests.noPRForBranch', 'No pull request for this branch yet')}
-              description={
-                currentBranch ? (
-                  <span className="font-mono">
-                    <bdi>{currentBranch}</bdi>
-                  </span>
-                ) : undefined
-              }
-              action={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setViewAll(true)}
-                  className="gap-1.5 text-xs"
-                  data-testid="prs-view-all-cta"
-                >
-                  <List className="icon-xs" />
-                  {t('review.pullRequests.viewAll', 'View all pull requests')}
-                </Button>
-              }
-            />
-          )
-        ) : prs.length === 0 ? (
-          <EmptyState
-            icon={GitPullRequest}
-            title={
-              state === 'open'
-                ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
-                : state === 'closed'
-                  ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
-                  : t('review.pullRequests.noPRs', 'No pull requests')
-            }
-          />
-        ) : (
-          <div className="flex flex-col">
-            {currentBranchPRs.length > 0 && (
-              <>
-                <div
-                  className="flex items-center gap-1.5 border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                  data-testid="prs-current-branch-header"
-                >
-                  <GitBranch className="size-3" />
-                  <span className="truncate">
-                    {t('review.pullRequests.currentBranch', 'Current branch')}
-                    {currentBranch ? (
-                      <>
-                        {' '}
-                        &middot; <bdi>{currentBranch}</bdi>
-                      </>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  {currentBranchPRs.map((pr) => (
-                    <PinnedPRCard
-                      key={pr.number}
-                      pr={pr}
-                      projectId={projectId}
-                      currentUserLogin={currentUserLogin}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-            {otherPRs.length > 0 && (
-              <>
-                {currentBranchPRs.length > 0 && (
+            <div className="flex flex-col">
+              {currentBranchPRs.length > 0 && (
+                <>
                   <div
-                    className="border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                    data-testid="prs-other-header"
+                    className="flex items-center gap-1.5 border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                    data-testid="prs-current-branch-header"
                   >
-                    {t('review.pullRequests.otherPRs', 'Other pull requests')}
+                    <GitBranch className="size-3" />
+                    <span className="truncate">
+                      {t('review.pullRequests.currentBranch', 'Current branch')}
+                      {currentBranch ? (
+                        <>
+                          {' '}
+                          &middot; <bdi>{currentBranch}</bdi>
+                        </>
+                      ) : null}
+                    </span>
                   </div>
-                )}
-                <div className="flex flex-col divide-y divide-sidebar-border">
-                  {otherPRs.map(renderPRRow)}
+                  <div className="flex flex-col">
+                    {currentBranchPRs.map((pr) => (
+                      <PinnedPRCard
+                        key={pr.number}
+                        pr={pr}
+                        projectId={projectId}
+                        currentUserLogin={currentUserLogin}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+              {otherPRs.length > 0 && (
+                <>
+                  {currentBranchPRs.length > 0 && (
+                    <div
+                      className="border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                      data-testid="prs-other-header"
+                    >
+                      {t('review.pullRequests.otherPRs', 'Other pull requests')}
+                    </div>
+                  )}
+                  <div className="flex flex-col divide-y divide-sidebar-border">
+                    {otherPRs.map(renderPRRow)}
+                  </div>
+                </>
+              )}
+              {hasMore && (
+                <div className="flex justify-center py-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadMore}
+                    disabled={loading}
+                    className="gap-1.5 text-xs"
+                    data-testid="prs-load-more"
+                  >
+                    {loading ? <Loader2 className="icon-xs animate-spin" /> : null}
+                    {t('review.pullRequests.loadMore', 'Load more')}
+                  </Button>
                 </div>
-              </>
-            )}
-            {hasMore && (
-              <div className="flex justify-center py-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={loadMore}
-                  disabled={loading}
-                  className="gap-1.5 text-xs"
-                  data-testid="prs-load-more"
-                >
-                  {loading ? <Loader2 className="icon-xs animate-spin" /> : null}
-                  {t('review.pullRequests.loadMore', 'Load more')}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </ScrollArea>
+              )}
+            </div>
+          )}
+        </ScrollArea>
+      )}
 
       {/* PR Detail Dialog */}
       {selectedPR && projectId && (

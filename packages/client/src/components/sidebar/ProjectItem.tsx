@@ -39,6 +39,7 @@ import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { openDirectoryInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { openProjectTerminal } from '@/lib/open-terminal-tab';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
@@ -420,12 +421,9 @@ export const ProjectItem = memo(function ProjectItem({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   data-testid="project-menu-open-terminal"
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const result = await api.openTerminal({ path: project.path });
-                    if (result.isErr()) {
-                      console.error('Failed to open terminal:', result.error);
-                    }
+                    openProjectTerminal({ projectId: project.id, cwd: project.path });
                   }}
                 >
                   <Terminal className="icon-sm" />

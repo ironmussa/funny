@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { PromptInput } from '@/components/PromptInput';
-import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { api } from '@/lib/api';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
@@ -104,7 +103,6 @@ export function ThreadIdleStarter({ activeThread }: Props) {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      <ProjectHeader />
       <div className="flex flex-1 items-center justify-center px-4">
         <div className="w-full max-w-3xl">
           <PromptInput

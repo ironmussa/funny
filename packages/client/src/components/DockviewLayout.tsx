@@ -61,6 +61,14 @@ export type BottomTabSpec = {
 type DockviewLayoutProps = {
   left: ReactNode;
   center: ReactNode;
+  /** Top slot — rendered inside a dockview edge group docked to the top of
+   *  the shell's middle column, so it spans the full width across center +
+   *  right pane (but NOT over the left sidebar, which is its own edge
+   *  group). Pass undefined to skip creating the edge group entirely. */
+  top?: ReactNode;
+  /** Height of the top edge group in px. Default 48 to match a typical
+   *  app header (h-12). */
+  topHeight?: number;
   /** Single right slot — only used when `rightTabs` is not provided. */
   right?: ReactNode;
   /** Multi-tab right group (fixed set, headers visible, no close on tabs). */
@@ -102,6 +110,7 @@ const PANEL_LEFT = 'left';
 const PANEL_CENTER = 'center';
 const PANEL_RIGHT = 'right';
 const PANEL_BROWSER = 'browser';
+const PANEL_TOP = 'top';
 /** Id of the LEFT-edge group container. The left sidebar panel lives INSIDE
  *  this group; the group itself is created once via `addEdgeGroup('left', ...)`
  *  in `buildDefaultLayout`. Edge groups have `priority = LayoutPriority.Low`
@@ -111,6 +120,11 @@ const PANEL_BROWSER = 'browser';
  *  the left a regular flexible view that absorbed delta from sibling resizes
  *  (and from `Sizing.Distribute` when the right pane was removed). */
 const LEFT_EDGE_ID = 'left-edge';
+/** Id of the TOP-edge group. The top edge group lives inside the shell's
+ *  MIDDLE column (between left and right edges), so it spans the gridview's
+ *  full width — i.e. across center + right pane. Use it for a header that
+ *  needs to extend past the center column to the right border. */
+const TOP_EDGE_ID = 'top-edge';
 const rightPanelId = (tabId: string) => `right:${tabId}`;
 const bottomPanelId = (tabId: string) => `bottom:${tabId}`;
 const isRightPanelId = (id: string) => id.startsWith('right:') || id === PANEL_RIGHT;
@@ -122,13 +136,10 @@ const STORAGE_KEY_BOTTOM_HEIGHT = 'dockview.bottom_height';
 const STORAGE_KEY_BROWSER_WIDTH = 'dockview.browser_width';
 /** Full serialized layout. The version suffix lets us invalidate stored
  *  layouts after structural code changes (rename, new panel ids, etc.).
- *  v3 forces a rebuild because the left sidebar moved to an edge group —
- *  layouts saved at v2 (before the migration finished) still have the left
- *  as a regular `direction: 'left'` panel and would silently restore without
- *  the priority.Low protection, causing the sidebar to absorb delta from
- *  the right pane's toggle. The structural check below
- *  (`hasLeftEdgeGroupAfterRestore`) belt-and-suspenders this. */
-const STORAGE_KEY_LAYOUT = 'dockview.layout.v3';
+ *  v8 forces a rebuild because the top edge group was removed — the header
+ *  is now rendered inside the center panel directly. Saved v7 layouts still
+ *  have a `top-edge` group that would restore as a stale empty band. */
+const STORAGE_KEY_LAYOUT = 'dockview.layout.v8';
 /** Persist the layout at most every 500ms — splitter drags fire dozens of
  *  layout-change events and we don't want to thrash localStorage. */
 const LAYOUT_PERSIST_DEBOUNCE_MS = 500;
@@ -204,6 +215,8 @@ function clearStoredLayout() {
 export function DockviewLayout({
   left,
   center,
+  top,
+  topHeight = 48,
   right,
   rightTabs,
   activeRightTab,
@@ -294,6 +307,7 @@ export function DockviewLayout({
       [PANEL_CENTER]: make(PANEL_CENTER),
       [PANEL_RIGHT]: make(PANEL_RIGHT),
       [PANEL_BROWSER]: make(PANEL_BROWSER),
+      [PANEL_TOP]: make(PANEL_TOP),
       'right-tab': dynamicRenderer,
       'bottom-tab': dynamicRenderer,
     };
@@ -371,9 +385,9 @@ export function DockviewLayout({
             params: { hostId: rightPanelId(tab.id) },
             position:
               i === 0
-                ? // ABSOLUTE 'right' — lands at the root grid edge so the right
-                  // group spans full height, even after the bottom (terminals)
-                  // group is later added below the center column.
+                ? // ABSOLUTE 'right' — lands at the root grid edge so the
+                  // right group spans full height, even next to the bottom
+                  // (terminals) group below center.
                   { direction: 'right' }
                 : { direction: 'within', referencePanel: rightPanelId(tabs[0].id) },
             initialWidth: i === 0 ? desiredWidth : undefined,
@@ -524,7 +538,16 @@ export function DockviewLayout({
       // Left is an EDGE GROUP (structurally outside the inner gridview), so
       // it has `LayoutPriority.Low` built in — proportional redistribution
       // from sibling resizes / removals can't shrink it. Resulting layout:
-      //   [left-edge | [ center / bottom ] | right] (right still inside grid)
+      //   ┌─────────┬──────────────────────────────────┐
+      //   │         │      top-edge (if `top`)         │
+      //   │ left-   ├────────────────────────┬─────────┤
+      //   │ edge    │       center           │  right  │
+      //   │         ├────────────────────────┤         │
+      //   │         │       bottom           │         │
+      //   └─────────┴────────────────────────┴─────────┘
+      // The top edge group is INSIDE the middle column, so it spans across
+      // center + right (and bottom if right wraps it), but not over the
+      // left sidebar.
       api.addEdgeGroup('left', {
         id: LEFT_EDGE_ID,
         initialSize: initialLeftWidthResolved,
@@ -542,11 +565,36 @@ export function DockviewLayout({
       hideHeader(centerPanel);
       hideHeader(leftPanel);
 
+      // Top edge group — header that spans across center+right area.
+      // We explicitly pin minimumSize === maximumSize === initialSize so the
+      // edge group is EXACTLY `topHeight` tall. Without this, dockview's
+      // default `minimumSize = collapsedSize + 50` would bloat the group
+      // (e.g. with our collapsedSize=0 the default min is 50, so the visible
+      // group would be 50px instead of the 48px we requested, leaving a
+      // ghost strip below the header).
+      if (top !== undefined) {
+        api.addEdgeGroup('top', {
+          id: TOP_EDGE_ID,
+          initialSize: topHeight,
+          minimumSize: topHeight,
+          maximumSize: topHeight,
+          collapsedSize: 0,
+          collapsed: false,
+        });
+        const topPanel = api.addPanel({
+          id: PANEL_TOP,
+          component: PANEL_TOP,
+          title: 'Top',
+          position: { referenceGroup: TOP_EDGE_ID, direction: 'within' },
+        });
+        hideHeader(topPanel);
+      }
+
       if (rightPaneOpen) addRightPanels(api);
       if (browserOpen && browser !== undefined) addBrowserPanel(api);
-      // Bottom MUST be added after right so that `direction: 'right'` for the
-      // right group lands at the root level (next to left+center), not inside
-      // a center+bottom sub-column.
+      // Bottom MUST be added AFTER right so the `direction: 'right'` of the
+      // right group lands at the root level (next to center column), not
+      // inside a center+bottom sub-column. Order matters.
       if (bottomPaneOpen) syncBottomPanels(api);
     },
     [
@@ -559,6 +607,8 @@ export function DockviewLayout({
       initialLeftWidthResolved,
       rightPaneOpen,
       syncBottomPanels,
+      top,
+      topHeight,
     ],
   );
 
@@ -584,8 +634,34 @@ export function DockviewLayout({
       // old structure loses the priority.Low protection and reintroduces
       // the sidebar-jiggle bug.
       if (!api.getEdgeGroup('left')) return false;
+      // Same check for the top edge group when the caller wants a top slot.
+      if (top !== undefined && !api.getEdgeGroup('top')) return false;
+      // Inverse: if the caller DOESN'T want a top slot, but the saved layout
+      // has a stale top edge group OR top panel (e.g. carried over from when
+      // the caller used to pass `top`), force a rebuild — otherwise it
+      // renders as a headerless empty band above center+right.
+      if (top === undefined && (api.getEdgeGroup('top') || api.getPanel(PANEL_TOP))) return false;
       hideHeader(api.getPanel(PANEL_LEFT)!);
       hideHeader(api.getPanel(PANEL_CENTER)!);
+      const restoredTopPanel = api.getPanel(PANEL_TOP);
+      if (restoredTopPanel) hideHeader(restoredTopPanel);
+      // Re-pin the top edge group's height. `addEdgeGroup` sets
+      // minimumSize/maximumSize on creation, but those constraints are NOT
+      // preserved by `fromJSON` — a saved layout where the splitter was
+      // dragged would restore at that wrong height AND stay draggable
+      // (since dockview's default min becomes `collapsedSize + 50`). Re-apply
+      // the height constraint and reset to topHeight so the header is exactly
+      // topHeight tall every reload.
+      if (top !== undefined) {
+        const topGroup = api.getEdgeGroup('top');
+        if (topGroup) {
+          topGroup.setConstraints({
+            minimumHeight: topHeight,
+            maximumHeight: topHeight,
+          });
+          topGroup.setSize({ height: topHeight });
+        }
+      }
       if (!browserOpen || browser === undefined) {
         const existingBrowser = api.getPanel(PANEL_BROWSER);
         if (existingBrowser) {
@@ -595,7 +671,7 @@ export function DockviewLayout({
       }
       return true;
     },
-    [browser, browserOpen, hideHeader],
+    [browser, browserOpen, hideHeader, top, topHeight],
   );
 
   /** Debounced layout persister — `onDidLayoutChange` fires on every pixel of
@@ -633,7 +709,14 @@ export function DockviewLayout({
         try {
           event.api.fromJSON(storedLayout);
           restored = reconcileAfterRestore(event.api);
-          if (!restored) clearStoredLayout();
+          if (!restored) {
+            clearStoredLayout();
+            // fromJSON left the dockview in a partial state — wipe it.
+            for (const p of [...event.api.panels]) {
+              suppressCloseRef.current.add(p.id);
+              p.api.close();
+            }
+          }
         } catch {
           clearStoredLayout();
           // fromJSON may have left the dockview in a partial state — wipe it.
@@ -847,6 +930,48 @@ export function DockviewLayout({
     }
   }, [bottomPaneOpen, syncBottomPanels]);
 
+  // ── Float / re-dock a bottom panel via a window event ──
+  // The TerminalDockview's "Detach" button dispatches `dockview:float-bottom`
+  // with the tab id; we move that panel into a floating group (or back to the
+  // bottom group if it's already floating). Decoupling via custom event keeps
+  // the action button free of dockview-API plumbing.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ tabId: string }>).detail;
+      const tabId = detail?.tabId;
+      if (!tabId) return;
+      const api = apiRef.current;
+      if (!api) return;
+      const panel = api.getPanel(bottomPanelId(tabId));
+      if (!panel) return;
+      if (panel.group.api.location.type === 'floating') {
+        // Re-dock: drop the panel into an existing bottom group if there is
+        // one, otherwise create a new bottom group below center.
+        const anchor = api.panels.find(
+          (p) => isBottomPanelId(p.id) && p.id !== panel.id && p.group.api.location.type === 'grid',
+        );
+        if (anchor) {
+          panel.api.moveTo({ group: anchor.group });
+        } else {
+          panel.api.moveTo({
+            group: api.addGroup({
+              direction: 'below',
+              referencePanel: PANEL_CENTER,
+              initialHeight: initialBottomHeightRef.current,
+            }),
+          });
+        }
+      } else {
+        api.addFloatingGroup(panel, {
+          width: 640,
+          height: Math.max(initialBottomHeightRef.current, 320),
+        });
+      }
+    };
+    window.addEventListener('dockview:float-bottom', handler);
+    return () => window.removeEventListener('dockview:float-bottom', handler);
+  }, []);
+
   // Sync bottom tabs whenever the desired set or titles change.
   const bottomTabsSig = (bottomTabs ?? []).map((t) => `${t.id}|${t.title}`).join(',');
   const lastSyncedBottomSigRef = useRef<string | null>(null);
@@ -888,6 +1013,7 @@ export function DockviewLayout({
       />
       {hosts[PANEL_LEFT] && createPortal(left, hosts[PANEL_LEFT])}
       {hosts[PANEL_CENTER] && createPortal(center, hosts[PANEL_CENTER])}
+      {top !== undefined && hosts[PANEL_TOP] && createPortal(top, hosts[PANEL_TOP])}
       {!isTabbedRight &&
         right !== undefined &&
         hosts[PANEL_RIGHT] &&

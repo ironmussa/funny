@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { PictureInPicture2, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -189,6 +189,35 @@ function NewTerminalButton() {
   );
 }
 
+/** "Detach" button — pops the active terminal out into a floating panel
+ *  (and back into the bottom group on a second click). Dispatches a window
+ *  event that DockviewLayout listens for, so this component doesn't need a
+ *  dockview-API ref. */
+function DetachTerminalButton({ activeTabId }: { activeTabId: string | undefined }) {
+  const { t } = useTranslation();
+  if (!activeTabId) return null;
+  const onClick = () => {
+    window.dispatchEvent(
+      new CustomEvent('dockview:float-bottom', { detail: { tabId: activeTabId } }),
+    );
+  };
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          onClick={onClick}
+          data-testid="terminal-detach"
+          className="h-full rounded-none px-2.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <PictureInPicture2 className="icon-sm" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{t('terminal.detach', 'Detach / re-dock terminal')}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** Hook that derives all the props DockviewLayout needs to render the bottom
  *  group as a set of native dockview tabs (one per terminal). */
 export function useTerminalDockview(): {
@@ -279,6 +308,6 @@ export function useTerminalDockview(): {
     bottomPaneOpen,
     bottomPrefixActions: null,
     bottomLeftActions: <NewTerminalButton />,
-    bottomRightActions: null,
+    bottomRightActions: <DetachTerminalButton activeTabId={effectiveActiveTabId} />,
   };
 }

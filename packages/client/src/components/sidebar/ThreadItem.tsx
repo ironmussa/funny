@@ -38,6 +38,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
+import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
 import {
@@ -388,12 +389,9 @@ export const ThreadItem = memo(function ThreadItem({
                   {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const result = await api.openTerminal({ threadId: thread.id });
-                    if (result.isErr()) {
-                      toastError(result.error);
-                    }
+                    openThreadTerminal({ thread });
                   }}
                 >
                   <Terminal className="icon-sm" />

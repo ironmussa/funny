@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { CenterDockview } from '@/components/CenterDockview';
 import { DockviewLayout, type RightTabSpec } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
@@ -11,6 +12,7 @@ import {
 } from '@/components/review-pane/panels/ChangesPanel';
 import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';
 import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
+import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
@@ -226,53 +228,6 @@ export function App() {
     </ErrorBoundary>
   );
 
-  const centerPanel = (
-    <SidebarInset className="flex h-full flex-col overflow-hidden">
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <ErrorBoundary area="main-content">
-          {/* Overlay views — same priority cascade as before. Wrapped in its
-              own Suspense so a lazy overlay's first-load suspension does not
-              unmount the persistent ThreadView below. */}
-          {isFullScreenView && (
-            <Suspense>
-              <div className="absolute inset-0 z-10 flex">
-                {generalSettingsOpen ? (
-                  <GeneralSettingsView />
-                ) : settingsOpen ? (
-                  <SettingsDetailView />
-                ) : analyticsOpen ? (
-                  <AnalyticsView />
-                ) : liveColumnsOpen ? (
-                  <LiveColumnsView />
-                ) : orchestratorOpen ? (
-                  <OrchestratorView />
-                ) : testRunnerOpen ? (
-                  <TestRunnerPane />
-                ) : automationInboxOpen ? (
-                  <AutomationInboxView />
-                ) : addProjectOpen ? (
-                  <AddProjectView />
-                ) : allThreadsProjectId ? (
-                  <AllThreadsView />
-                ) : null}
-              </div>
-            </Suspense>
-          )}
-
-          {/* ThreadView stays mounted under any overlay so returning from
-              Settings/Analytics/etc. is instant (no message refetch / Monaco
-              / syntax-highlight re-render). Hidden via display:none when an
-              overlay is active. */}
-          <Suspense>
-            <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
-              <ThreadView />
-            </div>
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    </SidebarInset>
-  );
-
   const rightPaneVisible = reviewPaneOpen && !isFullScreenView;
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
@@ -316,6 +271,70 @@ export function App() {
     </div>
   ) : undefined;
 
+  const threadContent = (
+    <ErrorBoundary area="main-content">
+      {/* Overlay views — same priority cascade as before. Wrapped in its
+          own Suspense so a lazy overlay's first-load suspension does not
+          unmount the persistent ThreadView below. */}
+      {isFullScreenView && (
+        <Suspense>
+          <div className="absolute inset-0 z-10 flex">
+            {generalSettingsOpen ? (
+              <GeneralSettingsView />
+            ) : settingsOpen ? (
+              <SettingsDetailView />
+            ) : analyticsOpen ? (
+              <AnalyticsView />
+            ) : liveColumnsOpen ? (
+              <LiveColumnsView />
+            ) : orchestratorOpen ? (
+              <OrchestratorView />
+            ) : testRunnerOpen ? (
+              <TestRunnerPane />
+            ) : automationInboxOpen ? (
+              <AutomationInboxView />
+            ) : addProjectOpen ? (
+              <AddProjectView />
+            ) : allThreadsProjectId ? (
+              <AllThreadsView />
+            ) : null}
+          </div>
+        </Suspense>
+      )}
+
+      {/* ThreadView stays mounted under any overlay so returning from
+          Settings/Analytics/etc. is instant (no message refetch / Monaco
+          / syntax-highlight re-render). Hidden via display:none when an
+          overlay is active. */}
+      <Suspense>
+        <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
+          <ThreadView />
+        </div>
+      </Suspense>
+    </ErrorBoundary>
+  );
+
+  const centerPanel = (
+    <SidebarInset className="flex h-full flex-col overflow-hidden">
+      {!isFullScreenView && (
+        <ErrorBoundary area="project-header">
+          <ProjectHeader />
+        </ErrorBoundary>
+      )}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <CenterDockview
+          thread={<div className="relative flex h-full w-full">{threadContent}</div>}
+          right={singleRightPanel}
+          rightTabs={rightTabs}
+          activeRightTab={reviewSubTab}
+          onActiveRightTabChange={(id) => setReviewSubTabStore(id as typeof reviewSubTab)}
+          rightPaneOpen={rightPaneVisible}
+          initialRightWidth={Math.round(window.innerWidth * (reviewPaneWidth / 100))}
+        />
+      </div>
+    </SidebarInset>
+  );
+
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
       <ThreadProvider threadId={selectedThreadId}>
@@ -324,11 +343,6 @@ export function App() {
             <DockviewLayout
               left={leftPanel}
               center={centerPanel}
-              right={singleRightPanel}
-              rightTabs={rightTabs}
-              activeRightTab={reviewSubTab}
-              onActiveRightTabChange={(id) => setReviewSubTabStore(id as typeof reviewSubTab)}
-              rightPaneOpen={rightPaneVisible}
               bottomTabs={terminalDockview.bottomTabs}
               activeBottomTab={terminalDockview.activeBottomTab}
               onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}
@@ -346,7 +360,6 @@ export function App() {
               browserOpen={browserPanelOpen && !isFullScreenView}
               onBrowserClose={togglebrowserPanel}
               initialLeftWidth={DEFAULT_SIDEBAR_WIDTH}
-              initialRightWidth={Math.round(window.innerWidth * (reviewPaneWidth / 100))}
               initialBrowserWidth={browserPanelWidth}
             />
           </ReviewPaneStateProvider>

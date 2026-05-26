@@ -1,10 +1,11 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUpCircle, GitCommit, Loader2 } from 'lucide-react';
+import { ArrowUpCircle, GitCommit, Loader2, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
+import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -111,20 +112,19 @@ export function CommitListPanel({
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-y-auto" ref={commitScrollRef}>
+        <div className="flex flex-1 flex-col overflow-y-auto" ref={commitScrollRef}>
           {logLoading && logEntries.length === 0 ? (
-            <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+            <div className="flex flex-1 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
               <Loader2 className="icon-sm animate-spin" />
               {t('review.loadingLog', 'Loading commits…')}
             </div>
           ) : logEntries.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">
-              {t('review.noCommits', 'No commits yet')}
-            </p>
+            <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
           ) : filteredEntries.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">
-              {t('history.noMatchingCommits', 'No matching commits')}
-            </p>
+            <EmptyState
+              icon={Search}
+              title={t('history.noMatchingCommits', 'No matching commits')}
+            />
           ) : (
             <div
               style={{

@@ -8,7 +8,6 @@ import { PipelineProgressBanner } from '@/components/PipelineProgressBanner';
 import { PromptInput } from '@/components/PromptInput';
 import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
-import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
@@ -139,7 +138,6 @@ export function ThreadChatView({ activeThread }: Props) {
 
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
-      <ProjectHeader />
       {activeThread.id && <PipelineProgressBanner threadId={activeThread.id} />}
       <div className="thread-container flex min-h-0 flex-1">
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

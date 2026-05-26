@@ -19,11 +19,6 @@ export const browseApi = {
       method: 'POST',
       body: JSON.stringify(target),
     }),
-  openTerminal: (target: { path: string } | { threadId: string }) =>
-    request<{ ok: boolean }>('/browse/open-terminal', {
-      method: 'POST',
-      body: JSON.stringify(target),
-    }),
   repoName: (path: string) =>
     request<{ name: string }>(`/browse/repo-name?path=${encodeURIComponent(path)}`),
   remoteUrl: (path: string) =>

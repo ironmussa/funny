@@ -41,6 +41,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { colorFromName } from '@/components/ui/project-chip';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
+import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { stageConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -226,12 +227,9 @@ export const KanbanCard = memo(function KanbanCard({
                   {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const result = await api.openTerminal({ threadId: thread.id });
-                    if (result.isErr()) {
-                      toastError(result.error);
-                    }
+                    openThreadTerminal({ thread });
                   }}
                 >
                   <Terminal className="icon-sm" />

@@ -27,6 +27,7 @@ import {
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
+import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -217,10 +218,9 @@ export const KanbanCard = memo(function KanbanCard({
                   {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const result = await api.openTerminal({ threadId: thread.id });
-                    if (result.isErr()) toastError(result.error);
+                    openThreadTerminal({ thread });
                   }}
                 >
                   <Terminal className="icon-sm" />

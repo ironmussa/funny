@@ -1,6 +1,6 @@
 import { useCallback, useRef, startTransition } from 'react';
 
-import { Sidebar, SidebarRail, useSidebar } from '@/components/ui/sidebar';
+import { Sidebar, useSidebar } from '@/components/ui/sidebar';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useSidebarDragDrop } from '@/hooks/use-sidebar-drag-drop';
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
@@ -127,7 +127,7 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
   );
 
   return (
-    <Sidebar collapsible="offcanvas" className="select-none">
+    <Sidebar collapsible="none" className="h-full w-full select-none">
       {/* Project settings nav — rendered alongside the projects tree so the
           tree stays mounted (avoiding a costly remount when returning). */}
       {settingsOpen && <SettingsPanelBody />}
@@ -196,8 +196,6 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
         setIssuesProjectId={setIssuesProjectId}
         actionLoading={actionLoading}
       />
-
-      <SidebarRail />
 
       {branchSwitchDialog}
     </Sidebar>

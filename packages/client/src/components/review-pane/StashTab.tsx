@@ -5,6 +5,7 @@ import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -44,108 +45,110 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     loadStashFileDiff,
   } = stash;
 
+  if (filteredStashEntries.length === 0) {
+    return (
+      <EmptyState
+        icon={Archive}
+        title={
+          currentBranch
+            ? t('review.noStashesOnBranch', {
+                branch: currentBranch,
+                defaultValue: `No stashed changes on ${currentBranch}`,
+              })
+            : t('review.noStashes', 'No stashed changes')
+        }
+        description={
+          stashEntries.length > 0
+            ? t('review.stashesOnOtherBranches', {
+                count: stashEntries.length,
+                defaultValue: `${stashEntries.length} stash(es) on other branches`,
+              })
+            : undefined
+        }
+      />
+    );
+  }
+
   return (
     <>
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
-        {filteredStashEntries.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <Archive className="size-8 opacity-40" />
-            <p className="text-xs">
-              {currentBranch
-                ? t('review.noStashesOnBranch', {
-                    branch: currentBranch,
-                    defaultValue: `No stashed changes on ${currentBranch}`,
-                  })
-                : t('review.noStashes', 'No stashed changes')}
-            </p>
-            {stashEntries.length > 0 && (
-              <p className="text-[10px] opacity-60">
-                {t('review.stashesOnOtherBranches', {
-                  count: stashEntries.length,
-                  defaultValue: `${stashEntries.length} stash(es) on other branches`,
-                })}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col divide-y divide-sidebar-border">
-            {filteredStashEntries.map((entry) => {
-              const idx = entry.index.replace('stash@{', '').replace('}', '');
-              return (
-                <div
-                  key={entry.index}
-                  role="button"
-                  tabIndex={0}
-                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent/50"
-                  onClick={() => setSelectedStashIndex(idx)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setSelectedStashIndex(idx);
-                    }
-                  }}
-                  data-testid={`stash-entry-${idx}`}
-                >
-                  <Archive className="size-3 shrink-0 text-muted-foreground" />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium">{entry.message}</span>
-                    <span className="text-[10px] text-muted-foreground">{entry.relativeDate}</span>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="shrink-0 text-muted-foreground"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStashPop();
-                        }}
-                        disabled={stashPopInProgress || !!isAgentRunning || idx !== '0'}
-                        data-testid={`stash-pop-${idx}`}
-                      >
-                        {stashPopInProgress && idx === '0' ? (
-                          <Loader2 className="icon-sm animate-spin" />
-                        ) : (
-                          <ArchiveRestore className="icon-sm" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      {idx === '0'
-                        ? t('review.popStash', 'Pop stash')
-                        : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRequestDrop(idx);
-                        }}
-                        disabled={!!stashDropInProgress || !!isAgentRunning}
-                        data-testid={`stash-drop-${idx}`}
-                      >
-                        {stashDropInProgress === idx ? (
-                          <Loader2 className="icon-sm animate-spin" />
-                        ) : (
-                          <Trash2 className="icon-sm" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      {t('review.dropStash', 'Discard stash')}
-                    </TooltipContent>
-                  </Tooltip>
+        <div className="flex flex-col divide-y divide-sidebar-border">
+          {filteredStashEntries.map((entry) => {
+            const idx = entry.index.replace('stash@{', '').replace('}', '');
+            return (
+              <div
+                key={entry.index}
+                role="button"
+                tabIndex={0}
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent/50"
+                onClick={() => setSelectedStashIndex(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedStashIndex(idx);
+                  }
+                }}
+                data-testid={`stash-entry-${idx}`}
+              >
+                <Archive className="size-3 shrink-0 text-muted-foreground" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate font-medium">{entry.message}</span>
+                  <span className="text-[10px] text-muted-foreground">{entry.relativeDate}</span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStashPop();
+                      }}
+                      disabled={stashPopInProgress || !!isAgentRunning || idx !== '0'}
+                      data-testid={`stash-pop-${idx}`}
+                    >
+                      {stashPopInProgress && idx === '0' ? (
+                        <Loader2 className="icon-sm animate-spin" />
+                      ) : (
+                        <ArchiveRestore className="icon-sm" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    {idx === '0'
+                      ? t('review.popStash', 'Pop stash')
+                      : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRequestDrop(idx);
+                      }}
+                      disabled={!!stashDropInProgress || !!isAgentRunning}
+                      data-testid={`stash-drop-${idx}`}
+                    >
+                      {stashDropInProgress === idx ? (
+                        <Loader2 className="icon-sm animate-spin" />
+                      ) : (
+                        <Trash2 className="icon-sm" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    {t('review.dropStash', 'Discard stash')}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            );
+          })}
+        </div>
       </ScrollArea>
 
       {/* Stash detail dialog */}

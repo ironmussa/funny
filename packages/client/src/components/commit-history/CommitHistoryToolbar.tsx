@@ -21,6 +21,8 @@ interface Props {
   prNumber?: number;
   prState?: string;
   prUrl?: string;
+  threadBranch?: string;
+  baseBranch?: string;
   onRefresh: () => void;
   onPull: () => void;
   onFetch: () => void;
@@ -48,6 +50,8 @@ export function CommitHistoryToolbar({
   prNumber,
   prState,
   prUrl,
+  threadBranch,
+  baseBranch,
   onRefresh,
   onPull,
   onFetch,
@@ -149,7 +153,10 @@ export function CommitHistoryToolbar({
           <TooltipContent side="top">
             {prNumber
               ? t('review.viewPR', { number: prNumber, defaultValue: `View PR #${prNumber}` })
-              : t('review.createPRTooltip', { defaultValue: 'Create pull request' })}
+              : t('review.createPRTooltip', {
+                  branch: threadBranch || '',
+                  target: baseBranch || 'base',
+                })}
           </TooltipContent>
         </Tooltip>
       )}

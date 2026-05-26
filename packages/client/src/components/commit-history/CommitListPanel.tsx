@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUpCircle, GitCommit, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { HighlightText } from '@/components/ui/highlight-text';
@@ -288,11 +289,41 @@ function CommitRow({
               </Tooltip>
             )}
             <GitCommit className="icon-xs flex-shrink-0" />
-            <HighlightText
-              text={entry.shortHash}
-              query={commitSearch}
-              className="flex-shrink-0 font-mono text-primary"
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void navigator.clipboard.writeText(entry.hash).then(
+                      () =>
+                        toast.success(
+                          t('history.hashCopied', {
+                            hash: entry.shortHash,
+                            defaultValue: `Copied ${entry.shortHash}`,
+                          }),
+                        ),
+                      () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
+                    );
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      (e.currentTarget as HTMLSpanElement).click();
+                    }
+                  }}
+                  className="flex-shrink-0 cursor-pointer font-mono text-primary hover:underline"
+                  data-testid={`history-commit-hash-${entry.shortHash}`}
+                >
+                  <HighlightText text={entry.shortHash} query={commitSearch} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {t('history.copyHash', 'Click to copy hash')}
+              </TooltipContent>
+            </Tooltip>
           </span>
         </div>
       </button>

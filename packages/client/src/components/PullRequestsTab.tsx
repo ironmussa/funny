@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -279,12 +280,10 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
 
   if (!projectId) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-        <GitPullRequest className="size-8 opacity-40" />
-        <p className="text-xs">
-          {t('review.pullRequests.noProject', 'Select a project to view pull requests')}
-        </p>
-      </div>
+      <EmptyState
+        icon={GitPullRequest}
+        title={t('review.pullRequests.noProject', 'Select a project to view pull requests')}
+      />
     );
   }
 
@@ -405,19 +404,21 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             {t('review.pullRequests.loading', 'Loading pull requests\u2026')}
           </div>
         ) : error ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
-            <p>{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refresh}
-              className="mt-1 gap-1.5"
-              data-testid="prs-retry"
-            >
-              <RefreshCw className="icon-xs" />
-              {t('common.retry', 'Retry')}
-            </Button>
-          </div>
+          <EmptyState
+            title={error}
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refresh}
+                className="gap-1.5"
+                data-testid="prs-retry"
+              >
+                <RefreshCw className="icon-xs" />
+                {t('common.retry', 'Retry')}
+              </Button>
+            }
+          />
         ) : branchFocusMode ? (
           currentBranchPRs.length > 0 ? (
             <div className="flex flex-col">
@@ -431,42 +432,42 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               ))}
             </div>
           ) : (
-            <div
-              className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground"
-              data-testid="prs-branch-empty"
-            >
-              <GitPullRequest className="size-8 opacity-40" />
-              <p className="text-center text-xs">
-                {t('review.pullRequests.noPRForBranch', 'No pull request for this branch yet')}
-              </p>
-              {currentBranch && (
-                <p className="text-center font-mono text-[10px] text-muted-foreground/70">
-                  <bdi>{currentBranch}</bdi>
-                </p>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setViewAll(true)}
-                className="mt-1 gap-1.5 text-xs"
-                data-testid="prs-view-all-cta"
-              >
-                <List className="icon-xs" />
-                {t('review.pullRequests.viewAll', 'View all pull requests')}
-              </Button>
-            </div>
+            <EmptyState
+              testId="prs-branch-empty"
+              icon={GitPullRequest}
+              title={t('review.pullRequests.noPRForBranch', 'No pull request for this branch yet')}
+              description={
+                currentBranch ? (
+                  <span className="font-mono">
+                    <bdi>{currentBranch}</bdi>
+                  </span>
+                ) : undefined
+              }
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setViewAll(true)}
+                  className="gap-1.5 text-xs"
+                  data-testid="prs-view-all-cta"
+                >
+                  <List className="icon-xs" />
+                  {t('review.pullRequests.viewAll', 'View all pull requests')}
+                </Button>
+              }
+            />
           )
         ) : prs.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <GitPullRequest className="size-8 opacity-40" />
-            <p className="text-xs">
-              {state === 'open'
+          <EmptyState
+            icon={GitPullRequest}
+            title={
+              state === 'open'
                 ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
                 : state === 'closed'
                   ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
-                  : t('review.pullRequests.noPRs', 'No pull requests')}
-            </p>
-          </div>
+                  : t('review.pullRequests.noPRs', 'No pull requests')
+            }
+          />
         ) : (
           <div className="flex flex-col">
             {currentBranchPRs.length > 0 && (

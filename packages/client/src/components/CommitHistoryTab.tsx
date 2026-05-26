@@ -8,6 +8,7 @@ import { CommitListPanel } from '@/components/commit-history/CommitListPanel';
 import { CreatePRDialog, type PRDraft } from '@/components/commit-history/CreatePRDialog';
 import { PublishRepoDialog } from '@/components/PublishRepoDialog';
 import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { api, type PullStrategy } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
@@ -375,11 +376,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   }, [hasGitContext, prInProgress, prDialog, effectiveThreadId, projectModeId]);
 
   if (!hasGitContext) {
-    return (
-      <div className="flex h-full items-center justify-center p-4 text-xs text-muted-foreground">
-        {t('review.noProject', 'Select a project to view history')}
-      </div>
-    );
+    return <EmptyState title={t('review.noProject', 'Select a project to view history')} />;
   }
 
   return (
@@ -401,6 +398,8 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
         prNumber={gitStatus?.prNumber ?? undefined}
         prState={gitStatus?.prState ?? undefined}
         prUrl={gitStatus?.prUrl ?? undefined}
+        threadBranch={threadBranch}
+        baseBranch={baseBranch}
         onRefresh={refreshLog}
         onPull={handlePull}
         onFetch={handleFetchOrigin}

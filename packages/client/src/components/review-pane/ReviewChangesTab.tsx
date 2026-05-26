@@ -29,7 +29,11 @@ interface ReviewChangesTabProps {
  * Extracted from ReviewPane.tsx so the orchestrator stops directly importing
  * five children just to forward their props.
  */
-export function ReviewChangesTab({
+/**
+ * Inner content of the Changes tab (no Radix Tabs wrapper). Use this directly
+ * when the tab gating is handled by a different system (e.g. dockview panels).
+ */
+export function ReviewChangesTabContent({
   truncatedInfo,
   summaries,
   prSummary,
@@ -41,38 +45,49 @@ export function ReviewChangesTab({
   const { t } = useTranslation();
 
   return (
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {truncatedInfo.truncated && (
+          <div className="border-b border-sidebar-border bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
+            {t('review.truncatedWarning', {
+              shown: summaries.length,
+              total: truncatedInfo.total,
+              defaultValue: `Showing ${summaries.length} of ${truncatedInfo.total} files. Some files were excluded.`,
+            })}
+          </div>
+        )}
+
+        {prSummary && <PRSummaryCard {...prSummary} />}
+
+        <ChangesToolbar {...toolbar} />
+
+        {summaries.length > 0 && (
+          <div className="border-b border-sidebar-border px-2 py-1">
+            <SearchBar {...search} />
+          </div>
+        )}
+
+        <ChangesFilesPanel {...filesPanel} />
+
+        <CommitDraftPanel {...commitDraft} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Legacy entry point used by ReviewPane.tsx — wraps the content in a Radix
+ * Tabs `TabsContent` so it can be slotted into the existing Tabs UI. New
+ * callers should prefer `ReviewChangesTabContent`.
+ */
+export function ReviewChangesTab(props: ReviewChangesTabProps) {
+  return (
     <TabsContent
       value="changes"
       className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
       forceMount
     >
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          {truncatedInfo.truncated && (
-            <div className="border-b border-sidebar-border bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
-              {t('review.truncatedWarning', {
-                shown: summaries.length,
-                total: truncatedInfo.total,
-                defaultValue: `Showing ${summaries.length} of ${truncatedInfo.total} files. Some files were excluded.`,
-              })}
-            </div>
-          )}
-
-          {prSummary && <PRSummaryCard {...prSummary} />}
-
-          <ChangesToolbar {...toolbar} />
-
-          {summaries.length > 0 && (
-            <div className="border-b border-sidebar-border px-2 py-1">
-              <SearchBar {...search} />
-            </div>
-          )}
-
-          <ChangesFilesPanel {...filesPanel} />
-
-          <CommitDraftPanel {...commitDraft} />
-        </div>
-      </div>
+      <ReviewChangesTabContent {...props} />
     </TabsContent>
   );
 }

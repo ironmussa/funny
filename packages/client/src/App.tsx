@@ -1,10 +1,17 @@
-import { PanelLeft } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { DockviewLayout, type RightTabSpec } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
-import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
+import {
+  ChangesPanel,
+  HistoryPanel,
+  PRsPanel,
+  StashPanel,
+} from '@/components/review-pane/panels/ChangesPanel';
+import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';
+import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
@@ -46,21 +53,6 @@ function SidebarPlaceholder() {
   );
 }
 
-/** Thin vertical strip visible when the sidebar is collapsed, click to reopen */
-function CollapsedSidebarStrip() {
-  const { state, toggleSidebar } = useSidebar();
-  if (state === 'expanded') return null;
-  return (
-    <button
-      onClick={toggleSidebar}
-      className="flex h-full w-10 flex-shrink-0 cursor-pointer items-start justify-center border-r border-border bg-sidebar pt-3 transition-colors hover:bg-sidebar-accent"
-      title="Expand sidebar"
-    >
-      <PanelLeft className="icon-base text-muted-foreground" />
-    </button>
-  );
-}
-
 // Lazy-load conditional views (bundle-conditional / bundle-dynamic-imports)
 const AllThreadsView = lazy(() =>
   import('@/components/AllThreadsView').then((m) => ({ default: m.AllThreadsView })),
@@ -76,9 +68,6 @@ const ActivityPane = lazy(() =>
 );
 const ProjectFilesPane = lazy(() =>
   import('@/components/ProjectFilesPane').then((m) => ({ default: m.ProjectFilesPane })),
-);
-const TerminalPanel = lazy(() =>
-  import('@/components/TerminalPanel').then((m) => ({ default: m.TerminalPanel })),
 );
 const SettingsDetailView = lazy(() =>
   import('@/components/SettingsDetailView').then((m) => ({ default: m.SettingsDetailView })),
@@ -138,7 +127,6 @@ export function App() {
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
-  const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
@@ -170,52 +158,13 @@ export function App() {
     automationInboxOpen ||
     addProjectOpen ||
     !!allThreadsProjectId;
-  const rightPaneVisible = reviewPaneOpen && !isFullScreenView;
+  // Note: right-pane resize is now handled by dockview's panel splitters.
 
-  // Drag-to-resize for the right pane. Capture starting width on pointerdown
-  // so the first drag responds immediately (no unit-normalization snap).
-  const dragStartWidthVw = useRef(0);
-  const { resizing, handlePointerDown, handlePointerMove, handlePointerUp } = useResizeHandle({
-    direction: 'horizontal',
-    onResizeStart: () => {
-      dragStartWidthVw.current = useUIStore.getState().reviewPaneWidth;
-    },
-    onResize: (deltaPx) => {
-      const deltaVw = (deltaPx / window.innerWidth) * 100;
-      // Dragging the handle right shrinks the right pane
-      setReviewPaneWidth(dragStartWidthVw.current - deltaVw);
-    },
-  });
-
-  // --- Browser annotator panel layout ---
+  // Browser annotator panel — now lives as a native dockview panel; resize
+  // and persistence are handled by dockview's splitter + storage.
   const browserPanelOpen = useBrowserPanelStore((s) => s.open);
   const browserPanelWidth = useBrowserPanelStore((s) => s.browserPanelWidth);
-  const setBrowserPanelWidth = useBrowserPanelStore((s) => s.setBrowserPanelWidth);
-  const dragStartBrowserWidthPx = useRef(0);
-  const browserResize = useResizeHandle({
-    direction: 'horizontal',
-    onResizeStart: () => {
-      dragStartBrowserWidthPx.current = useBrowserPanelStore.getState().browserPanelWidth;
-    },
-    onResize: (deltaPx) => {
-      // Handle sits on the LEFT edge of the panel: dragging left → panel grows.
-      setBrowserPanelWidth(dragStartBrowserWidthPx.current - deltaPx);
-    },
-  });
-
-  // Eagerly mount ReviewPane (hidden) after initial load so first toggle is instant.
-  // Deferred via requestIdleCallback to avoid blocking the initial render.
-  const [reviewPaneReady, setReviewPaneReady] = useState(false);
-  useEffect(() => {
-    const mount = () => setReviewPaneReady(true);
-    if (typeof requestIdleCallback === 'function') {
-      const id = requestIdleCallback(mount);
-      return () => cancelIdleCallback(id);
-    } else {
-      const id = setTimeout(mount, 3000);
-      return () => clearTimeout(id);
-    }
-  }, []);
+  const togglebrowserPanel = useBrowserPanelStore((s) => s.togglePanel);
 
   // Register navigate so the store can trigger navigation (e.g. from toasts)
   useEffect(() => {
@@ -264,153 +213,143 @@ export function App() {
   useThreadHistoryTracker();
   useTauriAnnotatorEvents();
 
-  return (
-    <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
-      <ErrorBoundary area="sidebar">
-        <Suspense fallback={<SidebarPlaceholder />}>
-          <AppSidebar />
+  // Terminals live as native dockview tabs below the center pane.
+  const terminalDockview = useTerminalDockview();
+
+  // --- Dockview panels ---
+
+  const leftPanel = (
+    <ErrorBoundary area="sidebar">
+      <Suspense fallback={<SidebarPlaceholder />}>
+        <AppSidebar />
+      </Suspense>
+    </ErrorBoundary>
+  );
+
+  const centerPanel = (
+    <SidebarInset className="flex h-full flex-col overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <ErrorBoundary area="main-content">
+          {/* Overlay views — same priority cascade as before. Wrapped in its
+              own Suspense so a lazy overlay's first-load suspension does not
+              unmount the persistent ThreadView below. */}
+          {isFullScreenView && (
+            <Suspense>
+              <div className="absolute inset-0 z-10 flex">
+                {generalSettingsOpen ? (
+                  <GeneralSettingsView />
+                ) : settingsOpen ? (
+                  <SettingsDetailView />
+                ) : analyticsOpen ? (
+                  <AnalyticsView />
+                ) : liveColumnsOpen ? (
+                  <LiveColumnsView />
+                ) : orchestratorOpen ? (
+                  <OrchestratorView />
+                ) : testRunnerOpen ? (
+                  <TestRunnerPane />
+                ) : automationInboxOpen ? (
+                  <AutomationInboxView />
+                ) : addProjectOpen ? (
+                  <AddProjectView />
+                ) : allThreadsProjectId ? (
+                  <AllThreadsView />
+                ) : null}
+              </div>
+            </Suspense>
+          )}
+
+          {/* ThreadView stays mounted under any overlay so returning from
+              Settings/Analytics/etc. is instant (no message refetch / Monaco
+              / syntax-highlight re-render). Hidden via display:none when an
+              overlay is active. */}
+          <Suspense>
+            <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
+              <ThreadView />
+            </div>
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    </SidebarInset>
+  );
+
+  const rightPaneVisible = reviewPaneOpen && !isFullScreenView;
+  const reviewSubTab = useUIStore((s) => s.reviewSubTab);
+  const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
+
+  // When the user is on the review tab and has git context, the right pane
+  // is split into 4 native dockview tabs (Changes/History/Stash/PRs). For the
+  // other top-level tabs (files / activity / project-mode), we fall back to a
+  // single header-less panel.
+  const useReviewTabs = rightPaneTab === 'review' && (activeThreadCanShowGit || hasSelectedProject);
+
+  const rightTabs: RightTabSpec[] | undefined = useReviewTabs
+    ? [
+        { id: 'changes', title: 'Changes', content: <ChangesPanel /> },
+        { id: 'history', title: 'History', content: <HistoryPanel /> },
+        { id: 'stash', title: 'Stash', content: <StashPanel /> },
+        { id: 'prs', title: 'PRs', content: <PRsPanel /> },
+      ]
+    : undefined;
+
+  const singleRightPanel = !useReviewTabs ? (
+    <div className="h-full w-full overflow-hidden bg-sidebar">
+      <ErrorBoundary area="right-pane">
+        <Suspense
+          fallback={
+            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+              Loading…
+            </div>
+          }
+        >
+          {rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
+            <ProjectFilesPane />
+          ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
+            // Compose mode (no thread) — activity has nothing to render, so
+            // show the branch-level review instead via tabs at next render.
+            <ReviewPane />
+          ) : (
+            <ActivityPane />
+          )}
         </Suspense>
       </ErrorBoundary>
-      <CollapsedSidebarStrip />
+    </div>
+  ) : undefined;
 
+  return (
+    <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
       <ThreadProvider threadId={selectedThreadId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
-          {/* Center panel — main content + terminal */}
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <SidebarInset className="flex h-full flex-col overflow-hidden">
-              <div className="relative flex min-h-0 flex-1 overflow-hidden">
-                <ErrorBoundary area="main-content">
-                  {/* Overlay views — same priority cascade as before. Wrapped in its
-                      own Suspense so a lazy overlay's first-load suspension does not
-                      unmount the persistent ThreadView below. */}
-                  {isFullScreenView && (
-                    <Suspense>
-                      <div className="absolute inset-0 z-10 flex">
-                        {generalSettingsOpen ? (
-                          <GeneralSettingsView />
-                        ) : settingsOpen ? (
-                          <SettingsDetailView />
-                        ) : analyticsOpen ? (
-                          <AnalyticsView />
-                        ) : liveColumnsOpen ? (
-                          <LiveColumnsView />
-                        ) : orchestratorOpen ? (
-                          <OrchestratorView />
-                        ) : testRunnerOpen ? (
-                          <TestRunnerPane />
-                        ) : automationInboxOpen ? (
-                          <AutomationInboxView />
-                        ) : addProjectOpen ? (
-                          <AddProjectView />
-                        ) : allThreadsProjectId ? (
-                          <AllThreadsView />
-                        ) : null}
-                      </div>
-                    </Suspense>
-                  )}
-
-                  {/* ThreadView stays mounted under any overlay so returning from
-                      Settings/Analytics/etc. is instant (no message refetch / Monaco
-                      / syntax-highlight re-render). Hidden via display:none when an
-                      overlay is active. */}
-                  <Suspense>
-                    <div
-                      className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}
-                    >
-                      <ThreadView />
-                    </div>
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-
-              {/* TerminalPanel stays mounted to preserve xterm state and PTY
-                  WebSocket connection when overlay views are shown. */}
-              <Suspense>
-                <div className={cn(isFullScreenView && 'hidden')}>
-                  <TerminalPanel />
-                </div>
-              </Suspense>
-            </SidebarInset>
-          </div>
-
-          {/* Browser annotator panel — sibling to SidebarInset. Handle on its
-              left edge resizes the panel; width persists to localStorage. */}
-          {browserPanelOpen && !isFullScreenView && (
-            <>
-              <ResizeHandle
-                direction="horizontal"
-                resizing={browserResize.resizing}
-                onPointerDown={browserResize.handlePointerDown}
-                onPointerMove={browserResize.handlePointerMove}
-                onPointerUp={browserResize.handlePointerUp}
-                data-testid="browser-panel-resize-handle"
-              />
-              <div
-                className={cn(
-                  'min-w-0 flex-shrink-0 overflow-hidden border-l border-border bg-card',
-                  !browserResize.resizing && 'transition-[width] duration-200 ease-linear',
-                )}
-                style={{ width: `${browserPanelWidth}px` }}
-              >
+          <ReviewPaneStateProvider>
+            <DockviewLayout
+              left={leftPanel}
+              center={centerPanel}
+              right={singleRightPanel}
+              rightTabs={rightTabs}
+              activeRightTab={reviewSubTab}
+              onActiveRightTabChange={(id) => setReviewSubTabStore(id as typeof reviewSubTab)}
+              rightPaneOpen={rightPaneVisible}
+              bottomTabs={terminalDockview.bottomTabs}
+              activeBottomTab={terminalDockview.activeBottomTab}
+              onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}
+              onBottomTabClose={terminalDockview.onBottomTabClose}
+              onBottomTabsReorder={terminalDockview.onBottomTabsReorder}
+              bottomPaneOpen={terminalDockview.bottomPaneOpen && !isFullScreenView}
+              bottomPrefixActions={terminalDockview.bottomPrefixActions}
+              bottomLeftActions={terminalDockview.bottomLeftActions}
+              bottomRightActions={terminalDockview.bottomRightActions}
+              browser={
                 <Suspense fallback={null}>
                   <BrowserPanel />
                 </Suspense>
-              </div>
-            </>
-          )}
-
-          {/* Resize handle between center and right pane — only when right pane is shown */}
-          {rightPaneVisible && (
-            <ResizeHandle
-              direction="horizontal"
-              resizing={resizing}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              data-testid="right-pane-resize-handle"
+              }
+              browserOpen={browserPanelOpen && !isFullScreenView}
+              onBrowserClose={togglebrowserPanel}
+              initialLeftWidth={DEFAULT_SIDEBAR_WIDTH}
+              initialRightWidth={Math.round(window.innerWidth * (reviewPaneWidth / 100))}
+              initialBrowserWidth={browserPanelWidth}
             />
-          )}
-
-          {/* Right panel — Review / Tasks / Activity. Outer takes flex width so
-              the center column compresses; inner is anchored to the right edge
-              so the content visually slides in from the right as the outer
-              expands (and slides out to the right when closing). */}
-          {!isFullScreenView && (reviewPaneReady || reviewPaneOpen) && (
-            <div
-              className={cn(
-                'relative min-w-0 flex-shrink-0 overflow-hidden bg-sidebar',
-                !resizing && 'transition-[width] duration-200 ease-linear',
-              )}
-              style={{ width: rightPaneVisible ? `${reviewPaneWidth}vw` : '0vw' }}
-            >
-              <div
-                className="absolute inset-y-0 right-0 flex"
-                style={{ width: `${reviewPaneWidth}vw` }}
-              >
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  <ErrorBoundary area="right-pane">
-                    <Suspense>
-                      {rightPaneTab === 'review' &&
-                      (activeThreadCanShowGit || hasSelectedProject) ? (
-                        <ReviewPane />
-                      ) : rightPaneTab === 'files' &&
-                        (activeThreadCanShowGit || hasSelectedProject) ? (
-                        <ProjectFilesPane />
-                      ) : rightPaneTab === 'activity' &&
-                        !activeThreadCanShowGit &&
-                        hasSelectedProject ? (
-                        // Compose mode (no thread) — activity has nothing to
-                        // render, so show the branch-level review instead.
-                        <ReviewPane />
-                      ) : (
-                        <ActivityPane />
-                      )}
-                    </Suspense>
-                  </ErrorBoundary>
-                </div>
-              </div>
-            </div>
-          )}
+          </ReviewPaneStateProvider>
         </div>
 
         {/* Global overlays — kept inside ThreadProvider so dialogs that read

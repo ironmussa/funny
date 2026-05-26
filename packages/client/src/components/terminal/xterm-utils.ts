@@ -78,6 +78,39 @@ export function attachWebglRenderer(
 export const searchAddonRegistry = new Map<string, import('@xterm/addon-search').SearchAddon>();
 export const terminalRegistry = new Map<string, import('@xterm/xterm').Terminal>();
 
+/**
+ * Trailing-edge debouncer for terminal fit() calls. Coalesces bursts of
+ * ResizeObserver notifications — from dockview splitter drags, the browser
+ * window resize, the bottom-panel expand transition, etc. — into a single
+ * fit() once the size has settled.
+ *
+ * Why this matters: with the WebGL renderer, every fit() resizes the backing
+ * canvas which clears the framebuffer for one frame, producing a visible
+ * flicker. Resizes also trigger SIGWINCH on the PTY, which makes most shells
+ * repaint the current line. At 60Hz both effects become a strobe.
+ *
+ * `delayMs` defaults to 100ms — long enough to absorb a frame storm or a
+ * 200ms CSS transition, short enough to feel instantaneous on release.
+ */
+export function createResizeScheduler(fit: () => void, delayMs = 100) {
+  let timer: number | null = null;
+  return {
+    schedule: () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        fit();
+      }, delayMs);
+    },
+    dispose: () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    },
+  };
+}
+
 if (!isTauri) getXtermModules();
 
 export function getCssVar(name: string): string {

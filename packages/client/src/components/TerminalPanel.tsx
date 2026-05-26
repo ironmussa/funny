@@ -18,6 +18,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import {
   attachWebglRenderer,
+  createResizeScheduler,
   getCssVar,
   getTerminalTheme,
   getXtermModules,
@@ -67,7 +68,7 @@ import {
 import { useThreadWorktreePath } from '@/stores/thread-context';
 
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
-function TauriTerminalTabContent({
+export function TauriTerminalTabContent({
   id,
   cwd,
   active,
@@ -159,11 +160,13 @@ function TauriTerminalTabContent({
       const dims = fitAddon.proposeDimensions();
       await invoke('pty_spawn', { id, cwd, rows: dims?.rows ?? 24, cols: dims?.cols ?? 80 });
 
-      const resizeObserver = new ResizeObserver(() => fitAddon.fit());
+      const resizeScheduler = createResizeScheduler(() => fitAddon.fit());
+      const resizeObserver = new ResizeObserver(() => resizeScheduler.schedule());
       resizeObserver.observe(containerRef.current!);
 
       cleanup = () => {
         resizeObserver.disconnect();
+        resizeScheduler.dispose();
         unlistenData();
         unlistenExit();
         onDataDisposable.dispose();
@@ -206,7 +209,7 @@ function TauriTerminalTabContent({
 }
 
 /** Web PTY tab — uses xterm.js over WebSocket */
-function WebTerminalTabContent({
+export function WebTerminalTabContent({
   id,
   cwd,
   active,
@@ -480,24 +483,23 @@ function WebTerminalTabContent({
         }
       });
 
-      // Debounce resize to avoid rapid reflows that cause screen jumping
-      let resizeRaf: number | null = null;
-      const resizeObserver = new ResizeObserver(() => {
+      // Trailing-debounced fit (see createResizeScheduler): coalesces frame
+      // storms from dockview splitter drags, window resize, and the bottom
+      // panel transition into one fit on settle — avoids WebGL canvas thrash
+      // and SIGWINCH spam that show up as a strobe during a drag.
+      const resizeScheduler = createResizeScheduler(() => {
         const el = containerRef.current;
         if (el && el.offsetParent !== null && el.clientHeight > 0) {
-          if (resizeRaf) cancelAnimationFrame(resizeRaf);
-          resizeRaf = requestAnimationFrame(() => {
-            resizeRaf = null;
-            fitAddon.fit();
-          });
+          fitAddon.fit();
         }
       });
+      const resizeObserver = new ResizeObserver(() => resizeScheduler.schedule());
       resizeObserver.observe(containerRef.current!);
 
       if (!cancelled) send({ type: 'TERM_READY' });
 
       cleanup = () => {
-        if (resizeRaf) cancelAnimationFrame(resizeRaf);
+        resizeScheduler.dispose();
         resizeObserver.disconnect();
         unregisterPtyCallback(id);
         onDataDisposable.dispose();
@@ -676,7 +678,7 @@ function formatUptime(ms: number): string {
 }
 
 /** Server-managed command tab — uses a <pre> log view */
-function CommandTabContent({
+export function CommandTabContent({
   commandId,
   projectId,
   active,
@@ -773,7 +775,7 @@ function CommandTabContent({
 }
 
 /** Search overlay shown over the active terminal when the user presses Ctrl+F. */
-function TerminalSearchOverlay({
+export function TerminalSearchOverlay({
   activeTabId,
   onClose,
 }: {

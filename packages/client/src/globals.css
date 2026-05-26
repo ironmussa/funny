@@ -1240,3 +1240,64 @@
   opacity: 0 !important;
   pointer-events: none;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Dockview theme — maps the library's CSS vars to the app's shadcn tokens so
+   panels, tab bars, splitters and drop overlays follow the active theme (light
+   / dark) automatically. The shadcn HSL vars below auto-switch under `.dark`,
+   so a single class handles both color schemes.
+   ─────────────────────────────────────────────────────────────────────────── */
+.dockview-theme-funny {
+  /* Panel content + tab bar surfaces */
+  --dv-group-view-background-color: hsl(var(--background));
+  --dv-tabs-and-actions-container-background-color: hsl(var(--sidebar-background));
+  --dv-activegroup-visiblepanel-tab-background-color: hsl(var(--background));
+  --dv-activegroup-hiddenpanel-tab-background-color: hsl(var(--sidebar-background));
+  --dv-inactivegroup-visiblepanel-tab-background-color: hsl(var(--background));
+  --dv-inactivegroup-hiddenpanel-tab-background-color: hsl(var(--sidebar-background));
+
+  /* Tab labels */
+  --dv-activegroup-visiblepanel-tab-color: hsl(var(--foreground));
+  --dv-activegroup-hiddenpanel-tab-color: hsl(var(--muted-foreground));
+  --dv-inactivegroup-visiblepanel-tab-color: hsl(var(--muted-foreground));
+  --dv-inactivegroup-hiddenpanel-tab-color: hsl(var(--muted-foreground));
+
+  /* Borders / separators between tabs, panels, splitters */
+  --dv-tab-divider-color: hsl(var(--border));
+  --dv-separator-border: hsl(var(--border));
+  --dv-paneview-header-border-color: hsl(var(--border));
+
+  /* Active panel highlight & drag-over overlay — use the app's ring color
+     instead of dockview's default dodgerblue. */
+  --dv-paneview-active-outline-color: hsl(var(--ring));
+  --dv-active-sash-color: hsl(var(--ring));
+  --dv-sash-color: transparent;
+  --dv-drag-over-background-color: hsl(var(--accent) / 0.5);
+  --dv-drag-over-border-color: hsl(var(--ring));
+
+  /* Tab close / overflow icon hover backdrop */
+  --dv-icon-hover-background-color: hsl(var(--accent));
+
+  /* Tab strip sizing — compact, matches the previous Radix tab look. */
+  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-font-size: 11px;
+  --dv-tab-font-size: 11px;
+
+  /* Scrollbar inside the tab overflow list */
+  --dv-tabs-container-scrollbar-color: hsl(var(--muted-foreground));
+
+  /* Tab group accent colors — retint "blue" so it matches the app's accent
+     rather than Google blue. */
+  --dv-tab-group-color-blue: hsl(var(--ring));
+}
+
+/* Hover highlight for inactive tabs — dockview ships no built-in CSS var for
+   this, so we add a subtle accent backdrop to make tabs feel clickable. */
+.dockview-theme-funny .dv-inactive-tab:hover {
+  background-color: hsl(var(--accent) / 0.5);
+  color: hsl(var(--foreground));
+}
+
+/* Right-pane tabs (Changes/History/Stash/PRs) use a custom tab component
+   (`RightTabHeader` in DockviewLayout.tsx) so they render without a close
+   button. Terminal tabs keep dockview's default tab with native close. */

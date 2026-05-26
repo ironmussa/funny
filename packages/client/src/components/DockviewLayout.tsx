@@ -915,13 +915,22 @@ export function DockviewLayout({
   }, [rightTabsSig, rightPaneOpen, right, addRightPanels, removeRightPanels, getCurrentRightWidth]);
 
   // ── Bottom-pane effects ──
+  // Tracks the previous value of `bottomPaneOpen` so we only tear down restored
+  // panels on an explicit user-driven `true → false` transition. On initial
+  // mount the terminal store may transiently report `bottomPaneOpen=false`
+  // (while rehydrating from localStorage) — without this guard we would close
+  // panels that `fromJSON` just restored, destroying the user's saved split
+  // group structure (all tabs end up collapsed into a single group on reload).
+  const prevBottomPaneOpenRef = useRef<boolean | null>(null);
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
     const hasBottom = api.panels.some((p) => isBottomPanelId(p.id));
+    const prev = prevBottomPaneOpenRef.current;
+    prevBottomPaneOpenRef.current = bottomPaneOpen;
     if (bottomPaneOpen && !hasBottom) {
       syncBottomPanels(api);
-    } else if (!bottomPaneOpen && hasBottom) {
+    } else if (!bottomPaneOpen && hasBottom && prev === true) {
       // Close all bottom panels without bouncing close events to the store.
       for (const p of api.panels.filter((x) => isBottomPanelId(x.id))) {
         suppressCloseRef.current.add(p.id);
@@ -930,11 +939,14 @@ export function DockviewLayout({
     }
   }, [bottomPaneOpen, syncBottomPanels]);
 
-  // ── Float / re-dock a bottom panel via a window event ──
-  // The TerminalDockview's "Detach" button dispatches `dockview:float-bottom`
-  // with the tab id; we move that panel into a floating group (or back to the
-  // bottom group if it's already floating). Decoupling via custom event keeps
-  // the action button free of dockview-API plumbing.
+  // ── Popout / re-dock a bottom panel via a window event ──
+  // The TerminalDockview's "Detach" button dispatches `dockview:popout-bottom`
+  // with the tab id; we move that panel into a real OS browser window
+  // (`addPopoutGroup`) — or back into the bottom group if it's already popped
+  // out. Dockview's PopoutWindow auto-copies the parent document's stylesheets,
+  // so Tailwind / shadcn / xterm styles work unchanged in the new window.
+  // Decoupling via custom event keeps the action button free of dockview-API
+  // plumbing.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ tabId: string }>).detail;
@@ -944,9 +956,10 @@ export function DockviewLayout({
       if (!api) return;
       const panel = api.getPanel(bottomPanelId(tabId));
       if (!panel) return;
-      if (panel.group.api.location.type === 'floating') {
+      if (panel.group.api.location.type === 'popout') {
         // Re-dock: drop the panel into an existing bottom group if there is
-        // one, otherwise create a new bottom group below center.
+        // one, otherwise create a new bottom group below center. Dockview
+        // closes the now-empty popout window automatically.
         const anchor = api.panels.find(
           (p) => isBottomPanelId(p.id) && p.id !== panel.id && p.group.api.location.type === 'grid',
         );
@@ -962,14 +975,22 @@ export function DockviewLayout({
           });
         }
       } else {
-        api.addFloatingGroup(panel, {
-          width: 640,
-          height: Math.max(initialBottomHeightRef.current, 320),
+        // Opens a new OS browser window. The popout inherits the parent's
+        // styles via dockview's internal style-cloning; React's createPortal
+        // keeps the panel mounted in the parent tree so stores / WS / xterm
+        // state survives unchanged.
+        void api.addPopoutGroup(panel, {
+          position: {
+            width: 720,
+            height: Math.max(initialBottomHeightRef.current, 360),
+            left: window.screenX + 80,
+            top: window.screenY + 80,
+          },
         });
       }
     };
-    window.addEventListener('dockview:float-bottom', handler);
-    return () => window.removeEventListener('dockview:float-bottom', handler);
+    window.addEventListener('dockview:popout-bottom', handler);
+    return () => window.removeEventListener('dockview:popout-bottom', handler);
   }, []);
 
   // Sync bottom tabs whenever the desired set or titles change.
@@ -1008,7 +1029,7 @@ export function DockviewLayout({
         rightHeaderActionsComponent={RightHeaderActions}
         onReady={onReady}
         theme={theme}
-        singleTabMode="fullwidth"
+        singleTabMode="default"
         className="h-full w-full"
       />
       {hosts[PANEL_LEFT] && createPortal(left, hosts[PANEL_LEFT])}

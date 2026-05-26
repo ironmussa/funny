@@ -1,4 +1,4 @@
-import { PictureInPicture2, Plus } from 'lucide-react';
+import { PanelBottomClose, PictureInPicture2, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -35,7 +35,16 @@ import { type BottomTabSpec } from '../DockviewLayout';
 /** Render the appropriate body for a single terminal tab (Web PTY, Tauri PTY,
  *  command output, or an empty fallback). Always rendered as the dockview
  *  panel content — never unmounted on tab switch because we use
- *  `renderer: 'always'` on the dockview side. */
+ *  `renderer: 'always'` on the dockview side.
+ *
+ *  We force `active=true` to the inner terminal components because, inside
+ *  dockview, each panel has its own host div and dockview itself hides the
+ *  inactive tabs in a group via CSS. The legacy `active ? z-10 : invisible`
+ *  styling used by these components was designed for the old `TerminalPanel`
+ *  where all tabs overlap in a single container — when applied inside dockview
+ *  it hides a split terminal that is actually visible in its own group. The
+ *  `active` prop here is still used to scope the Ctrl+F search overlay to the
+ *  store's single active tab so a key press doesn't open N overlays. */
 function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean }) {
   const panelVisibleByProject = useTerminalStore((s) => s.panelVisibleByProject);
   const panelVisible = tab.projectId ? (panelVisibleByProject[tab.projectId] ?? true) : true;
@@ -60,7 +69,7 @@ function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean })
         <WebTerminalTabContent
           id={tab.id}
           cwd={tab.cwd}
-          active={active}
+          active={true}
           panelVisible={panelVisible}
           shell={tab.shell}
           restored={tab.restored}
@@ -73,11 +82,11 @@ function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean })
         <CommandTabContent
           commandId={tab.commandId}
           projectId={tab.projectId}
-          active={active}
+          active={true}
           alive={tab.alive}
         />
       ) : isTauri ? (
-        <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={active} />
+        <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={true} />
       ) : (
         <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
           (unknown terminal type)
@@ -189,16 +198,16 @@ function NewTerminalButton() {
   );
 }
 
-/** "Detach" button — pops the active terminal out into a floating panel
- *  (and back into the bottom group on a second click). Dispatches a window
- *  event that DockviewLayout listens for, so this component doesn't need a
- *  dockview-API ref. */
+/** "Detach" button — pops the active terminal out into a real OS browser
+ *  window (and re-docks it back into the bottom group on a second click).
+ *  Dispatches a window event that DockviewLayout listens for, so this
+ *  component doesn't need a dockview-API ref. */
 function DetachTerminalButton({ activeTabId }: { activeTabId: string | undefined }) {
   const { t } = useTranslation();
   if (!activeTabId) return null;
   const onClick = () => {
     window.dispatchEvent(
-      new CustomEvent('dockview:float-bottom', { detail: { tabId: activeTabId } }),
+      new CustomEvent('dockview:popout-bottom', { detail: { tabId: activeTabId } }),
     );
   };
   return (
@@ -213,7 +222,33 @@ function DetachTerminalButton({ activeTabId }: { activeTabId: string | undefined
           <PictureInPicture2 className="icon-sm" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent>{t('terminal.detach', 'Detach / re-dock terminal')}</TooltipContent>
+      <TooltipContent>
+        {t('terminal.detach', 'Open terminal in a new window / re-dock')}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** "Hide" button — collapses the whole bottom terminal panel for the current
+ *  project scope. The panel can be restored from the sidebar / status bar. */
+function HideTerminalPanelButton() {
+  const { t } = useTranslation();
+  const { scopeId: selectedProjectId } = useTerminalScope();
+  const togglePanel = useTerminalStore((s) => s.togglePanel);
+  if (!selectedProjectId) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          onClick={() => togglePanel(selectedProjectId)}
+          data-testid="terminal-hide-panel"
+          className="h-full rounded-none px-2.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <PanelBottomClose className="icon-sm" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{t('terminal.hidePanel', 'Hide terminal panel')}</TooltipContent>
     </Tooltip>
   );
 }
@@ -308,6 +343,11 @@ export function useTerminalDockview(): {
     bottomPaneOpen,
     bottomPrefixActions: null,
     bottomLeftActions: <NewTerminalButton />,
-    bottomRightActions: <DetachTerminalButton activeTabId={effectiveActiveTabId} />,
+    bottomRightActions: (
+      <>
+        <DetachTerminalButton activeTabId={effectiveActiveTabId} />
+        <HideTerminalPanelButton />
+      </>
+    ),
   };
 }

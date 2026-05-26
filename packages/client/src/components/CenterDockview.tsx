@@ -401,7 +401,7 @@ export function CenterDockview({
         tabComponents={tabComponents}
         onReady={onReady}
         theme={theme}
-        singleTabMode="fullwidth"
+        singleTabMode="default"
         className="h-full w-full"
       />
       {hosts[PANEL_THREAD] && createPortal(thread, hosts[PANEL_THREAD])}

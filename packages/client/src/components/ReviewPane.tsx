@@ -370,6 +370,7 @@ export function ReviewPane() {
             onCaseSensitiveChange: setFileSearchCaseSensitive,
             onClose: fileSearch ? () => setFileSearch('') : undefined,
             autoFocus: false,
+            animate: false,
             testIdPrefix: 'review-file-filter',
           }}
           toolbar={{

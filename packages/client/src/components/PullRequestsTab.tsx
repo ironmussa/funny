@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -310,17 +311,13 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
 
         {/* State filter — only shown when browsing the full list */}
         {!branchFocusMode && (
-          <div className="flex min-w-0 items-center gap-0.5 rounded-md bg-sidebar-accent/50 p-0.5">
+          <ButtonGroup>
             {(['open', 'closed', 'all'] as PRState[]).map((s) => (
-              <button
+              <Button
                 key={s}
+                variant={state === s ? 'default' : 'outline'}
+                size="xs"
                 onClick={() => setState(s)}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-                  state === s
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
                 data-testid={`prs-filter-${s}`}
               >
                 {s === 'open'
@@ -328,9 +325,9 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                   : s === 'closed'
                     ? t('review.pullRequests.closed', 'Closed')
                     : t('review.pullRequests.all', 'All')}
-              </button>
+              </Button>
             ))}
-          </div>
+          </ButtonGroup>
         )}
 
         {/* Branch-focus indicator + escape hatch */}

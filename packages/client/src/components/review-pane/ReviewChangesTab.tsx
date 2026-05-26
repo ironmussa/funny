@@ -62,7 +62,7 @@ export function ReviewChangesTabContent({
         <ChangesToolbar {...toolbar} />
 
         {summaries.length > 0 && (
-          <div className="border-b border-sidebar-border px-2 py-1">
+          <div className="border-b border-sidebar-border bg-background px-2 py-1">
             <SearchBar {...search} />
           </div>
         )}

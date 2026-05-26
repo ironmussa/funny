@@ -96,7 +96,7 @@ export function CommitListPanel({
   return (
     <>
       {logEntries.length > 0 && (
-        <div className="border-b border-sidebar-border px-2 py-1">
+        <div className="border-b border-sidebar-border bg-background px-2 py-1">
           <SearchBar
             query={commitSearch}
             onQueryChange={setCommitSearch}
@@ -107,6 +107,7 @@ export function CommitListPanel({
             onCaseSensitiveChange={setCommitSearchCaseSensitive}
             onClose={commitSearch ? () => setCommitSearch('') : undefined}
             autoFocus={false}
+            animate={false}
             testIdPrefix="history-commit-search"
           />
         </div>

@@ -1298,6 +1298,18 @@
   color: hsl(var(--foreground));
 }
 
+/* Edge groups (left/right sidebars) put their content container inside a
+   `flex-direction: row` parent. Dockview's stock CSS gives the content
+   container `min-height: 0` (correct for the default `column` flex), but
+   forgets the matching `min-width: 0` for the row case — without it the
+   sidebar's content can't shrink below its intrinsic size and visually
+   overflows past the column edge. Apply the missing constraint everywhere
+   so the panel host (`overflow-hidden`) can clip cleanly. */
+.dockview-theme-funny .dv-groupview-header-left > .dv-content-container,
+.dockview-theme-funny .dv-groupview-header-right > .dv-content-container {
+  min-width: 0;
+}
+
 /* Right-pane tabs (Changes/History/Stash/PRs) use a custom tab component
    (`RightTabHeader` in DockviewLayout.tsx) so they render without a close
    button. Terminal tabs keep dockview's default tab with native close. */

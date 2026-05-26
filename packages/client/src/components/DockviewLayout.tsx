@@ -102,6 +102,15 @@ const PANEL_LEFT = 'left';
 const PANEL_CENTER = 'center';
 const PANEL_RIGHT = 'right';
 const PANEL_BROWSER = 'browser';
+/** Id of the LEFT-edge group container. The left sidebar panel lives INSIDE
+ *  this group; the group itself is created once via `addEdgeGroup('left', ...)`
+ *  in `buildDefaultLayout`. Edge groups have `priority = LayoutPriority.Low`
+ *  built in, which means the splitview's proportional redistribution
+ *  *never* takes from the sidebar — exactly what we want for a fixed-width
+ *  sidebar. Replaces the previous `direction: 'left'` placement, which made
+ *  the left a regular flexible view that absorbed delta from sibling resizes
+ *  (and from `Sizing.Distribute` when the right pane was removed). */
+const LEFT_EDGE_ID = 'left-edge';
 const rightPanelId = (tabId: string) => `right:${tabId}`;
 const bottomPanelId = (tabId: string) => `bottom:${tabId}`;
 const isRightPanelId = (id: string) => id.startsWith('right:') || id === PANEL_RIGHT;
@@ -112,8 +121,14 @@ const STORAGE_KEY_RIGHT_WIDTH = 'dockview.right_width';
 const STORAGE_KEY_BOTTOM_HEIGHT = 'dockview.bottom_height';
 const STORAGE_KEY_BROWSER_WIDTH = 'dockview.browser_width';
 /** Full serialized layout. The version suffix lets us invalidate stored
- *  layouts after structural code changes (rename, new panel ids, etc.). */
-const STORAGE_KEY_LAYOUT = 'dockview.layout.v1';
+ *  layouts after structural code changes (rename, new panel ids, etc.).
+ *  v3 forces a rebuild because the left sidebar moved to an edge group —
+ *  layouts saved at v2 (before the migration finished) still have the left
+ *  as a regular `direction: 'left'` panel and would silently restore without
+ *  the priority.Low protection, causing the sidebar to absorb delta from
+ *  the right pane's toggle. The structural check below
+ *  (`hasLeftEdgeGroupAfterRestore`) belt-and-suspenders this. */
+const STORAGE_KEY_LAYOUT = 'dockview.layout.v3';
 /** Persist the layout at most every 500ms — splitter drags fire dozens of
  *  layout-change events and we don't want to thrash localStorage. */
 const LAYOUT_PERSIST_DEBOUNCE_MS = 500;
@@ -331,33 +346,13 @@ export function DockviewLayout({
    *  sizes don't clobber the user's real width in localStorage. */
   const isAnimatingRef = useRef(false);
 
-  /** Captured left width at animation start. The "left moves on close" bug
-   *  isn't a during-animation problem — it's caused by `removeView` in dockview
-   *  always passing `Sizing.Distribute` ([baseComponentGridview.js:157]) which
-   *  triggers `distributeViewSizes()` after the panel is closed. That evenly
-   *  redistributes the freed width between the remaining views, so the left
-   *  sidebar (e.g. 240px) jumps to half the freed space (e.g. 620px). We
-   *  capture the width before animation and restore it via `setSize` after
-   *  `removePanels` completes — never touch constraints, so drag is untouched. */
-  const leftPinnedWidthRef = useRef<number | null>(null);
-
-  /** Capture or restore the left sidebar's width across the animation. On
-   *  start, snapshot the current width. On end, fire `setSize(left, snapshot)`
-   *  to undo dockview's automatic redistribution from the `panel.api.close()`
-   *  that happens inside the animation's onComplete. */
-  const pinLeftWidth = useCallback((api: DockviewApi, pinned: boolean) => {
-    const leftPanel = api.getPanel(PANEL_LEFT);
-    if (!leftPanel) return;
-    if (pinned) {
-      const w = leftPanel.group.width;
-      if (Number.isFinite(w) && w >= 1) leftPinnedWidthRef.current = w;
-    } else {
-      if (leftPinnedWidthRef.current !== null) {
-        leftPanel.api.setSize({ width: leftPinnedWidthRef.current });
-      }
-      leftPinnedWidthRef.current = null;
-    }
-  }, []);
+  // (Previously here: `pinLeftWidth` + `leftPinnedWidthRef`. They captured the
+  // left sidebar's width at animation start and restored it on end to undo
+  // `Sizing.Distribute` redistribution from `panel.api.close()`. Now that the
+  // sidebar lives in an edge group with `LayoutPriority.Low`, the splitview
+  // never takes from it in the first place — and calling `setSize` on the
+  // panel side actually triggered a spurious shell-level resize that MOVED
+  // the sidebar on every toggle. Removed.)
 
   // ── Right-pane management ──
   const addRightPanels = useCallback(
@@ -526,17 +521,23 @@ export function DockviewLayout({
         component: PANEL_CENTER,
         title: 'Main',
       });
-      // Use ABSOLUTE positions for left + right so they're added at the root
-      // grid level (full height). Bottom is then added RELATIVE to center,
-      // which makes dockview vertically split only the center column instead
-      // of stretching across the whole row. Resulting layout:
-      //   [left | [ center / bottom ] | right]
+      // Left is an EDGE GROUP (structurally outside the inner gridview), so
+      // it has `LayoutPriority.Low` built in — proportional redistribution
+      // from sibling resizes / removals can't shrink it. Resulting layout:
+      //   [left-edge | [ center / bottom ] | right] (right still inside grid)
+      api.addEdgeGroup('left', {
+        id: LEFT_EDGE_ID,
+        initialSize: initialLeftWidthResolved,
+        // 0 keeps the historical "no stub" behaviour. Bump this later if we
+        // want a VSCode-style activity-bar strip when the sidebar is closed.
+        collapsedSize: 0,
+        collapsed: false,
+      });
       const leftPanel = api.addPanel({
         id: PANEL_LEFT,
         component: PANEL_LEFT,
         title: 'Sidebar',
-        position: { direction: 'left' },
-        initialWidth: initialLeftWidthResolved,
+        position: { referenceGroup: LEFT_EDGE_ID, direction: 'within' },
       });
       hideHeader(centerPanel);
       hideHeader(leftPanel);
@@ -576,6 +577,13 @@ export function DockviewLayout({
   const reconcileAfterRestore = useCallback(
     (api: DockviewApi): boolean => {
       if (!api.getPanel(PANEL_LEFT) || !api.getPanel(PANEL_CENTER)) return false;
+      // Belt-and-suspenders alongside the storage-version bump: even if the
+      // saved blob has the right key version, double-check that the left
+      // sidebar actually lives inside the edge group. If it's a regular
+      // `direction: 'left'` panel, force a clean rebuild — restoring the
+      // old structure loses the priority.Low protection and reintroduces
+      // the sidebar-jiggle bug.
+      if (!api.getEdgeGroup('left')) return false;
       hideHeader(api.getPanel(PANEL_LEFT)!);
       hideHeader(api.getPanel(PANEL_CENTER)!);
       if (!browserOpen || browser === undefined) {
@@ -747,32 +755,28 @@ export function DockviewLayout({
     const stored = readStoredSize(STORAGE_KEY_RIGHT_WIDTH);
     return stored ?? initialRightWidthRef.current;
   }, []);
-  const onRightAnimating = useCallback(
-    (animating: boolean, api: DockviewApi) => {
-      isAnimatingRef.current = animating;
-      pinLeftWidth(api, animating);
-      // Dockview groups default to `minimumWidth = 100` (see
-      // `MINIMUM_DOCKVIEW_GROUP_PANEL_WIDTH` in dockview-core). The splitview
-      // clamps setSize to that floor, so without this drop our close animation
-      // would visually park at 100px until `removePanels` snaps it gone.
-      // We relax to 0 during the animation; on close the panel is gone before
-      // the `animating=false` branch runs, on open we restore the floor.
-      const r = api.panels.find((p) => isRightPanelId(p.id));
-      if (!r) return;
-      if (animating) {
-        r.group.api.setConstraints({
-          minimumWidth: 0,
-          maximumWidth: Number.MAX_SAFE_INTEGER,
-        });
-      } else {
-        r.group.api.setConstraints({
-          minimumWidth: 100,
-          maximumWidth: Number.MAX_SAFE_INTEGER,
-        });
-      }
-    },
-    [pinLeftWidth],
-  );
+  const onRightAnimating = useCallback((animating: boolean, api: DockviewApi) => {
+    isAnimatingRef.current = animating;
+    // Dockview groups default to `minimumWidth = 100` (see
+    // `MINIMUM_DOCKVIEW_GROUP_PANEL_WIDTH` in dockview-core). The splitview
+    // clamps setSize to that floor, so without this drop our close animation
+    // would visually park at 100px until `removePanels` snaps it gone.
+    // We relax to 0 during the animation; on close the panel is gone before
+    // the `animating=false` branch runs, on open we restore the floor.
+    const r = api.panels.find((p) => isRightPanelId(p.id));
+    if (!r) return;
+    if (animating) {
+      r.group.api.setConstraints({
+        minimumWidth: 0,
+        maximumWidth: Number.MAX_SAFE_INTEGER,
+      });
+    } else {
+      r.group.api.setConstraints({
+        minimumWidth: 100,
+        maximumWidth: Number.MAX_SAFE_INTEGER,
+      });
+    }
+  }, []);
   useAnimatedPanelToggle({
     apiRef,
     open: rightPaneOpen,

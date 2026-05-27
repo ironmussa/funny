@@ -20,6 +20,7 @@ const pinLog = createClientLogger('browser-session');
 
 interface PinToolProps {
   overlayRef: RefObject<HTMLDivElement | null>;
+  canvasRef: RefObject<HTMLCanvasElement | null>;
   isActive: boolean;
 }
 
@@ -27,7 +28,7 @@ interface PinToolProps {
  * Pin tool. Always renders existing pin markers (so they remain visible when
  * the user switches tools). Click-to-add behavior is gated by `isActive`.
  */
-export function PinTool({ overlayRef, isActive }: PinToolProps) {
+export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
   const annotations = useBrowserPanelStore((s) => s.annotations);
   const addAnnotation = useBrowserPanelStore((s) => s.addAnnotation);
   const updateAnnotationNote = useBrowserPanelStore((s) => s.updateAnnotationNote);
@@ -46,10 +47,11 @@ export function PinTool({ overlayRef, isActive }: PinToolProps) {
   const handleAddPin = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isActive) return;
     if ((e.target as HTMLElement).dataset.pinMarker === 'true') return;
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = Math.round(e.clientX - rect.left);
-    const y = Math.round(e.clientY - rect.top);
+    const overlayRect = overlayRef.current?.getBoundingClientRect();
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    if (!overlayRect || !canvasRect || canvasRect.width === 0 || canvasRect.height === 0) return;
+    const x = Math.round(e.clientX - overlayRect.left);
+    const y = Math.round(e.clientY - overlayRect.top);
 
     const id = addAnnotation({ kind: 'pin', x, y, note: '' });
     setOpenPinId(id);
@@ -58,8 +60,9 @@ export function PinTool({ overlayRef, isActive }: PinToolProps) {
     // to the annotation when it returns. The pin marker renders immediately
     // at the click coords; the DOM info fills in asynchronously.
     if (!sessionId) return;
-    const viewportX = Math.round((x / rect.width) * VIEWPORT_W);
-    const viewportY = Math.round((y / rect.height) * VIEWPORT_H);
+    // Use the CANVAS rect (not the overlay) for CDP scaling — see toViewportCoords in BrowserViewport.
+    const viewportX = Math.round(((e.clientX - canvasRect.left) / canvasRect.width) * VIEWPORT_W);
+    const viewportY = Math.round(((e.clientY - canvasRect.top) / canvasRect.height) * VIEWPORT_H);
     browserSessionClient
       .inspectAt(sessionId, viewportX, viewportY)
       .then((dom) => {

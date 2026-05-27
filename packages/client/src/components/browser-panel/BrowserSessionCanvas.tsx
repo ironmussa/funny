@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 
 import {
-  BROWSER_SESSION_ASPECT_RATIO,
   BROWSER_SESSION_VIEWPORT_HEIGHT,
   BROWSER_SESSION_VIEWPORT_WIDTH,
   subscribeToFrames,
@@ -17,10 +16,13 @@ import { useBrowserPanelStore } from '@/stores/browser-panel-store';
  * canvas's display bounds — see `BrowserViewport.tsx` for the click-handling
  * side.
  */
-export function BrowserSessionCanvas() {
+interface BrowserSessionCanvasProps {
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+}
+
+export function BrowserSessionCanvas({ canvasRef }: BrowserSessionCanvasProps) {
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Lazily create an Image() instance we reuse for every frame to avoid GC
@@ -54,20 +56,18 @@ export function BrowserSessionCanvas() {
     return () => {
       unsub();
     };
-  }, [sessionId]);
+  }, [sessionId, canvasRef]);
 
+  // The canvas fills its wrapper exactly (no own aspect-ratio / max-* sizing) so
+  // its display rect matches the overlay's rect pixel-for-pixel — clicks scale
+  // 1:1 to CDP coords without subpixel drift.
   return (
     <canvas
       ref={canvasRef}
       data-testid="browser-panel-canvas"
       data-session-status={sessionStatus}
-      className="max-h-full max-w-full bg-background"
-      style={{
-        aspectRatio: BROWSER_SESSION_ASPECT_RATIO,
-        // Smooth bilinear scaling looks better than `pixelated` for screencast
-        // content (which has plenty of low-frequency detail).
-        imageRendering: 'auto',
-      }}
+      className="block h-full w-full bg-background"
+      style={{ imageRendering: 'auto' }}
     />
   );
 }

@@ -14,6 +14,7 @@ const log = createClientLogger('browser-session');
 
 interface InspectOverlayProps {
   overlayRef: RefObject<HTMLDivElement | null>;
+  canvasRef: RefObject<HTMLCanvasElement | null>;
 }
 
 /**
@@ -28,7 +29,7 @@ interface InspectOverlayProps {
  *   single hover+click flow. The actual click → annotation is handled by
  *   PinTool; this overlay only renders the highlight + tooltip.
  */
-export function InspectOverlay({ overlayRef }: InspectOverlayProps) {
+export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
   const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
   const tool = useBrowserPanelStore((s) => s.tool);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
@@ -69,8 +70,12 @@ export function InspectOverlay({ overlayRef }: InspectOverlayProps) {
       const rect = el.getBoundingClientRect();
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
-      const vx = Math.round((cx / rect.width) * VIEWPORT_W);
-      const vy = Math.round((cy / rect.height) * VIEWPORT_H);
+      // Scale to CDP coords against the CANVAS rect, not the overlay's —
+      // see toViewportCoords in BrowserViewport.tsx.
+      const canvasRect = canvasRef.current?.getBoundingClientRect();
+      if (!canvasRect || canvasRect.width === 0 || canvasRect.height === 0) return;
+      const vx = Math.round(((e.clientX - canvasRect.left) / canvasRect.width) * VIEWPORT_W);
+      const vy = Math.round(((e.clientY - canvasRect.top) / canvasRect.height) * VIEWPORT_H);
       browserSessionClient
         .inspectAt(sessionId, vx, vy)
         .then((info) => {
@@ -87,7 +92,7 @@ export function InspectOverlay({ overlayRef }: InspectOverlayProps) {
 
     el.addEventListener('mousemove', onMove);
     return () => el.removeEventListener('mousemove', onMove);
-  }, [active, sessionId, overlayRef]);
+  }, [active, sessionId, overlayRef, canvasRef]);
 
   if (!active || !hover) return null;
 

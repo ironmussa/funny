@@ -25,6 +25,7 @@ export function BrowserViewport() {
   const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Heartbeat: keep the runner session alive while the viewport is mounted.
   // The runner reaps sessions idle for >90s (see HEARTBEAT_TIMEOUT_MS in
@@ -42,13 +43,16 @@ export function BrowserViewport() {
     setLoadError(null);
   }, [loadedUrl, setLoadError]);
 
-  // Translate overlay-relative CSS coords → CDP viewport coords (1920×1080).
-  // The overlay sits exactly on top of the canvas (same wrapper, both
-  // absolute inset-0), so its bounding box matches what the user sees.
+  // Translate canvas-relative CSS coords → CDP viewport coords (1920×1080).
+  // We measure against the CANVAS (not the overlay) because the canvas is the
+  // visible content the user is aiming at — using the overlay's rect can drift
+  // by a few pixels if its size doesn't exactly match the canvas (subpixel
+  // rounding, double aspect-ratio constraints, letterboxing, etc.).
   const toViewportCoords = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = overlayRef.current;
+    const el = canvasRef.current;
     if (!el) return { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
     const scaleX = BROWSER_SESSION_VIEWPORT_WIDTH / rect.width;
     const scaleY = BROWSER_SESSION_VIEWPORT_HEIGHT / rect.height;
     return {
@@ -172,8 +176,8 @@ export function BrowserViewport() {
             maxWidth: `calc((100% - 1rem) * 1)`,
           }}
         >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <BrowserSessionCanvas />
+          <div className="absolute inset-0">
+            <BrowserSessionCanvas canvasRef={canvasRef} />
           </div>
 
           <div
@@ -196,11 +200,11 @@ export function BrowserViewport() {
             onContextMenu={onBrowseContextMenu}
             onDragStart={(e) => e.preventDefault()}
           >
-            <PinTool overlayRef={overlayRef} isActive={tool === 'pin'} />
+            <PinTool overlayRef={overlayRef} canvasRef={canvasRef} isActive={tool === 'pin'} />
             <RegionTool overlayRef={overlayRef} isActive={tool === 'region'} />
             <DrawTool overlayRef={overlayRef} isActive={tool === 'draw'} />
             <TestIdOverlay />
-            <InspectOverlay overlayRef={overlayRef} />
+            <InspectOverlay overlayRef={overlayRef} canvasRef={canvasRef} />
           </div>
         </div>
       ) : (

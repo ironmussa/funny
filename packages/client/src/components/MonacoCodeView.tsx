@@ -25,17 +25,15 @@ function registerDotenvLanguage(monaco: typeof import('monaco-editor')) {
     tokenizer: {
       root: [
         [/^\s*#.*$/, 'comment'],
-        [/^\s*[\w.-]+(?==)/, 'variable.name'],
-        [/=/, 'delimiter', '@value'],
-      ],
-      value: [
-        [/\\./, 'string.escape'],
-        [/\$\{[^}]*\}/, 'variable'],
-        [/\$\w+/, 'variable'],
+        [/^(\s*)([A-Za-z_][\w.-]*)(\s*)(=)/, ['white', 'variable.name', 'white', 'delimiter']],
+        [/#.*$/, 'comment'],
         [/"([^"\\]|\\.)*"/, 'string'],
         [/'([^'\\]|\\.)*'/, 'string'],
-        [/#.*$/, 'comment', '@pop'],
-        [/$/, '', '@pop'],
+        [/\\./, 'string.escape'],
+        [/\$\{[^}]*\}/, 'variable'],
+        [/\$[A-Za-z_]\w*/, 'variable'],
+        [/\b(?:true|false|null)\b/, 'keyword'],
+        [/-?\b\d+(?:\.\d+)?\b/, 'number'],
         [/[^\s#"'$\\]+/, 'string'],
         [/\s+/, 'white'],
       ],
@@ -70,6 +68,8 @@ const handleBeforeMount: BeforeMount = (monaco) => {
       { token: 'variable.dotenv', foreground: '4FC1FF' },
       { token: 'string.escape.dotenv', foreground: 'D7BA7D' },
       { token: 'comment.dotenv', foreground: '6A9955', fontStyle: 'italic' },
+      { token: 'keyword.dotenv', foreground: '569CD6' },
+      { token: 'number.dotenv', foreground: 'B5CEA8' },
     ],
     colors: {
       'editor.background': '#000000',

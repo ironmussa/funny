@@ -13,6 +13,7 @@ import { ToolCallCard } from '@/components/ToolCallCard';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
+import { EFFORT_LEVELS } from '@/lib/providers';
 import { resolveModelLabel } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -185,16 +186,31 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
         <>
           <ScrollArea className="flex-1 p-3" viewportRef={scrollViewportRef}>
             <div className="space-y-3">
-              {activeThread.initInfo && (
-                <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{t('initInfo.model')}</span>
-                    <span className="font-mono">
-                      {resolveModelLabel(activeThread.initInfo.model, t)}
-                    </span>
-                  </div>
-                </div>
-              )}
+              {activeThread.initInfo &&
+                (() => {
+                  const firstUserEffort = activeThread.messages?.find(
+                    (m: any) => m.role === 'user',
+                  )?.effort;
+                  const effortLabel = firstUserEffort
+                    ? (EFFORT_LEVELS.find((e) => e.value === firstUserEffort)?.label ??
+                      firstUserEffort)
+                    : null;
+                  return (
+                    <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{t('initInfo.model')}</span>
+                        <span className="font-mono">
+                          {resolveModelLabel(activeThread.initInfo.model, t)}
+                        </span>
+                        {effortLabel && (
+                          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+                            {effortLabel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
               {activeThread.messages?.flatMap((msg) => [
                 msg.content && !msg.toolCalls?.some((tc: any) => tc.name === 'ExitPlanMode') && (

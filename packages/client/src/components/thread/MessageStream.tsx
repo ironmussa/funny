@@ -522,7 +522,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           )}
 
           {/* Init info card */}
-          {initInfo && <InitInfoCard initInfo={initInfo} />}
+          {initInfo && (
+            <InitInfoCard
+              initInfo={initInfo}
+              effort={messages?.find((m: any) => m.role === 'user')?.effort}
+            />
+          )}
 
           {/* Message list */}
           <MemoizedMessageList

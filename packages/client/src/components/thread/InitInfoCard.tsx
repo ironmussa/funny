@@ -3,6 +3,7 @@ import { memo, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { EFFORT_LEVELS } from '@/lib/providers';
 import { resolveModelLabel } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -58,9 +59,10 @@ function groupTools(tools: string[]) {
 }
 
 function initInfoAreEqual(
-  prev: { initInfo: { tools: string[]; cwd: string; model: string } },
-  next: { initInfo: { tools: string[]; cwd: string; model: string } },
+  prev: { initInfo: { tools: string[]; cwd: string; model: string }; effort?: string },
+  next: { initInfo: { tools: string[]; cwd: string; model: string }; effort?: string },
 ) {
+  if (prev.effort !== next.effort) return false;
   const a = prev.initInfo;
   const b = next.initInfo;
   if (a === b) return true;
@@ -75,8 +77,10 @@ function initInfoAreEqual(
 
 export const InitInfoCard = memo(function InitInfoCard({
   initInfo,
+  effort,
 }: {
   initInfo: { tools: string[]; cwd: string; model: string };
+  effort?: string;
 }) {
   const { t } = useTranslation();
   const { builtIn, plugins, connectors, mcpServers } = useMemo(
@@ -85,12 +89,20 @@ export const InitInfoCard = memo(function InitInfoCard({
   );
   const hasAnyTools =
     builtIn.length > 0 || plugins.size > 0 || connectors.size > 0 || mcpServers.size > 0;
+  const effortLabel = effort
+    ? (EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort)
+    : null;
 
   return (
     <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
       <div className="flex items-center gap-2">
         <span className="font-medium">{t('initInfo.model')}</span>
         <span className="font-mono">{resolveModelLabel(initInfo.model, t)}</span>
+        {effortLabel && (
+          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+            {effortLabel}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <span className="font-medium">{t('initInfo.cwd')}</span>

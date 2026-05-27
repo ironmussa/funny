@@ -1,6 +1,10 @@
+import { PanelLeftOpen } from 'lucide-react';
 import { useCallback, useRef, startTransition } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/components/ui/button';
 import { Sidebar, useSidebar } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useSidebarDragDrop } from '@/hooks/use-sidebar-drag-drop';
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
@@ -20,8 +24,16 @@ import { SidebarThreadsSection } from './sidebar/SidebarThreadsSection';
 import { SidebarTopBar } from './sidebar/SidebarTopBar';
 
 export function AppSidebar({ singleProjectId }: { singleProjectId?: string | null } = {}) {
+  // Keep this wrapper's hook count stable (only `useSidebar`) so the collapse
+  // toggle can early-return without violating the Rules of Hooks. All other
+  // hooks live in `AppSidebarBody`, which only mounts in the expanded state.
+  const { state: sidebarState } = useSidebar();
+  if (sidebarState === 'collapsed') return <CollapsedSidebarRail />;
+  return <AppSidebarBody singleProjectId={singleProjectId} />;
+}
+
+function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }) {
   const navigate = useStableNavigate();
-  useSidebar();
   // project-store
   const allProjects = useProjectStore((s) => s.projects);
   const projects = singleProjectId
@@ -199,5 +211,32 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
 
       {branchSwitchDialog}
     </Sidebar>
+  );
+}
+
+/** Thin rail rendered when the sidebar is collapsed. Holds the expand button
+ *  inside the sidebar's own column so the user can reopen it without going
+ *  through the top bar. The dockview LEFT edge group is sized to match
+ *  (`collapsedSize: 40` in DockviewLayout). */
+function CollapsedSidebarRail() {
+  const { t } = useTranslation();
+  const { toggleSidebar } = useSidebar();
+  return (
+    <div className="flex h-full w-full flex-col items-center border-r border-sidebar-border bg-sidebar py-2">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            data-testid="sidebar-expand"
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleSidebar}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <PanelLeftOpen className="icon-base" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{t('sidebar.show', 'Show sidebar')}</TooltipContent>
+      </Tooltip>
+    </div>
   );
 }

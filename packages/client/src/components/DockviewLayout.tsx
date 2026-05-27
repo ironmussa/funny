@@ -23,6 +23,7 @@ import {
 import { createPortal } from 'react-dom';
 import 'dockview-react/dist/styles/dockview.css';
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
+import { useLeftPaneSync } from './dockview/use-left-pane-sync';
 
 /**
  * Custom dockview theme bound to the app's shadcn tokens. The actual CSS vars
@@ -86,6 +87,9 @@ type DockviewLayoutProps = {
   /** User dragged tabs to reorder — receives the new ordered ids. */
   onBottomTabsReorder?: (orderedIds: string[]) => void;
   bottomPaneOpen?: boolean;
+  /** Whether the left sidebar edge group is expanded. Defaults to true.
+   *  Flipping collapses/expands the left edge group in place. */
+  leftPaneOpen?: boolean;
   /** Custom React node rendered at the far left of the bottom group's header,
    *  before the tabs. */
   bottomPrefixActions?: ReactNode;
@@ -228,6 +232,7 @@ export function DockviewLayout({
   onBottomTabClose,
   onBottomTabsReorder,
   bottomPaneOpen = true,
+  leftPaneOpen = true,
   bottomPrefixActions,
   bottomLeftActions,
   bottomRightActions,
@@ -279,6 +284,8 @@ export function DockviewLayout({
 
   const onBrowserCloseRef = useRef(onBrowserClose);
   onBrowserCloseRef.current = onBrowserClose;
+  const leftPaneOpenRef = useRef(leftPaneOpen);
+  leftPaneOpenRef.current = leftPaneOpen;
   const browserTitleRef = useRef(browserTitle);
   browserTitleRef.current = browserTitle;
 
@@ -551,10 +558,11 @@ export function DockviewLayout({
       api.addEdgeGroup('left', {
         id: LEFT_EDGE_ID,
         initialSize: initialLeftWidthResolved,
-        // 0 keeps the historical "no stub" behaviour. Bump this later if we
-        // want a VSCode-style activity-bar strip when the sidebar is closed.
-        collapsedSize: 0,
-        collapsed: false,
+        // 40px keeps a thin rail visible when the sidebar is collapsed so the
+        // in-sidebar expand button stays reachable. AppSidebar switches to a
+        // rail-only render when its `state === 'collapsed'`.
+        collapsedSize: 40,
+        collapsed: !leftPaneOpenRef.current,
       });
       const leftPanel = api.addPanel({
         id: PANEL_LEFT,
@@ -643,6 +651,14 @@ export function DockviewLayout({
       if (top === undefined && (api.getEdgeGroup('top') || api.getPanel(PANEL_TOP))) return false;
       hideHeader(api.getPanel(PANEL_LEFT)!);
       hideHeader(api.getPanel(PANEL_CENTER)!);
+      // Reconcile the restored left-edge collapsed state against the prop —
+      // the cookie-backed sidebar `open` is the source of truth.
+      const leftEdge = api.getEdgeGroup('left');
+      if (leftEdge) {
+        const want = leftPaneOpenRef.current;
+        if (want && leftEdge.isCollapsed()) leftEdge.expand();
+        else if (!want && !leftEdge.isCollapsed()) leftEdge.collapse();
+      }
       const restoredTopPanel = api.getPanel(PANEL_TOP);
       if (restoredTopPanel) hideHeader(restoredTopPanel);
       // Re-pin the top edge group's height. `addEdgeGroup` sets
@@ -799,6 +815,8 @@ export function DockviewLayout({
     },
     [buildDefaultLayout, reconcileAfterRestore, schedulePersistLayout],
   );
+
+  useLeftPaneSync(apiRef, leftPaneOpen);
 
   // Open/close the browser panel reactively when the prop changes. The
   // `reconcileAfterRestore` already pruned the panel on mount if the store

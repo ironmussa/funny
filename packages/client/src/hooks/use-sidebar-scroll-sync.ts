@@ -27,15 +27,17 @@ export function useSidebarScrollSync({
 }: Options) {
   const revealNonce = useProjectStore((s) => s.revealNonce);
   const revealIntent = useProjectStore((s) => s.revealIntent);
-  const expandedProjects = useProjectStore((s) => s.expandedProjects);
   const toggleProject = useProjectStore((s) => s.toggleProject);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
 
   useEffect(() => {
     if (!selectedProjectId) return;
-    if (expandedProjects.has(selectedProjectId)) return;
+    // Read expandedProjects via getState() rather than subscribing — otherwise
+    // a user-initiated collapse of the selected project would re-trigger this
+    // effect and immediately re-expand it.
+    if (useProjectStore.getState().expandedProjects.has(selectedProjectId)) return;
     toggleProject(selectedProjectId);
-  }, [selectedProjectId, revealNonce, expandedProjects, toggleProject]);
+  }, [selectedProjectId, revealNonce, toggleProject]);
 
   useEffect(() => {
     if (settingsOpen) return;

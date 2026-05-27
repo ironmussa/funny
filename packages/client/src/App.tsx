@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { CenterDockview } from '@/components/CenterDockview';
@@ -13,7 +13,7 @@ import {
 import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';
 import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
@@ -347,27 +347,14 @@ export function App() {
       <ThreadProvider threadId={selectedThreadId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
           <ReviewPaneStateProvider>
-            <DockviewLayout
-              left={leftPanel}
-              center={centerPanel}
-              bottomTabs={terminalDockview.bottomTabs}
-              activeBottomTab={terminalDockview.activeBottomTab}
-              onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}
-              onBottomTabClose={terminalDockview.onBottomTabClose}
-              onBottomTabsReorder={terminalDockview.onBottomTabsReorder}
-              bottomPaneOpen={terminalDockview.bottomPaneOpen && !isFullScreenView}
-              bottomPrefixActions={terminalDockview.bottomPrefixActions}
-              bottomLeftActions={terminalDockview.bottomLeftActions}
-              bottomRightActions={terminalDockview.bottomRightActions}
-              browser={
-                <Suspense fallback={null}>
-                  <BrowserPanel />
-                </Suspense>
-              }
-              browserOpen={browserPanelOpen && !isFullScreenView}
-              onBrowserClose={togglebrowserPanel}
-              initialLeftWidth={DEFAULT_SIDEBAR_WIDTH}
-              initialBrowserWidth={browserPanelWidth}
+            <SidebarAwareDockview
+              leftPanel={leftPanel}
+              centerPanel={centerPanel}
+              terminalDockview={terminalDockview}
+              isFullScreenView={isFullScreenView}
+              browserPanelOpen={browserPanelOpen}
+              togglebrowserPanel={togglebrowserPanel}
+              browserPanelWidth={browserPanelWidth}
             />
           </ReviewPaneStateProvider>
         </div>
@@ -402,5 +389,53 @@ export function App() {
         </Suspense>
       </ThreadProvider>
     </SidebarProvider>
+  );
+}
+
+/** Reads the sidebar context (cookie-backed `open`) and feeds it into
+ *  DockviewLayout as `leftPaneOpen` so the SidebarTopBar collapse button
+ *  actually collapses the left edge group. Lives inside <SidebarProvider>. */
+function SidebarAwareDockview({
+  leftPanel,
+  centerPanel,
+  terminalDockview,
+  isFullScreenView,
+  browserPanelOpen,
+  togglebrowserPanel,
+  browserPanelWidth,
+}: {
+  leftPanel: ReactNode;
+  centerPanel: ReactNode;
+  terminalDockview: ReturnType<typeof useTerminalDockview>;
+  isFullScreenView: boolean;
+  browserPanelOpen: boolean;
+  togglebrowserPanel: () => void;
+  browserPanelWidth: number;
+}) {
+  const { open: sidebarOpen } = useSidebar();
+  return (
+    <DockviewLayout
+      left={leftPanel}
+      center={centerPanel}
+      leftPaneOpen={sidebarOpen}
+      bottomTabs={terminalDockview.bottomTabs}
+      activeBottomTab={terminalDockview.activeBottomTab}
+      onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}
+      onBottomTabClose={terminalDockview.onBottomTabClose}
+      onBottomTabsReorder={terminalDockview.onBottomTabsReorder}
+      bottomPaneOpen={terminalDockview.bottomPaneOpen && !isFullScreenView}
+      bottomPrefixActions={terminalDockview.bottomPrefixActions}
+      bottomLeftActions={terminalDockview.bottomLeftActions}
+      bottomRightActions={terminalDockview.bottomRightActions}
+      browser={
+        <Suspense fallback={null}>
+          <BrowserPanel />
+        </Suspense>
+      }
+      browserOpen={browserPanelOpen && !isFullScreenView}
+      onBrowserClose={togglebrowserPanel}
+      initialLeftWidth={DEFAULT_SIDEBAR_WIDTH}
+      initialBrowserWidth={browserPanelWidth}
+    />
   );
 }

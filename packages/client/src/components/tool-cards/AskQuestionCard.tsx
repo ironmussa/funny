@@ -19,6 +19,7 @@ import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDictation } from '@/hooks/use-dictation';
+import { usePushToTalk } from '@/hooks/use-push-to-talk';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
@@ -147,6 +148,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
     () => restoredState?.otherTexts ?? new Map(),
   );
   const otherEditorRef = useRef<PromptEditorHandle>(null);
+  const otherEditorContainerRef = useRef<HTMLDivElement>(null);
   const cwd = useCurrentProjectPath();
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
@@ -173,12 +175,22 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   const {
     isRecording,
     isConnecting: isTranscribing,
+    start: startRecording,
     toggle: toggleRecording,
     stop: stopRecording,
   } = useDictation({
     onPartial: handlePartialTranscript,
     onFinal: handleFinalTranscript,
     onError: handleDictationError,
+  });
+
+  usePushToTalk({
+    enabled: hasAssemblyaiKey,
+    containerRef: otherEditorContainerRef,
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecording,
   });
 
   // ── Skills loader for slash commands ──
@@ -218,17 +230,20 @@ export const AskQuestionCard = memo(function AskQuestionCard({
     });
   }, [activeTab]);
 
-  // Restore editor content when switching tabs
-  const prevActiveTabRef = useRef(activeTab);
-  useEffect(() => {
-    if (prevActiveTabRef.current !== activeTab) {
-      prevActiveTabRef.current = activeTab;
-      const savedText = otherTexts.get(activeTab) || '';
-      if (otherEditorRef.current) {
-        otherEditorRef.current.setContent(savedText);
-      }
-    }
-  }, [activeTab, otherTexts]);
+  // Restore editor content on mount via callback ref. The PromptEditor lives
+  // inside an AnimatePresence(mode="wait") subtree keyed by activeTab, so it
+  // remounts on every tab switch — a regular effect would run before the new
+  // editor exists. Reading current state via refs keeps the callback stable.
+  const otherTextsRef = useRef(otherTexts);
+  otherTextsRef.current = otherTexts;
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const handleOtherEditorRef = useCallback((handle: PromptEditorHandle | null) => {
+    otherEditorRef.current = handle;
+    if (!handle) return;
+    const savedText = otherTextsRef.current.get(activeTabRef.current) || '';
+    if (savedText) handle.setContent(savedText);
+  }, []);
 
   const toggleOption = (qIndex: number, optIndex: number, multiSelect: boolean) => {
     if (submitted) return;
@@ -513,6 +528,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                     {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
                     {isOtherSelected && !submitted && (
                       <div
+                        ref={otherEditorContainerRef}
                         onMouseDown={(e) => {
                           const target = e.target as HTMLElement;
                           // Mic and editor handle their own focus — don't interfere
@@ -526,7 +542,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                       >
                         <div className="px-2.5 py-1.5">
                           <PromptEditor
-                            ref={otherEditorRef}
+                            ref={handleOtherEditorRef}
                             placeholder={t('tools.otherPlaceholder')}
                             onChange={handleOtherEditorChange}
                             onSubmit={() => {

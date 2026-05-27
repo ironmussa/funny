@@ -14,6 +14,7 @@ import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePiPromptModels } from '@/hooks/use-pi-prompt-models';
+import { usePushToTalk } from '@/hooks/use-push-to-talk';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { getEffortLevels, getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
@@ -262,91 +263,21 @@ export function usePromptInputState({
     wasRecordingRef.current = isRecording;
   }, [isRecording]);
 
-  // Push-to-talk refs
-  const pttActiveRef = useRef(false);
-  const isRecordingRef = useRef(isRecording);
-  const isTranscribingRef = useRef(isTranscribing);
-  const startRecordingRef = useRef(startRecording);
-  const stopRecordingRef = useRef(stopRecording);
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
-  useEffect(() => {
-    isTranscribingRef.current = isTranscribing;
-  }, [isTranscribing]);
-  useEffect(() => {
-    startRecordingRef.current = startRecording;
-  }, [startRecording]);
+
+  const stopRecordingRef = useRef(stopRecording);
   useEffect(() => {
     stopRecordingRef.current = stopRecording;
   }, [stopRecording]);
 
-  const pttStopTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => {
-    if (!hasAssemblyaiKey) return;
-
-    const keysDown = { ctrl: false, alt: false };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Control') keysDown.ctrl = true;
-      if (e.key === 'Alt') keysDown.alt = true;
-
-      const active = document.activeElement;
-      const inPrompt = active && editorContainerRef.current?.contains(active);
-      if (
-        keysDown.ctrl &&
-        keysDown.alt &&
-        inPrompt &&
-        !pttActiveRef.current &&
-        !isRecordingRef.current &&
-        !isTranscribingRef.current
-      ) {
-        e.preventDefault();
-        if (pttStopTimerRef.current) {
-          clearTimeout(pttStopTimerRef.current);
-          pttStopTimerRef.current = undefined;
-        }
-        pttActiveRef.current = true;
-        startRecordingRef.current();
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Control') keysDown.ctrl = false;
-      if (e.key === 'Alt') keysDown.alt = false;
-
-      if (pttActiveRef.current && (!keysDown.ctrl || !keysDown.alt)) {
-        pttActiveRef.current = false;
-        pttStopTimerRef.current = setTimeout(() => {
-          pttStopTimerRef.current = undefined;
-          stopRecordingRef.current();
-        }, 500);
-      }
-    };
-
-    const handleBlur = () => {
-      keysDown.ctrl = false;
-      keysDown.alt = false;
-      if (pttActiveRef.current) pttActiveRef.current = false;
-      if (pttStopTimerRef.current) {
-        clearTimeout(pttStopTimerRef.current);
-        pttStopTimerRef.current = undefined;
-      }
-      stopRecordingRef.current();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('blur', handleBlur);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur', handleBlur);
-      if (pttStopTimerRef.current) clearTimeout(pttStopTimerRef.current);
-    };
-  }, [hasAssemblyaiKey]);
+  usePushToTalk({
+    enabled: hasAssemblyaiKey,
+    containerRef: editorContainerRef,
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecording,
+  });
 
   // ── Sync mode with active thread ──
   useEffect(() => {

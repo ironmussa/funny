@@ -21,6 +21,7 @@ import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDictation } from '@/hooks/use-dictation';
+import { usePushToTalk } from '@/hooks/use-push-to-talk';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
@@ -78,6 +79,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   };
   const [submitted, setSubmitted] = useState(alreadyAnswered);
   const editorRef = useRef<PromptEditorHandle>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const cwd = useCurrentProjectPath();
 
   // Skills loader for slash commands
@@ -123,11 +125,22 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const {
     isRecording,
     isConnecting: isTranscribing,
+    start: startRecording,
+    stop: stopRecording,
     toggle: toggleRecording,
   } = useDictation({
     onPartial: handlePartialTranscript,
     onFinal: handleFinalTranscript,
     onError: handleDictationError,
+  });
+
+  usePushToTalk({
+    enabled: hasAssemblyaiKey,
+    containerRef: editorContainerRef,
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecording,
   });
 
   // Track if editor has content for send button state
@@ -280,7 +293,10 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
           {/* Row 3: Custom response — single row with inline editor */}
           <div className="flex items-center gap-3 px-4 py-2.5">
             <Pencil className="size-4 flex-shrink-0 text-muted-foreground/60" />
-            <div className="min-w-0 flex-1 rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
+            <div
+              ref={editorContainerRef}
+              className="min-w-0 flex-1 rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50"
+            >
               <div className="px-2.5 py-1.5">
                 <PromptEditor
                   ref={editorRef}

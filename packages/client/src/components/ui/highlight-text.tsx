@@ -9,17 +9,29 @@ function normalize(str: string) {
 
 interface HighlightTextProps {
   text: string;
-  query: string;
+  query?: string;
   /**
    * Pre-computed character indices to highlight (0-based, into `text`).
    * When provided, takes precedence over `query`-based substring matching.
    * Used by fuzzy-search results where matching characters aren't contiguous.
    */
   indices?: number[];
+  /**
+   * Pre-computed [start, end) ranges to highlight (0-based, into `text`).
+   * When provided, takes precedence over `query` and `indices`.
+   * Used by backends (e.g. ripgrep) that emit explicit match offsets.
+   */
+  ranges?: Array<{ start: number; end: number }>;
   className?: string;
 }
 
-export function HighlightText({ text, query, indices, className }: HighlightTextProps) {
+export function HighlightText({
+  text,
+  query = '',
+  indices,
+  ranges,
+  className,
+}: HighlightTextProps) {
   // Normalize text only when text changes — the expensive NFKC/NFKD passes
   // shouldn't re-run on every keystroke as the query changes.
   const normalizedText = useMemo(() => {
@@ -28,6 +40,21 @@ export function HighlightText({ text, query, indices, className }: HighlightText
   }, [text]);
 
   const parts = useMemo(() => {
+    // Range-based highlighting (from ripgrep / explicit offsets)
+    if (ranges && ranges.length > 0) {
+      const out: { text: string; highlight: boolean }[] = [];
+      let cursor = 0;
+      for (const r of ranges) {
+        const start = Math.max(0, Math.min(r.start, text.length));
+        const end = Math.max(start, Math.min(r.end, text.length));
+        if (start > cursor) out.push({ text: text.slice(cursor, start), highlight: false });
+        if (end > start) out.push({ text: text.slice(start, end), highlight: true });
+        cursor = end;
+      }
+      if (cursor < text.length) out.push({ text: text.slice(cursor), highlight: false });
+      return out;
+    }
+
     if (!query.trim()) return [{ text, highlight: false }];
 
     // Index-based highlighting (from fuzzy scorer)
@@ -69,7 +96,7 @@ export function HighlightText({ text, query, indices, className }: HighlightText
     return result;
   }, [text, query, indices, normalizedText]);
 
-  if (!query.trim()) {
+  if (!query.trim() && !(ranges && ranges.length > 0) && !(indices && indices.length > 0)) {
     return <span className={className}>{text}</span>;
   }
 

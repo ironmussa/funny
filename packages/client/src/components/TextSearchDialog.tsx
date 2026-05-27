@@ -5,6 +5,7 @@ import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState }
 import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
+import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { SearchBar } from '@/components/ui/search-bar';
 import { api } from '@/lib/api';
@@ -405,30 +406,9 @@ function MatchLine({
       <span className="w-10 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
         {line}
       </span>
-      <span className="truncate font-mono text-xs">{renderHighlighted(text, ranges)}</span>
+      <HighlightText text={text} ranges={ranges} className="truncate font-mono text-xs" />
     </div>
   );
-}
-
-/** Slice `text` at byte ranges and wrap matched segments in a highlight span. */
-function renderHighlighted(text: string, ranges: Array<{ start: number; end: number }>) {
-  if (ranges.length === 0) return text;
-  // ripgrep emits byte offsets; for ASCII-heavy code they map 1:1 to chars.
-  // Multi-byte chars in the matched portion are rare in source code; if we hit
-  // a corruption case the worst outcome is a slightly mis-aligned highlight.
-  const out: React.ReactNode[] = [];
-  let cursor = 0;
-  ranges.forEach((r, i) => {
-    if (r.start > cursor) out.push(text.slice(cursor, r.start));
-    out.push(
-      <mark key={i} className="rounded bg-yellow-300/40 px-0.5 text-foreground">
-        {text.slice(r.start, r.end)}
-      </mark>,
-    );
-    cursor = r.end;
-  });
-  if (cursor < text.length) out.push(text.slice(cursor));
-  return out;
 }
 
 function EmptyRow({ text }: { text: string }) {

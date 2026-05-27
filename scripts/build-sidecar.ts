@@ -40,7 +40,18 @@ mkdirSync(outDir, { recursive: true });
 console.log(`Building sidecar for ${triple}...`);
 console.log(`Output: ${outFile}`);
 
-execSync(`bun build --compile packages/runtime/src/index.ts --outfile "${outFile}"`, {
+const externals = [
+  'electron',
+  'chromium-bidi',
+  'chromium-bidi/*',
+  'playwright',
+  'playwright-core',
+  'node-pty',
+]
+  .map((e) => `--external "${e}"`)
+  .join(' ');
+
+execSync(`bun build --compile ${externals} scripts/sidecar-entry.ts --outfile "${outFile}"`, {
   stdio: 'inherit',
   cwd: join(__dirname, '..'),
 });

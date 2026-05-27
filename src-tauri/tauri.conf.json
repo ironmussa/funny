@@ -5,7 +5,7 @@
   "identifier": "com.funny.app",
   "build": {
     "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:5179",
+    "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "bun run build:sidecar && bun run build",
     "frontendDist": "../packages/client/dist"
   },

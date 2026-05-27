@@ -1023,7 +1023,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // Update placeholder when it changes
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     editor.extensionManager.extensions.forEach((ext) => {
       if (ext.name === 'placeholder') {
         (ext.options as any).placeholder = placeholder ?? '';
@@ -1034,29 +1034,38 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // Update editable state
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     editor.setEditable(!disabled);
   }, [editor, disabled]);
 
   // ── Imperative handle ──
+  // Tiptap destroys the underlying editor on unmount (Strict Mode reconnect,
+  // HMR, fast remounts). The React closure can still hold the reference and
+  // calls into `editor.commands` / `editor.extensionManager` after destroy
+  // throw a null deref. Guard every entry point with `isDestroyed`.
+  const alive = (ed: typeof editor): ed is NonNullable<typeof editor> => !!ed && !ed.isDestroyed;
   useImperativeHandle(
     ref,
     () => ({
-      getJSON: () => editor?.getJSON(),
+      getJSON: () => (alive(editor) ? editor.getJSON() : undefined),
       setContent: (content: JSONContent | string) => {
-        if (!editor) return;
+        if (!alive(editor)) return;
         if (typeof content === 'string') {
           editor.commands.setContent(content ? `<p>${content}</p>` : '');
         } else {
           editor.commands.setContent(content);
         }
       },
-      getText: () => editor?.getText() ?? '',
-      focus: () => editor?.commands.focus(),
-      clear: () => editor?.commands.clearContent(),
-      isEmpty: () => editor?.isEmpty ?? true,
+      getText: () => (alive(editor) ? editor.getText() : ''),
+      focus: () => {
+        if (alive(editor)) editor.commands.focus();
+      },
+      clear: () => {
+        if (alive(editor)) editor.commands.clearContent();
+      },
+      isEmpty: () => (alive(editor) ? editor.isEmpty : true),
       insertFileMention: (path: string, fileType: 'file' | 'folder') => {
-        if (!editor) return;
+        if (!alive(editor)) return;
         const label = path.split('/').pop() ?? path;
         editor
           .chain()
@@ -1071,11 +1080,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           .run();
       },
       insertText: (text: string) => {
-        if (!editor) return;
+        if (!alive(editor)) return;
         editor.chain().focus().insertContent(text).run();
       },
       setDictationPreview: (text: string) => {
-        if (!editor) return;
+        if (!alive(editor)) return;
         const { state } = editor;
         const range = dictationRangeRef.current;
 
@@ -1115,7 +1124,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         dictationRangeRef.current = { from: insertFrom, to: insertFrom + text.length };
       },
       commitDictation: (text: string) => {
-        if (!editor) return;
+        if (!alive(editor)) return;
         const { state } = editor;
         const range = dictationRangeRef.current;
         const finalText = text + ' ';

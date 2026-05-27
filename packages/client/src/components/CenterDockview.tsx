@@ -166,40 +166,50 @@ export function CenterDockview({
   }, []);
 
   const isAnimatingRef = useRef(false);
+  // Suppress onDidActivePanelChange during programmatic open/close of right
+  // panels. Closing panels one-by-one makes dockview activate the next-in-line
+  // each step, which would otherwise overwrite the user's selected tab in the
+  // store (and in localStorage) with whichever panel happened to be last alive.
+  const isMutatingRightRef = useRef(false);
 
   const addRightPanels = useCallback(
     (api: DockviewApi, widthOverride?: number) => {
       const desiredWidth = widthOverride ?? initialRightWidthRef.current;
       const tabs = rightTabsRef.current;
-      if (tabs && tabs.length > 0) {
-        for (let i = 0; i < tabs.length; i++) {
-          const tab = tabs[i];
-          api.addPanel({
-            id: rightPanelId(tab.id),
-            component: 'right-tab',
-            tabComponent: 'right-tab',
-            title: tab.title,
-            params: { hostId: rightPanelId(tab.id) },
-            position:
-              i === 0
-                ? { direction: 'right' }
-                : { direction: 'within', referencePanel: rightPanelId(tabs[0].id) },
-            initialWidth: i === 0 ? desiredWidth : undefined,
-            renderer: 'always',
+      isMutatingRightRef.current = true;
+      try {
+        if (tabs && tabs.length > 0) {
+          for (let i = 0; i < tabs.length; i++) {
+            const tab = tabs[i];
+            api.addPanel({
+              id: rightPanelId(tab.id),
+              component: 'right-tab',
+              tabComponent: 'right-tab',
+              title: tab.title,
+              params: { hostId: rightPanelId(tab.id) },
+              position:
+                i === 0
+                  ? { direction: 'right' }
+                  : { direction: 'within', referencePanel: rightPanelId(tabs[0].id) },
+              initialWidth: i === 0 ? desiredWidth : undefined,
+              renderer: 'always',
+            });
+          }
+          const desired = activeRightTabRef.current ?? tabs[0].id;
+          const target = api.getPanel(rightPanelId(desired));
+          target?.api.setActive();
+        } else if (right !== undefined) {
+          const panel = api.addPanel({
+            id: PANEL_RIGHT,
+            component: PANEL_RIGHT,
+            title: 'Right',
+            position: { direction: 'right' },
+            initialWidth: desiredWidth,
           });
+          hideHeader(panel);
         }
-        const desired = activeRightTabRef.current ?? tabs[0].id;
-        const target = api.getPanel(rightPanelId(desired));
-        target?.api.setActive();
-      } else if (right !== undefined) {
-        const panel = api.addPanel({
-          id: PANEL_RIGHT,
-          component: PANEL_RIGHT,
-          title: 'Right',
-          position: { direction: 'right' },
-          initialWidth: desiredWidth,
-        });
-        hideHeader(panel);
+      } finally {
+        isMutatingRightRef.current = false;
       }
     },
     [hideHeader, right],
@@ -213,9 +223,14 @@ export function CenterDockview({
   }, []);
 
   const removeRightPanels = useCallback((api: DockviewApi) => {
-    const ids = api.panels.filter((p) => isRightPanelId(p.id)).map((p) => p.id);
-    for (const id of ids) {
-      api.getPanel(id)?.api.close();
+    isMutatingRightRef.current = true;
+    try {
+      const ids = api.panels.filter((p) => isRightPanelId(p.id)).map((p) => p.id);
+      for (const id of ids) {
+        api.getPanel(id)?.api.close();
+      }
+    } finally {
+      isMutatingRightRef.current = false;
     }
   }, []);
 
@@ -289,6 +304,7 @@ export function CenterDockview({
       }
 
       event.api.onDidActivePanelChange((panel) => {
+        if (isMutatingRightRef.current) return;
         if (!panel) return;
         if (panel.id.startsWith('right:')) {
           const tabId = panel.id.slice('right:'.length);

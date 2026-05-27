@@ -25,7 +25,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
-export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileSearch: () => void) {
+export function useGlobalShortcuts(
+  toggleCommandPalette: () => void,
+  toggleFileSearch: () => void,
+  toggleTextSearch: () => void,
+) {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -166,8 +170,10 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
         return;
       }
 
-      // Ctrl+Shift+F for thread search — scope to current thread's project by default
-      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+      // Ctrl+Shift+L for thread list/search — scope to current thread's project
+      // by default. (Was Ctrl+Shift+F until text-in-files search took that slot
+      // to match the VSCode convention.)
+      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'L' || e.key === 'l')) {
         e.preventDefault();
         e.stopPropagation();
         const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
@@ -212,5 +218,22 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigate, toggleCommandPalette, toggleFileSearch]);
+  }, [navigate, toggleCommandPalette, toggleFileSearch, toggleTextSearch]);
+
+  // Ctrl+Shift+F for text search (matches VSCode). Registered in CAPTURE
+  // phase with `stopImmediatePropagation` so no component listener can
+  // swallow it. Uses `e.code === 'KeyF'` (physical key, IME/layout-
+  // independent) rather than `e.key`.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;
+      if (e.code !== 'KeyF') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      log.info('shortcut.text_search');
+      toggleTextSearch();
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [toggleTextSearch]);
 }

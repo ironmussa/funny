@@ -14,6 +14,9 @@ const CommandPalette = lazy(commandPaletteImport);
 const fileSearchImport = () =>
   import('@/components/FileSearchDialog').then((m) => ({ default: m.FileSearchDialog }));
 const FileSearchDialog = lazy(fileSearchImport);
+const textSearchImport = () =>
+  import('@/components/TextSearchDialog').then((m) => ({ default: m.TextSearchDialog }));
+const TextSearchDialog = lazy(textSearchImport);
 const CircuitBreakerDialog = lazy(() =>
   import('@/components/CircuitBreakerDialog').then((m) => ({ default: m.CircuitBreakerDialog })),
 );
@@ -33,6 +36,9 @@ if (typeof requestIdleCallback === 'function') {
   requestIdleCallback(() => {
     fileSearchImport();
   });
+  requestIdleCallback(() => {
+    textSearchImport();
+  });
 } else {
   setTimeout(() => {
     commandPaletteImport();
@@ -40,6 +46,9 @@ if (typeof requestIdleCallback === 'function') {
   setTimeout(() => {
     fileSearchImport();
   }, 2500);
+  setTimeout(() => {
+    textSearchImport();
+  }, 3000);
 }
 
 interface OverlayDialogsProps {
@@ -62,6 +71,8 @@ export function OverlayDialogs({ branchSyncDialog }: OverlayDialogsProps) {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const fileSearchOpen = useUIStore((s) => s.fileSearchOpen);
   const setFileSearchOpen = useUIStore((s) => s.setFileSearchOpen);
+  const textSearchOpen = useUIStore((s) => s.textSearchOpen);
+  const setTextSearchOpen = useUIStore((s) => s.setTextSearchOpen);
   const internalEditorOpen = useInternalEditorStore((s) => s.isOpen);
   const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
@@ -84,6 +95,9 @@ export function OverlayDialogs({ branchSyncDialog }: OverlayDialogsProps) {
       </Suspense>
       <Suspense>
         <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
+      </Suspense>
+      <Suspense>
+        <TextSearchDialog open={textSearchOpen} onOpenChange={setTextSearchOpen} />
       </Suspense>
 
       {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}

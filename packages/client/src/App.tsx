@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { CenterDockview } from '@/components/CenterDockview';
@@ -103,6 +103,10 @@ const fileSearchImport = import('@/components/FileSearchDialog').then((m) => ({
   default: m.FileSearchDialog,
 }));
 const FileSearchDialog = lazy(() => fileSearchImport);
+const textSearchImport = import('@/components/TextSearchDialog').then((m) => ({
+  default: m.TextSearchDialog,
+}));
+const TextSearchDialog = lazy(() => textSearchImport);
 // Prefetch ReviewPane on idle so the first toggle is instant.
 if (typeof requestIdleCallback === 'function') {
   requestIdleCallback(() => {
@@ -146,8 +150,10 @@ export function App() {
   const activeThreadCanShowGit = useThreadStore((s) => canDoGitOps(s.activeThread));
   const hasSelectedProject = useProjectStore((s) => s.selectedProjectId != null);
   const navigate = useNavigate();
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [fileSearchOpen, setFileSearchOpen] = useState(false);
+  const commandPaletteOpen = useUIStore((s) => s.commandPaletteOpen);
+  const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const fileSearchOpen = useUIStore((s) => s.fileSearchOpen);
+  const setFileSearchOpen = useUIStore((s) => s.setFileSearchOpen);
 
   // --- Right panel layout ---
   const isFullScreenView =
@@ -204,14 +210,15 @@ export function App() {
     }
   }, [selectedProjectId, selectedProjectName, selectedProjectBranch]);
 
-  // Global keyboard shortcuts (extracted to dedicated hook)
-  const toggleCommandPalette = useCallback(() => {
-    setCommandPaletteOpen((prev) => !prev);
-  }, []);
-  const toggleFileSearch = useCallback(() => {
-    setFileSearchOpen((prev) => !prev);
-  }, []);
-  useGlobalShortcuts(toggleCommandPalette, toggleFileSearch);
+  // Global keyboard shortcuts (extracted to dedicated hook). All three dialog
+  // toggles must go through the store so its mutual-exclusion logic fires
+  // (opening one closes the others — see ui-store setters).
+  const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
+  const toggleFileSearch = useUIStore((s) => s.toggleFileSearch);
+  const textSearchOpen = useUIStore((s) => s.textSearchOpen);
+  const setTextSearchOpen = useUIStore((s) => s.setTextSearchOpen);
+  const toggleTextSearch = useUIStore((s) => s.toggleTextSearch);
+  useGlobalShortcuts(toggleCommandPalette, toggleFileSearch, toggleTextSearch);
   useThreadHistoryTracker();
   useTauriAnnotatorEvents();
 
@@ -377,6 +384,9 @@ export function App() {
         </Suspense>
         <Suspense>
           <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
+        </Suspense>
+        <Suspense>
+          <TextSearchDialog open={textSearchOpen} onOpenChange={setTextSearchOpen} />
         </Suspense>
 
         {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}

@@ -73,12 +73,29 @@ interface UIState {
   composePrefillPrompt: string | null;
   commandPaletteOpen: boolean;
   fileSearchOpen: boolean;
+  textSearchOpen: boolean;
+  /**
+   * Last text-search query and options, persisted across dialog open/close so
+   * the user keeps their workspace when they pop the dialog to peek at a file
+   * and then reopen it. Wiped only on explicit reset or sign-out.
+   */
+  textSearchState: {
+    query: string;
+    caseSensitive: boolean;
+    wholeWord: boolean;
+    regex: boolean;
+    include: string;
+    exclude: string;
+  };
   keyboardShortcutsOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   setFileSearchOpen: (open: boolean) => void;
+  setTextSearchOpen: (open: boolean) => void;
+  setTextSearchState: (patch: Partial<UIState['textSearchState']>) => void;
   setKeyboardShortcutsOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
   toggleFileSearch: () => void;
+  toggleTextSearch: () => void;
   toggleKeyboardShortcuts: () => void;
   setReviewSubTab: (tab: ReviewSubTab) => void;
   setReviewPaneOpen: (open: boolean) => void;
@@ -198,13 +215,106 @@ export const useUIStore = create<UIState>((set) => ({
   composePrefillPrompt: null,
   commandPaletteOpen: false,
   fileSearchOpen: false,
+  textSearchOpen: false,
+  textSearchState: {
+    query: '',
+    caseSensitive: false,
+    wholeWord: false,
+    regex: false,
+    include: '',
+    exclude: '',
+  },
   keyboardShortcutsOpen: false,
-  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
-  setFileSearchOpen: (open) => set({ fileSearchOpen: open }),
-  setKeyboardShortcutsOpen: (open) => set({ keyboardShortcutsOpen: open }),
-  toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
-  toggleFileSearch: () => set((s) => ({ fileSearchOpen: !s.fileSearchOpen })),
-  toggleKeyboardShortcuts: () => set((s) => ({ keyboardShortcutsOpen: !s.keyboardShortcutsOpen })),
+  setCommandPaletteOpen: (open) =>
+    set(
+      open
+        ? {
+            commandPaletteOpen: true,
+            fileSearchOpen: false,
+            textSearchOpen: false,
+            keyboardShortcutsOpen: false,
+          }
+        : { commandPaletteOpen: false },
+    ),
+  setFileSearchOpen: (open) =>
+    set(
+      open
+        ? {
+            fileSearchOpen: true,
+            commandPaletteOpen: false,
+            textSearchOpen: false,
+            keyboardShortcutsOpen: false,
+          }
+        : { fileSearchOpen: false },
+    ),
+  setTextSearchOpen: (open) =>
+    set(
+      open
+        ? {
+            textSearchOpen: true,
+            commandPaletteOpen: false,
+            fileSearchOpen: false,
+            keyboardShortcutsOpen: false,
+          }
+        : { textSearchOpen: false },
+    ),
+  setTextSearchState: (patch) =>
+    set((s) => ({ textSearchState: { ...s.textSearchState, ...patch } })),
+  setKeyboardShortcutsOpen: (open) =>
+    set(
+      open
+        ? {
+            keyboardShortcutsOpen: true,
+            commandPaletteOpen: false,
+            fileSearchOpen: false,
+            textSearchOpen: false,
+          }
+        : { keyboardShortcutsOpen: false },
+    ),
+  toggleCommandPalette: () =>
+    set((s) =>
+      s.commandPaletteOpen
+        ? { commandPaletteOpen: false }
+        : {
+            commandPaletteOpen: true,
+            fileSearchOpen: false,
+            textSearchOpen: false,
+            keyboardShortcutsOpen: false,
+          },
+    ),
+  toggleFileSearch: () =>
+    set((s) =>
+      s.fileSearchOpen
+        ? { fileSearchOpen: false }
+        : {
+            fileSearchOpen: true,
+            commandPaletteOpen: false,
+            textSearchOpen: false,
+            keyboardShortcutsOpen: false,
+          },
+    ),
+  toggleTextSearch: () =>
+    set((s) =>
+      s.textSearchOpen
+        ? { textSearchOpen: false }
+        : {
+            textSearchOpen: true,
+            commandPaletteOpen: false,
+            fileSearchOpen: false,
+            keyboardShortcutsOpen: false,
+          },
+    ),
+  toggleKeyboardShortcuts: () =>
+    set((s) =>
+      s.keyboardShortcutsOpen
+        ? { keyboardShortcutsOpen: false }
+        : {
+            keyboardShortcutsOpen: true,
+            commandPaletteOpen: false,
+            fileSearchOpen: false,
+            textSearchOpen: false,
+          },
+    ),
   setReviewSubTab: (tab) => {
     try {
       localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);

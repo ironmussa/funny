@@ -89,4 +89,42 @@ export const browseApi = {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
+  /**
+   * Full-text search across the thread's working directory (VSCode-style
+   * "Search in Files"). Runs ripgrep on the runner and groups matches by file.
+   * Truncates at `maxResults` (default 1000) and surfaces a `truncated` flag
+   * so the UI can prompt for a more specific query.
+   */
+  searchText: (params: {
+    threadId: string;
+    query: string;
+    caseSensitive?: boolean;
+    wholeWord?: boolean;
+    regex?: boolean;
+    include?: string;
+    exclude?: string;
+    maxResults?: number;
+  }) => {
+    const qs = new URLSearchParams({ threadId: params.threadId, q: params.query });
+    if (params.caseSensitive) qs.set('caseSensitive', 'true');
+    if (params.wholeWord) qs.set('wholeWord', 'true');
+    if (params.regex) qs.set('regex', 'true');
+    if (params.include) qs.set('include', params.include);
+    if (params.exclude) qs.set('exclude', params.exclude);
+    if (params.maxResults) qs.set('maxResults', String(params.maxResults));
+    return request<{
+      files: Array<{
+        path: string;
+        matches: Array<{
+          line: number;
+          text: string;
+          ranges: Array<{ start: number; end: number }>;
+        }>;
+      }>;
+      totalMatches: number;
+      truncated: boolean;
+      durationMs: number;
+      basePath: string;
+    }>(`/search/text?${qs.toString()}`);
+  },
 };

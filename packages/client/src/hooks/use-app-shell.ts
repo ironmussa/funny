@@ -112,7 +112,8 @@ export function useAppShell(): ShellState {
 
   const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
   const toggleFileSearch = useUIStore((s) => s.toggleFileSearch);
-  useGlobalShortcuts(toggleCommandPalette, toggleFileSearch);
+  const toggleTextSearch = useUIStore((s) => s.toggleTextSearch);
+  useGlobalShortcuts(toggleCommandPalette, toggleFileSearch, toggleTextSearch);
   useThreadHistoryTracker();
 
   return {

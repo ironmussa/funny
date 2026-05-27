@@ -15,6 +15,7 @@ import pluginRoutes from '../routes/plugins.js';
 import { projectRoutes } from '../routes/projects.js';
 import skillsRoutes from '../routes/skills.js';
 import { testRoutes } from '../routes/tests.js';
+import { textSearchRoutes } from '../routes/text-search.js';
 import { threadRoutes } from '../routes/threads.js';
 import { worktreeRoutes } from '../routes/worktrees.js';
 
@@ -45,4 +46,5 @@ export function registerRoutes(app: Hono): void {
   app.route('/api/orchestrator', orchestratorRuntimeRoutes);
   app.route('/api/projects', designProjectRoutes);
   app.route('/api/browser-session', browserSessionRoutes);
+  app.route('/api/search', textSearchRoutes);
 }

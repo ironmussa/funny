@@ -1017,6 +1017,7 @@
     "commandPaletteAlt": "Abrir paleta de comandos (alt)",
     "fileSearch": "Buscar arquivos do projeto",
     "searchInThread": "Buscar no thread atual",
+    "textSearch": "Buscar texto em arquivos",
     "searchAcrossThreads": "Buscar entre threads",
     "toggleSidebar": "Mostrar/ocultar sidebar",
     "projectSettings": "Abrir configurações do projeto",

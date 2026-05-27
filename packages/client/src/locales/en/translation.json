@@ -1036,6 +1036,7 @@
     "commandPaletteAlt": "Open command palette (alt)",
     "fileSearch": "Search files in project",
     "searchInThread": "Search within current thread",
+    "textSearch": "Search text in files",
     "searchAcrossThreads": "Search across threads",
     "toggleSidebar": "Toggle sidebar",
     "projectSettings": "Open project settings",

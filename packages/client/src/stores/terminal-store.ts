@@ -333,12 +333,22 @@ export const useTerminalStore = create<TerminalState>()(
             const matchedProject = projects.find(
               (p) => s.projectId === p.id || s.cwd === p.path || s.cwd.startsWith(p.path + '/'),
             );
+            const resolvedProjectId = s.projectId ?? matchedProject?.id ?? '';
+            // Mirror the create-tab naming pattern (see buildTab in
+            // open-terminal-tab.ts) so a restored session without a stored
+            // label gets a unique "<shell> N" name per project instead of
+            // every tab collapsing to "Terminal".
+            const shellId = (s.shell as TerminalShell) ?? 'default';
+            const shellName = shellId === 'default' ? 'Terminal' : shellId;
+            const sameShellCount = [...tabs, ...newTabs].filter(
+              (t) => t.projectId === resolvedProjectId && (t.shell ?? 'default') === shellId,
+            ).length;
             newTabs.push({
               id: s.ptyId,
-              label: s.label ?? `Terminal (restored)`,
+              label: s.label ?? `${shellName} ${sameShellCount + 1}`,
               cwd: s.cwd,
               alive: true,
-              projectId: s.projectId ?? matchedProject?.id ?? '',
+              projectId: resolvedProjectId,
               type: 'pty',
               shell: (s.shell as TerminalShell) ?? undefined,
               restored: true,

@@ -1050,10 +1050,13 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       getJSON: () => (alive(editor) ? editor.getJSON() : undefined),
       setContent: (content: JSONContent | string) => {
         if (!alive(editor)) return;
+        // emitUpdate=false: prevents onUpdate from firing for programmatic
+        // restores, which would otherwise call the parent's onChange with
+        // potentially stale closure state and clobber persisted text.
         if (typeof content === 'string') {
-          editor.commands.setContent(content ? `<p>${content}</p>` : '');
+          editor.commands.setContent(content ? `<p>${content}</p>` : '', { emitUpdate: false });
         } else {
-          editor.commands.setContent(content);
+          editor.commands.setContent(content, { emitUpdate: false });
         }
       },
       getText: () => (alive(editor) ? editor.getText() : ''),

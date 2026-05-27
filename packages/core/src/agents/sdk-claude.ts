@@ -11,7 +11,7 @@ import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent
 
 import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
-import { resolveSDKCliPath } from './resolve-sdk-cli.js';
+import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage } from './types.js';
 
 const dlog = createDebugLogger('sdk');
@@ -61,15 +61,18 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       permissionMode: this.options.permissionMode ?? 'none',
     });
 
+    const cli = resolveSDKCli();
     const sdkOptions: Record<string, any> = {
-      pathToClaudeCodeExecutable: resolveSDKCliPath(),
+      pathToClaudeCodeExecutable: cli.path,
       model: this.options.model,
       cwd: this.options.cwd,
       maxTurns: this.options.maxTurns,
       abortController: this.abortController,
       allowedTools: this.options.allowedTools,
       disallowedTools: this.options.disallowedTools,
-      executable: 'node',
+      // `executable` is the JS runtime used to run cli.js; the new native
+      // binary is exec'd directly, so omit it in that case.
+      ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),
       env: sdkEnv,
       // Track per-file checkpoints so the UI can offer "Rewind code to here" /
       // "Fork conversation and rewind code". Required for query.rewindFiles().

@@ -17,7 +17,12 @@ export {
   type OrchestratorEvents,
 } from './orchestrator.js';
 export { defaultProcessFactory, registerProvider } from './process-factory.js';
-export { resolveSDKCliPath } from './resolve-sdk-cli.js';
+export {
+  resolveSDKCli,
+  resolveSDKCliPath,
+  type ResolvedSDKCli,
+  type SDKCliKind,
+} from './resolve-sdk-cli.js';
 export {
   forkAcpSession,
   type ForkAcpSessionOptions,

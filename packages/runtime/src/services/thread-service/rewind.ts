@@ -25,7 +25,7 @@
 
 import { forkSession, query } from '@anthropic-ai/claude-agent-sdk';
 import type { Query, RewindFilesResult } from '@anthropic-ai/claude-agent-sdk';
-import { resolveSDKCliPath } from '@funny/core/agents';
+import { resolveSDKCli } from '@funny/core/agents';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -77,15 +77,16 @@ async function withResumedQueryForRewind<T>(
   async function* emptyPrompt(): AsyncGenerator<any, void, unknown> {
     // Never yield. The CLI control channel still comes up, but no turn runs.
   }
+  const cli = resolveSDKCli();
   const q = query({
     prompt: emptyPrompt(),
     options: {
       resume: sessionId,
       enableFileCheckpointing: true,
       cwd,
-      pathToClaudeCodeExecutable: resolveSDKCliPath(),
+      pathToClaudeCodeExecutable: cli.path,
       abortController: controller,
-      executable: 'node',
+      ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),
       maxTurns: 0,
     } as any,
   });

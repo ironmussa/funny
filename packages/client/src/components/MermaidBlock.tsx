@@ -2,6 +2,7 @@ import { Check, Code, Image, Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lu
 import mermaid from 'mermaid';
 import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,41 +14,17 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 
-/**
- * Security M1: parse mermaid's SVG output as XML (preserving SVG + XHTML
- * namespaces) and remove the elements/attributes that can carry JS. Mermaid
- * already escapes user input at `securityLevel: 'strict'`, so this is
- * defense-in-depth. We used to delegate to DOMPurify, but its SVG profile
- * stripped HTML content nested inside `<foreignObject>` (which mermaid uses
- * for node labels), leaving every node visually empty.
- */
-function sanitizeMermaidSvg(svg: string): string {
-  if (!svg) return svg;
-  const template = document.createElement('template');
-  template.innerHTML = svg;
-  const root = template.content;
+import { getSvgExportDimensions, inlineForeignObjects, sanitizeMermaidSvg } from './mermaid-utils';
 
-  root.querySelectorAll('script').forEach((n) => n.remove());
-  root.querySelectorAll('*').forEach((el) => {
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
-      if (name.startsWith('on')) el.removeAttribute(attr.name);
-      else if (
-        (name === 'href' || name === 'xlink:href' || name === 'src') &&
-        value.startsWith('javascript:')
-      ) {
-        el.removeAttribute(attr.name);
-      }
-    }
-  });
+const log = createClientLogger('mermaid');
 
-  const svgEl = root.querySelector('svg');
-  return svgEl ? svgEl.outerHTML : '';
-}
-
+// mermaid.render is inherently async — there is no event-handler alternative
+// short of restructuring callers around Suspense + use(). useState+useEffect
+// is the standard derived-async-value pattern here.
+// oxlint-disable react-doctor/no-event-handler
 function useMermaidSvg(chart: string) {
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -72,16 +49,25 @@ function useMermaidSvg(chart: string) {
 
   return { svg, error };
 }
+// oxlint-enable react-doctor/no-event-handler
 
-const MIN_SCALE = 0.2;
-const MAX_SCALE = 5;
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 20;
 
 type PanZoom = {
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: (el: HTMLDivElement | null) => void;
+  // Absolute scale — what's applied in the CSS transform. Multiplies the SVG's
+  // intrinsic size, so e.g. a tiny diagram fitted to a big container can be
+  // scale=10 while looking "correctly sized" to the user.
   scale: number;
+  // Display ratio normalized to the fit baseline — 1.0 means "fitted to
+  // container". This is what the UI shows as a percentage so the badge reads
+  // 100% at fit, not "1000%".
+  displayScale: number;
   offset: { x: number; y: number };
   zoomBy: (factor: number) => void;
   reset: () => void;
+  fit: () => void;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
@@ -93,20 +79,23 @@ function clampScale(s: number) {
 }
 
 function useMermaidPanZoom(): PanZoom {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerElRef = useRef<HTMLDivElement | null>(null);
+  const wheelCleanupRef = useRef<(() => void) | null>(null);
   const [scale, setScale] = useState(1);
+  // The fit-to-container scale, used as the "100%" baseline for the displayed
+  // percentage. Updated by fit() — defaults to 1 so the UI doesn't divide by
+  // zero before the first measurement.
+  const [baselineScale, setBaselineScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
 
-  // Live refs so the native wheel listener always reads current values.
+  // Live refs so the native wheel listener always reads current values. Refs
+  // can be safely assigned during render — they're not state and don't trigger
+  // re-renders, and this keeps the hook free of "sync state into ref" effects.
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
-  useEffect(() => {
-    scaleRef.current = scale;
-  }, [scale]);
-  useEffect(() => {
-    offsetRef.current = offset;
-  }, [offset]);
+  scaleRef.current = scale;
+  offsetRef.current = offset;
 
   const dragRef = useRef<{
     startX: number;
@@ -136,28 +125,63 @@ function useMermaidPanZoom(): PanZoom {
     [applyZoom],
   );
 
-  const reset = useCallback(() => {
-    setScale(1);
+  const fit = useCallback(() => {
+    const el = containerElRef.current;
+    if (!el) return;
+    const svg = el.querySelector('svg');
+    if (!svg) return;
+    const containerW = el.clientWidth;
+    const containerH = el.clientHeight;
+    let svgW = svg.clientWidth;
+    let svgH = svg.clientHeight;
+    if (!svgW || !svgH) {
+      const widthAttr = svg.getAttribute('width');
+      const heightAttr = svg.getAttribute('height');
+      svgW = widthAttr ? parseFloat(widthAttr) : 0;
+      svgH = heightAttr ? parseFloat(heightAttr) : 0;
+    }
+    if (!containerW || !containerH || !svgW || !svgH) return;
+    const fitScale = clampScale(Math.min(containerW / svgW, containerH / svgH) * 0.95);
+    setBaselineScale(fitScale);
+    setScale(fitScale);
     setOffset({ x: 0, y: 0 });
   }, []);
 
-  // Non-passive wheel listener — React's synthetic wheel handler is passive
-  // by default, so preventDefault() there is a no-op and the page scrolls
-  // along with the zoom gesture. Binding natively fixes that.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const handler = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const mx = e.clientX - (rect.left + rect.width / 2);
-      const my = e.clientY - (rect.top + rect.height / 2);
-      const factor = e.deltaY > 0 ? 0.9 : 1.1;
-      applyZoom(factor, mx, my);
-    };
-    el.addEventListener('wheel', handler, { passive: false });
-    return () => el.removeEventListener('wheel', handler);
-  }, [applyZoom]);
+  // "1:1" / reset goes back to the fitted view (== 100% in the UI) rather
+  // than the SVG's intrinsic size, since the latter is what users perceive
+  // as "wrong" when a small diagram opens at e.g. 10% of the dialog.
+  const reset = useCallback(() => {
+    setScale(baselineScale);
+    setOffset({ x: 0, y: 0 });
+  }, [baselineScale]);
+
+  // Callback ref: attaches the wheel listener inline so we don't need a
+  // useEffect that depends on a containerEl state. The native listener is
+  // non-passive because the handler calls preventDefault() to stop the page
+  // from scrolling along with the zoom gesture — React's synthetic wheel
+  // handler is passive and would no-op preventDefault().
+  const containerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (wheelCleanupRef.current) {
+        wheelCleanupRef.current();
+        wheelCleanupRef.current = null;
+      }
+      containerElRef.current = el;
+      if (!el) return;
+      const handler = (e: WheelEvent) => {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        const mx = e.clientX - (rect.left + rect.width / 2);
+        const my = e.clientY - (rect.top + rect.height / 2);
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        applyZoom(factor, mx, my);
+      };
+      // oxlint-disable-next-line react-doctor/client-passive-event-listeners -- intentional non-passive: handler calls preventDefault to suppress page scroll during zoom
+      el.addEventListener('wheel', handler, { passive: false });
+      wheelCleanupRef.current = () => el.removeEventListener('wheel', handler);
+    },
+    [applyZoom],
+  );
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -186,12 +210,16 @@ function useMermaidPanZoom(): PanZoom {
     setIsDragging(false);
   }, []);
 
+  const displayScale = baselineScale > 0 ? scale / baselineScale : scale;
+
   return {
     containerRef,
     scale,
+    displayScale,
     offset,
     zoomBy,
     reset,
+    fit,
     onPointerDown,
     onPointerMove,
     onPointerUp,
@@ -205,6 +233,15 @@ export function MermaidBlock({ chart }: { chart: string }) {
   const { svg, error } = useMermaidSvg(chart);
   const [expanded, setExpanded] = useState(false);
   const pz = useMermaidPanZoom();
+  // Memoize the fit-on-mount ref so React only re-attaches when the SVG
+  // actually changes — otherwise every render (pan/zoom state change) would
+  // refire fit() and reset the user's view.
+  const fitOnMount = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (el && svg) pz.fit();
+    },
+    [svg, pz.fit],
+  );
 
   if (error) {
     return (
@@ -221,7 +258,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
       >
         <div
           ref={pz.containerRef}
-          className="absolute inset-0 flex items-center justify-center"
+          className="absolute inset-0 flex select-none items-center justify-center"
           style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
@@ -229,11 +266,16 @@ export function MermaidBlock({ chart }: { chart: string }) {
           onPointerCancel={pz.onPointerUp}
         >
           <div
+            key={svg}
+            ref={fitOnMount}
             className="[&>svg]:max-w-none"
             style={{
               transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
               transformOrigin: 'center center',
             }}
+            // SVG is sanitized by sanitizeMermaidSvg() (scripts removed,
+            // javascript: URLs scrubbed) and mermaid runs at securityLevel:'strict'.
+            // oxlint-disable-next-line react-doctor/no-danger
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         </div>
@@ -241,7 +283,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
         <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-border bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur">
             <span className="px-1 text-xs text-muted-foreground">
-              {Math.round(pz.scale * 100)}%
+              {Math.round(pz.displayScale * 100)}%
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -308,12 +350,54 @@ export function MermaidBlock({ chart }: { chart: string }) {
   );
 }
 
+/**
+ * Re-render the mermaid chart with `htmlLabels: false` so labels are emitted
+ * as native SVG `<text>` instead of HTML inside `<foreignObject>`. This both
+ * (a) avoids canvas-taint on export (foreignObject taints any canvas it gets
+ * drawn into) and (b) gives crisp, mermaid-styled labels in the PNG instead
+ * of the rough "screenshot" look from my hand-rolled foreignObject→text
+ * fallback. We prepend mermaid's per-chart init directive so this only
+ * affects the export render, not the on-screen one.
+ */
+async function renderChartForExport(chart: string): Promise<string> {
+  // Force theme="default" (light) for the export — dark-theme diagrams render
+  // with light text that's invisible when pasted onto the typical light
+  // surfaces (Google Docs, Slack, Notion, slides). The init directive applies
+  // per-render so mermaid's global theme stays as the user set it on screen.
+  const annotated = `%%{init: {"theme": "default", "flowchart": {"htmlLabels": false}}}%%\n${chart}`;
+  const id = `mermaid-export-${Math.random().toString(36).slice(2)}`;
+  const { svg } = await mermaid.render(id, annotated);
+  return sanitizeMermaidSvg(svg);
+}
+
 async function svgToPngBlob(svgHtml: string): Promise<Blob> {
+  // Parse as HTML (matches the sanitizer's input) so we work with the same DOM
+  // shape mermaid produced, then re-serialize with XMLSerializer below. The
+  // HTML outerHTML serializer drops the xmlns="http://www.w3.org/2000/svg"
+  // attribute because it's implicit in HTML context — but when we feed the
+  // string back through a blob URL as image/svg+xml, the SVG parser REQUIRES
+  // the explicit namespace, otherwise <img> rejects it with "Failed to load
+  // SVG image" (the actual error we were seeing in Abbacchio).
   const parser = new DOMParser();
-  const doc = parser.parseFromString(svgHtml, 'image/svg+xml');
+  const doc = parser.parseFromString(svgHtml, 'text/html');
   const svgEl = doc.querySelector('svg');
-  const w = svgEl?.getAttribute('width') ? parseFloat(svgEl.getAttribute('width')!) : 800;
-  const h = svgEl?.getAttribute('height') ? parseFloat(svgEl.getAttribute('height')!) : 600;
+  if (!svgEl) throw new Error('mermaid output had no <svg> element');
+  if (!svgEl.getAttribute('xmlns')) {
+    svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  }
+  if (!svgEl.getAttribute('xmlns:xlink')) {
+    svgEl.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  }
+  inlineForeignObjects(svgEl);
+
+  const { w, h } = getSvgExportDimensions(svgEl);
+
+  // Force absolute pixel dimensions in the exported SVG itself. Without this,
+  // mermaid's responsive width="100%" makes <img> resolve to a 0×0 (or default
+  // 300×150) intrinsic size, and drawImage rasterizes garbage even though we
+  // pass explicit w/h.
+  svgEl.setAttribute('width', String(w));
+  svgEl.setAttribute('height', String(h));
 
   const scale = 2;
   const canvas = document.createElement('canvas');
@@ -322,12 +406,18 @@ async function svgToPngBlob(svgHtml: string): Promise<Blob> {
   const ctx = canvas.getContext('2d')!;
   ctx.scale(scale, scale);
 
-  const blob = new Blob([svgHtml], { type: 'image/svg+xml;charset=utf-8' });
+  const serialized = new XMLSerializer().serializeToString(svgEl);
+  const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
 
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.onload = () => {
+      // Paint an opaque white background before the SVG so the PNG isn't
+      // transparent — otherwise pasting into apps that show whatever's behind
+      // (Slack threads, doc backgrounds, dark surfaces) bleeds through.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
       canvas.toBlob((pngBlob) => {
@@ -357,23 +447,38 @@ export function MermaidExpandedDialog({
   const pz = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
   const [copiedImage, setCopiedImage] = useState(false);
-
-  useEffect(() => {
-    if (open) pz.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // See MermaidBlock — same memoization rationale. The svg arg is gated on
+  // `open` so closing the dialog doesn't refit a stale view.
+  const dialogSvg = open ? svg : '';
+  const fitOnMount = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (el && dialogSvg) pz.fit();
+    },
+    [dialogSvg, pz.fit],
+  );
 
   const handleCopyImage = useCallback(async () => {
     if (!svg) return;
     try {
-      const pngBlob = await svgToPngBlob(svg);
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      // Pass the Promise<Blob> directly to ClipboardItem so the user-activation
+      // gesture context is preserved across the SVG→PNG conversion. Awaiting
+      // the blob first and then calling clipboard.write loses the gesture in
+      // Chrome and the write is rejected with NotAllowedError.
+      const pngPromise = renderChartForExport(chart).then(svgToPngBlob);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
       setCopiedImage(true);
       setTimeout(() => setCopiedImage(false), 2000);
-    } catch {
-      // fallback: ignore if clipboard API not supported
+      toast.success('Diagram image copied to clipboard');
+    } catch (err) {
+      log.error('copy-image failed', { error: err instanceof Error ? err.message : String(err) });
+      toast.error('Could not copy image to clipboard');
     }
-  }, [svg]);
+  }, [chart, svg]);
+
+  const handleCopyCode = useCallback(() => {
+    copyCode(chart);
+    toast.success('Diagram code copied to clipboard');
+  }, [chart, copyCode]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -395,7 +500,7 @@ export function MermaidExpandedDialog({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => copyCode(chart)}
+                  onClick={handleCopyCode}
                   className="text-muted-foreground"
                   data-testid="mermaid-copy-code"
                 >
@@ -420,7 +525,7 @@ export function MermaidExpandedDialog({
             </Tooltip>
             <div className="mx-1 h-4 w-px bg-border" />
             <span className="mr-1 text-xs text-muted-foreground">
-              {Math.round(pz.scale * 100)}%
+              {Math.round(pz.displayScale * 100)}%
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -496,7 +601,7 @@ export function MermaidExpandedDialog({
 
         <div
           ref={pz.containerRef}
-          className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-background"
+          className="flex min-h-0 flex-1 select-none items-center justify-center overflow-hidden bg-background"
           style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
@@ -504,11 +609,16 @@ export function MermaidExpandedDialog({
           onPointerCancel={pz.onPointerUp}
         >
           <div
+            key={dialogSvg}
+            ref={fitOnMount}
             className="[&>svg]:max-w-none"
             style={{
               transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
               transformOrigin: 'center center',
             }}
+            // SVG is sanitized by sanitizeMermaidSvg() and mermaid runs at
+            // securityLevel:'strict'.
+            // oxlint-disable-next-line react-doctor/no-danger
             dangerouslySetInnerHTML={{ __html: svg }}
             data-testid="mermaid-expanded-diagram"
           />

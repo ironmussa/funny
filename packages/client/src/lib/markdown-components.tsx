@@ -30,38 +30,37 @@ function looksLikeMarkdown(text: string): boolean {
   return markdownSignals >= 3;
 }
 
-// Lazy-loaded nested markdown renderer for ```markdown code blocks
+// Lazy-loaded nested markdown renderer for ```markdown code blocks.
+// Security ME-9: rehypeSanitize is mandatory on every ReactMarkdown sink
+// (see MessageContent.tsx). Lazy-loaded alongside the markdown package so
+// the bundle cost is shared.
 const LazyNestedMarkdown = lazy(() =>
-  import('react-markdown').then(({ default: ReactMarkdown }) => ({
-    default: function NestedMarkdown({ content }: { content: string }) {
-      return (
-        <ReactMarkdown remarkPlugins={remarkPlugins} components={baseMarkdownComponents}>
-          {content}
-        </ReactMarkdown>
-      );
-    },
-  })),
+  Promise.all([import('react-markdown'), import('rehype-sanitize')]).then(
+    ([{ default: ReactMarkdown }, { default: rehypeSanitize }]) => ({
+      default: function NestedMarkdown({ content }: { content: string }) {
+        return (
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={[rehypeSanitize]}
+            components={baseMarkdownComponents}
+          >
+            {content}
+          </ReactMarkdown>
+        );
+      },
+    }),
+  ),
 );
 
 function MermaidCodeBlock({ chart }: { chart: string }) {
-  const [copied, copy] = useCopyToClipboard();
-
   return (
-    <div className="group/codeblock relative my-2">
+    <div className="my-2">
       <div className="overflow-x-auto rounded bg-muted p-2">
         <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
           mermaid
         </div>
         <MermaidBlock chart={chart} />
       </div>
-      <button
-        data-testid="code-block-copy"
-        onClick={() => copy(chart)}
-        className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
-        aria-label="Copy code"
-      >
-        {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
-      </button>
     </div>
   );
 }

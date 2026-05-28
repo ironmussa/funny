@@ -112,7 +112,9 @@ async function releaseInviteSlot(linkId: string): Promise<void> {
 
 // Better Auth's organization plugin methods are not fully typed in the
 // inferred API surface — cast to `any` for the invitation-related calls.
-const orgApi = auth.api as any;
+function orgApi() {
+  return auth.api as any;
+}
 
 async function addUserToOrg(
   userId: string,
@@ -122,13 +124,13 @@ async function addUserToOrg(
   headers: Headers,
 ) {
   // Use Better Auth's invitation flow: create invitation + accept it
-  await orgApi.inviteMember({
+  await orgApi().inviteMember({
     body: { email, role, organizationId: orgId },
     headers,
   });
 
   // Find and accept the pending invitation
-  const pendingInvitations = await orgApi.listInvitations({
+  const pendingInvitations = await orgApi().listInvitations({
     headers,
     query: { organizationId: orgId },
   });
@@ -138,14 +140,14 @@ async function addUserToOrg(
   );
 
   if (invitation) {
-    await orgApi.acceptInvitation({
+    await orgApi().acceptInvitation({
       headers,
       body: { invitationId: invitation.id },
     });
   }
 
   // Set the user's active organization
-  await orgApi.setActiveOrganization({
+  await orgApi().setActiveOrganization({
     headers,
     body: { organizationId: orgId },
   });
@@ -162,7 +164,7 @@ inviteLinkPublicRoutes.get('/verify/:token', async (c) => {
 
   let organizationName = 'the team';
   try {
-    const org = await orgApi.getFullOrganization({
+    const org = await orgApi().getFullOrganization({
       query: { organizationId: result.link.organizationId },
     });
     if (org) organizationName = org.name || organizationName;
@@ -242,7 +244,7 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
     slotConsumed = true;
 
     // 2. Sign the user in — returns Set-Cookie headers
-    const signInResponse = await orgApi.signInUsername({
+    const signInResponse = await orgApi().signInUsername({
       body: { username: body.username, password: body.password },
       headers: c.req.raw.headers,
       asResponse: true,
@@ -445,7 +447,7 @@ inviteLinkRoutes.post('/accept', async (c) => {
 
   try {
     // Get user info
-    const allUsers = await orgApi.listUsers({ query: { limit: 1000 } });
+    const allUsers = await orgApi().listUsers({ query: { limit: 1000 } });
     const user = (allUsers as any)?.users?.find((u: any) => u.id === userId);
     if (!user) {
       await releaseInviteSlot(link.id);

@@ -44,6 +44,18 @@ export class TunnelTimeoutError extends Error {
   }
 }
 
+/** Duck-type check — survives duplicate class identities from test mocks. */
+export function isTunnelTimeoutError(err: unknown): err is TunnelTimeoutError {
+  return (
+    err instanceof TunnelTimeoutError ||
+    (typeof err === 'object' &&
+      err !== null &&
+      (err as Error).name === 'TunnelTimeoutError' &&
+      typeof (err as TunnelTimeoutError).runnerId === 'string' &&
+      typeof (err as TunnelTimeoutError).timeoutMs === 'number')
+  );
+}
+
 /**
  * Send an HTTP request to a runner through the Socket.IO tunnel.
  * Returns a Response-like object with status, headers, and body.

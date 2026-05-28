@@ -29,6 +29,11 @@ export function setAuthInstance(auth: any): void {
   _auth = auth;
 }
 
+/** Test-only: reset cached auth so mocked lib/auth.js is picked up again. */
+export function resetAuthInstanceForTests(): void {
+  _auth = null;
+}
+
 export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   const path = new URL(c.req.url).pathname;
 

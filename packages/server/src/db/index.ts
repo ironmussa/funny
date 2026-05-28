@@ -134,6 +134,12 @@ export async function closeDatabase(): Promise<void> {
   }
 }
 
+/** Test-only: drop singleton refs after closing an in-memory DB. */
+export function resetDatabaseForTests(): void {
+  _provider = null;
+  _legacyConnection = null;
+}
+
 // ── Compat helpers ───────────────────────────────────────────────
 
 /** @deprecated Use dbDialect instead. */

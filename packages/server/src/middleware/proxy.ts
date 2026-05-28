@@ -35,7 +35,7 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { resolveAnyRunner, resolveRunner } from '../services/runner-resolver.js';
 import { isRunnerConnected } from '../services/ws-relay.js';
-import { TunnelTimeoutError, tunnelFetch } from '../services/ws-tunnel.js';
+import { isTunnelTimeoutError, tunnelFetch } from '../services/ws-tunnel.js';
 
 function getRunnerAuthSecret(): string {
   const secret = process.env.RUNNER_AUTH_SECRET;
@@ -171,10 +171,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
       // a second time and duplicate side effects (e.g., persisting a user
       // message twice and enqueuing two prompts on agents that await the
       // full turn in sendPrompt — Gemini/Codex/Pi). Surface 504 instead.
-      if (
-        tunnelErr instanceof TunnelTimeoutError ||
-        (tunnelErr instanceof Error && tunnelErr.name === 'TunnelTimeoutError')
-      ) {
+      if (isTunnelTimeoutError(tunnelErr)) {
         log.warn('Tunnel request timed out — not falling back', {
           namespace: 'proxy',
           runnerId,

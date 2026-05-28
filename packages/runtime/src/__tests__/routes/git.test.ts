@@ -21,8 +21,9 @@ import { Hono } from 'hono';
 import { describe, test, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 
 import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
+import { testPath } from '../helpers/test-dirname.js';
 
-const TEST_REPO = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-git-routes');
+const TEST_REPO = testPath(import.meta, '..', '..', '..', '.test-tmp-git-routes');
 
 function setupRepo() {
   rmSync(TEST_REPO, { recursive: true, force: true });

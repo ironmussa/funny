@@ -5,9 +5,8 @@
  * plus the listActiveSessions merge logic between in-memory and DB sessions.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
-
 import { sql } from 'drizzle-orm';
+import { describe, test, expect, beforeEach } from 'vitest';
 
 import { createTestDb } from '../helpers/test-db.js';
 

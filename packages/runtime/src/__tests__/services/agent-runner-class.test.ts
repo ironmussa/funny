@@ -159,6 +159,25 @@ function createMockWSBroker(): IWSBroker & { events: WSEvent[] } {
 /** Flush pending microtasks so fire-and-forget async handlers complete. */
 const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 
+const TEST_PROJECT_ID = 'p1';
+const TEST_USER_ID = 'user-1';
+const TEST_PROJECT_PATH = '/tmp/repo';
+
+function seedRunnerThread(
+  tm: ReturnType<typeof createMockThreadManager>,
+  threadId: string,
+  overrides: Record<string, unknown> = {},
+) {
+  tm.threads.set(threadId, {
+    id: threadId,
+    projectId: TEST_PROJECT_ID,
+    userId: TEST_USER_ID,
+    mode: 'local',
+    sessionId: null,
+    ...overrides,
+  });
+}
+
 /**
  * Build a minimal RuntimeServiceProvider that delegates thread operations
  * back to the given mock thread manager and stubs everything else.
@@ -201,7 +220,10 @@ function createMockServiceProvider(
       findLastUnansweredInteractiveToolCall: () => Promise.resolve(undefined),
     } as any,
     projects: {
-      getProject: () => Promise.resolve(undefined),
+      getProject: (id: string) =>
+        Promise.resolve(
+          id === TEST_PROJECT_ID ? { id: TEST_PROJECT_ID, path: TEST_PROJECT_PATH } : undefined,
+        ),
       listProjects: () => Promise.resolve([]),
       listProjectsByOrg: () => Promise.resolve([]),
       isProjectInOrg: () => Promise.resolve(false),
@@ -263,7 +285,7 @@ describe('AgentRunner class', () => {
 
   describe('startAgent', () => {
     test('sets thread status to running and creates user message', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
 
       await runner.startAgent('t1', 'Fix the bug', '/tmp/repo');
 
@@ -277,7 +299,7 @@ describe('AgentRunner class', () => {
     });
 
     test('emits agent:status running via WebSocket', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
 
       await runner.startAgent('t1', 'test', '/tmp');
 
@@ -296,7 +318,7 @@ describe('AgentRunner class', () => {
       // the prompt is rebuilt from DB, giving equivalent continuity.
       // The Claude SDK resumes safely by sessionId, so it is exempted from
       // this guard — this test covers a non-Claude provider (gemini).
-      tmMock.threads.set('t1', { sessionId: 'sess-abc' });
+      seedRunnerThread(tmMock, 't1', { sessionId: 'sess-abc' });
 
       let capturedOpts: any = null;
       factory.create = (opts) => {
@@ -323,7 +345,7 @@ describe('AgentRunner class', () => {
     });
 
     test('stops existing agent before starting a new one', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
 
       await runner.startAgent('t1', 'first', '/tmp');
       const firstProc = lastProcess;
@@ -336,7 +358,7 @@ describe('AgentRunner class', () => {
     });
 
     test('stores images as JSON string in user message', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       const images = [{ type: 'image', source: { type: 'base64', data: 'abc' } }];
 
       await runner.startAgent('t1', 'describe image', '/tmp', 'sonnet', 'autoEdit', images);
@@ -350,7 +372,7 @@ describe('AgentRunner class', () => {
 
   describe('handleCLIMessage — system init', () => {
     test('saves session_id and emits agent:init', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       await flush(); // let the auto-init from MockClaudeProcess.start() settle
       wsMock.events.length = 0;
@@ -383,7 +405,7 @@ describe('AgentRunner class', () => {
 
   describe('handleCLIMessage — assistant text', () => {
     test('inserts a new message on first text', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
       const startupMsgCount = tmMock.messages.size;
@@ -411,7 +433,7 @@ describe('AgentRunner class', () => {
     });
 
     test('updates existing message on cumulative streaming', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       const startupMsgCount = tmMock.messages.size;
 
@@ -442,7 +464,7 @@ describe('AgentRunner class', () => {
     });
 
     test('combines multiple text blocks into one', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       const msg: CLIAssistantMessage = {
@@ -464,7 +486,7 @@ describe('AgentRunner class', () => {
     });
 
     test('decodes Unicode escapes in text', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       const msg: CLIAssistantMessage = {
@@ -487,7 +509,7 @@ describe('AgentRunner class', () => {
 
   describe('handleCLIMessage — tool_use', () => {
     test('creates a tool call record and emits WS event', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -513,7 +535,7 @@ describe('AgentRunner class', () => {
     });
 
     test('deduplicates tool_use blocks with the same CLI ID', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       const content = [
@@ -538,7 +560,7 @@ describe('AgentRunner class', () => {
     });
 
     test('creates parent assistant message when no text preceded tool_use', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       const startupMsgCount = tmMock.messages.size;
 
@@ -562,7 +584,7 @@ describe('AgentRunner class', () => {
     });
 
     test('handles multiple tool_use blocks in one message', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       const msg: CLIAssistantMessage = {
@@ -585,7 +607,7 @@ describe('AgentRunner class', () => {
     });
 
     test('tracks AskUserQuestion as pending user input', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -628,7 +650,7 @@ describe('AgentRunner class', () => {
     });
 
     test('tracks ExitPlanMode as pending user input', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -666,7 +688,7 @@ describe('AgentRunner class', () => {
 
   describe('handleCLIMessage — user tool results', () => {
     test('updates tool call output and emits WS event', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -701,7 +723,7 @@ describe('AgentRunner class', () => {
     });
 
     test('decodes Unicode in tool output', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       const assistantMsg: CLIAssistantMessage = {
@@ -732,7 +754,7 @@ describe('AgentRunner class', () => {
 
   describe('handleCLIMessage — result', () => {
     test('success result sets thread to completed', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -763,7 +785,7 @@ describe('AgentRunner class', () => {
     });
 
     test('error result sets thread to failed', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       const msg: CLIResultMessage = {
@@ -783,7 +805,7 @@ describe('AgentRunner class', () => {
     });
 
     test('deduplicates result messages', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -807,7 +829,7 @@ describe('AgentRunner class', () => {
     });
 
     test('decodes Unicode in result text', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       wsMock.events.length = 0;
 
@@ -834,7 +856,7 @@ describe('AgentRunner class', () => {
 
   describe('stopAgent', () => {
     test('kills active process and sets status to stopped', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       await runner.stopAgent('t1');
@@ -855,7 +877,7 @@ describe('AgentRunner class', () => {
     });
 
     test('manually stopped thread does not get failed status on exit', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       const proc = lastProcess;
 
@@ -878,7 +900,7 @@ describe('AgentRunner class', () => {
     });
 
     test('returns true for running thread', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       expect(runner.isAgentRunning('t1')).toBe(true);
@@ -889,7 +911,7 @@ describe('AgentRunner class', () => {
 
   describe('cleanupThreadState', () => {
     test('clears all in-memory state for a thread', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       // Simulate some messages to populate state
@@ -923,7 +945,7 @@ describe('AgentRunner class', () => {
 
   describe('process exit handling', () => {
     test('exit without result marks thread as failed', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       lastProcess.simulateExit(1);
@@ -935,7 +957,7 @@ describe('AgentRunner class', () => {
     });
 
     test('exit after result does not overwrite completed status', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       // Simulate result first
@@ -958,7 +980,7 @@ describe('AgentRunner class', () => {
     });
 
     test('error event marks thread as failed when no result received', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
 
       lastProcess.simulateError(new Error('process crashed'));
@@ -968,7 +990,7 @@ describe('AgentRunner class', () => {
     });
 
     test('error event does not overwrite status after manual stop', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'test', '/tmp');
       const proc = lastProcess;
 
@@ -988,7 +1010,7 @@ describe('AgentRunner class', () => {
 
   describe('session resume deduplication', () => {
     test('processedToolUseIds survive across startAgent calls', async () => {
-      tmMock.threads.set('t1', { sessionId: 'sess-1' });
+      seedRunnerThread(tmMock, 't1', { sessionId: 'sess-1' });
 
       // First session
       await runner.startAgent('t1', 'first prompt', '/tmp');
@@ -1042,7 +1064,7 @@ describe('AgentRunner class', () => {
 
   describe('full lifecycle', () => {
     test('start → text → tool → tool_result → result → exit', async () => {
-      tmMock.threads.set('t1', { sessionId: null });
+      seedRunnerThread(tmMock, 't1');
       await runner.startAgent('t1', 'Fix the bug', '/tmp');
 
       // Init
@@ -1122,6 +1144,36 @@ describe('AgentRunner class', () => {
 
       // WS events should include: status(running), init, message, tool_call, tool_output, message, result
       expect(wsMock.events.length).toBeGreaterThanOrEqual(6);
+    });
+  });
+
+  // ── stopAllAgents / extractActiveAgents ─────────────────────
+
+  describe('stopAllAgents and extractActiveAgents', () => {
+    test('stopAllAgents stops every running thread', async () => {
+      seedRunnerThread(tmMock, 't1');
+      seedRunnerThread(tmMock, 't2');
+
+      await runner.startAgent('t1', 'first', '/tmp');
+      await runner.startAgent('t2', 'second', '/tmp');
+
+      expect(runner.isAgentRunning('t1')).toBe(true);
+      expect(runner.isAgentRunning('t2')).toBe(true);
+
+      await runner.stopAllAgents();
+
+      expect(runner.isAgentRunning('t1')).toBe(false);
+      expect(runner.isAgentRunning('t2')).toBe(false);
+    });
+
+    test('extractActiveAgents returns running thread entries', async () => {
+      seedRunnerThread(tmMock, 't1');
+      await runner.startAgent('t1', 'test', '/tmp');
+
+      const active = runner.extractActiveAgents();
+
+      expect(active.size).toBeGreaterThan(0);
+      expect(active.has('t1')).toBe(true);
     });
   });
 });

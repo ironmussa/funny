@@ -145,7 +145,7 @@ describe('execute edge cases', () => {
   });
 
   test('handles empty stdout', async () => {
-    const result = await execute('node', ['-e', '']);
+    const result = await execute('node', ['-e', 'void 0']);
     expect(result.stdout).toBe('');
     expect(result.exitCode).toBe(0);
   });
@@ -160,7 +160,7 @@ describe('execute edge cases', () => {
 
 describe('executeSync edge cases', () => {
   test('handles empty output', () => {
-    const result = executeSync('node', ['-e', '']);
+    const result = executeSync('node', ['-e', 'void 0']);
     expect(result.stdout).toBe('');
     expect(result.exitCode).toBe(0);
   });

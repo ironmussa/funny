@@ -33,6 +33,7 @@ export function createTestDb() {
       launcher_url TEXT,
       user_id TEXT NOT NULL DEFAULT '',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      default_agent_template_id TEXT,
       closed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     )
@@ -41,8 +42,9 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS threads (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL DEFAULT '',
+      is_scratch INTEGER NOT NULL DEFAULT 0,
       created_by TEXT,
       title TEXT NOT NULL,
       mode TEXT NOT NULL,
@@ -62,12 +64,17 @@ export function createTestDb() {
       source TEXT NOT NULL DEFAULT 'web',
       external_request_id TEXT,
       parent_thread_id TEXT,
+      design_id TEXT,
+      agent_template_id TEXT,
+      template_variables TEXT,
       runtime TEXT NOT NULL DEFAULT 'local',
       container_url TEXT,
       container_name TEXT,
       init_tools TEXT,
       init_cwd TEXT,
       runner_id TEXT,
+      merged_at TEXT,
+      context_recovery_reason TEXT,
       file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
       orchestrator_managed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -111,7 +118,8 @@ export function createTestDb() {
       name TEXT NOT NULL,
       input TEXT,
       output TEXT,
-      author TEXT
+      author TEXT,
+      parent_tool_call_id TEXT
     )
   `);
 
@@ -132,6 +140,7 @@ export function createTestDb() {
       max_run_history INTEGER NOT NULL DEFAULT 20,
       last_run_at TEXT,
       next_run_at TEXT,
+      source TEXT NOT NULL DEFAULT 'ui',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -157,13 +166,16 @@ export function createTestDb() {
       user_id TEXT NOT NULL UNIQUE,
       git_name TEXT,
       git_email TEXT,
-      github_token TEXT,
+      provider_keys TEXT,
       setup_completed INTEGER NOT NULL DEFAULT 0,
       default_editor TEXT,
       use_internal_editor INTEGER,
       terminal_shell TEXT,
       tool_permissions TEXT,
       theme TEXT,
+      runner_invite_token TEXT,
+      runner_invite_token_expires_at TEXT,
+      runner_invite_token_used_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -297,6 +309,7 @@ export function seedPipeline(
   const pipeline = {
     id: overrides.id ?? 'test-pipeline-1',
     projectId: overrides.projectId ?? 'test-project-1',
+    userId: overrides.userId ?? 'user-1',
     name: overrides.name ?? 'Test Pipeline',
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     updatedAt: overrides.updatedAt ?? new Date().toISOString(),

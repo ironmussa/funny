@@ -30,6 +30,7 @@ describe('ProjectManager', () => {
       id,
       name,
       path,
+      userId: 'user-1',
       createdAt: new Date().toISOString(),
     };
     testDb.db.insert(testDb.schema.projects).values(project).run();

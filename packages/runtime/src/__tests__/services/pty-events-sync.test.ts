@@ -10,30 +10,22 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
+import { BROWSER_PTY_FORWARD_EVENTS } from '@funny/shared/socket-events';
 import { describe, test, expect } from 'vitest';
 
-// Paths relative to the monorepo root (__tests__/services/)
 const MONOREPO_ROOT = resolve(import.meta.dirname ?? __dirname, '../../../../..');
-const SOCKETIO_PATH = resolve(MONOREPO_ROOT, 'packages/server/src/services/socketio.ts');
 const APP_PATH = resolve(MONOREPO_ROOT, 'packages/runtime/src/app/pty-message-handler.ts');
 
-function extractPtyEvents(source: string, pattern: RegExp): string[] {
-  const match = source.match(pattern);
-  if (!match) return [];
-  return [...match[0].matchAll(/'(pty:[^']+)'/g)].map((m) => m[1]);
-}
-
 describe('PTY event sync between server and runtime', () => {
-  const socketioSource = readFileSync(SOCKETIO_PATH, 'utf-8');
   const appSource = readFileSync(APP_PATH, 'utf-8');
 
-  // Events the server forwards (ptyEvents array)
-  const serverEvents = extractPtyEvents(socketioSource, /const ptyEvents\s*=\s*\[[\s\S]*?\]/);
+  // Events the server forwards (shared wire contract)
+  const serverEvents = [...BROWSER_PTY_FORWARD_EVENTS];
 
   // Events the runtime handles (case 'pty:...' in the switch)
   const runtimeEvents = [...appSource.matchAll(/case '(pty:[^']+)'/g)].map((m) => m[1]);
 
-  test('server ptyEvents array is non-empty', () => {
+  test('server PTY forward contract is non-empty', () => {
     expect(serverEvents.length).toBeGreaterThan(0);
   });
 

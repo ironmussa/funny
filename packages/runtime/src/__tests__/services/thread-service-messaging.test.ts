@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     updateMessage: vi.fn(async () => undefined),
     findLastUnansweredInteractiveToolCall: vi.fn(async () => undefined),
     updateToolCallOutput: vi.fn(async () => undefined),
+    deleteComment: vi.fn(async () => undefined),
   },
   projects: {
     resolveProjectPath: vi.fn(),
@@ -27,6 +28,8 @@ const mocks = vi.hoisted(() => ({
     enqueue: vi.fn(),
     queueCount: vi.fn(async () => 0),
     peek: vi.fn(async () => null),
+    cancel: vi.fn(),
+    update: vi.fn(),
   },
 }));
 
@@ -70,7 +73,21 @@ vi.mock('../../services/service-registry.js', () => ({
 
 import { ok } from 'neverthrow';
 
-import { sendMessage } from '../../services/thread-service/messaging.js';
+import { startAgent, stopAgent, isAgentRunning } from '../../services/agent-runner.js';
+import { cleanupExternalThread } from '../../services/ingest-mapper.js';
+import {
+  createPermissionRule,
+  listPermissionRules,
+} from '../../services/permission-rules-client.js';
+import {
+  sendMessage,
+  stopThread,
+  approveToolCall,
+  cancelQueuedMessage,
+  updateQueuedMessage,
+  deleteComment,
+} from '../../services/thread-service/messaging.js';
+import { wsBroker } from '../../services/ws-broker.js';
 
 describe('sendMessage — idle/backlog regression', () => {
   beforeEach(() => {
@@ -223,5 +240,563 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.projects.resolveProjectPath).not.toHaveBeenCalled();
     expect(mocks.projects.getProject).not.toHaveBeenCalled();
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sendMessage — queue and interactive tool flows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projects.resolveProjectPath.mockResolvedValue(ok('/projects/test'));
+    mocks.projects.getProject.mockResolvedValue({ followUpMode: 'queue', path: '/projects/test' });
+    vi.mocked(isAgentRunning).mockReturnValue(false);
+  });
+
+  test('queues follow-up when agent is running and project uses queue mode', async () => {
+    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-1' });
+    mocks.messageQueue.queueCount.mockResolvedValue(2);
+    mocks.messageQueue.peek.mockResolvedValue({ content: 'second message' });
+
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'running',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: 'second message',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({
+        ok: true,
+        queued: true,
+        queuedCount: 2,
+        queuedMessageId: 'queued-1',
+      });
+    }
+    expect(mocks.messageQueue.enqueue).toHaveBeenCalledWith(
+      't-running',
+      expect.objectContaining({
+        content: 'second message',
+        model: 'sonnet',
+        permissionMode: 'autoEdit',
+      }),
+    );
+    expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({ type: 'thread:queue_update' }),
+    );
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('upgrades permission mode after ExitPlanMode approval', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-waiting',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'waiting',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'plan',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+    mocks.tm.findLastUnansweredInteractiveToolCall.mockResolvedValue({
+      id: 'tc-plan',
+      name: 'ExitPlanMode',
+    });
+
+    const result = await sendMessage({
+      threadId: 't-waiting',
+      userId: 'u-1',
+      content: 'Approved plan',
+      permissionMode: 'plan',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.updateToolCallOutput).toHaveBeenCalledWith('tc-plan', 'Approved plan');
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+      't-waiting',
+      expect.objectContaining({ permissionMode: 'autoEdit' }),
+    );
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'thread:updated',
+        data: { permissionMode: 'autoEdit' },
+      }),
+    );
+  });
+
+  test('clears sessionId when provider changes mid-thread', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-completed',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'old-session',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-completed',
+      userId: 'u-1',
+      content: 'continue with codex',
+      provider: 'codex',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+      't-completed',
+      expect.objectContaining({
+        provider: 'codex',
+        sessionId: null,
+        contextRecoveryReason: 'provider_changed',
+      }),
+    );
+  });
+
+  test('clears sessionId when model changes mid-thread', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-completed',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'old-session',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-completed',
+      userId: 'u-1',
+      content: 'switch model',
+      model: 'opus',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+      't-completed',
+      expect.objectContaining({
+        model: 'opus',
+        sessionId: null,
+        contextRecoveryReason: 'model_changed',
+      }),
+    );
+  });
+
+  test('queues with broadcast emit when thread has no userId', async () => {
+    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-1' });
+    mocks.messageQueue.queueCount.mockResolvedValue(1);
+    mocks.messageQueue.peek.mockResolvedValue({ content: 'queued' });
+
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-anon',
+      userId: '',
+      projectId: 'p-1',
+      status: 'running',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-anon',
+      userId: '',
+      content: 'queued without owner',
+      forceQueue: true,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(wsBroker.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'thread:queue_update' }),
+    );
+    expect(wsBroker.emitToUser).not.toHaveBeenCalled();
+  });
+
+  test('continues when resolving pending interactive tool call fails', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'running',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+    mocks.tm.findLastUnansweredInteractiveToolCall.mockRejectedValue(new Error('db timeout'));
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: 'answer anyway',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.insertMessage).toHaveBeenCalled();
+    expect(startAgent).toHaveBeenCalled();
+  });
+
+  test('logs but does not fail when background startAgent rejects', async () => {
+    vi.mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: 'retry',
+    });
+
+    expect(result.isOk()).toBe(true);
+    await vi.waitFor(() => {
+      expect(startAgent).toHaveBeenCalled();
+    });
+  });
+});
+
+describe('stopThread', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('returns 404 when thread is missing', async () => {
+    mocks.tm.getThread.mockResolvedValue(null);
+
+    const result = await stopThread('missing');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.statusCode).toBe(404);
+    }
+  });
+
+  test('stops a running local agent', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-1',
+      provider: 'claude',
+    });
+
+    const result = await stopThread('t-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(stopAgent).toHaveBeenCalledWith('t-1');
+  });
+
+  test('cleans up external provider threads via ingest mapper', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-ext',
+      provider: 'external',
+    });
+
+    const result = await stopThread('t-ext');
+
+    expect(result.isOk()).toBe(true);
+    expect(cleanupExternalThread).toHaveBeenCalledWith('t-ext');
+    expect(stopAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('approveToolCall', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projects.resolveProjectPath.mockResolvedValue(ok('/projects/test'));
+    mocks.projects.getProject.mockResolvedValue({ id: 'p-1', path: '/projects/test' });
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-1',
+      userId: 'u-1',
+      projectId: 'p-1',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      worktreePath: null,
+    });
+  });
+
+  test('returns 404 when thread is missing', async () => {
+    mocks.tm.getThread.mockResolvedValue(undefined);
+
+    const result = await approveToolCall({
+      threadId: 'missing',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(404);
+  });
+
+  test('restarts agent with approval message when approved', async () => {
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+      toolInput: 'npm test',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalledWith(
+      't-1',
+      expect.stringContaining('approved'),
+      '/projects/test',
+      'sonnet',
+      'autoEdit',
+      undefined,
+      undefined,
+      expect.arrayContaining(['Bash']),
+      'claude',
+    );
+  });
+
+  test('persists always-allow rule when scope is always', async () => {
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+      scope: 'always',
+      toolInput: 'npm test',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(createPermissionRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u-1',
+        toolName: 'Bash',
+        pattern: 'npm',
+        decision: 'allow',
+      }),
+    );
+  });
+
+  test('restarts agent with denial message when not approved', async () => {
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: false,
+      disallowedTools: ['Bash'],
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalledWith(
+      't-1',
+      expect.stringContaining('denied'),
+      '/projects/test',
+      'sonnet',
+      'autoEdit',
+      undefined,
+      ['Bash'],
+      undefined,
+      'claude',
+    );
+  });
+
+  test('continues approval flow when always-allow rule persistence fails', async () => {
+    vi.mocked(createPermissionRule).mockRejectedValueOnce(new Error('network error'));
+
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+      scope: 'always',
+      toolInput: 'npm test',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalled();
+  });
+
+  test('merges always-allow permission rules into approved tool restart', async () => {
+    vi.mocked(listPermissionRules).mockResolvedValue([{ toolName: 'Read', decision: 'allow' }]);
+
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalledWith(
+      't-1',
+      expect.any(String),
+      '/projects/test',
+      'sonnet',
+      'autoEdit',
+      undefined,
+      undefined,
+      expect.arrayContaining(['Read', 'Bash']),
+      'claude',
+    );
+  });
+});
+
+describe('queue operations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.tm.getThread.mockResolvedValue({ id: 't-1', userId: 'u-1' });
+  });
+
+  test('cancelQueuedMessage returns 404 when message is not queued', async () => {
+    mocks.messageQueue.cancel.mockResolvedValue(false);
+
+    const result = await cancelQueuedMessage('t-1', 'q-missing');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(404);
+  });
+
+  test('cancelQueuedMessage emits queue update to thread owner', async () => {
+    mocks.messageQueue.cancel.mockResolvedValue(true);
+    mocks.messageQueue.queueCount.mockResolvedValue(1);
+    mocks.messageQueue.peek.mockResolvedValue({ content: 'next prompt in queue' });
+
+    const result = await cancelQueuedMessage('t-1', 'q-1');
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) expect(result.value.queuedCount).toBe(1);
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'thread:queue_update',
+        data: expect.objectContaining({
+          queuedCount: 1,
+          nextMessage: 'next prompt in queue',
+        }),
+      }),
+    );
+  });
+
+  test('updateQueuedMessage returns updated message and queue count', async () => {
+    mocks.messageQueue.update.mockResolvedValue({ id: 'q-1', content: 'edited' });
+    mocks.messageQueue.queueCount.mockResolvedValue(2);
+    mocks.messageQueue.peek.mockResolvedValue({ content: 'edited' });
+
+    const result = await updateQueuedMessage('t-1', 'q-1', 'edited');
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.queuedMessage.content).toBe('edited');
+      expect(result.value.queuedCount).toBe(2);
+    }
+  });
+
+  test('updateQueuedMessage returns 404 when message is missing', async () => {
+    mocks.messageQueue.update.mockResolvedValue(null);
+
+    const result = await updateQueuedMessage('t-1', 'q-missing', 'x');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(404);
+  });
+
+  test('cancelQueuedMessage broadcasts when thread owner is missing', async () => {
+    mocks.tm.getThread.mockResolvedValue({ id: 't-1', userId: '' });
+    mocks.messageQueue.cancel.mockResolvedValue(true);
+    mocks.messageQueue.queueCount.mockResolvedValue(0);
+    mocks.messageQueue.peek.mockResolvedValue(null);
+
+    const result = await cancelQueuedMessage('t-1', 'q-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(wsBroker.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'thread:queue_update' }),
+    );
+  });
+
+  test('updateQueuedMessage broadcasts when thread owner is missing', async () => {
+    mocks.tm.getThread.mockResolvedValue({ id: 't-1', userId: '' });
+    mocks.messageQueue.update.mockResolvedValue({ id: 'q-1', content: 'edited' });
+    mocks.messageQueue.queueCount.mockResolvedValue(1);
+    mocks.messageQueue.peek.mockResolvedValue({ content: 'edited' });
+
+    const result = await updateQueuedMessage('t-1', 'q-1', 'edited');
+
+    expect(result.isOk()).toBe(true);
+    expect(wsBroker.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'thread:queue_update' }),
+    );
+  });
+});
+
+describe('deleteComment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('returns 404 when thread is missing', async () => {
+    mocks.tm.getThread.mockResolvedValue(undefined);
+
+    const result = await deleteComment('missing', 'c-1');
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(404);
+  });
+
+  test('deletes comment and emits WS event', async () => {
+    mocks.tm.getThread.mockResolvedValue({ id: 't-1', userId: 'u-1' });
+
+    const result = await deleteComment('t-1', 'c-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.deleteComment).toHaveBeenCalledWith('c-1');
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'thread:comment_deleted',
+        data: { commentId: 'c-1' },
+      }),
+    );
+  });
+
+  test('deletes comment without WS event when thread has no userId', async () => {
+    mocks.tm.getThread.mockResolvedValue({ id: 't-1', userId: '' });
+
+    const result = await deleteComment('t-1', 'c-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.deleteComment).toHaveBeenCalledWith('c-1');
+    expect(wsBroker.emitToUser).not.toHaveBeenCalled();
   });
 });

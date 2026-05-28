@@ -12,6 +12,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mockEmitToUser = vi.fn();
 
+const serviceMocks = vi.hoisted(() => ({
+  createRun: vi.fn().mockResolvedValue('run-1'),
+  updateRun: vi.fn().mockResolvedValue(undefined),
+  getProject: vi.fn(),
+}));
+
 vi.mock('bun:sqlite', () => ({ Database: vi.fn() }));
 vi.mock('nanoid', () => {
   let counter = 0;
@@ -59,8 +65,8 @@ vi.mock('../../services/ws-broker.js', () => ({
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
     pipelines: {
-      createRun: vi.fn().mockResolvedValue('run-1'),
-      updateRun: vi.fn().mockResolvedValue(undefined),
+      createRun: serviceMocks.createRun,
+      updateRun: serviceMocks.updateRun,
       getRunById: vi.fn(),
       getRunsForThread: vi.fn().mockReturnValue([]),
       getPipelineForProject: vi.fn(),
@@ -75,7 +81,7 @@ vi.mock('../../services/service-registry.js', () => ({
       broadcast: vi.fn(),
     },
     projects: {
-      getProject: vi.fn(),
+      getProject: serviceMocks.getProject,
     },
     automations: {
       getAutomation: vi.fn(),
@@ -172,7 +178,13 @@ vi.mock('../../services/git-pipelines.js', () => {
   };
 });
 
-import { startPipelineRun, type PipelineConfig } from '../../services/pipeline-manager.js';
+import {
+  startPipelineRun,
+  cancelPipelineRun,
+  cleanupReviewerThread,
+  type PipelineConfig,
+} from '../../services/pipeline-manager.js';
+import * as tm from '../../services/thread-manager.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -273,6 +285,93 @@ describe('Pipeline Orchestration', () => {
         (call: any[]) => call[1]?.type === 'pipeline:run_completed',
       );
       expect(completedCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('cancelPipelineRun aborts an in-flight run', async () => {
+      const pipeline = makePipeline();
+
+      await startPipelineRun({
+        pipeline,
+        threadId: 'thread-1',
+        userId: 'user-1',
+        projectId: 'proj-1',
+        cwd: '/tmp/repo',
+      });
+
+      expect(cancelPipelineRun('run-1')).toBe(true);
+
+      await new Promise((r) => setTimeout(r, 150));
+      expect(cancelPipelineRun('run-1')).toBe(false);
+    });
+  });
+
+  describe('cleanupReviewerThread', () => {
+    beforeEach(() => {
+      serviceMocks.getProject.mockResolvedValue({
+        id: 'proj-1',
+        path: '/tmp/repo',
+      });
+    });
+
+    test('no-ops when reviewer thread is missing', async () => {
+      vi.mocked(tm.getThread).mockResolvedValue(undefined);
+
+      await cleanupReviewerThread('missing', 'proj-1');
+
+      expect(tm.updateThread).not.toHaveBeenCalled();
+    });
+
+    test('no-ops when project is missing', async () => {
+      vi.mocked(tm.getThread).mockResolvedValue({
+        id: 'rev-1',
+        mode: 'worktree',
+        worktreePath: '/tmp/repo/.worktrees/rev',
+        branch: 'review/fix',
+      });
+      serviceMocks.getProject.mockResolvedValue(undefined);
+
+      await cleanupReviewerThread('rev-1', 'proj-1');
+
+      expect(tm.updateThread).not.toHaveBeenCalled();
+    });
+
+    test('archives reviewer worktree and removes git artifacts', async () => {
+      vi.mocked(tm.getThread).mockResolvedValue({
+        id: 'rev-1',
+        mode: 'worktree',
+        worktreePath: '/tmp/repo/.worktrees/rev',
+        branch: 'review/fix',
+      });
+
+      await cleanupReviewerThread('rev-1', 'proj-1');
+
+      const { removeWorktree, removeBranch } = await import('@funny/core/git');
+      expect(removeWorktree).toHaveBeenCalledWith('/tmp/repo', '/tmp/repo/.worktrees/rev');
+      expect(removeBranch).toHaveBeenCalledWith('/tmp/repo', 'review/fix');
+      expect(tm.updateThread).toHaveBeenCalledWith('rev-1', {
+        archived: 1,
+        worktreePath: null,
+        branch: null,
+      });
+    });
+
+    test('archives local reviewer thread without git cleanup', async () => {
+      vi.mocked(tm.getThread).mockResolvedValue({
+        id: 'rev-local',
+        mode: 'local',
+        worktreePath: null,
+        branch: 'main',
+      });
+
+      await cleanupReviewerThread('rev-local', 'proj-1');
+
+      const { removeWorktree } = await import('@funny/core/git');
+      expect(removeWorktree).not.toHaveBeenCalled();
+      expect(tm.updateThread).toHaveBeenCalledWith('rev-local', {
+        archived: 1,
+        worktreePath: null,
+        branch: null,
+      });
     });
   });
 

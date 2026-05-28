@@ -167,7 +167,7 @@ describe('AutomationManager', () => {
       expect(auto.name).toBe('Daily lint check');
       expect(auto.prompt).toBe('Run eslint on the codebase and fix any errors');
       expect(auto.schedule).toBe('0 9 * * *');
-      expect(auto.model).toBe('sonnet');
+      expect(auto.model).toBe('opus');
       expect(auto.mode).toBe('local');
       expect(auto.permissionMode).toBe('autoEdit');
       expect(auto.enabled).toBe(1);
@@ -336,6 +336,7 @@ describe('AutomationManager', () => {
         .values({
           id: 'auto-old',
           projectId: 'p1',
+          userId: 'user-1',
           name: 'Old',
           prompt: 'A',
           schedule: '* * * * *',
@@ -349,6 +350,7 @@ describe('AutomationManager', () => {
         .values({
           id: 'auto-new',
           projectId: 'p1',
+          userId: 'user-1',
           name: 'New',
           prompt: 'B',
           schedule: '0 * * * *',

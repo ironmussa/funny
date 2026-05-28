@@ -4,7 +4,9 @@ import { resolve, dirname } from 'path';
 import { executeSync } from '@funny/core/git';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
-const TEST_REPO = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-worktree-repo');
+import { testPath } from '../helpers/test-dirname.js';
+
+const TEST_REPO = testPath(import.meta, '..', '..', '..', '.test-tmp-worktree-repo');
 const WORKTREE_DIR = resolve(dirname(TEST_REPO), '.funny-worktrees');
 
 function setupRepo() {

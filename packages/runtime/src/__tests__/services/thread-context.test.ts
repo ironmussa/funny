@@ -96,4 +96,16 @@ describe('scratchPathFor', () => {
   test('joins under ~/.funny/scratch/<userId>/<threadId>', () => {
     expect(scratchPathFor('u-x', 't-y')).toBe(join(homedir(), '.funny', 'scratch', 'u-x', 't-y'));
   });
+
+  test('rejects userId with path traversal characters', () => {
+    expect(() => scratchPathFor('../etc', 't-y')).toThrow(/userId failed shape check/);
+  });
+
+  test('rejects threadId with slashes', () => {
+    expect(() => scratchPathFor('u-x', 't/y')).toThrow(/threadId failed shape check/);
+  });
+
+  test('rejects empty userId', () => {
+    expect(() => scratchPathFor('', 't-y')).toThrow(/userId failed shape check/);
+  });
 });

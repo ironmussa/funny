@@ -193,7 +193,9 @@ export const ThreadItem = memo(function ThreadItem({
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         data-testid={`thread-item-${thread.id}`}
         onPointerEnter={() => {
           if (!isSelected) useThreadStore.getState().prefetchThread(thread.id);
@@ -214,6 +216,12 @@ export const ThreadItem = memo(function ThreadItem({
           }
           onSelect();
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
         onAuxClick={(e) => {
           // Middle-click also opens in a new window for consistency
           if (e.button === 1) {
@@ -226,7 +234,7 @@ export const ThreadItem = memo(function ThreadItem({
             );
           }
         }}
-        className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden py-1.5 pl-2 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden py-1.5 pl-2 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         {/* Row 1: Status icon + Title */}
         <div className="flex min-w-0 items-center gap-1.5">
@@ -345,7 +353,7 @@ export const ThreadItem = memo(function ThreadItem({
             ) : null}
           </div>
         )}
-      </button>
+      </div>
       <div className="flex flex-shrink-0 items-center gap-1.5 py-1 pl-2 pr-1.5">
         <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
           <span

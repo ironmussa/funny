@@ -9,6 +9,7 @@ import {
   getSummary,
   getToolLabel,
   getTodos,
+  isTodoToolName,
   makeRelativePath,
   useCurrentProjectPath,
 } from '@/components/tool-cards/utils';
@@ -43,10 +44,10 @@ export const ToolCallCard = memo(
   }: ToolCallCardProps) {
     const { t } = useTranslation();
     const tick = useMinuteTick();
-    const isTodo = name === 'TodoWrite';
+    const isTodo = isTodoToolName(name);
     const parsed = useMemo(() => formatInput(input), [input]);
-    const label = getToolLabel(name, t);
-    const summary = getSummary(name, parsed, t);
+    const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
+    const summary = getSummary(isTodo ? 'TodoWrite' : name, parsed, t);
 
     const todos = isTodo ? getTodos(parsed) : null;
     const filePath = getFilePath(name, parsed);

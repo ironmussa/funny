@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react';
 
-import { formatInput, getTodos } from '@/components/tool-cards/utils';
+import { formatInput, getTodos, isTodoToolName } from '@/components/tool-cards/utils';
 import type { TodoItem } from '@/components/tool-cards/utils';
 import { useThreadMessages } from '@/stores/thread-context';
 
@@ -38,7 +38,7 @@ function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: strin
     const calls: { id: string; input: any; parentToolCallId?: string }[] = [];
     for (const msg of messages) {
       for (const tc of msg.toolCalls ?? []) {
-        if (tc.name === 'TodoWrite') calls.push(tc);
+        if (isTodoToolName(tc.name)) calls.push(tc);
       }
     }
 

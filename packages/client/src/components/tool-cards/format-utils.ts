@@ -16,6 +16,38 @@ export interface Question {
   multiSelect: boolean;
 }
 
+/** Cursor ACP `updateTodos` / `todo_write` and Claude `TodoWrite` share the checklist card. */
+export function isTodoToolName(name: string): boolean {
+  const n = name.toLowerCase().replace(/[_-]/g, '');
+  return n === 'todowrite' || n === 'updatetodos' || n === 'towrite';
+}
+
+function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
+  const todos: TodoItem[] = [];
+  for (const raw of arr) {
+    if (!raw || typeof raw !== 'object') continue;
+    const e = raw as Record<string, unknown>;
+    const content =
+      (typeof e.content === 'string' && e.content) ||
+      (typeof e.title === 'string' && e.title) ||
+      (typeof e.description === 'string' && e.description) ||
+      '';
+    if (!content) continue;
+    const status =
+      e.status === 'completed' || e.status === 'in_progress'
+        ? e.status
+        : e.status === 'cancelled'
+          ? 'completed'
+          : 'pending';
+    todos.push({
+      content,
+      status,
+      ...(typeof e.activeForm === 'string' ? { activeForm: e.activeForm } : {}),
+    });
+  }
+  return todos.length > 0 ? todos : null;
+}
+
 export function formatInput(
   input: string | Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
@@ -31,9 +63,22 @@ export function formatInput(
 }
 
 export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
-  const todos = parsed.todos;
-  if (!Array.isArray(todos)) return null;
-  return todos as TodoItem[];
+  for (const key of ['todos', 'entries', 'items'] as const) {
+    const arr = parsed[key];
+    if (Array.isArray(arr)) {
+      const normalized = normalizeTodoItems(arr);
+      if (normalized) return normalized;
+    }
+  }
+  const outcome = parsed.outcome;
+  if (outcome && typeof outcome === 'object') {
+    const o = outcome as Record<string, unknown>;
+    if (Array.isArray(o.todos)) {
+      const normalized = normalizeTodoItems(o.todos);
+      if (normalized) return normalized;
+    }
+  }
+  return null;
 }
 
 export function getFilePath(name: string, parsed: Record<string, unknown>): string | null {
@@ -74,10 +119,12 @@ export function getSummary(
       return (parsed.url as string) ?? null;
     case 'NotebookEdit':
       return (parsed.notebook_path as string) ?? null;
-    case 'TodoWrite': {
+    case 'TodoWrite':
+    case 'updateTodos':
+    case 'todo_write': {
       const todos = getTodos(parsed);
       if (!todos) return null;
-      const done = todos.filter((t) => t.status === 'completed').length;
+      const done = todos.filter((tc) => tc.status === 'completed').length;
       return `${done}/${todos.length} ${t('tools.done')}`;
     }
     case 'AskUserQuestion': {
@@ -115,6 +162,8 @@ export function getToolLabel(name: string, t: (key: string) => string): string {
     Task: t('tools.subagent'),
     Agent: t('tools.subagent'),
     TodoWrite: t('tools.todos'),
+    updateTodos: t('tools.todos'),
+    todo_write: t('tools.todos'),
     NotebookEdit: t('tools.editNotebook'),
     AskUserQuestion: t('tools.question'),
     Think: t('tools.thinking'),

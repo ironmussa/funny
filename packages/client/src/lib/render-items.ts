@@ -1,5 +1,6 @@
 import type { ThreadEvent } from '@funny/shared';
 
+import { isTodoToolName } from '@/components/tool-cards/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
 
 export type ToolItem =
@@ -178,8 +179,8 @@ export function buildGroupedRenderItems(
   for (let i = grouped.length - 1; i >= 0; i--) {
     const g = grouped[i];
     if (
-      (g.type === 'toolcall' && g.tc.name === 'TodoWrite') ||
-      (g.type === 'toolcall-group' && g.name === 'TodoWrite')
+      (g.type === 'toolcall' && isTodoToolName(g.tc.name)) ||
+      (g.type === 'toolcall-group' && isTodoToolName(g.name))
     ) {
       lastTodoIdx = i;
       break;
@@ -189,8 +190,8 @@ export function buildGroupedRenderItems(
   for (let i = 0; i < grouped.length; i++) {
     const g = grouped[i];
     const isTodoItem =
-      (g.type === 'toolcall' && g.tc.name === 'TodoWrite') ||
-      (g.type === 'toolcall-group' && g.name === 'TodoWrite');
+      (g.type === 'toolcall' && isTodoToolName(g.tc.name)) ||
+      (g.type === 'toolcall-group' && isTodoToolName(g.name));
     if (isTodoItem && i !== lastTodoIdx) continue; // skip earlier TodoWrites
     if (isTodoItem && g.type === 'toolcall-group') {
       // Replace group with just the last call

@@ -6,7 +6,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
-import { getToolLabel } from './tool-cards/utils';
+import { getToolLabel, isTodoToolName } from './tool-cards/utils';
 
 export interface ToolCallItem {
   id: string;
@@ -51,8 +51,8 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   const { t } = useTranslation();
   const tick = useMinuteTick(); // re-render every 60s so timeAgo stays fresh (memo blocks parent ticks)
   const [expanded, setExpanded] = useState(false);
-  const label = getToolLabel(name, t);
-  const isTodo = name === 'TodoWrite';
+  const isTodo = isTodoToolName(name);
+  const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
   const displayTime = useMemo(
     () => (timestamp ? timeAgo(timestamp, t) : null),
     [timestamp, t, tick],

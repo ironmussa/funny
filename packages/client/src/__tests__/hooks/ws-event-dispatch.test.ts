@@ -327,3 +327,118 @@ describe('ws-event-dispatch — pendingMessages keying', () => {
     expect(statusCalls).toHaveLength(1);
   });
 });
+
+describe('ws-event-dispatch — additional event types', () => {
+  async function captureHandlers() {
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    registerSocketIOHandlers({
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any);
+    return handlers;
+  }
+
+  test('agent:tool_call flushes pending messages before applying tool call', async () => {
+    const messageCalls: any[] = [];
+    const toolCalls: any[] = [];
+    useThreadStore.setState({
+      handleWSMessage: ((tid: string, data: any) => {
+        messageCalls.push({ tid, data });
+      }) as any,
+      handleWSToolCall: ((tid: string, data: any) => {
+        toolCalls.push({ tid, data });
+      }) as any,
+    });
+
+    const handlers = await captureHandlers();
+    handlers['agent:message']({
+      threadId: 't1',
+      data: { messageId: 'm1', role: 'assistant', content: 'partial' },
+    });
+    handlers['agent:tool_call']({
+      threadId: 't1',
+      data: { toolCallId: 'tc1', name: 'Read' },
+    });
+
+    expect(messageCalls).toHaveLength(1);
+    expect(toolCalls).toEqual([{ tid: 't1', data: { toolCallId: 'tc1', name: 'Read' } }]);
+  });
+
+  test('agent:error routes to handleWSError immediately', async () => {
+    const errorCalls: any[] = [];
+    useThreadStore.setState({
+      handleWSError: ((tid: string, data: any) => {
+        errorCalls.push({ tid, data });
+      }) as any,
+    });
+
+    const handlers = await captureHandlers();
+    handlers['agent:error']({ threadId: 't1', data: { error: 'boom' } });
+
+    expect(errorCalls).toEqual([{ tid: 't1', data: { error: 'boom' } }]);
+  });
+
+  test('agent:compact_boundary and agent:context_usage route to store handlers', async () => {
+    const compactCalls: any[] = [];
+    const contextCalls: any[] = [];
+    useThreadStore.setState({
+      handleWSCompactBoundary: ((tid: string, data: any) => {
+        compactCalls.push({ tid, data });
+      }) as any,
+      handleWSContextUsage: ((tid: string, data: any) => {
+        contextCalls.push({ tid, data });
+      }) as any,
+    });
+
+    const handlers = await captureHandlers();
+    handlers['agent:compact_boundary']({ threadId: 't1', data: { boundary: 1 } });
+    handlers['agent:context_usage']({ threadId: 't1', data: { used: 100, limit: 200 } });
+
+    expect(compactCalls).toEqual([{ tid: 't1', data: { boundary: 1 } }]);
+    expect(contextCalls).toEqual([{ tid: 't1', data: { used: 100, limit: 200 } }]);
+  });
+
+  test('thread:queue_update applies immediately without RAF batching', async () => {
+    const queueCalls: any[] = [];
+    useThreadStore.setState({
+      handleWSQueueUpdate: ((tid: string, data: any) => {
+        queueCalls.push({ tid, data });
+      }) as any,
+    });
+
+    const handlers = await captureHandlers();
+    handlers['thread:queue_update']({ threadId: 't1', data: { queuedCount: 2 } });
+
+    expect(queueCalls).toEqual([{ tid: 't1', data: { queuedCount: 2 } }]);
+  });
+
+  test('agent:result flushes pending batch before applying final result', async () => {
+    const messageCalls: any[] = [];
+    const resultCalls: any[] = [];
+    useThreadStore.setState({
+      handleWSMessage: ((tid: string, data: any) => {
+        messageCalls.push({ tid, data });
+      }) as any,
+      handleWSResult: ((tid: string, data: any) => {
+        resultCalls.push({ tid, data });
+      }) as any,
+    });
+
+    const handlers = await captureHandlers();
+    handlers['agent:message']({
+      threadId: 't1',
+      data: { messageId: 'm1', role: 'assistant', content: 'almost done' },
+    });
+    handlers['agent:result']({
+      threadId: 't1',
+      data: { status: 'completed', cost: 0.1, duration: 3 },
+    });
+
+    expect(messageCalls).toHaveLength(1);
+    expect(resultCalls).toEqual([
+      { tid: 't1', data: { status: 'completed', cost: 0.1, duration: 3 } },
+    ]);
+  });
+});

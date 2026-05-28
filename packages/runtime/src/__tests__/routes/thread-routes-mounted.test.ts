@@ -1,16 +1,27 @@
 import { Hono } from 'hono';
-import { okAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+
+import { ThreadServiceError } from '../../services/thread-service/helpers.js';
 
 const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
+  updateToolCallOutput: vi.fn(),
   isProjectInOrg: vi.fn(),
+  getThreadEvents: vi.fn(),
+  listQueue: vi.fn(),
   createIdleThread: vi.fn(),
   createAndStartThread: vi.fn(),
   sendMessage: vi.fn(),
   stopThread: vi.fn(),
   forkThread: vi.fn(),
   uploadFile: vi.fn(),
+  rewindCode: vi.fn(),
+  forkAndRewind: vi.fn(),
+  convertToWorktree: vi.fn(),
+  approveToolCall: vi.fn(),
+  cancelQueuedMessage: vi.fn(),
+  updateQueuedMessage: vi.fn(),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -28,11 +39,14 @@ vi.mock('../../middleware/tracing.js', () => ({
 
 vi.mock('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
+  updateToolCallOutput: mocks.updateToolCallOutput,
 }));
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { isProjectInOrg: mocks.isProjectInOrg },
+    threadEvents: { getThreadEvents: mocks.getThreadEvents },
+    messageQueue: { listQueue: mocks.listQueue },
   }),
 }));
 
@@ -44,9 +58,9 @@ vi.mock('../../services/thread-service/create.js', () => ({
 vi.mock('../../services/thread-service/messaging.js', () => ({
   sendMessage: mocks.sendMessage,
   stopThread: mocks.stopThread,
-  approveToolCall: vi.fn(),
-  cancelQueuedMessage: vi.fn(),
-  updateQueuedMessage: vi.fn(),
+  approveToolCall: mocks.approveToolCall,
+  cancelQueuedMessage: mocks.cancelQueuedMessage,
+  updateQueuedMessage: mocks.updateQueuedMessage,
 }));
 
 vi.mock('../../services/thread-service/fork.js', () => ({
@@ -58,12 +72,12 @@ vi.mock('../../services/thread-service/upload.js', () => ({
 }));
 
 vi.mock('../../services/thread-service/rewind.js', () => ({
-  forkAndRewind: vi.fn(),
-  rewindCode: vi.fn(),
+  forkAndRewind: mocks.forkAndRewind,
+  rewindCode: mocks.rewindCode,
 }));
 
 vi.mock('../../services/thread-service/update.js', () => ({
-  convertToWorktree: vi.fn(),
+  convertToWorktree: mocks.convertToWorktree,
 }));
 
 import { threadRoutes } from '../../routes/threads.js';
@@ -78,11 +92,11 @@ const baseThread = {
   model: 'sonnet',
 };
 
-function makeApp() {
+function makeApp(userId = 'user-1', organizationId: string | null = null) {
   const app = new Hono();
   app.use('*', async (c, next) => {
-    c.set('userId', 'user-1');
-    c.set('organizationId', null);
+    c.set('userId', userId);
+    c.set('organizationId', organizationId);
     return next();
   });
   app.route('/api/threads', threadRoutes);
@@ -94,6 +108,9 @@ describe('threadRoutes (mounted)', () => {
     vi.clearAllMocks();
     mocks.isProjectInOrg.mockResolvedValue(false);
     mocks.getThread.mockResolvedValue(baseThread);
+    mocks.getThreadEvents.mockResolvedValue([{ id: 'ev-1', type: 'status' }]);
+    mocks.listQueue.mockResolvedValue({ messages: [], queuedCount: 0 });
+    mocks.updateToolCallOutput.mockResolvedValue(undefined);
     mocks.createIdleThread.mockResolvedValue(okAsync({ id: 'idle-1', status: 'idle' }));
     mocks.createAndStartThread.mockResolvedValue(
       okAsync({ id: 'new-1', status: 'running', title: 'New thread' }),
@@ -102,6 +119,14 @@ describe('threadRoutes (mounted)', () => {
     mocks.stopThread.mockResolvedValue(okAsync(undefined));
     mocks.forkThread.mockResolvedValue(okAsync({ id: 'fork-1', title: 'Fork' }));
     mocks.uploadFile.mockResolvedValue(okAsync({ path: '/tmp/upload.txt' }));
+    mocks.rewindCode.mockResolvedValue(okAsync({ ok: true }));
+    mocks.forkAndRewind.mockResolvedValue(okAsync({ id: 'fork-rewind-1' }));
+    mocks.convertToWorktree.mockResolvedValue(okAsync(undefined));
+    mocks.approveToolCall.mockResolvedValue(undefined);
+    mocks.cancelQueuedMessage.mockResolvedValue(okAsync({ queuedCount: 0 }));
+    mocks.updateQueuedMessage.mockResolvedValue(
+      okAsync({ queuedCount: 1, queuedMessage: { id: 'q1', content: 'updated' } }),
+    );
   });
 
   test('POST /idle creates an idle thread', async () => {
@@ -112,6 +137,16 @@ describe('threadRoutes (mounted)', () => {
     });
     expect(res.status).toBe(201);
     expect(mocks.createIdleThread).toHaveBeenCalled();
+  });
+
+  test('POST /idle returns 400 on invalid body', async () => {
+    const res = await makeApp().request('/api/threads/idle', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: 'p1' }),
+    });
+    expect(res.status).toBe(400);
+    expect(mocks.createIdleThread).not.toHaveBeenCalled();
   });
 
   test('POST / creates and starts a thread', async () => {
@@ -127,6 +162,23 @@ describe('threadRoutes (mounted)', () => {
     });
     expect(res.status).toBe(201);
     expect((await res.json()).id).toBe('new-1');
+  });
+
+  test('POST / returns service error status from ThreadServiceError', async () => {
+    mocks.createAndStartThread.mockResolvedValue(
+      errAsync(new ThreadServiceError('project missing', 404)),
+    );
+
+    const res = await makeApp().request('/api/threads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        projectId: 'p1',
+        mode: 'local',
+        prompt: 'hello',
+      }),
+    });
+    expect(res.status).toBe(404);
   });
 
   test('POST /:id/message sends a follow-up message', async () => {
@@ -157,6 +209,102 @@ describe('threadRoutes (mounted)', () => {
     expect(mocks.forkThread).toHaveBeenCalled();
   });
 
+  test('POST /:id/rewind rewinds code in place', async () => {
+    const res = await makeApp().request('/api/threads/t1/rewind', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messageId: 'm1' }),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.rewindCode).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 't1', messageId: 'm1' }),
+    );
+  });
+
+  test('POST /:id/fork-and-rewind forks then rewinds', async () => {
+    const res = await makeApp().request('/api/threads/t1/fork-and-rewind', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messageId: 'm1', title: 'Rewound fork' }),
+    });
+    expect(res.status).toBe(201);
+    expect(mocks.forkAndRewind).toHaveBeenCalled();
+  });
+
+  test('POST /:id/convert-to-worktree converts a local thread', async () => {
+    const res = await makeApp().request('/api/threads/t1/convert-to-worktree', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseBranch: 'main' }),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.convertToWorktree).toHaveBeenCalledWith('t1', 'user-1', 'main');
+  });
+
+  test('POST /:id/approve-tool approves a pending tool', async () => {
+    const res = await makeApp().request('/api/threads/t1/approve-tool', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ toolName: 'Write', approved: true }),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.approveToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 't1', toolName: 'Write', approved: true }),
+    );
+  });
+
+  test('PATCH /:id/tool-calls/:toolCallId persists tool output', async () => {
+    const res = await makeApp().request('/api/threads/t1/tool-calls/tc-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ output: 'done' }),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.updateToolCallOutput).toHaveBeenCalledWith('tc-1', 'done');
+  });
+
+  test('PATCH tool-calls returns 400 when output is missing', async () => {
+    const res = await makeApp().request('/api/threads/t1/tool-calls/tc-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /:id/events returns thread events', async () => {
+    const res = await makeApp().request('/api/threads/t1/events');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ events: [{ id: 'ev-1', type: 'status' }] });
+  });
+
+  test('GET /:id/queue lists queued messages', async () => {
+    mocks.listQueue.mockResolvedValue({
+      messages: [{ id: 'q1', content: 'wait' }],
+      queuedCount: 1,
+    });
+
+    const res = await makeApp().request('/api/threads/t1/queue');
+    expect(res.status).toBe(200);
+    expect((await res.json()).queuedCount).toBe(1);
+  });
+
+  test('DELETE /:id/queue/:messageId cancels a queued message', async () => {
+    const res = await makeApp().request('/api/threads/t1/queue/q1', { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(mocks.cancelQueuedMessage).toHaveBeenCalledWith('t1', 'q1');
+  });
+
+  test('PATCH /:id/queue/:messageId updates queued content', async () => {
+    const res = await makeApp().request('/api/threads/t1/queue/q1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'updated prompt' }),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.updateQueuedMessage).toHaveBeenCalledWith('t1', 'q1', 'updated prompt');
+  });
+
   test('POST /:id/upload writes an attachment', async () => {
     const res = await makeApp().request('/api/threads/t1/upload', {
       method: 'POST',
@@ -171,12 +319,23 @@ describe('threadRoutes (mounted)', () => {
     expect(mocks.uploadFile).toHaveBeenCalled();
   });
 
-  test('returns 404 when thread belongs to another user', async () => {
+  test('returns 403 when thread belongs to another user', async () => {
     mocks.getThread.mockResolvedValue({ ...baseThread, userId: 'user-2' });
 
     const res = await makeApp().request('/api/threads/t1/stop', { method: 'POST' });
     expect(res.status).toBe(403);
     expect(mocks.stopThread).not.toHaveBeenCalled();
+  });
+
+  test('allows org member when project is shared with organization', async () => {
+    mocks.getThread.mockResolvedValue({ ...baseThread, userId: 'user-2' });
+    mocks.isProjectInOrg.mockResolvedValue(true);
+
+    const res = await makeApp('user-1', 'org-1').request('/api/threads/t1/stop', {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.stopThread).toHaveBeenCalledWith('t1');
   });
 
   test('returns 404 when thread does not exist', async () => {

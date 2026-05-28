@@ -1,17 +1,17 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 // Use vi.hoisted() so these mocks are available when vi.mock factories run (which are hoisted)
-const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection } = vi.hoisted(
-  () => ({
+const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection, mockProjects } =
+  vi.hoisted(() => ({
     mockSelectProject: vi.fn(),
     mockInvalidateSelectThread: vi.fn(),
     mockClearThreadSelection: vi.fn(),
-  }),
-);
+    mockProjects: [] as Array<{ id: string; needsSetup?: boolean }>,
+  }));
 
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: {
-    getState: () => ({ selectProject: mockSelectProject }),
+    getState: () => ({ selectProject: mockSelectProject, projects: mockProjects }),
   },
 }));
 
@@ -25,17 +25,39 @@ import { useUIStore } from '@/stores/ui-store';
 
 describe('useUIStore', () => {
   beforeEach(() => {
+    mockProjects.length = 0;
+    localStorage.clear();
     // Reset the store to its initial state
     useUIStore.setState({
       reviewPaneOpen: false,
+      reviewPaneWidth: 28,
+      rightPaneTab: 'activity',
+      reviewSubTab: 'changes',
       settingsOpen: false,
       activeSettingsPage: null,
+      settingsReturnPath: null,
       newThreadProjectId: null,
       newThreadIdleOnly: false,
+      newThreadIsScratch: false,
       allThreadsProjectId: null,
       automationInboxOpen: false,
       addProjectOpen: false,
       analyticsOpen: false,
+      liveColumnsOpen: false,
+      orchestratorOpen: false,
+      testRunnerOpen: false,
+      generalSettingsOpen: false,
+      commandPaletteOpen: false,
+      fileSearchOpen: false,
+      textSearchOpen: false,
+      keyboardShortcutsOpen: false,
+      kanbanContext: null,
+      newThreadIssueContext: null,
+      composePrefillPrompt: null,
+      designViewProjectId: null,
+      designViewDesignId: null,
+      activeDesignId: null,
+      designsListProjectId: null,
     });
     vi.clearAllMocks();
   });
@@ -399,6 +421,196 @@ describe('useUIStore', () => {
       useUIStore.getState().showGlobalSearch();
       expect(useUIStore.getState().newThreadProjectId).toBeNull();
       expect(useUIStore.getState().allThreadsProjectId).toBe('__all__');
+    });
+  });
+
+  describe('startNewScratchThread', () => {
+    test('enters scratch compose mode and clears project selection', () => {
+      useUIStore.getState().startNewScratchThread();
+
+      const state = useUIStore.getState();
+      expect(state.newThreadIsScratch).toBe(true);
+      expect(state.newThreadProjectId).toBeNull();
+      expect(mockSelectProject).toHaveBeenCalledWith(null);
+      expect(mockClearThreadSelection).toHaveBeenCalled();
+    });
+  });
+
+  describe('startNewThread guards', () => {
+    test('does not open compose when project needs setup', () => {
+      mockProjects.push({ id: 'p-setup', needsSetup: true });
+
+      useUIStore.getState().startNewThread('p-setup');
+
+      expect(useUIStore.getState().newThreadProjectId).toBeNull();
+      expect(mockSelectProject).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelNewThread scratch + issue context', () => {
+    test('clears scratch and issue context flags', () => {
+      useUIStore.setState({
+        newThreadProjectId: 'p1',
+        newThreadIsScratch: true,
+        newThreadIssueContext: { prompt: 'fix', branchName: 'fix-1', title: 'Fix' },
+      });
+
+      useUIStore.getState().cancelNewThread();
+
+      const state = useUIStore.getState();
+      expect(state.newThreadIsScratch).toBe(false);
+      expect(state.newThreadIssueContext).toBeNull();
+    });
+  });
+
+  describe('review pane layout', () => {
+    test('setReviewPaneWidth clamps to min/max and persists', () => {
+      useUIStore.getState().setReviewPaneWidth(5);
+      expect(useUIStore.getState().reviewPaneWidth).toBe(20);
+
+      useUIStore.getState().setReviewPaneWidth(999);
+      expect(useUIStore.getState().reviewPaneWidth).toBe(70);
+      expect(localStorage.getItem('review_pane_width')).toBe('70');
+    });
+
+    test('setRightPaneTab opens review pane on selected tab', () => {
+      useUIStore.getState().setRightPaneTab('files');
+      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+      expect(useUIStore.getState().rightPaneTab).toBe('files');
+    });
+
+    test('setActivityPaneOpen switches to activity tab', () => {
+      useUIStore.getState().setActivityPaneOpen(true);
+      expect(useUIStore.getState().rightPaneTab).toBe('activity');
+      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+    });
+
+    test('setReviewSubTab persists valid tab', () => {
+      useUIStore.getState().setReviewSubTab('stash');
+      expect(useUIStore.getState().reviewSubTab).toBe('stash');
+      expect(localStorage.getItem('review_sub_tab')).toBe('stash');
+    });
+  });
+
+  describe('search + palette toggles', () => {
+    test('opening command palette closes other search dialogs', () => {
+      useUIStore.setState({ fileSearchOpen: true, textSearchOpen: true });
+      useUIStore.getState().setCommandPaletteOpen(true);
+
+      const state = useUIStore.getState();
+      expect(state.commandPaletteOpen).toBe(true);
+      expect(state.fileSearchOpen).toBe(false);
+      expect(state.textSearchOpen).toBe(false);
+    });
+
+    test('toggleTextSearch opens and closes text search', () => {
+      useUIStore.getState().toggleTextSearch();
+      expect(useUIStore.getState().textSearchOpen).toBe(true);
+      useUIStore.getState().toggleTextSearch();
+      expect(useUIStore.getState().textSearchOpen).toBe(false);
+    });
+
+    test('setTextSearchState merges partial state', () => {
+      useUIStore.getState().setTextSearchState({ query: 'auth middleware', regex: true });
+      expect(useUIStore.getState().textSearchState.query).toBe('auth middleware');
+      expect(useUIStore.getState().textSearchState.regex).toBe(true);
+      expect(useUIStore.getState().textSearchState.caseSensitive).toBe(false);
+    });
+  });
+
+  describe('secondary panels', () => {
+    test('setOrchestratorOpen clears competing panels when opening', () => {
+      useUIStore.setState({ analyticsOpen: true, reviewPaneOpen: true });
+      useUIStore.getState().setOrchestratorOpen(true);
+
+      const state = useUIStore.getState();
+      expect(state.orchestratorOpen).toBe(true);
+      expect(state.analyticsOpen).toBe(false);
+      expect(state.reviewPaneOpen).toBe(false);
+      expect(mockClearThreadSelection).toHaveBeenCalled();
+    });
+
+    test('setLiveColumnsOpen clears analytics when opening', () => {
+      useUIStore.setState({ analyticsOpen: true });
+      useUIStore.getState().setLiveColumnsOpen(true);
+      expect(useUIStore.getState().liveColumnsOpen).toBe(true);
+      expect(useUIStore.getState().analyticsOpen).toBe(false);
+    });
+
+    test('setGeneralSettingsOpen closes review pane and settings', () => {
+      useUIStore.setState({ settingsOpen: true, reviewPaneOpen: true });
+      useUIStore.getState().setGeneralSettingsOpen(true);
+      expect(useUIStore.getState().generalSettingsOpen).toBe(true);
+      expect(useUIStore.getState().settingsOpen).toBe(false);
+      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+    });
+
+    test('setTestRunnerOpen closes review pane and clears thread selection', () => {
+      useUIStore.setState({ reviewPaneOpen: true });
+      useUIStore.getState().setTestRunnerOpen(true);
+      expect(useUIStore.getState().testRunnerOpen).toBe(true);
+      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+      expect(mockClearThreadSelection).toHaveBeenCalled();
+    });
+  });
+
+  describe('design + kanban flows', () => {
+    test('setDesignView stores design context and closes overlays', () => {
+      useUIStore.setState({ settingsOpen: true, orchestratorOpen: true });
+      useUIStore.getState().setDesignView('p1', 'd1');
+
+      const state = useUIStore.getState();
+      expect(state.designViewProjectId).toBe('p1');
+      expect(state.designViewDesignId).toBe('d1');
+      expect(state.activeDesignId).toBe('d1');
+      expect(state.settingsOpen).toBe(false);
+      expect(state.orchestratorOpen).toBe(false);
+    });
+
+    test('closeDesignView clears design context', () => {
+      useUIStore.setState({
+        designViewProjectId: 'p1',
+        designViewDesignId: 'd1',
+        activeDesignId: 'd1',
+      });
+      useUIStore.getState().closeDesignView();
+      expect(useUIStore.getState().designViewDesignId).toBeNull();
+      expect(useUIStore.getState().activeDesignId).toBeNull();
+    });
+
+    test('setKanbanContext stores board context', () => {
+      useUIStore.getState().setKanbanContext({ projectId: 'p1', viewMode: 'board' });
+      expect(useUIStore.getState().kanbanContext).toEqual({ projectId: 'p1', viewMode: 'board' });
+    });
+  });
+
+  describe('issue + compose helpers', () => {
+    test('startNewThreadFromIssue sets issue context then opens compose', () => {
+      const issue = { prompt: 'Fix bug', branchName: 'fix/bug', title: 'Bug' };
+      useUIStore.getState().startNewThreadFromIssue('p1', issue);
+
+      expect(useUIStore.getState().newThreadIssueContext).toEqual(issue);
+      expect(useUIStore.getState().newThreadProjectId).toBe('p1');
+    });
+
+    test('setComposePrefillPrompt stores and clears prefill', () => {
+      useUIStore.getState().setComposePrefillPrompt('from annotator');
+      expect(useUIStore.getState().composePrefillPrompt).toBe('from annotator');
+      useUIStore.getState().setComposePrefillPrompt(null);
+      expect(useUIStore.getState().composePrefillPrompt).toBeNull();
+    });
+  });
+
+  describe('settings navigation', () => {
+    test('setSettingsReturnPath stores back navigation target', () => {
+      useUIStore.getState().setSettingsReturnPath('/projects/p1');
+      expect(useUIStore.getState().settingsReturnPath).toBe('/projects/p1');
+    });
+
+    test('setTimelineVisible persists visibility flag', () => {
+      useUIStore.getState().setTimelineVisible(true);
+      expect(useUIStore.getState().timelineVisible).toBe(true);
+      expect(localStorage.getItem('timeline_visible')).toBe('true');
     });
   });
 });

@@ -16,6 +16,7 @@ import { computeBranchKey } from '../utils/git-status-helpers.js';
 import type { AgentStateTracker } from './agent-state.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
+import { flushPendingMessageUpdates } from './team-client.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
@@ -713,6 +714,11 @@ export class AgentMessageHandler {
       log.debug('Ignoring duplicate result', { namespace: 'agent', threadId });
       return;
     }
+
+    // Flush debounced update_message buffers so the DB has the final
+    // assistant text BEFORE the run is marked complete. Otherwise a fast
+    // reload right after completion can race the 100ms debounce window.
+    flushPendingMessageUpdates();
 
     log.info('Agent completed', {
       ...(await this.threadCtx(threadId)),

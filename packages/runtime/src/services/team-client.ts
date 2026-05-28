@@ -605,6 +605,11 @@ function connectSocket(): void {
       }
       pendingDataRequests.clear();
     }
+    // Drop any buffered update_message debounce timers — the socket is dead,
+    // so the emits would be no-ops. The next remoteUpdateMessage after
+    // reconnect will carry a fresh cumulative snapshot.
+    for (const [, pending] of pendingMessageUpdates) clearTimeout(pending.timer);
+    pendingMessageUpdates.clear();
   });
 
   // Handle browser WS messages forwarded through the central server
@@ -925,10 +930,63 @@ export async function remoteUpdateThread(
   await sendDataMessage('data:update_thread', { payload: { threadId, updates } });
 }
 
-/** Update message content on the server (fire-and-forget) */
-export async function remoteUpdateMessage(messageId: string, content: string): Promise<void> {
+/**
+ * Debounced fire-and-forget update_message buffer.
+ *
+ * Streaming ACP agents (cursor-agent, codex, gemini) emit one
+ * `agent_message_chunk` per token, which translates to a `data:update_message`
+ * per token on the runner→server socket. A long answer can fire hundreds of
+ * emits per second and trip the server's 1000/10s data-event rate limit
+ * (socketio.ts), causing the *latest* (longest) snapshots to be dropped and
+ * the persisted message to look truncated on reload.
+ *
+ * Since `content` is cumulative (each call carries the full text so far),
+ * the latest write wins — coalescing intermediate writes is safe. We keep a
+ * per-messageId timer; every call resets it and stores the newest content,
+ * and after the quiet window we flush a single emit.
+ *
+ * The live UX is unaffected: the WS broadcast to the browser goes through a
+ * separate `runner:agent_event` path in `agent-message-handler.ts`, not this
+ * function.
+ */
+const MESSAGE_UPDATE_DEBOUNCE_MS = 100;
+const pendingMessageUpdates = new Map<
+  string,
+  { content: string; timer: ReturnType<typeof setTimeout> }
+>();
+
+function emitUpdateMessage(messageId: string, content: string): void {
   if (!state.socket?.connected) return;
   state.socket.emit('data:update_message', { payload: { messageId, content } });
+}
+
+/** Update message content on the server (debounced fire-and-forget). */
+export async function remoteUpdateMessage(messageId: string, content: string): Promise<void> {
+  if (!state.socket?.connected) return;
+  const existing = pendingMessageUpdates.get(messageId);
+  if (existing) clearTimeout(existing.timer);
+  const timer = setTimeout(() => {
+    const pending = pendingMessageUpdates.get(messageId);
+    if (!pending) return;
+    pendingMessageUpdates.delete(messageId);
+    emitUpdateMessage(messageId, pending.content);
+  }, MESSAGE_UPDATE_DEBOUNCE_MS);
+  pendingMessageUpdates.set(messageId, { content, timer });
+}
+
+/**
+ * Flush every pending update_message immediately. Called from
+ * `agent-message-handler.handleResult` so the DB has the final text before
+ * the run is marked complete, and from the socket `disconnect` handler so
+ * we don't leak timers when the connection drops.
+ */
+export function flushPendingMessageUpdates(): void {
+  if (pendingMessageUpdates.size === 0) return;
+  for (const [messageId, pending] of pendingMessageUpdates) {
+    clearTimeout(pending.timer);
+    emitUpdateMessage(messageId, pending.content);
+  }
+  pendingMessageUpdates.clear();
 }
 
 /** Delete every message strictly after the anchor for the given thread.

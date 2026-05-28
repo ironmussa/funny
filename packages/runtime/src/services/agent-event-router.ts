@@ -19,6 +19,7 @@ import type { AgentMessageHandler } from './agent-message-handler.js';
 import type { AgentStateTracker } from './agent-state.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
+import { flushPendingMessageUpdates } from './team-client.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
@@ -100,6 +101,9 @@ export class AgentEventRouter {
     this.orchestrator.on('agent:stopped', (threadId: string) => {
       void (async () => {
         log.info('Agent stopped', { namespace: 'agent', threadId });
+        // Drain debounced update_message buffers so a user-initiated stop
+        // doesn't drop the last 100ms of streamed text from the DB.
+        flushPendingMessageUpdates();
         this.endRunSpanFn?.(threadId, 'ok');
         const thread = await this.threadManager.getThread(threadId);
         const userId = thread?.userId;
@@ -216,6 +220,9 @@ export class AgentEventRouter {
 
   private async handleAgentFailure(threadId: string, errorMessage: string): Promise<void> {
     log.error('Agent failure', { namespace: 'agent', threadId, error: errorMessage });
+    // Flush debounced update_message buffers so partial assistant text
+    // emitted before the failure still lands in the DB.
+    flushPendingMessageUpdates();
     this.endRunSpanFn?.(threadId, 'error', errorMessage);
     const thread = await this.threadManager.getThread(threadId);
     const userId = thread?.userId;

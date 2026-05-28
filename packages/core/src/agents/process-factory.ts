@@ -10,6 +10,7 @@
  */
 
 import { CodexACPProcess } from './codex-acp.js';
+import { CursorACPProcess } from './cursor-acp.js';
 import { DeepAgentProcess } from './deepagent-process.js';
 import { GeminiACPProcess } from './gemini-acp.js';
 import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from './interfaces.js';
@@ -24,6 +25,7 @@ const providerRegistry = new Map<string, ProcessConstructor>([
   ['codex', CodexACPProcess],
   ['gemini', GeminiACPProcess],
   ['pi', PiACPProcess],
+  ['cursor', CursorACPProcess],
   ['deepagent', DeepAgentProcess],
   ['llm-api', LLMApiProcess],
 ]);

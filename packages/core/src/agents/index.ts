@@ -4,6 +4,7 @@ export { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 export { SDKClaudeProcess } from './sdk-claude.js';
 export { CodexACPProcess } from './codex-acp.js';
 export { GeminiACPProcess } from './gemini-acp.js';
+export { CursorACPProcess } from './cursor-acp.js';
 export { DeepAgentProcess } from './deepagent-process.js';
 export {
   inferACPToolName,
@@ -34,6 +35,11 @@ export {
   type DiscoveredPiModel,
   type DiscoverPiModelsResult,
 } from './pi-discover.js';
+export {
+  discoverCursorModels,
+  type DiscoveredCursorModel,
+  type DiscoverCursorModelsResult,
+} from './cursor-discover.js';
 
 // ── LLM Provider Abstraction ──────────────────────────────────
 export * from './llm/index.js';

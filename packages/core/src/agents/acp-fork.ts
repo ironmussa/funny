@@ -7,14 +7,14 @@
  * Out-of-process ACP session fork: spawns the agent CLI just long enough to
  * call `unstable_forkSession()` against the source session, returns the new
  * sessionId, and tears the process down. Used by the runtime fork service
- * so that codex / gemini / pi conversations can be branched the same way
- * Claude SDK conversations are.
+ * so that codex / gemini / pi / cursor conversations can be branched the
+ * same way Claude SDK conversations are.
  */
 
 import { spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
 
-type AcpProvider = 'codex' | 'gemini' | 'pi';
+type AcpProvider = 'codex' | 'gemini' | 'pi' | 'cursor';
 
 /** Resolve the CLI command + args to run an ACP-compliant agent over stdio. */
 function resolveAcpCommand(provider: AcpProvider): { command: string; args: string[] } {
@@ -39,6 +39,14 @@ function resolveAcpCommand(provider: AcpProvider): { command: string; args: stri
         return { command: 'npx', args: ['-y', 'pi-acp'] };
       }
       return { command: 'pi-acp', args: [] };
+    }
+    case 'cursor': {
+      const explicit = process.env.CURSOR_BINARY_PATH || process.env.ACP_CURSOR_BIN;
+      if (explicit) return { command: explicit, args: ['acp'] };
+      if (process.env.CURSOR_ACP_USE_NPX === '1') {
+        return { command: 'npx', args: ['-y', 'cursor-agent', 'acp'] };
+      }
+      return { command: 'cursor-agent', args: ['acp'] };
     }
   }
 }

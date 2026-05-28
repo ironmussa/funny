@@ -16,6 +16,7 @@ export interface ACPToolCallData {
   title: string; // Human-readable description from ACP
   rawInput?: unknown; // Opaque input from the provider (often empty)
   locations?: Array<{ path: string; line?: number | null }>; // File paths
+  content?: unknown[]; // ACP ToolCallContent blocks (resource / resource_link can carry a file path)
 }
 
 /**
@@ -97,7 +98,7 @@ export function buildACPToolInput(
       ? { ...(data.rawInput as Record<string, unknown>) }
       : {};
 
-  const { title, locations } = data;
+  const { title, locations, content } = data;
   const input: Record<string, unknown> = { ...raw };
 
   switch (toolName) {
@@ -109,15 +110,25 @@ export function buildACPToolInput(
           (input.path as string) ??
           (input.filePath as string) ??
           (input.filename as string) ??
-          (input.file as string);
+          (input.file as string) ??
+          // Cursor-specific aliases
+          (input.target_file as string) ??
+          (input.abs_path as string) ??
+          (input.absolute_path as string) ??
+          (input.relative_workspace_path as string);
         if (path) {
           input.file_path = path;
         } else if (locations?.length) {
           input.file_path = locations[0].path;
-        } else if (title) {
-          const extracted = extractPathFromTitle(title);
-          if (extracted) {
-            input.file_path = extracted;
+        } else {
+          const fromContent = extractPathFromContent(content);
+          if (fromContent) {
+            input.file_path = fromContent;
+          } else if (title) {
+            const extracted = extractPathFromTitle(title);
+            if (extracted) {
+              input.file_path = extracted;
+            }
           }
         }
       }
@@ -201,7 +212,19 @@ export function extractACPToolOutput(
   fallbackTitle: string,
 ): string {
   if (rawOutput != null) {
-    return typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput);
+    if (typeof rawOutput === 'string') return rawOutput;
+    // Cursor read_file returns `{ content: "<file text>" }`; unwrap so the
+    // ReadFileCard sees the actual file contents instead of a JSON blob.
+    if (typeof rawOutput === 'object') {
+      const obj = rawOutput as Record<string, unknown>;
+      const inner =
+        (typeof obj.content === 'string' && obj.content) ||
+        (typeof obj.text === 'string' && obj.text) ||
+        (typeof obj.output === 'string' && obj.output) ||
+        (typeof obj.stdout === 'string' && obj.stdout);
+      if (inner) return inner;
+    }
+    return JSON.stringify(rawOutput);
   }
 
   if (content?.length) {
@@ -210,8 +233,15 @@ export function extractACPToolOutput(
         if (c.type === 'content' && c.content) {
           const items = Array.isArray(c.content) ? c.content : [c.content];
           return items
-            .filter((b: any) => b.type === 'text')
-            .map((b: any) => b.text)
+            .map((b: any) => {
+              if (b.type === 'text') return b.text;
+              // Embedded resource — file content lives in resource.text.
+              if (b.type === 'resource' && b.resource && typeof b.resource.text === 'string') {
+                return b.resource.text;
+              }
+              return '';
+            })
+            .filter(Boolean)
             .join('\n');
         }
         if (c.type === 'diff') return c.diff ?? '';
@@ -224,6 +254,35 @@ export function extractACPToolOutput(
   }
 
   return fallbackTitle || 'Done';
+}
+
+/**
+ * Extract a file path from ACP ToolCallContent blocks. Reads `resource_link.uri`
+ * and embedded `resource.uri`, stripping any `file://` prefix. Returns null if
+ * no path-like URI is found.
+ */
+function extractPathFromContent(content: unknown[] | undefined): string | null {
+  if (!content?.length) return null;
+  for (const c of content as any[]) {
+    if (!c || typeof c !== 'object') continue;
+    if (c.type === 'content' && c.content) {
+      const items = Array.isArray(c.content) ? c.content : [c.content];
+      for (const b of items) {
+        if (!b || typeof b !== 'object') continue;
+        if (b.type === 'resource_link' && typeof b.uri === 'string') {
+          return stripFileUri(b.uri);
+        }
+        if (b.type === 'resource' && b.resource && typeof b.resource.uri === 'string') {
+          return stripFileUri(b.resource.uri);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function stripFileUri(uri: string): string {
+  return uri.startsWith('file://') ? uri.slice('file://'.length) : uri;
 }
 
 /**

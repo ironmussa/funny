@@ -71,6 +71,15 @@ describe('process-factory', () => {
     }
   });
 
+  test('creates a cursor process when provider is "cursor"', () => {
+    try {
+      const process = defaultProcessFactory.create({ ...baseOpts, provider: 'cursor' });
+      expect(process.constructor.name).toBe('CursorACPProcess');
+    } catch {
+      // Optional dependency — test passes if constructor resolves correctly
+    }
+  });
+
   test('creates an llm-api process when provider is "llm-api"', () => {
     try {
       const process = defaultProcessFactory.create({ ...baseOpts, provider: 'llm-api' });

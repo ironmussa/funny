@@ -10,8 +10,13 @@ const {
   mockGetThreadEvents,
   mockDeleteThread,
   mockListThreads,
+  mockListScratchThreads,
   mockLoadThreadData,
   mockIsThreadDataLoaded,
+  mockArchiveThread,
+  mockRenameThread,
+  mockPinThread,
+  mockUpdateThreadStage,
 } = vi.hoisted(() => ({
   mockSendMessage: vi.fn(),
   mockStopThread: vi.fn(),
@@ -21,8 +26,13 @@ const {
   mockGetThreadEvents: vi.fn(),
   mockDeleteThread: vi.fn(),
   mockListThreads: vi.fn(),
+  mockListScratchThreads: vi.fn(),
   mockLoadThreadData: vi.fn(),
   mockIsThreadDataLoaded: vi.fn(),
+  mockArchiveThread: vi.fn(),
+  mockRenameThread: vi.fn(),
+  mockPinThread: vi.fn(),
+  mockUpdateThreadStage: vi.fn(),
 }));
 
 vi.mock('@/lib/api/threads', () => ({
@@ -34,13 +44,14 @@ vi.mock('@/lib/api/threads', () => ({
     getThread: mockGetThread,
     getThreadEvents: mockGetThreadEvents,
     listThreads: mockListThreads,
+    listScratchThreads: mockListScratchThreads,
     updateThread: vi.fn(),
     deleteThread: mockDeleteThread,
-    archiveThread: vi.fn(),
+    archiveThread: mockArchiveThread,
     getThreadMessages: vi.fn(),
-    renameThread: vi.fn(),
-    pinThread: vi.fn(),
-    updateThreadStage: vi.fn(),
+    renameThread: mockRenameThread,
+    pinThread: mockPinThread,
+    updateThreadStage: mockUpdateThreadStage,
   },
 }));
 
@@ -600,6 +611,177 @@ describe('thread store actions', () => {
 
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
       expect(useThreadStore.getState().activeThread).toBeNull();
+    });
+  });
+
+  describe('loadScratchThreads', () => {
+    test('replaces scratch bucket on successful fetch', async () => {
+      const scratch = {
+        ...baseThread,
+        id: 's1',
+        projectId: '',
+        isScratch: true,
+        title: 'Scratch idea',
+      };
+      mockListScratchThreads.mockReturnValue(okAsync({ threads: [scratch], total: 1 }));
+
+      await useThreadStore.getState().loadScratchThreads();
+
+      expect(useThreadStore.getState().scratchThreadIds).toEqual(['s1']);
+      expect(useThreadStore.getState().threadsById.s1.title).toBe('Scratch idea');
+    });
+  });
+
+  describe('addScratchThread', () => {
+    test('prepends scratch thread to scratch bucket', () => {
+      const existing = {
+        ...baseThread,
+        id: 's0',
+        projectId: '',
+        isScratch: true,
+      };
+      const incoming = {
+        ...baseThread,
+        id: 's1',
+        projectId: '',
+        isScratch: true,
+        title: 'New scratch',
+      };
+      useThreadStore.setState({
+        threadsById: { s0: existing as any },
+        scratchThreadIds: ['s0'],
+        scratchThreadTotal: 1,
+        threadIdsByProject: {},
+        threadTotalByProject: {},
+      } as any);
+
+      useThreadStore.getState().addScratchThread(incoming as any);
+
+      expect(useThreadStore.getState().scratchThreadIds).toEqual(['s1', 's0']);
+      expect(useThreadStore.getState().threadsById.s1.title).toBe('New scratch');
+    });
+  });
+
+  describe('archiveThread', () => {
+    test('optimistically archives and keeps archived on success', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      mockArchiveThread.mockReturnValue(okAsync({ ok: true }));
+
+      await useThreadStore.getState().archiveThread('t1');
+
+      expect(useThreadStore.getState().threadsById.t1.archived).toBe(true);
+      expect(mockArchiveThread).toHaveBeenCalledWith('t1', true);
+    });
+
+    test('rolls back archived flag when api fails', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      mockArchiveThread.mockReturnValue(errAsync(new Error('nope')));
+
+      await useThreadStore.getState().archiveThread('t1');
+
+      expect(useThreadStore.getState().threadsById.t1.archived).not.toBe(true);
+    });
+  });
+
+  describe('renameThread', () => {
+    test('updates title optimistically and keeps it on success', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      mockRenameThread.mockReturnValue(okAsync({ ok: true }));
+
+      await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
+
+      expect(useThreadStore.getState().threadsById.t1.title).toBe('Renamed');
+    });
+
+    test('rolls back title when api fails', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      mockRenameThread.mockReturnValue(errAsync(new Error('nope')));
+
+      await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
+
+      expect(useThreadStore.getState().threadsById.t1.title).toBe('thread');
+    });
+  });
+
+  describe('pinThread', () => {
+    test('pins thread optimistically', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      mockPinThread.mockReturnValue(okAsync({ ok: true }));
+
+      await useThreadStore.getState().pinThread('t1', 'p1', true);
+
+      expect(useThreadStore.getState().threadsById.t1.pinned).toBe(true);
+    });
+
+    test('rolls back pin when api fails', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, pinned: false } as any] }),
+      } as any);
+      mockPinThread.mockReturnValue(errAsync(new Error('nope')));
+
+      await useThreadStore.getState().pinThread('t1', 'p1', true);
+
+      expect(useThreadStore.getState().threadsById.t1.pinned).toBe(false);
+    });
+  });
+
+  describe('unarchiveThread', () => {
+    test('unarchives and updates stage on success', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, archived: true, stage: 'backlog' } as any] }),
+      } as any);
+      mockArchiveThread.mockReturnValue(okAsync({ ok: true }));
+      mockUpdateThreadStage.mockReturnValue(okAsync({ ok: true }));
+
+      await useThreadStore.getState().unarchiveThread('t1', 'p1', 'planning');
+
+      expect(useThreadStore.getState().threadsById.t1.archived).toBe(false);
+      expect(useThreadStore.getState().threadsById.t1.stage).toBe('planning');
+    });
+
+    test('rolls back when archive api fails', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, archived: true, stage: 'backlog' } as any] }),
+      } as any);
+      mockArchiveThread.mockReturnValue(errAsync(new Error('fail')));
+
+      await useThreadStore.getState().unarchiveThread('t1', 'p1', 'planning');
+
+      expect(useThreadStore.getState().threadsById.t1.archived).toBe(true);
+    });
+  });
+
+  describe('updateThreadStage', () => {
+    test('updates stage optimistically and keeps it on success', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      mockUpdateThreadStage.mockReturnValue(okAsync({ ok: true }));
+
+      await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
+
+      expect(useThreadStore.getState().threadsById.t1.stage).toBe('in_progress');
+    });
+
+    test('rolls back stage when api fails', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, stage: 'backlog' } as any] }),
+      } as any);
+      mockUpdateThreadStage.mockReturnValue(errAsync(new Error('fail')));
+
+      await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
+
+      expect(useThreadStore.getState().threadsById.t1.stage).toBe('backlog');
     });
   });
 });

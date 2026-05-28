@@ -6,44 +6,49 @@ import { describe, expect, test } from 'bun:test';
 
 import { createConsoleLogger } from '../logger.js';
 
-function captureConsole<T>(fn: () => T): { logs: string[]; errors: string[]; result: T } {
-  const logs: string[] = [];
-  const errors: string[] = [];
-  const origLog = console.log;
-  const origErr = console.error;
-  console.log = (msg: unknown) => {
-    logs.push(String(msg));
-  };
-  console.error = (msg: unknown) => {
-    errors.push(String(msg));
-  };
+function captureStreams<T>(fn: () => T): { stdout: string[]; stderr: string[]; result: T } {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const origStdoutWrite = process.stdout.write.bind(process.stdout);
+  const origStderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdout.push(String(chunk));
+    return true;
+  }) as typeof process.stdout.write;
+
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderr.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+
   try {
     const result = fn();
-    return { logs, errors, result };
+    return { stdout, stderr, result };
   } finally {
-    console.log = origLog;
-    console.error = origErr;
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
   }
 }
 
 describe('createConsoleLogger', () => {
   test('text format prints level + msg + key=value pairs', () => {
     const logger = createConsoleLogger({ format: 'text', level: 'info' });
-    const { logs } = captureConsole(() => {
+    const { stdout } = captureStreams(() => {
       logger.info('hello', { namespace: 'ns', count: 3 });
     });
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain('[info] hello');
-    expect(logs[0]).toContain('namespace=ns');
-    expect(logs[0]).toContain('count=3');
+    expect(stdout).toHaveLength(1);
+    expect(stdout[0]).toContain('[info] hello');
+    expect(stdout[0]).toContain('namespace=ns');
+    expect(stdout[0]).toContain('count=3');
   });
 
   test('json format outputs ndjson', () => {
     const logger = createConsoleLogger({ format: 'json', level: 'info' });
-    const { logs } = captureConsole(() => {
+    const { stdout } = captureStreams(() => {
       logger.info('hello', { namespace: 'ns', x: 1 });
     });
-    const parsed = JSON.parse(logs[0]);
+    const parsed = JSON.parse(stdout[0].trimEnd());
     expect(parsed.level).toBe('info');
     expect(parsed.msg).toBe('hello');
     expect(parsed.namespace).toBe('ns');
@@ -53,31 +58,31 @@ describe('createConsoleLogger', () => {
 
   test('warn and error go to stderr', () => {
     const logger = createConsoleLogger({ level: 'info' });
-    const { logs, errors } = captureConsole(() => {
+    const { stdout, stderr } = captureStreams(() => {
       logger.info('a');
       logger.warn('b');
       logger.error('c');
     });
-    expect(logs).toHaveLength(1);
-    expect(errors).toHaveLength(2);
+    expect(stdout).toHaveLength(1);
+    expect(stderr).toHaveLength(2);
   });
 
   test('level filter drops below-threshold logs', () => {
     const logger = createConsoleLogger({ level: 'warn' });
-    const { logs, errors } = captureConsole(() => {
+    const { stdout, stderr } = captureStreams(() => {
       logger.info('skipped');
       logger.warn('kept');
     });
-    expect(logs).toHaveLength(0);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain('kept');
+    expect(stdout).toHaveLength(0);
+    expect(stderr).toHaveLength(1);
+    expect(stderr[0]).toContain('kept');
   });
 
   test('text format quotes values containing spaces', () => {
     const logger = createConsoleLogger({ format: 'text', level: 'info' });
-    const { logs } = captureConsole(() => {
+    const { stdout } = captureStreams(() => {
       logger.info('m', { detail: 'has spaces' });
     });
-    expect(logs[0]).toContain('detail="has spaces"');
+    expect(stdout[0]).toContain('detail="has spaces"');
   });
 });

@@ -5,7 +5,6 @@ import {
   Columns3,
   Copy,
   EllipsisVertical,
-  ExternalLink,
   GitBranch,
   GitFork,
   Milestone,
@@ -18,20 +17,16 @@ import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CreateBranchDialog } from '@/components/CreateBranchDialog';
+import { OpenInEditorSubmenu } from '@/components/OpenInEditorSubmenu';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuPortal,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { editorLabels, type Editor } from '@/stores/settings-store';
 
 import { useMoreActionsMenu } from './use-more-actions-menu';
 
@@ -40,32 +35,6 @@ interface Props {
 }
 
 type Menu = ReturnType<typeof useMoreActionsMenu>;
-
-function OpenInEditorSubmenu({ onPick }: { onPick: (e: Editor) => void }) {
-  const { t } = useTranslation();
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger data-testid="header-menu-open-editor">
-        <ExternalLink className="icon-base mr-2" />
-        {t('thread.openInEditor', 'Open in Editor')}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuPortal>
-        <DropdownMenuSubContent>
-          {(Object.keys(editorLabels) as Editor[]).map((editor) => (
-            <DropdownMenuItem
-              key={editor}
-              data-testid={`header-menu-open-editor-${editor}`}
-              onClick={() => onPick(editor)}
-              className="cursor-pointer"
-            >
-              {editorLabels[editor]}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuSubContent>
-      </DropdownMenuPortal>
-    </DropdownMenuSub>
-  );
-}
 
 function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => void }) {
   const { t } = useTranslation();
@@ -144,7 +113,7 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
         {t('thread.copyWithTools', 'Copy with tool calls')}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <OpenInEditorSubmenu onPick={handleOpenInEditor} />
+      <OpenInEditorSubmenu testId="header-menu-open-editor" onPick={handleOpenInEditor} />
       {threadId && canConvertToWorktree && (
         <>
           <DropdownMenuSeparator />

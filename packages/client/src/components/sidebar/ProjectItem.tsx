@@ -15,7 +15,6 @@ import {
   Pencil,
   BarChart3,
   CircleDot,
-  SquareTerminal,
   Sparkles,
   EyeOff,
   RotateCcw,
@@ -23,6 +22,7 @@ import {
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { OpenInEditorSubmenu } from '@/components/OpenInEditorSubmenu';
 import { ProjectSetupHost } from '@/components/sidebar/ProjectSetupHost';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -38,12 +38,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
-import { openDirectoryInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { openDirectoryInEditor } from '@/lib/editor-utils';
 import { openProjectTerminal } from '@/lib/open-terminal-tab';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
@@ -275,7 +274,6 @@ export const ProjectItem = memo(function ProjectItem({
   );
   // Only highlight the project row when no child thread is selected
   const isProjectHighlighted = isSelected && !selectedThreadId;
-  const defaultEditor = useSettingsStore((s) => s.defaultEditor);
 
   // Memoize sorted & sliced threads to avoid O(n log n) sort on every render
   const visibleThreads = useMemo(() => {
@@ -429,16 +427,10 @@ export const ProjectItem = memo(function ProjectItem({
                   <Terminal className="icon-sm" />
                   {t('sidebar.openTerminal')}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-open-editor"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openDirectoryInEditor(project.path, defaultEditor);
-                  }}
-                >
-                  <SquareTerminal className="icon-sm" />
-                  {t('sidebar.openInEditor', { editor: getEditorLabel() })}
-                </DropdownMenuItem>
+                <OpenInEditorSubmenu
+                  testId="project-menu-open-editor"
+                  onPick={(editor) => openDirectoryInEditor(project.path, editor)}
+                />
                 <DropdownMenuItem
                   data-testid="project-menu-settings"
                   onClick={(e) => {

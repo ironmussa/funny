@@ -173,6 +173,29 @@ app.get('/oauth/callback', async (c) => {
   const state = c.req.query('state');
   const error = c.req.query('error');
 
+  // Security HI-10: harden the callback CSP and re-isolate the origin.
+  // Previously the page used an inline <script>, which required a CSP
+  // relaxation to `script-src 'unsafe-inline'` + `Cross-Origin-Opener-Policy:
+  // unsafe-none` (so the OAuth-provider popup could still see
+  // `window.opener`). That posture turned every future XSS reachable from
+  // this route into a real exploit and gave the cross-origin OAuth provider
+  // unrestricted DOM access to the opener.
+  //
+  // New shape:
+  //   - inline script removed; the page loads `/api/mcp/oauth/callback.js`
+  //     which is same-origin and authorised by `script-src 'self'`.
+  //   - the page passes status to the script via a JSON `<script
+  //     type="application/json">` element (inert, never executed).
+  //   - COOP is set to `same-origin-allow-popups`, which keeps
+  //     `window.opener` working for the opener that launched this popup
+  //     while still isolating us from the cross-origin OAuth provider's
+  //     intermediate page.
+  c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  c.res.headers.set(
+    'Content-Security-Policy',
+    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
+  );
+
   if (error) {
     const errorDesc = c.req.query('error_description') || error;
     return c.html(renderCallbackPage(false, errorDesc));
@@ -186,6 +209,33 @@ app.get('/oauth/callback', async (c) => {
   return c.html(renderCallbackPage(result.success, result.error));
 });
 
+/**
+ * Same-origin script loaded by the callback HTML. Reads status from the
+ * inert `#mcp-oauth-status` JSON island and forwards it to the opener via
+ * postMessage. Lives behind the same CSP/COOP as the HTML page.
+ */
+app.get('/oauth/callback.js', (c) => {
+  c.res.headers.set('Content-Type', 'application/javascript; charset=utf-8');
+  c.res.headers.set('Cache-Control', 'public, max-age=300');
+  return c.body(`(() => {
+  try {
+    const el = document.getElementById('mcp-oauth-status');
+    if (!el) return;
+    const status = JSON.parse(el.textContent || '{}');
+    if (window.opener) {
+      window.opener.postMessage({
+        type: 'mcp-oauth-callback',
+        success: status.success === true,
+        error: typeof status.error === 'string' ? status.error : null,
+      }, window.location.origin);
+    }
+    setTimeout(() => window.close(), status.success === true ? 1500 : 5000);
+  } catch (_) {
+    /* swallow — the user already sees a status message */
+  }
+})();`);
+});
+
 /** Escape HTML special characters to prevent XSS */
 function escapeHtml(s: string): string {
   return s
@@ -196,8 +246,18 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Safely embed a JSON payload inside a `<script type="application/json">`
+ * island. The only escape that matters is `</` so the parser can't be
+ * tricked into closing the element early.
+ */
+function escapeJsonForScriptTag(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
 function renderCallbackPage(success: boolean, error?: string): string {
   const safeError = error ? escapeHtml(error) : 'Unknown error';
+  const status = escapeJsonForScriptTag({ success, error: error ?? null });
   return `<!DOCTYPE html>
 <html>
 <head><title>MCP Authentication</title>
@@ -205,16 +265,8 @@ function renderCallbackPage(success: boolean, error?: string): string {
 </head>
 <body>
   <p>${success ? 'Authentication successful! This window will close.' : `Authentication failed: ${safeError}`}</p>
-  <script>
-    if (window.opener) {
-      window.opener.postMessage({
-        type: 'mcp-oauth-callback',
-        success: ${success},
-        error: ${error ? JSON.stringify(error) : 'null'}
-      }, window.location.origin);
-    }
-    setTimeout(() => window.close(), ${success ? 1500 : 5000});
-  </script>
+  <script id="mcp-oauth-status" type="application/json">${status}</script>
+  <script src="/api/mcp/oauth/callback.js"></script>
 </body>
 </html>`;
 }

@@ -2,11 +2,18 @@
  * Startup commands CRUD backed by the server's database.
  */
 
-import { eq, asc } from 'drizzle-orm';
+import { and, eq, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import { startupCommands } from '../db/schema.js';
+
+// Security CR-6: updateCommand / deleteCommand previously filtered by command
+// id alone, letting an authenticated user who guessed a row id mutate any
+// project's startup command — and the command body is shell-exec'd by
+// `command-runner.ts`. The mutating helpers now require the parent
+// projectId; the route layer is expected to verify project ownership before
+// calling.
 
 export async function listCommands(projectId: string) {
   return dbAll(
@@ -40,6 +47,7 @@ export async function createCommand(data: { projectId: string; label: string; co
 
 export async function updateCommand(
   cmdId: string,
+  projectId: string,
   data: { label: string; command: string; port?: number; portEnvVar?: string },
 ) {
   await dbRun(
@@ -51,12 +59,16 @@ export async function updateCommand(
         port: data.port ?? null,
         portEnvVar: data.portEnvVar ?? null,
       })
-      .where(eq(startupCommands.id, cmdId)),
+      .where(and(eq(startupCommands.id, cmdId), eq(startupCommands.projectId, projectId))),
   );
 }
 
-export async function deleteCommand(cmdId: string) {
-  await dbRun(db.delete(startupCommands).where(eq(startupCommands.id, cmdId)));
+export async function deleteCommand(cmdId: string, projectId: string) {
+  await dbRun(
+    db
+      .delete(startupCommands)
+      .where(and(eq(startupCommands.id, cmdId), eq(startupCommands.projectId, projectId))),
+  );
 }
 
 export async function getCommand(cmdId: string) {

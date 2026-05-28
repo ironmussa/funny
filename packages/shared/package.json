@@ -26,7 +26,8 @@
     "./db/adapters/pg": "./src/db/adapters/pg.ts",
     "./db/migrate": "./src/db/migrate.ts",
     "./repositories": "./src/repositories/index.ts",
-    "./evflow-model": "./src/evflow.model.ts"
+    "./evflow-model": "./src/evflow.model.ts",
+    "./lib/crypto": "./src/lib/crypto.ts"
   },
   "scripts": {
     "test": "bun test"

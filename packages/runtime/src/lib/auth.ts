@@ -9,6 +9,7 @@
 import { randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { stderr } from 'process';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -42,9 +43,25 @@ function getOrCreateSecret(): string {
   }
 
   const secret = randomBytes(64).toString('hex');
-  writeFileSync(SECRET_PATH, secret, { mode: 0o600 });
-  log.info('Generated new auth secret', { namespace: 'auth' });
-  return secret;
+  // Security ME-10: write atomically with `flag: 'wx'` so two parallel
+  // runtime starts (or a `bun --watch` restart racing the original) can't
+  // clobber a freshly-generated secret. If the file is created by another
+  // process between the existsSync check and now (EEXIST), read it back
+  // instead of overwriting — the other process won the race.
+  try {
+    writeFileSync(SECRET_PATH, secret, { mode: 0o600, flag: 'wx' });
+    log.info('Generated new auth secret', { namespace: 'auth' });
+    return secret;
+  } catch (err: any) {
+    if (err?.code === 'EEXIST') {
+      const existing = readFileSync(SECRET_PATH, 'utf-8').trim();
+      if (existing.length > 0) {
+        log.info('Auth secret already created by a concurrent process', { namespace: 'auth' });
+        return existing;
+      }
+    }
+    throw err;
+  }
 }
 
 // ── Access Control ──────────────────────────────────────────────
@@ -206,26 +223,69 @@ export async function initBetterAuth(): Promise<void> {
   }
 
   try {
-    const password = 'admin';
+    // Security CR-7: never seed the runtime admin with a hardcoded value.
+    // Prefer ADMIN_PASSWORD from the environment; otherwise generate a
+    // strong random one and write it to a mode-0600 file the operator can
+    // read once and then delete. Mirrors the server-side logic in
+    // packages/server/src/lib/auth.ts.
+    const username = process.env.ADMIN_USERNAME ?? 'admin';
+    const email = process.env.ADMIN_EMAIL ?? 'admin@local.host';
+    const { resolveAdminPassword } = await import('./admin-password.js');
+    const { password, isGenerated, warning } = resolveAdminPassword(
+      process.env.ADMIN_PASSWORD,
+      () => randomBytes(16).toString('base64url'),
+    );
+    if (warning) {
+      log.warn(warning, { namespace: 'auth' });
+    }
+
     // Use admin plugin's createUser to bypass disableSignUp restriction
     const result = await auth.api.createUser({
       body: {
-        email: 'admin@local.host',
+        email,
         password,
         name: 'Admin',
         role: 'admin',
-        data: { username: 'admin' },
+        data: { username },
       },
     } as any);
 
     if ((result as any)?.user) {
-      log.info(
-        'Created default admin account — change the password immediately after first login',
-        {
-          namespace: 'auth',
-          username: 'admin',
-        },
-      );
+      if (isGenerated) {
+        const passwordPath = resolve(DATA_DIR, 'admin-password.txt');
+        const body =
+          `Generated admin credentials for funny (runtime)\n` +
+          `Username: ${username}\n` +
+          `Password: ${password}\n\n` +
+          `Delete this file after first login.\n` +
+          `Set ADMIN_PASSWORD in the environment to skip credential generation.\n`;
+        writeFileSync(passwordPath, body, { mode: 0o600 });
+        stderr.write(
+          `\n` +
+            `  ========================================\n` +
+            `  GENERATED ADMIN CREDENTIALS (runtime)\n` +
+            `  Username: ${username}\n` +
+            `  Password written to: ${passwordPath}\n` +
+            `  (file is mode 0600; delete after first login)\n` +
+            `  ========================================\n\n`,
+        );
+        log.info(
+          'Created admin account with generated password — credentials written to data dir',
+          {
+            namespace: 'auth',
+            username,
+            passwordPath,
+          },
+        );
+      } else {
+        log.info(
+          'Created default admin account — change the password immediately after first login',
+          {
+            namespace: 'auth',
+            username,
+          },
+        );
+      }
     }
   } catch (err: any) {
     // "User already exists" is expected after first boot

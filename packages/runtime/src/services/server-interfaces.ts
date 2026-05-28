@@ -311,11 +311,15 @@ export interface ISearchService {
 export interface IStartupCommandsService {
   listCommands(projectId: string): Promise<any[]>;
   createCommand(data: { projectId: string; label: string; command: string }): Promise<any>;
+  // Security CR-6: updateCommand/deleteCommand require projectId so the
+  // server-side repo can scope the SQL `WHERE` by parent project — prevents
+  // cross-project tampering on a guessed cmdId.
   updateCommand(
     cmdId: string,
+    projectId: string,
     data: { label: string; command: string; port?: number; portEnvVar?: string },
   ): Promise<void>;
-  deleteCommand(cmdId: string): Promise<void>;
+  deleteCommand(cmdId: string, projectId: string): Promise<void>;
   getCommand(cmdId: string): Promise<any | undefined>;
 }
 

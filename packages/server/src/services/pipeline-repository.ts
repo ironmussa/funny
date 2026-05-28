@@ -3,16 +3,28 @@
  * Pure data operations only — pipeline execution lives in the runtime.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
-import { pipelines, pipelineRuns } from '../db/schema.js';
+import { pipelines, pipelineRuns, threads } from '../db/schema.js';
 
 // ── Pipeline CRUD ────────────────────────────────────────────
+//
+// Security CR-5: every read/write here MUST be scoped to the caller's
+// `userId`. The route layer previously trusted callers with bare ids and
+// any logged-in user could read/mutate/delete another tenant's pipelines.
+// Helpers accept `userId` as the second arg and return null/no-op when the
+// row doesn't belong to that user. The `pipelines.userId` column is set
+// at creation time (see `createPipeline`).
 
-export async function getPipelineForProject(projectId: string) {
-  const rows = await dbAll(db.select().from(pipelines).where(eq(pipelines.projectId, projectId)));
+export async function getPipelineForProject(projectId: string, userId: string) {
+  const rows = await dbAll(
+    db
+      .select()
+      .from(pipelines)
+      .where(and(eq(pipelines.projectId, projectId), eq(pipelines.userId, userId))),
+  );
   return rows.find((r: any) => r.enabled) ?? null;
 }
 
@@ -69,21 +81,36 @@ export async function createPipeline(data: {
   return id;
 }
 
-export async function getPipelineById(id: string) {
-  return dbGet(db.select().from(pipelines).where(eq(pipelines.id, id)));
+export async function getPipelineById(id: string, userId: string) {
+  return dbGet(
+    db
+      .select()
+      .from(pipelines)
+      .where(and(eq(pipelines.id, id), eq(pipelines.userId, userId))),
+  );
 }
 
-export async function getPipelinesByProject(projectId: string) {
-  return dbAll(db.select().from(pipelines).where(eq(pipelines.projectId, projectId)));
+export async function getPipelinesByProject(projectId: string, userId: string) {
+  return dbAll(
+    db
+      .select()
+      .from(pipelines)
+      .where(and(eq(pipelines.projectId, projectId), eq(pipelines.userId, userId))),
+  );
 }
 
-export async function updatePipeline(id: string, updates: Record<string, unknown>) {
+export async function updatePipeline(id: string, userId: string, updates: Record<string, unknown>) {
   const data = { ...updates, updatedAt: new Date().toISOString() };
-  await dbRun(db.update(pipelines).set(data).where(eq(pipelines.id, id)));
+  await dbRun(
+    db
+      .update(pipelines)
+      .set(data)
+      .where(and(eq(pipelines.id, id), eq(pipelines.userId, userId))),
+  );
 }
 
-export async function deletePipeline(id: string) {
-  await dbRun(db.delete(pipelines).where(eq(pipelines.id, id)));
+export async function deletePipeline(id: string, userId: string) {
+  await dbRun(db.delete(pipelines).where(and(eq(pipelines.id, id), eq(pipelines.userId, userId))));
 }
 
 // ── Pipeline Run CRUD ────────────────────────────────────────
@@ -119,6 +146,15 @@ export async function getRunById(id: string) {
   return dbGet(db.select().from(pipelineRuns).where(eq(pipelineRuns.id, id)));
 }
 
-export async function getRunsForThread(threadId: string) {
+export async function getRunsForThread(threadId: string, userId: string) {
+  // Security CR-5: pipeline_runs has no userId column. Verify ownership
+  // through the parent thread before returning rows.
+  const thread = await dbGet(
+    db
+      .select()
+      .from(threads)
+      .where(and(eq(threads.id, threadId), eq(threads.userId, userId))),
+  );
+  if (!thread) return [];
   return dbAll(db.select().from(pipelineRuns).where(eq(pipelineRuns.threadId, threadId)));
 }

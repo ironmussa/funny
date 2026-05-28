@@ -6,6 +6,7 @@
  */
 
 import {
+  checkWorktreePathInProject,
   createWorktree,
   getStatusSummary,
   listWorktrees,
@@ -56,6 +57,15 @@ worktreeRoutes.get('/status', async (c) => {
     c.get('organizationId') ?? undefined,
   );
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  // Security ME-1: `worktreePath` from the query string is otherwise passed
+  // unchecked to `getStatusSummary`, which runs `git status` / `git
+  // rev-list` in that cwd. A user could enumerate the dirty-file state of
+  // any directory the runner UID can read (other git repos on the host)
+  // through this single endpoint. Constrain to the project's worktree
+  // base, same as CR-3.
+  const containmentErr = checkWorktreePathInProject(projectResult.value.path, worktreePath);
+  if (containmentErr) return resultToResponse(c, err(containmentErr));
 
   const statusResult = await getStatusSummary(worktreePath, undefined, projectResult.value.path);
   return resultToResponse(

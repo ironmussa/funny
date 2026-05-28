@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, realpathSync } from 'fs';
 import { mkdir, rm, stat } from 'fs/promises';
-import { resolve, dirname, basename, normalize, join } from 'path';
+import { resolve, dirname, basename, normalize, join, sep } from 'path';
 
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
@@ -8,6 +8,34 @@ import { ResultAsync } from 'neverthrow';
 import type { SetupProgressFn } from '../ports/setup-progress.js';
 import { git } from './base.js';
 import { gitRead, gitWrite } from './process.js';
+
+/**
+ * Security HI-4: pure predicate that decides whether a path is *safe* to
+ * pass to `git config --global --add safe.directory ...`. Extracted from
+ * `ensureSafeDirectory` so the guards can be unit-tested without mocking
+ * the git CLI.
+ *
+ * Refuses paths that:
+ *   - begin with `-` (would be interpreted as a `git config` flag),
+ *   - are empty / non-string / contain NUL,
+ *   - are non-absolute (no meaningful scope), or
+ *   - live under a known system prefix.
+ *
+ * `safe.directory` is global state on the runner, so a missing guard
+ * upstream would otherwise let an attacker-influenced project path
+ * persistently widen what git trusts.
+ */
+export function shouldRegisterSafeDirectory(dirPath: unknown): boolean {
+  if (typeof dirPath !== 'string' || dirPath.length === 0) return false;
+  if (dirPath.startsWith('-')) return false;
+  if (dirPath.includes('\0')) return false;
+  if (!dirPath.startsWith('/') && !/^[a-zA-Z]:[\\/]/.test(dirPath)) return false;
+  const SAFE_DIR_BLOCKED_PREFIXES = ['/etc', '/proc', '/sys', '/dev', '/run', '/boot', '/root'];
+  for (const prefix of SAFE_DIR_BLOCKED_PREFIXES) {
+    if (dirPath === prefix || dirPath.startsWith(prefix + '/')) return false;
+  }
+  return true;
+}
 
 /**
  * Ensure a directory is registered as a git safe.directory so that
@@ -19,6 +47,7 @@ import { gitRead, gitWrite } from './process.js';
  * if not already present, so it's idempotent and safe to call repeatedly.
  */
 async function ensureSafeDirectory(dirPath: string): Promise<void> {
+  if (!shouldRegisterSafeDirectory(dirPath)) return;
   // Check if already registered
   const check = await gitRead(['config', '--global', '--get-all', 'safe.directory'], {
     reject: false,
@@ -27,8 +56,12 @@ async function ensureSafeDirectory(dirPath: string): Promise<void> {
     const existing = check.stdout.split('\n').map((l) => l.trim());
     if (existing.includes(dirPath)) return;
   }
-  // Add to global config
-  await gitWrite(['config', '--global', '--add', 'safe.directory', dirPath], { reject: false });
+  // Add to global config. The leading-`-` guard above is the actual defense
+  // against flag-injection — `git config` doesn't honour `--` as a positional
+  // separator the way most porcelain commands do.
+  await gitWrite(['config', '--global', '--add', 'safe.directory', dirPath], {
+    reject: false,
+  });
 }
 
 export const WORKTREE_DIR_NAME = '.funny-worktrees';
@@ -223,12 +256,66 @@ export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], 
   });
 }
 
+/**
+ * Security CR-3: verify that `worktreePath` is inside the project's worktree
+ * base (`getWorktreeBasePath(projectPath)`) before any destructive operation.
+ *
+ * The route layer previously took `worktreePath` from the request body with
+ * only a `z.string().min(1)` check, then passed it straight to
+ * `git worktree remove -f` (which on failure was followed by an unconditional
+ * `rm -rf`). That let an authenticated user delete arbitrary directories
+ * writable by the runner UID — `~/.funny/encryption.key`, `~/.ssh`, source
+ * trees, etc.
+ *
+ * Containment is enforced on the **realpath** of both ends so symlinks
+ * cannot escape. Leading-`-` is also rejected to keep `git` from
+ * interpreting the value as a flag.
+ */
+function assertWorktreeInProjectBase(
+  projectPath: string,
+  worktreePath: string,
+): DomainError | null {
+  if (typeof worktreePath !== 'string' || worktreePath.length === 0) {
+    return badRequest('worktreePath is required');
+  }
+  if (worktreePath.startsWith('-')) {
+    return badRequest('worktreePath must not start with "-"');
+  }
+  const base = getWorktreeBasePath(projectPath);
+  let realBase: string;
+  let realTarget: string;
+  try {
+    realBase = realpathSync(base);
+  } catch {
+    // Base hasn't been created yet — fall back to the lexical path. No
+    // worktrees can exist below it in that state anyway.
+    realBase = resolve(base);
+  }
+  try {
+    realTarget = realpathSync(worktreePath);
+  } catch {
+    // Target may already be gone — apply containment against the lexical
+    // resolve so a missing dir doesn't bypass the check.
+    realTarget = resolve(worktreePath);
+  }
+  const within = realTarget === realBase || realTarget.startsWith(realBase + sep);
+  if (!within) {
+    return badRequest(
+      `worktreePath is outside the project's worktree base (project: ${projectPath})`,
+    );
+  }
+  return null;
+}
+
 export function removeWorktree(
   projectPath: string,
   worktreePath: string,
 ): ResultAsync<void, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
+      const containmentErr = assertWorktreeInProjectBase(projectPath, worktreePath);
+      if (containmentErr) throw containmentErr;
+
       const result = await gitWrite(['worktree', 'remove', '-f', worktreePath], {
         cwd: projectPath,
         reject: false,
@@ -240,6 +327,12 @@ export function removeWorktree(
       // Fallback: on Windows, file locks (antivirus, IDE, stale processes) commonly
       // prevent `git worktree remove`. Force-delete the directory, then prune the
       // worktree bookkeeping so git stays consistent.
+      //
+      // Re-verify containment immediately before the rm — even though the
+      // path was checked up-front, defense-in-depth catches any code path
+      // that swaps the variable between then and now.
+      const recheck = assertWorktreeInProjectBase(projectPath, worktreePath);
+      if (recheck) throw recheck;
       await rm(worktreePath, { recursive: true, force: true });
       await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
 
@@ -254,6 +347,19 @@ export function removeWorktree(
       return internal(String(error));
     },
   );
+}
+
+/**
+ * Public helper for callers (route layer, thread resolvers) that need to
+ * confirm a worktree path is within a given project's base before consuming
+ * it as a cwd or destructive target. Returns null if valid, a DomainError
+ * otherwise. Uses realpath so symlinks cannot escape.
+ */
+export function checkWorktreePathInProject(
+  projectPath: string,
+  worktreePath: string,
+): DomainError | null {
+  return assertWorktreeInProjectBase(projectPath, worktreePath);
 }
 
 export function removeBranch(

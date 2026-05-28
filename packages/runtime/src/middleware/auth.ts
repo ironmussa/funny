@@ -49,6 +49,15 @@ const sessionCache = new Map<
 const SESSION_CACHE_TTL = 15_000; // 15 seconds — balance between performance and session revocation freshness
 
 /**
+ * Security ME-7: cache lookups are only honoured for read-only methods
+ * (GET / HEAD / OPTIONS). A user who logged out continues to see cached
+ * authorization for read traffic for up to `SESSION_CACHE_TTL`, but any
+ * mutating verb forces a fresh `/api/auth/get-session` round-trip so a
+ * stale session can't perform destructive writes during the cache window.
+ */
+const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
  * Direct auth middleware — validates sessions without relying on forwarded headers.
  *
  * Priority:
@@ -115,7 +124,10 @@ export async function authMiddleware(c: Context, next: Next) {
     const cacheKey = new Bun.CryptoHasher('sha256').update(cookie).digest('hex');
 
     const cached = sessionCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
+    // Security ME-7: read traffic may use the cache; mutating verbs must
+    // re-validate so a stale (post-logout / post-revoke) session can't be
+    // used to perform destructive writes during the cache window.
+    if (cached && cached.expiresAt > Date.now() && READ_ONLY_METHODS.has(c.req.method)) {
       c.set('userId', cached.userId);
       c.set('userRole', cached.role);
       c.set('organizationId', cached.orgId);

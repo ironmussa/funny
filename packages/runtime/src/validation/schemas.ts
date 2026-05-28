@@ -264,6 +264,33 @@ export const updateThreadSchema = z.object({
   stage: threadStageSchema.optional(),
 });
 
+/**
+ * Security ME-3: regex for git ref / hash arguments that are passed
+ * positionally to `git checkout` / `revert` / `reset` / `cherry-pick`. The
+ * route layer takes these from the request body, and previously had no
+ * schema — a value like `--force` or `-d branch` would be interpreted by
+ * git as a flag rather than a ref.
+ *
+ * The regex matches the characters git itself allows in ref names plus
+ * commit hashes (`^/~@:` for special refs like `HEAD^`, `origin/foo`,
+ * `branch@{1}`, `commit:path`). Trailing whitespace / control chars are
+ * rejected. Leading `-` is forbidden by the `.refine` so flag injection
+ * (the actual exploit class) is closed.
+ */
+export const gitRefSchema = z
+  .string()
+  .min(1, 'ref is required')
+  .max(255, 'ref is too long')
+  .regex(
+    /^[A-Za-z0-9._/@^~:{}=-]+$/,
+    'ref contains characters that are not valid in a git ref or commit hash',
+  )
+  .refine((s) => !s.startsWith('-'), 'ref must not start with "-"');
+
+export const checkoutHashSchema = z.object({ hash: gitRefSchema });
+export const revertCommitSchema = z.object({ hash: gitRefSchema });
+export const resetHardSchema = z.object({ hash: gitRefSchema });
+
 export const stageFilesSchema = z.object({
   paths: z.array(z.string()).min(1, 'paths must not be empty'),
 });
@@ -391,14 +418,21 @@ export const gitInitSchema = z.object({
   path: z.string().min(1, 'path is required'),
 });
 
+// Security ME-4: leading-`-` rejection is the ACTUAL defense against
+// `gh repo create <flag>` flag-injection — the character-class regex on
+// its own still admits e.g. `--no-clobber` because `-` is a valid char in
+// real repo/org names. Apply both to `name` and `org` for symmetry.
+const ghRepoIdentSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9_.-]+$/, 'Invalid repository / org name')
+  .refine((s) => !s.startsWith('-'), 'Name must not start with "-"');
+
 export const publishRepoSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(100)
-    .regex(/^[a-zA-Z0-9_.-]+$/, 'Invalid repository name'),
+  name: ghRepoIdentSchema,
   description: z.string().max(350).optional(),
-  org: z.string().optional(),
+  org: ghRepoIdentSchema.optional(),
   private: z.boolean().default(true),
 });
 

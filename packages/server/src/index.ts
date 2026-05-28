@@ -12,6 +12,7 @@ import { join, resolve } from 'path';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { cors } from 'hono/cors';
+import { csrf } from 'hono/csrf';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
@@ -32,6 +33,29 @@ if (!process.env.RUNNER_AUTH_SECRET) {
     namespace: 'server',
   });
   process.exit(1);
+}
+
+// Security CR-1: the three shared secrets cross independent trust boundaries
+// (runner↔server, orchestrator↔server, external webhook→runner). Reusing one
+// value across them means compromise of any single path leaks all three.
+// Refuse to boot when any two are set to the same value.
+{
+  const { findDuplicateSecretPairs } = await import('./lib/secret-check.js');
+  const duplicates = findDuplicateSecretPairs({
+    RUNNER_AUTH_SECRET: process.env.RUNNER_AUTH_SECRET,
+    INGEST_WEBHOOK_SECRET: process.env.INGEST_WEBHOOK_SECRET,
+    ORCHESTRATOR_AUTH_SECRET: process.env.ORCHESTRATOR_AUTH_SECRET,
+  });
+  if (duplicates.length > 0) {
+    log.error(
+      'Shared secrets must be distinct. Generate a fresh value for each with `openssl rand -hex 32`.',
+      {
+        namespace: 'server',
+        duplicates: duplicates.map(([a, b]) => `${a} === ${b}`),
+      },
+    );
+    process.exit(1);
+  }
 }
 
 // ── Always initialize server DB and auth ────────────────
@@ -70,6 +94,15 @@ const corsOrigins = process.env.CORS_ORIGIN
   : [`http://localhost:${devClientPort}`, `http://127.0.0.1:${devClientPort}`];
 
 app.use('*', cors({ origin: corsOrigins, credentials: true }));
+// Security HI-7: defense-in-depth on top of `SameSite=Strict` session cookies.
+// `csrf()` blocks form-submittable POSTs (form-urlencoded / multipart /
+// text/plain — the CORS-"simple" content types that browsers send cross-
+// origin WITHOUT preflight) unless the Origin matches the allowlist. JSON
+// requests are unaffected because they require CORS preflight and so are
+// already gated by the same allowlist via the `cors()` middleware above.
+// Runner/orchestrator/proxy traffic is JSON-only, so this is invisible to
+// them.
+app.use('*', csrf({ origin: corsOrigins }));
 app.use(
   '*',
   secureHeaders({
@@ -94,7 +127,14 @@ app.use(
       // weaponize than inline-script XSS.
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
-      connectSrc: ["'self'", 'ws:', 'wss:'],
+      // Security HI-9: `'self'` already authorises same-origin `ws://` /
+      // `wss://` upgrades; the prior wildcard `ws:` / `wss:` allowed any
+      // host and was a convenient exfil channel for a compromised script
+      // (open a WebSocket to `wss://attacker.example` and stream session
+      // contents). Cross-origin WebSocket targets must be added explicitly
+      // by a future deployment that needs them (e.g. a remote analytics
+      // collector) — keep the default closed.
+      connectSrc: ["'self'"],
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
@@ -112,16 +152,23 @@ app.use(
     xContentTypeOptions: true,
   }),
 );
-// Relax COOP and CSP for the MCP OAuth callback page.
-// The popup navigates cross-origin through the OAuth provider and back,
-// so same-origin COOP breaks window.opener (needed for postMessage + window.close).
-// The callback HTML also uses an inline script for postMessage/close.
-app.use('/api/mcp/oauth/callback', async (c, next) => {
+// Security HI-10: CSP/COOP override for the MCP OAuth callback page and its
+// same-origin script. The runtime now serves the page WITHOUT an inline
+// script — the HTML loads `/api/mcp/oauth/callback.js` instead — so we can
+// drop `script-src 'unsafe-inline'` and restore origin isolation via
+// `Cross-Origin-Opener-Policy: same-origin-allow-popups` (still preserves
+// `window.opener` for the parent that launched the popup, but isolates us
+// from the cross-origin OAuth provider's intermediate page).
+//
+// Match the runtime's override exactly so a response that lands here
+// (server is in front of the runner via tunnel/proxy) is not silently
+// loosened on its way back to the browser.
+app.use('/api/mcp/oauth/callback*', async (c, next) => {
   await next();
-  c.res.headers.set('Cross-Origin-Opener-Policy', 'unsafe-none');
+  c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   c.res.headers.set(
     'Content-Security-Policy',
-    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
   );
 });
 
@@ -150,6 +197,14 @@ app.use('/api/auth/get-session', rateLimit({ windowMs: 60_000, max: 600 }));
 // Scoped narrowly so it does not block high-frequency reads like get-session.
 app.use('/api/auth/sign-in/*', rateLimit({ windowMs: 60_000, max: 60 }));
 app.use('/api/auth/sign-up/*', rateLimit({ windowMs: 60_000, max: 60 }));
+
+// Security HI-12: per-account login throttle — IP rate limiting alone does
+// not stop a distributed brute force against a single username/email.
+// `loginThrottleMiddleware` reads the identifier from the request body,
+// rejects 429 if it is currently locked, otherwise hands the request to
+// Better Auth and records failure/success based on the response status.
+const { loginThrottleMiddleware } = await import('./middleware/login-throttle.js');
+app.use('/api/auth/sign-in/*', loginThrottleMiddleware);
 // Generous catch-all for any other auth endpoints
 app.use('/api/auth/*', rateLimit({ windowMs: 60_000, max: 600 }));
 // Strict rate limit on invite link registration: 20 per minute per IP
@@ -239,7 +294,13 @@ if (existsSync(clientDistDir)) {
 // ── Server ──────────────────────────────────────────────
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-const HOST = process.env.HOST || '0.0.0.0';
+// Security CR-7: default to loopback. The auto-generated admin credentials
+// (`~/.funny/admin-password.txt`) are written *after* the server starts
+// listening; binding all interfaces by default opens a window where the
+// stock admin/admin race is reachable from the LAN/internet. Operators who
+// genuinely want remote exposure set HOST=0.0.0.0 explicitly.
+const { resolveHost } = await import('./lib/host-default.js');
+const HOST = resolveHost(process.env.HOST);
 
 // Initialize Socket.IO server with Bun-native engine
 const { createSocketIOServer, closeSocketIO } = await import('./services/socketio.js');

@@ -263,10 +263,33 @@ projectRoutes.post('/:id/local-path', async (c) => {
 });
 
 // ── Startup Commands CRUD (DB-backed, handled by server) ──
+//
+// Security CR-6: each route below verifies that the caller can access the
+// parent project (owner or org member). Mutations also scope the command-id
+// lookup to the parent projectId so a guessed id from another project
+// cannot be modified or deleted.
+
+/** Returns true when the user owns the project or is a member of an org that owns it. */
+async function userCanAccessProject(
+  projectId: string,
+  userId: string,
+  orgId: string | null,
+): Promise<boolean> {
+  const project = await projectRepo.getProject(projectId);
+  if (!project) return false;
+  if (project.userId === userId) return true;
+  if (orgId && (await projectRepo.isProjectInOrg(projectId, orgId))) return true;
+  return false;
+}
 
 /** GET /api/projects/:id/commands — list commands for a project */
 projectRoutes.get('/:id/commands', async (c) => {
   const projectId = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
   const commands = await cmdRepo.listCommands(projectId);
   return c.json(commands);
 });
@@ -274,6 +297,11 @@ projectRoutes.get('/:id/commands', async (c) => {
 /** POST /api/projects/:id/commands — create a new command */
 projectRoutes.post('/:id/commands', async (c) => {
   const projectId = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
   const { label, command } = await c.req.json<{ label: string; command: string }>();
   if (!label || !command) {
     return c.json({ error: 'label and command are required' }, 400);
@@ -284,7 +312,13 @@ projectRoutes.post('/:id/commands', async (c) => {
 
 /** PUT /api/projects/:id/commands/:cmdId — update a command */
 projectRoutes.put('/:id/commands/:cmdId', async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
   const { label, command, port, portEnvVar } = await c.req.json<{
     label: string;
     command: string;
@@ -294,13 +328,19 @@ projectRoutes.put('/:id/commands/:cmdId', async (c) => {
   if (!label || !command) {
     return c.json({ error: 'label and command are required' }, 400);
   }
-  await cmdRepo.updateCommand(cmdId, { label, command, port, portEnvVar });
+  await cmdRepo.updateCommand(cmdId, projectId, { label, command, port, portEnvVar });
   return c.json({ ok: true });
 });
 
 /** DELETE /api/projects/:id/commands/:cmdId — delete a command */
 projectRoutes.delete('/:id/commands/:cmdId', async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
-  await cmdRepo.deleteCommand(cmdId);
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+  await cmdRepo.deleteCommand(cmdId, projectId);
   return c.json({ ok: true });
 });

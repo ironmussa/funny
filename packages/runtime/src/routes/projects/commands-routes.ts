@@ -16,16 +16,34 @@ import { createCommandSchema, validate } from '../../validation/schemas.js';
 
 export const projectCommandsRoutes = new Hono<HonoEnv>();
 
+// Security CR-6: every CRUD route below validates project ownership via
+// requireProject *before* touching startup-commands. Mutations also pass
+// the parent projectId to the repo so a guessed cmdId from another project
+// cannot be modified or deleted. The command body is shell-exec'd by
+// command-runner.ts, so an IDOR here is RCE-equivalent.
+
 // GET /api/projects/:id/commands
 projectCommandsRoutes.get('/:id/commands', async (c) => {
-  const id = c.req.param('id');
-  const commands = await getServices().startupCommands.listCommands(id);
+  const projectId = c.req.param('id');
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const commands = await getServices().startupCommands.listCommands(projectId);
   return c.json(commands);
 });
 
 // POST /api/projects/:id/commands
 projectCommandsRoutes.post('/:id/commands', async (c) => {
   const projectId = c.req.param('id');
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const raw = await c.req.json();
   const parsed = validate(createCommandSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
@@ -37,20 +55,39 @@ projectCommandsRoutes.post('/:id/commands', async (c) => {
 
 // PUT /api/projects/:id/commands/:cmdId
 projectCommandsRoutes.put('/:id/commands/:cmdId', async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const raw = await c.req.json();
   const parsed = validate(createCommandSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const { label, command, port, portEnvVar } = parsed.value;
 
-  await getServices().startupCommands.updateCommand(cmdId, { label, command, port, portEnvVar });
+  await getServices().startupCommands.updateCommand(cmdId, projectId, {
+    label,
+    command,
+    port,
+    portEnvVar,
+  });
   return c.json({ ok: true });
 });
 
 // DELETE /api/projects/:id/commands/:cmdId
 projectCommandsRoutes.delete('/:id/commands/:cmdId', async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
-  await getServices().startupCommands.deleteCommand(cmdId);
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  await getServices().startupCommands.deleteCommand(cmdId, projectId);
   return c.json({ ok: true });
 });
 
@@ -172,7 +209,9 @@ projectCommandsRoutes.post('/:id/sync-processes', requireAdmin, async (c) => {
       });
       synced++;
     } else if (match.command !== proc.command) {
-      await getServices().startupCommands.updateCommand(match.id, {
+      // Security CR-6: pass projectId so the repo can scope the SQL `WHERE`
+      // by parent project.
+      await getServices().startupCommands.updateCommand(match.id, projectId, {
         label: proc.name,
         command: proc.command,
       });

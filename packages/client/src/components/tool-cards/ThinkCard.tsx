@@ -6,12 +6,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
 
+// Security ME-9: rehypeSanitize is mandatory on every ReactMarkdown sink
+// (see MessageContent.tsx). Lazy-loaded alongside react-markdown.
 const LazyMarkdown = lazy(() =>
-  import('react-markdown').then(({ default: ReactMarkdown }) => ({
-    default: function ThinkMarkdown({ content }: { content: string }) {
-      return <ReactMarkdown remarkPlugins={remarkPlugins}>{content}</ReactMarkdown>;
-    },
-  })),
+  Promise.all([import('react-markdown'), import('rehype-sanitize')]).then(
+    ([{ default: ReactMarkdown }, { default: rehypeSanitize }]) => ({
+      default: function ThinkMarkdown({ content }: { content: string }) {
+        return (
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={[rehypeSanitize]}>
+            {content}
+          </ReactMarkdown>
+        );
+      },
+    }),
+  ),
 );
 
 export function ThinkCard({

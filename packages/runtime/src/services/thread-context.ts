@@ -74,7 +74,26 @@ export function canDoGitOps(thread: Pick<Thread, 'isScratch'>): boolean {
  * Derive (without persisting) the on-disk scratch directory for a thread.
  * The directory is created lazily on first agent spawn and removed on
  * thread delete — see `agent-lifecycle.ts` and `thread-service/update.ts`.
+ *
+ * Security L-1: enforce the path-traversal invariant at the boundary.
+ * `userId` comes from Better Auth (nanoid-style) and `threadId` is
+ * server-generated via `nanoid()`, so in practice neither contains `..`
+ * or `/`. But this function is the single source of truth for the scratch
+ * cwd, which becomes the trusted scope for browse / file / search routes
+ * and the agent's working directory. An explicit regex makes the
+ * invariant local and obvious — call sites no longer need to remember
+ * that they're feeding it sanitised values.
  */
+const SCRATCH_ID_RE = /^[A-Za-z0-9_-]+$/;
+
 export function scratchPathFor(userId: string, threadId: string): string {
+  if (!SCRATCH_ID_RE.test(userId)) {
+    throw new Error(`scratchPathFor: userId failed shape check (got: ${JSON.stringify(userId)})`);
+  }
+  if (!SCRATCH_ID_RE.test(threadId)) {
+    throw new Error(
+      `scratchPathFor: threadId failed shape check (got: ${JSON.stringify(threadId)})`,
+    );
+  }
   return join(homedir(), '.funny', 'scratch', userId, threadId);
 }

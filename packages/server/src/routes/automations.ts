@@ -56,22 +56,26 @@ automationRoutes.get('/inbox', async (c) => {
 
 // GET /api/automations?projectId=xxx
 automationRoutes.get('/', async (c) => {
-  const userId = c.get('userId') as string;
+  // Security ME-5: previously `if (userId) filters.push(...)` made the
+  // tenant filter conditional. The auth middleware always populates userId,
+  // so this was effectively safe — but a future code path that reaches
+  // this handler with `isRunner=true, userId=undefined` (or any other
+  // bypass) would silently return EVERY user's automations. Match the
+  // shape of `/inbox` and `/:id`: explicit 401 when missing, hard filter
+  // otherwise.
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
   const projectId = c.req.query('projectId');
 
-  const filters: ReturnType<typeof eq>[] = [];
+  const filters: ReturnType<typeof eq>[] = [eq(automations.userId, userId)];
   if (projectId) {
     filters.push(eq(automations.projectId, projectId));
   }
-  if (userId) {
-    filters.push(eq(automations.userId, userId));
-  }
 
-  const condition = filters.length > 0 ? and(...filters) : undefined;
   const result = await db
     .select()
     .from(automations)
-    .where(condition)
+    .where(and(...filters))
     .orderBy(desc(automations.createdAt));
 
   return c.json(result);

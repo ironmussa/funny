@@ -20,6 +20,7 @@ import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
+import { safeFetchUserUrl } from '../../lib/ssrf-guard.js';
 import {
   augmentPromptWithFiles,
   augmentPromptWithSymbols,
@@ -427,6 +428,17 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
   let needsBranchCheckout = false;
 
   if (params.worktreePath) {
+    // Security CR-4: client-supplied worktreePath becomes the cwd for
+    // browse/file-index/text-search/agent-spawn. An attacker who supplies
+    // an absolute path outside the project's worktree base — `/etc`,
+    // another user's HOME, etc. — would otherwise pivot every downstream
+    // file/command op into that scope. Verify against the project's
+    // worktree base (`getWorktreeBasePath(projectPath)`) using realpath.
+    const { checkWorktreePathInProject } = await import('@funny/core/git');
+    const containmentErr = checkWorktreePathInProject(projectPath, params.worktreePath);
+    if (containmentErr) {
+      throw new ThreadServiceError(containmentErr.message, 400);
+    }
     worktreePath = params.worktreePath;
     const branchResult = await getCurrentBranch(params.worktreePath);
     if (branchResult.isOk()) threadBranch = branchResult.value;
@@ -551,9 +563,14 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
         containerName,
       });
 
-      // Forward the initial prompt to the container's Funny server
+      // Forward the initial prompt to the container's Funny server.
+      //
+      // Security HI-5: `containerUrl` is returned by the project's launcher
+      // (a project-config'd URL), so a compromised launcher response could
+      // point at a cloud-metadata endpoint. `safeFetchUserUrl` blocks IMDS
+      // ranges while allowing legitimate LAN container URLs.
       try {
-        const res = await fetch(`${containerUrl}/api/threads`, {
+        const res = await safeFetchUserUrl(`${containerUrl}/api/threads`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

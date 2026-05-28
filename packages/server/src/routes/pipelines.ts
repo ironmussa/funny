@@ -280,15 +280,20 @@ pipelineRoutes.post('/orchestrator/progress', async (c) => {
 
 // GET /api/pipelines/project/:projectId
 pipelineRoutes.get('/project/:projectId', async (c) => {
+  const userId = c.get('userId') as string;
   const { projectId } = c.req.param();
-  const rows = await pipelineRepo.getPipelinesByProject(projectId);
+  // Security CR-5: scope to caller's pipelines so cross-tenant rows are
+  // filtered server-side rather than relying on the project belonging to
+  // the user (project ownership is enforced separately).
+  const rows = await pipelineRepo.getPipelinesByProject(projectId, userId);
   return c.json(rows);
 });
 
 // GET /api/pipelines/:id
 pipelineRoutes.get('/:id', async (c) => {
+  const userId = c.get('userId') as string;
   const { id } = c.req.param();
-  const pipeline = await pipelineRepo.getPipelineById(id);
+  const pipeline = await pipelineRepo.getPipelineById(id, userId);
   if (!pipeline) return c.json({ error: 'Pipeline not found' }, 404);
   return c.json(pipeline);
 });
@@ -324,16 +329,17 @@ pipelineRoutes.post('/', async (c) => {
     testFixerPrompt: body.testFixerPrompt,
   });
 
-  const pipeline = await pipelineRepo.getPipelineById(id);
+  const pipeline = await pipelineRepo.getPipelineById(id, userId);
   return c.json(pipeline, 201);
 });
 
 // PATCH /api/pipelines/:id
 pipelineRoutes.patch('/:id', async (c) => {
+  const userId = c.get('userId') as string;
   const { id } = c.req.param();
   const body = await c.req.json();
 
-  const existing = await pipelineRepo.getPipelineById(id);
+  const existing = await pipelineRepo.getPipelineById(id, userId);
   if (!existing) return c.json({ error: 'Pipeline not found' }, 404);
 
   const updates: Record<string, unknown> = {};
@@ -361,23 +367,27 @@ pipelineRoutes.patch('/:id', async (c) => {
     updates.testFixMaxIterations = body.testFixMaxIterations;
   if (body.testFixerPrompt !== undefined) updates.testFixerPrompt = body.testFixerPrompt || null;
 
-  await pipelineRepo.updatePipeline(id, updates);
-  return c.json(await pipelineRepo.getPipelineById(id));
+  await pipelineRepo.updatePipeline(id, userId, updates);
+  return c.json(await pipelineRepo.getPipelineById(id, userId));
 });
 
 // DELETE /api/pipelines/:id
 pipelineRoutes.delete('/:id', async (c) => {
+  const userId = c.get('userId') as string;
   const { id } = c.req.param();
-  const existing = await pipelineRepo.getPipelineById(id);
+  const existing = await pipelineRepo.getPipelineById(id, userId);
   if (!existing) return c.json({ error: 'Pipeline not found' }, 404);
 
-  await pipelineRepo.deletePipeline(id);
+  await pipelineRepo.deletePipeline(id, userId);
   return c.json({ ok: true });
 });
 
 // GET /api/pipelines/runs/thread/:threadId
 pipelineRoutes.get('/runs/thread/:threadId', async (c) => {
+  const userId = c.get('userId') as string;
   const { threadId } = c.req.param();
-  const runs = await pipelineRepo.getRunsForThread(threadId);
+  // Security CR-5: getRunsForThread verifies thread ownership internally and
+  // returns [] for cross-tenant lookups.
+  const runs = await pipelineRepo.getRunsForThread(threadId, userId);
   return c.json(runs);
 });

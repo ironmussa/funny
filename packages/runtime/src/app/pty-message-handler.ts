@@ -25,23 +25,51 @@ export function handlePtyMessage(
   userId: string,
   send: (msg: any) => void,
 ): void {
+  // Security CR-2: every non-spawn op must verify the caller owns the
+  // session. Previously only `pty:spawn` checked the user against the
+  // project allow-list — `write`, `resize`, `kill`, `signal`, and `restore`
+  // accepted any `data.id`, which let an authenticated user inject input
+  // into another tenant's running shell or read their scrollback.
+  const requireOwnership = (op: string): boolean => {
+    const ptyId = typeof data?.id === 'string' ? data.id : '';
+    if (!ptyId) {
+      log.warn('PTY op missing id — dropping', { namespace: 'ws', op, userId });
+      return false;
+    }
+    if (!ptyManager.assertSessionAccess(ptyId, userId)) {
+      log.warn('PTY op denied: session not owned by user', {
+        namespace: 'ws',
+        op,
+        ptyId,
+        userId,
+      });
+      return false;
+    }
+    return true;
+  };
+
   switch (type) {
     case 'pty:spawn':
       handlePtySpawn(data, userId, send);
       break;
     case 'pty:write':
+      if (!requireOwnership('pty:write')) break;
       ptyManager.writePty(data.id, data.data);
       break;
     case 'pty:resize':
+      if (!requireOwnership('pty:resize')) break;
       ptyManager.resizePty(data.id, data.cols, data.rows);
       break;
     case 'pty:kill':
+      if (!requireOwnership('pty:kill')) break;
       ptyManager.killPty(data.id);
       break;
     case 'pty:signal':
+      if (!requireOwnership('pty:signal')) break;
       handlePtySignal(data);
       break;
     case 'pty:restore':
+      if (!requireOwnership('pty:restore')) break;
       handlePtyRestore(data, send);
       break;
     default:

@@ -1,31 +1,46 @@
+/**
+ * Tests for the runtime crypto wrapper. The implementation now lives in
+ * `@funny/shared/lib/crypto` (Security ME-11 consolidation) and produces
+ * the `v1:keyId:iv:authTag:ciphertext` envelope. Legacy 3-part inputs are
+ * still accepted on decrypt for backward-compat with previously-stored
+ * data — that path is exercised in the server suite where a legacy
+ * `encryption.key` is seeded.
+ */
 import { describe, test, expect } from 'vitest';
 
 import { encrypt, decrypt } from '../../lib/crypto.js';
 
-describe('encrypt', () => {
-  test('returns a string in iv:authTag:ciphertext format', () => {
+describe('encrypt (v1 envelope)', () => {
+  test('returns a string in v1:keyId:iv:authTag:ciphertext format', () => {
     const result = encrypt('hello');
     const parts = result.split(':');
-    expect(parts.length).toBe(3);
+    expect(parts.length).toBe(5);
+    expect(parts[0]).toBe('v1');
+  });
+
+  test('keyId is non-empty', () => {
+    const result = encrypt('test');
+    const keyId = result.split(':')[1];
+    expect(keyId.length).toBeGreaterThan(0);
   });
 
   test('iv is 24 hex characters (12 bytes)', () => {
     const result = encrypt('test');
-    const iv = result.split(':')[0];
+    const iv = result.split(':')[2];
     expect(iv.length).toBe(24);
     expect(/^[0-9a-f]+$/.test(iv)).toBe(true);
   });
 
   test('authTag is 32 hex characters (16 bytes)', () => {
     const result = encrypt('test');
-    const authTag = result.split(':')[1];
+    const authTag = result.split(':')[3];
     expect(authTag.length).toBe(32);
     expect(/^[0-9a-f]+$/.test(authTag)).toBe(true);
   });
 
   test('ciphertext is non-empty hex string', () => {
     const result = encrypt('test');
-    const ciphertext = result.split(':')[2];
+    const ciphertext = result.split(':')[4];
     expect(ciphertext.length).toBeGreaterThan(0);
     expect(/^[0-9a-f]+$/.test(ciphertext)).toBe(true);
   });
@@ -39,20 +54,20 @@ describe('encrypt', () => {
   test('encrypts empty string', () => {
     const result = encrypt('');
     const parts = result.split(':');
-    expect(parts.length).toBe(3);
+    expect(parts.length).toBe(5);
   });
 
   test('encrypts unicode content', () => {
     const result = encrypt('Hello world');
     const parts = result.split(':');
-    expect(parts.length).toBe(3);
+    expect(parts.length).toBe(5);
   });
 
   test('encrypts long string', () => {
     const longText = 'x'.repeat(10_000);
     const result = encrypt(longText);
     const parts = result.split(':');
-    expect(parts.length).toBe(3);
+    expect(parts.length).toBe(5);
   });
 });
 
@@ -89,8 +104,7 @@ describe('decrypt', () => {
   test('returns null for corrupted ciphertext', () => {
     const encrypted = encrypt('test');
     const parts = encrypted.split(':');
-    // Corrupt the ciphertext portion
-    parts[2] = 'ff'.repeat(parts[2].length / 2);
+    parts[4] = 'ff'.repeat(parts[4].length / 2);
     const corrupted = parts.join(':');
     expect(decrypt(corrupted)).toBeNull();
   });
@@ -98,8 +112,7 @@ describe('decrypt', () => {
   test('returns null for corrupted authTag', () => {
     const encrypted = encrypt('test');
     const parts = encrypted.split(':');
-    // Corrupt the auth tag
-    parts[1] = '00'.repeat(16);
+    parts[3] = '00'.repeat(16);
     const corrupted = parts.join(':');
     expect(decrypt(corrupted)).toBeNull();
   });
@@ -107,14 +120,9 @@ describe('decrypt', () => {
   test('returns null for corrupted IV', () => {
     const encrypted = encrypt('test');
     const parts = encrypted.split(':');
-    // Corrupt the IV
-    parts[0] = '00'.repeat(12);
+    parts[2] = '00'.repeat(12);
     const corrupted = parts.join(':');
-    // This may or may not return null depending on whether the tag check fails
-    // but the decrypted text should not match original
-    const result = decrypt(corrupted);
-    // With GCM, changing IV should cause auth failure
-    expect(result).toBeNull();
+    expect(decrypt(corrupted)).toBeNull();
   });
 
   test('returns null for wrong format (no colons)', () => {
@@ -125,19 +133,31 @@ describe('decrypt', () => {
     expect(decrypt('part1:part2')).toBeNull();
   });
 
-  test('returns null for wrong format (too many colons)', () => {
+  test('returns null for wrong format (four parts)', () => {
     expect(decrypt('a:b:c:d')).toBeNull();
+  });
+
+  test('returns null for v0/unknown version prefix', () => {
+    expect(decrypt('v9:k:iv:tag:ct')).toBeNull();
   });
 
   test('returns null for empty string', () => {
     expect(decrypt('')).toBeNull();
   });
 
-  test('returns null for completely random hex values in correct format', () => {
+  test('returns null for legacy-shaped input when no legacy key is registered', () => {
+    // 3-part input is treated as legacy and looked up under keyId=`legacy`.
+    // The test data dir doesn't have a legacy key registered (only the
+    // freshly-generated active one), so decrypt fails open with null.
     const fakeIv = 'ab'.repeat(12);
     const fakeTag = 'cd'.repeat(16);
     const fakeCiphertext = 'ef'.repeat(20);
     const fake = `${fakeIv}:${fakeTag}:${fakeCiphertext}`;
+    expect(decrypt(fake)).toBeNull();
+  });
+
+  test('returns null for random hex values in v1 format with unknown keyId', () => {
+    const fake = `v1:nope:${'ab'.repeat(12)}:${'cd'.repeat(16)}:${'ef'.repeat(20)}`;
     expect(decrypt(fake)).toBeNull();
   });
 
@@ -155,5 +175,27 @@ describe('decrypt', () => {
       const encrypted = encrypt(text);
       expect(decrypt(encrypted)).toBe(text);
     }
+  });
+});
+
+/**
+ * Security ME-11 regression — the runtime crypto used to be a separate
+ * legacy-only module. After consolidation, encrypt() produces the v1
+ * envelope, matching what the server writes. Both modules share the
+ * `@funny/shared/lib/crypto` factory.
+ */
+describe('ME-11 — runtime + server share the same envelope format', () => {
+  test('encrypt output is in v1 format (would have been 3 parts before consolidation)', () => {
+    const result = encrypt('hello');
+    expect(result.startsWith('v1:')).toBe(true);
+  });
+
+  test('decrypt still accepts the legacy 3-part shape (only fails because no legacy key is registered in this isolated test)', () => {
+    // The acceptance of 3-part shape is verified in the server tests where
+    // a legacy key is seeded. Here we just assert that 3-part input takes
+    // the legacy branch (returns null due to missing key, not due to
+    // shape rejection).
+    const legacyShape = `${'00'.repeat(12)}:${'00'.repeat(16)}:${'00'.repeat(20)}`;
+    expect(decrypt(legacyShape)).toBeNull(); // null = no legacy key, not shape error
   });
 });

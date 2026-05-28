@@ -9,6 +9,46 @@ import { defaultRateLimit } from '../middleware/rate-limit.js';
 import { tracingMiddleware } from '../middleware/tracing.js';
 import { ingestRoutes } from '../routes/ingest.js';
 
+/**
+ * Security HI-8 + HI-9: CSP/HSTS posture for any Hono app that may serve the
+ * SPA dist or otherwise hand HTML to a browser. Previously the runtime used
+ * `secureHeaders()` with defaults (no CSP, no HSTS) — when the runner was
+ * reached directly (dev mode or `WS_TUNNEL_ONLY=false`) the SPA loaded with
+ * materially weaker headers than via the server, so any XSS that slipped
+ * past the server's CSP would face no second layer here.
+ *
+ * The connect-src policy below intentionally drops the legacy global `ws:`
+ * source (HI-9): `'self'` already authorises same-origin `ws://` /
+ * `wss://` upgrades, so the wildcard was both broader than needed and a
+ * convenient exfil channel for any compromised script.
+ */
+function buildSecureHeadersConfig() {
+  return {
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      // Monaco editor workers are bundled via Vite's `?worker` imports and
+      // served from same-origin in prod; dev builds may use blob: URLs.
+      workerSrc: ["'self'", 'blob:'],
+      // Acknowledged limitation (M3): the SPA uses inline `style=` props +
+      // Radix UI primitives that compute positioning inline at runtime.
+      // Mirrors the server's config so the runtime doesn't become the
+      // weaker tier.
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+    strictTransportSecurity: 'max-age=31536000; includeSubDomains',
+    xContentTypeOptions: true,
+  };
+}
+
 interface Options {
   /** Client dev server port for CORS (default: 5173) */
   clientPort: number;
@@ -25,7 +65,7 @@ export function setupMiddleware(app: Hono, { clientPort, corsOrigin }: Options):
   app.onError(handleError);
 
   app.use('*', honoLogger());
-  app.use('*', secureHeaders());
+  app.use('*', secureHeaders(buildSecureHeadersConfig()));
   app.use(
     '*',
     cors({

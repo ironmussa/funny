@@ -34,6 +34,9 @@ import {
   stageFilesSchema,
   stagePatchSchema,
   resolveConflictSchema,
+  checkoutHashSchema,
+  revertCommitSchema,
+  resetHardSchema,
 } from '../../validation/schemas.js';
 import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
@@ -138,10 +141,20 @@ stageRoutes.post('/project/:projectId/checkout-commit', async (c) => {
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const { hash } = await c.req.json().catch(() => ({}));
-  if (!hash) return c.json({ error: 'hash is required' }, 400);
+  // Security ME-3: `hash` from the request body is passed positionally to
+  // `git checkout`. Without a schema, a value like `--force` would be
+  // interpreted as a flag. `gitRefSchema` rejects leading-`-` and any char
+  // not valid in a git ref / hash.
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(checkoutHashSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceCheckoutHash(projectId, userId, cwdResult.value, hash);
+  const result = await gitServiceCheckoutHash(
+    projectId,
+    userId,
+    cwdResult.value,
+    parsed.value.hash,
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -155,10 +168,16 @@ stageRoutes.post('/project/:projectId/revert-commit', async (c) => {
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const { hash } = await c.req.json().catch(() => ({}));
-  if (!hash) return c.json({ error: 'hash is required' }, 400);
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(revertCommitSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceRevertCommit(projectId, userId, cwdResult.value, hash);
+  const result = await gitServiceRevertCommit(
+    projectId,
+    userId,
+    cwdResult.value,
+    parsed.value.hash,
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -172,10 +191,11 @@ stageRoutes.post('/project/:projectId/reset-hard', async (c) => {
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const { hash } = await c.req.json().catch(() => ({}));
-  if (!hash) return c.json({ error: 'hash is required' }, 400);
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(resetHardSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceResetHard(projectId, userId, cwdResult.value, hash);
+  const result = await gitServiceResetHard(projectId, userId, cwdResult.value, parsed.value.hash);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -377,10 +397,12 @@ stageRoutes.post('/:threadId/checkout-commit', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const { hash } = await c.req.json();
-  if (!hash) return c.json({ error: 'hash is required' }, 400);
+  // Security ME-3: see project-scoped route above for context.
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(checkoutHashSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceCheckoutHash(threadId, userId, cwdResult.value, hash);
+  const result = await gitServiceCheckoutHash(threadId, userId, cwdResult.value, parsed.value.hash);
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
@@ -394,10 +416,11 @@ stageRoutes.post('/:threadId/revert-commit', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const { hash } = await c.req.json();
-  if (!hash) return c.json({ error: 'hash is required' }, 400);
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(revertCommitSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceRevertCommit(threadId, userId, cwdResult.value, hash);
+  const result = await gitServiceRevertCommit(threadId, userId, cwdResult.value, parsed.value.hash);
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
@@ -411,10 +434,11 @@ stageRoutes.post('/:threadId/reset-hard', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const { hash } = await c.req.json();
-  if (!hash) return c.json({ error: 'hash is required' }, 400);
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(resetHardSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServiceResetHard(threadId, userId, cwdResult.value, hash);
+  const result = await gitServiceResetHard(threadId, userId, cwdResult.value, parsed.value.hash);
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });

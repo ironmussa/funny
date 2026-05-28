@@ -3,7 +3,14 @@ import { tmpdir } from 'os';
 import { resolve } from 'path';
 
 import { executeSync } from '../git/process.js';
-import { createWorktree, listWorktrees, removeWorktree, removeBranch } from '../git/worktree.js';
+import {
+  checkWorktreePathInProject,
+  createWorktree,
+  listWorktrees,
+  removeWorktree,
+  removeBranch,
+  shouldRegisterSafeDirectory,
+} from '../git/worktree.js';
 
 const TMP = resolve(tmpdir(), 'core-worktree-test-' + Date.now());
 
@@ -168,6 +175,128 @@ describe('worktree operations', () => {
       if (result.isErr()) {
         expect(result.error.message).toMatch(/must not start with/i);
       }
+    });
+  });
+
+  /*
+   * Security CR-3 — `removeWorktree` previously took `worktreePath` verbatim
+   * from the request body and ran `git worktree remove -f <path>` followed
+   * by an unconditional `rm -rf <path>` on failure. That let an attacker
+   * delete arbitrary directories writable by the runner UID (`~/.ssh`,
+   * `~/.funny/encryption.key`, etc.). The current code calls
+   * `assertWorktreeInProjectBase` first; these tests pin that down.
+   */
+  describe('worktreePath containment (security CR-3)', () => {
+    test('checkWorktreePathInProject accepts a worktree under the project base', async () => {
+      const result = await createWorktree(repoPath, 'contained-1');
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(checkWorktreePathInProject(repoPath, result.value)).toBeNull();
+      }
+    });
+
+    test('checkWorktreePathInProject rejects /etc', () => {
+      const err = checkWorktreePathInProject(repoPath, '/etc');
+      expect(err).not.toBeNull();
+      expect(err?.message).toMatch(/outside the project's worktree base/i);
+    });
+
+    test('checkWorktreePathInProject rejects leading-dash', () => {
+      const err = checkWorktreePathInProject(repoPath, '-rf');
+      expect(err).not.toBeNull();
+      expect(err?.message).toMatch(/must not start with/i);
+    });
+
+    test('checkWorktreePathInProject rejects sibling of project (escape attempt)', () => {
+      const sibling = resolve(repoPath, '..', 'other-project');
+      const err = checkWorktreePathInProject(repoPath, sibling);
+      expect(err).not.toBeNull();
+    });
+
+    test('removeWorktree refuses /etc — does not delete anything', async () => {
+      const result = await removeWorktree(repoPath, '/etc');
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toMatch(/outside the project's worktree base/i);
+      }
+      // Sanity: /etc still exists.
+      expect(existsSync('/etc')).toBe(true);
+    });
+
+    test('removeWorktree refuses an unrelated dir even if it exists', async () => {
+      // Create a sibling dir of the project; removeWorktree must refuse it.
+      const sibling = resolve(repoPath, '..', 'sibling-victim');
+      mkdirSync(sibling, { recursive: true });
+      writeFileSync(resolve(sibling, 'precious.txt'), 'do not delete me');
+      try {
+        const result = await removeWorktree(repoPath, sibling);
+        expect(result.isErr()).toBe(true);
+        expect(existsSync(resolve(sibling, 'precious.txt'))).toBe(true);
+      } finally {
+        rmSync(sibling, { recursive: true, force: true });
+      }
+    });
+  });
+
+  /*
+   * Security HI-4 — `ensureSafeDirectory` writes the path into
+   * `git config --global --add safe.directory <path>`, which is global
+   * runner state. A leading-`-` value would be interpreted by `git
+   * config` as a flag; a system-prefix path would persistently widen
+   * what git trusts. `shouldRegisterSafeDirectory` is the pure predicate
+   * that gates the gitWrite call.
+   */
+  describe('shouldRegisterSafeDirectory (security HI-4)', () => {
+    test('accepts a normal absolute project path', () => {
+      expect(shouldRegisterSafeDirectory('/home/user/projects/foo')).toBe(true);
+    });
+
+    test('accepts a Windows-style absolute path', () => {
+      expect(shouldRegisterSafeDirectory('C:\\Users\\me\\proj')).toBe(true);
+      expect(shouldRegisterSafeDirectory('D:/projects/foo')).toBe(true);
+    });
+
+    test('rejects leading-dash (flag injection)', () => {
+      expect(shouldRegisterSafeDirectory('-rf')).toBe(false);
+      expect(shouldRegisterSafeDirectory('--exec=cmd')).toBe(false);
+      expect(shouldRegisterSafeDirectory('-c')).toBe(false);
+    });
+
+    test('rejects empty / non-string', () => {
+      expect(shouldRegisterSafeDirectory('')).toBe(false);
+      expect(shouldRegisterSafeDirectory(undefined)).toBe(false);
+      expect(shouldRegisterSafeDirectory(null)).toBe(false);
+      expect(shouldRegisterSafeDirectory(123 as unknown)).toBe(false);
+    });
+
+    test('rejects null byte', () => {
+      expect(shouldRegisterSafeDirectory('/home/user/proj\0extra')).toBe(false);
+    });
+
+    test('rejects non-absolute paths', () => {
+      expect(shouldRegisterSafeDirectory('relative/path')).toBe(false);
+      expect(shouldRegisterSafeDirectory('./foo')).toBe(false);
+    });
+
+    test('rejects system-prefix paths', () => {
+      for (const p of [
+        '/etc',
+        '/etc/passwd',
+        '/proc/1',
+        '/sys',
+        '/dev/null',
+        '/run/foo',
+        '/boot/grub',
+        '/root/.ssh',
+      ]) {
+        expect(shouldRegisterSafeDirectory(p)).toBe(false);
+      }
+    });
+
+    test('accepts /etcetera (not /etc) — prefix match must check separator', () => {
+      // Sanity: prevent over-broad rejection.
+      expect(shouldRegisterSafeDirectory('/etcetera')).toBe(true);
+      expect(shouldRegisterSafeDirectory('/var-extended')).toBe(true);
     });
   });
 });

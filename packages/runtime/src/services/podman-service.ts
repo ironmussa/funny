@@ -15,6 +15,7 @@ import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync, errAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { safeFetchUserUrl } from '../lib/ssrf-guard.js';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -72,8 +73,13 @@ export function launchContainer(
       // 3. Call launcher API to start container
       const containerName = `funny-${threadId}`;
 
+      // Security HI-5: launcherUrl is project-config (anyone with project
+      // write access can set it). Without a guard, the runner can be aimed
+      // at `http://169.254.169.254/` (cloud-metadata IMDS) to exfiltrate
+      // the host's IAM credentials. `safeFetchUserUrl` blocks that range
+      // unconditionally while still allowing legitimate LAN launchers.
       return ResultAsync.fromPromise(
-        fetch(`${launcherUrl}/start`, {
+        safeFetchUserUrl(`${launcherUrl}/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -122,8 +128,9 @@ export function launchContainer(
 export function stopContainer(options: StopContainerOptions): ResultAsync<void, DomainError> {
   const { containerName, launcherUrl, remove = true } = options;
 
+  // Security HI-5: see launchContainer.
   return ResultAsync.fromPromise(
-    fetch(`${launcherUrl}/stop`, {
+    safeFetchUserUrl(`${launcherUrl}/stop`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ containerName, remove }),
@@ -146,16 +153,17 @@ export function getContainerStatus(
   containerName: string,
   launcherUrl: string,
 ): ResultAsync<ContainerStatus, DomainError> {
+  // Security HI-5: see launchContainer.
   return ResultAsync.fromPromise(
-    fetch(`${launcherUrl}/status?containerName=${encodeURIComponent(containerName)}`).then(
-      async (res) => {
-        if (!res.ok) {
-          const text = await res.text().catch(() => 'Unknown error');
-          throw new Error(`Launcher returned ${res.status}: ${text}`);
-        }
-        return res.json();
-      },
-    ),
+    safeFetchUserUrl(
+      `${launcherUrl}/status?containerName=${encodeURIComponent(containerName)}`,
+    ).then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => 'Unknown error');
+        throw new Error(`Launcher returned ${res.status}: ${text}`);
+      }
+      return res.json();
+    }),
     (error) => internal(`Failed to get container status: ${error}`),
   ).map((status: any) => ({
     containerName: status.containerName ?? containerName,

@@ -22,6 +22,7 @@ import { setIO as setTunnelIO } from './ws-tunnel.js';
 let io: SocketIOServer | null = null;
 let engine: BunEngine | null = null;
 let authInstance: any = null;
+let allowedOrigins: string[] = [];
 
 // ── Per-socket rate limiter ─────────────────────────────
 
@@ -62,6 +63,7 @@ export function createSocketIOServer(
   corsOrigins: string[],
 ): { io: SocketIOServer; engine: BunEngine } {
   authInstance = auth;
+  allowedOrigins = corsOrigins;
 
   // Create the Bun-native engine (replaces engine.io)
   engine = new BunEngine({
@@ -126,6 +128,22 @@ export async function closeSocketIO(): Promise<void> {
 
 // ── Browser Namespace (/) ────────────────────────────────
 
+/**
+ * Security ME-8 — pure predicate for the browser-namespace upgrade gate.
+ *
+ * If the operator widens `CORS_ORIGIN` to include an attacker-controllable
+ * origin (a common deployment mistake), the engine's CORS check at upgrade
+ * time still admits it; this explicit re-check inside the namespace gives
+ * us a second gate that's local to the surface and trivially testable.
+ *
+ * Non-browser callers without an Origin header are refused (real browsers
+ * always send Origin for WebSocket upgrades).
+ */
+export function isAllowedBrowserOrigin(origin: string | undefined, allowlist: string[]): boolean {
+  if (!origin) return false;
+  return allowlist.includes(origin);
+}
+
 function setupBrowserNamespace(): void {
   if (!io) return;
 
@@ -134,6 +152,17 @@ function setupBrowserNamespace(): void {
   // Auth middleware: validate session cookie
   browserNsp.use(async (socket, next) => {
     try {
+      // Security ME-8: defense-in-depth Origin check on top of the engine's
+      // CORS handling. See `isAllowedBrowserOrigin` for the predicate.
+      const origin = socket.handshake.headers.origin as string | undefined;
+      if (!isAllowedBrowserOrigin(origin, allowedOrigins)) {
+        log.warn('Socket.IO browser namespace rejected upgrade: Origin not in allowlist', {
+          namespace: 'socketio',
+          origin: origin ?? null,
+        });
+        return next(new Error('Origin not allowed'));
+      }
+
       const cookieHeader = socket.handshake.headers.cookie;
       if (!cookieHeader) {
         return next(new Error('No session cookie'));

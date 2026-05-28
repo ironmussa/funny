@@ -6,7 +6,9 @@
  * adds filesystem/git validation on top of these operations.
  */
 
-import { resolve, isAbsolute } from 'path';
+import { realpathSync } from 'fs';
+import { homedir } from 'os';
+import { basename, dirname, resolve, isAbsolute, sep } from 'path';
 
 import { isGitRepoSync, isGitRepoRootSync, ensureWeaveConfigured } from '@funny/core/git';
 import type { Project, FollowUpMode } from '@funny/shared';
@@ -20,6 +22,166 @@ import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 
 type ProjectRow = typeof schema.projects.$inferSelect;
+
+// ── Security HI-3: project-path sanity check ─────────────────
+//
+// `createProject` previously accepted any absolute path provided it was a
+// git repo on the server's filesystem. On single-node deployments
+// (server + runner on the same host — the default `bun run dev` setup) that
+// let any authenticated user register `/var/lib/<service>/.git`, system
+// repos, or another user's tree as their project. Once registered, the
+// path becomes the trusted scope for `requireProjectPath`, granting
+// file/index/search/agent-spawn access across the host.
+//
+// The defenses below are layered:
+//   1. Reject traversal (`..`), leading-`-` (flag injection), and absolute
+//      paths under known system directories regardless of platform.
+//   2. When filesystem checks are enabled (single-node mode), realpath the
+//      path and require it sits inside one of the caller-relevant homes —
+//      either the OS user's `$HOME` (single-node) or a recorded org-server
+//      data root via the `FUNNY_PROJECT_ROOT` env override (deployments
+//      that genuinely need a wider scope can opt in explicitly).
+//
+// In team-mode (server and runner on different hosts) `isGitRepoSync` on
+// the server is already false for the runner's paths, so the filesystem
+// check naturally rejects them — the prefix block still catches the
+// edge case of a server with `/var` etc. accessible.
+
+/** Unix-style absolute paths that must never become a project root. */
+const PROJECT_BLOCKED_PREFIXES = [
+  '/etc',
+  '/proc',
+  '/sys',
+  '/dev',
+  '/run',
+  '/boot',
+  '/root',
+  '/var',
+  '/usr',
+  '/lib',
+  '/lib64',
+  '/sbin',
+  '/bin',
+  '/srv',
+  '/opt/funny', // app's own install dir; never register itself
+];
+
+/** Windows-style system roots that must never become a project root. */
+const PROJECT_BLOCKED_WINDOWS_PREFIXES = [
+  'C:\\Windows',
+  'C:\\Program Files',
+  'C:\\Program Files (x86)',
+  'C:\\ProgramData',
+  'C:\\$Recycle.Bin',
+  'C:\\System Volume Information',
+];
+
+function projectPathRealpathOrAnchor(target: string): string {
+  let current = resolve(target);
+  const missing: string[] = [];
+  for (let i = 0; i < 64; i++) {
+    try {
+      const real = realpathSync(current);
+      return missing.length === 0 ? real : resolve(real, ...missing.reverse());
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return resolve(target);
+      missing.push(basename(current));
+      current = parent;
+    }
+  }
+  return resolve(target);
+}
+
+function isUnderPath(target: string, scope: string): boolean {
+  const t = target;
+  const s = resolve(scope);
+  return t === s || t.startsWith(s + sep);
+}
+
+function isUnderPathCaseInsensitive(target: string, scope: string): boolean {
+  const t = target.toLowerCase();
+  const s = resolve(scope).toLowerCase();
+  return t === s || t.startsWith(s + sep);
+}
+
+/**
+ * Returns null when the path is acceptable as a project root, or a
+ * DomainError describing why it was rejected. Pure function: only filesystem
+ * read is `realpath`.
+ */
+function validateProjectPath(rawPath: string, skipFsCheck: boolean): DomainError | null {
+  if (typeof rawPath !== 'string' || rawPath.length === 0) {
+    return badRequest('Project path must be a non-empty string');
+  }
+  if (rawPath.startsWith('-')) {
+    return badRequest('Project path must not start with "-"');
+  }
+  if (rawPath.includes('\0')) {
+    return badRequest('Project path contains a null byte');
+  }
+  if (!isAbsolute(rawPath)) {
+    return badRequest('Project path must be absolute');
+  }
+  if (rawPath.split(/[\\/]/).includes('..')) {
+    return badRequest('Project path must not contain ".." segments');
+  }
+
+  const lexical = resolve(rawPath);
+
+  // Cross-platform: reject Unix system prefixes regardless of platform.
+  // (A server running on Linux must not register `/etc`; a Windows server
+  // hitting `/etc` via an unusual layout still gets the wrong answer back.)
+  for (const prefix of PROJECT_BLOCKED_PREFIXES) {
+    if (lexical === prefix || lexical.startsWith(prefix + '/')) {
+      return badRequest(`Project path is in a restricted system directory: ${prefix}`);
+    }
+  }
+  for (const prefix of PROJECT_BLOCKED_WINDOWS_PREFIXES) {
+    if (isUnderPathCaseInsensitive(lexical, prefix)) {
+      return badRequest(`Project path is in a restricted system directory: ${prefix}`);
+    }
+  }
+
+  if (skipFsCheck) return null;
+
+  // Filesystem-aware checks (single-node deployments).
+  const real = projectPathRealpathOrAnchor(rawPath);
+  // Re-check prefixes against the realpath — a symlink at /home/user/sneaky
+  // pointing to /etc would otherwise still slip through.
+  for (const prefix of PROJECT_BLOCKED_PREFIXES) {
+    if (real === prefix || real.startsWith(prefix + '/')) {
+      return badRequest(`Project path resolves to a restricted system directory: ${prefix}`);
+    }
+  }
+  for (const prefix of PROJECT_BLOCKED_WINDOWS_PREFIXES) {
+    if (isUnderPathCaseInsensitive(real, prefix)) {
+      return badRequest(`Project path resolves to a restricted system directory: ${prefix}`);
+    }
+  }
+
+  // Containment to the OS user's $HOME (the realpath of $HOME), unless an
+  // operator opts in to a wider root via FUNNY_PROJECT_ROOT (comma-sep list
+  // of additional allowed roots — e.g. /workspaces for codespaces-style
+  // deployments).
+  const allowedRoots: string[] = [projectPathRealpathOrAnchor(homedir())];
+  const extraRoots = process.env.FUNNY_PROJECT_ROOT;
+  if (extraRoots) {
+    for (const r of extraRoots
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      allowedRoots.push(projectPathRealpathOrAnchor(r));
+    }
+  }
+  const allowed = allowedRoots.some((root) => isUnderPath(real, root));
+  if (!allowed) {
+    return badRequest(
+      `Project path must live under the server's $HOME (or a path in FUNNY_PROJECT_ROOT). Path resolves to: ${real}`,
+    );
+  }
+  return null;
+}
 
 function toProject(row: ProjectRow): Project {
   const {
@@ -152,9 +314,11 @@ export async function createProject(
   /** Skip filesystem checks (git repo validation). Use when the caller already verified the path (e.g. runner after clone). */
   skipFsCheck?: boolean,
 ): Promise<Result<Project, DomainError>> {
-  if (!isAbsolute(rawPath)) {
-    return err(badRequest('Project path must be absolute'));
-  }
+  // Security HI-3: layered path validation (see `validateProjectPath`).
+  // Catches `/etc`, `/var/*`, Windows system dirs, symlink escapes from $HOME,
+  // and leading-`-` flag-injection candidates before touching the filesystem.
+  const pathErr = validateProjectPath(rawPath, skipFsCheck ?? false);
+  if (pathErr) return err(pathErr);
   const path = resolve(rawPath);
 
   if (!skipFsCheck) {
@@ -299,9 +463,11 @@ export async function updateProject(
 
   let resolvedPath: string | undefined;
   if (fields.path !== undefined) {
-    if (!isAbsolute(fields.path)) {
-      return err(badRequest('Project path must be absolute'));
-    }
+    // Security HI-3: mirror createProject's containment check on update too,
+    // so a user can't bypass the rule by creating a benign project and then
+    // PATCHing the path.
+    const pathErr = validateProjectPath(fields.path, false);
+    if (pathErr) return err(pathErr);
     resolvedPath = resolve(fields.path);
     if (!isGitRepoSync(resolvedPath)) {
       return err(badRequest(`Not a git repository: ${resolvedPath}`));

@@ -1,6 +1,7 @@
 import { Download, FileQuestion, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
 import { ImageLightbox } from '@/components/ImageLightbox';
@@ -310,7 +311,15 @@ function MarkdownPreview({
         lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
       }}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      {/* Security ME-9: rehypeSanitize is mandatory on every ReactMarkdown sink
+       *  (MessageContent.tsx documents the policy). Without it, raw HTML in a
+       *  previewed file would render — react-markdown defaults to escaping it,
+       *  but the policy is explicit and any future plugin that enables raw
+       *  HTML (rehype-raw) would silently turn this into an XSS sink.
+       */}
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }

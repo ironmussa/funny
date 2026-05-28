@@ -544,6 +544,61 @@ export function spawnPty(
   }
 }
 
+/**
+ * Security CR-2: ownership lookup used by `pty-message-handler.ts` to reject
+ * write / resize / kill / signal / restore operations against sessions that
+ * don't belong to the requesting user.
+ *
+ * In runner mode, sessions reattached after a process restart may not have a
+ * `userId` until a request adopts them. Mirror the policy from
+ * `listActiveSessions`: in runner mode (one user per runner) adopt the first
+ * requesting userId; in non-runner mode the answer is strict.
+ *
+ * Returns:
+ *  - "owner"      → session exists and belongs to `userId`
+ *  - "unowned"    → session exists with no userId yet (caller decides
+ *                   whether adoption is allowed for this op)
+ *  - "denied"     → session exists but belongs to a different user
+ *  - "not_found"  → no such session
+ */
+export type PtyOwnership = 'owner' | 'unowned' | 'denied' | 'not_found';
+
+export function checkSessionOwnership(ptyId: string, userId: string): PtyOwnership {
+  const session = activeSessions.get(ptyId);
+  if (!session) return 'not_found';
+  if (!session.userId) return 'unowned';
+  return session.userId === userId ? 'owner' : 'denied';
+}
+
+/**
+ * Adopt an unowned session into the caller's name. Only safe in runner mode
+ * (one user per runner) — `pty-message-handler.ts` gates the call.
+ */
+export function adoptSession(ptyId: string, userId: string): void {
+  const session = activeSessions.get(ptyId);
+  if (session && !session.userId) session.userId = userId;
+}
+
+/**
+ * Single decision point for "may this user act on this PTY session?".
+ *
+ * - In runner mode: adopt unowned sessions (the previous behaviour for
+ *   reattached daemons), then enforce strict ownership.
+ * - In server-attached mode: never adopt — every session must have a
+ *   recorded owner or the op is rejected.
+ *
+ * Returns true when the op should proceed.
+ */
+export function assertSessionAccess(ptyId: string, userId: string): boolean {
+  const status = checkSessionOwnership(ptyId, userId);
+  if (status === 'owner') return true;
+  if (status === 'unowned' && isRunnerMode) {
+    adoptSession(ptyId, userId);
+    return true;
+  }
+  return false;
+}
+
 export function writePty(id: string, data: string): void {
   backend.write(id, data);
 }

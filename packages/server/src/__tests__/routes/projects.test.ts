@@ -14,6 +14,13 @@ mock.module('@funny/core/git', () => ({
   ensureWeaveConfigured: () => Promise.resolve(),
 }));
 
+// Security HI-3: createProject now requires the path to live under $HOME
+// or an explicitly opted-in root via FUNNY_PROJECT_ROOT. The integration
+// tests use `/tmp/*` placeholder paths (the DB is in-memory, so no file is
+// actually touched) — opt the test process into `/tmp` so those paths
+// pass validation without changing every test fixture.
+process.env.FUNNY_PROJECT_ROOT = '/tmp';
+
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';

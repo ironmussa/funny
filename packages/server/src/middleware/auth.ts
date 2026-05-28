@@ -160,42 +160,80 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
           );
         }
 
+        // Security HI-13: loopback shared-secret registration previously
+        // silently bound the runner to the first admin user. Any local
+        // process able to read `RUNNER_AUTH_SECRET` (it sits in the
+        // operator's `.env`) could register itself as admin's runner —
+        // turning a low-privilege local user / sidecar / malicious npm
+        // postinstall into an admin-proxying runner without any consent
+        // signal.
+        //
+        // The new policy: operators who want the dev convenience must opt
+        // in explicitly with `FUNNY_LOOPBACK_RUNNER_USERNAME=<name>`, which
+        // selects which user the loopback runner binds to. Without that
+        // env var the request is refused with guidance to use the
+        // invite-token flow (Settings > Profile generates one).
+        const optInUsername = process.env.FUNNY_LOOPBACK_RUNNER_USERNAME;
+        if (!optInUsername) {
+          log.warn('Loopback runner registration refused: no explicit opt-in', {
+            namespace: 'auth',
+          });
+          audit({
+            action: 'auth.runner_rejected',
+            actorId: null,
+            detail:
+              'Loopback shared-secret runner registration requires FUNNY_LOOPBACK_RUNNER_USERNAME opt-in',
+            meta: { path, method: c.req.method },
+          });
+          return c.json(
+            {
+              error:
+                'Runner registration requires X-Runner-Invite-Token. ' +
+                'Generate one from Settings > Profile, or set FUNNY_LOOPBACK_RUNNER_USERNAME ' +
+                'to allow loopback registration under that account.',
+            },
+            401,
+          );
+        }
         try {
-          // Loopback registration resolves to the admin user so that the
-          // single-host dev flow keeps working without manual token wiring.
-          // The "user" table is managed by Better Auth, so we query it via
-          // the raw DB connection (works with both SQLite and PostgreSQL).
+          // Security L-3: use the Drizzle query builder (with dialect-aware
+          // schema) instead of raw SQL. The previous pg branch built a raw
+          // `sql\`...\`` template; even though the value was parameterised,
+          // the pattern is brittle (any caller who reuses it with a
+          // non-literal column name or a future refactor that drops the
+          // `${value}` binding turns it into an injection sink). One path
+          // for both dialects also keeps the sqlite + pg behaviour aligned.
           const { db, dbDialect } = await import('../db/index.js');
-          let adminId: string | undefined;
+          const { getSchema } = await import('@funny/shared/db/schema');
+          const { eq } = await import('drizzle-orm');
+          const s = getSchema(dbDialect) as { user: any };
+          const rows = (await (db as any)
+            .select({ id: s.user.id })
+            .from(s.user)
+            .where(eq(s.user.username, optInUsername))
+            .limit(1)) as Array<{ id: string }>;
+          const resolvedUserId = rows[0]?.id;
 
-          if (dbDialect === 'pg') {
-            const { sql } = await import('drizzle-orm');
-            const result = await (db as any).execute(
-              sql`SELECT id FROM "user" WHERE role = 'admin' LIMIT 1`,
-            );
-            const rows = result?.rows ?? result;
-            adminId = rows?.[0]?.id;
-          } else {
-            const { getConnection } = await import('../db/index.js');
-            const conn = getConnection();
-            if (conn?.sqlite) {
-              const row = conn.sqlite
-                .query('SELECT id FROM "user" WHERE role = ? LIMIT 1')
-                .get('admin') as { id: string } | null;
-              adminId = row?.id;
-            }
-          }
-
-          if (adminId) {
-            c.set('userId', adminId);
-          } else {
-            log.error('No admin user found — runner cannot register without userId', {
-              namespace: 'auth',
+          if (resolvedUserId) {
+            c.set('userId', resolvedUserId);
+            audit({
+              action: 'runner.register',
+              actorId: resolvedUserId,
+              detail: 'Loopback runner registration via FUNNY_LOOPBACK_RUNNER_USERNAME opt-in',
+              meta: { username: optInUsername },
             });
-            return c.json({ error: 'No admin user found for runner association' }, 500);
+          } else {
+            log.error('FUNNY_LOOPBACK_RUNNER_USERNAME points at a non-existent user', {
+              namespace: 'auth',
+              username: optInUsername,
+            });
+            return c.json(
+              { error: `FUNNY_LOOPBACK_RUNNER_USERNAME "${optInUsername}" not found` },
+              500,
+            );
           }
         } catch (err) {
-          log.error('Failed to resolve admin userId for runner registration', {
+          log.error('Failed to resolve loopback runner userId', {
             namespace: 'auth',
             error: (err as Error).message,
           });

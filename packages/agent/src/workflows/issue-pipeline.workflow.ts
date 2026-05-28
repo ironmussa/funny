@@ -122,8 +122,7 @@ export class IssuePipelineWorkflow implements IWorkflow {
     );
 
     // Step 4: Commit changes
-    const { push, createPR, execute: gitExec } = await import('@funny/core/git');
-    const { executeShell } = await import('@funny/core/git');
+    const { push, createPR, execute: gitExec, commit } = await import('@funny/core/git');
     const identity = process.env.GH_TOKEN ? { githubToken: process.env.GH_TOKEN } : undefined;
 
     const statusResult = await gitExec('git', ['status', '--porcelain'], {
@@ -135,10 +134,22 @@ export class IssuePipelineWorkflow implements IWorkflow {
       const commitMsg = isPromptOnly
         ? `feat: ${issue.title}`
         : `fix: ${issue.title} (Closes #${issue.number})`;
-      await executeShell(`git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, {
-        cwd: worktreePath,
-        reject: false,
-      });
+      // Security CR-8: issue.title is attacker-controlled (GitHub issues are
+      // externally creatable). The previous `executeShell` form interpolated
+      // it into `sh -c`, which made `$()` / backticks / `${…}` a shell-RCE
+      // sink. Use argv-based add + commit so the title is never parsed by a
+      // shell.
+      const addResult = await gitExec('git', ['add', '-A'], { cwd: worktreePath, reject: false });
+      if (addResult.exitCode !== 0) {
+        logger.warn({ sessionId, stderr: addResult.stderr }, 'git add -A failed');
+      }
+      const commitResult = await commit(worktreePath, commitMsg, undefined, false, false);
+      if (commitResult.isErr()) {
+        logger.warn(
+          { sessionId, err: commitResult.error },
+          'commit failed — continuing to push step',
+        );
+      }
     }
 
     // Step 5: Push + create PR

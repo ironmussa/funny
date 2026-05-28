@@ -201,6 +201,27 @@ describe('Thread Routes (Integration)', () => {
       expect(body.projectId).toBe('p1');
       expect(body.userId).toBe('user-1');
     });
+
+    /*
+     * Security CR-4 — `worktreePath` is intentionally NOT in the PATCH
+     * allow-list. It's set exclusively by the runtime's `createWorktree`
+     * flow and identifies a directory the runner trusts as cwd. Letting
+     * clients overwrite it lets them pivot the runner to /etc, another
+     * user's HOME, etc., bypassing path-scope checks.
+     */
+    test('PATCH refuses to set worktreePath even when supplied (CR-4)', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      // Attacker tries to PATCH the cwd to /etc — the field is not in the
+      // allow-list so the update must NOT apply.
+      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
+        worktreePath: '/etc',
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.worktreePath).not.toBe('/etc');
+    });
   });
 
   // ── PATCH /api/threads/:id/status ──────────────────────

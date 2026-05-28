@@ -389,7 +389,12 @@ threadRoutes.patch('/:id', async (c) => {
   const thread = await threadRepo.getThread(id);
   if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
-  // Extract only valid update fields
+  // Security CR-4: `worktreePath` is intentionally NOT in the PATCH allow-
+  // list. It is set exclusively by the runtime's `createWorktree` flow and
+  // identifies a directory the runner trusts as a cwd for agent spawn,
+  // browse, ripgrep, and uploads. Letting clients overwrite it lets them
+  // pivot the runner to `/etc`, another user's HOME, etc., bypassing
+  // path-scope checks.
   const allowedFields = [
     'title',
     'status',
@@ -403,7 +408,6 @@ threadRoutes.patch('/:id', async (c) => {
     'baseBranch',
     'permissionMode',
     'provider',
-    'worktreePath',
   ];
   const updates: Record<string, any> = {};
   for (const key of allowedFields) {

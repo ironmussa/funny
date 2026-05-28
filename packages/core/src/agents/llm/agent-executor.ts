@@ -10,7 +10,9 @@
  * Uses the agent run protocol (POST /v1/runs) instead of OpenAI format.
  */
 
+import { lookup } from 'dns/promises';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
+import { isIP } from 'net';
 import { join } from 'path';
 
 import { z } from 'zod';
@@ -20,6 +22,84 @@ import { executeShell } from '../../git/process.js';
 import type { AgentRole, AgentContext, AgentResult, Finding } from './agent-context.js';
 import { createBrowserTools, type BrowserToolsHandle } from './browser-tools.js';
 import { loadContextDocs } from './context-loader.js';
+
+/**
+ * Security HI-5 — minimal SSRF guard for the LLM provider URL.
+ *
+ * The full `safeFetch` / `ssrf-guard.ts` lives in `packages/runtime` and we
+ * can't depend on it here (core must not import from runtime). The actual
+ * exploit class we care about is cloud-metadata exfiltration via
+ * attacker-controlled `baseURL`: a model config that points at
+ * `http://169.254.169.254/...` would let the runner's IAM credentials leak
+ * to whoever set the config. Local providers (Ollama, api-acp) legitimately
+ * use loopback, so we don't refuse RFC1918/loopback here — only the always-
+ * blocked ranges (link-local incl. IMDS, IPv4 "this-network", IPv6
+ * link-local + v4-mapped wrappers around the same).
+ *
+ * If a stricter policy is desired the runtime-side `safeFetchUserUrl`
+ * already exists; this inline check is just the floor.
+ */
+function isImdsOrAliasV4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false;
+  // 169.254.0.0/16 — link-local incl. AWS/GCP/Azure IMDS at 169.254.169.254
+  if (parts[0] === 169 && parts[1] === 254) return true;
+  // 0.0.0.0/8 — "this network"; some IMDS endpoints accept it as an alias
+  if (parts[0] === 0) return true;
+  return false;
+}
+
+function isImdsOrAliasV6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  if (lower.startsWith('fe80:')) return true; // link-local
+  const v4MappedMatch = lower.match(/^::ffff:([\d.]+)$/);
+  if (v4MappedMatch && isIP(v4MappedMatch[1]) === 4) return isImdsOrAliasV4(v4MappedMatch[1]);
+  return false;
+}
+
+async function assertNotImds(rawUrl: string): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`AgentExecutor: invalid baseURL: ${rawUrl}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`AgentExecutor: refusing non-http(s) baseURL (${parsed.protocol})`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('AgentExecutor: refusing baseURL with embedded credentials');
+  }
+  const rawHost = parsed.hostname;
+  if (!rawHost) throw new Error('AgentExecutor: baseURL has no hostname');
+  const hostname =
+    rawHost.startsWith('[') && rawHost.endsWith(']') ? rawHost.slice(1, -1) : rawHost;
+  const literalFamily = isIP(hostname);
+  if (literalFamily === 4) {
+    if (isImdsOrAliasV4(hostname)) {
+      throw new Error(
+        `AgentExecutor: baseURL points at cloud-metadata / this-network (${hostname})`,
+      );
+    }
+    return;
+  }
+  if (literalFamily === 6) {
+    if (isImdsOrAliasV6(hostname)) {
+      throw new Error(`AgentExecutor: baseURL points at link-local IPv6 (${hostname})`);
+    }
+    return;
+  }
+  const records = await lookup(hostname, { all: true });
+  for (const r of records) {
+    const family = (r.family === 6 ? 6 : 4) as 4 | 6;
+    const bad = family === 4 ? isImdsOrAliasV4(r.address) : isImdsOrAliasV6(r.address);
+    if (bad) {
+      throw new Error(
+        `AgentExecutor: baseURL host ${hostname} resolves to cloud-metadata/link-local (${r.address})`,
+      );
+    }
+  }
+}
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -138,6 +218,9 @@ export class AgentExecutor {
         // Call api-acp runs endpoint
         const url = `${this.baseURL}/v1/runs`;
         const prompt = conversationParts.join('\n\n');
+        // Security HI-5: block cloud-metadata / link-local destinations
+        // before connecting; baseURL is user-config'd via model overrides.
+        await assertNotImds(url);
         // debug: POST ${url} model=${this.modelId} tools=${runTools.length} step=${steps}
         const response = await fetch(url, {
           method: 'POST',

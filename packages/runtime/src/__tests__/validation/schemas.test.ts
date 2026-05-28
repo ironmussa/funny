@@ -13,6 +13,9 @@ import {
   mergeSchema,
   threadStageSchema,
   validate,
+  gitRefSchema,
+  checkoutHashSchema,
+  publishRepoSchema,
 } from '../../validation/schemas.js';
 
 // ── Enum schemas ─────────────────────────────────────────────
@@ -534,5 +537,88 @@ describe('validate', () => {
   test('returns err for null input', () => {
     const result = validate(createProjectSchema, null);
     expect(result.isErr()).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Security regression tests
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * ME-3 — git ref / hash argument schema. Without this guard, a body like
+ * `{ hash: "--force" }` would reach `git checkout --force` as a flag.
+ */
+describe('gitRefSchema (security ME-3)', () => {
+  test('accepts a normal commit hash', () => {
+    expect(gitRefSchema.safeParse('a1b2c3d4').success).toBe(true);
+  });
+
+  test('accepts ref shorthands (HEAD^, origin/main, branch@{1})', () => {
+    expect(gitRefSchema.safeParse('HEAD^').success).toBe(true);
+    expect(gitRefSchema.safeParse('origin/main').success).toBe(true);
+    expect(gitRefSchema.safeParse('feature/x').success).toBe(true);
+    expect(gitRefSchema.safeParse('branch@{1}').success).toBe(true);
+  });
+
+  test('rejects leading-dash (flag injection)', () => {
+    for (const candidate of ['-rf', '--exec=evil', '--no-verify', '-d']) {
+      expect(gitRefSchema.safeParse(candidate).success).toBe(false);
+    }
+  });
+
+  test('rejects shell metacharacters', () => {
+    for (const candidate of ['$(rm -rf /)', '`whoami`', 'a;ls', 'a|cat', 'a && b', 'a\nb', 'a b']) {
+      expect(gitRefSchema.safeParse(candidate).success).toBe(false);
+    }
+  });
+
+  test('rejects empty string and oversize', () => {
+    expect(gitRefSchema.safeParse('').success).toBe(false);
+    expect(gitRefSchema.safeParse('a'.repeat(256)).success).toBe(false);
+  });
+
+  test('checkoutHashSchema rejects leading-dash via the wrapping schema', () => {
+    const result = validate(checkoutHashSchema, { hash: '--force' });
+    expect(result.isErr()).toBe(true);
+  });
+
+  test('checkoutHashSchema accepts a real-looking hash', () => {
+    const result = validate(checkoutHashSchema, { hash: 'a1b2c3d4e5f6' });
+    expect(result.isOk()).toBe(true);
+  });
+});
+
+/**
+ * ME-4 — publishRepoSchema.org regex. Without it, `org: "--no-clobber"`
+ * would reach `gh repo create <flag>` as an argv flag.
+ */
+describe('publishRepoSchema.org (security ME-4)', () => {
+  test('accepts a normal org name', () => {
+    const result = publishRepoSchema.safeParse({
+      name: 'my-repo',
+      org: 'my-org',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects leading-dash org', () => {
+    const result = publishRepoSchema.safeParse({
+      name: 'my-repo',
+      org: '--no-clobber',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects shell metacharacters in org', () => {
+    const result = publishRepoSchema.safeParse({
+      name: 'my-repo',
+      org: 'evil$(whoami)',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('org is optional — schema passes without it', () => {
+    const result = publishRepoSchema.safeParse({ name: 'my-repo' });
+    expect(result.success).toBe(true);
   });
 });

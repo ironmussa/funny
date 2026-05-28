@@ -8,7 +8,7 @@
  * Fork a thread at a specific user message. For Claude threads, uses the
  * Claude Agent SDK's native `forkSession()` to slice the SDK transcript at
  * the matching transcript message UUID. For ACP-based providers (codex,
- * gemini, pi), spawns the agent CLI briefly and calls ACP's
+ * gemini, pi, cursor), spawns the agent CLI briefly and calls ACP's
  * `unstable_forkSession()` if the capability is advertised. Otherwise the
  * fork is a "branch the visible conversation" with no native session
  * continuity. In all cases the prefix of DB messages and tool calls are
@@ -28,7 +28,7 @@ import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { ThreadServiceError } from './helpers.js';
 
-const ACP_PROVIDERS = new Set(['codex', 'gemini', 'pi']);
+const ACP_PROVIDERS = new Set(['codex', 'gemini', 'pi', 'cursor']);
 
 export interface ForkThreadParams {
   sourceThreadId: string;

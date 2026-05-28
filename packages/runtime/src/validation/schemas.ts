@@ -24,7 +24,14 @@ function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
 
 export const threadModeSchema = z.enum(['local', 'worktree']);
 export const threadRuntimeSchema = z.enum(['local', 'remote']);
-export const agentProviderSchema = z.enum(['claude', 'codex', 'gemini', 'pi', 'deepagent']);
+export const agentProviderSchema = z.enum([
+  'claude',
+  'codex',
+  'gemini',
+  'pi',
+  'cursor',
+  'deepagent',
+]);
 export const claudeModelSchema = registryEnum('claude');
 export const codexModelSchema = registryEnum('codex');
 export const geminiModelSchema = registryEnum('gemini');
@@ -33,12 +40,15 @@ export const geminiModelSchema = registryEnum('gemini');
 // string here — `resolveModelId` already passes pi values through unchanged
 // and pi-acp itself rejects unknown model IDs at session time.
 export const piModelSchema = z.string().min(1);
+// Cursor's catalog is dynamic too (see cursor-discover.ts) — same shape as pi.
+export const cursorModelSchema = z.string().min(1);
 export const deepagentModelSchema = registryEnum('deepagent');
 export const agentModelSchema = z.union([
   claudeModelSchema,
   codexModelSchema,
   geminiModelSchema,
   piModelSchema,
+  cursorModelSchema,
   deepagentModelSchema,
 ]);
 
@@ -54,7 +64,7 @@ function validateProviderModel(
   const provider = data.provider;
   const model = data.model;
   if (!provider || !model) return;
-  if (provider === 'pi') return; // dynamic catalog
+  if (provider === 'pi' || provider === 'cursor') return; // dynamic catalogs
   if (!(provider in MODEL_REGISTRY)) return;
   const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
   if (!(model in bucket)) {

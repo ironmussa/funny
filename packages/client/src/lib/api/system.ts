@@ -25,6 +25,31 @@ export type PiModelsResponse =
       discoveredAt: number;
     };
 
+export interface CursorModelEntry {
+  modelId: string;
+  name: string;
+}
+
+export type CursorModelsResponse =
+  | {
+      ok: true;
+      models: CursorModelEntry[];
+      currentModelId: string | null;
+      discoveredAt: number;
+    }
+  | {
+      ok: false;
+      reason:
+        | 'spawn_failed'
+        | 'sdk_missing'
+        | 'auth_required'
+        | 'agent_error'
+        | 'no_models'
+        | 'timeout';
+      message: string | null;
+      discoveredAt: number;
+    };
+
 export const systemApi = {
   // Setup
   setupStatus: () =>
@@ -55,6 +80,10 @@ export const systemApi = {
   // Pi dynamic model catalog (spawns pi-acp on the runner to read what pi advertises).
   getPiModels: (refresh = false) =>
     request<PiModelsResponse>(`/system/pi/models${refresh ? '?refresh=1' : ''}`),
+
+  // Cursor dynamic model catalog (spawns cursor-agent acp on the runner).
+  getCursorModels: (refresh = false) =>
+    request<CursorModelsResponse>(`/system/cursor/models${refresh ? '?refresh=1' : ''}`),
 
   // Files (internal editor)
   readFile: (path: string) =>

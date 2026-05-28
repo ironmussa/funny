@@ -246,11 +246,26 @@ const piModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
+// Cursor CLI (https://cursor.com/docs/cli/acp) exposes its catalog through
+// the ACP session/new response. Like pi, the static registry only carries
+// the `default` sentinel — real model IDs are discovered at runtime via
+// `/system/cursor/models` and passed through `resolveModelId` as wire-format
+// strings that cursor's `unstable_setSessionModel` accepts.
+const cursorModels = {
+  default: {
+    id: 'default',
+    label: 'Cursor (configured default)',
+    contextWindow: 200_000,
+    i18nKey: 'cursorDefault',
+  },
+} as const satisfies Record<string, ModelDefinition>;
+
 export const MODEL_REGISTRY = {
   claude: claudeModels,
   codex: codexModels,
   gemini: geminiModels,
   pi: piModels,
+  cursor: cursorModels,
   deepagent: deepagentModels,
 } as const;
 
@@ -260,8 +275,15 @@ export type ClaudeModel = keyof typeof claudeModels;
 export type CodexModel = keyof typeof codexModels;
 export type GeminiModel = keyof typeof geminiModels;
 export type PiModel = keyof typeof piModels;
+export type CursorModel = keyof typeof cursorModels;
 export type DeepAgentModel = keyof typeof deepagentModels;
-export type AgentModel = ClaudeModel | CodexModel | GeminiModel | PiModel | DeepAgentModel;
+export type AgentModel =
+  | ClaudeModel
+  | CodexModel
+  | GeminiModel
+  | PiModel
+  | CursorModel
+  | DeepAgentModel;
 
 // Helper: narrow a provider string to keys of its sub-registry.
 type ModelsOf<P extends keyof typeof MODEL_REGISTRY> = keyof (typeof MODEL_REGISTRY)[P];
@@ -275,6 +297,7 @@ const PROVIDER_DEFAULT_MODEL: Record<keyof typeof MODEL_REGISTRY, AgentModel> = 
   codex: 'gpt-5.4',
   gemini: 'gemini-3.1-pro-preview',
   pi: 'default',
+  cursor: 'default',
   deepagent: 'minimax-m2.7',
 };
 
@@ -292,9 +315,10 @@ const PROVIDER_ATTACHMENT_LIMITS: Record<AgentProvider, AttachmentLimits> = {
   claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
   codex: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
   gemini: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 18 * MB, hardMaxBytes: 20 * MB },
-  // Pi and DeepAgent route through multiple upstream providers — use the
-  // smallest common ceiling so we never exceed the weakest backend.
+  // Pi, Cursor and DeepAgent route through multiple upstream providers — use
+  // the smallest common ceiling so we never exceed the weakest backend.
   pi: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  cursor: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   'llm-api': { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   external: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
@@ -312,6 +336,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   codex: 'Codex',
   gemini: 'Gemini',
   pi: 'Pi',
+  cursor: 'Cursor',
   deepagent: 'Deep Agent',
 };
 
@@ -355,6 +380,9 @@ const GEMINI_DEFAULT_TOOLS: string[] = [];
 
 // Pi manages its own tools via ACP — no default tool list needed
 const PI_DEFAULT_TOOLS: string[] = [];
+
+// Cursor manages its own tools via ACP — no default tool list needed
+const CURSOR_DEFAULT_TOOLS: string[] = [];
 
 // Deep Agent manages its own tools via LangGraph — no default tool list needed
 const DEEPAGENT_DEFAULT_TOOLS: string[] = [];
@@ -430,6 +458,15 @@ export const PROVIDER_KEY_REGISTRY: ProviderKeyConfig[] = [
     requiredByProviders: ['deepagent'],
   },
   {
+    id: 'cursor',
+    label: 'Cursor API Key',
+    helpUrl: 'https://cursor.com/dashboard',
+    description:
+      'Used by the Cursor CLI ACP adapter. Alternatively run `cursor-agent login` once on the runner.',
+    envVar: 'CURSOR_API_KEY',
+    requiredByProviders: ['cursor'],
+  },
+  {
     id: 'assemblyai',
     label: 'AssemblyAI API Key',
     helpUrl: 'https://www.assemblyai.com/dashboard/signup',
@@ -465,10 +502,11 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
   }
   const def = getModelDefinition(provider, model);
   if (!def) {
-    // Pi exposes its catalog dynamically (see pi-discover.ts). The selected
-    // value may already be the wire-format `provider/modelId` that pi-acp
-    // expects — pass it through instead of throwing.
-    if (provider === 'pi') return model as string;
+    // Pi and Cursor expose their catalogs dynamically (see *-discover.ts).
+    // The selected value may already be the wire-format model ID that
+    // pi-acp / cursor-agent's `unstable_setSessionModel` expects — pass it
+    // through instead of throwing.
+    if (provider === 'pi' || provider === 'cursor') return model as string;
     const providerLabel = PROVIDER_LABELS[provider] ?? provider;
     throw new Error(`Unknown ${providerLabel} model: ${model}`);
   }
@@ -552,6 +590,7 @@ export function getDefaultAllowedTools(provider: AgentProvider): string[] {
   if (provider === 'codex') return [...CODEX_DEFAULT_TOOLS];
   if (provider === 'gemini') return [...GEMINI_DEFAULT_TOOLS];
   if (provider === 'pi') return [...PI_DEFAULT_TOOLS];
+  if (provider === 'cursor') return [...CURSOR_DEFAULT_TOOLS];
   if (provider === 'deepagent') return [...DEEPAGENT_DEFAULT_TOOLS];
   if (provider === 'llm-api') return [...LLM_API_DEFAULT_TOOLS];
   return [];

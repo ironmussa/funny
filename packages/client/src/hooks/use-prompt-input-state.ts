@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
+import { useCursorPromptModels } from '@/hooks/use-cursor-prompt-models';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePiPromptModels } from '@/hooks/use-pi-prompt-models';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
@@ -150,7 +151,8 @@ export function usePromptInputState({
   const [effort, setEffort] = useState<string>('high');
 
   const baseUnifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
-  const unifiedModelGroups = usePiPromptModels(baseUnifiedModelGroups);
+  const piUnifiedModelGroups = usePiPromptModels(baseUnifiedModelGroups);
+  const unifiedModelGroups = useCursorPromptModels(piUnifiedModelGroups);
 
   const { provider: currentProvider, model: currentModel } = useMemo(
     () => parseUnifiedModel(unifiedModel),

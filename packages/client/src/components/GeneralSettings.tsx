@@ -22,6 +22,7 @@ import {
 } from '@/components/general-settings-project/setting-primitives';
 import { projectsApi } from '@/lib/api/projects';
 import { getModelOptions, PROVIDERS } from '@/lib/providers';
+import { useCursorModelsStore } from '@/stores/cursor-models-store';
 import { usePiModelsStore } from '@/stores/pi-models-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
@@ -92,16 +93,37 @@ export function GeneralSettings() {
     void fetchPiModels();
   }, [fetchPiModels]);
 
+  // Same dynamic-discovery story for cursor (see cursor-discover.ts): without
+  // this, the project's default-model combobox shows only `cursor:default`
+  // because the static registry has nothing else for cursor.
+  const cursorModels = useCursorModelsStore((s) => s.models);
+  const cursorStatus = useCursorModelsStore((s) => s.status);
+  const fetchCursorModels = useCursorModelsStore((s) => s.fetch);
+  useEffect(() => {
+    void fetchCursorModels();
+  }, [fetchCursorModels]);
+
   const projectDefaultProvider = (selectedProject?.defaultProvider ||
     DEFAULT_PROVIDER) as AgentProvider;
   const projectModelOptions = (() => {
     const base = getModelOptions(projectDefaultProvider, t);
-    if (projectDefaultProvider !== 'pi' || piStatus !== 'ready') return base;
-    const seen = new Set(base.map((o) => o.value));
-    for (const m of piModels) {
-      if (seen.has(m.modelId)) continue;
-      base.push({ value: m.modelId, label: m.name || m.modelId });
-      seen.add(m.modelId);
+    if (projectDefaultProvider === 'pi' && piStatus === 'ready') {
+      const seen = new Set(base.map((o) => o.value));
+      for (const m of piModels) {
+        if (seen.has(m.modelId)) continue;
+        base.push({ value: m.modelId, label: m.name || m.modelId });
+        seen.add(m.modelId);
+      }
+      return base;
+    }
+    if (projectDefaultProvider === 'cursor' && cursorStatus === 'ready') {
+      const seen = new Set(base.map((o) => o.value));
+      for (const m of cursorModels) {
+        if (seen.has(m.modelId)) continue;
+        base.push({ value: m.modelId, label: m.name || m.modelId });
+        seen.add(m.modelId);
+      }
+      return base;
     }
     return base;
   })();

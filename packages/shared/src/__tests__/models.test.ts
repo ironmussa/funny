@@ -536,6 +536,7 @@ describe('getAttachmentLimits', () => {
       'codex',
       'gemini',
       'pi',
+      'cursor',
       'deepagent',
       'llm-api',
       'external',

@@ -32,6 +32,7 @@ export type AgentProvider =
   | 'codex'
   | 'gemini'
   | 'pi'
+  | 'cursor'
   | 'deepagent'
   | 'llm-api'
   | 'external';
@@ -41,13 +42,13 @@ export type AgentProvider =
  *
  * Each provider adapter maps these to its own native modes:
  *
- *   funny          | claude SDK           | gemini-cli         | codex
- *   ───────────────┼──────────────────────┼────────────────────┼──────────────
- *   plan           | plan                 | plan               | read-only
- *   ask            | default              | default            | ask-on-request
- *   confirmEdit    | default              | default            | ask-on-request
- *   autoEdit       | bypassPermissions    | yolo (--yolo)      | full-access
- *   auto           | auto (classifier)    | (n/a — Claude-only)| (n/a)
+ *   funny          | claude SDK           | gemini-cli         | codex          | cursor (ACP)
+ *   ───────────────┼──────────────────────┼────────────────────┼────────────────┼──────────────
+ *   plan           | plan                 | plan               | read-only      | plan
+ *   ask            | default              | default            | ask-on-request | ask
+ *   confirmEdit    | default              | default            | ask-on-request | agent + prompt
+ *   autoEdit       | bypassPermissions    | yolo (--yolo)      | full-access    | agent + auto
+ *   auto           | auto (classifier)    | (n/a — Claude-only)| (n/a)          | (n/a)
  *
  * NAMING TRAP: funny's `autoEdit` is FULL BYPASS (≡ Claude `bypassPermissions`,
  * Gemini `yolo`). It is NOT the same as Claude `acceptEdits` or Gemini

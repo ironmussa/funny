@@ -17,10 +17,10 @@ import { resetBinaryCache } from '../utils/claude-binary.js';
 import { getAvailableProviders, resetProviderCache } from '../utils/provider-detection.js';
 
 /**
- * Mounts the runtime's "system" endpoints (health, available shells, pi
- * model discovery, setup status, native-git build, bootstrap). Pulled out
- * of app.ts so the bootstrap file doesn't need spawnSync, fs/path,
- * provider-detection, claude-binary, or shared/models utilities.
+ * Mounts the runtime's "system" endpoints (health, available shells, pi /
+ * cursor model discovery, setup status, native-git build, bootstrap).
+ * Pulled out of app.ts so the bootstrap file doesn't need spawnSync,
+ * fs/path, provider-detection, claude-binary, or shared/models utilities.
  */
 export function registerSystemRoutes(app: Hono): void {
   app.get('/api/health', (c) => {
@@ -65,6 +65,44 @@ export function registerSystemRoutes(app: Hono): void {
     } else {
       log.info('pi model discovery ok', {
         namespace: 'pi-discover',
+        count: result.models.length,
+      });
+    }
+    return c.json(payload);
+  });
+
+  let cursorModelsCache: { at: number; payload: unknown } | null = null;
+  const CURSOR_MODELS_TTL_MS = 60_000;
+  app.get('/api/system/cursor/models', async (c) => {
+    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+    if (!refresh && cursorModelsCache && Date.now() - cursorModelsCache.at < CURSOR_MODELS_TTL_MS) {
+      return c.json(cursorModelsCache.payload);
+    }
+    const { discoverCursorModels } = await import('@funny/core/agents');
+    const result = await discoverCursorModels();
+    const payload = result.ok
+      ? {
+          ok: true as const,
+          models: result.models,
+          currentModelId: result.currentModelId,
+          discoveredAt: Date.now(),
+        }
+      : {
+          ok: false as const,
+          reason: result.reason,
+          message: result.message ?? null,
+          discoveredAt: Date.now(),
+        };
+    cursorModelsCache = { at: Date.now(), payload };
+    if (!result.ok) {
+      log.warn('cursor model discovery failed', {
+        namespace: 'cursor-discover',
+        reason: result.reason,
+        message: result.message,
+      });
+    } else {
+      log.info('cursor model discovery ok', {
+        namespace: 'cursor-discover',
         count: result.models.length,
       });
     }

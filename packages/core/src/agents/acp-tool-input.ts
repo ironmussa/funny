@@ -26,12 +26,29 @@ export interface ACPToolCallData {
  * - Gemini maps `think` → `'Task'` (default)
  * - DeepAgent maps `think` → `'Think'` (via `{ thinkToolName: 'Think' }`)
  */
+/** Cursor ACP / provider todo tool names → canonical `TodoWrite` for the UI. */
+const TODO_TOOL_ALIASES = new Set(['todowrite', 'updatetodos', 'todo_write', 'towrite']);
+
+export function isTodoToolName(name: string): boolean {
+  return TODO_TOOL_ALIASES.has(name.toLowerCase().replace(/[_-]/g, ''));
+}
+
+function inferTodoToolFromRawInput(rawInput: unknown): boolean {
+  if (rawInput == null || typeof rawInput !== 'object') return false;
+  const raw = rawInput as Record<string, unknown>;
+  const rawName = raw._toolName ?? raw._TOOLNAME ?? raw.toolName ?? raw.tool_name ?? raw.toolname;
+  return typeof rawName === 'string' && isTodoToolName(rawName);
+}
+
 export function inferACPToolName(
   kind: string | undefined,
   title: string,
   overrides?: { thinkToolName?: string },
+  rawInput?: unknown,
 ): string {
   const thinkName = overrides?.thinkToolName ?? 'Task';
+
+  if (inferTodoToolFromRawInput(rawInput)) return 'TodoWrite';
 
   switch (kind) {
     case 'read':
@@ -105,6 +122,9 @@ export function buildACPToolInput(
     case 'Read':
     case 'Write':
     case 'Edit': {
+      // Cursor reports edits as a `diff` content block carrying the path plus
+      // the before/after text — the only place the path appears for an edit.
+      const diff = extractDiffBlock(content);
       if (!input.file_path) {
         const path =
           (input.path as string) ??
@@ -120,6 +140,8 @@ export function buildACPToolInput(
           input.file_path = path;
         } else if (locations?.length) {
           input.file_path = locations[0].path;
+        } else if (diff?.path) {
+          input.file_path = diff.path;
         } else {
           const fromContent = extractPathFromContent(content);
           if (fromContent) {
@@ -130,6 +152,16 @@ export function buildACPToolInput(
               input.file_path = extracted;
             }
           }
+        }
+      }
+      // Surface the diff's before/after text so the EditFileCard can render an
+      // inline diff (it needs file_path + old_string + new_string).
+      if (toolName !== 'Read' && diff) {
+        if (input.old_string == null && typeof diff.oldText === 'string') {
+          input.old_string = diff.oldText;
+        }
+        if (input.new_string == null && typeof diff.newText === 'string') {
+          input.new_string = diff.newText;
         }
       }
       break;
@@ -188,6 +220,13 @@ export function buildACPToolInput(
       }
       break;
     }
+    case 'TodoWrite': {
+      const todoInput = buildTodoWriteInputFromRaw(input);
+      if (todoInput) {
+        return { todos: todoInput.todos };
+      }
+      break;
+    }
   }
 
   // Always include the ACP title as description fallback
@@ -195,6 +234,104 @@ export function buildACPToolInput(
     input.description = title;
   }
 
+  return input;
+}
+
+/** True when a built TodoWrite input has a non-empty checklist for the client card. */
+export function hasRenderableTodoInput(input: Record<string, unknown>): boolean {
+  const built = buildTodoWriteInputFromRaw(input);
+  return built != null && built.todos.length > 0;
+}
+
+/** A single todo as the client's TodoList card expects it. */
+export interface ACPTodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+/**
+ * Convert an ACP `plan` update's entries into a `TodoWrite` tool input.
+ *
+ * The client renders a rich checklist (TodoList) when a tool call is named
+ * `TodoWrite` and its input carries `todos: [{ content, status }]`. ACP's
+ * `PlanEntry` already uses those exact field names — `content` (NOT `title`
+ * or `description`) and a `status` of `pending | in_progress | completed` —
+ * so the mapping is direct. Entries with no usable text are dropped.
+ */
+function parseTodoItemsFromArray(entries: unknown[] | undefined): ACPTodoItem[] {
+  const todos: ACPTodoItem[] = [];
+  for (const raw of entries ?? []) {
+    if (!raw || typeof raw !== 'object') continue;
+    const e = raw as Record<string, unknown>;
+    const content =
+      (typeof e.content === 'string' && e.content) ||
+      (typeof e.title === 'string' && e.title) ||
+      (typeof e.description === 'string' && e.description) ||
+      '';
+    if (!content) continue;
+    const status =
+      e.status === 'completed' || e.status === 'in_progress'
+        ? e.status
+        : e.status === 'cancelled'
+          ? 'completed'
+          : 'pending';
+    todos.push({ content, status });
+  }
+  return todos;
+}
+
+export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): {
+  todos: ACPTodoItem[];
+} {
+  return { todos: parseTodoItemsFromArray(entries) };
+}
+
+/**
+ * Normalize Cursor `cursor/update_todos`, plan entries, or tool-result payloads
+ * into the `{ todos: [{ content, status }] }` shape the client TodoList expects.
+ */
+export function buildTodoWriteInputFromRaw(
+  raw: Record<string, unknown>,
+): { todos: ACPTodoItem[] } | null {
+  for (const key of ['todos', 'entries', 'items'] as const) {
+    const arr = raw[key];
+    if (Array.isArray(arr)) {
+      const todos = parseTodoItemsFromArray(arr);
+      if (todos.length > 0) return { todos };
+    }
+  }
+  const outcome = raw.outcome;
+  if (outcome && typeof outcome === 'object') {
+    const o = outcome as Record<string, unknown>;
+    if (o.outcome === 'accepted' && Array.isArray(o.todos)) {
+      const todos = parseTodoItemsFromArray(o.todos);
+      if (todos.length > 0) return { todos };
+    }
+  }
+  return null;
+}
+
+/** Merge todos from a completed tool result when the initial tool_call lacked rawInput. */
+export function enrichTodoWriteInputFromOutput(
+  input: Record<string, unknown>,
+  rawOutput: unknown,
+): Record<string, unknown> {
+  if (hasRenderableTodoInput(input)) return input;
+  if (rawOutput != null && typeof rawOutput === 'object') {
+    const built = buildTodoWriteInputFromRaw(rawOutput as Record<string, unknown>);
+    if (built) return { todos: built.todos };
+  }
+  if (typeof rawOutput === 'string') {
+    try {
+      const parsed = JSON.parse(rawOutput) as unknown;
+      if (parsed && typeof parsed === 'object') {
+        const built = buildTodoWriteInputFromRaw(parsed as Record<string, unknown>);
+        if (built) return { todos: built.todos };
+      }
+    } catch {
+      /* not JSON */
+    }
+  }
   return input;
 }
 
@@ -244,7 +381,8 @@ export function extractACPToolOutput(
             .filter(Boolean)
             .join('\n');
         }
-        if (c.type === 'diff') return c.diff ?? '';
+        // Cursor diff blocks carry oldText/newText (not a `diff` string).
+        if (c.type === 'diff') return c.diff ?? c.newText ?? '';
         if (c.type === 'terminal') return c.output ?? '';
         return '';
       })
@@ -283,6 +421,27 @@ function extractPathFromContent(content: unknown[] | undefined): string | null {
 
 function stripFileUri(uri: string): string {
   return uri.startsWith('file://') ? uri.slice('file://'.length) : uri;
+}
+
+/**
+ * Find a Cursor `diff` ToolCallContent block. Cursor reports edits as a
+ * top-level `{ type: 'diff', path, oldText, newText }` entry in `content[]` —
+ * the only carrier of the edited file's path and before/after text.
+ */
+function extractDiffBlock(
+  content: unknown[] | undefined,
+): { path?: string; oldText?: string; newText?: string } | null {
+  if (!content?.length) return null;
+  for (const c of content as any[]) {
+    if (c && typeof c === 'object' && c.type === 'diff') {
+      return {
+        path: typeof c.path === 'string' ? stripFileUri(c.path) : undefined,
+        oldText: typeof c.oldText === 'string' ? c.oldText : undefined,
+        newText: typeof c.newText === 'string' ? c.newText : undefined,
+      };
+    }
+  }
+  return null;
 }
 
 /**

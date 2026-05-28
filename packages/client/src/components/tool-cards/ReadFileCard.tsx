@@ -7,7 +7,12 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { ensureLanguage, filePathToHljsLang, highlightLine } from '@/hooks/use-highlight';
+import {
+  detectLanguageFromContent,
+  ensureLanguage,
+  filePathToHljsLang,
+  highlightLine,
+} from '@/hooks/use-highlight';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -46,19 +51,29 @@ function stripLinePrefix(raw: string): string {
 }
 
 function HighlightedFileContent({ content, filePath }: { content: string; filePath?: string }) {
-  const lang = useMemo(() => (filePath ? filePathToHljsLang(filePath) : 'plaintext'), [filePath]);
+  // With a path the extension picks the language; without one (e.g. Cursor's
+  // ACP reads omit the path) fall back to detecting it from the content.
+  const [lang, setLang] = useState<string>(() =>
+    filePath ? filePathToHljsLang(filePath) : 'plaintext',
+  );
   const [langReady, setLangReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLangReady(false);
-    ensureLanguage(lang).then((ok) => {
+    const resolveLangFor = filePath
+      ? Promise.resolve(filePathToHljsLang(filePath))
+      : detectLanguageFromContent(content);
+    resolveLangFor.then(async (detected) => {
+      if (cancelled) return;
+      setLang(detected);
+      const ok = await ensureLanguage(detected);
       if (!cancelled) setLangReady(ok);
     });
     return () => {
       cancelled = true;
     };
-  }, [lang]);
+  }, [filePath, content]);
 
   const lines = useMemo(() => parseLines(content), [content]);
   const numWidth = useMemo(() => {

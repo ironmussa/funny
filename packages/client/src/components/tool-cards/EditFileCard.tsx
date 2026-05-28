@@ -100,7 +100,8 @@ export function EditFileCard({
 
   const threadId = useThreadId();
 
-  const [expanded, setExpanded] = useState(true);
+  // Open by default in the thread; collapsed when nested inside a ToolCallGroup.
+  const [expanded, setExpanded] = useState(!hideLabel);
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);
   const [diffMounted, setDiffMounted] = useState(false);
   const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);

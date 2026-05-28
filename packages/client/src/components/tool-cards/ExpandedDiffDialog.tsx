@@ -21,6 +21,7 @@ import {
   useRef,
   useTransition,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -213,6 +214,8 @@ function DiffContent({
   onHunkToggle?: (hunkLineIndices: number[]) => void;
   onDragSelect?: (startLineIdx: number, endLineIdx: number, select: boolean) => void;
 }) {
+  const { t } = useTranslation();
+
   // Compute unified diff from old/new if rawDiff is not provided
   const unifiedDiff = useMemo(() => {
     if (rawDiff) return rawDiff;
@@ -222,9 +225,12 @@ function DiffContent({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
-        <Loader2 className="icon-base animate-spin" />
-        Loading diff…
+      <div
+        className="flex h-full min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground"
+        data-testid="expanded-diff-loading"
+      >
+        <Loader2 className="size-4 animate-spin" />
+        {t('review.loading', 'Loading changes…')}
       </div>
     );
   }

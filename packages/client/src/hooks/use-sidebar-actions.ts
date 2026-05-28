@@ -11,8 +11,9 @@ import type {
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
+import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
-import { resolveThreadBranch } from '@/lib/utils';
+import { resolveLocalThreadBranch, shouldCheckoutBranchForThreadSelect } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -20,7 +21,7 @@ import { useThreadStore } from '@/stores/thread-store';
  * Owns the sidebar's destructive-action confirmation state and all the row
  * handlers (select/archive/delete/rename/pin) that ProjectItem and ThreadList
  * receive as props. Bundling them in a hook keeps Sidebar.tsx free of the
- * `toast`, `api`, `use-branch-switch`, and `resolveThreadBranch` imports
+ * `toast`, `api`, `use-branch-switch`, and thread-branch helpers
  * (~3-4 fan-out edges).
  */
 export function useSidebarActions() {
@@ -62,8 +63,16 @@ export function useSidebarActions() {
   const handleDeleteThreadConfirm = useCallback(
     async (options?: { deleteBranch?: boolean }) => {
       if (!deleteThreadConfirm) return;
-      const { threadId, projectId, title, worktreePath, branchName, isScratch } =
-        deleteThreadConfirm;
+      const {
+        threadId,
+        projectId,
+        title,
+        worktreePath,
+        branchName,
+        isScratch: confirmScratch,
+      } = deleteThreadConfirm;
+      const thread = useThreadStore.getState().threadsById[threadId];
+      const scratch = confirmScratch ?? isScratch(thread);
       const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
 
       // Close the modal up-front. deleteThread is already optimistic (sync UI
@@ -72,10 +81,18 @@ export function useSidebarActions() {
       // as a flicker.
       setDeleteThreadConfirm(null);
 
-      if (isScratch) {
+      // Leave the deleted thread's URL before optimistic store removal. While
+      // the URL still points at /scratch/:id (or a project thread route),
+      // useRouteSync's invariant guard sees selectedThreadId cleared and tries
+      // to re-load the thread — which trips the circuit breaker once enough
+      // follow-up requests fail.
+      if (wasSelected) {
+        navigate(buildPath(scratch || !projectId ? '/' : `/projects/${projectId}`));
+      }
+
+      if (scratch) {
         await deleteScratchThread(threadId);
         toast.success(t('toast.threadDeleted', { title }));
-        if (wasSelected) navigate(buildPath('/'));
         return;
       }
 
@@ -88,7 +105,6 @@ export function useSidebarActions() {
 
       await deleteThread(threadId, projectId);
       toast.success(t('toast.threadDeleted', { title }));
-      if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
     },
     [deleteThreadConfirm, deleteThread, deleteScratchThread, t, navigate],
   );
@@ -123,21 +139,23 @@ export function useSidebarActions() {
 
   const handleSelectThread = useCallback(
     async (projectId: string, threadId: string) => {
-      const thread = useThreadStore.getState().threadsById[threadId];
-      if (thread?.mode === 'local') {
-        const branch = resolveThreadBranch(thread);
-        if (branch) {
-          const canProceed = await ensureBranch(projectId, branch);
-          if (!canProceed) return;
-        }
+      const store = useThreadStore.getState();
+      const thread = store.threadsById[threadId];
+      const activeThread =
+        store.activeThread ??
+        (store.selectedThreadId ? store.threadsById[store.selectedThreadId] : undefined);
+      if (thread && shouldCheckoutBranchForThreadSelect(thread, activeThread)) {
+        const branch = resolveLocalThreadBranch(thread)!;
+        const canProceed = await ensureBranch(projectId, branch);
+        if (!canProceed) return;
       }
 
-      const store = useThreadStore.getState();
+      const freshStore = useThreadStore.getState();
       if (
-        store.selectedThreadId === threadId &&
-        (!store.activeThread || store.activeThread.id !== threadId)
+        freshStore.selectedThreadId === threadId &&
+        (!freshStore.activeThread || freshStore.activeThread.id !== threadId)
       ) {
-        store.selectThread(threadId);
+        freshStore.selectThread(threadId);
       }
       navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
     },
@@ -175,6 +193,7 @@ export function useSidebarActions() {
       threadId,
       projectId,
       title,
+      isScratch: isScratch(th),
       isWorktree,
       worktreePath: isWorktree ? th?.worktreePath : undefined,
       branchName: isWorktree ? th?.branch : undefined,
@@ -195,6 +214,7 @@ export function useSidebarActions() {
         threadId,
         projectId,
         title,
+        isScratch: isScratch(th),
         isWorktree,
         worktreePath: isWorktree ? th?.worktreePath : undefined,
         branchName: isWorktree ? th?.branch : undefined,

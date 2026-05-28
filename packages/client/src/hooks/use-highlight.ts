@@ -168,6 +168,55 @@ function resolveLang(lang: string): string {
 }
 
 /**
+ * Bounded set of common languages considered by content-based auto-detection.
+ * Kept small on purpose: hljs auto-detect grows less reliable (and slower) the
+ * more candidates it weighs, so we only include high-signal languages.
+ */
+const AUTODETECT_SUBSET = [
+  'typescript',
+  'javascript',
+  'python',
+  'json',
+  'yaml',
+  'bash',
+  'go',
+  'rust',
+  'java',
+  'cpp',
+  'css',
+  'xml',
+  'markdown',
+  'sql',
+  'ruby',
+  'php',
+];
+
+/**
+ * Detect an hljs language from a code block's content. Used when no file path
+ * is available to infer the language from (e.g. Cursor's ACP `read` tool calls
+ * omit the path, so the extension is unknown). Registers the bounded
+ * {@link AUTODETECT_SUBSET}, then runs hljs auto-detection limited to it.
+ * Returns 'plaintext' when nothing matches with enough confidence.
+ */
+export async function detectLanguageFromContent(content: string): Promise<string> {
+  if (!content.trim()) return 'plaintext';
+  await Promise.all(AUTODETECT_SUBSET.map((l) => ensureLanguage(l)));
+  const candidates = AUTODETECT_SUBSET.map(resolveLang).filter((l) => registeredLangs.has(l));
+  if (candidates.length === 0) return 'plaintext';
+  try {
+    // Cap the sample so auto-detection stays cheap on large files.
+    const sample = content.length > 20_000 ? content.slice(0, 20_000) : content;
+    const result = hljs.highlightAuto(sample, candidates);
+    // hljs relevance is a rough score; require a floor to avoid mislabeling
+    // plain prose / config snippets as code.
+    if (result.language && result.relevance >= 5) return result.language;
+  } catch {
+    // fall through to plaintext
+  }
+  return 'plaintext';
+}
+
+/**
  * Resolve a file extension to an hljs language name.
  */
 export function extToHljsLang(ext: string): string {

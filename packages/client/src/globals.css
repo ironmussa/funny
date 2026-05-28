@@ -986,7 +986,13 @@
   background: transparent !important;
 }
 
-/* Code viewer (highlight.js) */
+/* Code viewer (highlight.js). The <pre> carries `code-viewer` and `hljs` on
+   the SAME element, so the descendant rule below can't match it — neutralize
+   the blue-tinted github-dark-dimmed background on the compound selector too,
+   without touching its Tailwind padding. */
+.code-viewer.hljs {
+  background: transparent !important;
+}
 .code-viewer .hljs {
   background: transparent !important;
   padding: 0.5rem 0;

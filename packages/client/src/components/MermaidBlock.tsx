@@ -17,7 +17,13 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 
-import { getSvgExportDimensions, inlineForeignObjects, sanitizeMermaidSvg } from './mermaid-utils';
+import {
+  getMermaidInitOptions,
+  getSvgExportDimensions,
+  inlineForeignObjects,
+  removeMermaidRenderArtifacts,
+  sanitizeMermaidSvg,
+} from './mermaid-utils';
 
 const log = createClientLogger('mermaid');
 
@@ -32,10 +38,13 @@ function useMermaidSvg(chart: string) {
 
   useEffect(() => {
     let cancelled = false;
+    setSvg('');
+    setError('');
+    const renderId = `mermaid-${Math.random().toString(36).slice(2)}`;
     const theme = resolvedTheme === 'monochrome' ? 'default' : 'dark';
-    mermaid.initialize({ startOnLoad: false, theme });
+    mermaid.initialize(getMermaidInitOptions(theme));
     mermaid
-      .render(`mermaid-${Math.random().toString(36).slice(2)}`, chart)
+      .render(renderId, chart)
       .then(({ svg: renderedSvg }) => {
         if (!cancelled) setSvg(sanitizeMermaidSvg(renderedSvg));
       })
@@ -44,6 +53,7 @@ function useMermaidSvg(chart: string) {
       });
     return () => {
       cancelled = true;
+      removeMermaidRenderArtifacts(renderId);
     };
   }, [chart, resolvedTheme]);
 
@@ -245,7 +255,13 @@ export function MermaidBlock({ chart }: { chart: string }) {
 
   if (error) {
     return (
-      <pre className="overflow-auto rounded bg-red-950/30 p-3 text-xs text-red-400">{error}</pre>
+      <div
+        className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        data-testid="mermaid-error"
+      >
+        <span className="font-medium">Invalid diagram</span>
+        <span className="text-muted-foreground">{error}</span>
+      </div>
     );
   }
 
@@ -366,8 +382,13 @@ async function renderChartForExport(chart: string): Promise<string> {
   // per-render so mermaid's global theme stays as the user set it on screen.
   const annotated = `%%{init: {"theme": "default", "flowchart": {"htmlLabels": false}}}%%\n${chart}`;
   const id = `mermaid-export-${Math.random().toString(36).slice(2)}`;
-  const { svg } = await mermaid.render(id, annotated);
-  return sanitizeMermaidSvg(svg);
+  mermaid.initialize(getMermaidInitOptions('default'));
+  try {
+    const { svg } = await mermaid.render(id, annotated);
+    return sanitizeMermaidSvg(svg);
+  } finally {
+    removeMermaidRenderArtifacts(id);
+  }
 }
 
 async function svgToPngBlob(svgHtml: string): Promise<Blob> {

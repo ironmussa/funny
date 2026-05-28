@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSvgExportDimensions, inlineForeignObjects, sanitizeMermaidSvg } from './mermaid-utils';
+import {
+  getMermaidInitOptions,
+  getSvgExportDimensions,
+  inlineForeignObjects,
+  removeMermaidRenderArtifacts,
+  sanitizeMermaidSvg,
+} from './mermaid-utils';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -187,5 +193,26 @@ describe('getSvgExportDimensions', () => {
   it('rejects a viewBox with negative dimensions', () => {
     const svg = svgWith({ viewBox: '0 0 -100 -50', width: '321', height: '123' });
     expect(getSvgExportDimensions(svg)).toEqual({ w: 321, h: 123 });
+  });
+});
+
+describe('getMermaidInitOptions', () => {
+  it('suppresses built-in error SVG injection into document.body', () => {
+    expect(getMermaidInitOptions('dark').suppressErrorRendering).toBe(true);
+  });
+});
+
+describe('removeMermaidRenderArtifacts', () => {
+  it('removes mermaid temp nodes by id prefix', () => {
+    const renderId = 'mermaid-test-abc';
+    for (const id of [renderId, `d${renderId}`, `i${renderId}`]) {
+      const el = document.createElement('div');
+      el.id = id;
+      document.body.appendChild(el);
+    }
+    removeMermaidRenderArtifacts(renderId);
+    expect(document.getElementById(renderId)).toBeNull();
+    expect(document.getElementById(`d${renderId}`)).toBeNull();
+    expect(document.getElementById(`i${renderId}`)).toBeNull();
   });
 });

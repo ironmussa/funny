@@ -36,7 +36,15 @@ import { Readable, Writable } from 'stream';
 import { createDebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
 import { toACPMcpServers } from './acp-mcp.js';
-import { inferACPToolName, buildACPToolInput, extractACPToolOutput } from './acp-tool-input.js';
+import {
+  inferACPToolName,
+  buildACPToolInput,
+  buildTodoWriteInputFromPlanEntries,
+  buildTodoWriteInputFromRaw,
+  enrichTodoWriteInputFromOutput,
+  extractACPToolOutput,
+  hasRenderableTodoInput,
+} from './acp-tool-input.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 import type { CLIMessage } from './types.js';
 
@@ -89,6 +97,14 @@ export class CursorACPProcess extends BaseAgentProcess {
   private lastAssistantText = '';
   /** Buffer for `agent_thought_chunk` text — collapsed into a single Think tool call. */
   private pendingThought: { id: string; text: string } | null = null;
+  /**
+   * Tool calls whose initial event lacked the field its card needs to render
+   * (e.g. a `read` whose path only arrives in a later `tool_call_update`).
+   * Buffered here and emitted once an update carries the missing field, or at
+   * terminal status. The server freezes a tool's input at first emission, so
+   * emitting too early would permanently strand an empty card.
+   */
+  private deferredToolInputs = new Map<string, { name: string; input: Record<string, unknown> }>();
 
   /** True while loadSession is replaying historical events. */
   private replayingHistory = false;
@@ -358,6 +374,7 @@ export class CursorACPProcess extends BaseAgentProcess {
     this.assistantMsgId = randomUUID();
     this.accumulatedText = '';
     this.toolCallsSeen.clear();
+    this.deferredToolInputs.clear();
     this.lastAssistantText = '';
     this.pendingThought = null;
 
@@ -395,6 +412,7 @@ export class CursorACPProcess extends BaseAgentProcess {
               : 'success';
 
       this.flushPendingThought();
+      this.flushDeferredToolInputs();
 
       this.emitResult({
         sessionId: this.activeSessionId,
@@ -406,6 +424,7 @@ export class CursorACPProcess extends BaseAgentProcess {
       });
     } catch (err: unknown) {
       this.flushPendingThought();
+      this.flushDeferredToolInputs();
       if (!this.isAborted) {
         const errorMessage = this.extractErrorMessage(err);
         this.emitResult({
@@ -459,7 +478,7 @@ export class CursorACPProcess extends BaseAgentProcess {
 
     const acpKind = (toolCall.kind as string | undefined) ?? undefined;
     const title = toolCall.title ?? '';
-    const toolName = inferACPToolName(acpKind, title);
+    const toolName = inferACPToolName(acpKind, title, undefined, toolCall.rawInput);
     const toolInput = buildACPToolInput(toolName, {
       kind: acpKind,
       title,
@@ -545,6 +564,50 @@ export class CursorACPProcess extends BaseAgentProcess {
 
   // ── Update translation ──────────────────────────────────────
 
+  /**
+   * Emit a synthetic `tool_use` exactly once for a tool call id and mark it
+   * seen. Resets the per-turn assistant-text accumulator so any following
+   * agent text starts a fresh bubble.
+   */
+  private emitToolUse(toolCallId: string, toolName: string, input: Record<string, unknown>): void {
+    this.deferredToolInputs.delete(toolCallId);
+    this.toolCallsSeen.set(toolCallId, toolName);
+    this.emit('message', {
+      type: 'assistant',
+      message: {
+        id: randomUUID(),
+        content: [{ type: 'tool_use', id: toolCallId, name: toolName, input }],
+      },
+    } as CLIMessage);
+    this.accumulatedText = '';
+    this.assistantMsgId = randomUUID();
+  }
+
+  private emitToolResult(toolCallId: string, content: string): void {
+    this.toolCallsSeen.set(toolCallId, 'done');
+    this.emit('message', {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: toolCallId, content }],
+      },
+    } as CLIMessage);
+  }
+
+  /**
+   * Emit any tool calls still waiting for a renderable field at turn end. In
+   * the normal flow every deferred read resolves via a later `tool_call_update`;
+   * this is the safety net for a call that never updates (e.g. a dropped event)
+   * so the agent's action still surfaces as a card instead of vanishing.
+   */
+  private flushDeferredToolInputs(): void {
+    if (this.deferredToolInputs.size === 0) return;
+    for (const [toolCallId, { name, input }] of this.deferredToolInputs) {
+      if (name === 'TodoWrite' && !hasRenderableTodoInput(input)) continue;
+      this.emitToolUse(toolCallId, name, input);
+    }
+    this.deferredToolInputs.clear();
+  }
+
   private translateUpdate(update: ACPSessionUpdate): void {
     switch (update.sessionUpdate) {
       case 'agent_thought_chunk': {
@@ -586,8 +649,7 @@ export class CursorACPProcess extends BaseAgentProcess {
           | Array<{ path: string; line?: number | null }>
           | undefined;
         const updateContent = (update as any).content as unknown[] | undefined;
-        const toolName = inferACPToolName(acpKind, title);
-        this.toolCallsSeen.set(toolCallId, toolName);
+        const toolName = inferACPToolName(acpKind, title, undefined, update.rawInput);
 
         dlog.debug('tool_call', {
           toolCallId,
@@ -599,36 +661,36 @@ export class CursorACPProcess extends BaseAgentProcess {
           status: (update as any).status,
         });
 
-        const input = buildACPToolInput(toolName, {
+        let input = buildACPToolInput(toolName, {
           kind: acpKind,
           title,
           rawInput: update.rawInput,
           locations,
           content: updateContent,
         });
-
-        this.emit('message', {
-          type: 'assistant',
-          message: {
-            id: randomUUID(),
-            content: [{ type: 'tool_use', id: toolCallId, name: toolName, input }],
-          },
-        } as CLIMessage);
-
-        const tcStatus = (update as any).status as string | undefined;
-        if (tcStatus === 'completed' || tcStatus === 'failed') {
-          this.toolCallsSeen.set(toolCallId, 'done');
-          const tcOutput = extractACPToolOutput(update.rawOutput, (update as any).content, title);
-          this.emit('message', {
-            type: 'user',
-            message: {
-              content: [{ type: 'tool_result', tool_use_id: toolCallId, content: tcOutput }],
-            },
-          } as CLIMessage);
+        if (toolName === 'TodoWrite') {
+          input = enrichTodoWriteInputFromOutput(input, update.rawOutput);
+          const clean = buildTodoWriteInputFromRaw(input);
+          if (clean) input = { todos: clean.todos };
         }
 
-        this.accumulatedText = '';
-        this.assistantMsgId = randomUUID();
+        const tcStatus = (update as any).status as string | undefined;
+        const isTerminal = tcStatus === 'completed' || tcStatus === 'failed';
+
+        // Defer when the card isn't renderable yet. TodoWrite always waits for
+        // a todos array; other tools only defer while still pending.
+        if (!isRenderableToolInput(toolName, input)) {
+          if (toolName === 'TodoWrite' || !isTerminal) {
+            this.deferredToolInputs.set(toolCallId, { name: toolName, input });
+            return;
+          }
+        }
+
+        this.emitToolUse(toolCallId, toolName, input);
+        if (isTerminal) {
+          const tcOutput = extractACPToolOutput(update.rawOutput, updateContent, title);
+          this.emitToolResult(toolCallId, tcOutput);
+        }
         return;
       }
 
@@ -648,70 +710,78 @@ export class CursorACPProcess extends BaseAgentProcess {
           status: update.status,
         });
 
-        // Cursor can fire a completed tool_call_update without the initial
-        // tool_call — emit a synthetic tool_use so the card still renders.
+        const isTerminal = update.status === 'completed' || update.status === 'failed';
+
+        // Cursor can fire a completed tool_call_update without an emitted
+        // tool_call — either because it skipped the initial event, or because
+        // we deferred it waiting for the path. Merge any buffered input with
+        // the update's richer data (locations / rawInput / content) and emit.
         if (!this.toolCallsSeen.has(toolCallId)) {
+          const buffered = this.deferredToolInputs.get(toolCallId);
           const acpKind = (update as any).kind as string | undefined;
           const title = update.title || '';
           const locations = (update as any).locations as
             | Array<{ path: string; line?: number | null }>
             | undefined;
-          const toolName = inferACPToolName(acpKind, title);
-          const input = buildACPToolInput(toolName, {
+          // Trust the original tool name from the deferred tool_call — an
+          // update often omits kind/title, which would degrade to 'Tool'.
+          const rawInput = (update as any).rawInput;
+          const toolName = buffered?.name ?? inferACPToolName(acpKind, title, undefined, rawInput);
+          const built = buildACPToolInput(toolName, {
             kind: acpKind,
             title,
-            rawInput: (update as any).rawInput,
+            rawInput,
             locations,
             content: updateContent,
           });
-          this.toolCallsSeen.set(toolCallId, toolName);
-          this.emit('message', {
-            type: 'assistant',
-            message: {
-              id: randomUUID(),
-              content: [{ type: 'tool_use', id: toolCallId, name: toolName, input }],
-            },
-          } as CLIMessage);
-          this.accumulatedText = '';
-          this.assistantMsgId = randomUUID();
+          let input = buffered ? mergeToolInput(buffered.input, built) : built;
+          if (toolName === 'TodoWrite') {
+            input = enrichTodoWriteInputFromOutput(input, update.rawOutput);
+            const clean = buildTodoWriteInputFromRaw(input);
+            if (clean) input = { todos: clean.todos };
+          }
+
+          if (!isRenderableToolInput(toolName, input)) {
+            if (toolName === 'TodoWrite' || !isTerminal) {
+              this.deferredToolInputs.set(toolCallId, { name: toolName, input });
+              return;
+            }
+          }
+
+          this.emitToolUse(toolCallId, toolName, input);
         }
 
-        if (update.status === 'completed' || update.status === 'failed') {
-          this.toolCallsSeen.set(toolCallId, 'done');
-          const output = extractACPToolOutput(
-            update.rawOutput,
-            (update as any).content,
-            update.title || '',
-          );
-          this.emit('message', {
-            type: 'user',
-            message: {
-              content: [{ type: 'tool_result', tool_use_id: toolCallId, content: output }],
-            },
-          } as CLIMessage);
+        if (isTerminal) {
+          const output = extractACPToolOutput(update.rawOutput, updateContent, update.title || '');
+          this.emitToolResult(toolCallId, output);
         }
         return;
       }
 
       case 'plan': {
         this.flushPendingThought();
-        const entries = update.entries ?? [];
-        if (entries.length > 0) {
-          const planText = entries
-            .map((e: any, i: number) => {
-              const status =
-                e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
-              return `${status} ${i + 1}. ${e.title ?? e.description ?? 'Task'}`;
-            })
-            .join('\n');
-
+        const input = buildTodoWriteInputFromPlanEntries(update.entries);
+        if (input.todos.length > 0) {
+          // Render as a TodoWrite card (rich checklist) rather than a text
+          // bubble. ACP replaces the whole plan on each update, so each
+          // emission is its own card with a fresh id — matching how the Claude
+          // SDK surfaces successive TodoWrite calls.
+          const toolCallId = randomUUID();
           this.emit('message', {
             type: 'assistant',
             message: {
-              id: this.assistantMsgId,
-              content: [{ type: 'text', text: `**Plan:**\n${planText}` }],
+              id: randomUUID(),
+              content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
             },
           } as CLIMessage);
+          this.emit('message', {
+            type: 'user',
+            message: {
+              content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
+            },
+          } as CLIMessage);
+          this.accumulatedText = '';
+          this.assistantMsgId = randomUUID();
         }
         return;
       }
@@ -735,6 +805,51 @@ export class CursorACPProcess extends BaseAgentProcess {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
+
+/**
+ * Whether a built tool input has the primary field its client card needs to
+ * render a meaningful summary. When it doesn't, the emission is deferred until
+ * a later ACP update fills it in — otherwise the card renders empty (the
+ * server freezes a tool's input at first emission).
+ */
+function isRenderableToolInput(toolName: string, input: Record<string, unknown>): boolean {
+  const has = (key: string) => typeof input[key] === 'string' && (input[key] as string).length > 0;
+  switch (toolName) {
+    case 'Read':
+    case 'Write':
+    case 'Edit':
+      return has('file_path');
+    case 'Bash':
+      return has('command');
+    case 'Glob':
+    case 'Grep':
+      return has('pattern');
+    case 'TodoWrite':
+      return hasRenderableTodoInput(input);
+    default:
+      // Task / Think / WebFetch / etc. derive a usable summary from the
+      // title-backed `description`, which buildACPToolInput always sets.
+      return true;
+  }
+}
+
+/**
+ * Merge a buffered tool input with a freshly built one, preferring non-empty
+ * values from `next`. Lets a later update supply the field (e.g. file_path)
+ * that the initial deferred event was missing.
+ */
+function mergeToolInput(
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...prev };
+  for (const [key, value] of Object.entries(next)) {
+    if (value !== undefined && value !== null && value !== '') {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
 
 /**
  * Match the serialization Claude SDK uses for permission-rule lookup so a

@@ -1,3 +1,27 @@
+import type { MermaidConfig } from 'mermaid';
+
+/**
+ * Shared mermaid.initialize() options. `suppressErrorRendering` prevents
+ * mermaid from appending the built-in "Syntax error in text" SVG nodes to
+ * document.body on failure — those nodes are never removed and stack up,
+ * stretching the page with extra scroll.
+ */
+export function getMermaidInitOptions(theme: 'dark' | 'default'): MermaidConfig {
+  return {
+    startOnLoad: false,
+    theme,
+    securityLevel: 'strict',
+    suppressErrorRendering: true,
+  };
+}
+
+/** Remove temp nodes mermaid.render() may leave behind (id, d{id}, i{id}). */
+export function removeMermaidRenderArtifacts(renderId: string): void {
+  for (const id of [renderId, `d${renderId}`, `i${renderId}`]) {
+    document.getElementById(id)?.remove();
+  }
+}
+
 /**
  * Pure DOM helpers for the mermaid block. Extracted so they can be unit-tested
  * without dragging in React, mermaid, or canvas. Each piece corresponds to a

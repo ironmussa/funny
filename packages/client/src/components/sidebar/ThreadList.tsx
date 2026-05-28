@@ -20,7 +20,11 @@ import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { getThreadRoute, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
-import { resolveThreadBranch } from '@/lib/utils';
+import {
+  resolveLocalThreadBranch,
+  resolveThreadBranch,
+  shouldCheckoutBranchForThreadSelect,
+} from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -191,16 +195,20 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
       // Check if the thread requires a branch switch (local mode only).
       // Scratch threads have no git working tree — never run the branch preflight.
-      if (!scratch && thread?.mode === 'local') {
-        const branch = resolveThreadBranch(thread);
-        if (branch) {
-          // Kick off thread data fetch in parallel with the branch preflight so
-          // the network roundtrips overlap instead of serializing. If the user
-          // cancels the branch dialog we just discard the prefetched data.
-          useThreadStore.getState().prefetchThread(threadId);
-          const canProceed = await ensureBranch(projectId, branch);
-          if (!canProceed) return;
-        }
+      const storeBeforeNav = useThreadStore.getState();
+      const activeThread =
+        storeBeforeNav.activeThread ??
+        (storeBeforeNav.selectedThreadId
+          ? storeBeforeNav.threadsById[storeBeforeNav.selectedThreadId]
+          : undefined);
+      if (!scratch && thread && shouldCheckoutBranchForThreadSelect(thread, activeThread)) {
+        const branch = resolveLocalThreadBranch(thread)!;
+        // Kick off thread data fetch in parallel with the branch preflight so
+        // the network roundtrips overlap instead of serializing. If the user
+        // cancels the branch dialog we just discard the prefetched data.
+        useThreadStore.getState().prefetchThread(threadId);
+        const canProceed = await ensureBranch(projectId, branch);
+        if (!canProceed) return;
       }
 
       // Ensure the project is expanded so the thread row is mounted in the

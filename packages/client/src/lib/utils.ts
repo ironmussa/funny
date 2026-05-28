@@ -49,6 +49,39 @@ export function resolveThreadBranch(thread: {
   return undefined;
 }
 
+/** Branch label for a local-mode thread (matches ThreadPowerline for local threads). */
+export function resolveLocalThreadBranch(thread: {
+  branch?: string | null;
+  baseBranch?: string | null;
+  worktreePath?: string | null;
+}): string | undefined {
+  return resolveThreadBranch(thread) ?? thread.baseBranch ?? undefined;
+}
+
+type ThreadBranchIdentity = {
+  mode?: string;
+  projectId?: string;
+  branch?: string | null;
+  baseBranch?: string | null;
+  worktreePath?: string | null;
+};
+
+/**
+ * Whether selecting `target` should run a project-level branch checkout.
+ * Skips when both threads are local, same project, and share the same branch
+ * (switching threads is UI-only — no git branch change needed).
+ */
+export function shouldCheckoutBranchForThreadSelect(
+  target: ThreadBranchIdentity,
+  active: ThreadBranchIdentity | null | undefined,
+): boolean {
+  if (target.mode !== 'local') return false;
+  const targetBranch = resolveLocalThreadBranch(target);
+  if (!targetBranch) return false;
+  if (!active || active.mode !== 'local' || active.projectId !== target.projectId) return true;
+  return resolveLocalThreadBranch(active) !== targetBranch;
+}
+
 /**
  * Top inset used when scrolling sidebar items into view, so the row doesn't
  * end up tucked under the fade gradient (h-8 = 32px) at the top of the

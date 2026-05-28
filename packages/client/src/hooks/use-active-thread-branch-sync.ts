@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { createClientLogger } from '@/lib/client-logger';
-import { resolveThreadBranch } from '@/lib/utils';
+import { resolveLocalThreadBranch } from '@/lib/utils';
 import { useThreadCore } from '@/stores/thread-context';
 
 const log = createClientLogger('useActiveThreadBranchSync');
@@ -21,20 +21,23 @@ const log = createClientLogger('useActiveThreadBranchSync');
 export function useActiveThreadBranchSync() {
   const activeThread = useThreadCore();
   const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
-  const lastSyncedRef = useRef<string | null>(null);
+  /** projectId:branch — skip re-checkout when switching threads on the same branch. */
+  const lastSyncedBranchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activeThread) {
-      lastSyncedRef.current = null;
+      lastSyncedBranchKeyRef.current = null;
       return;
     }
     if (activeThread.mode !== 'local') return;
-    if (lastSyncedRef.current === activeThread.id) return;
 
-    const branch = resolveThreadBranch(activeThread);
+    const branch = resolveLocalThreadBranch(activeThread);
     if (!branch || !activeThread.projectId) return;
 
-    lastSyncedRef.current = activeThread.id;
+    const syncKey = `${activeThread.projectId}:${branch}`;
+    if (lastSyncedBranchKeyRef.current === syncKey) return;
+
+    lastSyncedBranchKeyRef.current = syncKey;
     ensureBranch(activeThread.projectId, branch).catch((err) => {
       log.error('ensureBranch failed', { threadId: activeThread.id, err });
     });

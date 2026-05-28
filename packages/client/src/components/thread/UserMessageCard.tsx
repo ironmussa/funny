@@ -275,20 +275,24 @@ export function UserMessageCard({
   // in the prompt text. Surface any referenced file that isn't already rendered
   // inline so the user can see what was sent.
   const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
+  const hasThreadActions = Boolean(onFork || onRewind || onForkAndRewind);
 
   return (
     <div
       data-testid={props['data-testid']}
       className={cn(
         'relative group text-sm',
-        'w-full rounded-lg px-3 py-2 bg-foreground text-background',
+        'w-full rounded-lg py-2 bg-foreground text-background',
+        'px-3',
+        // Reserve top-right space for the hover actions menu (w-6 + right-1.5 offset).
+        hasThreadActions && 'pr-9',
         onClick && 'cursor-pointer',
         'shadow-md',
       )}
       onClick={onClick}
     >
       {/* Fork / rewind menu — visible on hover */}
-      {(onFork || onRewind || onForkAndRewind) && (
+      {hasThreadActions && (
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>

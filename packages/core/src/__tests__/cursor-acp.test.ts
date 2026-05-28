@@ -192,6 +192,130 @@ describe('CursorACPProcess.translateUpdate', () => {
     expect(toolResults[0]).toMatchObject({ tool_use_id: 'read-dup', content: 'hello' });
   });
 
+  test('defers tool_use until a later update supplies the read path', () => {
+    // Cursor streams skeleton `pending` tool_calls (no rawInput/locations)
+    // when reading many files at once, then fills the path in a later update.
+    // Emitting from the empty initial event would freeze an empty card on the
+    // server (input is frozen at first emission), so we must defer.
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'read-deferred',
+      kind: 'read',
+      title: 'Reading file',
+      status: 'pending',
+    });
+
+    // Nothing emitted yet.
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'read-deferred',
+      status: 'completed',
+      locations: [{ path: '/repo/packages/client/src/foo.tsx' }],
+      rawOutput: { content: '1\timport x;\n' },
+    });
+
+    const uses = messages.flatMap((m) =>
+      m.type === 'assistant' ? m.message.content.filter((c) => c.type === 'tool_use') : [],
+    );
+    expect(uses).toHaveLength(1);
+    expect(uses[0]).toMatchObject({ id: 'read-deferred', name: 'Read' });
+    if (uses[0].type !== 'tool_use') throw new Error('unreachable');
+    expect(uses[0].input).toMatchObject({ file_path: '/repo/packages/client/src/foo.tsx' });
+
+    const results = messages.flatMap((m) =>
+      m.type === 'user' ? m.message.content.filter((c) => c.type === 'tool_result') : [],
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ tool_use_id: 'read-deferred' });
+  });
+
+  test('terminal update without a resolvable path still emits a card + result', () => {
+    // If the path never arrives, we must still emit the card at terminal status
+    // so the tool_result has a matching tool_use (no stranded result).
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'read-nopath',
+      kind: 'read',
+      title: 'Reading file',
+      status: 'pending',
+    });
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'read-nopath',
+      status: 'completed',
+      rawOutput: 'done',
+    });
+
+    const uses = messages.flatMap((m) =>
+      m.type === 'assistant' ? m.message.content.filter((c) => c.type === 'tool_use') : [],
+    );
+    expect(uses).toHaveLength(1);
+    expect(uses[0]).toMatchObject({ id: 'read-nopath', name: 'Read' });
+
+    const results = messages.flatMap((m) =>
+      m.type === 'user' ? m.message.content.filter((c) => c.type === 'tool_result') : [],
+    );
+    expect(results).toHaveLength(1);
+  });
+
+  test('Edit recovers file_path + old/new string from the ACP diff content block', () => {
+    // Cursor sends an empty rawInput on the initial tool_call and only reports
+    // the edit via the standard ACP `diff` ToolCallContent block on completion.
+    // The card needs file_path + old_string + new_string to render a diff.
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'edit-diff',
+      kind: 'edit',
+      title: 'Edit File',
+      status: 'pending',
+      rawInput: {},
+    });
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'edit-diff',
+      status: 'in_progress',
+    });
+    // Nothing renderable yet — deferred.
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'edit-diff',
+      status: 'completed',
+      content: [
+        {
+          type: 'diff',
+          path: '/repo/src/sample.ts',
+          oldText: 'export const a = 1;\n',
+          newText: 'export const a = 1;\nexport const b = 2;\n',
+        },
+      ],
+    });
+
+    const uses = messages.flatMap((m) =>
+      m.type === 'assistant' ? m.message.content.filter((c) => c.type === 'tool_use') : [],
+    );
+    expect(uses).toHaveLength(1);
+    const block = uses[0];
+    if (block.type !== 'tool_use') throw new Error('unreachable');
+    expect(block).toMatchObject({ id: 'edit-diff', name: 'Edit' });
+    expect(block.input).toMatchObject({
+      file_path: '/repo/src/sample.ts',
+      old_string: 'export const a = 1;\n',
+      new_string: 'export const a = 1;\nexport const b = 2;\n',
+    });
+  });
+
   test('agent_thought_chunk buffers thought and flushes as Think on next event', () => {
     const { proc, messages } = makeProcess();
 
@@ -245,26 +369,85 @@ describe('CursorACPProcess.translateUpdate', () => {
     expect(m1.message.content[0]).toMatchObject({ type: 'text', text: 'Hello world' });
   });
 
-  test('plan update emits a Plan markdown message', () => {
+  test('updateTodos tool_call defers until todos arrive in tool_call_update', () => {
     const { proc, messages } = makeProcess();
 
     translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'todo-1',
+      title: 'Update TODOs',
+      rawInput: { _toolName: 'updateTodos', description: 'Update TODOs' },
+      status: 'pending',
+    });
+
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'todo-1',
+      title: 'Update TODOs',
+      rawInput: {
+        todos: [
+          { id: '1', content: 'Fix CI blockers', status: 'in_progress' },
+          { id: '2', content: 'Raise coverage', status: 'pending' },
+        ],
+        merge: true,
+      },
+      status: 'completed',
+      rawOutput: 'Done',
+    });
+
+    expect(messages).toHaveLength(2);
+    const [use, result] = messages;
+    if (use.type !== 'assistant') throw new Error('unreachable');
+    const block = use.message.content[0];
+    expect(block).toMatchObject({ type: 'tool_use', name: 'TodoWrite' });
+    if (block.type !== 'tool_use') throw new Error('unreachable');
+    expect(block.input).toEqual({
+      todos: [
+        { content: 'Fix CI blockers', status: 'in_progress' },
+        { content: 'Raise coverage', status: 'pending' },
+      ],
+    });
+    if (result.type !== 'user') throw new Error('unreachable');
+    expect(result.message.content[0]).toMatchObject({
+      type: 'tool_result',
+      tool_use_id: 'todo-1',
+      content: 'Done',
+    });
+  });
+
+  test('plan update emits a TodoWrite card from `content` fields', () => {
+    const { proc, messages } = makeProcess();
+
+    // ACP PlanEntry carries the task text in `content` (not `title`).
+    translate(proc, {
       sessionUpdate: 'plan',
       entries: [
-        { title: 'Open file', status: 'completed' },
-        { title: 'Edit file', status: 'in_progress' },
-        { title: 'Commit', status: 'pending' },
+        { content: 'Open file', status: 'completed', priority: 'high' },
+        { content: 'Edit file', status: 'in_progress', priority: 'medium' },
+        { content: 'Commit', status: 'pending', priority: 'low' },
       ],
     });
 
-    expect(messages).toHaveLength(1);
-    const m = messages[0];
-    if (m.type !== 'assistant') throw new Error('unreachable');
-    const block = m.message.content[0];
-    if (block.type !== 'text') throw new Error('unreachable');
-    expect(block.text).toContain('**Plan:**');
-    expect(block.text).toContain('[x] 1. Open file');
-    expect(block.text).toContain('[~] 2. Edit file');
-    expect(block.text).toContain('[ ] 3. Commit');
+    expect(messages).toHaveLength(2);
+    const [use, result] = messages;
+    if (use.type !== 'assistant') throw new Error('unreachable');
+    const block = use.message.content[0];
+    expect(block).toMatchObject({ type: 'tool_use', name: 'TodoWrite' });
+    if (block.type !== 'tool_use') throw new Error('unreachable');
+    expect(block.input).toEqual({
+      todos: [
+        { content: 'Open file', status: 'completed' },
+        { content: 'Edit file', status: 'in_progress' },
+        { content: 'Commit', status: 'pending' },
+      ],
+    });
+
+    if (result.type !== 'user') throw new Error('unreachable');
+    expect(result.message.content[0]).toMatchObject({
+      type: 'tool_result',
+      tool_use_id: block.id,
+    });
   });
 });

@@ -21,7 +21,9 @@
     "dev": "bun --watch src/index.ts",
     "build": "bun run build.ts",
     "start": "bun run dist/index.js",
-    "test": "bun test"
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "test:coverage:gate": "bun scripts/coverage-gate.ts"
   },
   "dependencies": {
     "@abbacchio/transport": "^0.2.0",

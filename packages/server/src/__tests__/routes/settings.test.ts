@@ -32,7 +32,20 @@ mock.module('../../services/ws-relay.js', () => ({
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
   tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {},
+  TunnelTimeoutError: class TunnelTimeoutError extends Error {
+    name = 'TunnelTimeoutError';
+  },
+  isTunnelTimeoutError: () => false,
+}));
+
+const sendMailCalls: Array<Record<string, unknown>> = [];
+
+mock.module('nodemailer', () => ({
+  createTransport: () => ({
+    sendMail: async (opts: Record<string, unknown>) => {
+      sendMailCalls.push(opts);
+    },
+  }),
 }));
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
@@ -48,6 +61,7 @@ describe('Settings & Profile Routes (Integration)', () => {
 
   beforeEach(() => {
     t.cleanup();
+    sendMailCalls.length = 0;
   });
 
   // ── SMTP Settings (admin-only) ─────────────────────────
@@ -121,6 +135,37 @@ describe('Settings & Profile Routes (Integration)', () => {
         user: 'x',
         from: 'x',
       });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('POST /api/settings/smtp/test', () => {
+    test('returns 400 when SMTP is not configured', async () => {
+      const res = await t.requestAs('admin-1', 'admin').post('/api/settings/smtp/test');
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'SMTP not configured' });
+    });
+
+    test('sends a test email using stored SMTP settings', async () => {
+      await t.requestAs('admin-1', 'admin').put('/api/settings/smtp', {
+        host: 'smtp.example.com',
+        port: '587',
+        user: 'mailer@example.com',
+        from: 'noreply@example.com',
+        pass: 'secret123',
+      });
+
+      const res = await t.requestAs('admin-1', 'admin').post('/api/settings/smtp/test');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.sentTo).toBe('noreply@example.com');
+      expect(sendMailCalls).toHaveLength(1);
+      expect(sendMailCalls[0]?.subject).toBe('Funny SMTP Test');
+    });
+
+    test('returns 403 for non-admin', async () => {
+      const res = await t.requestAs('user-1').post('/api/settings/smtp/test');
       expect(res.status).toBe(403);
     });
   });

@@ -28,7 +28,6 @@ describe('GET /api/automations — userId required (security ME-5)', () => {
   beforeAll(async () => {
     t = await createTestApp();
     const { automationRoutes } = await import('../../routes/automations.js');
-    (t.app as Hono<ServerEnv>).route('/api/automations', automationRoutes);
 
     // A second app where the mock auth middleware leaves userId undefined,
     // to simulate the "bypass" scenario the ME-5 defense is supposed to

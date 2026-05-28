@@ -1,29 +1,14 @@
 /**
- * Verifies that socketio.ts registers all required PTY event handlers.
- *
- * This is a static analysis test — it reads the source file and checks
- * that the ptyEvents array includes every event the runtime expects to
- * receive from the browser. This catches regressions where a new PTY
- * event is handled by the runtime but never forwarded by the server.
- *
- * Background: the `pty:restore` event was missing from the ptyEvents
- * array, causing terminals to fail to restore after browser refresh.
+ * Verifies that all required PTY forward events are registered via shared contract.
  */
 
 import { describe, test, expect } from 'bun:test';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 
-const SOCKETIO_PATH = resolve(import.meta.dir, '../../services/socketio.ts');
+import { BROWSER_PTY_FORWARD_EVENTS } from '@funny/shared/socket-events';
 
 /**
- * All PTY events that the runtime (app.ts) handles in its
- * central:browser_ws switch. If the server doesn't forward
- * one of these, the runtime never receives it.
- *
- * Note: `pty:list` is intentionally NOT in this list — it is handled
- * out-of-band as an ack-based RPC (see `setupBrowserPtyListRpc` in
- * socketio.ts and `central:pty_list` in team-client.ts).
+ * PTY events the runtime handles in central:browser_ws.
+ * Note: `pty:list` is ack-based RPC — not in this list.
  */
 const REQUIRED_PTY_EVENTS = [
   'pty:spawn',
@@ -37,28 +22,15 @@ const REQUIRED_PTY_EVENTS = [
 ];
 
 describe('socketio PTY event forwarding', () => {
-  const source = readFileSync(SOCKETIO_PATH, 'utf-8');
-
-  // Extract the ptyEvents array from the source code
-  const ptyEventsMatch = source.match(/const ptyEvents\s*=\s*\[([\s\S]*?)\]/);
-  const ptyEventsBlock = ptyEventsMatch?.[1] ?? '';
-
-  // Parse the event names from the array literal
-  const registeredEvents = [...ptyEventsBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
-
-  test('ptyEvents array is found in socketio.ts', () => {
-    expect(ptyEventsMatch).not.toBeNull();
-    expect(registeredEvents.length).toBeGreaterThan(0);
+  test('shared contract lists every runtime PTY forward event', () => {
+    const missing = REQUIRED_PTY_EVENTS.filter(
+      (event) =>
+        !BROWSER_PTY_FORWARD_EVENTS.includes(event as (typeof BROWSER_PTY_FORWARD_EVENTS)[number]),
+    );
+    expect(missing).toEqual([]);
   });
 
-  for (const event of REQUIRED_PTY_EVENTS) {
-    test(`ptyEvents includes '${event}'`, () => {
-      expect(registeredEvents).toContain(event);
-    });
-  }
-
-  test('all required PTY events are registered', () => {
-    const missing = REQUIRED_PTY_EVENTS.filter((e) => !registeredEvents.includes(e));
-    expect(missing).toEqual([]);
+  test('pty:list is not in the fire-and-forget forwarder list', () => {
+    expect(BROWSER_PTY_FORWARD_EVENTS).not.toContain('pty:list');
   });
 });

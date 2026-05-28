@@ -28,13 +28,22 @@ mock.module('../../services/ws-relay.js', () => ({
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
   tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {},
+  TunnelTimeoutError: class TunnelTimeoutError extends Error {
+    name = 'TunnelTimeoutError';
+  },
+  isTunnelTimeoutError: () => false,
 }));
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedRunner, seedProject, seedRunnerProjectAssignment } from '../helpers/test-db.js';
+import {
+  seedRunner,
+  seedProject,
+  seedRunnerProjectAssignment,
+  seedRunnerTask,
+  seedThread,
+} from '../helpers/test-db.js';
 
 describe('Runner Routes (Integration)', () => {
   let t: TestApp;
@@ -273,6 +282,112 @@ describe('Runner Routes (Integration)', () => {
       const listRes = await t.requestAs('user-1').get('/api/runners/r1/projects');
       const body = await listRes.json();
       expect(body.assignments).toHaveLength(0);
+    });
+  });
+
+  describe('POST /api/runners/heartbeat', () => {
+    test('updates runner status for authenticated runner', async () => {
+      seedRunner(t.db as any, {
+        id: 'r1',
+        userId: 'user-1',
+        token: 'tok-1',
+        status: 'offline',
+        lastHeartbeatAt: '2020-01-01T00:00:00.000Z',
+      });
+
+      const res = await t.requestAsRunner('r1').post('/api/runners/heartbeat', {
+        activeThreadIds: ['t1'],
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.wsConnected).toBe(false);
+    });
+
+    test('returns 401 without runner context', async () => {
+      const res = await t.requestAs('user-1').post('/api/runners/heartbeat', {
+        activeThreadIds: [],
+      });
+      expect(res.status).toBe(401);
+    });
+
+    test('returns 404 when runner was purged', async () => {
+      const res = await t.requestAsRunner('missing-runner').post('/api/runners/heartbeat', {
+        activeThreadIds: [],
+      });
+      expect(res.status).toBe(404);
+      expect((await res.json()).code).toBe('RUNNER_NOT_FOUND');
+    });
+  });
+
+  describe('GET /api/runners/tasks', () => {
+    test('returns pending tasks and marks them running', async () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedRunnerTask(t.db as any, {
+        id: 'task-1',
+        runnerId: 'r1',
+        threadId: 't1',
+        status: 'pending',
+      });
+
+      const res = await t.requestAsRunner('r1').get('/api/runners/tasks');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.tasks).toHaveLength(1);
+      expect(body.tasks[0].taskId).toBe('task-1');
+
+      const second = await t.requestAsRunner('r1').get('/api/runners/tasks');
+      expect((await second.json()).tasks).toHaveLength(0);
+    });
+  });
+
+  describe('POST /api/runners/tasks/result', () => {
+    test('marks a task completed', async () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedRunnerTask(t.db as any, {
+        id: 'task-1',
+        runnerId: 'r1',
+        status: 'running',
+      });
+
+      const res = await t.requestAsRunner('r1').post('/api/runners/tasks/result', {
+        taskId: 'task-1',
+        success: true,
+        data: { ok: true },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+    });
+  });
+
+  describe('Runner project assignment — tenant isolation', () => {
+    test('user-2 cannot assign a project to user-1 runner (404)', async () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedProject(t.db as any, { id: 'p2', userId: 'user-2', path: '/b' });
+
+      const res = await t.requestAs('user-2').post('/api/runners/r1/projects', {
+        projectId: 'p2',
+        localPath: '/home/user-2/project',
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('user-2 cannot list assignments on user-1 runner (404)', async () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+
+      const res = await t.requestAs('user-2').get('/api/runners/r1/projects');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/runners/:runnerId — tenant isolation', () => {
+    test('returns 404 for non-owner non-admin', async () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
+
+      const res = await t.requestAs('user-2').get('/api/runners/r1');
+      expect(res.status).toBe(404);
     });
   });
 });

@@ -28,13 +28,25 @@ mock.module('../../services/ws-relay.js', () => ({
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
   tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {},
+  TunnelTimeoutError: class TunnelTimeoutError extends Error {
+    name = 'TunnelTimeoutError';
+  },
+  isTunnelTimeoutError: () => false,
 }));
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
+import { eq } from 'drizzle-orm';
+
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedThread, seedMessage, seedMessageQueue } from '../helpers/test-db.js';
+import {
+  seedProject,
+  seedThread,
+  seedMessage,
+  seedMessageQueue,
+  seedThreadEvent,
+  seedToolCall,
+} from '../helpers/test-db.js';
 
 describe('Thread Routes (Integration)', () => {
   let t: TestApp;
@@ -559,6 +571,242 @@ describe('Thread Routes (Integration)', () => {
       const body = await res.json();
       expect(body.threadIds).toContain('t1');
       expect(body.snippets['t1']).toBeTruthy();
+    });
+
+    test('does not return other users threads', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedMessage(t.db as any, {
+        id: 'msg1',
+        threadId: 't1',
+        content: 'secret brown fox content',
+      });
+
+      const res = await t.requestAs('user-1').get('/api/threads/search/content?q=brown+fox');
+      expect(res.status).toBe(200);
+      expect((await res.json()).threadIds).toEqual([]);
+    });
+  });
+
+  describe('GET /api/threads/scratch', () => {
+    test('returns only the caller scratch threads', async () => {
+      seedThread(t.db as any, {
+        id: 's1',
+        userId: 'user-1',
+        isScratch: 1,
+        projectId: null as any,
+        title: 'My scratch',
+      });
+      seedThread(t.db as any, {
+        id: 's2',
+        userId: 'user-2',
+        isScratch: 1,
+        projectId: null as any,
+        title: 'Their scratch',
+      });
+
+      const res = await t.requestAs('user-1').get('/api/threads/scratch');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.threads).toHaveLength(1);
+      expect(body.threads[0].id).toBe('s1');
+    });
+  });
+
+  describe('GET /api/threads/archived', () => {
+    test('lists archived threads for the caller', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't1',
+        projectId: 'p1',
+        userId: 'user-1',
+        title: 'Old work',
+        archived: 1,
+      });
+      seedThread(t.db as any, {
+        id: 't2',
+        projectId: 'p1',
+        userId: 'user-1',
+        title: 'Active',
+        archived: 0,
+      });
+
+      const res = await t.requestAs('user-1').get('/api/threads/archived');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.threads).toHaveLength(1);
+      expect(body.threads[0].id).toBe('t1');
+    });
+  });
+
+  describe('GET /api/threads/:id/messages', () => {
+    test('returns paginated messages for the owner', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db as any, { id: 'm1', threadId: 't1', content: 'One' });
+      seedMessage(t.db as any, { id: 'm2', threadId: 't1', content: 'Two' });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/messages');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.messages).toHaveLength(2);
+    });
+
+    test('returns 404 for cross-tenant access', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/messages');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/threads/:id/messages/search', () => {
+    test('searches within a thread', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db as any, {
+        id: 'm1',
+        threadId: 't1',
+        content: 'findme needle',
+      });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/messages/search?q=findme');
+      expect(res.status).toBe(200);
+      expect((await res.json()).results).toHaveLength(1);
+    });
+
+    test('returns empty results for blank query', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/messages/search?q=');
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ results: [] });
+    });
+  });
+
+  describe('GET /api/threads/:id/events', () => {
+    test('returns persisted thread events for the owner', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThreadEvent(t.db as any, {
+        id: 'ev-1',
+        threadId: 't1',
+        eventType: 'workflow:step',
+        data: '{"step":"review"}',
+      });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/events');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.events).toHaveLength(1);
+      expect(body.events[0].type).toBe('workflow:step');
+    });
+
+    test('returns 404 for cross-tenant access', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/events');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/threads/:id/touched-files', () => {
+    test('returns unique file paths from Write/Edit tool calls', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db as any, { id: 'm1', threadId: 't1' });
+      seedToolCall(t.db as any, {
+        id: 'tc1',
+        messageId: 'm1',
+        name: 'Write',
+        input: JSON.stringify({ file_path: 'src/a.ts' }),
+      });
+      seedToolCall(t.db as any, {
+        id: 'tc2',
+        messageId: 'm1',
+        name: 'Edit',
+        input: JSON.stringify({ file_path: 'src/b.ts' }),
+      });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/touched-files');
+      expect(res.status).toBe(200);
+      expect((await res.json()).files).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+  });
+
+  describe('POST /api/threads/:id/workflow-event', () => {
+    test('persists and acknowledges a workflow event', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').post('/api/threads/t1/workflow-event', {
+        type: 'workflow:notify',
+        data: { message: 'Step done' },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.eventId).toBeTruthy();
+
+      const events = await t.requestAs('user-1').get('/api/threads/t1/events');
+      expect((await events.json()).events).toHaveLength(1);
+    });
+
+    test('rejects non-workflow event types', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').post('/api/threads/t1/workflow-event', {
+        type: 'agent:result',
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 404 for cross-tenant post', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+
+      const res = await t.requestAs('user-1').post('/api/threads/t1/workflow-event', {
+        type: 'workflow:notify',
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/threads/:id/comments — tenant isolation', () => {
+    test('returns 404 for cross-tenant comment list', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+
+      const res = await t.requestAs('user-1').get('/api/threads/t1/comments');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/threads/:id/stage — history', () => {
+    test('records stage history on valid transition', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-history',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'backlog',
+      });
+
+      const res = await t
+        .requestAs('user-1')
+        .patch('/api/threads/t-history/stage', { value: 'in_progress' });
+      expect(res.status).toBe(200);
+
+      const rows = await t.db
+        .select()
+        .from(t.schema.stageHistory)
+        .where(eq(t.schema.stageHistory.threadId, 't-history'));
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      expect(rows.some((r) => r.fromStage === 'backlog' && r.toStage === 'in_progress')).toBe(true);
     });
   });
 });

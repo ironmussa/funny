@@ -324,6 +324,7 @@ export function seedThread(
     orchestratorManaged: overrides.orchestratorManaged ?? 1,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     updatedAt: overrides.updatedAt ?? new Date().toISOString(),
+    ...overrides,
   };
   db.insert(schema.threads).values(thread).run();
   return thread;
@@ -362,6 +363,7 @@ export function seedRunner(
     httpUrl: overrides.httpUrl ?? 'http://localhost:3002',
     registeredAt: overrides.registeredAt ?? now,
     lastHeartbeatAt: overrides.lastHeartbeatAt ?? now,
+    ...overrides,
   };
   db.insert(schema.runners).values(runner).run();
   return runner;
@@ -472,4 +474,187 @@ export function seedMessageQueue(
   };
   db.insert(schema.messageQueue).values(entry).run();
   return entry;
+}
+
+export function seedStageHistory(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: {
+    id?: string;
+    threadId?: string;
+    fromStage?: string | null;
+    toStage?: string;
+    changedAt?: string;
+  } = {},
+) {
+  const row = {
+    id: overrides.id ?? crypto.randomUUID(),
+    threadId: overrides.threadId ?? 'test-thread-1',
+    fromStage: overrides.fromStage ?? 'backlog',
+    toStage: overrides.toStage ?? 'planning',
+    changedAt: overrides.changedAt ?? new Date().toISOString(),
+  };
+  db.insert(schema.stageHistory).values(row).run();
+  return row;
+}
+
+export function seedInviteLink(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.inviteLinks.$inferInsert> = {},
+) {
+  const link = {
+    id: overrides.id ?? crypto.randomUUID(),
+    organizationId: overrides.organizationId ?? 'org-acme',
+    token: overrides.token ?? `token-${crypto.randomUUID()}`,
+    role: overrides.role ?? 'member',
+    createdBy: overrides.createdBy ?? 'admin-1',
+    expiresAt: overrides.expiresAt ?? null,
+    maxUses: overrides.maxUses ?? null,
+    useCount: overrides.useCount ?? '0',
+    revoked: overrides.revoked ?? '0',
+    createdAt: overrides.createdAt ?? new Date().toISOString(),
+    ...overrides,
+  };
+  db.insert(schema.inviteLinks).values(link).run();
+  return link;
+}
+
+export function seedOrchestratorRun(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: {
+    threadId?: string;
+    userId?: string;
+    pipelineRunId?: string | null;
+    attempt?: number;
+  } = {},
+) {
+  const now = Date.now();
+  const row = {
+    threadId: overrides.threadId ?? 'test-thread-1',
+    pipelineRunId: overrides.pipelineRunId ?? null,
+    attempt: overrides.attempt ?? 0,
+    nextRetryAtMs: null,
+    lastEventAtMs: now,
+    lastError: null,
+    claimedAtMs: now,
+    userId: overrides.userId ?? 'user-1',
+    tokensTotal: 0,
+    updatedAtMs: now,
+    ...overrides,
+  };
+  db.insert(schema.orchestratorRuns).values(row).run();
+  return row;
+}
+
+export function seedAutomation(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.automations.$inferInsert> = {},
+) {
+  const now = new Date().toISOString();
+  const automation = {
+    id: overrides.id ?? 'auto-1',
+    projectId: overrides.projectId ?? 'test-project-1',
+    userId: overrides.userId ?? 'user-1',
+    name: overrides.name ?? 'Nightly Review',
+    prompt: overrides.prompt ?? 'Review open PRs',
+    schedule: overrides.schedule ?? '0 9 * * *',
+    enabled: overrides.enabled ?? 1,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
+    ...overrides,
+  };
+  db.insert(schema.automations).values(automation).run();
+  return automation;
+}
+
+export function seedAutomationRun(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.automationRuns.$inferInsert> = {},
+) {
+  const now = new Date().toISOString();
+  const run = {
+    id: overrides.id ?? 'run-1',
+    automationId: overrides.automationId ?? 'auto-1',
+    threadId: overrides.threadId ?? 'test-thread-1',
+    status: overrides.status ?? 'completed',
+    triageStatus: overrides.triageStatus ?? 'pending',
+    startedAt: overrides.startedAt ?? now,
+    completedAt: overrides.completedAt ?? now,
+    ...overrides,
+  };
+  db.insert(schema.automationRuns).values(run).run();
+  return run;
+}
+
+export function seedPipelineRun(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.pipelineRuns.$inferInsert> = {},
+) {
+  const now = new Date().toISOString();
+  const run = {
+    id: overrides.id ?? 'pipeline-run-1',
+    pipelineId: overrides.pipelineId ?? 'test-pipeline-1',
+    threadId: overrides.threadId ?? 'test-thread-1',
+    status: overrides.status ?? 'running',
+    createdAt: overrides.createdAt ?? now,
+    ...overrides,
+  };
+  db.insert(schema.pipelineRuns).values(run).run();
+  return run;
+}
+
+export function seedThreadDependency(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: { threadId?: string; blockedBy?: string } = {},
+) {
+  const row = {
+    threadId: overrides.threadId ?? 'test-thread-1',
+    blockedBy: overrides.blockedBy ?? 'blocker-thread-1',
+  };
+  db.insert(schema.threadDependencies).values(row).run();
+  return row;
+}
+
+export function seedToolCall(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: {
+    id?: string;
+    messageId?: string;
+    name?: string;
+    input?: string;
+    output?: string | null;
+  } = {},
+) {
+  const row = {
+    id: overrides.id ?? 'tc-1',
+    messageId: overrides.messageId ?? 'test-msg-1',
+    name: overrides.name ?? 'Write',
+    input: overrides.input ?? JSON.stringify({ file_path: 'src/index.ts' }),
+    output: overrides.output !== undefined ? overrides.output : null,
+  };
+  db.insert(schema.toolCalls).values(row).run();
+  return row;
+}
+
+export function seedRunnerTask(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: {
+    id?: string;
+    runnerId?: string;
+    threadId?: string;
+    type?: string;
+    status?: string;
+    payload?: string;
+  } = {},
+) {
+  const row = {
+    id: overrides.id ?? 'task-1',
+    runnerId: overrides.runnerId ?? 'test-runner-1',
+    threadId: overrides.threadId ?? 'test-thread-1',
+    type: overrides.type ?? 'start_agent',
+    payload: overrides.payload ?? JSON.stringify({ threadId: 'test-thread-1' }),
+    status: overrides.status ?? 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  db.insert(schema.runnerTasks).values(row).run();
+  return row;
 }

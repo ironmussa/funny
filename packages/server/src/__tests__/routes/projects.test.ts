@@ -21,7 +21,7 @@ mock.module('@funny/core/git', () => ({
 // pass validation without changing every test fixture.
 process.env.FUNNY_PROJECT_ROOT = '/tmp';
 
-import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeAll, beforeEach, afterAll } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedTeamProject, seedProjectMember } from '../helpers/test-db.js';
@@ -437,6 +437,56 @@ describe('Project Routes (Integration)', () => {
       const projects = await listRes.json();
       const project = projects.find((p: any) => p.id === 'p1');
       expect(project.defaultPermissionMode).toBe('plan');
+    });
+  });
+
+  // ── Path containment (HI-3) at route layer ─────────────
+
+  describe('POST /api/projects — path containment (HI-3)', () => {
+    const savedRoot = process.env.FUNNY_PROJECT_ROOT;
+
+    beforeAll(() => {
+      delete process.env.FUNNY_PROJECT_ROOT;
+    });
+
+    afterAll(() => {
+      if (savedRoot !== undefined) process.env.FUNNY_PROJECT_ROOT = savedRoot;
+      else delete process.env.FUNNY_PROJECT_ROOT;
+    });
+
+    test('returns 400 for restricted system paths', async () => {
+      const res = await t.requestAs('user-1').post('/api/projects', {
+        name: 'Evil',
+        path: '/etc',
+      });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/restricted system directory/i);
+    });
+
+    test('returns 400 for traversal segments', async () => {
+      const res = await t.requestAs('user-1').post('/api/projects', {
+        name: 'Traversal',
+        path: '/tmp/../etc/passwd',
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/projects — org listing', () => {
+    test('returns team projects when orgId is active', async () => {
+      seedProject(t.db as any, {
+        id: 'p-team',
+        userId: 'user-1',
+        name: 'Team Repo',
+        path: '/tmp/team',
+      });
+      seedTeamProject(t.db as any, { teamId: 'org-acme', projectId: 'p-team' });
+
+      const res = await t.requestAs('user-1', 'user', { orgId: 'org-acme' }).get('/api/projects');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toHaveLength(1);
+      expect(body[0].isTeamProject).toBe(true);
     });
   });
 });

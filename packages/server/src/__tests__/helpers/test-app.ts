@@ -33,12 +33,18 @@ export interface TestApp {
   requestAs: (
     userId: string,
     role?: string,
+    extras?: { orgId?: string },
   ) => {
     get: (path: string) => Promise<Response>;
     post: (path: string, body?: any) => Promise<Response>;
     patch: (path: string, body?: any) => Promise<Response>;
     put: (path: string, body?: any) => Promise<Response>;
     delete: (path: string) => Promise<Response>;
+  };
+  /** Make runner-authenticated requests (heartbeat, tasks, etc.) */
+  requestAsRunner: (runnerId: string) => {
+    get: (path: string) => Promise<Response>;
+    post: (path: string, body?: any) => Promise<Response>;
   };
   /** Truncate all tables for test isolation */
   cleanup: () => void;
@@ -79,12 +85,29 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { threadRoutes } = await import('../../routes/threads.js');
   const { settingsRoutes } = await import('../../routes/settings.js');
   const { profileRoutes } = await import('../../routes/profile.js');
+  const { orchestratorRoutes } = await import('../../routes/orchestrator.js');
+  const { teamSettingsRoutes } = await import('../../routes/team-settings.js');
+  const { teamProjectRoutes } = await import('../../routes/team-projects.js');
+  const { analyticsRoutes } = await import('../../routes/analytics.js');
+  const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
+  const { automationRoutes } = await import('../../routes/automations.js');
+  const { pipelineRoutes } = await import('../../routes/pipelines.js');
+  const { orchestratorSystemRoutes } = await import('../../routes/orchestrator-system.js');
 
   app.route('/api/projects', projectRoutes);
   app.route('/api/runners', runnerRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/settings', settingsRoutes);
   app.route('/api/profile', profileRoutes);
+  app.route('/api/orchestrator', orchestratorRoutes);
+  app.route('/api/orchestrator/system', orchestratorSystemRoutes);
+  app.route('/api/team-settings', teamSettingsRoutes);
+  app.route('/api/team-projects', teamProjectRoutes);
+  app.route('/api/analytics', analyticsRoutes);
+  app.route('/api/automations', automationRoutes);
+  app.route('/api/pipelines', pipelineRoutes);
+  app.route('/api/invite-links', inviteLinkPublicRoutes);
+  app.route('/api/invite-links', inviteLinkRoutes);
 
   // 6. Build helpers
   const cleanup = () => {
@@ -107,8 +130,11 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
       'project_members',
       'projects',
       'runners',
+      'orchestrator_runs',
+      'thread_dependencies',
       'user_profiles',
       'instance_settings',
+      'invite_links',
     ];
     for (const table of tables) {
       try {
@@ -119,18 +145,23 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
     }
   };
 
-  const requestAs = (userId: string, role = 'user') => ({
+  const testHeaders = (userId: string, role: string, extras?: { orgId?: string }) => ({
+    'X-Test-User-Id': userId,
+    'X-Test-User-Role': role,
+    ...(extras?.orgId ? { 'X-Test-Org-Id': extras.orgId } : {}),
+  });
+
+  const requestAs = (userId: string, role = 'user', extras?: { orgId?: string }) => ({
     get: (path: string) =>
       app.request(path, {
-        headers: { 'X-Test-User-Id': userId, 'X-Test-User-Role': role },
+        headers: testHeaders(userId, role, extras),
       }),
     post: (path: string, body?: any) =>
       app.request(path, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Test-User-Id': userId,
-          'X-Test-User-Role': role,
+          ...testHeaders(userId, role, extras),
         },
         body: body ? JSON.stringify(body) : undefined,
       }),
@@ -139,8 +170,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Test-User-Id': userId,
-          'X-Test-User-Role': role,
+          ...testHeaders(userId, role, extras),
         },
         body: body ? JSON.stringify(body) : undefined,
       }),
@@ -149,17 +179,37 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'X-Test-User-Id': userId,
-          'X-Test-User-Role': role,
+          ...testHeaders(userId, role, extras),
         },
         body: body ? JSON.stringify(body) : undefined,
       }),
     delete: (path: string) =>
       app.request(path, {
         method: 'DELETE',
-        headers: { 'X-Test-User-Id': userId, 'X-Test-User-Role': role },
+        headers: testHeaders(userId, role, extras),
       }),
   });
 
-  return { app, db, schema, requestAs, cleanup };
+  const runnerHeaders = (runnerId: string) => ({
+    'X-Test-Is-Runner': 'true',
+    'X-Test-Runner-Id': runnerId,
+  });
+
+  const requestAsRunner = (runnerId: string) => ({
+    get: (path: string) =>
+      app.request(path, {
+        headers: runnerHeaders(runnerId),
+      }),
+    post: (path: string, body?: any) =>
+      app.request(path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...runnerHeaders(runnerId),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      }),
+  });
+
+  return { app, db, schema, requestAs, requestAsRunner, cleanup };
 }

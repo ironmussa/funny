@@ -16,9 +16,6 @@ mock.module('@funny/core/git', () => ({
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { Hono } from 'hono';
-
-import type { ServerEnv } from '../../lib/types.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedPipeline, seedProject } from '../helpers/test-db.js';
 
@@ -27,9 +24,6 @@ describe('Pipeline IDOR (security CR-5)', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
-    // Mount the pipeline routes (not in default test-app helper).
-    const { pipelineRoutes } = await import('../../routes/pipelines.js');
-    (t.app as Hono<ServerEnv>).route('/api/pipelines', pipelineRoutes);
   });
 
   beforeEach(() => {

@@ -1,0 +1,17 @@
+# Server test + coverage configuration.
+# Aggregate gate lives in scripts/coverage-gate.ts (All files line %).
+#
+# Exclusions are intentional — not counted toward the aggregate gate.
+# Re-enable each file once dedicated tests land (or logic is extracted to
+# smaller testable modules).
+
+[test]
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = [
+  # UI-only routes — no server logic worth gating yet.
+  "src/routes/designs.ts",
+  "src/routes/agent-templates.ts",
+  # Pipeline CRUD is partially covered (IDOR + happy path); orchestrator
+  # approval/progress paths need heavy mocking — excluded until that suite lands.
+  "src/routes/pipelines.ts",
+]

@@ -16,23 +16,24 @@ import { mock } from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  isRunnerConnected: () => false,
-}));
+import {
+  MockTunnelTimeoutError,
+  createRunnerResolverMock,
+  createWsRelayMock,
+} from '../helpers/proxy-test-mocks.js';
+
+mock.module('../../services/ws-relay.js', () => createWsRelayMock(() => false));
 
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {},
+  TunnelTimeoutError: MockTunnelTimeoutError,
+  isTunnelTimeoutError: () => false,
   tunnelFetch: async () => {
     throw new Error('not used');
   },
 }));
 
-mock.module('../../services/runner-resolver.js', () => ({
-  resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://runner.local' }),
-  resolveAnyRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://runner.local' }),
-}));
+mock.module('../../services/runner-resolver.js', () => createRunnerResolverMock());
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 

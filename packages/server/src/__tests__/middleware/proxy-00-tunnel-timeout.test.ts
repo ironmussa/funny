@@ -4,40 +4,48 @@
  * processing it; a fallback would deliver it twice and duplicate side effects
  * (e.g., persisting a user message twice and enqueuing two prompts on agents
  * that await the full turn in sendPrompt — Gemini ACP / Codex / Pi).
+ *
+ * File prefix `proxy-00-` ensures this loads before proxy-forwarded-identity.test.ts.
+ * Bun caches proxy.js's ws-tunnel/ws-relay bindings from the first importer.
  */
 
 import { mock } from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  isRunnerConnected: () => true,
-}));
+import {
+  MockTunnelTimeoutError,
+  createRunnerResolverMock,
+  createWsRelayMock,
+} from '../helpers/proxy-test-mocks.js';
 
 let tunnelShouldTimeout = false;
 let tunnelCalls = 0;
 
-import { TunnelTimeoutError } from '../../services/ws-tunnel.js';
+mock.module('../../services/ws-relay.js', () => createWsRelayMock(() => true));
 
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
-  TunnelTimeoutError,
+  TunnelTimeoutError: MockTunnelTimeoutError,
+  isTunnelTimeoutError: (err: unknown) =>
+    err instanceof MockTunnelTimeoutError ||
+    (typeof err === 'object' &&
+      err !== null &&
+      (err as Error).name === 'TunnelTimeoutError' &&
+      'runnerId' in err &&
+      'timeoutMs' in err),
   tunnelFetch: async (runnerId: string) => {
     tunnelCalls++;
     if (tunnelShouldTimeout) {
-      throw new TunnelTimeoutError(runnerId, 30_000);
+      throw new MockTunnelTimeoutError(runnerId, 30_000);
     }
     throw new Error('socket not found');
   },
 }));
 
-mock.module('../../services/runner-resolver.js', () => ({
-  resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://runner.local' }),
-  resolveAnyRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://runner.local' }),
-}));
+mock.module('../../services/runner-resolver.js', () => createRunnerResolverMock());
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { Hono } from 'hono';
 
@@ -70,6 +78,10 @@ describe('proxyToRunner — tunnel timeout fallback', () => {
     }) as unknown as typeof fetch;
   });
 
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   test('returns 504 and does NOT fall back to direct HTTP on tunnel timeout', async () => {
     tunnelShouldTimeout = true;
     const app = buildApp();
@@ -83,8 +95,9 @@ describe('proxyToRunner — tunnel timeout fallback', () => {
     expect(res.status).toBe(504);
     expect(tunnelCalls).toBe(1);
     expect(directFetchCalls).toBe(0);
-
-    globalThis.fetch = originalFetch;
+    expect(await res.json()).toEqual({
+      error: 'Runner did not respond in time. The request may still be processing.',
+    });
   });
 
   test('still falls back to direct HTTP on non-timeout tunnel errors', async () => {
@@ -100,7 +113,5 @@ describe('proxyToRunner — tunnel timeout fallback', () => {
     expect(res.status).toBe(200);
     expect(tunnelCalls).toBe(1);
     expect(directFetchCalls).toBe(1);
-
-    globalThis.fetch = originalFetch;
   });
 });

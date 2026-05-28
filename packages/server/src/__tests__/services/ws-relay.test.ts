@@ -17,6 +17,14 @@ import {
   isRunnerConnected,
   getRunnerSocketId,
   userHasConnectedRunner,
+  setIO,
+  relayToUser,
+  broadcast,
+  sendToRunner,
+  forwardBrowserMessageToRunner,
+  getAnyConnectedRunnerId,
+  getConnectedBrowserUserIds,
+  getRelayStats,
 } from '../../services/ws-relay.js';
 
 /**
@@ -132,5 +140,104 @@ describe('ws-relay userHasConnectedRunner (readiness signal)', () => {
     addRunnerClient('r1', 'sock-2', 'user-A');
     removeRunnerClient('r1', 'sock-1'); // stale
     expect(userHasConnectedRunner('user-A')).toBe(true);
+  });
+});
+
+describe('ws-relay Socket.IO delivery', () => {
+  const relayCalls: Array<{ room: string; event: string; payload: unknown }> = [];
+  const runnerCalls: Array<{ socketId: string; event: string; payload: unknown }> = [];
+
+  function installMockIo() {
+    relayCalls.length = 0;
+    runnerCalls.length = 0;
+
+    const browserNs = {
+      sockets: { size: 3 },
+      adapter: {
+        rooms: new Map([
+          ['user:alice', new Set(['sock-a'])],
+          ['user:bob', new Set(['sock-b'])],
+          ['runner:r1', new Set(['sock-r1'])],
+        ]),
+      },
+      emit: (event: string, payload: unknown) => {
+        relayCalls.push({ room: '*', event, payload });
+      },
+      to: (room: string) => ({
+        emit: (event: string, payload: unknown) => {
+          relayCalls.push({ room, event, payload });
+        },
+      }),
+    };
+
+    const runnerNs = {
+      to: (socketId: string) => ({
+        emit: (event: string, payload: unknown) => {
+          runnerCalls.push({ socketId, event, payload });
+        },
+      }),
+    };
+
+    setIO({
+      of: (name: string) => (name === '/runner' ? runnerNs : browserNs),
+    } as any);
+  }
+
+  beforeEach(() => {
+    for (const runnerId of TEST_RUNNERS) removeRunnerClient(runnerId);
+    installMockIo();
+    addRunnerClient('r1', 'sock-r1', 'user-A');
+  });
+
+  test('relayToUser emits to the user room', () => {
+    relayToUser('alice', { type: 'agent:status', threadId: 't1' });
+    expect(relayCalls).toHaveLength(1);
+    expect(relayCalls[0]?.room).toBe('user:alice');
+    expect(relayCalls[0]?.event).toBe('agent:status');
+  });
+
+  test('broadcast emits to all browser clients', () => {
+    broadcast({ type: 'system:pulse' });
+    expect(relayCalls[0]?.room).toBe('*');
+    expect(relayCalls[0]?.event).toBe('system:pulse');
+  });
+
+  test('sendToRunner targets the registered socketId', () => {
+    const ok = sendToRunner('r1', { type: 'central:ping' });
+    expect(ok).toBe(true);
+    expect(runnerCalls[0]?.socketId).toBe('sock-r1');
+    expect(runnerCalls[0]?.event).toBe('central:ping');
+  });
+
+  test('sendToRunner returns false when runner is not connected', () => {
+    removeRunnerClient('r1');
+    expect(sendToRunner('r1', { type: 'central:ping' })).toBe(false);
+  });
+
+  test('forwardBrowserMessageToRunner wraps browser payload', () => {
+    const ok = forwardBrowserMessageToRunner('r1', 'user-A', 'org-1', { cmd: 'pty:list' });
+    expect(ok).toBe(true);
+    expect(runnerCalls[0]?.payload).toEqual({
+      type: 'central:browser_ws',
+      userId: 'user-A',
+      organizationId: 'org-1',
+      data: { cmd: 'pty:list' },
+    });
+  });
+
+  test('getAnyConnectedRunnerId returns a registered runner', () => {
+    expect(getAnyConnectedRunnerId()).toBe('r1');
+  });
+
+  test('getConnectedBrowserUserIds lists user:* rooms', () => {
+    expect(getConnectedBrowserUserIds().sort()).toEqual(['alice', 'bob']);
+  });
+
+  test('getRelayStats reports runner and browser counts', () => {
+    addRunnerClient('r2', 'sock-r2', 'user-B');
+    const stats = getRelayStats();
+    expect(stats.runners).toBe(2);
+    expect(stats.browserClients).toBe(3);
+    expect(stats.browserUsers).toBe(2);
   });
 });

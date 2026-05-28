@@ -34,8 +34,17 @@ jobs:
       - name: Run tests (runtime)
         run: bun run --cwd packages/runtime test
 
+      - name: Run tests (server)
+        run: bun run --cwd packages/server test
+
+      - name: Run server coverage gate
+        run: bun run --cwd packages/server test:coverage:gate
+
       - name: Run tests (client)
         run: bun run --cwd packages/client test
+
+      - name: Run client coverage (scoped logic layers)
+        run: bun run --cwd packages/client test:coverage
 
   build:
     runs-on: ubuntu-latest

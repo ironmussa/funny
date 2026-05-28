@@ -22,5 +22,8 @@ export default defineConfig({
     globals: true,
     include: ['src/__tests__/*.test.ts'],
     exclude: ['dist/**'],
+    // Git suites share process.env (FUNNY_DISABLE_NATIVE_GIT) and temp dirs —
+    // parallel file workers cause flaky cross-talk.
+    fileParallelism: false,
   },
 });

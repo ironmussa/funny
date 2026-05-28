@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest';
 
-import { buildACPToolInput, extractACPToolOutput } from '../agents/acp-tool-input.js';
+import {
+  buildACPToolInput,
+  buildTodoWriteInputFromRaw,
+  extractACPToolOutput,
+  hasRenderableTodoInput,
+  inferACPToolName,
+} from '../agents/acp-tool-input.js';
 
 describe('extractACPToolOutput', () => {
   test('unwraps Cursor read_file `{ content: string }` rawOutput', () => {
@@ -85,5 +91,47 @@ describe('buildACPToolInput — Read with Cursor-style data', () => {
     });
     expect(input.file_path).toBeUndefined();
     expect(input.description).toBe('Read File');
+  });
+});
+
+describe('Cursor updateTodos → TodoWrite', () => {
+  test('inferACPToolName maps raw `_toolName: updateTodos` to TodoWrite', () => {
+    expect(
+      inferACPToolName(undefined, 'Update TODOs', undefined, {
+        _toolName: 'updateTodos',
+        description: 'Update TODOs',
+      }),
+    ).toBe('TodoWrite');
+  });
+
+  test('buildACPToolInput normalizes Cursor todos payload', () => {
+    const input = buildACPToolInput('TodoWrite', {
+      title: 'Update TODOs',
+      rawInput: {
+        _toolName: 'updateTodos',
+        todos: [
+          { id: '1', content: 'Fix CI', status: 'in_progress' },
+          { id: '2', content: 'Add tests', status: 'pending' },
+        ],
+        merge: true,
+      },
+    });
+    expect(input).toEqual({
+      todos: [
+        { content: 'Fix CI', status: 'in_progress' },
+        { content: 'Add tests', status: 'pending' },
+      ],
+    });
+    expect(hasRenderableTodoInput(input)).toBe(true);
+  });
+
+  test('buildTodoWriteInputFromRaw reads accepted outcome todos', () => {
+    const built = buildTodoWriteInputFromRaw({
+      outcome: {
+        outcome: 'accepted',
+        todos: [{ id: '1', content: 'Ship it', status: 'completed' }],
+      },
+    });
+    expect(built).toEqual({ todos: [{ content: 'Ship it', status: 'completed' }] });
   });
 });

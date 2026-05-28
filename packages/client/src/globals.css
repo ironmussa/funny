@@ -1298,6 +1298,11 @@
   color: hsl(var(--foreground));
 }
 
+/* Bottom (terminal) group: tab bar background matches the terminal body. */
+.dockview-theme-funny [data-bottom-group] > .dv-tabs-and-actions-container {
+  background-color: hsl(var(--background));
+}
+
 /* Edge groups (left/right sidebars) put their content container inside a
    `flex-direction: row` parent. Dockview's stock CSS gives the content
    container `min-height: 0` (correct for the default `column` flex), but

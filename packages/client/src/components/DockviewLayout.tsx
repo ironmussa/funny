@@ -16,6 +16,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -335,7 +336,11 @@ export function DockviewLayout({
     () =>
       function PrefixHeaderActions({ group }) {
         if (!isBottomGroup(group)) return null;
-        return <>{bottomPrefixActionsRef.current ?? null}</>;
+        return (
+          <BottomGroupMarker group={group}>
+            {bottomPrefixActionsRef.current ?? null}
+          </BottomGroupMarker>
+        );
       },
     [],
   );
@@ -1072,6 +1077,24 @@ export function DockviewLayout({
 }
 
 // ── Helpers ──
+
+/** Marks the bottom group's root `.groupview` element with `data-bottom-group`
+ *  so CSS can target the terminal tab bar background independently. */
+function BottomGroupMarker({
+  group,
+  children,
+}: {
+  group: DockviewGroupPanel;
+  children: ReactNode;
+}) {
+  useLayoutEffect(() => {
+    const el = group.element;
+    if (!el) return;
+    el.setAttribute('data-bottom-group', '');
+    return () => el.removeAttribute('data-bottom-group');
+  }, [group]);
+  return <>{children}</>;
+}
 
 function isBottomGroup(group: DockviewGroupPanel): boolean {
   return group.panels.some((p) => p.id.startsWith('bottom:'));

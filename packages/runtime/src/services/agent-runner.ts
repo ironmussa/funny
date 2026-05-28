@@ -73,6 +73,7 @@ export class AgentRunner {
     mcpServers?: Record<string, any>,
     skipMessageInsert?: boolean,
     effort?: string,
+    steer?: boolean,
   ): Promise<void> {
     return this.lifecycle.startAgent(
       threadId,
@@ -87,6 +88,7 @@ export class AgentRunner {
       mcpServers,
       skipMessageInsert,
       effort,
+      steer,
     );
   }
 

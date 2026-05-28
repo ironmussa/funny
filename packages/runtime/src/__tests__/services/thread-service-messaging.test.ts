@@ -301,6 +301,42 @@ describe('sendMessage — queue and interactive tool flows', () => {
     expect(startAgent).not.toHaveBeenCalled();
   });
 
+  test('steers the live turn (no queue) when running and project uses steer mode', async () => {
+    mocks.projects.getProject.mockResolvedValue({
+      followUpMode: 'steer',
+      path: '/projects/test',
+    });
+    vi.mocked(isAgentRunning).mockReturnValue(true);
+
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'running',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: 'go left instead',
+    });
+
+    expect(result.isOk()).toBe(true);
+    // Steer mode never queues — it redirects the live turn.
+    expect(mocks.messageQueue.enqueue).not.toHaveBeenCalled();
+    expect(startAgent).toHaveBeenCalledTimes(1);
+    // steer is the 13th positional arg (index 12) of startAgent.
+    const call = vi.mocked(startAgent).mock.calls.at(-1);
+    expect(call?.[0]).toBe('t-running');
+    expect(call?.[12]).toBe(true);
+  });
+
   test('upgrades permission mode after ExitPlanMode approval', async () => {
     mocks.tm.getThread.mockResolvedValue({
       id: 't-waiting',

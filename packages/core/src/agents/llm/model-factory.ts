@@ -39,6 +39,7 @@ export interface ResolvedModel {
 const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
   opus: 'claude-opus-4-6',
   'opus-4.7': 'claude-opus-4-7',
+  'opus-4.8': 'claude-opus-4-8',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -50,6 +51,7 @@ const OPENAI_MODEL_ALIASES: Record<string, string> = {
   // Claude short names — for OpenAI-compatible servers backed by Claude
   opus: 'claude-opus-4-6',
   'opus-4.7': 'claude-opus-4-7',
+  'opus-4.8': 'claude-opus-4-8',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -57,6 +59,7 @@ const OPENAI_MODEL_ALIASES: Record<string, string> = {
 const FUNNY_API_ACP_ALIASES: Record<string, string> = {
   opus: 'claude-opus-4-6',
   'opus-4.7': 'claude-opus-4-7',
+  'opus-4.8': 'claude-opus-4-8',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };

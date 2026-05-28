@@ -69,6 +69,7 @@ interface ProjectState {
       path?: string;
       color?: string | null;
       followUpMode?: string;
+      fastMode?: boolean;
       defaultProvider?: string | null;
       defaultModel?: string | null;
       defaultMode?: string | null;

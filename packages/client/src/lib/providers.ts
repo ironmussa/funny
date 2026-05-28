@@ -119,7 +119,11 @@ export const EFFORT_LEVELS: EffortConfig[] = [
   { value: 'low', label: 'Low', description: 'Minimal thinking — fastest' },
   { value: 'medium', label: 'Medium', description: 'Balanced speed and quality' },
   { value: 'high', label: 'High', description: 'Deep reasoning (default)' },
-  { value: 'xhigh', label: 'Extra High', description: 'Long-horizon agentic work — Opus 4.7 only' },
+  {
+    value: 'xhigh',
+    label: 'Extra High',
+    description: 'Long-horizon agentic work — Opus 4.7 / 4.8',
+  },
   { value: 'max', label: 'Max', description: 'Frontier reasoning — highest cost' },
 ];
 
@@ -128,8 +132,8 @@ const PROVIDERS_WITH_EFFORT = new Set(['claude', 'codex']);
 
 // Claude models that support effort beyond low/medium/high.
 // Keys are the friendly model names from `@funny/shared` models registry.
-const CLAUDE_MODELS_WITH_XHIGH = new Set(['opus-4.7']);
-const CLAUDE_MODELS_WITH_MAX = new Set(['opus-4.7', 'opus', 'sonnet-4.6']);
+const CLAUDE_MODELS_WITH_XHIGH = new Set(['opus-4.7', 'opus-4.8']);
+const CLAUDE_MODELS_WITH_MAX = new Set(['opus-4.7', 'opus-4.8', 'opus', 'sonnet-4.6']);
 
 /** Get available effort levels for a given provider + model. Returns empty array if not supported. */
 export function getEffortLevels(model: string, provider?: string): EffortConfig[] {

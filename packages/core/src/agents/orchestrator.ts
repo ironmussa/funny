@@ -49,6 +49,14 @@ export interface StartAgentOptions {
   env?: Record<string, string>;
   /** Effort level for Claude SDK — controls thinking depth ('low' | 'medium' | 'high' | 'xhigh' | 'max') */
   effort?: string;
+  /** Enable Claude fast mode (higher output speed at premium pricing). Claude SDK only. */
+  fastMode?: boolean;
+  /**
+   * Run the Claude process in persistent streaming-input mode so later prompts
+   * can steer the live turn instead of respawning. Set when followUpMode ===
+   * 'steer'. Claude SDK only.
+   */
+  steerable?: boolean;
   /** Built-in skill names to disable (Deep Agent only) */
   builtinSkillsDisabled?: string[];
   /** Additional skill directory paths (Deep Agent only) */
@@ -104,6 +112,7 @@ interface ProcessOptionsSnapshot {
   cwd: string;
   permissionMode: string;
   effort?: string;
+  fastMode: boolean;
   /** Stable JSON of mcpServers — '' when none. */
   mcpServersKey: string;
 }
@@ -114,6 +123,7 @@ function snapshotProcessOptions(opts: {
   cwd?: string;
   permissionMode?: string;
   effort?: string;
+  fastMode?: boolean;
   mcpServers?: Record<string, any>;
 }): ProcessOptionsSnapshot {
   let mcpServersKey = '';
@@ -133,6 +143,7 @@ function snapshotProcessOptions(opts: {
     cwd: opts.cwd ?? '',
     permissionMode: opts.permissionMode ?? '',
     effort: opts.effort,
+    fastMode: opts.fastMode ?? false,
     mcpServersKey,
   };
 }
@@ -167,6 +178,7 @@ export class AgentOrchestrator extends EventEmitter {
     if (prev.cwd !== next.cwd) return false;
     if (prev.permissionMode !== next.permissionMode) return false;
     if (prev.effort !== next.effort) return false;
+    if (prev.fastMode !== next.fastMode) return false;
     if (prev.mcpServersKey !== next.mcpServersKey) return false;
     return true;
   }
@@ -191,6 +203,8 @@ export class AgentOrchestrator extends EventEmitter {
       systemPrefix,
       env,
       effort,
+      fastMode,
+      steerable,
       builtinSkillsDisabled,
       customSkillPaths,
       agentName,
@@ -216,6 +230,7 @@ export class AgentOrchestrator extends EventEmitter {
       cwd,
       permissionMode,
       effort,
+      fastMode,
       mcpServers,
     });
 
@@ -329,6 +344,8 @@ export class AgentOrchestrator extends EventEmitter {
       systemPrefix,
       env,
       effort,
+      fastMode,
+      steerable,
       builtinSkillsDisabled,
       customSkillPaths,
       agentName,

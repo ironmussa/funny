@@ -166,7 +166,7 @@ describe('PromptInput', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit).toHaveBeenCalledWith(
       'Hello agent',
-      expect.objectContaining({ model: 'opus', mode: 'autoEdit' }),
+      expect.objectContaining({ model: 'opus-4.8', mode: 'autoEdit' }),
       undefined,
     );
   });

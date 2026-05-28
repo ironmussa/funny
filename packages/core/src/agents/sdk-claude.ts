@@ -11,8 +11,9 @@ import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent
 
 import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
+import type { IAgentProcess } from './interfaces.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
-import type { CLIMessage } from './types.js';
+import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 const dlog = createDebugLogger('sdk');
 
@@ -20,14 +21,108 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
   private stderrBuffer: string[] = [];
 
+  // ── Steering (live multi-turn) input channel ──────────────────
+  // Only used when `options.steerable` is set (followUpMode === 'steer').
+  // The query then runs in persistent streaming-input mode so we can
+  // interrupt() the in-flight turn and push a new user message on the same
+  // session, without respawning the process. Non-steerable threads keep the
+  // original one-shot behavior (query ends after the turn → process exits).
+  private inputQueue: Array<Record<string, unknown>> = [];
+  private inputWaiters: Array<() => void> = [];
+  private inputClosed = false;
+
+  constructor(options: ClaudeProcessOptions) {
+    super(options);
+    // Only steerable threads expose live-reuse hooks. Without these, the
+    // orchestrator's sendPrompt/steer branches are skipped for Claude and
+    // follow-ups fall back to kill+respawn (the historical behavior).
+    if (options.steerable) {
+      (this as IAgentProcess).sendPrompt = this.steerableSendPrompt.bind(this);
+      (this as IAgentProcess).steerPrompt = this.steerableSteerPrompt.bind(this);
+    }
+  }
+
+  private get steerable(): boolean {
+    return !!this.options.steerable;
+  }
+
   // ── Overrides ──────────────────────────────────────────────────
 
   async kill(): Promise<void> {
     dlog.debug('kill() called', { hasActiveQuery: !!this.activeQuery });
+    this.closeInput();
     await super.kill();
     // close() forcefully ends the query, stopping all in-flight API calls
     // and preventing further messages from being yielded
     this.activeQuery?.close();
+  }
+
+  // ── Steering API (only bound when steerable) ──────────────────
+
+  /**
+   * Warm follow-up on the live session: push a new user message. If a turn is
+   * in flight the SDK processes it next; if idle it starts immediately. No
+   * interrupt — use this for non-steer follow-ups in steerable threads.
+   */
+  private async steerableSendPrompt(prompt: string, images?: unknown[]): Promise<void> {
+    if (!this.activeQuery || this.isAborted || this._exited) {
+      throw new Error('claude-live-unavailable: no live session to continue');
+    }
+    this.pushInput(prompt, images);
+  }
+
+  /**
+   * Steer the live turn: interrupt the in-flight turn, then inject `prompt` on
+   * the same streaming session so the model redirects without a respawn.
+   */
+  private async steerableSteerPrompt(prompt: string, images?: unknown[]): Promise<void> {
+    if (!this.activeQuery || this.isAborted || this._exited) {
+      throw new Error('claude-live-unavailable: no live session to steer');
+    }
+    // Cancel the in-flight turn FIRST. The interrupted turn still yields a
+    // `result`; because the input channel stays open, the prompt we push next
+    // drives the following turn instead of ending the session. Pushing only
+    // after interrupt() succeeds avoids a double-send if interrupt throws and
+    // the orchestrator falls back to the plain sendPrompt path.
+    await this.activeQuery.interrupt();
+    this.pushInput(prompt, images);
+  }
+
+  // ── Input channel plumbing ────────────────────────────────────
+
+  private pushInput(prompt: string, images?: unknown[]): void {
+    this.inputQueue.push(this.makeUserMessage(prompt, images));
+    const wake = this.inputWaiters.shift();
+    if (wake) wake();
+  }
+
+  private closeInput(): void {
+    this.inputClosed = true;
+    const waiters = this.inputWaiters.splice(0);
+    for (const wake of waiters) wake();
+  }
+
+  private makeUserMessage(prompt: string, images?: unknown[]): Record<string, unknown> {
+    const content: any[] = [{ type: 'text', text: prompt }];
+    if (images?.length) content.push(...images);
+    return {
+      type: 'user',
+      session_id: '',
+      message: { role: 'user', content },
+      parent_tool_use_id: null,
+    };
+  }
+
+  private async *consumeInput(): AsyncGenerator<Record<string, unknown>, void, unknown> {
+    while (true) {
+      const next = this.inputQueue.shift();
+      if (next) {
+        yield next;
+        continue;
+      }
+      if (this.inputClosed) return;
+      await new Promise<void>((resolve) => this.inputWaiters.push(resolve));
+    }
   }
 
   // ── Provider-specific run loop ─────────────────────────────────
@@ -186,6 +281,17 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       sdkOptions.effort = validEfforts.has(this.options.effort) ? this.options.effort : 'high';
     }
 
+    // Fast mode (speed): enabled via the inline `settings` layer, which sits
+    // above user/project settings. `fastModePerSessionOptIn` keeps it scoped to
+    // this run instead of persisting to the user's settings file.
+    if (this.options.fastMode) {
+      sdkOptions.settings = {
+        ...(typeof sdkOptions.settings === 'object' ? sdkOptions.settings : {}),
+        fastMode: true,
+        fastModePerSessionOptIn: true,
+      };
+    }
+
     // Pass MCP servers (e.g., CDP browser tools) if provided
     if (this.options.mcpServers) {
       sdkOptions.mcpServers = this.options.mcpServers;
@@ -279,6 +385,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   // ── Prompt building ─────────────────────────────────────────────
 
   private buildPromptInput(): string | AsyncIterable<any> {
+    // Steerable threads always use the persistent input channel so the query
+    // stays in streaming-input mode (required for interrupt()/live follow-ups).
+    // Seed the first turn, then keep the channel open until kill().
+    if (this.steerable) {
+      this.pushInput(this.options.prompt, this.options.images);
+      return this.consumeInput();
+    }
     // In-process MCP servers (createSdkMcpServer) require streaming input mode
     const needsStreaming = !!this.options.images?.length || !!this.options.mcpServers;
     if (!needsStreaming) {

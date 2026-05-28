@@ -167,7 +167,7 @@ describe('AutomationManager', () => {
       expect(auto.name).toBe('Daily lint check');
       expect(auto.prompt).toBe('Run eslint on the codebase and fix any errors');
       expect(auto.schedule).toBe('0 9 * * *');
-      expect(auto.model).toBe('opus');
+      expect(auto.model).toBe('opus-4.8');
       expect(auto.mode).toBe('local');
       expect(auto.permissionMode).toBe('autoEdit');
       expect(auto.enabled).toBe(1);

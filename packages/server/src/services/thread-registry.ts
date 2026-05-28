@@ -4,6 +4,7 @@
  * for routing and listing.
  */
 
+import { DEFAULT_MODEL, DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
@@ -41,34 +42,33 @@ export async function registerThread(entry: {
   branch?: string;
   isScratch?: boolean;
 }): Promise<void> {
-  // DB column accepts null, but Drizzle's insert shape inferred from the
-  // (non-null) schema needs an explicit assertion at this boundary.
   const now = new Date().toISOString();
+  const insertRow: typeof threads.$inferInsert = {
+    id: entry.id,
+    projectId: entry.projectId,
+    runnerId: entry.runnerId,
+    userId: entry.userId,
+    title: entry.title ?? '',
+    status: 'idle',
+    stage: 'backlog',
+    model: entry.model ?? DEFAULT_MODEL,
+    mode: entry.mode ?? DEFAULT_THREAD_MODE,
+    branch: entry.branch ?? null,
+    isScratch: entry.isScratch ? 1 : 0,
+    createdAt: now,
+    updatedAt: now,
+  };
 
   await db
     .insert(threads)
-    .values({
-      id: entry.id,
-      projectId: entry.projectId,
-      runnerId: entry.runnerId,
-      userId: entry.userId,
-      title: entry.title ?? null,
-      status: 'idle',
-      stage: 'backlog',
-      model: entry.model ?? null,
-      mode: entry.mode ?? null,
-      branch: entry.branch ?? null,
-      isScratch: entry.isScratch ? 1 : 0,
-      createdAt: now,
-      updatedAt: now,
-    })
+    .values(insertRow)
     .onConflictDoUpdate({
       target: [threads.id],
       set: {
         runnerId: entry.runnerId,
-        title: entry.title ?? null,
-        model: entry.model ?? null,
-        mode: entry.mode ?? null,
+        ...(entry.title !== undefined ? { title: entry.title } : {}),
+        ...(entry.model !== undefined ? { model: entry.model } : {}),
+        ...(entry.mode !== undefined ? { mode: entry.mode } : {}),
         // Only overwrite branch if we have a value — the runtime's
         // data:create_thread may have already set the correct branch
         // before this upsert runs.

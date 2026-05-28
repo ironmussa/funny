@@ -672,6 +672,30 @@ describe('AgentLifecycleManager', () => {
     });
   });
 
+  describe('startAgent — project settings', () => {
+    test('forwards fastMode from project to orchestrator', async () => {
+      const call = await startWithStatus('pending', { id: 'thread-fastmode-on' }, 'claude', {
+        fastMode: true,
+      });
+
+      expect(call.fastMode).toBe(true);
+    });
+
+    test('defaults fastMode to false when project has it disabled', async () => {
+      const call = await startWithStatus('pending', { id: 'thread-fastmode-off' }, 'claude', {
+        fastMode: false,
+      });
+
+      expect(call.fastMode).toBe(false);
+    });
+
+    test('defaults fastMode to false when project omits the field', async () => {
+      const call = await startWithStatus('pending', { id: 'thread-fastmode-default' }, 'claude');
+
+      expect(call.fastMode).toBe(false);
+    });
+  });
+
   describe('extractActiveAgents', () => {
     test('delegates to orchestrator', () => {
       const active = new Map([['t-1', { threadId: 't-1' }]]);

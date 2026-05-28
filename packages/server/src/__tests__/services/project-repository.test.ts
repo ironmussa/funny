@@ -89,6 +89,30 @@ describe('project-repository', () => {
       expect(updated!.color).toBe('#FF0000');
     });
 
+    test('fastMode defaults to 0 and round-trips through update', () => {
+      seedProject(testDb.db, { id: 'p1' });
+
+      const created = testDb.db
+        .select()
+        .from(testDb.schema.projects)
+        .where(eq(testDb.schema.projects.id, 'p1'))
+        .get();
+      expect(created!.fastMode).toBe(0);
+
+      testDb.db
+        .update(testDb.schema.projects)
+        .set({ fastMode: 1 })
+        .where(eq(testDb.schema.projects.id, 'p1'))
+        .run();
+
+      const updated = testDb.db
+        .select()
+        .from(testDb.schema.projects)
+        .where(eq(testDb.schema.projects.id, 'p1'))
+        .get();
+      expect(updated!.fastMode).toBe(1);
+    });
+
     test('delete a project', () => {
       seedProject(testDb.db, { id: 'p1' });
 

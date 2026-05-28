@@ -134,7 +134,7 @@ export const renameProjectSchema = z.object({
   name: z.string().min(1, 'name is required'),
 });
 
-export const followUpModeSchema = z.enum(['interrupt', 'queue', 'ask']);
+export const followUpModeSchema = z.enum(['interrupt', 'queue', 'ask', 'steer']);
 
 export const updateProjectSchema = z
   .object({
@@ -145,6 +145,7 @@ export const updateProjectSchema = z
       .nullable()
       .optional(),
     followUpMode: followUpModeSchema.optional(),
+    fastMode: z.boolean().optional(),
     defaultProvider: agentProviderSchema.nullable().optional(),
     defaultModel: agentModelSchema.nullable().optional(),
     defaultMode: threadModeSchema.nullable().optional(),
@@ -180,7 +181,9 @@ export const createThreadSchema = z
     title: z.string().max(500).optional().default(''),
     mode: threadModeSchema,
     runtime: threadRuntimeSchema.optional().default('local'),
-    provider: agentProviderSchema.optional().default(DEFAULT_PROVIDER),
+    provider: agentProviderSchema
+      .optional()
+      .default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
     model: agentModelSchema.optional().default(DEFAULT_MODEL),
     permissionMode: permissionModeSchema.optional().default(DEFAULT_PERMISSION_MODE),
     effort: effortLevelSchema.optional(),
@@ -486,7 +489,9 @@ export const createAutomationSchema = z.object({
   name: z.string().min(1, 'name is required').max(200),
   prompt: z.string().min(1, 'prompt is required').max(500_000),
   schedule: automationScheduleSchema,
-  provider: agentProviderSchema.optional().default(DEFAULT_PROVIDER),
+  provider: agentProviderSchema
+    .optional()
+    .default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
   model: agentModelSchema.optional().default(DEFAULT_MODEL),
   permissionMode: permissionModeSchema.optional().default(DEFAULT_PERMISSION_MODE),
   mode: automationModeSchema.optional().default('default'),

@@ -166,6 +166,29 @@ export function GeneralSettings() {
                     label: t('settings.followUpAsk'),
                     testId: 'settings-followup-ask',
                   },
+                  {
+                    value: 'steer',
+                    label: t('settings.followUpSteer'),
+                    testId: 'settings-followup-steer',
+                  },
+                ]}
+              />
+            </SettingRow>
+            <SettingRow title={t('settings.fastMode')} description={t('settings.fastModeDesc')}>
+              <SegmentedControl<string>
+                value={selectedProject.fastMode ? 'on' : 'off'}
+                onChange={(v) => saveProject(selectedProject.id, { fastMode: v === 'on' })}
+                options={[
+                  {
+                    value: 'off',
+                    label: t('settings.fastModeOff'),
+                    testId: 'settings-fastmode-off',
+                  },
+                  {
+                    value: 'on',
+                    label: t('settings.fastModeOn'),
+                    testId: 'settings-fastmode-on',
+                  },
                 ]}
               />
             </SettingRow>

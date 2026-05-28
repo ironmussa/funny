@@ -83,6 +83,12 @@ const claudeModels = {
     contextWindow: 1_000_000,
     i18nKey: 'opus47',
   },
+  'opus-4.8': {
+    id: 'claude-opus-4-8[1m]',
+    label: 'Opus 4.8',
+    contextWindow: 1_000_000,
+    i18nKey: 'opus48',
+  },
 } as const satisfies Record<string, ModelDefinition>;
 
 const codexModels = {
@@ -288,7 +294,7 @@ export type AgentModel =
 // Helper: narrow a provider string to keys of its sub-registry.
 type ModelsOf<P extends keyof typeof MODEL_REGISTRY> = keyof (typeof MODEL_REGISTRY)[P];
 
-export const DEFAULT_MODEL: AgentModel = 'opus';
+export const DEFAULT_MODEL: AgentModel = 'opus-4.8';
 
 // ── Per-provider defaults ─────────────────────────────────────
 

@@ -123,8 +123,8 @@ describe('pipeline-repository', () => {
         .where(eq(testDb.schema.pipelines.id, 'pipe-defaults'))
         .get();
 
-      expect(pipeline!.reviewModel).toBe('opus');
-      expect(pipeline!.fixModel).toBe('opus');
+      expect(pipeline!.reviewModel).toBe('opus-4.8');
+      expect(pipeline!.fixModel).toBe('opus-4.8');
       expect(pipeline!.maxIterations).toBe(10);
       expect(pipeline!.precommitFixEnabled).toBe(0);
       expect(pipeline!.testEnabled).toBe(0);

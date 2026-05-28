@@ -106,6 +106,14 @@ export interface ClaudeProcessOptions {
   systemPrefix?: string;
   /** Effort level for Claude SDK — controls thinking depth ('low' | 'medium' | 'high' | 'xhigh' | 'max') */
   effort?: string;
+  /** Enable Claude fast mode (higher output speed at premium pricing). Claude SDK only. */
+  fastMode?: boolean;
+  /**
+   * Run the Claude SDK process in persistent streaming-input mode so the live
+   * turn can be steered (interrupted + redirected) or warm-continued without a
+   * respawn. Set when the thread's followUpMode === 'steer'. Claude SDK only.
+   */
+  steerable?: boolean;
   /** Additional environment variables to pass to the agent subprocess (e.g., API keys). */
   env?: Record<string, string>;
   /** Built-in skill names to disable (Deep Agent only, e.g., ['planning', 'code-review']) */

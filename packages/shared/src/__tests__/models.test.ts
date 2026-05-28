@@ -25,6 +25,10 @@ describe('resolveModelId', () => {
       expect(resolveModelId('claude', 'opus')).toBe('claude-opus-4-6[1m]');
     });
 
+    test('resolves opus-4.8 to its full model ID (with 1M context alias)', () => {
+      expect(resolveModelId('claude', 'opus-4.8')).toBe('claude-opus-4-8[1m]');
+    });
+
     test('resolves haiku to its full model ID', () => {
       expect(resolveModelId('claude', 'haiku')).toBe('claude-haiku-4-5-20251001');
     });
@@ -166,8 +170,8 @@ describe('resolveModelId', () => {
 // ── getDefaultModel ─────────────────────────────────────────────
 
 describe('getDefaultModel', () => {
-  test('returns opus for claude', () => {
-    expect(getDefaultModel('claude')).toBe('opus');
+  test('returns opus-4.8 for claude', () => {
+    expect(getDefaultModel('claude')).toBe('opus-4.8');
   });
 
   test('returns gpt-5.4 for codex', () => {
@@ -178,8 +182,8 @@ describe('getDefaultModel', () => {
     expect(getDefaultModel('gemini')).toBe('gemini-3.1-pro-preview');
   });
 
-  test('returns opus for llm-api', () => {
-    expect(getDefaultModel('llm-api')).toBe('opus');
+  test('returns opus-4.8 for llm-api', () => {
+    expect(getDefaultModel('llm-api')).toBe('opus-4.8');
   });
 
   test('throws on unknown provider', () => {
@@ -196,8 +200,9 @@ describe('getProviderModels', () => {
     expect(models).toContain('sonnet-4.6');
     expect(models).toContain('opus');
     expect(models).toContain('opus-4.7');
+    expect(models).toContain('opus-4.8');
     expect(models).toContain('haiku');
-    expect(models).toHaveLength(5);
+    expect(models).toHaveLength(6);
   });
 
   test('returns all codex models', () => {

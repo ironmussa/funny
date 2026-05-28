@@ -218,6 +218,8 @@ export interface Project {
   path: string;
   color?: string;
   followUpMode?: FollowUpMode;
+  /** Per-project default for Claude fast mode (speed). New threads inherit it. */
+  fastMode?: boolean;
   defaultProvider?: AgentProvider;
   defaultModel?: AgentModel;
   defaultMode?: ThreadMode;

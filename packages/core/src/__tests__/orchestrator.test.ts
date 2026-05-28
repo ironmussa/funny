@@ -63,6 +63,24 @@ class SilentMockProcess extends MockProcess {
   }
 }
 
+// ── Steerable mock (live multi-turn) ────────────────────────────
+// Implements sendPrompt + steerPrompt and stays alive after start, so the
+// orchestrator's warm-reuse / steer branches engage (mirrors a steerable
+// SDKClaudeProcess).
+
+class SteerableMockProcess extends MockProcess {
+  public sendPromptCalls: string[] = [];
+  public steerPromptCalls: string[] = [];
+
+  async sendPrompt(prompt: string): Promise<void> {
+    this.sendPromptCalls.push(prompt);
+  }
+
+  async steerPrompt(prompt: string): Promise<void> {
+    this.steerPromptCalls.push(prompt);
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 function createFactory(
@@ -145,6 +163,18 @@ describe('AgentOrchestrator', () => {
       expect(factory.lastProcess.options.permissionMode).toBe('bypassPermissions');
     });
 
+    test('forwards fastMode to process options', async () => {
+      await orchestrator.startAgent(baseOpts({ fastMode: true }));
+
+      expect(factory.lastProcess.options.fastMode).toBe(true);
+    });
+
+    test('forwards steerable to process options', async () => {
+      await orchestrator.startAgent(baseOpts({ steerable: true }));
+
+      expect(factory.lastProcess.options.steerable).toBe(true);
+    });
+
     test('passes allowed tools to process', async () => {
       await orchestrator.startAgent(baseOpts());
 
@@ -157,6 +187,54 @@ describe('AgentOrchestrator', () => {
       await orchestrator.startAgent(baseOpts({ allowedTools: ['Read'] }));
 
       expect(factory.lastProcess.options.allowedTools).toEqual(['Read']);
+    });
+  });
+
+  // ── Steering (live multi-turn) ─────────────────────────────────
+
+  describe('steering', () => {
+    let steerFactory: ReturnType<typeof createFactory>;
+    let orch: AgentOrchestrator;
+
+    beforeEach(() => {
+      steerFactory = createFactory(SteerableMockProcess);
+      orch = new AgentOrchestrator(steerFactory);
+    });
+
+    test('steer redirects the live turn via steerPrompt without respawning', async () => {
+      await orch.startAgent(baseOpts({ steerable: true }));
+      const proc = steerFactory.lastProcess as SteerableMockProcess;
+
+      await orch.startAgent(baseOpts({ steerable: true, steer: true, prompt: 'redirect' }));
+
+      expect(proc.steerPromptCalls).toEqual(['redirect']);
+      expect(proc.sendPromptCalls).toEqual([]);
+      // Same live process — no kill + respawn (partial output preserved).
+      expect(steerFactory.lastProcess).toBe(proc);
+      expect(proc.exited).toBe(false);
+    });
+
+    test('non-steer follow-up warm-continues the live session via sendPrompt', async () => {
+      await orch.startAgent(baseOpts({ steerable: true }));
+      const proc = steerFactory.lastProcess as SteerableMockProcess;
+
+      await orch.startAgent(baseOpts({ steerable: true, prompt: 'follow up' }));
+
+      expect(proc.sendPromptCalls).toEqual(['follow up']);
+      expect(proc.steerPromptCalls).toEqual([]);
+      expect(steerFactory.lastProcess).toBe(proc);
+    });
+
+    test('incompatible options force a respawn instead of steering', async () => {
+      await orch.startAgent(baseOpts({ steerable: true }));
+      const first = steerFactory.lastProcess as SteerableMockProcess;
+
+      // Switching model breaks the reuse-compatibility snapshot.
+      await orch.startAgent(baseOpts({ steerable: true, steer: true, model: 'haiku' }));
+
+      expect(first.steerPromptCalls).toEqual([]);
+      expect(first.exited).toBe(true);
+      expect(steerFactory.lastProcess).not.toBe(first);
     });
   });
 

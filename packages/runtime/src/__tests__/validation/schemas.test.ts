@@ -155,11 +155,11 @@ describe('createThreadSchema', () => {
     }
   });
 
-  test('applies default model to "opus"', () => {
+  test('applies default model to "opus-4.8"', () => {
     const result = createThreadSchema.safeParse(validThread);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.model).toBe('opus');
+      expect(result.data.model).toBe('opus-4.8');
     }
   });
 
@@ -521,7 +521,7 @@ describe('validate', () => {
     });
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.model).toBe('opus');
+      expect(result.value.model).toBe('opus-4.8');
       expect(result.value.permissionMode).toBe('autoEdit');
     }
   });

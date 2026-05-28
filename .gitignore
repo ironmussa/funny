@@ -36,3 +36,4 @@ storybook-static
 openspec/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+/.codegraph

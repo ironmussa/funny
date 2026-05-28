@@ -24,6 +24,7 @@ export function createTestDb() {
       path TEXT NOT NULL,
       color TEXT,
       follow_up_mode TEXT NOT NULL DEFAULT 'interrupt',
+      fast_mode INTEGER NOT NULL DEFAULT 0,
       default_provider TEXT,
       default_model TEXT,
       default_mode TEXT,

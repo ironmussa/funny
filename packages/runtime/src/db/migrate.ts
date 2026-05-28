@@ -930,6 +930,15 @@ const migrations: Migration[] = [
       await addColumn('messages', 'effort', 'TEXT');
     },
   },
+  {
+    // Per-project default for Claude fast mode (speed). New threads in the
+    // project inherit it; resolved at agent-start and forwarded to the SDK
+    // via the inline `settings.fastMode` option.
+    name: '059_projects_fast_mode',
+    async up() {
+      await addColumn('projects', 'fast_mode', 'INTEGER NOT NULL', '0');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

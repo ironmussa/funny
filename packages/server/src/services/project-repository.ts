@@ -187,20 +187,26 @@ function toProject(row: ProjectRow): Project {
   const {
     color,
     followUpMode,
+    fastMode,
     defaultProvider,
     defaultModel,
     defaultMode,
     defaultPermissionMode,
     defaultBranch,
+    defaultAgentTemplateId,
     urls: urlsRaw,
     systemPrompt,
     launcherUrl,
     closed,
     ...rest
-  } = row as ProjectRow & { closed?: number | boolean | null };
+  } = row as ProjectRow & {
+    closed?: number | boolean | null;
+    fastMode?: number | boolean | null;
+  };
   return {
     ...rest,
     ...(closed ? { closed: true } : {}),
+    ...(fastMode ? { fastMode: true } : {}),
     ...(color != null ? { color } : {}),
     ...(followUpMode && followUpMode !== DEFAULT_FOLLOW_UP_MODE
       ? { followUpMode: followUpMode as FollowUpMode }
@@ -214,6 +220,7 @@ function toProject(row: ProjectRow): Project {
       ? { defaultPermissionMode: defaultPermissionMode as Project['defaultPermissionMode'] }
       : {}),
     ...(defaultBranch != null ? { defaultBranch } : {}),
+    ...(defaultAgentTemplateId != null ? { defaultAgentTemplateId } : {}),
     ...(urlsRaw != null ? { urls: JSON.parse(urlsRaw) as string[] } : {}),
     ...(systemPrompt != null ? { systemPrompt } : {}),
     ...(launcherUrl != null ? { launcherUrl } : {}),
@@ -445,6 +452,7 @@ export async function updateProject(
     launcherUrl?: string | null;
     defaultAgentTemplateId?: string | null;
     closed?: boolean;
+    fastMode?: boolean;
   },
 ): Promise<Result<Project, DomainError>> {
   const project = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
@@ -509,6 +517,7 @@ export async function updateProject(
   if (fields.defaultAgentTemplateId !== undefined)
     updateData.defaultAgentTemplateId = fields.defaultAgentTemplateId;
   if (fields.closed !== undefined) updateData.closed = fields.closed ? 1 : 0;
+  if (fields.fastMode !== undefined) updateData.fastMode = fields.fastMode ? 1 : 0;
 
   await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
   return ok(toProject({ ...project, ...updateData } as ProjectRow));

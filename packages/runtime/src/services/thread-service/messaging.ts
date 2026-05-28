@@ -207,6 +207,11 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
     !threadIsTerminal &&
     (followUpMode === 'queue' || params.forceQueue);
 
+  // Steer: only when the agent is actively mid-turn (not waiting on an
+  // interactive answer, not terminal). When the thread is idle the message is
+  // a normal follow-up (warm-continue on the live session, or resume).
+  const steer = followUpMode === 'steer' && agentRunning && !isWaitingResponse && !threadIsTerminal;
+
   if (!willQueue) {
     // Persist the user's message BEFORE any remote/long-running call. If a later
     // step (e.g. findLastUnansweredInteractiveToolCall) times out or throws, the
@@ -343,6 +348,7 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
     undefined,
     hasDraftMessage, // skipMessageInsert — draft already exists
     params.effort,
+    steer,
   ).catch((err) => {
     log.error('Failed to start agent in background', {
       namespace: 'thread-service',

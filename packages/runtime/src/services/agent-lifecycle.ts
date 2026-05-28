@@ -75,6 +75,9 @@ export class AgentLifecycleManager {
     mcpServers?: Record<string, any>,
     skipMessageInsert?: boolean,
     effort?: string,
+    /** Steer the live turn (interrupt + redirect) instead of respawning.
+     *  Set by the caller when sending to a running thread in 'steer' mode. */
+    steer?: boolean,
   ): Promise<void> {
     log.info('startAgent called', {
       namespace: 'agent',
@@ -291,7 +294,7 @@ export class AgentLifecycleManager {
 
           // Template system prompt (mode: replace | prepend | append)
           if (tpl.systemPrompt) {
-            templateSystemPrompt = tpl.systemPrompt;
+            let resolvedPrompt = tpl.systemPrompt;
 
             // Interpolate template variables: replace {{VAR_NAME}} with values
             const rawVars = thread.templateVariables;
@@ -302,11 +305,12 @@ export class AgentLifecycleManager {
                   ? rawVars
                   : {};
             if (Object.keys(varValues).length > 0) {
-              templateSystemPrompt = templateSystemPrompt.replace(
+              resolvedPrompt = resolvedPrompt.replace(
                 /\{\{(\w+)\}\}/g,
-                (match, name) => varValues[name] ?? match,
+                (match: string, name: string) => varValues[name] ?? match,
               );
             }
+            templateSystemPrompt = resolvedPrompt;
             // prepend/append are handled below in systemPrefix assembly
           }
 
@@ -455,6 +459,9 @@ export class AgentLifecycleManager {
         mcpServers,
         env: agentEnv,
         effort,
+        fastMode: project?.fastMode ?? false,
+        steerable: project?.followUpMode === 'steer',
+        steer: steer ?? false,
         builtinSkillsDisabled: tplBuiltinSkillsDisabled,
         customSkillPaths: tplCustomSkillPaths,
         agentName: tplAgentName,

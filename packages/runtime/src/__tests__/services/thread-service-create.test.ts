@@ -301,7 +301,7 @@ describe('createAndStartThread', () => {
       'fixed-thread-id',
       'Try a regex',
       '',
-      'opus',
+      'opus-4.8',
       'autoEdit',
       undefined,
       undefined,

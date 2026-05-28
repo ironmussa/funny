@@ -42,6 +42,7 @@ export const projects = pgTable('projects', {
   path: text('path').notNull(),
   color: text('color'),
   followUpMode: text('follow_up_mode').notNull().default(DEFAULT_FOLLOW_UP_MODE),
+  fastMode: integer('fast_mode').notNull().default(0),
   defaultProvider: text('default_provider'),
   defaultModel: text('default_model'),
   defaultMode: text('default_mode'),

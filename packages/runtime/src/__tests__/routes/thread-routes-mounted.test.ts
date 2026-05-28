@@ -344,4 +344,61 @@ describe('threadRoutes (mounted)', () => {
     const res = await makeApp().request('/api/threads/missing/stop', { method: 'POST' });
     expect(res.status).toBe(404);
   });
+
+  test('POST /:id/message returns 400 on invalid body', async () => {
+    const res = await makeApp().request('/api/threads/t1/message', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  test('POST /:id/message propagates service errors', async () => {
+    mocks.sendMessage.mockResolvedValue(errAsync(new ThreadServiceError('agent busy', 409)));
+
+    const res = await makeApp().request('/api/threads/t1/message', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'follow up' }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  test('POST / returns friendly error when Claude CLI is missing', async () => {
+    mocks.createAndStartThread.mockResolvedValue(
+      errAsync(new Error('Could not find the claude CLI binary')),
+    );
+
+    const res = await makeApp().request('/api/threads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        projectId: 'p1',
+        mode: 'local',
+        prompt: 'hello',
+      }),
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toContain('Claude Code CLI is not installed');
+  });
+
+  test('POST /:id/stop returns 500 when stop fails', async () => {
+    mocks.stopThread.mockResolvedValue(errAsync(new ThreadServiceError('stop failed', 500)));
+
+    const res = await makeApp().request('/api/threads/t1/stop', { method: 'POST' });
+    expect(res.status).toBe(500);
+  });
+
+  test('POST /:id/fork returns 400 on invalid body', async () => {
+    const res = await makeApp().request('/api/threads/t1/fork', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'no message id' }),
+    });
+    expect(res.status).toBe(400);
+    expect(mocks.forkThread).not.toHaveBeenCalled();
+  });
 });

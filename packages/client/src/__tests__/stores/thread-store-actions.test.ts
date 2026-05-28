@@ -17,6 +17,8 @@ const {
   mockRenameThread,
   mockPinThread,
   mockUpdateThreadStage,
+  mockGetThreadMessages,
+  mockCleanupThreadActor,
 } = vi.hoisted(() => ({
   mockSendMessage: vi.fn(),
   mockStopThread: vi.fn(),
@@ -33,6 +35,8 @@ const {
   mockRenameThread: vi.fn(),
   mockPinThread: vi.fn(),
   mockUpdateThreadStage: vi.fn(),
+  mockGetThreadMessages: vi.fn(),
+  mockCleanupThreadActor: vi.fn(),
 }));
 
 vi.mock('@/lib/api/threads', () => ({
@@ -48,7 +52,7 @@ vi.mock('@/lib/api/threads', () => ({
     updateThread: vi.fn(),
     deleteThread: mockDeleteThread,
     archiveThread: mockArchiveThread,
-    getThreadMessages: vi.fn(),
+    getThreadMessages: mockGetThreadMessages,
     renameThread: mockRenameThread,
     pinThread: mockPinThread,
     updateThreadStage: mockUpdateThreadStage,
@@ -64,7 +68,7 @@ vi.mock('@/stores/store-bridge', () => ({
 
 vi.mock('@/stores/thread-machine-bridge', () => ({
   transitionThreadStatus: vi.fn().mockReturnValue('running'),
-  cleanupThreadActor: vi.fn(),
+  cleanupThreadActor: mockCleanupThreadActor,
   loadThreadData: mockLoadThreadData,
   isThreadDataLoaded: mockIsThreadDataLoaded,
   isThreadDataPrefetched: vi.fn().mockReturnValue(false),
@@ -129,6 +133,19 @@ const baseThread = {
 describe('thread store actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useThreadStore.setState({
+      threadsById: {},
+      threadIdsByProject: {},
+      scratchThreadIds: [],
+      threadTotalByProject: {},
+      scratchThreadTotal: 0,
+      selectedThreadId: null,
+      threadDataById: {},
+      activeThread: null,
+      setupProgressByThread: {},
+      contextUsageByThread: {},
+      queuedCountByThread: {},
+    });
   });
 
   describe('sendMessage', () => {
@@ -782,6 +799,188 @@ describe('thread store actions', () => {
       await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
 
       expect(useThreadStore.getState().threadsById.t1.stage).toBe('backlog');
+    });
+  });
+
+  describe('loadMoreThreads', () => {
+    test('appends additional threads to project bucket', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+      const t2 = { ...baseThread, id: 't2', title: 'second' };
+      mockListThreads.mockReturnValue(okAsync({ threads: [t2], total: 2 }));
+
+      await useThreadStore.getState().loadMoreThreads('p1');
+
+      expect(useThreadStore.getState().threadIdsByProject.p1).toEqual(['t1', 't2']);
+      expect(mockListThreads).toHaveBeenCalledWith('p1', false, 50, 1);
+    });
+  });
+
+  describe('deleteThread', () => {
+    test('stops running thread, removes from store, and clears selection', async () => {
+      const running = { ...baseThread, status: 'running' as const };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [running as any] }),
+        selectedThreadId: 't1',
+        activeThread: running as any,
+        threadDataById: { t1: running as any },
+      } as any);
+      mockStopThread.mockReturnValue(okAsync({ ok: true }));
+
+      await useThreadStore.getState().deleteThread('t1');
+
+      expect(mockStopThread).toHaveBeenCalledWith('t1');
+      expect(mockCleanupThreadActor).toHaveBeenCalledWith('t1');
+      expect(useThreadStore.getState().threadsById.t1).toBeUndefined();
+      expect(useThreadStore.getState().selectedThreadId).toBeNull();
+      expect(mockDeleteThread).toHaveBeenCalledWith('t1');
+    });
+  });
+
+  describe('deleteScratchThread', () => {
+    test('removes scratch thread from scratch bucket', async () => {
+      const scratch = {
+        ...baseThread,
+        id: 's1',
+        projectId: '',
+        isScratch: true,
+        status: 'idle' as const,
+      };
+      useThreadStore.setState({
+        threadsById: { s1: scratch as any },
+        scratchThreadIds: ['s1'],
+        scratchThreadTotal: 1,
+        threadIdsByProject: {},
+        threadTotalByProject: {},
+        threadDataById: { s1: scratch as any },
+      } as any);
+
+      await useThreadStore.getState().deleteScratchThread('s1');
+
+      expect(useThreadStore.getState().scratchThreadIds).toEqual([]);
+      expect(useThreadStore.getState().threadsById.s1).toBeUndefined();
+    });
+  });
+
+  describe('appendOptimisticMessage', () => {
+    test('appends user message and transitions status on hydrated thread', () => {
+      const idle = { ...baseThread, status: 'idle' as const, messages: [] };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [idle as any] }),
+        selectedThreadId: 't1',
+        activeThread: idle as any,
+        threadDataById: { t1: idle as any },
+      } as any);
+
+      useThreadStore.getState().appendOptimisticMessage('t1', 'hello world');
+
+      const payload = useThreadStore.getState().threadDataById.t1;
+      expect(payload.messages).toHaveLength(1);
+      expect(payload.messages[0].content).toBe('hello world');
+      expect(payload.status).toBe('running');
+      expect(useThreadStore.getState().threadsById.t1.status).toBe('running');
+    });
+
+    test('replaces existing draft user message on idle thread', () => {
+      const draft = {
+        id: 'draft-1',
+        threadId: 't1',
+        role: 'user' as const,
+        content: 'old draft',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const idle = { ...baseThread, status: 'idle' as const, messages: [draft] };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [idle as any] }),
+        threadDataById: { t1: idle as any },
+      } as any);
+
+      useThreadStore.getState().appendOptimisticMessage('t1', 'final prompt');
+
+      const msgs = useThreadStore.getState().threadDataById.t1.messages;
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].content).toBe('final prompt');
+    });
+  });
+
+  describe('rollbackOptimisticMessage', () => {
+    test('removes last user message from payload', () => {
+      const userMsg = {
+        id: 'u1',
+        threadId: 't1',
+        role: 'user' as const,
+        content: 'oops',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const asstMsg = {
+        id: 'a1',
+        threadId: 't1',
+        role: 'assistant' as const,
+        content: 'hi',
+        timestamp: '2026-01-01T00:01:00.000Z',
+      };
+      const thread = {
+        ...baseThread,
+        status: 'running' as const,
+        messages: [userMsg, asstMsg],
+        lastUserMessage: userMsg,
+      };
+      useThreadStore.setState({
+        threadDataById: { t1: thread as any },
+      } as any);
+
+      useThreadStore.getState().rollbackOptimisticMessage('t1');
+
+      expect(useThreadStore.getState().threadDataById.t1.messages).toEqual([asstMsg]);
+    });
+  });
+
+  describe('clearProjectThreads', () => {
+    test('clears bucket, payloads, and selection when active thread belongs to project', () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+        selectedThreadId: 't1',
+        activeThread: baseThread as any,
+        threadDataById: { t1: baseThread as any },
+      } as any);
+
+      useThreadStore.getState().clearProjectThreads('p1');
+
+      expect(useThreadStore.getState().threadIdsByProject.p1).toBeUndefined();
+      expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
+      expect(useThreadStore.getState().selectedThreadId).toBeNull();
+    });
+  });
+
+  describe('registerLiveThread / unregisterLiveThread', () => {
+    beforeEach(() => {
+      for (let i = 0; i < 3; i++) {
+        useThreadStore.getState().unregisterLiveThread('t1');
+      }
+    });
+
+    test('fetches and hydrates thread when not yet loaded', async () => {
+      const fetched = { ...baseThread, title: 'Live column' };
+      mockGetThread.mockReturnValue(okAsync(fetched));
+
+      await useThreadStore.getState().registerLiveThread('t1');
+
+      expect(useThreadStore.getState().threadDataById.t1.title).toBe('Live column');
+      useThreadStore.getState().unregisterLiveThread('t1');
+    });
+
+    test('evicts payload after unregister when not selected', async () => {
+      const fetched = { ...baseThread, title: 'Live column' };
+      mockGetThread.mockReturnValue(okAsync(fetched));
+      useThreadStore.setState({ selectedThreadId: null, activeThread: null } as any);
+
+      await useThreadStore.getState().registerLiveThread('t1');
+      expect(useThreadStore.getState().threadDataById.t1).toBeDefined();
+
+      useThreadStore.getState().unregisterLiveThread('t1');
+
+      expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
     });
   });
 });

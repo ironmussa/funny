@@ -12,6 +12,7 @@ import { TeamMembers } from '@/components/settings/TeamMembers';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { SkillsSettings } from '@/components/SkillsSettings';
 import { StartupCommandsSettings } from '@/components/StartupCommandsSettings';
+import { LoadingState } from '@/components/ui/loading-state';
 import { WorktreeSettings } from '@/components/WorktreeSettings';
 
 // Lazy-loaded: pulls in Monaco editor (~3MB) only when the user opens this page
@@ -47,9 +48,7 @@ export function SettingsPageContent({ page, label }: Props) {
       return <ProjectConfigSettings />;
     case 'hooks':
       return (
-        <Suspense
-          fallback={<div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>}
-        >
+        <Suspense fallback={<LoadingState label="Loading…" className="min-h-[40vh]" />}>
           <ProjectHooksSettings />
         </Suspense>
       );

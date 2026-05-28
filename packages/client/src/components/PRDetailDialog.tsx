@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import {
@@ -371,10 +372,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
 
               <ScrollArea className="min-h-0 flex-1">
                 {loadingCommitFiles ? (
-                  <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Loading…
-                  </div>
+                  <LoadingState testId="pr-detail-files-loading" label="Loading…" />
                 ) : fileSummaries.length === 0 ? (
                   <div className="py-4 text-center text-xs text-muted-foreground">
                     {fileSearch ? 'No matching files' : 'No files changed'}

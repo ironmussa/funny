@@ -151,11 +151,10 @@ export function useSidebarActions() {
       }
 
       const freshStore = useThreadStore.getState();
-      if (
-        freshStore.selectedThreadId === threadId &&
-        (!freshStore.activeThread || freshStore.activeThread.id !== threadId)
-      ) {
-        freshStore.selectThread(threadId);
+      if (freshStore.selectedThreadId !== threadId) {
+        void freshStore.selectThread(threadId);
+      } else if (!freshStore.activeThread || freshStore.activeThread.id !== threadId) {
+        void freshStore.selectThread(threadId);
       }
       navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
     },

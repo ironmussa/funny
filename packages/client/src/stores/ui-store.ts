@@ -385,6 +385,8 @@ export const useUIStore = create<UIState>((set) => ({
       open
         ? {
             settingsOpen: true,
+            generalSettingsOpen: false,
+            activePreferencesPage: null,
             automationInboxOpen: false,
             addProjectOpen: false,
             testRunnerOpen: false,

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
@@ -196,7 +197,7 @@ export function PipelineSettings() {
   }
 
   if (loading || !pipeline) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>;
+    return <LoadingState label="Loading…" className="min-h-[40vh]" />;
   }
 
   return (

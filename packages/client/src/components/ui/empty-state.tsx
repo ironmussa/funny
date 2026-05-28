@@ -21,7 +21,7 @@ interface EmptyStateProps {
 /**
  * Centered, dead-vertical empty-state block. Always fills its parent and
  * centers content both axes so callers don't have to remember the flex / size
- * boilerplate. Drop-in for the "nothing here" placeholders inside tab panels.
+ * Pair with {@link LoadingState} for the loading case in the same panel.
  */
 export function EmptyState({
   icon: Icon,

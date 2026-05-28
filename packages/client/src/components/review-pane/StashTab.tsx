@@ -6,6 +6,7 @@ import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -195,10 +196,10 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
           </div>
 
           {stashFilesLoading ? (
-            <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {t('review.loading', 'Loading changes…')}
-            </div>
+            <LoadingState
+              testId="stash-detail-loading"
+              label={t('review.loading', 'Loading changes…')}
+            />
           ) : (
             <div className="flex min-h-0 flex-1">
               <div

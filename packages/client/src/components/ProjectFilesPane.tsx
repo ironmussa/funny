@@ -1,11 +1,12 @@
 import type { FileDiffSummary } from '@funny/shared';
-import { FolderMinus, FolderOpen, Loader2, RefreshCw } from 'lucide-react';
+import { FolderMinus, FolderOpen, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { collectAllFolderPaths, FileTree } from '@/components/FileTree';
 import { isMediaFile } from '@/components/MediaPreview';
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -242,10 +243,10 @@ export function ProjectFilesPane() {
             {t('projectFiles.noProject', 'Select a project first')}
           </div>
         ) : loading && files.length === 0 ? (
-          <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="icon-sm animate-spin" />
-            {t('projectFiles.loading', 'Loading files...')}
-          </div>
+          <LoadingState
+            testId="project-files-loading"
+            label={t('projectFiles.loading', 'Loading files...')}
+          />
         ) : filteredSummaries.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             {query

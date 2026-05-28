@@ -10,6 +10,7 @@ import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -424,10 +425,10 @@ export function CommitDetailDialog({
             )}
           </div>
           {filesLoading ? (
-            <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {t('review.loading', 'Loading changes…')}
-            </div>
+            <LoadingState
+              testId="commit-detail-loading"
+              label={t('review.loading', 'Loading changes…')}
+            />
           ) : (
             <div className="flex min-h-0 flex-1">
               <div

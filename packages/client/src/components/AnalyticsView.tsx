@@ -7,13 +7,13 @@ import {
   ClipboardList,
   DollarSign,
   Archive,
-  Loader2,
   ChevronDown,
   Check,
 } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
@@ -31,11 +31,7 @@ const TimelineChart = lazy(() =>
   import('./analytics/TimelineChart').then((m) => ({ default: m.TimelineChart })),
 );
 
-const ChartFallback = () => (
-  <div className="flex h-64 items-center justify-center text-xs text-muted-foreground">
-    Loading…
-  </div>
-);
+const ChartFallback = () => <LoadingState label="Loading…" />;
 
 interface OverviewData {
   currentStageDistribution: Record<string, number>;
@@ -189,12 +185,7 @@ export function AnalyticsView() {
 
       {/* Content */}
       {loading ? (
-        <div
-          className="flex flex-1 items-center justify-center text-muted-foreground"
-          data-testid="analytics-loading"
-        >
-          <Loader2 className="icon-lg animate-spin" />
-        </div>
+        <LoadingState testId="analytics-loading" spinnerClassName="icon-lg" />
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">

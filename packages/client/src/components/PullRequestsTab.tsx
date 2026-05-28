@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -395,10 +396,10 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
 
       {/* Content */}
       {loading && prs.length === 0 ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-          <Loader2 className="icon-sm animate-spin" />
-          {t('review.pullRequests.loading', 'Loading pull requests\u2026')}
-        </div>
+        <LoadingState
+          testId="prs-loading"
+          label={t('review.pullRequests.loading', 'Loading pull requests\u2026')}
+        />
       ) : error ? (
         <EmptyState
           title={error}

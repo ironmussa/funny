@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -225,13 +226,10 @@ function DiffContent({
 
   if (loading) {
     return (
-      <div
-        className="flex h-full min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground"
-        data-testid="expanded-diff-loading"
-      >
-        <Loader2 className="size-4 animate-spin" />
-        {t('review.loading', 'Loading changes…')}
-      </div>
+      <LoadingState
+        testId="expanded-diff-loading"
+        label={t('review.loading', 'Loading changes…')}
+      />
     );
   }
 

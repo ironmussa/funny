@@ -376,30 +376,44 @@ export const MemoizedMessageList = memo(
       let cancelled = false;
       const { proseFont } = fontConfig;
 
-      // Ensure pretext is loaded, then prepare all uncached assistant messages
-      ensurePretextLoaded().then(() => {
+      const runPrepare = () => {
         if (cancelled) return;
-        pretextReadyRef.current = true;
+        ensurePretextLoaded().then(() => {
+          if (cancelled) return;
+          pretextReadyRef.current = true;
 
-        const toPrepare: string[] = [];
-        for (const item of groupedItems) {
-          if (item.type === 'message' && item.msg.role === 'assistant' && item.msg.content) {
-            const analysis = analyzeMarkdown(item.msg.content.trim());
-            if (analysis.plainText && !getCachedPrepared(analysis.plainText, proseFont)) {
-              toPrepare.push(analysis.plainText);
+          const toPrepare: string[] = [];
+          for (const item of groupedItems) {
+            if (item.type === 'message' && item.msg.role === 'assistant' && item.msg.content) {
+              const analysis = analyzeMarkdown(item.msg.content.trim());
+              if (analysis.plainText && !getCachedPrepared(analysis.plainText, proseFont)) {
+                toPrepare.push(analysis.plainText);
+              }
             }
           }
-        }
 
-        if (toPrepare.length > 0) {
-          prepareBatch(toPrepare, proseFont, {
-            signal: cancelled ? AbortSignal.abort() : undefined,
-          });
-        }
-      });
+          if (toPrepare.length > 0) {
+            prepareBatch(toPrepare, proseFont, {
+              signal: cancelled ? AbortSignal.abort() : undefined,
+            });
+          }
+        });
+      };
+
+      // Defer off the thread-switch commit so pretext layout work does not
+      // extend INP on the click that mounted this list.
+      const idleId =
+        typeof requestIdleCallback === 'function'
+          ? requestIdleCallback(runPrepare, { timeout: 2000 })
+          : (setTimeout(runPrepare, 0) as unknown as number);
 
       return () => {
         cancelled = true;
+        if (typeof cancelIdleCallback === 'function') {
+          cancelIdleCallback(idleId);
+        } else {
+          clearTimeout(idleId);
+        }
       };
     }, [groupedItems, fontConfig]);
 

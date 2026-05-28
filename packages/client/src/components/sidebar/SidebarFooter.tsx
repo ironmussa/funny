@@ -1,4 +1,4 @@
-import { Keyboard, LogOut, MoreVertical, Settings, User } from 'lucide-react';
+import { Keyboard, LogOut, Settings, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { AutomationInboxButton } from '@/components/sidebar/AutomationInboxButton';
@@ -16,13 +16,14 @@ import { SidebarFooter as ShadSidebarFooter } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 
 /**
- * Bottom of AppSidebar: automation-inbox button + (when signed in) avatar
- * with user-menu dropdown for settings/logout, or a settings shortcut when
- * signed out.
+ * Bottom of AppSidebar: automation-inbox button, user identity (when signed
+ * in), an always-visible settings shortcut, and an account menu (shortcuts +
+ * logout) opened by clicking the avatar/name row.
  *
  * Extracted from Sidebar.tsx as part of the god-file split.
  */
@@ -32,6 +33,7 @@ export function SidebarFooter() {
   const authUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const openShortcuts = useUIStore((s) => s.setKeyboardShortcutsOpen);
+  const openSettings = () => navigate(buildPath('/preferences/general'));
 
   return (
     <ShadSidebarFooter className="pb-4">
@@ -40,73 +42,61 @@ export function SidebarFooter() {
       </div>
       <div className="flex items-center gap-2 px-1">
         {authUser ? (
-          <>
-            <Avatar size="sm">
-              <AvatarFallback className="text-xs" name={authUser.displayName || undefined}>
-                {authUser.displayName
-                  ?.split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .slice(0, 2)
-                  .toUpperCase() || <User className="icon-sm" />}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-sidebar-foreground">
-                {authUser.displayName}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">@{authUser.username}</p>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  data-testid="sidebar-user-menu"
-                  className="size-7 shrink-0 text-muted-foreground"
-                >
-                  <MoreVertical className="icon-base" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="end" className="w-48">
-                <DropdownMenuItem
-                  data-testid="sidebar-user-settings"
-                  onClick={() => navigate(buildPath('/preferences/general'))}
-                >
-                  <Settings className="icon-sm" />
-                  {t('settings.title')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="sidebar-user-shortcuts"
-                  onClick={() => openShortcuts(true)}
-                >
-                  <Keyboard className="icon-sm" />
-                  {t('shortcuts.title')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem data-testid="sidebar-logout" onClick={logout}>
-                  <LogOut className="icon-sm" />
-                  {t('auth.logout')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
-                data-testid="sidebar-settings"
-                onClick={() => navigate(buildPath('/preferences/general'))}
-                className="ml-auto size-7 text-muted-foreground"
+                data-testid="sidebar-user-menu"
+                className="h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1 hover:bg-sidebar-accent"
               >
-                <Settings className="icon-base" />
+                <Avatar size="sm">
+                  <AvatarFallback className="text-xs" name={authUser.displayName || undefined}>
+                    {authUser.displayName
+                      ?.split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase() || <User className="icon-sm" />}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-sm font-medium text-sidebar-foreground">
+                    {authUser.displayName}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">@{authUser.username}</p>
+                </div>
               </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{t('settings.title')}</TooltipContent>
-          </Tooltip>
-        )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-48">
+              <DropdownMenuItem
+                data-testid="sidebar-user-shortcuts"
+                onClick={() => openShortcuts(true)}
+              >
+                <Keyboard className="icon-sm" />
+                {t('shortcuts.title')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem data-testid="sidebar-logout" onClick={logout}>
+                <LogOut className="icon-sm" />
+                {t('auth.logout')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              data-testid="sidebar-settings"
+              onClick={openSettings}
+              className={cn('size-7 shrink-0 text-muted-foreground', !authUser && 'ml-auto')}
+            >
+              <Settings className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('settings.title')}</TooltipContent>
+        </Tooltip>
       </div>
       <KeyboardShortcutsDialog />
     </ShadSidebarFooter>

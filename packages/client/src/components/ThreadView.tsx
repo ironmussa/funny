@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadCore } from '@/stores/thread-context';
@@ -23,6 +24,8 @@ export function ThreadView() {
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const activeThread = useThreadCore();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const isThreadSwitching =
+    !!selectedThreadId && !!activeThread && activeThread.id !== selectedThreadId;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
@@ -86,7 +89,10 @@ export function ThreadView() {
   if (!activeThread) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
+        <div
+          className="flex flex-1 items-center justify-center px-4 text-muted-foreground"
+          data-testid="thread-loading-placeholder"
+        >
           <div className="flex w-full max-w-md flex-col items-center justify-center gap-4">
             <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
             <span className="text-sm text-muted-foreground/60">Preparing…</span>
@@ -96,19 +102,30 @@ export function ThreadView() {
     );
   }
 
-  if (activeThread.status === 'setting_up') {
+  const threadBody =
+    activeThread.status === 'setting_up' ? (
+      <div className="flex flex-1 items-center justify-center px-4">
+        <WorktreeSetupProgress steps={activeThread.setupProgress ?? []} />
+      </div>
+    ) : activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0 ? (
+      <ThreadIdleStarter activeThread={activeThread} />
+    ) : (
+      <ThreadChatView activeThread={activeThread} />
+    );
+
+  if (isThreadSwitching) {
     return (
-      <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div className="flex flex-1 items-center justify-center px-4">
-          <WorktreeSetupProgress steps={activeThread.setupProgress ?? []} />
+      <div className="relative flex h-full min-w-0 flex-1 flex-col" data-testid="thread-switching">
+        {threadBody}
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center bg-background/40 pt-16"
+          aria-hidden
+        >
+          <Loader2 className="size-6 animate-spin text-muted-foreground/70" />
         </div>
       </div>
     );
   }
 
-  const uiQueuedCount = activeThread.queuedCount ?? 0;
-  const isIdle = activeThread.status === 'idle' && uiQueuedCount === 0;
-  if (isIdle) return <ThreadIdleStarter activeThread={activeThread} />;
-
-  return <ThreadChatView activeThread={activeThread} />;
+  return <div className={cn('flex h-full min-w-0 flex-1 flex-col')}>{threadBody}</div>;
 }

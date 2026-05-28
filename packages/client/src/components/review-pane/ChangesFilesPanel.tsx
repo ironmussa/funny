@@ -17,7 +17,6 @@ import {
   FolderOpenDot,
   FolderX,
   GitBranch,
-  Loader2,
   MoreHorizontal,
   RotateCcw,
   Search,
@@ -39,7 +38,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import {
@@ -252,35 +253,32 @@ export function ChangesFilesPanel({
       {/* File list (virtualized) — wrapper ensures flex-1 so commit area stays pinned to bottom */}
       <div ref={fileListRef} className="min-h-0 flex-1 overflow-auto">
         {loading && summaries.length === 0 ? (
-          <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-            <Loader2 className="icon-sm animate-spin" />
-            {t('review.loading', 'Loading changes…')}
-          </div>
+          <LoadingState
+            testId="review-changes-loading"
+            label={t('review.loading', 'Loading changes…')}
+          />
         ) : loadError ? (
-          <div className="flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground">
-            <AlertTriangle className="icon-base text-status-error" />
-            <p>{t('review.loadFailed', 'Failed to load changes')}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refresh}
-              className="mt-1 gap-1.5"
-              data-testid="review-retry"
-            >
-              <RotateCcw className="icon-xs" />
-              {t('common.retry', 'Retry')}
-            </Button>
-          </div>
+          <EmptyState
+            testId="review-load-error"
+            icon={AlertTriangle}
+            title={t('review.loadFailed', 'Failed to load changes')}
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refresh}
+                className="gap-1.5"
+                data-testid="review-retry"
+              >
+                <RotateCcw className="icon-xs" />
+                {t('common.retry', 'Retry')}
+              </Button>
+            }
+          />
         ) : summaries.length === 0 && !loading ? (
-          <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <FileCheck2 className="size-8 opacity-40" />
-            <p className="text-xs">{t('review.noChanges')}</p>
-          </div>
+          <EmptyState icon={FileCheck2} title={t('review.noChanges')} />
         ) : filteredDiffs.length === 0 && !loading ? (
-          <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <Search className="size-8 opacity-40" />
-            <p className="text-xs">{t('review.noMatchingFiles', 'No matching files')}</p>
-          </div>
+          <EmptyState icon={Search} title={t('review.noMatchingFiles', 'No matching files')} />
         ) : (
           <div className={cn(loading && 'pointer-events-none')}>
             <div

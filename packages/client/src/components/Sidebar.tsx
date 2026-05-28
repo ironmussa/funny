@@ -15,6 +15,7 @@ import { cn, scrollSidebarItemIntoView } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
+import { PreferencesPanelBody } from './PreferencesPanel';
 import { SettingsPanelBody } from './SettingsPanel';
 import { SidebarDialogs } from './sidebar/SidebarDialogs';
 import { SidebarFooter } from './sidebar/SidebarFooter';
@@ -48,6 +49,8 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
   const threadsByProject = useThreadsByProject();
   // ui-store
   const settingsOpen = useUIStore((s) => s.settingsOpen);
+  const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
+  const settingsNavOpen = settingsOpen || generalSettingsOpen;
   const startNewThread = useUIStore((s) => s.startNewThread);
   const showGlobalSearch = useUIStore((s) => s.showGlobalSearch);
 
@@ -91,7 +94,7 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
   useSidebarScrollSync({
     selectedProjectId,
     projectsScrollRef,
-    settingsOpen,
+    settingsNavOpen,
   });
   useSidebarDragDrop({ projectsScrollRef, threadsScrollRef, projects, reorderProjects });
 
@@ -143,12 +146,13 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
       {/* Project settings nav — rendered alongside the projects tree so the
           tree stays mounted (avoiding a costly remount when returning). */}
       {settingsOpen && <SettingsPanelBody />}
+      {generalSettingsOpen && <PreferencesPanelBody />}
 
       {/* Projects/threads tree — always mounted; hidden via display:none
-          when project settings is open so toggling is instant. Uses
+          when settings nav is open so toggling is instant. Uses
           `display:contents` so the wrapper is layout-transparent inside
           the Sidebar's flex column. */}
-      <div className={cn(settingsOpen ? 'hidden' : 'contents')}>
+      <div className={cn(settingsNavOpen ? 'hidden' : 'contents')}>
         <SidebarTopBar />
 
         <SidebarThreadsSection

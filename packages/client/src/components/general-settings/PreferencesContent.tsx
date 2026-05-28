@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { GeneralPage } from '@/components/PreferencesPanel';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
@@ -37,18 +38,6 @@ import {
   type TerminalShell,
   useSettingsStore,
 } from '@/stores/settings-store';
-
-type GeneralPage =
-  | 'general'
-  | 'appearance'
-  | 'github'
-  | 'ai-keys'
-  | 'speech'
-  | 'email'
-  | 'organizations'
-  | 'runners'
-  | 'system'
-  | 'agent-templates';
 
 interface ThemeOption {
   value: string;
@@ -412,8 +401,8 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
   }, []);
 
   return (
-    <ScrollArea className="min-h-0 max-w-2xl flex-1">
-      <div className="p-6">
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="max-w-4xl px-8 py-8">
         {activePreferencesPage === 'general' && (
           <>
             <h3 className="settings-section-header">{t('settings.general')}</h3>

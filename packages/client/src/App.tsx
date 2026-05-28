@@ -13,9 +13,11 @@ import {
 import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';
 import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
+import { LoadingState } from '@/components/ui/loading-state';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
+import { useDisplayThreadId } from '@/hooks/use-display-thread-id';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
@@ -147,6 +149,7 @@ export function App() {
   const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const displayThreadId = useDisplayThreadId();
   const activeThreadCanShowGit = useThreadStore((s) => canDoGitOps(s.activeThread));
   const hasSelectedProject = useProjectStore((s) => s.selectedProjectId != null);
   const navigate = useNavigate();
@@ -257,13 +260,7 @@ export function App() {
   const singleRightPanel = !useReviewTabs ? (
     <div className="h-full w-full overflow-hidden bg-sidebar">
       <ErrorBoundary area="right-pane">
-        <Suspense
-          fallback={
-            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-              Loading…
-            </div>
-          }
-        >
+        <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
           {rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
             <ProjectFilesPane />
           ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
@@ -315,7 +312,9 @@ export function App() {
           overlay is active. */}
       <Suspense>
         <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
-          <ThreadView />
+          <ThreadProvider threadId={displayThreadId}>
+            <ThreadView />
+          </ThreadProvider>
         </div>
       </Suspense>
     </ErrorBoundary>

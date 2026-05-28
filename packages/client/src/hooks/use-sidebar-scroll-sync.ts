@@ -7,7 +7,7 @@ import { useThreadStore } from '@/stores/thread-store';
 interface Options {
   selectedProjectId: string | null;
   projectsScrollRef: RefObject<HTMLDivElement | null>;
-  settingsOpen: boolean;
+  settingsNavOpen: boolean;
 }
 
 /**
@@ -23,7 +23,7 @@ interface Options {
 export function useSidebarScrollSync({
   selectedProjectId,
   projectsScrollRef,
-  settingsOpen,
+  settingsNavOpen,
 }: Options) {
   const revealNonce = useProjectStore((s) => s.revealNonce);
   const revealIntent = useProjectStore((s) => s.revealIntent);
@@ -40,7 +40,7 @@ export function useSidebarScrollSync({
   }, [selectedProjectId, revealNonce, toggleProject]);
 
   useEffect(() => {
-    if (settingsOpen) return;
+    if (settingsNavOpen) return;
     if (!selectedProjectId) return;
     let scrolled = false;
     const scrollToTarget = (isRetry = false): boolean => {
@@ -85,7 +85,7 @@ export function useSidebarScrollSync({
     selectedThreadId,
     revealNonce,
     revealIntent,
-    settingsOpen,
+    settingsNavOpen,
     projectsScrollRef,
   ]);
 }

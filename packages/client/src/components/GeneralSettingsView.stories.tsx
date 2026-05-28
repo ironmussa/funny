@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -11,11 +10,9 @@ import { GeneralSettingsView } from './GeneralSettingsView';
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
     <MemoryRouter>
-      <SidebarProvider>
-        <div className="flex h-[700px] w-[900px] overflow-hidden border border-border rounded-lg">
-          {children}
-        </div>
-      </SidebarProvider>
+      <div className="flex h-[700px] w-[800px] overflow-hidden rounded-lg border border-border">
+        {children}
+      </div>
     </MemoryRouter>
   );
 }

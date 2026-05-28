@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
+import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shortRelativeDate } from '@/lib/thread-utils';
@@ -115,10 +116,10 @@ export function CommitListPanel({
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-1 flex-col overflow-y-auto" ref={commitScrollRef}>
           {logLoading && logEntries.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-              <Loader2 className="icon-sm animate-spin" />
-              {t('review.loadingLog', 'Loading commits…')}
-            </div>
+            <LoadingState
+              testId="history-commits-loading"
+              label={t('review.loadingLog', 'Loading commits…')}
+            />
           ) : logEntries.length === 0 ? (
             <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
           ) : filteredEntries.length === 0 ? (

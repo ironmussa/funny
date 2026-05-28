@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
@@ -115,7 +116,7 @@ export function OrchestratorView() {
 
       <ScrollArea className="min-h-0 flex-1">
         {loading && runs.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-muted-foreground">Loading…</div>
+          <LoadingState testId="orchestrator-loading" label="Loading…" />
         ) : runs.length === 0 ? (
           <div className="px-4 py-12 text-center text-xs text-muted-foreground">
             No runs in flight. The orchestrator picks up queued threads on the next tick.

@@ -799,7 +799,27 @@
   }
 
   .prose a {
+    color: hsl(var(--primary));
     text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: hsl(var(--primary) / 0.45);
+  }
+
+  .prose a:hover {
+    text-decoration-color: hsl(var(--primary) / 0.75);
+  }
+
+  /* Monochrome themes: keep links subtle and on-palette */
+  .theme-monochrome .prose a,
+  .theme-monochrome-dark .prose a {
+    color: hsl(var(--muted-foreground));
+    text-decoration-color: hsl(var(--muted-foreground) / 0.55);
+  }
+
+  .theme-monochrome .prose a:hover,
+  .theme-monochrome-dark .prose a:hover {
+    color: hsl(var(--foreground));
+    text-decoration-color: hsl(var(--foreground) / 0.75);
   }
 
   .prose pre {

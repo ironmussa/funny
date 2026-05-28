@@ -139,7 +139,7 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sky-600 underline decoration-sky-600/40 underline-offset-2 hover:text-sky-500 hover:decoration-sky-500"
+          className="text-background/70 underline decoration-background/45 underline-offset-2 hover:text-background hover:decoration-background/75"
           onClick={(e) => e.stopPropagation()}
         >
           {url}

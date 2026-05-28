@@ -30,7 +30,7 @@ vi.mock('@/stores/thread-read-store', () => ({
 
 vi.mock('@/stores/thread-store-internals', () => ({
   bufferWSEvent: mockBuffer,
-  getNavigate: vi.fn(),
+  getNavigate: vi.fn(() => vi.fn()),
   getProjectIdForThread: vi.fn(() => null),
 }));
 
@@ -46,6 +46,7 @@ vi.mock('sonner', () => ({
 
 const { handleWSStatus, handleWSError, handleWSContextUsage, handleWSResult } =
   await import('@/stores/thread-ws-handlers');
+import { toast } from 'sonner';
 
 const THREAD_ID = 'thread-edge';
 
@@ -245,5 +246,59 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
 
     expect(mockMarkRead).toHaveBeenCalledWith('scratch-x');
     expect(state.threadsById['scratch-x'].status).toBe('completed');
+  });
+
+  test('handleWSResult shows completion toast with truncated title for project threads', () => {
+    const longTitle = 'This is a very long thread title that should truncate';
+    const thread = {
+      id: THREAD_ID,
+      projectId: 'p1',
+      title: longTitle,
+      status: 'running',
+      cost: 0,
+      messages: [],
+    };
+    const state = makeState({
+      threadsById: { [THREAD_ID]: thread },
+      threadDataById: { [THREAD_ID]: thread },
+      activeThread: thread,
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSResult(get, set, THREAD_ID, { status: 'completed', cost: 0.02, duration: 5 });
+
+    expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
+      expect.stringContaining('completed'),
+      expect.objectContaining({ id: `result-${THREAD_ID}` }),
+    );
+  });
+
+  test('handleWSResult shows failed toast with known error reason', () => {
+    const thread = {
+      id: THREAD_ID,
+      projectId: 'p1',
+      title: 'Budget run',
+      status: 'running',
+      cost: 0.5,
+      messages: [],
+    };
+    const state = makeState({
+      threadsById: { [THREAD_ID]: thread },
+      threadDataById: { [THREAD_ID]: thread },
+      scratchThreadIds: [],
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSResult(get, set, THREAD_ID, {
+      status: 'failed',
+      cost: 0.5,
+      duration: 10,
+      errorReason: 'error_max_budget_usd',
+    });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+      expect.stringContaining('Budget limit exceeded'),
+      expect.objectContaining({ id: `result-${THREAD_ID}` }),
+    );
   });
 });

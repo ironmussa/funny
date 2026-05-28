@@ -221,16 +221,14 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
         }
       }
 
-      // Run state changes at full priority so the center pane updates in
-      // parallel with the sidebar's smooth scroll. Wrapping these in
-      // startTransition deferred the commit, making the swap appear to
-      // happen *after* the scroll animation finished.
+      // Start hydration before navigate so it overlaps route-sync instead of
+      // waiting for useThreadProjectSync's effect. selectThread updates
+      // selectedThreadId urgently and defers the heavy chat mount.
       const store = useThreadStore.getState();
-      if (
-        store.selectedThreadId === threadId &&
-        (!store.activeThread || store.activeThread.id !== threadId)
-      ) {
-        store.selectThread(threadId);
+      if (store.selectedThreadId !== threadId) {
+        void store.selectThread(threadId);
+      } else if (!store.activeThread || store.activeThread.id !== threadId) {
+        void store.selectThread(threadId);
       }
       navigate(
         buildPath(thread ? getThreadRoute(thread) : `/projects/${projectId}/threads/${threadId}`),

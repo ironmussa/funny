@@ -30,6 +30,20 @@ vi.mock('@/hooks/use-branch-switch', () => ({
   }),
 }));
 
+const mockArchiveThread = vi.fn().mockResolvedValue(undefined);
+const mockRenameThread = vi.fn().mockResolvedValue(undefined);
+const mockPinThread = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('@/stores/project-store', () => ({
+  useProjectStore: (selector: (s: any) => unknown) =>
+    selector({
+      renameProject: vi.fn(),
+      deleteProject: vi.fn(),
+      closeProject: vi.fn(),
+      reopenProject: vi.fn(),
+    }),
+}));
+
 vi.mock('@/lib/api', () => ({
   api: {
     removeWorktree: vi.fn(),
@@ -47,6 +61,9 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
       scratchThreadIds: [],
       deleteThread: mockDeleteThread,
       deleteScratchThread: mockDeleteScratchThread,
+      archiveThread: mockArchiveThread,
+      renameThread: mockRenameThread,
+      pinThread: mockPinThread,
     } as any);
   });
 
@@ -150,5 +167,78 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
 
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+  });
+});
+
+describe('useSidebarActions — archive, pin, and select', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useThreadStore.setState({
+      selectedThreadId: null,
+      activeThread: null,
+      threadsById: {},
+      threadIdsByProject: {},
+      scratchThreadIds: [],
+      deleteThread: mockDeleteThread,
+      deleteScratchThread: mockDeleteScratchThread,
+      archiveThread: mockArchiveThread,
+      renameThread: mockRenameThread,
+      pinThread: mockPinThread,
+      selectThread: vi.fn(),
+    } as any);
+  });
+
+  test('handleArchiveConfirm archives and navigates away when selected', async () => {
+    useThreadStore.setState({
+      selectedThreadId: 't1',
+      threadsById: {
+        t1: { id: 't1', projectId: 'p1', title: 'Fix', status: 'completed', mode: 'local' },
+      },
+    } as any);
+
+    const { result } = renderHook(() => useSidebarActions());
+
+    act(() => {
+      result.current.handleArchiveThreadFromList('t1', 'p1', 'Fix', false);
+    });
+
+    await act(async () => {
+      await result.current.handleArchiveConfirm();
+    });
+
+    expect(mockArchiveThread).toHaveBeenCalledWith('t1', 'p1');
+    expect(mockNavigate).toHaveBeenCalledWith('/projects/p1');
+  });
+
+  test('handlePinThread delegates to thread store', () => {
+    const { result } = renderHook(() => useSidebarActions());
+
+    act(() => {
+      result.current.handlePinThread('p1', 't1', true);
+    });
+
+    expect(mockPinThread).toHaveBeenCalledWith('t1', 'p1', true);
+  });
+
+  test('handleSelectThread navigates to thread route', async () => {
+    useThreadStore.setState({
+      threadsById: {
+        t1: {
+          id: 't1',
+          projectId: 'p1',
+          title: 'Thread',
+          status: 'completed',
+          mode: 'local',
+        },
+      },
+    } as any);
+
+    const { result } = renderHook(() => useSidebarActions());
+
+    await act(async () => {
+      await result.current.handleSelectThread('p1', 't1');
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('/projects/p1/threads/t1');
   });
 });

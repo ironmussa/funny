@@ -28,13 +28,13 @@ const markdownComponents = {
         <Tooltip>
           <TooltipTrigger asChild>
             {uri ? (
-              <a href={uri} className="text-primary hover:underline">
+              <a href={uri} className="hover:underline">
                 {children}
               </a>
             ) : (
               <button
                 onClick={() => openFileInEditor(fileMatch[0], defaultEditor)}
-                className="inline cursor-pointer text-primary hover:underline"
+                className="inline cursor-pointer hover:underline"
               >
                 {children}
               </button>
@@ -45,12 +45,7 @@ const markdownComponents = {
       );
     }
     return (
-      <a
-        href={href}
-        className="text-primary hover:underline"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <a href={href} className="hover:underline" target="_blank" rel="noopener noreferrer">
         {children}
       </a>
     );

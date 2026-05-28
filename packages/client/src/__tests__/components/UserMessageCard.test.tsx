@@ -74,6 +74,17 @@ describe('UserMessageCard', () => {
     expect(screen.getAllByText('a.ts').length).toBeGreaterThan(0);
   });
 
+  test('renders URLs as theme-aware links', () => {
+    const url = 'https://example.com/path';
+    renderWithProviders(<UserMessageCard content={`Check ${url} please`} data-testid="msg-url" />);
+
+    const link = screen.getByRole('link', { name: url });
+    expect(link).toHaveAttribute('href', url);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.className).toContain('text-background/70');
+    expect(link.className).not.toContain('text-sky');
+  });
+
   test('renders model and permission badges', () => {
     renderWithProviders(
       <UserMessageCard

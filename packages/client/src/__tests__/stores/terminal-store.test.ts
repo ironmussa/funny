@@ -391,5 +391,96 @@ describe('useTerminalStore', () => {
       expect(cb2).toHaveBeenCalledWith('to-cb2');
       expect(cb1).toHaveBeenCalledTimes(1); // cb1 not called again
     });
+
+    test('buffers pty data until a callback is registered', async () => {
+      useTerminalStore.getState().emitPtyData('pty-buffered', 'early chunk');
+
+      const callback = vi.fn();
+      useTerminalStore.getState().registerPtyCallback('pty-buffered', callback);
+
+      await vi.waitFor(() => {
+        expect(callback).toHaveBeenCalledWith('early chunk');
+      });
+    });
+  });
+
+  describe('reorderTabs / renameTab / lifecycle helpers', () => {
+    test('reorderTabs reorders tabs within a project only', () => {
+      const tab1 = makeTab({ id: 'tab-1', projectId: 'p1', label: 'a' });
+      const tab2 = makeTab({ id: 'tab-2', projectId: 'p1', label: 'b' });
+      const tab3 = makeTab({ id: 'tab-3', projectId: 'p2', label: 'other' });
+      useTerminalStore.getState().addTab(tab1);
+      useTerminalStore.getState().addTab(tab2);
+      useTerminalStore.getState().addTab(tab3);
+
+      useTerminalStore.getState().reorderTabs('p1', 0, 1);
+
+      const labels = useTerminalStore
+        .getState()
+        .tabs.filter((t) => t.projectId === 'p1')
+        .map((t) => t.label);
+      expect(labels).toEqual(['b', 'a']);
+    });
+
+    test('renameTab updates the tab label', () => {
+      const tab = makeTab({ id: 'tab-1', label: 'old' });
+      useTerminalStore.getState().addTab(tab);
+      useTerminalStore.getState().renameTab('tab-1', 'new name');
+      expect(useTerminalStore.getState().tabs[0].label).toBe('new name');
+    });
+
+    test('markAlive and respawnTab clear error state', () => {
+      const tab = makeTab({ id: 'tab-1', alive: false, error: 'dead' });
+      useTerminalStore.getState().addTab(tab);
+
+      useTerminalStore.getState().markAlive('tab-1');
+      expect(useTerminalStore.getState().tabs[0].alive).toBe(true);
+      expect(useTerminalStore.getState().tabs[0].error).toBeUndefined();
+
+      useTerminalStore.getState().setTabError('tab-1', 'spawn failed');
+      expect(useTerminalStore.getState().tabs[0].alive).toBe(false);
+
+      useTerminalStore.getState().respawnTab('tab-1');
+      expect(useTerminalStore.getState().tabs[0].alive).toBe(true);
+      expect(useTerminalStore.getState().tabs[0].restored).toBe(false);
+    });
+
+    test('updateCommandMetrics stores metrics by command id', () => {
+      useTerminalStore.getState().updateCommandMetrics({
+        commandId: 'cmd-1',
+        uptime: 42,
+        restartCount: 1,
+        memoryUsageKB: 512,
+      });
+      expect(useTerminalStore.getState().commandMetrics['cmd-1']).toEqual({
+        uptime: 42,
+        restartCount: 1,
+        memoryUsageKB: 512,
+      });
+    });
+
+    test('restoreTabs creates tabs from server sessions', () => {
+      useTerminalStore
+        .getState()
+        .restoreTabs(
+          [{ ptyId: 'pty-restored', cwd: '/repo', projectId: 'p1', label: 'main' }],
+          [{ id: 'p1', path: '/repo' }],
+        );
+
+      expect(useTerminalStore.getState().tabs).toHaveLength(1);
+      expect(useTerminalStore.getState().tabs[0]).toMatchObject({
+        id: 'pty-restored',
+        cwd: '/repo',
+        restored: true,
+      });
+      expect(useTerminalStore.getState().sessionsChecked).toBe(true);
+    });
+
+    test('markSessionsChecked and resetSessionsChecked toggle flag', () => {
+      useTerminalStore.getState().markSessionsChecked();
+      expect(useTerminalStore.getState().sessionsChecked).toBe(true);
+      useTerminalStore.getState().resetSessionsChecked();
+      expect(useTerminalStore.getState().sessionsChecked).toBe(false);
+    });
   });
 });

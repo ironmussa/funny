@@ -113,6 +113,7 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setClearThreadSelection: vi.fn(),
 }));
 
+import { prefetchThreadData } from '@/stores/thread-machine-bridge';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { seedThreads } from '../helpers/seed-thread-state';
@@ -981,6 +982,234 @@ describe('thread store actions', () => {
       useThreadStore.getState().unregisterLiveThread('t1');
 
       expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
+    });
+  });
+
+  describe('loadOlderMessages', () => {
+    test('prepends older messages and updates hasMore', async () => {
+      const newest = {
+        id: 'm2',
+        threadId: 't1',
+        role: 'assistant' as const,
+        content: 'newest',
+        timestamp: '2026-01-02T00:00:00.000Z',
+      };
+      const thread = {
+        ...baseThread,
+        hasMore: true,
+        loadingMore: false,
+        messages: [newest],
+      };
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread as any,
+        threadDataById: { t1: thread as any },
+      } as any);
+      mockGetThreadMessages.mockReturnValue(
+        okAsync({
+          messages: [
+            {
+              id: 'm1',
+              threadId: 't1',
+              role: 'user',
+              content: 'older',
+              timestamp: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          hasMore: false,
+        }),
+      );
+
+      await useThreadStore.getState().loadOlderMessages();
+
+      const msgs = useThreadStore.getState().threadDataById.t1.messages;
+      expect(msgs.map((m: { id: string }) => m.id)).toEqual(['m1', 'm2']);
+      expect(useThreadStore.getState().threadDataById.t1.hasMore).toBe(false);
+      expect(useThreadStore.getState().threadDataById.t1.loadingMore).toBe(false);
+    });
+
+    test('resets loadingMore when fetch fails', async () => {
+      const thread = {
+        ...baseThread,
+        hasMore: true,
+        messages: [
+          {
+            id: 'm1',
+            threadId: 't1',
+            role: 'user' as const,
+            content: 'only',
+            timestamp: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      };
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread as any,
+        threadDataById: { t1: thread as any },
+      } as any);
+      mockGetThreadMessages.mockReturnValue(errAsync(new Error('network')));
+
+      await useThreadStore.getState().loadOlderMessages();
+
+      expect(useThreadStore.getState().threadDataById.t1.loadingMore).toBe(false);
+    });
+  });
+
+  describe('refreshActiveThread', () => {
+    test('merges recovered server messages into the active payload', async () => {
+      const localMsg = {
+        id: 'm1',
+        threadId: 't1',
+        role: 'user' as const,
+        content: 'hello',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const thread = {
+        ...baseThread,
+        status: 'running' as const,
+        messages: [localMsg],
+      };
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread as any,
+        threadDataById: { t1: thread as any },
+      } as any);
+      mockGetThread.mockReturnValue(
+        okAsync({
+          ...thread,
+          messages: [
+            localMsg,
+            {
+              id: 'm2',
+              threadId: 't1',
+              role: 'assistant',
+              content: 'recovered while offline',
+              timestamp: '2026-01-01T00:01:00.000Z',
+            },
+          ],
+        }),
+      );
+      mockGetThreadEvents.mockReturnValue(
+        okAsync({
+          events: [
+            {
+              id: 'ev-compact',
+              type: 'compact_boundary',
+              data: JSON.stringify({
+                trigger: 'auto',
+                preTokens: 1000,
+                timestamp: '2026-01-01T00:02:00.000Z',
+              }),
+              createdAt: '2026-01-01T00:02:00.000Z',
+            },
+          ],
+        }),
+      );
+
+      await useThreadStore.getState().refreshActiveThread();
+
+      const payload = useThreadStore.getState().threadDataById.t1;
+      expect(payload.messages).toHaveLength(2);
+      expect(payload.compactionEvents).toHaveLength(1);
+      expect(payload.compactionEvents![0].preTokens).toBe(1000);
+    });
+  });
+
+  describe('refreshAllLoadedThreads', () => {
+    test('refreshes every loaded project bucket', async () => {
+      const t2 = { ...baseThread, id: 't2', projectId: 'p2', title: 'other' };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any], p2: [t2 as any] }),
+        threadTotalByProject: { p1: 1, p2: 1 },
+      } as any);
+      mockListThreads.mockImplementation((pid: string) => {
+        if (pid === 'p1') return okAsync({ threads: [baseThread], total: 1 });
+        return okAsync({ threads: [t2], total: 1 });
+      });
+
+      await useThreadStore.getState().refreshAllLoadedThreads();
+
+      expect(mockListThreads).toHaveBeenCalledWith('p1', false, 50);
+      expect(mockListThreads).toHaveBeenCalledWith('p2', false, 50);
+      expect(useThreadStore.getState().threadsById.t2.title).toBe('other');
+    });
+  });
+
+  describe('approveTool', () => {
+    test('returns true when api succeeds', async () => {
+      mockApproveTool.mockReturnValue(okAsync({ ok: true }));
+
+      const ok = await useThreadStore.getState().approveTool('t1', 'Bash', true, [], []);
+
+      expect(ok).toBe(true);
+    });
+
+    test('returns false when api fails', async () => {
+      mockApproveTool.mockReturnValue(errAsync(new Error('denied')));
+
+      const ok = await useThreadStore.getState().approveTool('t1', 'Bash', false, [], []);
+
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe('searchThreadContent', () => {
+    test('returns results on success and null on failure', async () => {
+      mockSearchThreadContent.mockReturnValueOnce(
+        okAsync({ results: [{ threadId: 't1', snippet: 'match' }] }),
+      );
+      mockSearchThreadContent.mockReturnValueOnce(errAsync(new Error('nope')));
+
+      expect(await useThreadStore.getState().searchThreadContent('foo', 'p1')).toEqual({
+        results: [{ threadId: 't1', snippet: 'match' }],
+      });
+      expect(await useThreadStore.getState().searchThreadContent('bar', 'p1')).toBeNull();
+    });
+  });
+
+  describe('prefetchThread', () => {
+    test('no-ops for empty id and active thread', () => {
+      useThreadStore.setState({
+        activeThread: { ...baseThread, id: 't1' } as any,
+      } as any);
+
+      useThreadStore.getState().prefetchThread('');
+      useThreadStore.getState().prefetchThread('t1');
+
+      expect(prefetchThreadData).not.toHaveBeenCalled();
+    });
+
+    test('delegates to prefetchThreadData for inactive threads', () => {
+      useThreadStore.setState({ activeThread: null } as any);
+
+      useThreadStore.getState().prefetchThread('t2');
+
+      expect(prefetchThreadData).toHaveBeenCalledWith('t2');
+    });
+  });
+
+  describe('handleWSWorktreeSetupComplete', () => {
+    test('clears setup progress and patches branch onto payload', () => {
+      const thread = {
+        ...baseThread,
+        status: 'setting_up' as const,
+        branch: 'old-branch',
+      };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [thread as any] }),
+        threadDataById: { t1: thread as any },
+        setupProgressByThread: {
+          t1: [{ id: 'clone', label: 'Clone', status: 'running' as const }],
+        },
+        loadThreadsForProject: vi.fn(),
+      } as any);
+
+      useThreadStore.getState().handleWSWorktreeSetupComplete('t1', {
+        branch: 'feat/worktree',
+      });
+
+      expect(useThreadStore.getState().setupProgressByThread.t1).toBeUndefined();
+      expect(useThreadStore.getState().threadDataById.t1.branch).toBe('feat/worktree');
     });
   });
 });

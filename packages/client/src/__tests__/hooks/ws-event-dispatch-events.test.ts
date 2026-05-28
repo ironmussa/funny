@@ -9,6 +9,14 @@ const {
   mockRemoveTab,
   mockDispatchTestEvent,
   mockDispatchBrowserSessionEvent,
+  mockStartCommit,
+  mockReplaceSteps,
+  mockFinishCommit,
+  mockSetFailedWorkflow,
+  mockToastSuccess,
+  mockToastError,
+  mockShowAgentNotification,
+  mockSetTabError,
 } = vi.hoisted(() => ({
   mockNotifyDirty: vi.fn(),
   mockSetRunnerStatus: vi.fn(),
@@ -18,6 +26,25 @@ const {
   mockRemoveTab: vi.fn(),
   mockDispatchTestEvent: vi.fn(),
   mockDispatchBrowserSessionEvent: vi.fn(),
+  mockStartCommit: vi.fn(),
+  mockReplaceSteps: vi.fn(),
+  mockFinishCommit: vi.fn(),
+  mockSetFailedWorkflow: vi.fn(),
+  mockToastSuccess: vi.fn(),
+  mockToastError: vi.fn(),
+  mockShowAgentNotification: vi.fn(),
+  mockSetTabError: vi.fn(),
+}));
+
+vi.mock('@/stores/commit-progress-store', () => ({
+  useCommitProgressStore: {
+    getState: () => ({
+      startCommit: mockStartCommit,
+      replaceSteps: mockReplaceSteps,
+      finishCommit: mockFinishCommit,
+      setFailedWorkflow: mockSetFailedWorkflow,
+    }),
+  },
 }));
 
 vi.mock('@/stores/review-pane-store', () => ({
@@ -39,7 +66,7 @@ vi.mock('@/stores/terminal-store', () => ({
       appendCommandOutput: mockAppendCommandOutput,
       markCommandExited: mockMarkCommandExited,
       removeTab: mockRemoveTab,
-      setTabError: vi.fn(),
+      setTabError: mockSetTabError,
       updateCommandMetrics: vi.fn(),
     }),
   },
@@ -55,20 +82,42 @@ vi.mock('@/hooks/dispatch-browser-session-events', () => ({
 
 vi.mock('sonner', () => ({
   toast: {
-    error: vi.fn(),
-    success: vi.fn(),
+    error: mockToastError,
+    success: mockToastSuccess,
   },
 }));
 
 vi.mock('@/hooks/use-notifications', () => ({
-  showAgentNotification: vi.fn(),
+  showAgentNotification: mockShowAgentNotification,
 }));
 
 vi.mock('@/hooks/use-preview-window', () => ({
   closePreviewForCommand: vi.fn(),
 }));
 
-import { clearWSDispatchState, registerSocketIOHandlers } from '@/hooks/ws-event-dispatch';
+vi.mock('@/stores/settings-store', () => ({
+  useSettingsStore: {
+    getState: () => ({
+      notificationsEnabled: true,
+      notificationSoundEnabled: false,
+    }),
+  },
+}));
+
+vi.mock('@/stores/thread-store-internals', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/thread-store-internals')>();
+  return {
+    ...actual,
+    getNavigate: () => vi.fn(),
+    getProjectIdForThread: vi.fn(() => 'p1'),
+  };
+});
+
+import {
+  clearWSDispatchState,
+  registerSocketIOHandlers,
+  unregisterSocketIOHandlers,
+} from '@/hooks/ws-event-dispatch';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -319,5 +368,163 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
     expect(listener).toHaveBeenCalled();
     window.removeEventListener('clone:progress', listener as EventListener);
+  });
+
+  test('git:workflow_progress starts commit progress on started status', async () => {
+    captureHandlers()['git:workflow_progress']({
+      threadId: 't1',
+      data: {
+        status: 'started',
+        title: 'Committing',
+        action: 'commit',
+        workflowId: 'wf-1',
+        steps: [{ id: 'stage', label: 'Stage', status: 'running' }],
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(mockStartCommit).toHaveBeenCalledWith(
+        't1',
+        'Committing',
+        [{ id: 'stage', label: 'Stage', status: 'running' }],
+        'commit',
+        'wf-1',
+      );
+    });
+  });
+
+  test('git:workflow_progress shows hook failure toast on step_update', async () => {
+    captureHandlers()['git:workflow_progress']({
+      threadId: 't1',
+      data: {
+        status: 'step_update',
+        steps: [{ id: 'hooks', status: 'failed', error: 'lint failed badly' }],
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Pre-commit hook failed',
+        expect.objectContaining({ description: 'lint failed badly' }),
+      );
+    });
+  });
+
+  test('pty:env_activated shows success toast with activation lines', () => {
+    captureHandlers()['pty:env_activated']({
+      threadId: 't1',
+      data: {
+        activations: [
+          { kind: 'venv', detail: 'python3.12' },
+          { kind: 'nvm', detail: 'node 20' },
+        ],
+      },
+    });
+
+    expect(mockToastSuccess).toHaveBeenCalledWith('Activated environment', {
+      description: 'venv: python3.12\nnvm: node 20',
+    });
+  });
+
+  test('pty:error sets tab error and shows toast', () => {
+    captureHandlers()['pty:error']({
+      threadId: 't1',
+      data: { ptyId: 'pty-1', error: 'spawn failed' },
+    });
+
+    expect(mockSetTabError).toHaveBeenCalledWith('pty-1', 'spawn failed');
+    expect(mockToastError).toHaveBeenCalledWith('spawn failed');
+  });
+
+  test('git:workflow_progress completes push workflow and marks review dirty', async () => {
+    vi.useFakeTimers();
+    captureHandlers()['git:workflow_progress']({
+      threadId: 't1',
+      data: {
+        status: 'completed',
+        action: 'push',
+        steps: [{ id: 'push', status: 'done' }],
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(mockReplaceSteps).toHaveBeenCalled();
+      expect(mockToastSuccess).toHaveBeenCalledWith('Pushed successfully');
+    });
+    await vi.waitFor(() => {
+      expect(mockNotifyDirty).toHaveBeenCalledWith('t1');
+    });
+
+    vi.advanceTimersByTime(1500);
+    expect(mockFinishCommit).toHaveBeenCalledWith('t1');
+    vi.useRealTimers();
+  });
+
+  test('git:workflow_progress records failed workflow state', async () => {
+    captureHandlers()['git:workflow_progress']({
+      threadId: 't1',
+      data: {
+        status: 'failed',
+        title: 'Push failed',
+        action: 'push',
+        steps: [{ id: 'push', status: 'failed' }],
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Push failed', action: 'push' }),
+      );
+      expect(mockFinishCommit).toHaveBeenCalledWith('t1');
+    });
+  });
+
+  test('agent:result dispatches desktop notification when tab is hidden', async () => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    Object.defineProperty(window, 'Notification', {
+      configurable: true,
+      value: class {
+        static permission = 'granted';
+        constructor(_title: string, _opts?: NotificationOptions) {}
+      },
+    });
+
+    useThreadStore.setState({
+      activeThread: {
+        id: 't1',
+        projectId: 'p1',
+        title: 'Fix bug',
+        branch: 'feat/x',
+      } as any,
+      threadsById: {
+        t1: { id: 't1', projectId: 'p1', title: 'Fix bug', branch: 'feat/x' } as any,
+      },
+    });
+
+    captureHandlers()['agent:result']({
+      threadId: 't1',
+      data: { status: 'completed', cost: 0.01, duration: 2 },
+    });
+
+    await vi.waitFor(() => {
+      expect(mockShowAgentNotification).toHaveBeenCalledWith(
+        expect.stringContaining('Fix bug'),
+        'Agent finished',
+        expect.objectContaining({ tag: 'agent-result-t1' }),
+      );
+    });
+  });
+
+  test('unregisterSocketIOHandlers detaches captured handlers', () => {
+    const off = vi.fn();
+    const socket = {
+      on: vi.fn(),
+      off,
+    } as any;
+    registerSocketIOHandlers(socket);
+    expect(socket.on).toHaveBeenCalled();
+
+    unregisterSocketIOHandlers(socket);
+    expect(off).toHaveBeenCalled();
   });
 });

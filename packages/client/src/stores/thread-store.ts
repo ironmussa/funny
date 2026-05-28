@@ -39,6 +39,7 @@ import type {
   EffortLevel,
   PermissionMode,
 } from '@funny/shared';
+import { startTransition } from 'react';
 import { create } from 'zustand';
 
 import { api } from '@/lib/api';
@@ -369,20 +370,37 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const cacheHit = !!threadId && isThreadDataLoaded(threadId);
       const keepStale = isDifferentThread && cacheHit;
 
-      // Compute the new active mirror. If the target thread is already in the
-      // map (e.g. it was anchored by a live column), point at that entry —
-      // this is the unified-store "instant swap" path.
-      set((state) => ({
-        selectedThreadId: threadId,
-        activeThread: computeNextActiveThread(
-          state,
-          threadId,
-          keepStale,
-          prevActive,
-          isDifferentThread,
-        ),
-      }));
+      // Split the swap into an urgent and a deferred update.
+      //
+      // `selectedThreadId` drives the sidebar highlight and the ThreadList
+      // re-select guard — it must paint immediately so the click feels
+      // instant. It's cheap (one string), so keep it synchronous/urgent.
+      set({ selectedThreadId: threadId });
       notifyThreadSelected();
+
+      // `activeThread` mounts the heavy ThreadChatView → MessageStream →
+      // MemoizedMessageList subtree. On a cache hit (instant swap) this is
+      // the dominant INP cost on a thread switch — rendering it synchronously
+      // inside the click blocks the next paint for hundreds of ms. Defer it
+      // to a transition so the urgent highlight paints first and React can
+      // render the message list at transition priority instead of freezing
+      // the click. Zustand applies the state synchronously regardless (only
+      // the React re-render is deprioritized), so the post-load eviction and
+      // flushWSBuffer below still observe fresh state. The route-sync
+      // invariant guard is held off by `getSelectingThreadId()` for the
+      // duration of this selectThread call, so the transient
+      // selectedThreadId/activeThread mismatch can't trigger a re-select.
+      startTransition(() => {
+        set((state) => ({
+          activeThread: computeNextActiveThread(
+            state,
+            threadId,
+            keepStale,
+            prevActive,
+            isDifferentThread,
+          ),
+        }));
+      });
 
       // The previously-selected thread loses its implicit anchor; evict if no
       // explicit registration is holding it. Skip when the user deselected
@@ -474,7 +492,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         queuedCount: storedQueuedCount,
         compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
       };
-      set((state) => mutations.setThreadData(state, threadId, hydrated));
+      // Same rationale as the instant-swap above: hydrating the full thread
+      // payload mounts the heavy message list. On a cache miss this is the
+      // spinner→content render. Defer the React commit to a transition so it
+      // doesn't block; the zustand state still updates synchronously, so the
+      // eviction and flushWSBuffer below see the repointed activeThread.
+      startTransition(() => {
+        set((state) => mutations.setThreadData(state, threadId, hydrated));
+      });
 
       // Deferred eviction for the `keepStale` path: we skipped it above so the
       // back-fill subscriber wouldn't see `activeThread` pointing at an entry

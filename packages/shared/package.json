@@ -13,6 +13,7 @@
 
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
+    "./socket-events": "./src/socket-events.ts",
     "./auth/forwarded-identity": "./src/auth/forwarded-identity.ts",
     "./dom/extract": "./src/dom/extract.ts",
     "./db/columns": "./src/db/columns.ts",
@@ -37,7 +38,8 @@
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.5",
     "pg": "^8.20.0",
-    "xstate": "^5.28.0"
+    "xstate": "^5.28.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/pg": "^8.18.0"

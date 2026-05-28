@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
+import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
@@ -67,7 +68,9 @@ function connect() {
     });
 
     useCircuitBreakerStore.getState().recordSuccess();
-    useThreadStore.getState().refreshAllLoadedThreads();
+    if (routeNeedsThreadResync(window.location.pathname)) {
+      useThreadStore.getState().refreshAllLoadedThreads();
+    }
     // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
     // naturally throttles the thundering herd. WS git:status events will
     // invalidate specific keys when the server pushes fresh data.
@@ -160,14 +163,36 @@ function teardown() {
 const VISIBILITY_RESYNC_MIN_INTERVAL_MS = 2_000;
 let lastVisibilityResyncAt = 0;
 
+// Routes that don't read thread data — skipping resync on these saves the
+// N+1 listThreads requests fired by refreshAllLoadedThreads. When the user
+// navigates back to a thread-bearing route, that route's own load path
+// re-fetches; WS events still update threadsById in the background.
+function routeNeedsThreadResync(pathname: string): boolean {
+  const route = parseRoute(pathname);
+  return !(route.settingsPage || route.preferencesPage || route.addProject || route.scratchNew);
+}
+
 function resyncOnFocus(reason: 'visibility' | 'focus') {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   if (!activeSocket?.connected) return;
   const now = Date.now();
   if (now - lastVisibilityResyncAt < VISIBILITY_RESYNC_MIN_INTERVAL_MS) return;
+  if (!routeNeedsThreadResync(window.location.pathname)) {
+    wsLog.debug('Skipping focus resync — route does not display thread data', { reason });
+    return;
+  }
   lastVisibilityResyncAt = now;
   wsLog.info('Tab regained focus — resyncing threads', { reason });
-  useThreadStore.getState().refreshAllLoadedThreads();
+  // Prefer narrow refresh: when one thread is active (project or scratch
+  // detail view), refreshing only that thread avoids the N+1 listThreads
+  // pattern. Bulk refresh is reserved for cross-project views (inbox,
+  // kanban, grid, analytics) where every loaded project's status matters.
+  const store = useThreadStore.getState();
+  if (store.activeThread) {
+    store.refreshActiveThread();
+  } else {
+    store.refreshAllLoadedThreads();
+  }
 }
 
 export function useWS() {

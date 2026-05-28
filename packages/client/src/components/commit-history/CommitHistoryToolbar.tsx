@@ -11,7 +11,6 @@ interface Props {
   logLoading: boolean;
   unpulledCommitCount: number;
   unpushedCount: number;
-  hasUnpushed: boolean;
   pullInProgress: boolean;
   fetchInProgress: boolean;
   pushInProgress: boolean;
@@ -40,7 +39,6 @@ export function CommitHistoryToolbar({
   logLoading,
   unpulledCommitCount,
   unpushedCount,
-  hasUnpushed,
   pullInProgress,
   fetchInProgress,
   pushInProgress,
@@ -116,7 +114,6 @@ export function CommitHistoryToolbar({
           onPush={onPush}
           pushInProgress={pushInProgress}
           unpushedCommitCount={unpushedCount}
-          disabled={pushInProgress || !hasUnpushed}
           testIdPrefix="history"
         />
       )}

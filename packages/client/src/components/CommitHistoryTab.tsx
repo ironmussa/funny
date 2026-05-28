@@ -256,7 +256,9 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   }, [ghProjectId, logEntries, githubAvatarBySha]);
 
   const selectedCommit = logEntries.find((e) => e.hash === selectedHash);
-  const hasUnpushed = unpushedHashes.size > 0;
+  // Toolbar badge/count must match Changes tab — use git-status store, not the
+  // log page's unpushedHashes (which is empty until loadLog finishes).
+  const unpushedCommitCount = gitStatus?.unpushedCommitCount ?? 0;
 
   const runPull = useCallback(
     async (strategy: PullStrategy) => {
@@ -348,6 +350,8 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       setPushInProgress(false);
     } else {
       setPushInProgress(false);
+      if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+      else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
       refreshLog();
     }
   }, [hasGitContext, pushInProgress, effectiveThreadId, projectModeId, t, refreshLog]);
@@ -387,8 +391,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       <CommitHistoryToolbar
         logLoading={logLoading}
         unpulledCommitCount={gitStatus?.unpulledCommitCount ?? 0}
-        unpushedCount={unpushedHashes.size}
-        hasUnpushed={hasUnpushed}
+        unpushedCount={unpushedCommitCount}
         pullInProgress={pullInProgress}
         fetchInProgress={fetchInProgress}
         pushInProgress={pushInProgress}

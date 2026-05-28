@@ -7,11 +7,18 @@ vi.mock('@/lib/api/git', () => ({
   gitApi: {
     getGitStatuses: vi.fn(),
     getGitStatus: vi.fn(),
+    projectGitStatus: vi.fn(),
   },
 }));
 
 import { gitApi } from '@/lib/api/git';
-import { useGitStatusStore, _resetCooldowns, branchKey } from '@/stores/git-status-store';
+import {
+  useGitStatusStore,
+  _resetCooldowns,
+  branchKey,
+  invalidateCooldownsForKeys,
+} from '@/stores/git-status-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 const mockApi = vi.mocked(gitApi);
 
@@ -36,9 +43,15 @@ describe('GitStatusStore', () => {
     useGitStatusStore.setState({
       statusByBranch: {},
       threadToBranchKey: {},
+      statusByProject: {},
       loadingProjects: new Set(),
       _loadingBranchKeys: new Set(),
+      _loadingProjectStatus: new Set(),
     });
+    useThreadStore.setState({
+      threadsById: {},
+      threadIdsByProject: {},
+    } as any);
     _resetCooldowns();
     vi.clearAllMocks();
   });
@@ -241,6 +254,18 @@ describe('GitStatusStore', () => {
 
       expect(useGitStatusStore.getState()._loadingBranchKeys.has('p1:main')).toBe(false);
     });
+
+    test('skips fetch for scratch threads', async () => {
+      useThreadStore.setState({
+        threadsById: {
+          scratch1: { id: 'scratch1', isScratch: true, projectId: '' } as any,
+        },
+      } as any);
+
+      await useGitStatusStore.getState().fetchForThread('scratch1');
+
+      expect(mockApi.getGitStatus).not.toHaveBeenCalled();
+    });
   });
 
   // ── 4. updateFromWS ──────────────────────────────────────
@@ -339,6 +364,23 @@ describe('GitStatusStore', () => {
       expect(bk1).toBe(bk2);
       expect(statusByBranch[bk1!]).toEqual(update);
       expect(statusByBranch[bk2!]).toEqual(update);
+    });
+
+    test('is a no-op when incoming statuses are identical', () => {
+      const existing = makeStatus({
+        threadId: 't1',
+        branchKey: 'p1:main',
+        state: 'dirty',
+        dirtyFileCount: 2,
+      });
+      useGitStatusStore.setState({
+        statusByBranch: { 'p1:main': existing },
+        threadToBranchKey: { t1: 'p1:main' },
+      });
+
+      const before = useGitStatusStore.getState().statusByBranch;
+      useGitStatusStore.getState().updateFromWS([{ ...existing }]);
+      expect(useGitStatusStore.getState().statusByBranch).toBe(before);
     });
   });
 
@@ -444,6 +486,78 @@ describe('GitStatusStore', () => {
         projectId: 'p1',
       });
       expect(key).toBe('p1');
+    });
+  });
+
+  // ── 7. fetchProjectStatus ─────────────────────────────────
+  describe('fetchProjectStatus', () => {
+    test('stores project-level git status', async () => {
+      mockApi.projectGitStatus.mockReturnValueOnce(
+        okAsync({
+          branch: 'main',
+          ahead: 0,
+          behind: 0,
+          staged: [],
+          unstaged: [],
+          untracked: [],
+        }) as any,
+      );
+
+      await useGitStatusStore.getState().fetchProjectStatus('p1');
+
+      expect(useGitStatusStore.getState().statusByProject.p1).toMatchObject({ branch: 'main' });
+    });
+  });
+
+  // ── 8. ensureStatusForThreads ─────────────────────────────
+  describe('ensureStatusForThreads', () => {
+    test('fetches only threads whose branchKey is missing', async () => {
+      useGitStatusStore.setState({
+        statusByBranch: {
+          'p1:main': makeStatus({ threadId: 't1', branchKey: 'p1:main' }),
+        },
+      });
+      mockApi.getGitStatus.mockReturnValue(
+        okAsync(makeStatus({ threadId: 't2', branchKey: 'p1:feat' })) as any,
+      );
+
+      useGitStatusStore.getState().ensureStatusForThreads([
+        { id: 't1', projectId: 'p1', mode: 'local', branch: 'main' },
+        { id: 't2', projectId: 'p1', mode: 'local', branch: 'feat' },
+      ]);
+
+      await vi.waitFor(() => {
+        expect(mockApi.getGitStatus).toHaveBeenCalledTimes(1);
+      });
+      expect(mockApi.getGitStatus).toHaveBeenCalledWith('t2', expect.any(AbortSignal));
+    });
+
+    test('skips scratch threads', () => {
+      const fetchSpy = vi.spyOn(useGitStatusStore.getState(), 'fetchForThread');
+
+      useGitStatusStore
+        .getState()
+        .ensureStatusForThreads([{ id: 'scratch1', projectId: '', isScratch: true } as any]);
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── 9. invalidateCooldownsForKeys ─────────────────────────
+  describe('invalidateCooldownsForKeys', () => {
+    test('clears project cooldown when a branch key in that project is invalidated', async () => {
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }) as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }) as any);
+
+      await useGitStatusStore.getState().fetchForProject('p1');
+      expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(1);
+
+      await useGitStatusStore.getState().fetchForProject('p1');
+      expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(1);
+
+      invalidateCooldownsForKeys(['p1:main']);
+      await useGitStatusStore.getState().fetchForProject('p1');
+      expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(2);
     });
   });
 });

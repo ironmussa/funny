@@ -163,3 +163,24 @@ describe('selectThreadById', () => {
     expect(selectThreadById(state, 'missing')).toBeUndefined();
   });
 });
+
+describe('selectThreadsForProject — missing thread rows', () => {
+  test('skips ids that are not present in threadsById', () => {
+    const t1 = makeThread('t1');
+    const state = makeState({
+      threadsById: { t1 },
+      threadIdsByProject: { p1: ['t1', 'ghost'] },
+    });
+    expect(selectThreadsForProject(state, 'p1')).toEqual([t1]);
+  });
+});
+
+describe('selectThreadsByProject — empty buckets', () => {
+  test('returns the empty sentinel when no projects are loaded', () => {
+    const state = makeState();
+    const a = selectThreadsByProject(state);
+    const b = selectThreadsByProject(state);
+    expect(a).toEqual({});
+    expect(a).toBe(b);
+  });
+});

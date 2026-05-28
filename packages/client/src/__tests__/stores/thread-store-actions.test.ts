@@ -8,6 +8,10 @@ const {
   mockSearchThreadContent,
   mockGetThread,
   mockGetThreadEvents,
+  mockDeleteThread,
+  mockListThreads,
+  mockLoadThreadData,
+  mockIsThreadDataLoaded,
 } = vi.hoisted(() => ({
   mockSendMessage: vi.fn(),
   mockStopThread: vi.fn(),
@@ -15,6 +19,10 @@ const {
   mockSearchThreadContent: vi.fn(),
   mockGetThread: vi.fn(),
   mockGetThreadEvents: vi.fn(),
+  mockDeleteThread: vi.fn(),
+  mockListThreads: vi.fn(),
+  mockLoadThreadData: vi.fn(),
+  mockIsThreadDataLoaded: vi.fn(),
 }));
 
 vi.mock('@/lib/api/threads', () => ({
@@ -25,9 +33,9 @@ vi.mock('@/lib/api/threads', () => ({
     searchThreadContent: mockSearchThreadContent,
     getThread: mockGetThread,
     getThreadEvents: mockGetThreadEvents,
-    listThreads: vi.fn(),
+    listThreads: mockListThreads,
     updateThread: vi.fn(),
-    deleteThread: vi.fn(),
+    deleteThread: mockDeleteThread,
     archiveThread: vi.fn(),
     getThreadMessages: vi.fn(),
     renameThread: vi.fn(),
@@ -46,6 +54,15 @@ vi.mock('@/stores/store-bridge', () => ({
 vi.mock('@/stores/thread-machine-bridge', () => ({
   transitionThreadStatus: vi.fn().mockReturnValue('running'),
   cleanupThreadActor: vi.fn(),
+  loadThreadData: mockLoadThreadData,
+  isThreadDataLoaded: mockIsThreadDataLoaded,
+  isThreadDataPrefetched: vi.fn().mockReturnValue(false),
+  prefetchThreadData: vi.fn(),
+  invalidateThreadData: vi.fn(),
+}));
+
+vi.mock('@/stores/thread-read-store', () => ({
+  useThreadReadStore: { getState: () => ({ markRead: vi.fn() }) },
 }));
 
 vi.mock('@/stores/ui-store', () => ({
@@ -82,6 +99,21 @@ vi.mock('@/stores/thread-store-internals', () => ({
 }));
 
 import { useThreadStore } from '@/stores/thread-store';
+
+import { seedThreads } from '../helpers/seed-thread-state';
+
+const baseThread = {
+  id: 't1',
+  projectId: 'p1',
+  title: 'thread',
+  mode: 'local',
+  status: 'completed',
+  cost: 0,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  hasMore: false,
+  messages: [],
+};
 
 describe('thread store actions', () => {
   beforeEach(() => {
@@ -418,14 +450,156 @@ describe('thread store actions', () => {
 
   describe('loadThreadsForProject', () => {
     test('bails on empty projectId so scratch threads do not leak into threadsByProject[""]', async () => {
-      const { threadsApi } = await import('@/lib/api/threads');
-      const listSpy = vi.mocked(threadsApi.listThreads);
-      listSpy.mockClear();
+      mockListThreads.mockClear();
 
       await useThreadStore.getState().loadThreadsForProject('');
 
-      expect(listSpy).not.toHaveBeenCalled();
+      expect(mockListThreads).not.toHaveBeenCalled();
       expect(useThreadStore.getState().threadIdsByProject['']).toBeUndefined();
+    });
+
+    test('replaces project bucket on successful fetch', async () => {
+      const threads = [{ ...baseThread, id: 't-new', title: 'New' }];
+      mockListThreads.mockReturnValue(okAsync({ threads, total: 1 }));
+
+      await useThreadStore.getState().loadThreadsForProject('p1');
+
+      expect(useThreadStore.getState().threadIdsByProject.p1).toEqual(['t-new']);
+      expect(useThreadStore.getState().threadsById['t-new'].title).toBe('New');
+    });
+  });
+
+  describe('loadMoreThreads', () => {
+    test('appends paginated threads without duplicating ids', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, id: 't1' } as any] }),
+        threadTotalByProject: { p1: 2 },
+      } as any);
+      mockListThreads.mockReturnValue(
+        okAsync({ threads: [{ ...baseThread, id: 't2', title: 'Page 2' }], total: 2 }),
+      );
+
+      await useThreadStore.getState().loadMoreThreads('p1');
+
+      expect(useThreadStore.getState().threadIdsByProject.p1).toEqual(['t1', 't2']);
+    });
+  });
+
+  describe('deleteThread', () => {
+    beforeEach(() => {
+      mockDeleteThread.mockReturnValue(okAsync({ ok: true }));
+      mockStopThread.mockReturnValue(okAsync({ ok: true }));
+    });
+
+    test('removes thread from store and clears selection', async () => {
+      const payload = { ...baseThread, messages: [] };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+        threadTotalByProject: { p1: 1 },
+        selectedThreadId: 't1',
+        activeThread: payload as any,
+        threadDataById: { t1: payload as any },
+      } as any);
+
+      await useThreadStore.getState().deleteThread('t1', 'p1');
+
+      expect(useThreadStore.getState().threadsById.t1).toBeUndefined();
+      expect(useThreadStore.getState().selectedThreadId).toBeNull();
+      expect(useThreadStore.getState().activeThread).toBeNull();
+      expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
+      expect(mockDeleteThread).toHaveBeenCalledWith('t1');
+    });
+
+    test('stops running threads before delete', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, status: 'running' } as any] }),
+        threadTotalByProject: { p1: 1 },
+      } as any);
+
+      await useThreadStore.getState().deleteThread('t1', 'p1');
+
+      expect(mockStopThread).toHaveBeenCalledWith('t1');
+      expect(mockDeleteThread).toHaveBeenCalledWith('t1');
+    });
+  });
+
+  describe('deleteScratchThread', () => {
+    beforeEach(() => {
+      mockDeleteThread.mockReturnValue(okAsync({ ok: true }));
+      mockStopThread.mockReturnValue(okAsync({ ok: true }));
+    });
+
+    test('removes scratch thread from scratch bucket', async () => {
+      const scratch = {
+        ...baseThread,
+        id: 's1',
+        projectId: '',
+        isScratch: true,
+      };
+      useThreadStore.setState({
+        threadsById: { s1: scratch as any },
+        scratchThreadIds: ['s1'],
+        scratchThreadTotal: 1,
+        threadIdsByProject: {},
+        threadTotalByProject: {},
+      } as any);
+
+      await useThreadStore.getState().deleteScratchThread('s1');
+
+      expect(useThreadStore.getState().threadsById.s1).toBeUndefined();
+      expect(useThreadStore.getState().scratchThreadIds).toEqual([]);
+      expect(useThreadStore.getState().scratchThreadTotal).toBe(0);
+      expect(mockDeleteThread).toHaveBeenCalledWith('s1');
+    });
+  });
+
+  describe('selectThread', () => {
+    beforeEach(() => {
+      mockIsThreadDataLoaded.mockReturnValue(false);
+      mockLoadThreadData.mockResolvedValue({
+        thread: { ...baseThread, messages: [] },
+        events: [],
+      });
+    });
+
+    test('clears selection when passed null', async () => {
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: { ...baseThread, messages: [] } as any,
+        threadDataById: { t1: { ...baseThread, messages: [] } as any },
+      } as any);
+
+      await useThreadStore.getState().selectThread(null);
+
+      expect(useThreadStore.getState().selectedThreadId).toBeNull();
+      expect(useThreadStore.getState().activeThread).toBeNull();
+      expect(mockLoadThreadData).not.toHaveBeenCalled();
+    });
+
+    test('hydrates thread payload on successful select', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+        threadTotalByProject: { p1: 1 },
+      } as any);
+
+      await useThreadStore.getState().selectThread('t1');
+
+      expect(mockLoadThreadData).toHaveBeenCalledWith('t1');
+      expect(useThreadStore.getState().selectedThreadId).toBe('t1');
+      expect(useThreadStore.getState().threadDataById.t1).toBeDefined();
+      expect(useThreadStore.getState().activeThread?.id).toBe('t1');
+    });
+
+    test('clears selection when hydration fails', async () => {
+      mockLoadThreadData.mockRejectedValueOnce(new Error('network'));
+      useThreadStore.setState({
+        ...seedThreads({ p1: [baseThread as any] }),
+      } as any);
+
+      await useThreadStore.getState().selectThread('t1');
+
+      expect(useThreadStore.getState().selectedThreadId).toBeNull();
+      expect(useThreadStore.getState().activeThread).toBeNull();
     });
   });
 });

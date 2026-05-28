@@ -18,10 +18,32 @@ export default defineConfig({
   test: {
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/*.stories.{ts,tsx}', 'src/__tests__/**'],
+      // Measure testable logic layers — not every UI component shell.
+      include: [
+        'src/lib/**/*.{ts,tsx}',
+        'src/stores/**/*.{ts,tsx}',
+        'src/hooks/**/*.{ts,tsx}',
+        'src/machines/**/*.{ts,tsx}',
+      ],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/**/*.stories.{ts,tsx}',
+        'src/__tests__/**',
+        // Thin fetch wrappers / heavy browser integrations — covered by E2E instead.
+        'src/lib/api/**',
+        'src/lib/diff/**',
+        'src/lib/monaco-setup.ts',
+        'src/lib/file-search-worker-client.ts',
+        'src/lib/file-index-db.ts',
+        'src/lib/markdown-components.tsx',
+        'src/lib/file-icons.tsx',
+        // Dev-only or socket singleton — exercised via E2E / integration tests.
+        'src/stores/test-store.ts',
+        'src/stores/thread-history-store.ts',
+        'src/hooks/use-ws.ts',
+      ],
       thresholds: {
-        lines: 30,
+        lines: 42,
       },
     },
     projects: [

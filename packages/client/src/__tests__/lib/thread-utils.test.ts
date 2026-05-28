@@ -2,11 +2,14 @@ import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
 import { describe, test, expect, vi } from 'vitest';
 
 import {
+  getDisplayThreadStatus,
   statusConfig,
   stageConfig,
   timeAgo,
   gitSyncStateConfig,
   getStatusLabels,
+  resolveModelLabel,
+  shortRelativeDate,
 } from '@/lib/thread-utils';
 
 // A mock translation function that returns the key and any interpolation options
@@ -257,6 +260,42 @@ describe('gitSyncStateConfig', () => {
 
   test('merged has muted foreground class', () => {
     expect(gitSyncStateConfig.merged.className).toContain('text-muted-foreground');
+  });
+});
+
+describe('getDisplayThreadStatus', () => {
+  test('maps running/setting_up to runner_offline when runner is offline', () => {
+    expect(getDisplayThreadStatus('running', 'offline')).toBe('runner_offline');
+    expect(getDisplayThreadStatus('setting_up', 'offline')).toBe('runner_offline');
+  });
+
+  test('preserves status when runner is online', () => {
+    expect(getDisplayThreadStatus('running', 'online')).toBe('running');
+    expect(getDisplayThreadStatus('completed', 'offline')).toBe('completed');
+  });
+});
+
+describe('shortRelativeDate', () => {
+  test('converts git relative dates to short units', () => {
+    expect(shortRelativeDate('4 days ago')).toBe('4d');
+    expect(shortRelativeDate('22 hours ago')).toBe('22h');
+    expect(shortRelativeDate('3 months ago')).toBe('3mo');
+  });
+
+  test('returns original string when format is unknown', () => {
+    expect(shortRelativeDate('yesterday')).toBe('yesterday');
+    expect(shortRelativeDate('')).toBe('');
+  });
+});
+
+describe('resolveModelLabel', () => {
+  test('maps known model IDs to translation keys', () => {
+    expect(resolveModelLabel('claude-sonnet-4-6', t)).toContain('thread.model.sonnet46');
+    expect(resolveModelLabel('claude-haiku-4-5-20251001', t)).toContain('thread.model.haiku');
+  });
+
+  test('falls back to raw model id when unknown', () => {
+    expect(resolveModelLabel('custom-model', t)).toContain('thread.model.custom-model');
   });
 });
 

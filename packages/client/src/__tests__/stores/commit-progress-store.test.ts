@@ -4,7 +4,7 @@ import { useCommitProgressStore } from '@/stores/commit-progress-store';
 
 describe('useCommitProgressStore', () => {
   beforeEach(() => {
-    useCommitProgressStore.setState({ activeCommits: {} });
+    useCommitProgressStore.setState({ activeCommits: {}, failedWorkflow: null });
   });
 
   describe('startCommit', () => {
@@ -21,6 +21,13 @@ describe('useCommitProgressStore', () => {
       expect(entry.title).toBe('Committing changes');
       expect(entry.steps).toEqual(steps);
       expect(entry.action).toBe('commit');
+    });
+
+    test('stores optional workflowId', () => {
+      const steps = [{ id: 'stage', label: 'Staging', status: 'pending' as const }];
+      useCommitProgressStore.getState().startCommit('t1', 'Committing', steps, 'commit', 'wf-1');
+
+      expect(useCommitProgressStore.getState().activeCommits.t1.workflowId).toBe('wf-1');
     });
   });
 
@@ -58,6 +65,39 @@ describe('useCommitProgressStore', () => {
       useCommitProgressStore.getState().updateStep('nonexistent', 'stage', { status: 'completed' });
       const stateAfter = useCommitProgressStore.getState().activeCommits;
       expect(stateAfter).toEqual(stateBefore);
+    });
+  });
+
+  describe('replaceSteps', () => {
+    test('replaces all steps for an active commit', () => {
+      const initial = [{ id: 'stage', label: 'Staging', status: 'pending' as const }];
+      const replacement = [{ id: 'push', label: 'Pushing', status: 'running' as const }];
+
+      useCommitProgressStore.getState().startCommit('t1', 'Committing', initial, 'commit');
+      useCommitProgressStore.getState().replaceSteps('t1', replacement);
+
+      expect(useCommitProgressStore.getState().activeCommits.t1.steps).toEqual(replacement);
+    });
+
+    test('is a no-op for unknown commit id', () => {
+      useCommitProgressStore.getState().replaceSteps('missing', []);
+      expect(useCommitProgressStore.getState().activeCommits).toEqual({});
+    });
+  });
+
+  describe('failed workflow modal state', () => {
+    test('stores and clears failed workflow entries', () => {
+      const entry = {
+        title: 'Push failed',
+        action: 'push',
+        steps: [{ id: 'push', label: 'Pushing', status: 'failed' as const, error: 'denied' }],
+      };
+
+      useCommitProgressStore.getState().setFailedWorkflow(entry);
+      expect(useCommitProgressStore.getState().failedWorkflow).toEqual(entry);
+
+      useCommitProgressStore.getState().clearFailedWorkflow();
+      expect(useCommitProgressStore.getState().failedWorkflow).toBeNull();
     });
   });
 

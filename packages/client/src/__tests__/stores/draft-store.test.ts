@@ -7,6 +7,42 @@ describe('useDraftStore', () => {
     useDraftStore.setState({ drafts: {} });
   });
 
+  describe('setEditorDraft', () => {
+    const emptyDoc = { type: 'doc', content: [{ type: 'paragraph' }] };
+    const nonEmptyDoc = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }],
+    };
+
+    test('stores TipTap editor content and clears legacy prompt fields', () => {
+      useDraftStore.getState().setPromptDraft('t1', 'legacy', [], []);
+      useDraftStore.getState().setEditorDraft('t1', nonEmptyDoc, []);
+
+      const draft = useDraftStore.getState().drafts['t1'];
+      expect(draft.editorContent).toEqual(nonEmptyDoc);
+      expect(draft.prompt).toBeUndefined();
+      expect(draft.selectedFiles).toBeUndefined();
+    });
+
+    test('removes draft entry when editor content and images are empty', () => {
+      useDraftStore.getState().setEditorDraft('t1', nonEmptyDoc, []);
+      useDraftStore.getState().setEditorDraft('t1', emptyDoc, []);
+
+      expect(useDraftStore.getState().drafts['t1']).toBeUndefined();
+    });
+
+    test('keeps commit draft when clearing empty editor content', () => {
+      useDraftStore.getState().setEditorDraft('t1', nonEmptyDoc, []);
+      useDraftStore.getState().setCommitDraft('t1', 'title', 'body');
+      useDraftStore.getState().setEditorDraft('t1', emptyDoc, []);
+
+      expect(useDraftStore.getState().drafts['t1']).toMatchObject({
+        commitTitle: 'title',
+        commitBody: 'body',
+      });
+    });
+  });
+
   describe('setPromptDraft', () => {
     test('stores prompt, images, and selectedFiles', () => {
       const images = [

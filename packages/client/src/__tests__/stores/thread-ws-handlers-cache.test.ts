@@ -12,8 +12,9 @@
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-const { mockInvalidate } = vi.hoisted(() => ({
+const { mockInvalidate, mockBuffer } = vi.hoisted(() => ({
   mockInvalidate: vi.fn(),
+  mockBuffer: vi.fn(),
 }));
 
 vi.mock('@/stores/thread-machine-bridge', () => ({
@@ -33,7 +34,7 @@ vi.mock('@/stores/thread-read-store', () => ({
 }));
 
 vi.mock('@/stores/thread-store-internals', () => ({
-  bufferWSEvent: vi.fn(),
+  bufferWSEvent: mockBuffer,
   getNavigate: vi.fn(),
   getProjectIdForThread: vi.fn(() => null),
 }));
@@ -50,6 +51,7 @@ const {
   handleWSResult,
   handleWSCompactBoundary,
   handleWSQueueUpdate,
+  handleWSInit,
 } = await import('@/stores/thread-ws-handlers');
 
 const THREAD_ID = 'thread-active';
@@ -92,6 +94,77 @@ function makeGetSet(state: any) {
 describe('thread-ws-handlers — cache invalidation for the active thread', () => {
   beforeEach(() => {
     mockInvalidate.mockClear();
+    mockBuffer.mockClear();
+  });
+
+  test('buffers events when thread is selected but not yet hydrated', () => {
+    const state = makeState({
+      selectedThreadId: THREAD_ID,
+      threadDataById: {},
+      activeThread: { ...makeState().activeThread, status: 'running' },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSMessage(get, set, THREAD_ID, { role: 'assistant', content: 'buffered' });
+
+    expect(mockBuffer).toHaveBeenCalledWith(
+      THREAD_ID,
+      'message',
+      expect.objectContaining({ content: 'buffered' }),
+    );
+    expect(state.threadDataById[THREAD_ID]).toBeUndefined();
+  });
+
+  test('updates sidebar snippet for assistant messages on unknown hydrated payload', () => {
+    const otherId = 'thread-sidebar-only';
+    const otherThread = {
+      id: otherId,
+      projectId: 'p1',
+      title: 'Side',
+      status: 'running',
+      cost: 0,
+      messages: [],
+    };
+    const state = makeState({
+      selectedThreadId: null,
+      activeThread: null,
+      threadsById: { [otherId]: otherThread },
+      threadIdsByProject: { p1: [otherId] },
+      threadDataById: {},
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSMessage(get, set, otherId, {
+      role: 'assistant',
+      content: 'x'.repeat(200),
+    });
+
+    expect(state.threadsById[otherId].lastAssistantMessage).toHaveLength(120);
+  });
+
+  test('handleWSInit patches initInfo into hydrated thread payload', () => {
+    const initInfo = { model: 'claude-sonnet-4-6', permissionMode: 'autoEdit' };
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+
+    handleWSInit(get, set, THREAD_ID, initInfo as any);
+
+    expect(state.threadDataById[THREAD_ID].initInfo).toEqual(initInfo);
+  });
+
+  test('handleWSStatus mirrors status onto activeThread via patchThread', () => {
+    const state = makeState({
+      activeThread: { ...makeState().activeThread, status: 'idle' },
+    });
+    state.threadsById[THREAD_ID].status = 'idle';
+    state.threadDataById[THREAD_ID].status = 'idle';
+    const { get, set } = makeGetSet(state);
+
+    handleWSStatus(get, set, THREAD_ID, { status: 'running' });
+
+    expect(state.activeThread.status).toBe('running');
+    expect(state.threadsById[THREAD_ID].status).toBe('running');
+    expect(state.threadDataById[THREAD_ID].status).toBe('running');
   });
 
   test('handleWSMessage invalidates when thread is active', () => {

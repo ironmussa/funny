@@ -174,4 +174,156 @@ describe('ws-event-dispatch — pendingMessages keying', () => {
       't2:m2',
     ]);
   });
+
+  test('agent:status routes to handleWSStatus after RAF flush', async () => {
+    const statusCalls: Array<{ threadId: string; data: any }> = [];
+    useThreadStore.setState({
+      handleWSStatus: ((tid: string, data: any) => {
+        statusCalls.push({ threadId: tid, data });
+      }) as any,
+    });
+
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    const fakeSocket = {
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any;
+    registerSocketIOHandlers(fakeSocket);
+
+    handlers['agent:status']({ threadId: 't9', data: { status: 'running' } });
+    drainRaf();
+
+    expect(statusCalls).toEqual([{ threadId: 't9', data: { status: 'running' } }]);
+  });
+
+  test('agent:result routes to handleWSResult after RAF flush', async () => {
+    const resultCalls: Array<{ threadId: string; data: any }> = [];
+    useThreadStore.setState({
+      handleWSResult: ((tid: string, data: any) => {
+        resultCalls.push({ threadId: tid, data });
+      }) as any,
+    });
+
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    const fakeSocket = {
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any;
+    registerSocketIOHandlers(fakeSocket);
+
+    handlers['agent:result']({
+      threadId: 't9',
+      data: { status: 'completed', cost: 0.2, duration: 5 },
+    });
+    drainRaf();
+
+    expect(resultCalls).toEqual([
+      { threadId: 't9', data: { status: 'completed', cost: 0.2, duration: 5 } },
+    ]);
+  });
+
+  test('agent:tool_output batches and flushes via RAF', async () => {
+    const toolCalls: Array<{ threadId: string; data: any }> = [];
+    useThreadStore.setState({
+      handleWSToolOutput: ((tid: string, data: any) => {
+        toolCalls.push({ threadId: tid, data });
+      }) as any,
+    });
+
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    const fakeSocket = {
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any;
+    registerSocketIOHandlers(fakeSocket);
+
+    handlers['agent:tool_output']({
+      threadId: 't1',
+      data: { toolCallId: 'tc1', output: 'partial' },
+    });
+    expect(toolCalls).toHaveLength(0);
+
+    drainRaf();
+    expect(toolCalls).toEqual([{ threadId: 't1', data: { toolCallId: 'tc1', output: 'partial' } }]);
+  });
+
+  test('agent:init applies immediately without RAF batching', async () => {
+    const initCalls: Array<{ threadId: string; data: any }> = [];
+    useThreadStore.setState({
+      handleWSInit: ((tid: string, data: any) => {
+        initCalls.push({ threadId: tid, data });
+      }) as any,
+    });
+
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    const fakeSocket = {
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any;
+    registerSocketIOHandlers(fakeSocket);
+
+    handlers['agent:init']({ threadId: 't5', data: { sessionId: 'sess-1' } });
+
+    expect(initCalls).toEqual([{ threadId: 't5', data: { sessionId: 'sess-1' } }]);
+  });
+
+  test('agent:status waiting applies immediately (not batched)', async () => {
+    const statusCalls: Array<{ threadId: string; data: any }> = [];
+    useThreadStore.setState({
+      handleWSStatus: ((tid: string, data: any) => {
+        statusCalls.push({ threadId: tid, data });
+      }) as any,
+    });
+
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    const fakeSocket = {
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any;
+    registerSocketIOHandlers(fakeSocket);
+
+    handlers['agent:status']({
+      threadId: 't1',
+      data: { status: 'waiting', waitingReason: 'permission' },
+    });
+
+    expect(statusCalls).toHaveLength(1);
+    drainRaf();
+    expect(statusCalls).toHaveLength(1);
+  });
+
+  test('duplicate agent:status events are deduped per thread', async () => {
+    const statusCalls: Array<{ threadId: string; data: any }> = [];
+    useThreadStore.setState({
+      handleWSStatus: ((tid: string, data: any) => {
+        statusCalls.push({ threadId: tid, data });
+      }) as any,
+    });
+
+    const { registerSocketIOHandlers } = await import('@/hooks/ws-event-dispatch');
+    const handlers: Record<string, (e: any) => void> = {};
+    const fakeSocket = {
+      on(event: string, handler: (e: any) => void) {
+        handlers[event] = handler;
+      },
+    } as any;
+    registerSocketIOHandlers(fakeSocket);
+
+    const payload = { threadId: 't1', data: { status: 'running' } };
+    handlers['agent:status'](payload);
+    handlers['agent:status'](payload);
+    drainRaf();
+
+    expect(statusCalls).toHaveLength(1);
+  });
 });

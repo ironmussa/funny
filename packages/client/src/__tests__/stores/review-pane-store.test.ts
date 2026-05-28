@@ -4,10 +4,10 @@ import { useReviewPaneStore } from '@/stores/review-pane-store';
 
 describe('useReviewPaneStore', () => {
   beforeEach(() => {
-    // Reset to initial state
     useReviewPaneStore.setState({
       dirtySignal: 0,
       dirtyThreadId: null,
+      generatingCommitMsg: {},
     });
   });
 
@@ -77,6 +77,21 @@ describe('useReviewPaneStore', () => {
       useReviewPaneStore.getState().notifyDirty('second');
       useReviewPaneStore.getState().notifyDirty('last');
       expect(useReviewPaneStore.getState().dirtyThreadId).toBe('last');
+    });
+  });
+
+  describe('setGeneratingCommitMsg', () => {
+    test('sets generating flag for a draft id', () => {
+      useReviewPaneStore.getState().setGeneratingCommitMsg('thread-1', true);
+      expect(useReviewPaneStore.getState().generatingCommitMsg).toEqual({ 'thread-1': true });
+    });
+
+    test('clears generating flag without affecting other drafts', () => {
+      useReviewPaneStore.getState().setGeneratingCommitMsg('thread-1', true);
+      useReviewPaneStore.getState().setGeneratingCommitMsg('thread-2', true);
+      useReviewPaneStore.getState().setGeneratingCommitMsg('thread-1', false);
+
+      expect(useReviewPaneStore.getState().generatingCommitMsg).toEqual({ 'thread-2': true });
     });
   });
 });

@@ -235,6 +235,18 @@ describe('parseReferencedFiles', () => {
     });
   });
 
+  describe('inline content and @path stripping', () => {
+    test('preserves inlineContent with @path markers after removing XML block', () => {
+      const content =
+        '<referenced-files>\n<file path="src/a.ts" />\n</referenced-files>\nReview @src/a.ts please';
+      const result = parseReferencedFiles(content);
+
+      expect(result.inlineContent).toBe('Review @src/a.ts please');
+      expect(result.cleanContent).toBe('Review please');
+      expect(result.fileMap.get('src/a.ts')).toEqual({ path: 'src/a.ts', type: 'file' });
+    });
+  });
+
   describe('edge cases', () => {
     test('handles file tag with additional attributes', () => {
       const content =

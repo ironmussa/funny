@@ -9,6 +9,7 @@ import {
   getToolLabel,
   getFileExtension,
   getFileName,
+  isTodoToolName,
 } from '@/components/tool-cards/format-utils';
 import { extToHljsLang } from '@/hooks/use-highlight';
 import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
@@ -33,6 +34,15 @@ describe('formatInput', () => {
   });
 });
 
+describe('isTodoToolName', () => {
+  test('recognizes Claude and Cursor todo tool names', () => {
+    expect(isTodoToolName('TodoWrite')).toBe(true);
+    expect(isTodoToolName('updateTodos')).toBe(true);
+    expect(isTodoToolName('todo_write')).toBe(true);
+    expect(isTodoToolName('Grep')).toBe(false);
+  });
+});
+
 describe('getTodos', () => {
   test('returns array of todos when present', () => {
     const todos = [
@@ -48,6 +58,13 @@ describe('getTodos', () => {
 
   test('returns null when todos key is missing', () => {
     expect(getTodos({})).toBeNull();
+  });
+
+  test('normalizes Cursor updateTodos metadata-only input when todos arrive later', () => {
+    const todos = getTodos({
+      todos: [{ id: '1', content: 'Fix CI', status: 'in_progress' }],
+    });
+    expect(todos).toEqual([{ content: 'Fix CI', status: 'in_progress' }]);
   });
 });
 

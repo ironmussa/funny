@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -373,11 +374,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
 
   // Loading / Checking state
   if (view === 'checking') {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="icon-lg animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <LoadingState fill={false} className="py-12" testId="clone-repo-checking" />;
   }
 
   // Error state — API call failed (network error, server down, etc.)
@@ -486,10 +483,13 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="icon-base animate-spin" />
-          {t('github.deviceFlow.waitingAuth')}
-        </div>
+        <LoadingState
+          fill={false}
+          layout="inline"
+          className="text-sm"
+          testId="clone-repo-waiting-auth"
+          label={t('github.deviceFlow.waitingAuth')}
+        />
 
         <Button
           variant="ghost"
@@ -592,9 +592,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           ))}
 
           {loadingRepos && (
-            <div className="flex justify-center py-4">
-              <Loader2 className="icon-base animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState fill={false} className="py-4" testId="clone-repo-loading-repos" />
           )}
 
           {!loadingRepos && repos.length === 0 && (

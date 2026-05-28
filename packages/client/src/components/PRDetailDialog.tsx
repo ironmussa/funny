@@ -1,5 +1,5 @@
 import type { FileDiffSummary, GitHubPR, PRCommit, PRFile } from '@funny/shared';
-import { FileCode, GitCommitHorizontal, Loader2, X } from 'lucide-react';
+import { FileCode, GitCommitHorizontal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -335,10 +335,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
 
         {/* ── Body ── */}
         {isLoading ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Loading PR data…
-          </div>
+          <LoadingState testId="pr-detail-loading" label="Loading PR data…" />
         ) : error ? (
           <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
             {error}

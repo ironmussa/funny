@@ -1,12 +1,13 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -417,9 +418,13 @@ function EmptyRow({ text }: { text: string }) {
 
 function LoadingRow({ text }: { text: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-muted-foreground">
-      <Loader2 className="icon-sm animate-spin" />
-      <span>{text}</span>
-    </div>
+    <LoadingState
+      fill={false}
+      layout="inline"
+      size="compact"
+      className="px-3 py-6"
+      testId="text-search-loading"
+      label={text}
+    />
   );
 }

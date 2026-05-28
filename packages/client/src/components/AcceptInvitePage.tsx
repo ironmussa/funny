@@ -1,8 +1,9 @@
-import { Loader2, CheckCircle2, XCircle, UserPlus } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, UserPlus } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -143,10 +144,11 @@ export function AcceptInvitePage({ token }: Props) {
       <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8 text-center shadow-lg">
         {/* Verifying token */}
         {step === 'verifying' && (
-          <>
-            <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Verifying invite link…</p>
-          </>
+          <LoadingState
+            fill={false}
+            testId="accept-invite-verifying"
+            label="Verifying invite link…"
+          />
         )}
 
         {/* Registration / Login form */}
@@ -267,10 +269,11 @@ export function AcceptInvitePage({ token }: Props) {
 
         {/* Accepting invite */}
         {step === 'accepting' && (
-          <>
-            <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Joining {orgName}...</p>
-          </>
+          <LoadingState
+            fill={false}
+            testId="accept-invite-accepting"
+            label={`Joining ${orgName}...`}
+          />
         )}
 
         {/* Success */}

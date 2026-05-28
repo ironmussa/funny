@@ -11,7 +11,7 @@ import {
   monitorForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { useMachine } from '@xstate/react';
-import { Plus, X, Square, Loader2, AlertCircle, RotateCcw, Zap } from 'lucide-react';
+import { Plus, X, Square, AlertCircle, RotateCcw, Zap } from 'lucide-react';
 import { useRef, useState, useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -639,10 +640,13 @@ function TerminalPhaseOverlay({
         className="absolute inset-0 flex items-center justify-center bg-background"
         data-testid="terminal-awaiting-runner"
       >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="icon-base animate-spin" />
-          <span>{t('terminal.awaitingRunner', 'Waiting for runner to come online…')}</span>
-        </div>
+        <LoadingState
+          fill={false}
+          layout="inline"
+          size="compact"
+          testId="terminal-awaiting-runner-spinner"
+          label={t('terminal.awaitingRunner', 'Waiting for runner to come online…')}
+        />
       </div>
     );
   }
@@ -655,10 +659,13 @@ function TerminalPhaseOverlay({
   ) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-background">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="icon-base animate-spin" />
-          <span>{t('terminal.loading')}</span>
-        </div>
+        <LoadingState
+          fill={false}
+          layout="inline"
+          size="compact"
+          testId="terminal-loading-spinner"
+          label={t('terminal.loading')}
+        />
       </div>
     );
   }

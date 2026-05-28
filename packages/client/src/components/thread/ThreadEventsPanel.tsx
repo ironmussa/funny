@@ -3,10 +3,11 @@
  */
 
 import type { ThreadEvent } from '@funny/shared';
-import { GitCommit, GitMerge, Upload, Loader2 } from 'lucide-react';
+import { GitCommit, GitMerge, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -98,11 +99,7 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
   }, [threadId]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="icon-xl animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <LoadingState fill={false} className="p-8" testId="thread-events-loading" />;
   }
 
   if (events.length === 0) {

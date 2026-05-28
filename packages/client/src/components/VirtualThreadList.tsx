@@ -1,6 +1,5 @@
 import type { Thread } from '@funny/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Loader2 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +7,7 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { LoadingState } from '@/components/ui/loading-state';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
@@ -202,13 +202,14 @@ export function VirtualThreadList({
           })}
         </div>
         {loadingMore && (
-          <div
-            data-testid="virtual-thread-list-loading-more"
-            className="flex items-center justify-center gap-1.5 py-3 text-xs text-muted-foreground"
-          >
-            <Loader2 className="icon-sm animate-spin" />
-            {t('common.loading')}
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            size="compact"
+            className="py-3"
+            testId="virtual-thread-list-loading-more"
+            label={t('common.loading')}
+          />
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { Download, FileQuestion, Loader2 } from 'lucide-react';
+import { Download, FileQuestion } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 import {
@@ -372,9 +373,7 @@ function UnknownPreview({ src, name }: { src: string; name?: string }) {
 
 function PreviewSpinner() {
   return (
-    <div className="flex items-center justify-center p-6 text-muted-foreground">
-      <Loader2 className="icon-sm animate-spin" />
-    </div>
+    <LoadingState fill={false} size="compact" className="p-6" testId="media-preview-loading" />
   );
 }
 

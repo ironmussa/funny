@@ -6,7 +6,6 @@ import type {
 } from '@funny/shared';
 import {
   Monitor,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Play,
@@ -20,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionList } from '@/components/test-runner/ActionList';
 import { ActionTimeline } from '@/components/test-runner/ActionTimeline';
 import { TestDetailTabs } from '@/components/test-runner/TestDetailTabs';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { cn } from '@/lib/utils';
@@ -421,10 +421,11 @@ export function BrowserPreview({
               <span className="text-sm">No test running</span>
             </div>
           ) : isRunning && !isStreaming ? (
-            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <Loader2 className="size-8 animate-spin" />
-              <span className="text-sm">Connecting to browser…</span>
-            </div>
+            <LoadingState
+              fill={false}
+              testId="browser-preview-connecting"
+              label="Connecting to browser…"
+            />
           ) : null}
           <canvas
             ref={canvasRef}

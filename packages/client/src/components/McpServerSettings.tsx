@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
   SelectContent,
@@ -606,10 +607,13 @@ export function McpServerSettings() {
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="icon-base animate-spin" />
-            {t('mcp.loadingServers')}
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-6"
+            testId="mcp-settings-loading"
+            label={t('mcp.loadingServers')}
+          />
         ) : servers.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{t('mcp.noServers')}</div>
         ) : (

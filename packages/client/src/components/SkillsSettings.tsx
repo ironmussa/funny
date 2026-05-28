@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { colorFromName } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
@@ -398,10 +399,13 @@ export function SkillsSettings() {
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="icon-base animate-spin" />
-            {t('skills.loadingSkills')}
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-6"
+            testId="skills-loading"
+            label={t('skills.loadingSkills')}
+          />
         ) : globalSkills.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {t('skills.noGlobalSkills')}
@@ -432,10 +436,13 @@ export function SkillsSettings() {
         </div>
 
         {loadingPlugins ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="icon-base animate-spin" />
-            {t('plugins.loadingPlugins')}
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-6"
+            testId="skills-loading-plugins"
+            label={t('plugins.loadingPlugins')}
+          />
         ) : plugins.length === 0 ? (
           <div className="py-4 text-center text-sm text-muted-foreground">
             {t('plugins.noPlugins')}

@@ -1,11 +1,12 @@
 import type { Thread } from '@funny/shared';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BranchBadge } from '@/components/BranchBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
@@ -195,10 +196,14 @@ export function ThreadListView({
 
       {/* Thread list */}
       {loading ? (
-        <div className="flex h-32 flex-shrink-0 items-center justify-center text-xs text-muted-foreground">
-          <Loader2 className="icon-base mr-2 animate-spin" />
-          {t('common.loading')}
-        </div>
+        <LoadingState
+          fill={false}
+          layout="inline"
+          size="compact"
+          className="h-32 flex-shrink-0"
+          testId="thread-list-loading"
+          label={t('common.loading')}
+        />
       ) : threads.length === 0 ? (
         <div className="flex h-32 flex-shrink-0 items-center justify-center text-xs text-muted-foreground">
           {search ? searchEmptyMessage : emptyMessage}

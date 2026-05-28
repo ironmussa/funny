@@ -185,7 +185,7 @@ export function AnalyticsView() {
 
       {/* Content */}
       {loading ? (
-        <LoadingState testId="analytics-loading" spinnerClassName="icon-lg" />
+        <LoadingState testId="analytics-loading" label="Loading…" />
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">

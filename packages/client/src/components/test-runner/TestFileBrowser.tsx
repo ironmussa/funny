@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
@@ -734,10 +735,13 @@ export function TestFileBrowser({
       {/* File tree */}
       <ScrollArea className="flex-1 pr-3">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-            <Loader2 className="icon-base mr-2 animate-spin" />
-            Loading tests…
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-8"
+            testId="test-file-browser-loading"
+            label="Loading tests…"
+          />
         ) : files.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             No test files found

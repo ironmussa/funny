@@ -1,11 +1,12 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Loader2, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
+import { LoadingState } from '@/components/ui/loading-state';
 import { createClientLogger } from '@/lib/client-logger';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { FileSearchWorkerClient, type FileSearchMatch } from '@/lib/file-search-worker-client';
@@ -338,9 +339,13 @@ function EmptyRow({ text }: { text: string }) {
 
 function LoadingRow({ text }: { text: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-muted-foreground">
-      <Loader2 className="icon-sm animate-spin" />
-      <span>{text}</span>
-    </div>
+    <LoadingState
+      fill={false}
+      layout="inline"
+      size="compact"
+      className="px-3 py-6"
+      testId="file-search-loading"
+      label={text}
+    />
   );
 }

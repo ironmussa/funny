@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUpCircle, GitCommit, Loader2, Search } from 'lucide-react';
+import { ArrowUpCircle, GitCommit, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -200,10 +200,13 @@ function SentinelRow({
       className="flex items-center justify-center py-2"
     >
       {logLoading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="icon-sm animate-spin" />
-          {t('history.loadingMore', 'Loading more…')}
-        </div>
+        <LoadingState
+          fill={false}
+          layout="inline"
+          size="compact"
+          testId="history-loading-more"
+          label={t('history.loadingMore', 'Loading more…')}
+        />
       ) : (
         <button
           type="button"

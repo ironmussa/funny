@@ -8,6 +8,7 @@ import {
   useStepTimers,
   useTotalFromSteps,
 } from '@/components/GitProgressModal';
+import { LoadingState } from '@/components/ui/loading-state';
 import { cn } from '@/lib/utils';
 
 interface WorktreeSetupProgressProps {
@@ -30,15 +31,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
 
   // Empty state while waiting for first WS event
   if (!focalStep) {
-    return (
-      <div
-        className="flex w-full max-w-md flex-col items-center justify-center gap-4"
-        data-testid="worktree-setup-progress"
-      >
-        <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
-        <span className="text-sm text-muted-foreground/60">Preparing…</span>
-      </div>
-    );
+    return <LoadingState testId="worktree-setup-progress" label="Preparing…" />;
   }
 
   const stepElapsed = getStepElapsed(focalStep.id);

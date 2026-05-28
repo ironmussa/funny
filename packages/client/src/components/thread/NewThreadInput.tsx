@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
@@ -245,13 +246,7 @@ export function NewThreadInput({
   if (creating) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
-        <div
-          className="flex w-full max-w-md flex-col items-center justify-center gap-4"
-          data-testid="new-thread-creating"
-        >
-          <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
-          <span className="text-sm text-muted-foreground/60">Preparing…</span>
-        </div>
+        <LoadingState testId="new-thread-creating" label={t('common.preparing', 'Preparing…')} />
       </div>
     );
   }

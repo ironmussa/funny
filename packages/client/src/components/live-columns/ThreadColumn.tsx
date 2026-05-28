@@ -10,6 +10,7 @@ import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
+import { LoadingState } from '@/components/ui/loading-state';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { api } from '@/lib/api';
@@ -238,8 +239,8 @@ export const ThreadColumn = memo(function ThreadColumn({
 
   if (loading) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center rounded-sm border border-border">
-        <Loader2 className="icon-lg animate-spin text-muted-foreground" />
+      <div className="flex min-h-0 flex-1 rounded-sm border border-border">
+        <LoadingState testId={`grid-column-loading-${threadId}`} />
       </div>
     );
   }

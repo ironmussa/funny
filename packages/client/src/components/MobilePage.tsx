@@ -1,10 +1,10 @@
-import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { ChatView } from '@/components/mobile/ChatView';
 import { NewThreadView } from '@/components/mobile/NewThreadView';
 import { ProjectListView } from '@/components/mobile/ProjectListView';
 import { ThreadListView } from '@/components/mobile/ThreadListView';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Toaster } from '@/components/ui/sonner';
 import { useWS } from '@/hooks/use-ws';
 import { TOAST_DURATION } from '@/lib/utils';
@@ -32,8 +32,8 @@ export function MobilePage() {
 
   if (!ready) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center bg-background text-foreground">
-        <Loader2 className="icon-xl animate-spin text-muted-foreground" />
+      <div className="flex h-[100dvh] bg-background text-foreground">
+        <LoadingState testId="mobile-page-loading" />
       </div>
     );
   }

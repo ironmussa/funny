@@ -1,5 +1,5 @@
 import type { ThreadEvent, WaitingReason } from '@funny/shared';
-import { Loader2, ArrowDown, Clock } from 'lucide-react';
+import { ArrowDown, Clock } from 'lucide-react';
 import { m, useReducedMotion } from 'motion/react';
 import {
   useState,
@@ -14,6 +14,7 @@ import {
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { LoadingState } from '@/components/ui/loading-state';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { selectLastMessage, selectFirstMessage } from '@/stores/thread-selectors';
@@ -503,12 +504,14 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         >
           {/* Loading indicator (pagination) */}
           {pagination?.loadingMore && (
-            <div className="flex items-center justify-center py-3">
-              <Loader2 className="icon-base animate-spin text-muted-foreground" />
-              <span className="ml-2 text-xs text-muted-foreground">
-                {t('thread.loadingOlder', 'Loading older messages\u2026')}
-              </span>
-            </div>
+            <LoadingState
+              fill={false}
+              layout="inline"
+              size="compact"
+              className="py-3"
+              testId="message-stream-loading-more"
+              label={t('thread.loadingOlder', 'Loading older messages\u2026')}
+            />
           )}
 
           {/* Beginning of conversation marker */}

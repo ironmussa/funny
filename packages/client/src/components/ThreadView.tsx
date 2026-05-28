@@ -1,7 +1,8 @@
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -89,15 +90,10 @@ export function ThreadView() {
   if (!activeThread) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div
-          className="flex flex-1 items-center justify-center px-4 text-muted-foreground"
-          data-testid="thread-loading-placeholder"
-        >
-          <div className="flex w-full max-w-md flex-col items-center justify-center gap-4">
-            <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
-            <span className="text-sm text-muted-foreground/60">Preparing…</span>
-          </div>
-        </div>
+        <LoadingState
+          testId="thread-loading-placeholder"
+          label={t('common.preparing', 'Preparing…')}
+        />
       </div>
     );
   }
@@ -121,7 +117,7 @@ export function ThreadView() {
           className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center bg-background/40 pt-16"
           aria-hidden
         >
-          <Loader2 className="size-6 animate-spin text-muted-foreground/70" />
+          <LoadingState fill={false} testId="thread-switching-spinner" />
         </div>
       </div>
     );

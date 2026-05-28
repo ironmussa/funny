@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
@@ -254,10 +255,13 @@ export function WorktreeSettings() {
           ))}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="icon-base animate-spin" />
-            {t('worktreeSettings.loadingWorktrees')}
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-6"
+            testId="worktree-settings-loading"
+            label={t('worktreeSettings.loadingWorktrees')}
+          />
         ) : worktrees.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {t('worktreeSettings.noWorktrees')}

@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -159,9 +160,12 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
         {/* Content */}
         <ScrollArea className="-mx-6 min-h-0 flex-1 px-6">
           {loading && issues.length === 0 ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="icon-lg animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState
+              fill={false}
+              className="py-12"
+              testId="issues-loading"
+              label={t('common.loading', 'Loading…')}
+            />
           ) : error ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
               <p>{t('issues.error')}</p>

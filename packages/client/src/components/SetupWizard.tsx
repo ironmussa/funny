@@ -1,7 +1,8 @@
-import { Loader2, CheckCircle2, XCircle, ExternalLink, ArrowRight, Terminal } from 'lucide-react';
+import { CheckCircle2, XCircle, ExternalLink, ArrowRight, Terminal } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -104,10 +105,13 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
 
       <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
         {checking ? (
-          <div className="flex items-center justify-center gap-2 py-2">
-            <Loader2 className="icon-lg animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Checking…</span>
-          </div>
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-2"
+            testId="setup-wizard-checking"
+            label="Checking…"
+          />
         ) : status?.available ? (
           <>
             <div className="flex items-center gap-2">

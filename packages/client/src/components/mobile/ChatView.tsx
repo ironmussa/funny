@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
+import { ArrowLeft, Clock } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { CopyButton, MessageContent } from '@/components/thread/MessageContent';
 import { WaitingActions } from '@/components/thread/WaitingCards';
 import { ToolCallCard } from '@/components/ToolCallCard';
 import { Badge } from '@/components/ui/badge';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { EFFORT_LEVELS } from '@/lib/providers';
@@ -179,9 +180,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
       </header>
 
       {!activeThread ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="icon-lg animate-spin text-muted-foreground" />
-        </div>
+        <LoadingState testId="mobile-chat-loading" />
       ) : (
         <>
           <ScrollArea className="flex-1 p-3" viewportRef={scrollViewportRef}>

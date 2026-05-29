@@ -40,7 +40,6 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { threadsApi } from '@/lib/api/threads';
 import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
-import { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 

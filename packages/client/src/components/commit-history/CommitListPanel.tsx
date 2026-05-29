@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUpCircle, GitCommit, Search } from 'lucide-react';
+import { ArrowUpCircle, ExternalLink, GitCommit, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { githubCommitUrl } from '@/lib/github-url';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ interface LogEntry {
   authorEmail: string;
   relativeDate: string;
   message: string;
+  body: string;
 }
 
 interface Props {
@@ -28,6 +30,7 @@ interface Props {
   hasMore: boolean;
   unpushedHashes: Set<string>;
   githubAvatarBySha: Map<string, string>;
+  githubBrowseBaseUrl: string | null;
   selectedHash: string | null;
   onSelectHash: (hash: string | null) => void;
   onLoadMore: () => void;
@@ -45,6 +48,7 @@ export function CommitListPanel({
   hasMore,
   unpushedHashes,
   githubAvatarBySha,
+  githubBrowseBaseUrl,
   selectedHash,
   onSelectHash,
   onLoadMore,
@@ -57,6 +61,7 @@ export function CommitListPanel({
     if (!commitSearch.trim()) return logEntries;
     const matches = (e: LogEntry, q: string) =>
       e.message.includes(q) ||
+      e.body.includes(q) ||
       e.author.includes(q) ||
       e.shortHash.includes(q) ||
       e.hash.includes(q);
@@ -65,6 +70,7 @@ export function CommitListPanel({
     return logEntries.filter(
       (e) =>
         e.message.toLowerCase().includes(q) ||
+        e.body.toLowerCase().includes(q) ||
         e.author.toLowerCase().includes(q) ||
         e.shortHash.toLowerCase().includes(q) ||
         e.hash.toLowerCase().includes(q),
@@ -78,7 +84,11 @@ export function CommitListPanel({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => commitScrollRef.current,
-    estimateSize: () => 40,
+    estimateSize: (index) => {
+      const entry = filteredEntries[index];
+      if (!entry) return 48;
+      return entry.body.trim() ? 72 : 48;
+    },
     getItemKey: (index) =>
       index >= filteredEntries.length ? '__sentinel__' : filteredEntries[index].hash,
     overscan: 10,
@@ -156,6 +166,7 @@ export function CommitListPanel({
                     selected={selectedHash === entry.hash}
                     unpushed={unpushedHashes.has(entry.hash)}
                     avatarUrl={githubAvatarBySha.get(entry.hash)}
+                    githubBrowseBaseUrl={githubBrowseBaseUrl}
                     commitSearch={commitSearch}
                     measureRef={virtualizer.measureElement}
                     index={virtualRow.index}
@@ -226,6 +237,7 @@ function CommitRow({
   selected,
   unpushed,
   avatarUrl,
+  githubBrowseBaseUrl,
   commitSearch,
   measureRef,
   index,
@@ -236,6 +248,7 @@ function CommitRow({
   selected: boolean;
   unpushed: boolean;
   avatarUrl: string | undefined;
+  githubBrowseBaseUrl: string | null;
   commitSearch: string;
   measureRef: (el: Element | null) => void;
   index: number;
@@ -269,7 +282,14 @@ function CommitRow({
           query={commitSearch}
           className="block truncate font-medium text-foreground"
         />
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+        {entry.body.trim() ? (
+          <HighlightText
+            text={entry.body}
+            query={commitSearch}
+            className="mt-0.5 block whitespace-pre-wrap text-[10px] leading-snug text-muted-foreground"
+          />
+        ) : null}
+        <div className="mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
           <AuthorBadge
             name={entry.author}
             email={entry.authorEmail}
@@ -330,6 +350,25 @@ function CommitRow({
               </TooltipContent>
             </Tooltip>
           </span>
+          {githubBrowseBaseUrl ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={githubCommitUrl(githubBrowseBaseUrl, entry.hash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="ml-auto flex-shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                  data-testid={`history-commit-github-${entry.shortHash}`}
+                >
+                  <ExternalLink className="icon-xs" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {t('history.viewOnGithub', 'View on GitHub')}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
         </div>
       </button>
     </div>

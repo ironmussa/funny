@@ -10,6 +10,7 @@ import { PublishRepoDialog } from '@/components/PublishRepoDialog';
 import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { api, type PullStrategy } from '@/lib/api';
+import { githubBrowseBaseUrl as resolveGithubBrowseBaseUrl } from '@/lib/github-url';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
@@ -24,6 +25,7 @@ interface LogEntry {
   authorEmail: string;
   relativeDate: string;
   message: string;
+  body: string;
 }
 
 const PAGE_SIZE = 50;
@@ -86,6 +88,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [githubAvatarBySha, setGithubAvatarBySha] = useState<Map<string, string>>(new Map());
 
   const [remoteUrl, setRemoteUrl] = useState<string | null | undefined>(undefined);
+  const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
   const threadProjectId = useThreadProjectId();
@@ -107,17 +110,20 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   useEffect(() => {
     if (!remoteCheckProjectId) {
       setRemoteUrl(undefined);
+      setGithubBrowseBaseUrl(null);
       return;
     }
     if (gitStatus?.hasRemoteBranch) {
       setRemoteUrl('exists');
-      return;
     }
     const controller = new AbortController();
     api.projectGetRemoteUrl(remoteCheckProjectId, controller.signal).then((r) => {
-      if (!controller.signal.aborted && r.isOk()) {
-        setRemoteUrl(r.value.remoteUrl);
+      if (controller.signal.aborted || !r.isOk()) return;
+      const url = r.value.remoteUrl;
+      if (!gitStatus?.hasRemoteBranch) {
+        setRemoteUrl(url);
       }
+      setGithubBrowseBaseUrl(resolveGithubBrowseBaseUrl(url));
     });
     return () => controller.abort();
   }, [remoteCheckProjectId, gitStatus?.hasRemoteBranch]);
@@ -417,6 +423,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
         hasMore={hasMore}
         unpushedHashes={unpushedHashes}
         githubAvatarBySha={githubAvatarBySha}
+        githubBrowseBaseUrl={githubBrowseBaseUrl}
         selectedHash={selectedHash}
         onSelectHash={setSelectedHash}
         onLoadMore={loadMore}
@@ -455,6 +462,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
         onOpenChange={setPublishDialogOpen}
         onSuccess={(repoUrl) => {
           setRemoteUrl(repoUrl);
+          setGithubBrowseBaseUrl(resolveGithubBrowseBaseUrl(repoUrl));
           setPublishDialogOpen(false);
           if (remoteCheckProjectId) {
             useGitStatusStore.getState().fetchProjectStatus(remoteCheckProjectId, true);

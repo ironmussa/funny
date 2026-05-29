@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   metric: vi.fn(),
   getProject: vi.fn(),
   getProviderKey: vi.fn(async () => undefined),
+  getGitIdentity: vi.fn(async (): Promise<{ name: string; email: string } | null> => null),
   threadEventBusEmit: vi.fn(),
   remoteGetAgentTemplate: vi.fn(),
   findPermissionRule: vi.fn(),
@@ -89,7 +90,10 @@ vi.mock('../../services/thread-context.js', async (importOriginal) => {
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { getProject: mocks.getProject },
-    profile: { getProviderKey: mocks.getProviderKey },
+    profile: {
+      getProviderKey: mocks.getProviderKey,
+      getGitIdentity: mocks.getGitIdentity,
+    },
   }),
 }));
 
@@ -575,6 +579,43 @@ describe('AgentLifecycleManager', () => {
 
       expect(mocks.getProviderKey).toHaveBeenCalledWith('user-1', 'openai');
       expect(call.env).toBeUndefined();
+    });
+
+    test('injects git identity env vars from user profile', async () => {
+      mocks.getGitIdentity.mockResolvedValue({
+        name: 'Argenis Leon',
+        email: 'argenis@example.com',
+      });
+
+      const call = await startWithStatus('pending', { id: 'thread-git-identity' });
+
+      expect(mocks.getGitIdentity).toHaveBeenCalledWith('user-1');
+      expect(call.env).toEqual({
+        GIT_AUTHOR_NAME: 'Argenis Leon',
+        GIT_AUTHOR_EMAIL: 'argenis@example.com',
+        GIT_COMMITTER_NAME: 'Argenis Leon',
+        GIT_COMMITTER_EMAIL: 'argenis@example.com',
+      });
+    });
+
+    test('merges git identity env with provider keys', async () => {
+      mocks.getProviderKey.mockImplementation(async (_userId, keyId) =>
+        keyId === 'gemini' ? 'gemini-secret' : undefined,
+      );
+      mocks.getGitIdentity.mockResolvedValue({
+        name: 'Argenis Leon',
+        email: 'argenis@example.com',
+      });
+
+      const call = await startWithStatus('pending', { id: 'thread-env-both' }, 'gemini');
+
+      expect(call.env).toEqual({
+        GEMINI_API_KEY: 'gemini-secret',
+        GIT_AUTHOR_NAME: 'Argenis Leon',
+        GIT_AUTHOR_EMAIL: 'argenis@example.com',
+        GIT_COMMITTER_NAME: 'Argenis Leon',
+        GIT_COMMITTER_EMAIL: 'argenis@example.com',
+      });
     });
 
     test('skips env injection and permission lookup when thread has no userId', async () => {

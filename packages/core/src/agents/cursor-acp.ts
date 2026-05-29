@@ -595,14 +595,15 @@ export class CursorACPProcess extends BaseAgentProcess {
 
   /**
    * Emit any tool calls still waiting for a renderable field at turn end. In
-   * the normal flow every deferred read resolves via a later `tool_call_update`;
-   * this is the safety net for a call that never updates (e.g. a dropped event)
-   * so the agent's action still surfaces as a card instead of vanishing.
+   * the normal flow every deferred call resolves via a later `tool_call_update`;
+   * this is the safety net for a call that never updates (e.g. a dropped event).
+   * A still-unrenderable call is discarded — an empty card (no path / no
+   * command / no todos) is worse than no card at all.
    */
   private flushDeferredToolInputs(): void {
     if (this.deferredToolInputs.size === 0) return;
     for (const [toolCallId, { name, input }] of this.deferredToolInputs) {
-      if (name === 'TodoWrite' && !hasRenderableTodoInput(input)) continue;
+      if (!isRenderableToolInput(name, input)) continue;
       this.emitToolUse(toolCallId, name, input);
     }
     this.deferredToolInputs.clear();
@@ -677,13 +678,18 @@ export class CursorACPProcess extends BaseAgentProcess {
         const tcStatus = (update as any).status as string | undefined;
         const isTerminal = tcStatus === 'completed' || tcStatus === 'failed';
 
-        // Defer when the card isn't renderable yet. TodoWrite always waits for
-        // a todos array; other tools only defer while still pending.
+        // Defer when the card isn't renderable yet. A non-terminal call waits
+        // for a later tool_call_update to supply the missing field; a terminal
+        // call that still lacks it (e.g. Cursor fires a completed edit with no
+        // diff/path) is dropped rather than emitted as an empty card — the
+        // server freezes a tool's input at first emission.
         if (!isRenderableToolInput(toolName, input)) {
-          if (toolName === 'TodoWrite' || !isTerminal) {
+          if (!isTerminal) {
             this.deferredToolInputs.set(toolCallId, { name: toolName, input });
-            return;
+          } else {
+            this.deferredToolInputs.delete(toolCallId);
           }
+          return;
         }
 
         this.emitToolUse(toolCallId, toolName, input);
@@ -742,10 +748,16 @@ export class CursorACPProcess extends BaseAgentProcess {
           }
 
           if (!isRenderableToolInput(toolName, input)) {
-            if (toolName === 'TodoWrite' || !isTerminal) {
+            if (!isTerminal) {
               this.deferredToolInputs.set(toolCallId, { name: toolName, input });
-              return;
+            } else {
+              // Terminal but still missing its renderable field (e.g. Cursor
+              // fires a completed edit update with no diff/path). Drop it
+              // entirely — no card and no dangling tool_result — rather than
+              // surface an empty card.
+              this.deferredToolInputs.delete(toolCallId);
             }
+            return;
           }
 
           this.emitToolUse(toolCallId, toolName, input);

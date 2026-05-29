@@ -382,7 +382,7 @@ export class AgentLifecycleManager {
     metric('agents.running', this.runSpans.size, { type: 'gauge' });
     metric('threads.started', 1, { type: 'sum', attributes: { model, provider } });
 
-    // Resolve per-user API keys for providers that need them
+    // Resolve per-user API keys and git identity for agent subprocesses.
     let agentEnv: Record<string, string> | undefined;
     if (thread?.userId) {
       const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');
@@ -395,6 +395,15 @@ export class AgentLifecycleManager {
           agentEnv ??= {};
           agentEnv[keyConfig.envVar] = keyValue;
         }
+      }
+
+      const gitIdentity = await getServices().profile.getGitIdentity(thread.userId);
+      if (gitIdentity) {
+        agentEnv ??= {};
+        agentEnv.GIT_AUTHOR_NAME = gitIdentity.name;
+        agentEnv.GIT_AUTHOR_EMAIL = gitIdentity.email;
+        agentEnv.GIT_COMMITTER_NAME = gitIdentity.name;
+        agentEnv.GIT_COMMITTER_EMAIL = gitIdentity.email;
       }
     }
 

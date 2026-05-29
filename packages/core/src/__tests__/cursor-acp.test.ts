@@ -233,9 +233,11 @@ describe('CursorACPProcess.translateUpdate', () => {
     expect(results[0]).toMatchObject({ tool_use_id: 'read-deferred' });
   });
 
-  test('terminal update without a resolvable path still emits a card + result', () => {
-    // If the path never arrives, we must still emit the card at terminal status
-    // so the tool_result has a matching tool_use (no stranded result).
+  test('terminal update without a resolvable path is dropped (no empty card)', () => {
+    // If the path never arrives, emitting at terminal status would freeze an
+    // empty card on the server (input is frozen at first emission). An empty
+    // card is worse than no card, so the call is dropped — neither the tool_use
+    // nor a dangling tool_result is emitted.
     const { proc, messages } = makeProcess();
 
     translate(proc, {
@@ -254,16 +256,50 @@ describe('CursorACPProcess.translateUpdate', () => {
       rawOutput: 'done',
     });
 
-    const uses = messages.flatMap((m) =>
-      m.type === 'assistant' ? m.message.content.filter((c) => c.type === 'tool_use') : [],
-    );
-    expect(uses).toHaveLength(1);
-    expect(uses[0]).toMatchObject({ id: 'read-nopath', name: 'Read' });
+    expect(messages).toHaveLength(0);
+  });
 
-    const results = messages.flatMap((m) =>
-      m.type === 'user' ? m.message.content.filter((c) => c.type === 'tool_result') : [],
-    );
-    expect(results).toHaveLength(1);
+  test('completed edit update with no diff/path is dropped, not an empty card', () => {
+    // Repro of thread VmbRG3qKjPYxNoBZEkjNG: Cursor coalesces a batch of edits
+    // into one tool_call carrying the diff plus several bare completed
+    // tool_call_updates with no diff/path/output. Those bare updates must not
+    // render as empty "Edit File" cards.
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'edit-empty',
+      kind: 'edit',
+      title: 'Edit File',
+      status: 'pending',
+      rawInput: {},
+    });
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'edit-empty',
+      status: 'completed',
+    });
+
+    // No card, no result — the phantom edit is discarded entirely.
+    expect(messages).toHaveLength(0);
+  });
+
+  test('orphan completed edit update with no diff/path emits nothing', () => {
+    // Same shape as above but with no preceding tool_call at all (the update is
+    // the first event for this id). Must not synthesize an empty card.
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'edit-orphan-empty',
+      kind: 'edit',
+      title: 'Edit File',
+      status: 'completed',
+    });
+
+    expect(messages).toHaveLength(0);
   });
 
   test('Edit recovers file_path + old/new string from the ACP diff content block', () => {

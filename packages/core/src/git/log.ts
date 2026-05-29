@@ -16,7 +16,10 @@ export interface GitLogEntry {
   author: string;
   authorEmail: string;
   relativeDate: string;
+  /** Subject line (first line of the commit message). */
   message: string;
+  /** Body text after the subject (blank line separator). Empty when none. */
+  body: string;
 }
 
 export interface CommitFileEntry {
@@ -62,13 +65,16 @@ export function getLog(
           authorEmail: emailMap.get(e.hash) ?? '',
           relativeDate: e.relativeDate,
           message: e.message,
+          body: e.body ?? '',
         }));
       })(),
       (error) => processError(String(error), 1, ''),
     );
   }
-  const SEP = '@@SEP@@';
-  const format = `%H${SEP}%h${SEP}%an${SEP}%ae${SEP}%ar${SEP}%s`;
+  // Field/record separators so multi-line commit bodies do not break parsing.
+  const FIELD_SEP = '\x1f';
+  const RECORD_SEP = '\x1e';
+  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%ar%x1F%s%x1F%b%x1E`;
   const args = ['log', `--format=${format}`, `-n`, String(limit)];
   if (skip > 0) {
     args.push(`--skip=${skip}`);
@@ -82,11 +88,21 @@ export function getLog(
       // Empty repo (no commits yet) returns exit code 128 — treat as empty log
       if (result.exitCode !== 0 || !result.stdout.trim()) return [];
       return result.stdout
-        .trim()
-        .split('\n')
-        .map((line) => {
-          const [hash, shortHash, author, authorEmail, relativeDate, message] = line.split(SEP);
-          return { hash, shortHash, author, authorEmail, relativeDate, message };
+        .split(RECORD_SEP)
+        .map((record) => record.trim())
+        .filter(Boolean)
+        .map((record) => {
+          const [hash, shortHash, author, authorEmail, relativeDate, message, body = ''] =
+            record.split(FIELD_SEP);
+          return {
+            hash,
+            shortHash,
+            author,
+            authorEmail,
+            relativeDate,
+            message,
+            body: body.trim(),
+          };
         });
     })(),
     (error) => processError(String(error), 1, ''),

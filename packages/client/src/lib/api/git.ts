@@ -134,6 +134,7 @@ export const gitApi = {
         authorEmail: string;
         relativeDate: string;
         message: string;
+        body: string;
       }>;
       hasMore: boolean;
       unpushedHashes: string[];
@@ -383,6 +384,7 @@ export const gitApi = {
         authorEmail: string;
         relativeDate: string;
         message: string;
+        body: string;
       }>;
       hasMore: boolean;
       unpushedHashes: string[];

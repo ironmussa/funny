@@ -181,6 +181,8 @@ describe('integration: full commit lifecycle', () => {
     if (logResult.isOk()) {
       const hash = logResult.value[0].hash;
       expect(logResult.value[0].message).toBe('subject line');
+      expect(logResult.value[0].body).toContain('This is the body.');
+      expect(logResult.value[0].body).toContain('With multiple lines.');
 
       const bodyResult = await getCommitBody(repoPath, hash);
       expect(bodyResult.isOk()).toBe(true);

@@ -121,6 +121,7 @@ export interface GitLogEntry {
   author: string;
   relativeDate: string;
   message: string;
+  body: string;
 }
 
 export interface GitStatusSummary {

@@ -12,6 +12,7 @@ pub struct GitLogEntry {
   pub author: String,
   pub relative_date: String,
   pub message: String,
+  pub body: String,
 }
 
 /// Format a timestamp as a relative date string (e.g. "2 hours ago", "3 days ago").
@@ -109,13 +110,13 @@ pub async fn get_log(cwd: String, limit: Option<u32>) -> napi::Result<Vec<GitLog
 
       let relative_date = format_relative_date(time_seconds);
 
-      // message_raw_sloppy returns &BStr, use ByteSlice::lines()
       let raw_message = commit.message_raw_sloppy();
-      let message = raw_message
-        .lines()
-        .next()
-        .map(|l| l.to_str_lossy().to_string())
-        .unwrap_or_default();
+      let full = raw_message.to_str_lossy();
+      let message = full.lines().next().unwrap_or("").trim().to_string();
+      let body = match full.find('\n') {
+        Some(idx) => full[idx + 1..].trim().to_string(),
+        None => String::new(),
+      };
 
       entries.push(GitLogEntry {
         hash,
@@ -123,6 +124,7 @@ pub async fn get_log(cwd: String, limit: Option<u32>) -> napi::Result<Vec<GitLog
         author: author_name,
         relative_date,
         message,
+        body,
       });
     }
 

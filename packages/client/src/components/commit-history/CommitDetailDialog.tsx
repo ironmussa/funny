@@ -28,6 +28,7 @@ interface LogEntry {
   authorEmail: string;
   relativeDate: string;
   message: string;
+  body: string;
 }
 
 interface CommitFile {
@@ -127,7 +128,7 @@ export function CommitDetailDialog({
     }
     let cancelled = false;
     setFilesLoading(true);
-    setCommitBody(null);
+    setCommitBody(selectedCommit?.body.trim() || null);
     setFileSearch('');
     (async () => {
       const [filesResult, bodyResult] = await Promise.all([
@@ -171,7 +172,7 @@ export function CommitDetailDialog({
     return () => {
       cancelled = true;
     };
-  }, [selectedHash, hasGitContext, effectiveThreadId, projectModeId, t]);
+  }, [selectedHash, selectedCommit?.body, hasGitContext, effectiveThreadId, projectModeId, t]);
 
   const handleFileClick = useCallback(
     async (filePath: string) => {

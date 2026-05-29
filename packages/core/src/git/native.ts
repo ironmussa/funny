@@ -27,6 +27,7 @@ export interface NativeGitLogEntry {
   author: string;
   relativeDate: string;
   message: string;
+  body?: string;
 }
 
 export interface NativeDiffSummaryResult {

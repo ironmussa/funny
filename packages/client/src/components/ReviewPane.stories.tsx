@@ -138,6 +138,7 @@ const mockLogEntries = [
     author: 'Argenis Leon',
     relativeDate: '2 hours ago',
     message: 'feat: add file tree component with collapsible folders',
+    body: 'Adds a recursive tree with expand/collapse and diff stat badges per file.',
   },
   {
     hash: 'def2345678901',
@@ -145,6 +146,7 @@ const mockLogEntries = [
     author: 'Argenis Leon',
     relativeDate: '3 hours ago',
     message: 'fix: correct diff stats calculation for renamed files',
+    body: '',
   },
   {
     hash: 'ghi3456789012',
@@ -152,6 +154,7 @@ const mockLogEntries = [
     author: 'Argenis Leon',
     relativeDate: '5 hours ago',
     message: 'refactor: extract ReviewPane toolbar into separate component',
+    body: '',
   },
   {
     hash: 'jkl4567890123',
@@ -159,6 +162,7 @@ const mockLogEntries = [
     author: 'Claude',
     relativeDate: '1 day ago',
     message: 'feat: add stash support with pop and drop actions',
+    body: '',
   },
   {
     hash: 'mno5678901234',
@@ -166,6 +170,7 @@ const mockLogEntries = [
     author: 'Argenis Leon',
     relativeDate: '1 day ago',
     message: 'chore: update dependencies and fix type errors',
+    body: '',
   },
   {
     hash: 'pqr6789012345',
@@ -173,6 +178,7 @@ const mockLogEntries = [
     author: 'Claude',
     relativeDate: '2 days ago',
     message: 'feat: implement commit history tab with virtual scrolling',
+    body: '',
   },
   {
     hash: 'stu7890123456',
@@ -180,6 +186,7 @@ const mockLogEntries = [
     author: 'Argenis Leon',
     relativeDate: '3 days ago',
     message: 'fix: resolve merge conflict in shared types',
+    body: '',
   },
 ];
 

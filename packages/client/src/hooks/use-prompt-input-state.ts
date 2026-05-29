@@ -12,19 +12,19 @@ import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
-import { useCursorPromptModels } from '@/hooks/use-cursor-prompt-models';
 import { useDictation } from '@/hooks/use-dictation';
-import { usePiPromptModels } from '@/hooks/use-pi-prompt-models';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
+import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { getEffortLevels, getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
+import { getEffortLevels, filterVisibleModelGroups, parseUnifiedModel } from '@/lib/providers';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadId, useThreadSelector } from '@/stores/thread-context';
 import * as mutations from '@/stores/thread-mutations';
 import { useThreadStore } from '@/stores/thread-store';
@@ -150,9 +150,12 @@ export function usePromptInputState({
   const hasLauncher = !!effectiveProject?.launcherUrl;
   const [effort, setEffort] = useState<string>('high');
 
-  const baseUnifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
-  const piUnifiedModelGroups = usePiPromptModels(baseUnifiedModelGroups);
-  const unifiedModelGroups = useCursorPromptModels(piUnifiedModelGroups);
+  const baseUnifiedModelGroups = useUnifiedPromptModelGroups();
+  const hiddenPromptModels = useSettingsStore((s) => s.hiddenPromptModels);
+  const unifiedModelGroups = useMemo(
+    () => filterVisibleModelGroups(baseUnifiedModelGroups, hiddenPromptModels, unifiedModel),
+    [baseUnifiedModelGroups, hiddenPromptModels, unifiedModel],
+  );
 
   const { provider: currentProvider, model: currentModel } = useMemo(
     () => parseUnifiedModel(unifiedModel),

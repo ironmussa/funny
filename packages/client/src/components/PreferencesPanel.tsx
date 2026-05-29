@@ -9,6 +9,7 @@ import {
   Palette,
   Server,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +28,7 @@ import { useUIStore } from '@/stores/ui-store';
 
 export type GeneralPage =
   | 'general'
+  | 'models'
   | 'appearance'
   | 'github'
   | 'ai-keys'
@@ -43,6 +45,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   icon: typeof SlidersHorizontal;
 }> = [
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
+  { id: 'models', label: 'settings.models', icon: Sparkles },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: Github },
   { id: 'ai-keys', label: 'AI Providers', icon: Bot },

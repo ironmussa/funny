@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { GeneralPage } from '@/components/PreferencesPanel';
+import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
@@ -514,6 +515,18 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
                   />
                 </div>
               </SettingRow>
+            </div>
+          </>
+        )}
+
+        {activePreferencesPage === 'models' && (
+          <>
+            <h3 className="settings-section-header">{t('settings.models')}</h3>
+            <p className="px-1 pb-3 text-xs text-muted-foreground">
+              {t('settings.promptModelVisibilityDesc')}
+            </p>
+            <div className="settings-card !overflow-visible">
+              <PromptModelVisibilitySettings showHeader={false} />
             </div>
           </>
         )}

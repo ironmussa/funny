@@ -1,4 +1,5 @@
 import type { ToolPermission, UserProfile } from '@funny/shared';
+import { MODEL_REGISTRY } from '@funny/shared/models';
 import { create } from 'zustand';
 
 import { profileApi } from '@/lib/api/profile';
@@ -122,6 +123,9 @@ function getStoredFontSize(): FontSize {
 
 const NOTIFICATIONS_ENABLED_KEY = 'funny_notifications_enabled';
 const NOTIFICATIONS_SOUND_KEY = 'funny_notifications_sound';
+const HIDDEN_PROMPT_MODELS_KEY = 'funny_hidden_prompt_models';
+const HIDDEN_PROMPT_MODELS_VERSION_KEY = 'funny_hidden_prompt_models_version';
+const CURRENT_HIDDEN_MODELS_VERSION = '1';
 
 function getStoredNotificationsEnabled(): boolean {
   try {
@@ -137,6 +141,64 @@ function getStoredNotificationSoundEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Default models shown in the dropdown on first run. Only essential models
+ * are visible — users can enable more from Settings > Models.
+ */
+const DEFAULT_VISIBLE_MODELS = new Set([
+  // Core Claude models (most common)
+  'claude:haiku',
+  'claude:sonnet',
+  'claude:opus-4.8',
+  // Dynamic provider defaults
+  'pi:default',
+  'cursor:default',
+]);
+
+/**
+ * Compute all model keys from the registry as `provider:model` strings.
+ */
+function getAllModelKeys(): string[] {
+  const keys: string[] = [];
+  for (const [provider, models] of Object.entries(MODEL_REGISTRY)) {
+    for (const modelKey of Object.keys(models)) {
+      keys.push(`${provider}:${modelKey}`);
+    }
+  }
+  return keys;
+}
+
+function getStoredHiddenPromptModels(): string[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_PROMPT_MODELS_KEY);
+    const version = localStorage.getItem(HIDDEN_PROMPT_MODELS_VERSION_KEY);
+
+    // If user has saved preferences AND they're on the current version, use those
+    if (raw && version === CURRENT_HIDDEN_MODELS_VERSION) {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'string') : [];
+    }
+
+    // First run OR migration needed: hide all models except the default visible set
+    const allModels = getAllModelKeys();
+    const hiddenModels = allModels.filter((key) => !DEFAULT_VISIBLE_MODELS.has(key));
+    // Persist the default so subsequent loads use it
+    persistHiddenPromptModels(hiddenModels);
+    try {
+      localStorage.setItem(HIDDEN_PROMPT_MODELS_VERSION_KEY, CURRENT_HIDDEN_MODELS_VERSION);
+    } catch {}
+    return hiddenModels;
+  } catch {
+    return [];
+  }
+}
+
+function persistHiddenPromptModels(hiddenPromptModels: string[]) {
+  try {
+    localStorage.setItem(HIDDEN_PROMPT_MODELS_KEY, JSON.stringify(hiddenPromptModels));
+  } catch {}
 }
 
 function applyFontSize(size: FontSize) {
@@ -158,6 +220,8 @@ interface SettingsState {
   fontSize: FontSize;
   notificationsEnabled: boolean;
   notificationSoundEnabled: boolean;
+  /** `provider:model` keys hidden from the prompt input model picker. */
+  hiddenPromptModels: string[];
   _initialized: boolean;
   initializeFromProfile: (profile: UserProfile) => void;
   setDefaultEditor: (editor: Editor) => void;
@@ -166,6 +230,8 @@ interface SettingsState {
   setFontSize: (size: FontSize) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotificationSoundEnabled: (enabled: boolean) => void;
+  setPromptModelVisible: (combinedKey: string, visible: boolean) => void;
+  resetPromptModelVisibility: () => void;
   fetchAvailableShells: () => Promise<void>;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
@@ -204,6 +270,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   fontSize: getStoredFontSize(),
   notificationsEnabled: getStoredNotificationsEnabled(),
   notificationSoundEnabled: getStoredNotificationSoundEnabled(),
+  hiddenPromptModels: getStoredHiddenPromptModels(),
   _initialized: false,
 
   initializeFromProfile: (profile) => {
@@ -248,6 +315,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     try {
       localStorage.setItem(NOTIFICATIONS_SOUND_KEY, enabled ? '1' : '0');
     } catch {}
+  },
+  setPromptModelVisible: (combinedKey, visible) =>
+    set((state) => {
+      const hidden = new Set(state.hiddenPromptModels);
+      if (visible) hidden.delete(combinedKey);
+      else hidden.add(combinedKey);
+      const hiddenPromptModels = [...hidden];
+      persistHiddenPromptModels(hiddenPromptModels);
+      return { hiddenPromptModels };
+    }),
+  resetPromptModelVisibility: () => {
+    // Reset to the default visible set (not all visible)
+    const allModels = getAllModelKeys();
+    const hiddenModels = allModels.filter((key) => !DEFAULT_VISIBLE_MODELS.has(key));
+    persistHiddenPromptModels(hiddenModels);
+    set({ hiddenPromptModels: hiddenModels });
   },
   fetchAvailableShells: async () => {
     if (get()._shellsLoaded) return;

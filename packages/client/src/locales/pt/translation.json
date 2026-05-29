@@ -191,6 +191,7 @@
     "typeToQueue": "Digite um acompanhamento para enfileirar...",
     "typeToInterrupt": "Digite para enviar um acompanhamento...",
     "interruptingAgent": "Interrompendo agente com novo prompt...",
+    "steeringAgent": "Redirecionando agente com nova mensagem...",
     "messageQueued": "Mensagem enfileirada — será enviada quando o agente terminar",
     "sendFailed": "Não foi possível enviar a mensagem — servidor indisponível",
     "sendFailedGeneric": "Não foi possível enviar a mensagem: {{error}}",
@@ -390,6 +391,9 @@
     "additions": "adições",
     "deletions": "exclusões"
   },
+  "history": {
+    "viewOnGithub": "Ver no GitHub"
+  },
   "settings": {
     "title": "Configurações",
     "general": "Geral",
@@ -456,6 +460,15 @@
     "defaultPermissionMode": "Modo de permissão padrão",
     "defaultPermissionModeDesc": "O modo de permissão selecionado por padrão para novas threads e acompanhamentos",
     "permissions": "Permissões",
+    "models": "Modelos",
+    "promptModelVisibility": "Seletor de modelos do prompt",
+    "promptModelVisibilityDesc": "Escolha quais modelos aparecem no menu ao redigir uma mensagem.",
+    "promptModelVisibilityProvider": "Selecione um provedor",
+    "promptModelVisibilityToggle": "Mostrar {{model}} no seletor de modelos do prompt",
+    "resetPromptModels": "Mostrar todos os modelos",
+    "organizations": "Organizações",
+    "runners": "Runners",
+    "agentTemplates": "Modelos de agente",
     "toolPermissions": "Permissões de Ferramentas",
     "toolPermissionsDesc": "Escolha como cada ferramenta se comporta: Permitir (auto-aprovada), Perguntar (requer aprovação) ou Negar (bloqueada).",
     "allow": "Permitir",

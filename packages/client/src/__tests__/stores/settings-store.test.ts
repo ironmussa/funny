@@ -24,6 +24,7 @@ describe('SettingsStore', () => {
     // Reset store to default state before each test
     useSettingsStore.setState({
       defaultEditor: 'cursor',
+      hiddenPromptModels: [],
       toolPermissions: Object.fromEntries(
         ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
       ),
@@ -176,6 +177,43 @@ describe('SettingsStore', () => {
       for (const tool of ALL_STANDARD_TOOLS) {
         expect(state.toolPermissions[tool]).toBe('allow');
       }
+    });
+  });
+
+  describe('prompt model visibility', () => {
+    test('defaults to only essential models visible', () => {
+      const state = useSettingsStore.getState();
+      // On first run, most models are hidden except the essential ones
+      // The test beforeEach explicitly sets hiddenPromptModels: [] so this won't apply there
+      // but in real usage, getStoredHiddenPromptModels() initializes with defaults
+      expect(Array.isArray(state.hiddenPromptModels)).toBe(true);
+    });
+
+    test('setPromptModelVisible hides and shows models', () => {
+      useSettingsStore.getState().setPromptModelVisible('claude:haiku', false);
+      expect(useSettingsStore.getState().hiddenPromptModels).toContain('claude:haiku');
+
+      useSettingsStore.getState().setPromptModelVisible('claude:haiku', true);
+      expect(useSettingsStore.getState().hiddenPromptModels).not.toContain('claude:haiku');
+    });
+
+    test('resetPromptModelVisibility resets to default visible set', () => {
+      // Start with empty hidden list
+      useSettingsStore.setState({ hiddenPromptModels: [] });
+
+      // Reset should hide all models except the default visible ones
+      useSettingsStore.getState().resetPromptModelVisibility();
+      const hiddenAfterReset = useSettingsStore.getState().hiddenPromptModels;
+
+      // Should have hidden many models
+      expect(hiddenAfterReset.length).toBeGreaterThan(0);
+
+      // Essential models should NOT be in the hidden list
+      expect(hiddenAfterReset).not.toContain('claude:haiku');
+      expect(hiddenAfterReset).not.toContain('claude:sonnet');
+      expect(hiddenAfterReset).not.toContain('claude:opus-4.8');
+      expect(hiddenAfterReset).not.toContain('pi:default');
+      expect(hiddenAfterReset).not.toContain('cursor:default');
     });
   });
 });

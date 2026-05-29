@@ -40,6 +40,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { threadsApi } from '@/lib/api/threads';
 import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
+import { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
@@ -237,36 +238,7 @@ export const EffortSelect = memo(function EffortSelect({
   );
 });
 
-/** Parse a git remote URL into a friendly `owner/repo` display string. */
-export function formatRemoteUrl(url: string): string {
-  const sshMatch = url.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (sshMatch) return sshMatch[1];
-  try {
-    const u = new URL(url);
-    const path = u.pathname.replace(/^\//, '').replace(/\.git$/, '');
-    return path;
-  } catch {
-    return url;
-  }
-}
-
-/** Convert a git remote URL (SSH or HTTPS) to a browseable HTTPS URL. */
-export function remoteUrlToBrowseUrl(url: string): string | null {
-  // SSH form: git@host:owner/repo(.git)
-  const sshMatch = url.match(/^[^@]+@([^:]+):(.+?)(?:\.git)?$/);
-  if (sshMatch) {
-    const [, host, path] = sshMatch;
-    return `https://${host}/${path}`;
-  }
-  try {
-    const u = new URL(url);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    const path = u.pathname.replace(/\.git$/, '');
-    return `https://${u.host}${path}`;
-  } catch {
-    return null;
-  }
-}
+export { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 
 // ── Props ────────────────────────────────────────────────────────
 

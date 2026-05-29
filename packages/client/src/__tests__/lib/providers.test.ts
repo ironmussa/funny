@@ -7,6 +7,8 @@ import {
   getModelOptions,
   getAllModelOptions,
   getUnifiedModelOptions,
+  filterVisibleModelGroups,
+  isPromptModelConfigurable,
   getContextWindow,
   parseUnifiedModel,
 } from '@/lib/providers';
@@ -126,6 +128,52 @@ describe('getUnifiedModelOptions', () => {
     expect(sonnet.provider).toBe('claude');
     expect(sonnet.providerLabel).toBe('Claude');
     expect(sonnet.value).toBe('claude:sonnet');
+  });
+});
+
+// ── filterVisibleModelGroups ─────────────────────────────────────
+
+describe('filterVisibleModelGroups', () => {
+  test('hides models listed in hiddenPromptModels', () => {
+    const groups = getUnifiedModelOptions(tPassthrough);
+    const filtered = filterVisibleModelGroups(groups, ['claude:haiku', 'codex:gpt-5.4']);
+    const claudeGroup = filtered.find((g) => g.provider === 'claude')!;
+    expect(claudeGroup.models.some((m) => m.value === 'claude:haiku')).toBe(false);
+    const codexGroup = filtered.find((g) => g.provider === 'codex')!;
+    expect(codexGroup.models.some((m) => m.value === 'codex:gpt-5.4')).toBe(false);
+  });
+
+  test('keeps pinned model visible even when hidden', () => {
+    const groups = getUnifiedModelOptions(tPassthrough);
+    const filtered = filterVisibleModelGroups(groups, ['claude:haiku'], 'claude:haiku');
+    const claudeGroup = filtered.find((g) => g.provider === 'claude')!;
+    expect(claudeGroup.models.some((m) => m.value === 'claude:haiku')).toBe(true);
+  });
+
+  test('always keeps status placeholder models', () => {
+    const groups = [
+      {
+        provider: 'pi',
+        providerLabel: 'Pi',
+        models: [
+          { value: 'pi:default', label: 'Default' },
+          { value: 'pi:__loading__', label: 'Loading…' },
+        ],
+      },
+    ];
+    const filtered = filterVisibleModelGroups(groups, ['pi:default']);
+    expect(filtered[0].models.map((m) => m.value)).toEqual(['pi:__loading__']);
+  });
+});
+
+describe('isPromptModelConfigurable', () => {
+  test('returns false for status placeholders', () => {
+    expect(isPromptModelConfigurable('pi:__loading__')).toBe(false);
+    expect(isPromptModelConfigurable('cursor:__configure__')).toBe(false);
+  });
+
+  test('returns true for normal models', () => {
+    expect(isPromptModelConfigurable('claude:sonnet')).toBe(true);
   });
 });
 

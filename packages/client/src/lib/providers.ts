@@ -166,3 +166,36 @@ export function parseUnifiedModel(combined: string): { provider: string; model: 
   if (idx === -1) return { provider: 'claude', model: combined };
   return { provider: combined.slice(0, idx), model: combined.slice(idx + 1) };
 }
+
+export interface ModelSelectGroup {
+  provider: string;
+  providerLabel: string;
+  models: { value: string; label: string }[];
+}
+
+/** Status placeholders (loading, configure hints) are not user-toggleable. */
+export function isPromptModelConfigurable(combinedKey: string): boolean {
+  return !combinedKey.includes('__');
+}
+
+/**
+ * Filter model groups for the prompt picker. Hidden models are omitted unless
+ * they are the currently selected model (so the trigger still shows a label).
+ */
+export function filterVisibleModelGroups(
+  groups: ModelSelectGroup[],
+  hiddenModels: readonly string[],
+  pinnedModel?: string,
+): ModelSelectGroup[] {
+  const hidden = new Set(hiddenModels);
+  return groups
+    .map((group) => ({
+      ...group,
+      models: group.models.filter((model) => {
+        if (!isPromptModelConfigurable(model.value)) return true;
+        if (model.value === pinnedModel) return true;
+        return !hidden.has(model.value);
+      }),
+    }))
+    .filter((group) => group.models.length > 0);
+}

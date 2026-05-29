@@ -939,6 +939,15 @@ const migrations: Migration[] = [
       await addColumn('projects', 'fast_mode', 'INTEGER NOT NULL', '0');
     },
   },
+  {
+    // The 'ask' follow-up mode was removed (scratch / quick-chat threads cover
+    // that workflow). Normalize any project still set to 'ask' to the app
+    // default 'queue' so the value stays in the supported enum.
+    name: '060_projects_drop_ask_follow_up',
+    async up() {
+      await exec(sql`UPDATE projects SET follow_up_mode = 'queue' WHERE follow_up_mode = 'ask'`);
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

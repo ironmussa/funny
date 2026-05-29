@@ -134,7 +134,7 @@ export const renameProjectSchema = z.object({
   name: z.string().min(1, 'name is required'),
 });
 
-export const followUpModeSchema = z.enum(['interrupt', 'queue', 'ask', 'steer']);
+export const followUpModeSchema = z.enum(['interrupt', 'queue', 'steer']);
 
 export const updateProjectSchema = z
   .object({

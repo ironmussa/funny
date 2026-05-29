@@ -6,11 +6,7 @@ import { toast } from 'sonner';
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import {
-  buildSendMessagePayload,
-  type SendMessageOpts,
-  type SendMessagePayload,
-} from '@/lib/send-message-payload';
+import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
@@ -19,21 +15,6 @@ import { useThreadStore } from '@/stores/thread-store';
 const log = createClientLogger('ThreadChatHandlers');
 
 type ActiveThread = ThreadCore;
-
-/**
- * Captured send opts while the follow-up dialog is open. We freeze the
- * already-resolved API payload here (including allowedTools/disallowedTools)
- * so a permission toggle between "Ask" and the user's answer doesn't change
- * what gets sent.
- */
-export interface PendingSend {
-  prompt: string;
-  /** API-shape payload — already resolved through `buildSendMessagePayload`. */
-  payload: SendMessagePayload;
-  /** Original PromptInput-shape opts — needed for optimistic-message rendering. */
-  rawOpts: SendOpts;
-  images?: any[];
-}
 
 /** PromptInput-shape opts. `mode` here is the API's permissionMode. */
 export interface SendOpts extends SendMessageOpts {
@@ -45,20 +26,17 @@ interface Refs {
   activeThreadRef: RefObject<ActiveThread | null>;
   sendingRef: RefObject<boolean>;
   streamRef: RefObject<MessageStreamHandle | null>;
-  pendingSendRef: RefObject<PendingSend | null>;
-  setPromptRef: RefObject<((text: string) => void) | null>;
 }
 
 /**
- * Messaging-only logic for ThreadChatView: send, follow-up dialog, stop,
- * permission approval, tool respond. Fork / rewind / fork-and-rewind live
- * in `use-thread-checkpoints` (extracted for clarity; they share their own
+ * Messaging-only logic for ThreadChatView: send, stop, permission approval,
+ * tool respond. Fork / rewind / fork-and-rewind live in
+ * `use-thread-checkpoints` (extracted for clarity; they share their own
  * in-flight guard).
  */
 export function useThreadHandlers(refs: Refs) {
   const { t } = useTranslation();
   const [sending, setSending] = useState(false);
-  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
   refs.sendingRef.current = sending;
 
   const handleSend = useCallback(
@@ -76,24 +54,14 @@ export function useThreadHandlers(refs: Refs) {
         .projects.find((p) => p.id === thread.projectId);
       const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
 
-      // Build the API payload once — used for the ask-dialog freeze and the
-      // immediate send path so they can't drift.
       const toolPermissions = useSettingsStore.getState().toolPermissions;
-
-      if (threadIsRunning && followUpMode === 'ask') {
-        refs.pendingSendRef.current = {
-          prompt,
-          payload: buildSendMessagePayload(opts, toolPermissions),
-          rawOpts: opts,
-          images,
-        };
-        setFollowUpDialogOpen(true);
-        return;
-      }
 
       setSending(true);
       if (threadIsRunning && followUpMode === 'interrupt') {
         toast.info(t('thread.interruptingAgent'));
+      }
+      if (threadIsRunning && followUpMode === 'steer') {
+        toast.info(t('thread.steeringAgent'));
       }
       if (!threadIsRunning) {
         useThreadStore
@@ -116,49 +84,6 @@ export function useThreadHandlers(refs: Refs) {
     },
     [refs, t],
   );
-
-  const handleFollowUpAction = useCallback(
-    async (action: 'interrupt' | 'queue') => {
-      setFollowUpDialogOpen(false);
-      const pending = refs.pendingSendRef.current;
-      if (!pending) return;
-      refs.pendingSendRef.current = null;
-      const thread = refs.activeThreadRef.current;
-      if (!thread) return;
-      setSending(true);
-      if (action === 'interrupt') {
-        toast.info(t('thread.interruptingAgent'));
-        useThreadStore
-          .getState()
-          .appendOptimisticMessage(
-            thread.id,
-            pending.prompt,
-            pending.images,
-            pending.rawOpts.model as any,
-            pending.rawOpts.mode as any,
-            pending.rawOpts.fileReferences,
-            pending.rawOpts.effort as any,
-          );
-      }
-      requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
-      const result = await api.sendMessage(
-        thread.id,
-        pending.prompt,
-        { ...pending.payload, forceQueue: action === 'queue' ? true : undefined },
-        pending.images,
-      );
-      handleSendResult(result, thread.id, { rollbackOnQueue: action === 'interrupt' }, t);
-      setSending(false);
-    },
-    [refs, t],
-  );
-
-  const handleFollowUpCancel = useCallback(() => {
-    setFollowUpDialogOpen(false);
-    const pending = refs.pendingSendRef.current;
-    if (pending && refs.setPromptRef.current) refs.setPromptRef.current(pending.prompt);
-    refs.pendingSendRef.current = null;
-  }, [refs]);
 
   const handleStop = useCallback(async () => {
     const thread = refs.activeThreadRef.current;
@@ -225,11 +150,7 @@ export function useThreadHandlers(refs: Refs) {
   return {
     sending,
     setSending: setSending as Dispatch<SetStateAction<boolean>>,
-    followUpDialogOpen,
-    setFollowUpDialogOpen,
     handleSend,
-    handleFollowUpAction,
-    handleFollowUpCancel,
     handleStop,
     handlePermissionApproval,
     handleToolRespond,

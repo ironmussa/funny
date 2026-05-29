@@ -60,7 +60,7 @@ export type AgentProvider =
  */
 export type PermissionMode = 'plan' | 'auto' | 'autoEdit' | 'confirmEdit' | 'ask';
 export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-export type FollowUpMode = 'interrupt' | 'queue' | 'ask' | 'steer';
+export type FollowUpMode = 'interrupt' | 'queue' | 'steer';
 
 // ─── Resume reason (used by thread-machine + types barrel) ────
 export type ResumeReason =

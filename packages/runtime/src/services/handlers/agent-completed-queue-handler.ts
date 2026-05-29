@@ -34,7 +34,9 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
     const project = await ctx.getProject(thread.projectId);
     if (!project) return;
     const mode = project?.followUpMode ?? DEFAULT_FOLLOW_UP_MODE;
-    if (mode !== 'queue' && mode !== 'ask') return;
+    // Only 'queue' mode parks follow-ups in the queue; interrupt/steer send
+    // immediately (or redirect the live turn), so there's nothing to drain.
+    if (mode !== 'queue') return;
 
     const next = await ctx.dequeueMessage(threadId);
     if (!next) return;

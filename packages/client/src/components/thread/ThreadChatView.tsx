@@ -3,7 +3,6 @@ import { useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FollowUpModeDialog } from '@/components/FollowUpModeDialog';
 import { PipelineProgressBanner } from '@/components/PipelineProgressBanner';
 import { PromptInput } from '@/components/PromptInput';
 import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
@@ -25,7 +24,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { useThreadCheckpoints } from './use-thread-checkpoints';
-import { useThreadHandlers, type PendingSend } from './use-thread-handlers';
+import { useThreadHandlers } from './use-thread-handlers';
 
 type ActiveThread = ThreadCore;
 
@@ -48,7 +47,6 @@ export function ThreadChatView({ activeThread }: Props) {
   const [visibleMessageId, setVisibleMessageId] = useState<string | null>(null);
   const { openLightbox, lightbox } = useImageLightbox();
 
-  const pendingSendRef = useRef<PendingSend | null>(null);
   const setPromptRef = useRef<((text: string) => void) | null>(null);
   const activeThreadRef = useRef<ActiveThread | null>(activeThread);
   activeThreadRef.current = activeThread;
@@ -58,19 +56,8 @@ export function ThreadChatView({ activeThread }: Props) {
     activeThreadRef,
     sendingRef,
     streamRef,
-    pendingSendRef,
-    setPromptRef,
   });
-  const {
-    sending,
-    followUpDialogOpen,
-    handleSend,
-    handleFollowUpAction,
-    handleFollowUpCancel,
-    handleStop,
-    handlePermissionApproval,
-    handleToolRespond,
-  } = handlers;
+  const { sending, handleSend, handleStop, handlePermissionApproval, handleToolRespond } = handlers;
   const { handleFork, handleRewind, handleForkAndRewind, forkingMessageId } = useThreadCheckpoints({
     activeThreadRef,
   });
@@ -134,7 +121,7 @@ export function ThreadChatView({ activeThread }: Props) {
     .getState()
     .projects.find((p) => p.id === activeThread.projectId);
   const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
-  const isQueueMode = followUpMode === 'queue' || followUpMode === 'ask';
+  const isQueueMode = followUpMode === 'queue';
 
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
@@ -237,12 +224,6 @@ export function ThreadChatView({ activeThread }: Props) {
         )}
       </div>
       {lightbox}
-      <FollowUpModeDialog
-        open={followUpDialogOpen}
-        onInterrupt={() => handleFollowUpAction('interrupt')}
-        onQueue={() => handleFollowUpAction('queue')}
-        onCancel={handleFollowUpCancel}
-      />
     </div>
   );
 }

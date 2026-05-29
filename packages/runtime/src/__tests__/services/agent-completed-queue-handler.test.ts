@@ -210,18 +210,15 @@ describe('agentCompletedQueueHandler', () => {
     );
   });
 
-  test('works with followUpMode "ask"', async () => {
-    const entry = makeQueueEntry();
+  test('does nothing when followUpMode is "steer"', async () => {
     const ctx = makeCtx({
-      getProject: vi.fn(async () => ({ id: 'p-1', path: '/test', followUpMode: 'ask' })),
-      dequeueMessage: vi.fn(async () => entry),
-      queueCount: vi.fn(async () => 0),
-      peekMessage: vi.fn(async () => null),
+      getProject: vi.fn(async () => ({ id: 'p-1', path: '/test', followUpMode: 'steer' })),
     });
 
     await agentCompletedQueueHandler.action(makeEvent(), ctx);
 
-    expect(ctx.startAgent).toHaveBeenCalled();
+    expect(ctx.dequeueMessage).not.toHaveBeenCalled();
+    expect(ctx.startAgent).not.toHaveBeenCalled();
   });
 
   // ── Queue update emission ───────────────────────────────

@@ -162,11 +162,6 @@ export function GeneralSettings() {
                     testId: 'settings-followup-queue',
                   },
                   {
-                    value: 'ask',
-                    label: t('settings.followUpAsk'),
-                    testId: 'settings-followup-ask',
-                  },
-                  {
                     value: 'steer',
                     label: t('settings.followUpSteer'),
                     testId: 'settings-followup-steer',

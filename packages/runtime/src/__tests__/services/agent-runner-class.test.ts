@@ -238,6 +238,7 @@ function createMockServiceProvider(
     } as any,
     profile: {
       getProviderKey: () => Promise.resolve(null),
+      getGitIdentity: () => Promise.resolve(null),
     } as any,
     wsBroker: ws,
     // Remaining services stubbed as empty objects — not used by startAgent

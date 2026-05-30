@@ -1,6 +1,6 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useRouteSync } from '@/hooks/use-route-sync';
@@ -75,6 +75,45 @@ describe('useRouteSync — activeThread/URL invariant', () => {
     // Give the subscriber a chance to (incorrectly) fire.
     await new Promise((r) => setTimeout(r, 50));
     expect(selectThreadSpy.mock.calls.length).toBe(initialCalls);
+  });
+
+  test('does not re-select the PREVIOUS thread after navigating to a new one', async () => {
+    // Regression: the deferred invariant check must read the LIVE URL, not the
+    // effect closure. Otherwise, right after the user navigates A → B, the
+    // pending timer (scheduled while the URL was A) re-selects A — a spurious
+    // blink back to the previous thread on every thread switch.
+    const { result } = renderHook(
+      () => {
+        const navigate = useNavigate();
+        useRouteSync();
+        return navigate;
+      },
+      { wrapper: wrapperFor('/scratch/A') },
+    );
+
+    await waitFor(() => expect(selectThreadSpy).toHaveBeenCalledWith('A'));
+    act(() => {
+      useThreadStore.setState({
+        selectedThreadId: 'A',
+        activeThread: { id: 'A', messages: [] } as any,
+      });
+    });
+    selectThreadSpy.mockClear();
+
+    // User navigates to B; then B's selectThread lands its activeThread.
+    act(() => result.current('/scratch/B'));
+    act(() => {
+      useThreadStore.setState({
+        selectedThreadId: 'B',
+        activeThread: { id: 'B', messages: [] } as any,
+      });
+    });
+
+    // Wait past the 200ms debounce so the deferred check runs.
+    await new Promise((r) => setTimeout(r, 300));
+
+    // The guard must NOT have re-selected the stale previous thread.
+    expect(selectThreadSpy).not.toHaveBeenCalledWith('A');
   });
 
   test('does not re-select when activeThread already matches the URL', async () => {

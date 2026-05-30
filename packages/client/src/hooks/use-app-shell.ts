@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useActiveThreadBranchSync } from '@/hooks/use-active-thread-branch-sync';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
 import { useRouteSync } from '@/hooks/use-route-sync';
@@ -92,23 +93,7 @@ export function useAppShell(): ShellState {
     loadScratchThreads();
   }, [loadProjects, loadTemplates, loadScratchThreads]);
 
-  // Update browser tab title with selected project name + branch
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProjectName = useProjectStore(
-    (s) => s.projects.find((p) => p.id === s.selectedProjectId)?.name,
-  );
-  const selectedProjectBranch = useProjectStore((s) =>
-    s.selectedProjectId ? s.branchByProject[s.selectedProjectId] : undefined,
-  );
-  useEffect(() => {
-    if (selectedProjectName && selectedProjectBranch) {
-      document.title = `${selectedProjectName} [${selectedProjectBranch}] — funny`;
-    } else if (selectedProjectName) {
-      document.title = `${selectedProjectName} — funny`;
-    } else {
-      document.title = 'funny';
-    }
-  }, [selectedProjectId, selectedProjectName, selectedProjectBranch]);
+  useDocumentTitle();
 
   const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
   const toggleFileSearch = useUIStore((s) => s.toggleFileSearch);

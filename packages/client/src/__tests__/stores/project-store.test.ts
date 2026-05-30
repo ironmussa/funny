@@ -214,6 +214,43 @@ describe('ProjectStore', () => {
     });
   });
 
+  describe('fetchBranch race with setBranch', () => {
+    test('discards stale fetchBranch result when a checkout lands mid-flight', async () => {
+      const pid = 'race-p1';
+      let resolveList!: (v: unknown) => void;
+      mockApi.listBranches.mockReturnValueOnce(
+        new Promise((r) => {
+          resolveList = r;
+        }) as any,
+      );
+
+      // selectProject-style fetch begins; the branch listing is still in flight.
+      const fetchPromise = useProjectStore.getState().fetchBranch(pid);
+
+      // A checkout completes (ensureBranch → setBranch) before the listing returns.
+      useProjectStore.getState().setBranch(pid, 'feat/x');
+      expect(useProjectStore.getState().branchByProject[pid]).toBe('feat/x');
+
+      // The in-flight listing resolves with the pre-checkout (stale) branch.
+      resolveList({ isErr: () => false, value: { currentBranch: 'master' } });
+      await fetchPromise;
+
+      // Stale value must NOT clobber the authoritative checkout result.
+      expect(useProjectStore.getState().branchByProject[pid]).toBe('feat/x');
+    });
+
+    test('applies fetchBranch result when no checkout intervenes', async () => {
+      const pid = 'race-p2';
+      mockApi.listBranches.mockReturnValueOnce(
+        Promise.resolve({ isErr: () => false, value: { currentBranch: 'main' } }) as any,
+      );
+
+      await useProjectStore.getState().fetchBranch(pid);
+
+      expect(useProjectStore.getState().branchByProject[pid]).toBe('main');
+    });
+  });
+
   describe('renameProject', () => {
     test('updates the project in the list', async () => {
       const original = makeProject({ id: 'p1', name: 'Old Name' });

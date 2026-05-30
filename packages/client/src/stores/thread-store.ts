@@ -241,6 +241,7 @@ export function useActiveThread(): ThreadWithMessages | null {
 const _threadLoadPromises = new Map<string, Promise<void>>();
 
 const refreshLog = createClientLogger('thread-refresh');
+const selectLog = createClientLogger('thread-select');
 
 type LocalMessage = import('@funny/shared').Message & { toolCalls?: any[] };
 
@@ -345,6 +346,19 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     // Skip if already loading this exact thread (prevents StrictMode double-fire)
     if (threadId && threadId === getSelectingThreadId()) return;
+
+    // Diagnostic: who is driving selection? Surfaces the caller chain behind the
+    // route-sync ↔ back-fill re-select ping-pong. Off in prod by default; enable
+    // with `__funnyLog.setNamespaceLevel('thread-select', 'debug')`.
+    if (threadId) {
+      const caller = new Error().stack?.split('\n').slice(2, 7).join(' <- ').replace(/\s+/g, ' ');
+      selectLog.debug('selectThread called', {
+        threadId,
+        prevSelectedId: get().selectedThreadId ?? null,
+        prevActiveId: get().activeThread?.id ?? null,
+        caller,
+      });
+    }
 
     const gen = nextSelectGeneration();
     // Allocate span / timer BEFORE claiming the in-flight slot so a synchronous
@@ -1142,8 +1156,16 @@ useThreadStore.subscribe((state) => {
   if (!at) return;
   const mapEntry = state.threadDataById[at.id];
   if (mapEntry === at) return; // already aligned
+  // Don't realign `selectedThreadId` while a `selectThread` is in flight. The
+  // route-sync invariant guard (use-route-sync.ts) treats the URL as the source
+  // of truth and drives selection; realigning here would yank `selectedThreadId`
+  // back to a stale `activeThread`, and the guard would immediately re-select
+  // the URL's thread — a ~50ms ping-pong that flickers the tab title and hammers
+  // selectProject/fetchBranch. Mirror the payload into the map regardless (the
+  // safety net), but leave selection to the in-flight selectThread.
+  const selecting = getSelectingThreadId() !== null;
   useThreadStore.setState({
     threadDataById: { ...state.threadDataById, [at.id]: at },
-    ...(state.selectedThreadId === at.id ? {} : { selectedThreadId: at.id }),
+    ...(state.selectedThreadId === at.id || selecting ? {} : { selectedThreadId: at.id }),
   });
 });

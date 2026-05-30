@@ -18,6 +18,7 @@ import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sideb
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { useDisplayThreadId } from '@/hooks/use-display-thread-id';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
@@ -195,23 +196,7 @@ export function App() {
     loadScratchThreads();
   }, [loadProjects, loadTemplates, loadScratchThreads]);
 
-  // Update browser tab title with selected project name
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProjectName = useProjectStore(
-    (s) => s.projects.find((p) => p.id === s.selectedProjectId)?.name,
-  );
-  const selectedProjectBranch = useProjectStore((s) =>
-    s.selectedProjectId ? s.branchByProject[s.selectedProjectId] : undefined,
-  );
-  useEffect(() => {
-    if (selectedProjectName && selectedProjectBranch) {
-      document.title = `${selectedProjectName} [${selectedProjectBranch}] — funny`;
-    } else if (selectedProjectName) {
-      document.title = `${selectedProjectName} — funny`;
-    } else {
-      document.title = 'funny';
-    }
-  }, [selectedProjectId, selectedProjectName, selectedProjectBranch]);
+  useDocumentTitle();
 
   // Global keyboard shortcuts (extracted to dedicated hook). All three dialog
   // toggles must go through the store so its mutual-exclusion logic fires

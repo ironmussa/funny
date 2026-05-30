@@ -22,6 +22,11 @@ const BRANCH_COOLDOWN_MS = 10_000;
 const _lastFetchBranch = new Map<string, number>();
 const _inFlightBranch = new Set<string>();
 const _abortBranch = new Map<string, AbortController>();
+// Bumped by the authoritative writer (setBranch, post-checkout). An in-flight
+// fetchBranch reads the cwd branch *before* a checkout completes, so it must
+// discard its result if a setBranch superseded it mid-flight — otherwise the
+// stale value overwrites the fresh one and the branch label flickers back.
+const _branchGen = new Map<string, number>();
 
 function loadExpandedProjects(): Set<string> {
   try {
@@ -221,6 +226,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // Bypass the fetchBranch cooldown — the caller already knows the new branch
     // (e.g. just performed a checkout) and needs subscribers to see the change.
     _lastFetchBranch.set(projectId, Date.now());
+    // Invalidate any in-flight fetchBranch that read the pre-checkout branch.
+    _branchGen.set(projectId, (_branchGen.get(projectId) ?? 0) + 1);
     set({ branchByProject: { ...get().branchByProject, [projectId]: branch } });
   },
 
@@ -229,6 +236,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const last = _lastFetchBranch.get(projectId) ?? 0;
     if (now - last < BRANCH_COOLDOWN_MS) return;
     _lastFetchBranch.set(projectId, now);
+    const gen = _branchGen.get(projectId) ?? 0;
 
     // Abort any stale in-flight branch listing for this project
     _abortBranch.get(projectId)?.abort();
@@ -239,6 +247,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const result = await projectsApi.listBranches(projectId, ac.signal);
       if (result.isErr()) return;
+      // A checkout (setBranch) landed while we were listing — its branch is
+      // authoritative, so drop our now-stale read instead of clobbering it.
+      if ((_branchGen.get(projectId) ?? 0) !== gen) return;
       const { currentBranch } = result.value;
       if (currentBranch) {
         set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });

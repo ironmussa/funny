@@ -498,6 +498,11 @@ export class AgentOrchestrator extends EventEmitter {
       }
     });
 
+    proc.on('session-invalidated', () => {
+      dlog.warn('Process reported invalidated session — clearing sessionId', { threadId });
+      this.emit('agent:session-cleared', threadId);
+    });
+
     proc.on('exit', (code: number | null) => {
       dlog.info('Process exit', {
         threadId,
@@ -582,6 +587,11 @@ export class AgentOrchestrator extends EventEmitter {
         this.resultReceived.add(threadId);
       }
       this.emit('agent:message', threadId, msg);
+    });
+
+    proc.on('session-invalidated', () => {
+      dlog.warn('Resume process reported invalidated session — clearing sessionId', { threadId });
+      this.emit('agent:session-cleared', threadId);
     });
 
     proc.on('error', (err: Error) => {

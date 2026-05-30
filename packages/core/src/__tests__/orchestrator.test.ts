@@ -52,6 +52,10 @@ class MockProcess extends EventEmitter implements IAgentProcess {
   simulateError(err: Error): void {
     this.emit('error', err);
   }
+
+  simulateSessionInvalidated(): void {
+    this.emit('session-invalidated');
+  }
 }
 
 // ── Silent mock that does NOT emit init on start ────────────────
@@ -139,6 +143,16 @@ describe('AgentOrchestrator', () => {
       await orchestrator.startAgent(baseOpts());
 
       expect(events).toEqual(['t1']);
+    });
+
+    test('emits agent:session-cleared when fresh process reports session-invalidated', async () => {
+      const clearedSessions: string[] = [];
+      orchestrator.on('agent:session-cleared', (id) => clearedSessions.push(id));
+
+      await orchestrator.startAgent(baseOpts());
+      factory.lastProcess.simulateSessionInvalidated();
+
+      expect(clearedSessions).toEqual(['t1']);
     });
 
     test('kills existing process before starting new one', async () => {
@@ -396,6 +410,18 @@ describe('AgentOrchestrator', () => {
       const freshProc = factory.processes[1];
       expect(freshProc.options.sessionId).toBeUndefined();
       expect(freshProc.started).toBe(true);
+    });
+
+    test('emits agent:session-cleared when resume process reports session-invalidated', async () => {
+      const clearedSessions: string[] = [];
+      orchestrator.on('agent:session-cleared', (id) => clearedSessions.push(id));
+
+      await orchestrator.startAgent(baseOpts({ sessionId: 'poisoned-sess' }));
+      const proc = factory.lastProcess;
+
+      proc.simulateSessionInvalidated();
+
+      expect(clearedSessions).toEqual(['t1']);
     });
 
     test('does not retry when resume process produces messages', async () => {

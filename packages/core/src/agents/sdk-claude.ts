@@ -17,6 +17,19 @@ import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 const dlog = createDebugLogger('sdk');
 
+/**
+ * Detect the Anthropic 400 that fires when a resumed/continued conversation
+ * carries a `thinking` / `redacted_thinking` block that was altered from the
+ * original response — e.g. a turn interrupted mid-thinking leaves a partial
+ * block in the session, which the API rejects on the next turn. Opus models
+ * with interleaved thinking are the most exposed. When this happens the
+ * session file is poisoned: every resume re-hits the same 400 and the thread
+ * is stuck, so we clear the session and let the next message rebuild context.
+ */
+export function isThinkingBlockError(text: string): boolean {
+  return /(?:thinking|redacted_thinking)[\s\S]*?cannot be modified/i.test(text);
+}
+
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
   private stderrBuffer: string[] = [];
@@ -339,6 +352,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
             if (errorText) {
               dlog.info('Synthetic provider error', { preview: errorText.slice(0, 200) });
               this.emitErrorToolCall(errorText);
+              // A poisoned thinking block makes the resumed session permanently
+              // unusable — signal the orchestrator to drop the sessionId so the
+              // next message recovers context from the DB instead of resuming.
+              if (isThinkingBlockError(errorText)) {
+                dlog.warn('Thinking-block 400 detected — invalidating session');
+                this.emit('session-invalidated');
+              }
               continue;
             }
           }

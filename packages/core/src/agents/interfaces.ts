@@ -13,6 +13,14 @@ export interface IAgentProcess {
   on(event: 'message', listener: (msg: CLIMessage) => void): this;
   on(event: 'error', listener: (err: Error) => void): this;
   on(event: 'exit', listener: (code: number | null) => void): this;
+  /**
+   * Emitted when the underlying provider session becomes permanently
+   * unusable for resume (e.g. a poisoned `thinking` block that the API
+   * rejects on every continuation). The orchestrator responds by clearing
+   * the persisted sessionId so the next message rebuilds context instead of
+   * resuming the broken session.
+   */
+  on(event: 'session-invalidated', listener: () => void): this;
   removeAllListeners(event?: string): this;
   start(): void;
   kill(): Promise<void>;

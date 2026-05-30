@@ -7,14 +7,14 @@ import {
   Loader2,
   AlertCircle,
   Download,
-  Server,
   ChevronUp,
   ShieldAlert,
   KeyRound,
   Check,
   XCircle,
+  FileJson,
 } from 'lucide-react';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -27,7 +27,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import {
@@ -38,8 +40,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
+import { openClaudeSettingsInEditor } from '@/lib/claude-settings';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -52,11 +56,80 @@ interface RecommendedServer {
   args?: string[];
 }
 
-function TypeBadge({ type }: { type: McpServerType }) {
+function isClaudeAiConnectorName(name: string): boolean {
+  return name.startsWith('claude.ai') || name.startsWith('claude_ai_');
+}
+
+function ClaudeSettingsEditorButton({ className }: { className?: string }) {
+  const { t } = useTranslation();
   return (
-    <span
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className={cn('h-6 px-2 text-xs', className)}
+      data-testid="mcp-edit-claude-settings"
+      onClick={() => void openClaudeSettingsInEditor()}
+    >
+      <FileJson className="icon-xs mr-1" />
+      {t('mcp.editClaudeSettings')}
+    </Button>
+  );
+}
+
+function McpServerToggle({
+  server,
+  toggling,
+  isDisabled,
+  onToggle,
+}: {
+  server: McpServer;
+  toggling: boolean;
+  isDisabled: boolean;
+  onToggle: (disabled: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const notToggleable = server.toggleable === false;
+  const isClaudeAi = isClaudeAiConnectorName(server.name);
+
+  const switchControl = (
+    <Switch
+      data-testid={`mcp-toggle-${server.name}`}
+      checked={!isDisabled}
+      onCheckedChange={(checked) => onToggle(!checked)}
+      disabled={toggling || notToggleable}
+    />
+  );
+
+  if (!notToggleable) return switchControl;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex cursor-not-allowed"
+          data-testid={`mcp-toggle-disabled-wrap-${server.name}`}
+        >
+          {switchControl}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-xs p-3 text-left">
+        <p className="leading-snug">
+          {t(isClaudeAi ? 'mcp.externalToggleTooltipClaudeAi' : 'mcp.externalToggleTooltipPlugin')}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function McpProtocolBadge({ type }: { type: McpServerType }) {
+  return (
+    <Badge
+      variant="outline"
+      size="xs"
+      data-testid={`mcp-protocol-badge-${type}`}
       className={cn(
-        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider',
+        'rounded-md border-transparent uppercase tracking-wider',
         type === 'http'
           ? 'bg-status-info/10 text-status-info/80'
           : type === 'sse'
@@ -66,7 +139,28 @@ function TypeBadge({ type }: { type: McpServerType }) {
     >
       {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
       {type}
-    </span>
+    </Badge>
+  );
+}
+
+function McpStatusBadge({
+  children,
+  className,
+  testId,
+}: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+}) {
+  return (
+    <Badge
+      variant="outline"
+      size="xs"
+      data-testid={testId}
+      className={cn('rounded-md border-transparent font-medium', className)}
+    >
+      {children}
+    </Badge>
   );
 }
 
@@ -95,68 +189,73 @@ function InstalledServerCard({
   const [showTokenInput, setShowTokenInput] = useState(false);
   const [tokenValue, setTokenValue] = useState('');
   const isDisabled = server.disabled === true;
+  const showClaudeSettingsEditor =
+    server.toggleable === false && isClaudeAiConnectorName(server.name);
+  const needsAuthActions = !isDisabled && server.status === 'needs_auth';
 
   return (
-    <div
+    <Card
+      data-testid={`mcp-installed-card-${server.name}`}
       className={cn(
-        'flex flex-col gap-1.5 px-3 py-2.5 rounded-md border bg-card',
+        'flex flex-col shadow-none',
         isDisabled
           ? 'border-border/30 opacity-60'
           : server.status === 'needs_auth'
             ? 'border-amber-500/50'
             : server.status === 'error'
               ? 'border-red-500/50'
-              : 'border-border/50',
+              : undefined,
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Server
-            className={cn(
-              'icon-base flex-shrink-0',
-              isDisabled ? 'text-muted-foreground/50' : 'text-muted-foreground',
-            )}
-          />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  'truncate text-sm font-medium',
-                  isDisabled && 'text-muted-foreground',
-                )}
+      <CardHeader className="flex flex-row items-start gap-3 space-y-0 p-4 pb-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle
+              className={cn(
+                'truncate text-sm font-medium leading-snug',
+                isDisabled && 'text-muted-foreground',
+              )}
+            >
+              {server.name}
+            </CardTitle>
+            <McpProtocolBadge type={server.type} />
+            {!isDisabled && server.status === 'error' && (
+              <McpStatusBadge
+                testId={`mcp-status-error-${server.name}`}
+                className="bg-red-500/15 text-red-400"
               >
-                {server.name}
-              </span>
-              <TypeBadge type={server.type} />
-              {!isDisabled && server.status === 'needs_auth' && (
-                <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-400">
-                  <ShieldAlert className="icon-2xs" />
-                  {t('mcp.needsAuth')}
-                </span>
-              )}
-              {!isDisabled && server.status === 'error' && (
-                <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-xs font-medium text-red-400">
-                  <XCircle className="icon-2xs" />
-                  {t('mcp.failed')}
-                </span>
-              )}
-              {isDisabled && (
-                <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {t('mcp.disabled')}
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {server.url || [server.command, ...(server.args || [])].join(' ')}
-            </p>
+                <XCircle className="icon-2xs" />
+                {t('mcp.failed')}
+              </McpStatusBadge>
+            )}
+            {isDisabled && (
+              <McpStatusBadge
+                testId={`mcp-status-disabled-${server.name}`}
+                className="bg-muted text-muted-foreground"
+              >
+                {t('mcp.disabled')}
+              </McpStatusBadge>
+            )}
+            {server.toggleable === false && (
+              <McpStatusBadge
+                testId={`mcp-status-managed-${server.name}`}
+                className="bg-muted text-muted-foreground"
+              >
+                {t('mcp.managedExternally')}
+              </McpStatusBadge>
+            )}
           </div>
+          <CardDescription className="mt-1 truncate text-xs">
+            {server.url || [server.command, ...(server.args || [])].join(' ')}
+          </CardDescription>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <Switch
-            data-testid={`mcp-toggle-${server.name}`}
-            checked={!isDisabled}
-            onCheckedChange={(checked) => onToggle(!checked)}
-            disabled={toggling}
+          {showClaudeSettingsEditor && !needsAuthActions && <ClaudeSettingsEditorButton />}
+          <McpServerToggle
+            server={server}
+            toggling={toggling}
+            isDisabled={isDisabled}
+            onToggle={onToggle}
           />
           <TooltipIconButton
             onClick={onRemove}
@@ -171,16 +270,17 @@ function InstalledServerCard({
             )}
           </TooltipIconButton>
         </div>
-      </div>
-      {!isDisabled && server.status === 'needs_auth' && (
-        <div className="space-y-2 pl-7">
-          <div className="flex items-center gap-2">
+      </CardHeader>
+      {needsAuthActions && (
+        <CardFooter className="flex-col items-stretch gap-2 p-4 pt-0">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
               className="h-6 border-amber-500/30 px-2 text-xs text-amber-400 hover:bg-amber-500/10"
+              data-testid={`mcp-oauth-${server.name}`}
             >
               {authenticating ? (
                 <Loader2 className="icon-xs mr-1 animate-spin" />
@@ -195,10 +295,12 @@ function InstalledServerCard({
               onClick={() => setShowTokenInput(!showTokenInput)}
               disabled={authenticating || settingToken}
               className="h-6 px-2 text-xs"
+              data-testid={`mcp-manual-token-${server.name}`}
             >
               <KeyRound className="icon-xs mr-1" />
               {t('mcp.manualToken')}
             </Button>
+            {showClaudeSettingsEditor && <ClaudeSettingsEditorButton />}
           </div>
           {showTokenInput && (
             <div className="flex items-center gap-2">
@@ -208,6 +310,7 @@ function InstalledServerCard({
                 onChange={(e) => setTokenValue(e.target.value)}
                 placeholder={t('mcp.tokenPlaceholder')}
                 className="h-7 flex-1 px-2 text-xs"
+                data-testid={`mcp-token-input-${server.name}`}
               />
               <Button
                 variant="outline"
@@ -221,6 +324,7 @@ function InstalledServerCard({
                 }}
                 disabled={!tokenValue || settingToken}
                 className="h-7 px-2 text-xs"
+                data-testid={`mcp-token-save-${server.name}`}
               >
                 {settingToken ? (
                   <Loader2 className="icon-xs animate-spin" />
@@ -230,9 +334,9 @@ function InstalledServerCard({
               </Button>
             </div>
           )}
-        </div>
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -250,29 +354,37 @@ function RecommendedServerCard({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{server.name}</span>
-          <TypeBadge type={server.type} />
+    <Card
+      data-testid={`mcp-recommended-card-${server.name}`}
+      className="flex h-full flex-col shadow-none"
+    >
+      <CardHeader className="flex-1 space-y-2 p-4 pb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="text-sm font-medium leading-snug">{server.name}</CardTitle>
+          <McpProtocolBadge type={server.type} />
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">{server.description}</p>
-      </div>
-      <Button
-        variant={installed ? 'ghost' : 'outline'}
-        size="sm"
-        onClick={onInstall}
-        disabled={installed || installing}
-        className="flex-shrink-0"
-      >
-        {installing ? (
-          <Loader2 className="icon-xs mr-1 animate-spin" />
-        ) : installed ? null : (
-          <Download className="icon-xs mr-1" />
-        )}
-        {installed ? t('mcp.installed') : installing ? t('mcp.installing') : t('mcp.install')}
-      </Button>
-    </div>
+        <CardDescription className="line-clamp-3 text-xs leading-relaxed">
+          {server.description}
+        </CardDescription>
+      </CardHeader>
+      <CardFooter className="p-4 pt-0">
+        <Button
+          variant={installed ? 'ghost' : 'outline'}
+          size="sm"
+          onClick={onInstall}
+          disabled={installed || installing}
+          className="w-full"
+          data-testid={`mcp-install-${server.name}`}
+        >
+          {installing ? (
+            <Loader2 className="icon-xs mr-1 animate-spin" />
+          ) : installed ? null : (
+            <Download className="icon-xs mr-1" />
+          )}
+          {installed ? t('mcp.installed') : installing ? t('mcp.installing') : t('mcp.install')}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -617,7 +729,7 @@ export function McpServerSettings() {
         ) : servers.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{t('mcp.noServers')}</div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {servers.map((server) => (
               <InstalledServerCard
                 key={server.name}
@@ -640,7 +752,7 @@ export function McpServerSettings() {
       {recommended.length > 0 && (
         <div>
           <h3 className="settings-section-header mb-2 px-0 pb-0">{t('mcp.recommendedServers')}</h3>
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {recommended.map((server) => (
               <RecommendedServerCard
                 key={server.name}

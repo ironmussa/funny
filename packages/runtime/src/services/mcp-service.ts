@@ -22,27 +22,51 @@ import { getClaudeBinaryPath } from '../utils/claude-binary.js';
 
 /** Shape of per-project settings in ~/.claude.json */
 interface ClaudeProjectSettings {
-  mcpServers?: Record<
-    string,
-    {
-      type?: string;
-      url?: string;
-      command?: string;
-      args?: string[];
-      headers?: Record<string, string>;
-      env?: Record<string, string>;
-    }
-  >;
+  mcpServers?: Record<string, ClaudeMcpServerEntry>;
   enabledMcpjsonServers?: string[];
   disabledMcpjsonServers?: string[];
-  /** Claude CLI's native list for disabled user-scoped servers */
+  /** Claude CLI's native list for disabled user-scoped servers (per project) */
   disabledMcpServers?: string[];
   [key: string]: unknown;
 }
 
+interface ClaudeMcpServerEntry {
+  type?: string;
+  url?: string;
+  command?: string;
+  args?: string[];
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+}
+
 interface ClaudeConfig {
+  /** Global user-scoped MCP servers (`claude mcp add` without --scope project) */
+  mcpServers?: Record<string, ClaudeMcpServerEntry>;
+  /** Global disabled user-scoped MCP servers */
+  disabledMcpServers?: string[];
   projects?: Record<string, ClaudeProjectSettings>;
   [key: string]: unknown;
+}
+
+/** Plugin and Claude.ai connector servers cannot be toggled via ~/.claude.json */
+export function isExternallyManagedMcpServer(name: string): boolean {
+  return (
+    name.startsWith('plugin:') || name.startsWith('claude_ai_') || name.startsWith('claude.ai')
+  );
+}
+
+function mergeUserMcpServers(
+  config: ClaudeConfig,
+  settings: ClaudeProjectSettings,
+): Record<string, ClaudeMcpServerEntry> {
+  return { ...(config.mcpServers ?? {}), ...(settings.mcpServers ?? {}) };
+}
+
+function getDisabledUserMcpNames(
+  config: ClaudeConfig,
+  settings: ClaudeProjectSettings,
+): Set<string> {
+  return new Set([...(settings.disabledMcpServers ?? []), ...(config.disabledMcpServers ?? [])]);
 }
 
 const CLAUDE_CONFIG_PATH = join(homedir(), '.claude.json');
@@ -124,13 +148,16 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
 
         const settings = getProjectSettings(config, projectPath);
         const disabledProjectNames = new Set(settings.disabledMcpjsonServers ?? []);
-        const disabledUserNames = new Set(settings.disabledMcpServers ?? []);
-        const userServers = settings.mcpServers ?? {};
+        const disabledUserNames = getDisabledUserMcpNames(config, settings);
+        const userServers = mergeUserMcpServers(config, settings);
         const activeNames = new Set(activeServers.map((s) => s.name));
 
         // Annotate active servers with source, disabled state, and config fields
         // (headers/env are not included in CLI text output, so merge from config)
         for (const server of activeServers) {
+          if (isExternallyManagedMcpServer(server.name)) {
+            server.toggleable = false;
+          }
           if (server.name in mcpJson) {
             server.source = 'project';
             if (disabledProjectNames.has(server.name)) server.disabled = true;
@@ -208,8 +235,15 @@ export function toggleMcpServer(opts: {
       const settings = ensureProjectSettings(config, opts.projectPath);
       const mcpJson = await readMcpJson(opts.projectPath);
 
+      if (isExternallyManagedMcpServer(opts.name)) {
+        throw new Error(
+          `Server "${opts.name}" is managed by Claude Code and cannot be toggled here`,
+        );
+      }
+
+      const userServers = mergeUserMcpServers(config, settings);
       const isProjectServer = opts.name in mcpJson;
-      const isUserServer = opts.name in (settings.mcpServers ?? {});
+      const isUserServer = opts.name in userServers;
 
       if (!isProjectServer && !isUserServer) {
         throw new Error(`Server "${opts.name}" not found in any config`);
@@ -245,6 +279,11 @@ export function toggleMcpServer(opts: {
           }
         } else {
           settings.disabledMcpServers = settings.disabledMcpServers.filter((n) => n !== opts.name);
+          // Also clear root-level disables so re-enable works when the server was
+          // disabled globally (config.disabledMcpServers) rather than per-project.
+          if (config.disabledMcpServers?.includes(opts.name)) {
+            config.disabledMcpServers = config.disabledMcpServers.filter((n) => n !== opts.name);
+          }
         }
       }
 
@@ -262,11 +301,13 @@ export function toggleMcpServer(opts: {
 /**
  * Parse the text output of `claude mcp list`.
  *
- * Handles two formats from `claude mcp list`:
+ * Handles formats from `claude mcp list`:
  *   name: url (HTTP|SSE) - status       → HTTP/SSE server with explicit type
  *   name: command args - status          → stdio server (no type in parens)
+ *   claude.ai Label: https://url - status → Claude.ai connector (name may contain spaces)
+ *   plugin:org:tool: command - status   → Plugin-provided MCP server
  */
-function parseMcpListOutput(output: string): McpServer[] {
+export function parseMcpListOutput(output: string): McpServer[] {
   const servers: McpServer[] = [];
   const lines = output.split('\n').filter((l) => l.trim());
 
@@ -279,6 +320,33 @@ function parseMcpListOutput(output: string): McpServer[] {
       trimmed.startsWith('Checking')
     )
       continue;
+
+    // Claude.ai connectors — display name includes spaces before the URL colon
+    const claudeAiMatch = trimmed.match(/^(claude\.ai [^:]+):\s+(https?:\/\/\S+)\s+-\s+(.+)/);
+    if (claudeAiMatch) {
+      const server: McpServer = {
+        name: claudeAiMatch[1].trim(),
+        type: 'http',
+        url: claudeAiMatch[2].trim(),
+        toggleable: false,
+      };
+      applyStatus(server, claudeAiMatch[3].trim().toLowerCase());
+      servers.push(server);
+      continue;
+    }
+
+    // Plugin MCP servers — name is a single token with colons
+    const pluginMatch = trimmed.match(/^(plugin:\S+):\s+(.+?)\s+-\s+(.+)/);
+    if (pluginMatch) {
+      const value = pluginMatch[2].trim();
+      const server: McpServer = { name: pluginMatch[1], type: 'stdio', toggleable: false };
+      const cmdParts = value.split(/\s+/);
+      server.command = cmdParts[0];
+      server.args = cmdParts.slice(1);
+      applyStatus(server, pluginMatch[3].trim().toLowerCase());
+      servers.push(server);
+      continue;
+    }
 
     // Match lines WITH explicit type: "name: value (HTTP|SSE|stdio) - status"
     const typedMatch = trimmed.match(
@@ -499,6 +567,12 @@ export const RECOMMENDED_SERVERS = [
     args: ['-y', '@modelcontextprotocol/server-postgres'],
   },
   {
+    name: 'neon',
+    description: 'Create and manage Neon Postgres databases and projects',
+    type: 'http' as McpServerType,
+    url: 'https://mcp.neon.tech/mcp',
+  },
+  {
     name: 'sequential-thinking',
     description: 'Dynamic problem solving with step-by-step reasoning',
     type: 'stdio' as McpServerType,
@@ -517,6 +591,12 @@ export const RECOMMENDED_SERVERS = [
     description: 'Error monitoring and debugging via Sentry',
     type: 'http' as McpServerType,
     url: 'https://mcp.sentry.dev/sse',
+  },
+  {
+    name: 'cloudflare',
+    description: 'Manage Cloudflare Workers, DNS, R2, and other Cloudflare services',
+    type: 'http' as McpServerType,
+    url: 'https://mcp.cloudflare.com/mcp',
   },
   {
     name: 'slack',

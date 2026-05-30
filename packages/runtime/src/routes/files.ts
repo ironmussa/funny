@@ -5,7 +5,7 @@
  * @domain layer: infrastructure
  */
 
-import { readFile, writeFile, stat, realpath } from 'fs/promises';
+import { mkdir, readFile, writeFile, stat, realpath } from 'fs/promises';
 import { homedir } from 'os';
 import { basename, dirname, join, normalize, resolve, sep } from 'path';
 
@@ -16,6 +16,7 @@ import { ResultAsync, err } from 'neverthrow';
 
 import { getServices } from '../services/service-registry.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resolveClaudeHomeConfigScope } from '../utils/claude-config-paths.js';
 import { resultToResponse } from '../utils/result-response.js';
 
 const app = new Hono<HonoEnv>();
@@ -46,6 +47,11 @@ async function resolveProjectScope(
   const scratchRoot = normalize(resolve(homedir(), '.funny', 'scratch', userId));
   if (normalizedTarget === scratchRoot || normalizedTarget.startsWith(scratchRoot + sep)) {
     return { projectPath: scratchRoot, worktreeBase: scratchRoot };
+  }
+
+  const claudeConfig = resolveClaudeHomeConfigScope(normalizedTarget);
+  if (claudeConfig) {
+    return { projectPath: claudeConfig.scopeDir, worktreeBase: claudeConfig.scopeDir };
   }
 
   const projects = await getServices().projects.listProjects(userId);
@@ -214,6 +220,11 @@ app.post('/write', async (c) => {
   const userId = c.get('userId') as string;
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
+
+  const claudeConfig = resolveClaudeHomeConfigScope(normalize(resolve(filePath)));
+  if (claudeConfig) {
+    await mkdir(claudeConfig.scopeDir, { recursive: true });
+  }
 
   // Resolve to a canonical path before the write. For new files (ENOENT) we
   // canonicalize the parent dir and rejoin the basename — the basename is not

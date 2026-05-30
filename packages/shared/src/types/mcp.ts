@@ -13,7 +13,9 @@ export interface McpServer {
   status?: 'ok' | 'needs_auth' | 'error';
   disabled?: boolean;
   /** Where the server is defined: 'project' (.mcp.json) or 'user' (~/.claude.json) */
-  source?: 'project' | 'user';
+  source?: 'user' | 'project';
+  /** False for plugin/connector servers that Claude Code manages outside ~/.claude.json */
+  toggleable?: boolean;
 }
 
 export interface McpListResponse {

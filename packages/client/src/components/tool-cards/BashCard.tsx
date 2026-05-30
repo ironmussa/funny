@@ -127,10 +127,12 @@ export function BashCard({
               </div>
               <div className="overflow-x-auto rounded border border-border/40 bg-background/80 px-2.5 py-1.5 font-mono text-xs">
                 {highlightedCommand ? (
-                  <div
-                    className="hljs whitespace-pre-wrap break-all leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: highlightedCommand }}
-                  />
+                  <pre className="code-viewer hljs m-0 whitespace-pre-wrap break-all leading-relaxed text-foreground">
+                    <code
+                      className="hljs language-bash"
+                      dangerouslySetInnerHTML={{ __html: highlightedCommand }}
+                    />
+                  </pre>
                 ) : (
                   <pre className="whitespace-pre-wrap break-all leading-relaxed text-foreground">
                     {command}
@@ -146,10 +148,12 @@ export function BashCard({
               {output ? (
                 <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
                   {highlightedOutput ? (
-                    <pre
-                      className="hljs whitespace-pre-wrap break-all font-mono text-xs leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: highlightedOutput }}
-                    />
+                    <pre className="code-viewer m-0 whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground">
+                      <code
+                        className="hljs"
+                        dangerouslySetInnerHTML={{ __html: highlightedOutput }}
+                      />
+                    </pre>
                   ) : htmlOutput ? (
                     <pre
                       className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground"

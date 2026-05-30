@@ -201,16 +201,36 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   const isWaitingResponse = thread.status === 'waiting';
   const threadIsTerminal =
     thread.status === 'stopped' || thread.status === 'completed' || thread.status === 'failed';
+  // A turn is genuinely in flight only when the agent is running and not
+  // paused on an interactive answer (waiting) or already terminal.
+  const turnInFlight = agentRunning && !isWaitingResponse && !threadIsTerminal;
+
+  // Interrupting a Claude turn mid-thinking (steer's query.interrupt() or
+  // interrupt mode's kill+respawn) leaves a partial `thinking` block that
+  // poisons session resume — the Anthropic 400 "thinking blocks ... cannot be
+  // modified". The risk scales with thinking depth, so for heavy-thinking
+  // efforts we queue the follow-up instead, letting the turn finish cleanly
+  // rather than being cut. (Lighter efforts keep steer/interrupt; the session
+  // self-recovers via isThinkingBlockError if a poison still slips through.)
+  const heavyThinking =
+    effectiveProvider === 'claude' && (params.effort === 'xhigh' || params.effort === 'max');
+  const avoidInterrupt = turnInFlight && heavyThinking;
+  if (avoidInterrupt && followUpMode !== 'queue') {
+    log.info('Queuing follow-up to avoid interrupting a heavy-thinking turn', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      followUpMode,
+      effort: params.effort ?? '',
+    });
+  }
+
   const willQueue =
-    agentRunning &&
-    !isWaitingResponse &&
-    !threadIsTerminal &&
-    (followUpMode === 'queue' || params.forceQueue);
+    turnInFlight && (followUpMode === 'queue' || params.forceQueue || avoidInterrupt);
 
   // Steer: only when the agent is actively mid-turn (not waiting on an
   // interactive answer, not terminal). When the thread is idle the message is
   // a normal follow-up (warm-continue on the live session, or resume).
-  const steer = followUpMode === 'steer' && agentRunning && !isWaitingResponse && !threadIsTerminal;
+  const steer = followUpMode === 'steer' && turnInFlight && !avoidInterrupt;
 
   if (!willQueue) {
     // Persist the user's message BEFORE any remote/long-running call. If a later

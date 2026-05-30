@@ -337,6 +337,76 @@ describe('sendMessage — queue and interactive tool flows', () => {
     expect(call?.[12]).toBe(true);
   });
 
+  test('queues (does not steer) a heavy-thinking Claude turn to avoid poisoning the session', async () => {
+    mocks.projects.getProject.mockResolvedValue({
+      followUpMode: 'steer',
+      path: '/projects/test',
+    });
+    vi.mocked(isAgentRunning).mockReturnValue(true);
+    mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-1' });
+    mocks.messageQueue.queueCount.mockResolvedValue(1);
+    mocks.messageQueue.peek.mockResolvedValue({ content: 'go left instead' });
+
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'running',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'opus-4.8',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: 'go left instead',
+      effort: 'xhigh',
+    });
+
+    expect(result.isOk()).toBe(true);
+    // Heavy thinking must NOT interrupt mid-turn — it queues instead.
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(mocks.messageQueue.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  test('still steers a Claude turn under light thinking (effort high)', async () => {
+    mocks.projects.getProject.mockResolvedValue({
+      followUpMode: 'steer',
+      path: '/projects/test',
+    });
+    vi.mocked(isAgentRunning).mockReturnValue(true);
+
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'running',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'opus-4.8',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: 'go left instead',
+      effort: 'high',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.messageQueue.enqueue).not.toHaveBeenCalled();
+    expect(startAgent).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(startAgent).mock.calls.at(-1);
+    expect(call?.[12]).toBe(true); // steer flag
+  });
+
   test('upgrades permission mode after ExitPlanMode approval', async () => {
     mocks.tm.getThread.mockResolvedValue({
       id: 't-waiting',

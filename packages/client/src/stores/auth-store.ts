@@ -1,6 +1,7 @@
 import type { SafeUser } from '@funny/shared';
 import { create } from 'zustand';
 
+import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { onUnauthorized } from '@/lib/api/auth-events';
 import { authClient } from '@/lib/auth-client';
 import { createClientLogger } from '@/lib/client-logger';
@@ -47,23 +48,20 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
         // loadProjects() (which fires when App mounts) uses the correct
         // org context.  Without this, a page refresh loads personal
         // projects first and the OrgSwitcher restores the org too late.
-        let activeOrgId: string | null = null;
+        let activeOrgId: string | null = activeOrganizationIdFromSession(session.data);
         let activeOrgName: string | null = null;
         let activeOrgSlug: string | null = null;
-        try {
-          const active = await authClient.organization.getActiveMember();
-          if (active.data?.organizationId) {
-            activeOrgId = active.data.organizationId;
-            // Fetch org list to resolve name/slug
+        if (activeOrgId) {
+          try {
             const orgList = await authClient.organization.list();
             const orgInfo = orgList.data?.find((o: any) => o.id === activeOrgId);
             if (orgInfo) {
               activeOrgName = orgInfo.name;
               activeOrgSlug = orgInfo.slug;
             }
+          } catch {
+            // Org list failed — keep id, continue without name/slug
           }
-        } catch {
-          // Org fetch failed — continue with personal context
         }
 
         set({

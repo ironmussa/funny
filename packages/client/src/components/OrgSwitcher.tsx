@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -55,9 +56,9 @@ export function OrgSwitcher() {
         // Only fetch it here if it wasn't restored (e.g. initialize ran
         // before the org plugin was ready).
         if (!cancelled && !useAuthStore.getState().activeOrgId) {
-          const active = await authClient.organization.getActiveMember();
-          if (!cancelled && active.data) {
-            const orgId = active.data.organizationId;
+          const session = await authClient.getSession();
+          const orgId = activeOrganizationIdFromSession(session.data);
+          if (!cancelled && orgId) {
             setActiveOrgId(orgId);
             const orgInfo = res.data?.find((o: any) => o.id === orgId);
             setActiveOrg(orgId, orgInfo?.name ?? null, orgInfo?.slug ?? null);

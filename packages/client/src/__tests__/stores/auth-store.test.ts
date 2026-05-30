@@ -4,7 +4,6 @@ const mockAuth = vi.hoisted(() => ({
   getSession: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
-  getActiveMember: vi.fn(),
   listOrgs: vi.fn(),
 }));
 
@@ -14,7 +13,6 @@ vi.mock('@/lib/auth-client', () => ({
     signIn: { username: mockAuth.signIn },
     signOut: mockAuth.signOut,
     organization: {
-      getActiveMember: mockAuth.getActiveMember,
       list: mockAuth.listOrgs,
     },
   },
@@ -64,10 +62,8 @@ describe('auth-store', () => {
           name: 'Admin',
           role: 'admin',
         },
+        session: { activeOrganizationId: 'org-1' },
       },
-    });
-    mockAuth.getActiveMember.mockResolvedValue({
-      data: { organizationId: 'org-1' },
     });
     mockAuth.listOrgs.mockResolvedValue({
       data: [{ id: 'org-1', name: 'Acme', slug: 'acme' }],

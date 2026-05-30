@@ -6,6 +6,7 @@ import { createAuthClient } from 'better-auth/react';
 // Only the packaged Tauri binary loads from a non-http origin (tauri://localhost
 // or http://tauri.localhost), where an absolute URL to the sidecar is required.
 const isPackagedTauri =
+  typeof window !== 'undefined' &&
   !!(window as any).__TAURI_INTERNALS__ &&
   window.location.protocol !== 'http:' &&
   window.location.protocol !== 'https:';

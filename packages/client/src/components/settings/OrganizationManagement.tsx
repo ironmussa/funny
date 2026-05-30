@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -43,6 +44,9 @@ export function OrganizationManagement() {
 
   const loadOrgs = useCallback(async () => {
     try {
+      const session = await authClient.getSession();
+      setActiveOrgId(activeOrganizationIdFromSession(session.data));
+
       const res = await authClient.organization.list();
       if (res.data) {
         setOrgs(
@@ -55,7 +59,6 @@ export function OrganizationManagement() {
         );
         // Build membership map (orgId -> role)
         const memberMap = new Map<string, string>();
-        const session = await authClient.getSession();
         const currentUserId = session.data?.user?.id;
         const fulls = await Promise.all(
           res.data.map((org) =>
@@ -74,15 +77,6 @@ export function OrganizationManagement() {
           }
         }
         setMemberships(memberMap);
-      }
-      // Get active org
-      try {
-        const active = await authClient.organization.getActiveMember();
-        if (active.data) {
-          setActiveOrgId(active.data.organizationId);
-        }
-      } catch {
-        // No active org
       }
     } catch (err) {
       console.error('[OrganizationManagement] Failed to load orgs:', err);

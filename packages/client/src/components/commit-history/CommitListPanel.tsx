@@ -118,7 +118,6 @@ export function CommitListPanel({
             onCaseSensitiveChange={setCommitSearchCaseSensitive}
             onClose={commitSearch ? () => setCommitSearch('') : undefined}
             autoFocus={false}
-            animate={false}
             testIdPrefix="history-commit-search"
           />
         </div>

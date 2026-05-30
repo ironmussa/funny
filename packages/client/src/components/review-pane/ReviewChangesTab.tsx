@@ -13,7 +13,7 @@ import { CommitDraftPanel } from './CommitDraftPanel';
 interface ReviewChangesTabProps {
   /** Diff-load truncation info — surfaces the yellow banner when files were dropped. */
   truncatedInfo: { truncated: boolean; total: number };
-  /** Used to gate SearchBar visibility (only show once we have files). */
+  /** Used for truncation banner counts and file-list state. */
   summaries: FileDiffSummary[];
   /** Pre-built PRSummaryCard props, or null to hide. */
   prSummary: ComponentProps<typeof PRSummaryCard> | null;
@@ -61,11 +61,9 @@ export function ReviewChangesTabContent({
 
         <ChangesToolbar {...toolbar} />
 
-        {summaries.length > 0 && (
-          <div className="border-b border-sidebar-border bg-background px-2 py-1">
-            <SearchBar {...search} />
-          </div>
-        )}
+        <div className="border-b border-sidebar-border bg-background px-2 py-1">
+          <SearchBar {...search} />
+        </div>
 
         <ChangesFilesPanel {...filesPanel} />
 

@@ -8,7 +8,7 @@ import {
   WholeWord,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,13 +62,6 @@ export interface SearchBarProps {
   onInputKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   /** Forward a ref to the input element */
   inputRef?: React.Ref<HTMLInputElement>;
-  /**
-   * Play the slide-in / slide-out animation on mount / close. Set to `false`
-   * for persistent filter bars that live inside resizable panels — otherwise
-   * the entry animation replays on layout-driven remounts (e.g. dockview
-   * panel size changes) and the placeholder visibly jumps.
-   */
-  animate?: boolean;
 }
 
 export function SearchBar({
@@ -94,10 +87,8 @@ export function SearchBar({
   resultLabel,
   onInputKeyDown,
   inputRef: externalInputRef,
-  animate = true,
 }: SearchBarProps) {
   const internalInputRef = useRef<HTMLInputElement>(null);
-  const [closing, setClosing] = useState(false);
 
   const setInputRef = useCallback(
     (node: HTMLInputElement | null) => {
@@ -116,21 +107,11 @@ export function SearchBar({
     }
   }, [autoFocus]);
 
-  const startClose = useCallback(() => {
-    if (!onClose) return;
-    if (animate) setClosing(true);
-    else onClose();
-  }, [onClose, animate]);
-
-  const handleAnimationEnd = useCallback(() => {
-    if (closing) onClose?.();
-  }, [closing, onClose]);
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape' && onClose) {
         e.preventDefault();
-        startClose();
+        onClose();
         return;
       }
       if (e.key === 'Enter' && (onPrev || onNext)) {
@@ -157,7 +138,6 @@ export function SearchBar({
       onInputKeyDown?.(e);
     },
     [
-      startClose,
       onPrev,
       onNext,
       onClose,
@@ -182,15 +162,7 @@ export function SearchBar({
 
   return (
     <div
-      className={cn(
-        'flex items-center gap-1.5',
-        animate &&
-          (closing
-            ? 'duration-150 animate-out fade-out slide-out-to-top-2 fill-mode-forwards'
-            : 'duration-150 animate-in fade-in slide-in-from-top-2'),
-        className,
-      )}
-      onAnimationEnd={handleAnimationEnd}
+      className={cn('flex items-center gap-1.5', className)}
       onClick={(e) => {
         if (e.target === e.currentTarget) internalInputRef.current?.focus();
       }}
@@ -283,7 +255,7 @@ export function SearchBar({
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={startClose}
+          onClick={onClose}
           data-testid={`${testIdPrefix}-close`}
         >
           <X className="size-3.5" />

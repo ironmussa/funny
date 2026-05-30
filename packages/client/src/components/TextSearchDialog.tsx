@@ -273,7 +273,6 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
               inputRef={inputRef}
               placeholder={t('textSearch.placeholder', 'Search in files...')}
               testIdPrefix="text-search"
-              animate={false}
             />
             <div className="flex gap-2">
               <Input

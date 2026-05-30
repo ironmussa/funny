@@ -487,3 +487,84 @@ describe('CursorACPProcess.translateUpdate', () => {
     });
   });
 });
+
+describe('CursorACPProcess context usage', () => {
+  test('usage_update emits a synthetic assistant message with token usage', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'usage_update',
+      used: 42_000,
+      size: 200_000,
+    });
+
+    expect(messages).toHaveLength(1);
+    const m = messages[0];
+    if (m.type !== 'assistant') throw new Error('unreachable');
+    expect(m.message.content).toEqual([]);
+    expect(m.message.usage).toEqual({
+      input_tokens: 42_000,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    });
+  });
+
+  test('usage_update with zero used tokens is ignored', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'usage_update',
+      used: 0,
+      size: 200_000,
+    });
+
+    expect(messages).toHaveLength(0);
+  });
+
+  test('emitAcpPromptResponseUsage maps ACP camelCase usage fields', () => {
+    const { proc, messages } = makeProcess();
+
+    (
+      proc as unknown as { emitAcpPromptResponseUsage: (u: unknown) => void }
+    ).emitAcpPromptResponseUsage({
+      inputTokens: 100,
+      outputTokens: 20,
+      cachedReadTokens: 5_000,
+      cachedWriteTokens: 200,
+    });
+
+    expect(messages).toHaveLength(1);
+    const m = messages[0];
+    if (m.type !== 'assistant') throw new Error('unreachable');
+    expect(m.message.usage).toEqual({
+      input_tokens: 100,
+      output_tokens: 20,
+      cache_read_input_tokens: 5_000,
+      cache_creation_input_tokens: 200,
+    });
+  });
+
+  test('usage_update is still emitted while replaying session history', () => {
+    const { proc, messages } = makeProcess();
+
+    (proc as unknown as { replayingHistory: boolean }).replayingHistory = true;
+
+    translate(proc, {
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: 'old history' },
+    });
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'usage_update',
+      used: 88_000,
+      size: 200_000,
+    });
+
+    expect(messages).toHaveLength(1);
+    const m = messages[0];
+    if (m.type !== 'assistant') throw new Error('unreachable');
+    expect(m.message.usage?.input_tokens).toBe(88_000);
+  });
+});

@@ -231,8 +231,9 @@ export class CodexACPProcess extends BaseAgentProcess {
     const acpClient: ACPClient = {
       sessionUpdate: async (params: ACPSessionNotification): Promise<void> => {
         if (this.isAborted) return;
-        if (this.replayingHistory) return;
-        this.translateUpdate(params.update);
+        const update = params.update;
+        if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
+        this.translateUpdate(update);
       },
 
       requestPermission: async (
@@ -412,6 +413,7 @@ export class CodexACPProcess extends BaseAgentProcess {
         const outputTokens = usage.outputTokens ?? 0;
         this.totalCost += (inputTokens * 0.0025 + outputTokens * 0.01) / 1000;
       }
+      this.emitAcpPromptResponseUsage(usage);
 
       this.numTurns += 1;
 
@@ -560,6 +562,8 @@ export class CodexACPProcess extends BaseAgentProcess {
   // ── Update translation (mirrors gemini-acp.translateUpdate) ───
 
   private translateUpdate(update: ACPSessionUpdate): void {
+    if (this.handleAcpUsageUpdate(update)) return;
+
     switch (update.sessionUpdate) {
       case 'agent_thought_chunk': {
         // Buffer thought — flushed as a Think tool_call on the next non-thought event.

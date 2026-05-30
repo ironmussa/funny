@@ -205,6 +205,63 @@ export abstract class BaseAgentProcess extends EventEmitter {
     this.emit('message', msg);
   }
 
+  /**
+   * Emit a synthetic assistant message carrying token usage so the runtime can
+   * broadcast `agent:context_usage` to the client context ring. ACP providers
+   * often surface usage via `sessionUpdate: "usage_update"` or
+   * `PromptResponse.usage` rather than on streamed assistant chunks.
+   */
+  protected emitContextUsageMessage(params: {
+    inputTokens: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  }): void {
+    const inputTokens = params.inputTokens;
+    if (!Number.isFinite(inputTokens) || inputTokens <= 0) return;
+
+    this.emit('message', {
+      type: 'assistant',
+      message: {
+        id: randomUUID(),
+        content: [],
+        usage: {
+          input_tokens: inputTokens,
+          output_tokens: params.outputTokens ?? 0,
+          cache_read_input_tokens: params.cacheReadTokens ?? 0,
+          cache_creation_input_tokens: params.cacheWriteTokens ?? 0,
+        },
+      },
+    } as CLIMessage);
+  }
+
+  /** Handle ACP `sessionUpdate: "usage_update"`. Returns true when handled. */
+  protected handleAcpUsageUpdate(update: { sessionUpdate?: string; used?: number }): boolean {
+    if (update.sessionUpdate !== 'usage_update') return false;
+    if (typeof update.used === 'number') {
+      this.emitContextUsageMessage({ inputTokens: update.used });
+    }
+    return true;
+  }
+
+  /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
+  protected emitAcpPromptResponseUsage(usage: unknown): void {
+    if (!usage || typeof usage !== 'object') return;
+    const u = usage as Record<string, unknown>;
+    this.emitContextUsageMessage({
+      inputTokens: (u.inputTokens as number | undefined) ?? 0,
+      outputTokens: (u.outputTokens as number | undefined) ?? 0,
+      cacheReadTokens:
+        (u.cachedReadTokens as number | undefined) ??
+        (u.cacheReadTokens as number | undefined) ??
+        0,
+      cacheWriteTokens:
+        (u.cachedWriteTokens as number | undefined) ??
+        (u.cacheWriteTokens as number | undefined) ??
+        0,
+    });
+  }
+
   /** Emit a result CLIMessage. */
   protected emitResult(params: {
     sessionId: string;

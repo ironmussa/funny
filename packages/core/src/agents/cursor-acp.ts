@@ -237,8 +237,11 @@ export class CursorACPProcess extends BaseAgentProcess {
     const acpClient: ACPClient = {
       sessionUpdate: async (params: ACPSessionNotification): Promise<void> => {
         if (this.isAborted) return;
-        if (this.replayingHistory) return;
-        this.translateUpdate(params.update);
+        const update = params.update;
+        // History replay streams old message/tool chunks we must not re-ingest,
+        // but usage_update carries the live context window size we still want.
+        if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
+        this.translateUpdate(update);
       },
 
       requestPermission: async (
@@ -399,6 +402,8 @@ export class CursorACPProcess extends BaseAgentProcess {
         sessionId: this.activeSessionId,
         prompt: promptBlocks,
       });
+
+      this.emitAcpPromptResponseUsage(promptResponse.usage);
 
       this.numTurns += 1;
 
@@ -610,6 +615,8 @@ export class CursorACPProcess extends BaseAgentProcess {
   }
 
   private translateUpdate(update: ACPSessionUpdate): void {
+    if (this.handleAcpUsageUpdate(update)) return;
+
     switch (update.sessionUpdate) {
       case 'agent_thought_chunk': {
         const content = update.content;

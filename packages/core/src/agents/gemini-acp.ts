@@ -297,8 +297,11 @@ export class GeminiACPProcess extends BaseAgentProcess {
     const acpClient: ACPClient = {
       sessionUpdate: async (params: ACPSessionNotification): Promise<void> => {
         if (this.isAborted) return;
-        if (this.replayingHistory) return;
-        this.translateUpdate(params.update);
+        const update = params.update;
+        // History replay streams old message/tool chunks we must not re-ingest,
+        // but usage_update carries the live context window size we still want.
+        if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
+        this.translateUpdate(update);
       },
 
       requestPermission: async (
@@ -504,6 +507,7 @@ export class GeminiACPProcess extends BaseAgentProcess {
         turnCost = (inputTokens * 0.00025 + outputTokens * 0.001) / 1000;
         this.totalCost += turnCost;
       }
+      this.emitAcpPromptResponseUsage(promptResponse.usage);
 
       this.numTurns += 1;
 
@@ -689,6 +693,8 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
   /** Translate an ACP SessionUpdate into CLIMessage(s) and update per-turn state. */
   private translateUpdate(update: ACPSessionUpdate): void {
+    if (this.handleAcpUsageUpdate(update)) return;
+
     switch (update.sessionUpdate) {
       case 'agent_thought_chunk': {
         // Buffer the thought — flushed as a Think tool_call when the next

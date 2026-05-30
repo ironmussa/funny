@@ -222,8 +222,9 @@ export class PiACPProcess extends BaseAgentProcess {
     const acpClient: ACPClient = {
       sessionUpdate: async (params: ACPSessionNotification): Promise<void> => {
         if (this.isAborted) return;
-        if (this.replayingHistory) return;
-        this.translateUpdate(params.update);
+        const update = params.update;
+        if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
+        this.translateUpdate(update);
       },
 
       requestPermission: async (
@@ -409,6 +410,8 @@ export class PiACPProcess extends BaseAgentProcess {
         prompt: promptBlocks,
       });
 
+      this.emitAcpPromptResponseUsage(promptResponse.usage);
+
       this.numTurns += 1;
 
       const subtype: ResultSubtype =
@@ -450,6 +453,8 @@ export class PiACPProcess extends BaseAgentProcess {
   // ── Update translation ──────────────────────────────────────
 
   private translateUpdate(update: ACPSessionUpdate): void {
+    if (this.handleAcpUsageUpdate(update)) return;
+
     switch (update.sessionUpdate) {
       case 'agent_thought_chunk': {
         const content = update.content;

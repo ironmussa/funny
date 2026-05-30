@@ -337,10 +337,22 @@ export class AgentMessageHandler {
     // rather than accumulating across messages (which would vastly overcount).
     const usage = msg.message.usage as Record<string, unknown> | undefined;
     if (usage) {
-      const inputTokens = (usage.input_tokens as number) ?? 0;
-      const cacheRead = (usage.cache_read_input_tokens as number) ?? 0;
-      const cacheCreation = (usage.cache_creation_input_tokens as number) ?? 0;
-      const outputTokens = (usage.output_tokens as number) ?? 0;
+      const inputTokens =
+        (usage.input_tokens as number) ??
+        (usage.inputTokens as number) ??
+        (usage.used as number) ??
+        0;
+      const cacheRead =
+        (usage.cache_read_input_tokens as number) ??
+        (usage.cachedReadTokens as number) ??
+        (usage.cacheReadTokens as number) ??
+        0;
+      const cacheCreation =
+        (usage.cache_creation_input_tokens as number) ??
+        (usage.cachedWriteTokens as number) ??
+        (usage.cacheWriteTokens as number) ??
+        0;
+      const outputTokens = (usage.output_tokens as number) ?? (usage.outputTokens as number) ?? 0;
       const totalInputTokens = inputTokens + cacheRead + cacheCreation;
 
       log.info('Assistant message usage (DEBUG)', {

@@ -60,7 +60,14 @@ const THREAD_STAGE_VALUES = [
   'archived',
 ] as const;
 
-const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
+// Read at call time, not module load — the test harness sets this in a
+// per-file top-of-module assignment, but `routes/threads.ts` may have already
+// been imported by an earlier test file via the shared test-app helper, so
+// capturing it as a top-level constant freezes whatever value `process.env`
+// happened to hold at first load (commonly undefined → crypto signing throws).
+function getRunnerAuthSecret(): string {
+  return process.env.RUNNER_AUTH_SECRET ?? '';
+}
 
 // ── Shared repository instances ──────────────────────────────────
 
@@ -151,17 +158,18 @@ function buildForwardHeaders(
   // Default role to 'user' so the signed payload matches what the runtime
   // verifies (runtime defaults a missing X-Forwarded-Role to 'user' too).
   const effectiveRole = role ?? 'user';
+  const runnerAuthSecret = getRunnerAuthSecret();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Forwarded-User': userId,
-    'X-Runner-Auth': RUNNER_AUTH_SECRET,
+    'X-Runner-Auth': runnerAuthSecret,
     'X-Forwarded-Role': effectiveRole,
   };
   if (orgId) headers['X-Forwarded-Org'] = orgId;
   if (orgName) headers['X-Forwarded-Org-Name'] = orgName;
   const { signature, timestamp, nonce } = signForwardedIdentity(
     { userId, role: effectiveRole, orgId: orgId ?? null, orgName: orgName ?? null },
-    RUNNER_AUTH_SECRET,
+    runnerAuthSecret,
   );
   headers[SIGNATURE_HEADER] = signature;
   headers[TIMESTAMP_HEADER] = String(timestamp);

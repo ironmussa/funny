@@ -615,6 +615,7 @@ export class CursorACPProcess extends BaseAgentProcess {
   }
 
   private translateUpdate(update: ACPSessionUpdate): void {
+    if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
     if (this.handleAcpUsageUpdate(update)) return;
 
     switch (update.sessionUpdate) {

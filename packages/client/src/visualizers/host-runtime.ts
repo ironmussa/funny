@@ -1,4 +1,5 @@
 import * as React from 'react';
+import * as ReactDOM from 'react-dom';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
 
 import { hostApi } from './host-api';
@@ -15,6 +16,7 @@ import { hostApi } from './host-api';
 export function installVisualizerHostGlobals(): void {
   const g = globalThis as Record<string, unknown>;
   g.__FUNNY_REACT__ = React;
+  g.__FUNNY_REACT_DOM__ = ReactDOM;
   g.__FUNNY_REACT_JSX_RUNTIME__ = ReactJsxRuntime;
   g.__FUNNY_HOST__ = hostApi;
 }

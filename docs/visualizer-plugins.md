@@ -231,8 +231,9 @@ Key pieces:
   preview consult it; nothing is hardcoded.
 - **Import map** ([`packages/shared/src/visualizer-importmap.mjs`](../packages/shared/src/visualizer-importmap.mjs))
   — a single source of truth injected into `index.html` that maps `react`,
-  `react/jsx-runtime`, and `@funny/host` to tiny `/vendor/*.mjs` shims which
-  re-export the host's own module instances. This is what makes "shared React"
+  `react/jsx-runtime`, `react-dom`, and `@funny/host` to tiny `/vendor/*.mjs`
+  shims which re-export the host's own module instances. This is what makes
+  "shared React"
   work. The server adds a matching CSP `script-src` hash so the inline import
   map is allowed under the strict policy.
 - **Loader** ([`packages/client/src/lib/visualizer-loader.ts`](../packages/client/src/lib/visualizer-loader.ts))

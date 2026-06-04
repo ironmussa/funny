@@ -23,6 +23,7 @@ export const VISUALIZER_IMPORT_MAP = {
   imports: {
     react: '/vendor/funny-react.mjs',
     'react/jsx-runtime': '/vendor/funny-react-jsx-runtime.mjs',
+    'react-dom': '/vendor/funny-react-dom.mjs',
     '@funny/host': '/vendor/funny-host.mjs',
   },
 };

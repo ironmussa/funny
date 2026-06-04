@@ -11004,7 +11004,7 @@ function DbmlSchemaNodeComponent({ data }) {
   return /* @__PURE__ */ jsxs2(
     "div",
     {
-      className: "nodrag nopan w-[260px] overflow-hidden rounded-lg border border-border bg-card shadow-md",
+      className: "nodrag nopan border-border bg-card w-[260px] overflow-hidden rounded-lg border shadow-md",
       "data-testid": `dbml-table-${data.label}`,
       children: [
         /* @__PURE__ */ jsxs2(
@@ -11016,7 +11016,7 @@ function DbmlSchemaNodeComponent({ data }) {
             ),
             style: headerStyle,
             children: [
-              /* @__PURE__ */ jsx2("div", { className: "text-sm font-semibold leading-tight", children: data.label }),
+              /* @__PURE__ */ jsx2("div", { className: "text-sm leading-tight font-semibold", children: data.label }),
               data.note && /* @__PURE__ */ jsx2(
                 "p",
                 {
@@ -11030,7 +11030,7 @@ function DbmlSchemaNodeComponent({ data }) {
             ]
           }
         ),
-        /* @__PURE__ */ jsx2("div", { children: /* @__PURE__ */ jsx2("ul", { className: "divide-y divide-border", children: data.schema.map((col) => /* @__PURE__ */ jsxs2(
+        /* @__PURE__ */ jsx2("div", { children: /* @__PURE__ */ jsx2("ul", { className: "divide-border divide-y", children: data.schema.map((col) => /* @__PURE__ */ jsxs2(
           "li",
           {
             className: "relative flex items-start gap-2 px-3 py-1.5 text-xs",
@@ -11042,12 +11042,12 @@ function DbmlSchemaNodeComponent({ data }) {
                   type: "target",
                   position: Position.Left,
                   id: col.title,
-                  className: "!top-3 !h-2 !w-2 !border-border !bg-muted-foreground"
+                  className: "!border-border !bg-muted-foreground !top-3 !h-2 !w-2"
                 }
               ),
               /* @__PURE__ */ jsxs2("div", { className: "min-w-0 flex-1", children: [
                 /* @__PURE__ */ jsxs2("div", { className: "flex items-center justify-between gap-2", children: [
-                  /* @__PURE__ */ jsx2("span", { className: "truncate font-mono text-foreground", children: col.title }),
+                  /* @__PURE__ */ jsx2("span", { className: "text-foreground truncate font-mono", children: col.title }),
                   /* @__PURE__ */ jsxs2("span", { className: "flex shrink-0 items-center gap-1", children: [
                     col.pk && /* @__PURE__ */ jsx2("span", { className: cn2(BADGE_BASE, "bg-secondary text-secondary-foreground"), children: "PK" }),
                     col.fk && /* @__PURE__ */ jsx2(
@@ -11061,7 +11061,7 @@ function DbmlSchemaNodeComponent({ data }) {
                     /* @__PURE__ */ jsx2("span", { className: "text-muted-foreground", children: col.type })
                   ] })
                 ] }),
-                col.note && /* @__PURE__ */ jsx2("p", { className: "mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground", children: col.note })
+                col.note && /* @__PURE__ */ jsx2("p", { className: "text-muted-foreground mt-0.5 line-clamp-2 text-xs leading-snug", children: col.note })
               ] }),
               /* @__PURE__ */ jsx2(
                 Handle,
@@ -11069,7 +11069,7 @@ function DbmlSchemaNodeComponent({ data }) {
                   type: "source",
                   position: Position.Right,
                   id: col.title,
-                  className: "!top-3 !h-2 !w-2 !border-border !bg-muted-foreground"
+                  className: "!border-border !bg-muted-foreground !top-3 !h-2 !w-2"
                 }
               )
             ]
@@ -26600,7 +26600,7 @@ function ZoomToolbar({ testIdPrefix }) {
     void setViewport({ x: x2, y, zoom: 1 }, { duration: 150 });
   }, [getViewport, setViewport]);
   return /* @__PURE__ */ jsxs3(Fragment2, { children: [
-    /* @__PURE__ */ jsxs3("span", { className: "px-1 text-xs text-muted-foreground", children: [
+    /* @__PURE__ */ jsxs3("span", { className: "text-muted-foreground px-1 text-xs", children: [
       percent,
       "%"
     ] }),
@@ -26668,14 +26668,14 @@ function DbmlFlowCanvas({
             minZoom: 0.1,
             maxZoom: 2,
             proOptions: { hideAttribution: true },
-            className: "h-full w-full bg-card [&_.react-flow__edge-path]:stroke-[hsl(var(--foreground))]",
+            className: "bg-card h-full w-full [&_.react-flow__edge-path]:stroke-[hsl(var(--foreground))]",
             children: [
               /* @__PURE__ */ jsx3(Background, { variant: BackgroundVariant.Dots, gap: 16, size: 1, color: "hsl(var(--border))" }),
               /* @__PURE__ */ jsx3(FitViewOnGraphChange, { graphKey })
             ]
           }
         ),
-        /* @__PURE__ */ jsx3("div", { className: "pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100", children: /* @__PURE__ */ jsxs3("div", { className: "pointer-events-auto flex items-center gap-1 rounded-md border border-border bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur", children: [
+        /* @__PURE__ */ jsx3("div", { className: "pointer-events-none absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100", children: /* @__PURE__ */ jsxs3("div", { className: "border-border bg-background/90 pointer-events-auto flex items-center gap-1 rounded-md border px-1 py-0.5 shadow-sm backdrop-blur", children: [
           /* @__PURE__ */ jsx3(ZoomToolbar, { testIdPrefix }),
           toolbarExtra
         ] }) })
@@ -26754,16 +26754,16 @@ function ExpandedOverlay({ graph, onClose }) {
       children: /* @__PURE__ */ jsxs4(
         "div",
         {
-          className: fullscreen ? "flex h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-card" : "flex h-[85vh] w-[90vw] max-w-[1200px] flex-col overflow-hidden rounded-lg border border-border bg-card",
+          className: fullscreen ? "border-border bg-card flex h-full w-full flex-col overflow-hidden rounded-lg border" : "border-border bg-card flex h-[85vh] w-[90vw] max-w-[1200px] flex-col overflow-hidden rounded-lg border",
           onClick: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ jsxs4("div", { className: "flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-2", children: [
+            /* @__PURE__ */ jsxs4("div", { className: "border-border flex flex-shrink-0 items-center justify-between border-b px-4 py-2", children: [
               /* @__PURE__ */ jsx4("span", { className: "text-sm font-medium", children: "DBML Diagram" }),
               /* @__PURE__ */ jsx4(
                 "button",
                 {
                   type: "button",
-                  className: "inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground",
+                  className: "text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded",
                   onClick: onClose,
                   "aria-label": "Close",
                   title: "Close",
@@ -26803,7 +26803,7 @@ function DbmlBlock({ source, fill }) {
     return /* @__PURE__ */ jsxs4(
       "div",
       {
-        className: "flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive",
+        className: "border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded border px-3 py-2 text-xs",
         "data-testid": "dbml-error",
         children: [
           /* @__PURE__ */ jsx4("span", { className: "font-medium", children: "Invalid DBML" }),
@@ -26830,7 +26830,7 @@ function DbmlBlock({ source, fill }) {
       {
         nodes: graph.nodes,
         edges: graph.edges,
-        className: "rounded border border-border",
+        className: "border-border rounded border",
         style: { height: DBML_INLINE_HEIGHT },
         testIdPrefix: "dbml-inline",
         toolbarExtra: /* @__PURE__ */ jsx4(

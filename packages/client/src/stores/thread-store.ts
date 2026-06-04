@@ -89,6 +89,8 @@ export {
   invalidateSelectThread,
   setAppNavigate,
   getSelectingThreadId,
+  getUrlThreadId,
+  setUrlThreadId,
 } from './thread-store-internals';
 
 // ── Types ────────────────────────────────────────────────────────

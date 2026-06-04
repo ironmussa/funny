@@ -35,6 +35,26 @@ export class ThreadStoreInternals {
   /** Callback registered by thread-store so UI actions can clear selection without importing it */
   private clearThreadSelectionFn: (() => void) | null = null;
 
+  /**
+   * The active thread id parsed from the current URL, mirrored here so non-React
+   * store code (eviction, WS routing) can read "which thread is the user looking
+   * at" without coupling to `selectedThreadId` or reading `window.location`
+   * (which `MemoryRouter` doesn't update in tests). Updated by `useRouteSync` on
+   * every location change. This is the route-driven source of truth that lets
+   * the invariant guard eventually go away.
+   */
+  private urlThreadId: string | null = null;
+
+  // ── URL thread id (route-driven anchor) ────────────────────────
+
+  getUrlThreadId(): string | null {
+    return this.urlThreadId;
+  }
+
+  setUrlThreadId(threadId: string | null): void {
+    this.urlThreadId = threadId;
+  }
+
   // ── Select generation ──────────────────────────────────────────
 
   getSelectGeneration(): number {
@@ -152,6 +172,7 @@ export class ThreadStoreInternals {
     this.navigateFn = null;
     this.threadSelectListener = null;
     this.clearThreadSelectionFn = null;
+    this.urlThreadId = null;
   }
 }
 
@@ -182,3 +203,5 @@ export const setThreadSelectListener = (fn: () => void) => internals.setThreadSe
 export const notifyThreadSelected = () => internals.notifyThreadSelected();
 export const setClearThreadSelection = (fn: () => void) => internals.setClearThreadSelection(fn);
 export const clearThreadSelection = () => internals.clearThreadSelection();
+export const getUrlThreadId = () => internals.getUrlThreadId();
+export const setUrlThreadId = (id: string | null) => internals.setUrlThreadId(id);

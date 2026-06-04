@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { settingsItems } from '@/components/settings/items';
 import { createClientLogger } from '@/lib/client-logger';
 import { useProjectStore } from '@/stores/project-store';
-import { getSelectingThreadId, useThreadStore } from '@/stores/thread-store';
+import { getSelectingThreadId, setUrlThreadId, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { parseRoute, type ParsedRoute } from './route-parser';
@@ -63,6 +63,12 @@ export function useRouteSync() {
   locationRef.current = location;
 
   const parsed = useMemo(() => parseRoute(location.pathname), [location.pathname]);
+
+  // Mirror the URL's thread id into the store layer synchronously (same pattern
+  // as `locationRef` above) so non-React store code — eviction, WS routing —
+  // can read the route-driven active thread without `window.location` coupling
+  // or a dependency on `selectedThreadId`. Foundation for retiring the guard.
+  setUrlThreadId(parsed.threadId);
 
   // Cold-load: restore the last visited route at root path
   useEffect(() => {

@@ -7,6 +7,10 @@
   "types": "./src/types.ts",
   "exports": {
     ".": "./src/types.ts",
+    "./visualizer-importmap": {
+      "types": "./src/visualizer-importmap.d.ts",
+      "default": "./src/visualizer-importmap.mjs"
+    },
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
     "./thread-machine": "./src/thread-machine.ts",

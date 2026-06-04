@@ -1,0 +1,21 @@
+{
+  "name": "@funny/host",
+  "version": "1.0.0",
+  "description": "Public host SDK for funny visualizer plugins — the stable contract third-party authors compile against.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@funny/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0"
+  }
+}

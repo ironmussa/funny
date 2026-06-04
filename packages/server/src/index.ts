@@ -6,9 +6,11 @@
  * connected via WebSocket tunnel.
  */
 
+import { createHash } from 'crypto';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 
+import { VISUALIZER_IMPORT_MAP_JSON } from '@funny/shared/visualizer-importmap';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { cors } from 'hono/cors';
@@ -26,6 +28,13 @@ import { authMiddleware, setAuthInstance } from './middleware/auth.js';
 // Uses `any` because the runtime and server auth instances have slightly different types
 // (different access control statements, different plugin configurations).
 let authInstance: any;
+
+// CSP source expression for the inline visualizer import map (see secureHeaders
+// below). Computed from the exact bytes the client injects, so the policy always
+// matches the page.
+const VISUALIZER_IMPORT_MAP_CSP_HASH = `'sha256-${createHash('sha256')
+  .update(VISUALIZER_IMPORT_MAP_JSON, 'utf8')
+  .digest('base64')}'`;
 
 // Ensure a RUNNER_AUTH_SECRET exists
 if (!process.env.RUNNER_AUTH_SECRET) {
@@ -108,7 +117,12 @@ app.use(
   secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      // The inline `<script type="importmap">` injected into index.html (lets
+      // full-trust visualizer plugins share the host's React) is allowed via a
+      // SHA-256 hash of its exact contents — keeping script-src otherwise strict
+      // ('self' only, no 'unsafe-inline'). The hash derives from the same
+      // constant the client injects, so the two can never drift.
+      scriptSrc: ["'self'", VISUALIZER_IMPORT_MAP_CSP_HASH],
       // Monaco editor workers are bundled via Vite's `?worker` imports and
       // served from same-origin in prod; dev builds may use blob: URLs.
       workerSrc: ["'self'", 'blob:'],

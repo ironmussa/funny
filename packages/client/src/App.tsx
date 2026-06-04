@@ -36,9 +36,14 @@ import { ThreadProvider } from '@/stores/thread-context';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
+import { installVisualizerHostGlobals } from '@/visualizers/host-runtime';
 
-// Register the built-in visualizers (Mermaid) once, before any markdown or file
-// preview renders. Installed third-party visualizers load on top later.
+// Visualizer plugin system, before any render:
+//  1. Expose the host's React + SDK on globalThis so dynamically-imported
+//     plugins resolve `react` / `@funny/host` via the import map to the host's
+//     own instances (shared React, no "Invalid hook call").
+//  2. Register the built-in visualizers (Mermaid).
+installVisualizerHostGlobals();
 registerBuiltinVisualizers();
 
 const AppSidebar = lazy(() =>

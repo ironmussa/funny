@@ -91,6 +91,7 @@
         "@fontsource/jetbrains-mono": "^5.2.8",
         "@fontsource/noto-sans": "^5.2.10",
         "@fontsource/noto-sans-mono": "^5.2.10",
+        "@funny/host": "workspace:*",
         "@funny/shared": "workspace:*",
         "@iconify-json/vscode-icons": "^1.2.44",
         "@iconify/react": "^6.0.2",
@@ -242,6 +243,19 @@
       "devDependencies": {
         "@types/bun": "^1.3.8",
         "typescript": "^5.8.2",
+      },
+    },
+    "packages/host": {
+      "name": "@funny/host",
+      "version": "1.0.0",
+      "dependencies": {
+        "@funny/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/react": "^19.0.0",
+      },
+      "peerDependencies": {
+        "react": ">=19",
       },
     },
     "packages/memory": {
@@ -697,6 +711,8 @@
     "@funny/design-client": ["@funny/design-client@workspace:packages/design-client"],
 
     "@funny/evflow": ["@funny/evflow@workspace:packages/evflow"],
+
+    "@funny/host": ["@funny/host@workspace:packages/host"],
 
     "@funny/memory": ["@funny/memory@workspace:packages/memory"],
 

@@ -1,25 +1,13 @@
-import type { VisualizerManifest } from '@funny/shared';
-import type { ComponentType } from 'react';
+import type { VisualizerPlugin, VisualizerProps } from '@funny/host';
 
 import { createClientLogger } from '@/lib/client-logger';
 
+// The host↔plugin contract types live in `@funny/host` (the public author SDK)
+// so built-ins and third-party plugins share one definition. Re-exported here
+// for in-tree consumers that already depend on the registry.
+export type { VisualizerPlugin, VisualizerProps } from '@funny/host';
+
 const log = createClientLogger('visualizers');
-
-/** Props a visualizer component receives. Kept minimal — because plugins share
- *  the host's React tree (full-trust model), they read theme / font size from
- *  host hooks rather than via props. (In milestone 2 these types move to the
- *  public `@funny/host` SDK and this file re-exports them.) */
-export interface VisualizerProps {
-  /** The source text to render (fenced-block contents or file contents). */
-  source: string;
-  /** True when rendered as a full file-preview pane rather than an inline block. */
-  fill?: boolean;
-}
-
-/** A registered visualizer: serializable manifest plus its React component. */
-export interface VisualizerPlugin extends VisualizerManifest {
-  Component: ComponentType<VisualizerProps>;
-}
 
 const byFence = new Map<string, VisualizerPlugin>();
 const byExt = new Map<string, VisualizerPlugin>();

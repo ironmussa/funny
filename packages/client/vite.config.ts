@@ -1,7 +1,24 @@
 import { resolve } from 'path';
 
+import { VISUALIZER_IMPORT_MAP_JSON } from '@funny/shared/visualizer-importmap';
 import react from '@vitejs/plugin-react';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+
+/**
+ * Inject the visualizer import map into index.html so dynamically-loaded
+ * visualizer plugins resolve `react` / `@funny/host` to the host's instances.
+ * The inner text must be byte-identical to what the server hashes for CSP
+ * (`script-src 'sha256-…'`), so both use `VISUALIZER_IMPORT_MAP_JSON` verbatim.
+ */
+function visualizerImportMap(): Plugin {
+  return {
+    name: 'funny-visualizer-importmap',
+    transformIndexHtml(html) {
+      const tag = `<script type="importmap">${VISUALIZER_IMPORT_MAP_JSON}</script>`;
+      return html.replace('</head>', `    ${tag}\n  </head>`);
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   // Load env from both the monorepo root and the package dir (package-level overrides root)
@@ -25,7 +42,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir: monorepoRoot,
-    plugins: [react()],
+    plugins: [react(), visualizerImportMap()],
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),

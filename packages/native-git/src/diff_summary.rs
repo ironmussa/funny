@@ -3,7 +3,8 @@ use std::path::Path;
 
 use gix::bstr::{BString, ByteSlice};
 
-use crate::commit_info::{count_diff_lines, count_lines};
+use crate::blob_diff::count_diff_lines;
+use crate::commit_info::count_lines;
 use crate::repo_cache::with_repo;
 
 /// Skip line-counting for untracked/working-tree files larger than this.

@@ -9,15 +9,16 @@ crate-type = ["cdylib"]
 [dependencies]
 napi = { version = "3.8", default-features = false, features = ["napi8", "async"] }
 napi-derive = "3.5"
-gix = { version = "0.80", default-features = false, features = [
+gix = { version = "0.84", default-features = false, features = [
   "status",
   "revision",
   "dirwalk",
   "blob-diff",
   "index",
   "attributes",
+  "sha1",
 ] }
-gix-status = "0.27"
+gix-status = "0.31"
 lru = "0.12"
 
 [build-dependencies]

@@ -7,8 +7,8 @@ use lru::LruCache;
 /// Maximum number of cached repository handles per libuv worker thread.
 const CACHE_CAPACITY: usize = 8;
 
-/// Time-to-live for cached handles. After this duration, a fresh `gix::open()`
-/// is forced to pick up any external changes (e.g. refs modified by CLI git).
+/// Time-to-live for cached handles. After this duration, `Repository::reload()`
+/// is called to pick up external changes (e.g. refs modified by CLI git).
 const CACHE_TTL: Duration = Duration::from_secs(10);
 
 struct CachedRepo {
@@ -24,8 +24,9 @@ thread_local! {
 /// Execute a closure with a cached `gix::Repository` handle.
 ///
 /// If a handle for `cwd` exists in this thread's cache and its TTL has not
-/// expired, it is reused. Otherwise, `gix::open(cwd)` is called and the
-/// result is stored in the LRU cache.
+/// expired, it is reused. When expired, `Repository::reload()` refreshes config
+/// and drops caches without a full re-open. Otherwise, `gix::open(cwd)` is
+/// called and the result is stored in the LRU cache.
 ///
 /// The closure receives a shared `&gix::Repository` reference. Because the
 /// entire call happens inside `REPO_CACHE.with()`, the borrow is scoped
@@ -40,13 +41,15 @@ pub(crate) fn with_repo<T>(
     REPO_CACHE.with(|cache| {
         let mut map = cache.borrow_mut();
 
-        // Check if cached and not expired
-        let needs_open = match map.get(cwd) {
-            Some(cached) if cached.opened_at.elapsed() < CACHE_TTL => false,
-            _ => true,
-        };
-
-        if needs_open {
+        if let Some(entry) = map.get_mut(cwd) {
+            if entry.opened_at.elapsed() >= CACHE_TTL {
+                entry
+                    .repo
+                    .reload()
+                    .map_err(|e| napi::Error::from_reason(format!("Failed to reload repo: {e}")))?;
+                entry.opened_at = Instant::now();
+            }
+        } else {
             let repo = gix::open(cwd)
                 .map_err(|e| napi::Error::from_reason(format!("Failed to open repo: {e}")))?;
             map.put(

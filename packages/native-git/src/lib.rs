@@ -2,6 +2,7 @@
 extern crate napi_derive;
 
 mod repo_cache;
+mod blob_diff;
 mod status_summary;
 mod diff_summary;
 mod branch;

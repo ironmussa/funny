@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use gix::bstr::ByteSlice;
 
+use crate::blob_diff::diff_hunks;
 use crate::repo_cache::with_repo;
 
 /// Default context lines around changes (matches git default).
@@ -17,31 +18,6 @@ fn is_binary(data: &[u8]) -> bool {
   }
   let check_len = data.len().min(8192);
   data[..check_len].contains(&0)
-}
-
-/// Sink that collects change ranges for later formatting.
-struct UnifiedDiffCollector {
-  changes: Vec<(std::ops::Range<u32>, std::ops::Range<u32>)>,
-}
-
-impl UnifiedDiffCollector {
-  fn new() -> Self {
-    Self {
-      changes: Vec::new(),
-    }
-  }
-}
-
-impl gix::diff::blob::Sink for UnifiedDiffCollector {
-  type Out = Vec<(std::ops::Range<u32>, std::ops::Range<u32>)>;
-
-  fn process_change(&mut self, before: std::ops::Range<u32>, after: std::ops::Range<u32>) {
-    self.changes.push((before, after));
-  }
-
-  fn finish(self) -> Self::Out {
-    self.changes
-  }
 }
 
 /// Split byte data into lines (preserving content, splitting on \n).
@@ -227,11 +203,7 @@ fn compute_and_format_with_context(
 
   let old_lines = split_lines(old);
   let new_lines = split_lines(new);
-
-  let input = gix::diff::blob::intern::InternedInput::new(old, new);
-  let collector = UnifiedDiffCollector::new();
-  let changes =
-    gix::diff::blob::diff(gix::diff::blob::Algorithm::Histogram, &input, collector);
+  let changes = diff_hunks(old, new);
 
   format_unified_diff(&old_lines, &new_lines, &changes, path, path, is_new, is_deleted, context_lines)
 }
@@ -286,10 +258,6 @@ fn diff_file_with_context(
   })
 }
 
-fn diff_staged_file(repo: &gix::Repository, file_path: &str) -> napi::Result<String> {
-  diff_staged_file_ctx(repo, file_path, CONTEXT_LINES)
-}
-
 fn diff_staged_file_ctx(repo: &gix::Repository, file_path: &str, context_lines: u32) -> napi::Result<String> {
   // Get blob from HEAD tree
   let old_data: Option<Vec<u8>> = (|| {
@@ -324,15 +292,6 @@ fn diff_staged_file_ctx(repo: &gix::Repository, file_path: &str, context_lines: 
     new_data.is_none(),
     context_lines,
   ))
-}
-
-fn diff_unstaged_file(
-  repo: &gix::Repository,
-  worktree_path: &PathBuf,
-  file_path: &str,
-  index: &gix::index::File,
-) -> napi::Result<String> {
-  diff_unstaged_file_ctx(repo, worktree_path, file_path, index, CONTEXT_LINES)
 }
 
 fn diff_unstaged_file_ctx(
@@ -376,10 +335,6 @@ fn diff_unstaged_file_ctx(
     new_data.is_none(),
     context_lines,
   ))
-}
-
-fn diff_untracked_file(worktree_path: &PathBuf, file_path: &str) -> napi::Result<String> {
-  diff_untracked_file_ctx(worktree_path, file_path, CONTEXT_LINES)
 }
 
 fn diff_untracked_file_ctx(worktree_path: &PathBuf, file_path: &str, context_lines: u32) -> napi::Result<String> {

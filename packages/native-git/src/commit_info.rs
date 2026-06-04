@@ -1,7 +1,7 @@
 use gix::bstr::ByteSlice;
 
+use crate::blob_diff::count_diff_lines;
 use crate::repo_cache::with_repo;
-use crate::status_summary::LineCounter;
 
 #[napi(object)]
 #[derive(Debug, Clone)]
@@ -70,23 +70,6 @@ pub(crate) fn count_lines(data: &[u8]) -> u32 {
     n += 1;
   }
   n
-}
-
-pub(crate) fn count_diff_lines(old: &[u8], new: &[u8]) -> (u32, u32) {
-  let is_bin = |d: &[u8]| -> bool {
-    if d.is_empty() {
-      return false;
-    }
-    let c = d.len().min(8192);
-    d[..c].contains(&0)
-  };
-  if is_bin(old) || is_bin(new) {
-    return (0, 0);
-  }
-
-  let input = gix::diff::blob::intern::InternedInput::new(old, new);
-  let counter = LineCounter::default();
-  gix::diff::blob::diff(gix::diff::blob::Algorithm::Histogram, &input, counter)
 }
 
 #[napi]

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use gix::bstr::{BString, ByteSlice};
 use gix::worktree::stack::state::attributes::Source as AttrSource;
 
+use crate::blob_diff::count_diff_lines;
 use crate::repo_cache::with_repo;
 
 const MAX_UNTRACKED_TO_COUNT: usize = 200;
@@ -80,30 +81,7 @@ fn count_lines_for_entry(
     return (0, 0);
   }
 
-  // Use imara-diff for accurate line counting
-  let input = gix::diff::blob::intern::InternedInput::new(old_bytes, new_bytes);
-  let counter = LineCounter::default();
-  gix::diff::blob::diff(gix::diff::blob::Algorithm::Histogram, &input, counter)
-}
-
-/// Sink for imara-diff that counts added and deleted lines.
-#[derive(Default)]
-pub(crate) struct LineCounter {
-  pub(crate) added: u32,
-  pub(crate) deleted: u32,
-}
-
-impl gix::diff::blob::Sink for LineCounter {
-  type Out = (u32, u32);
-
-  fn process_change(&mut self, before: std::ops::Range<u32>, after: std::ops::Range<u32>) {
-    self.deleted += before.end - before.start;
-    self.added += after.end - after.start;
-  }
-
-  fn finish(self) -> Self::Out {
-    (self.added, self.deleted)
-  }
+  count_diff_lines(old_bytes, new_bytes)
 }
 
 /// Check `.gitattributes` to determine if a file should be treated as binary.

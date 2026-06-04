@@ -92,6 +92,15 @@ export default defineConfig(({ mode }) => {
           ws: true,
           changeOrigin: true,
         },
+        // Installed visualizer extension bundles are served by the funny server
+        // (from ~/.funny/extensions), not by Vite. In dev the app loads from
+        // Vite (5173), so the browser's dynamic `import('/extensions/.../index.mjs')`
+        // must be proxied to the server (3001) or it 404s against Vite.
+        // (In prod a single server serves both the client and /extensions.)
+        '/extensions': {
+          target: serverTarget,
+          changeOrigin: true,
+        },
       },
     },
   };

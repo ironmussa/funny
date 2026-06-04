@@ -9,7 +9,7 @@ import { useActiveThreadId } from './use-active-thread-id';
  * tracks loading via `selectThread`'s in-flight slot, not per-id error).
  *
  * Part of the route-driven-threads migration — see
- * `docs/route-driven-threads-plan.md` (Phase 3). This is the eventual drop-in
+ * `docs/rfc/route-driven-threads.md` (Phase 3). This is the eventual drop-in
  * replacement for the `selectedThreadId`-keyed `useActiveThread()` once readers
  * derive the active id from the URL.
  */

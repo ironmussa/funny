@@ -9,7 +9,7 @@
  * prefix stay correct in one spot.
  *
  * Part of the route-driven-threads migration — see
- * `docs/route-driven-threads-plan.md`.
+ * `docs/rfc/route-driven-threads.md`.
  */
 
 import type { Thread } from '@funny/shared';

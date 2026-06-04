@@ -101,8 +101,6 @@ services:
 
 ## Configuration
 
-Via environment variables with sensible defaults:
-
 | Env Var                       | Default                 | Description                 |
 | ----------------------------- | ----------------------- | --------------------------- |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP HTTP endpoint (Vector) |
@@ -126,18 +124,18 @@ Server's `shutdown()` calls `observabilityShutdown()` to flush pending telemetry
 
 ## Implementation Steps
 
-1. **Create `packages/observability/`** — `package.json`, `tsconfig.json`
-2. **Create `docker-compose.yml`** — Vector + 3 Victoria services
-3. **Create `vector.toml`** — OTLP source, 3 sinks (metrics, logs, traces)
-4. **Implement `config.ts`** — read env vars, build OTel resource
-5. **Implement `exporter.ts`** — OTLP HTTP exporters for metrics + traces
-6. **Implement `tracer.ts`** — TracerProvider with OTLP exporter
-7. **Implement `metrics.ts`** — MeterProvider with HTTP instruments
-8. **Implement `middleware.ts`** — Hono middleware (spans + metrics per request)
-9. **Implement `index.ts`** — public API, init, shutdown, re-exports
-10. **Wire into server** — add dependency + middleware + shutdown call
-11. **Run `bun install`** — link workspace package
-12. **Verify** — `bun run build` to confirm compilation
+1. Create `packages/observability/` — `package.json`, `tsconfig.json`
+2. Create `docker-compose.yml` — Vector + 3 Victoria services
+3. Create `vector.toml` — OTLP source, 3 sinks (metrics, logs, traces)
+4. Implement `config.ts` — read env vars, build OTel resource
+5. Implement `exporter.ts` — OTLP HTTP exporters for metrics + traces
+6. Implement `tracer.ts` — TracerProvider with OTLP exporter
+7. Implement `metrics.ts` — MeterProvider with HTTP instruments
+8. Implement `middleware.ts` — Hono middleware (spans + metrics per request)
+9. Implement `index.ts` — public API, init, shutdown, re-exports
+10. Wire into server — add dependency + middleware + shutdown call
+11. Run `bun install` — link workspace package
+12. Verify — `bun run build` to confirm compilation
 
 ## Usage
 

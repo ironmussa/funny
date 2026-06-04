@@ -1,5 +1,7 @@
 # Node.js OS Communication & Process Execution Strategy
 
+> **Note:** Design proposal from early development. Current git/shell execution lives in [`packages/core/src/git/process.ts`](../../packages/core/src/git/process.ts) (`spawn` + `p-limit`, not execa).
+
 ## Current State Analysis
 
 ### Issues Identified

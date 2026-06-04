@@ -14,7 +14,7 @@ import { parseRoute } from './route-parser';
  * the transient divergence the route-sync invariant guard exists to paper over.
  *
  * Part of the route-driven-threads migration — see
- * `docs/route-driven-threads-plan.md` (Phase 3).
+ * `docs/rfc/route-driven-threads.md` (Phase 3).
  */
 export function useActiveThreadId(): string | null {
   const { pathname } = useLocation();

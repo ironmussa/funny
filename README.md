@@ -338,7 +338,7 @@ bunx playwright install chromium
 
 **Send** → creates a thread with the URL + annotations as the first message + draw image attached. Annotations are formatted via [`browser-panel-markdown.ts`](packages/client/src/lib/browser-panel-markdown.ts).
 
-The CDP implementation lives in [`packages/runtime/src/services/browser-session-manager.ts`](packages/runtime/src/services/browser-session-manager.ts) (runner side) and [`packages/client/src/components/browser-panel/`](packages/client/src/components/browser-panel/) (client side). Background and design decisions: [`openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/`](openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/). Screenshot follow-ups for non-CDP contexts: [`docs/browser-panel-screenshot.md`](docs/browser-panel-screenshot.md).
+The CDP implementation lives in [`packages/runtime/src/services/browser-session-manager.ts`](packages/runtime/src/services/browser-session-manager.ts) (runner side) and [`packages/client/src/components/browser-panel/`](packages/client/src/components/browser-panel/) (client side). Background and design decisions: [`openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/`](openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/). Screenshot follow-ups for non-CDP contexts: [`docs/design/browser-panel-screenshot.md`](docs/design/browser-panel-screenshot.md).
 
 ## Development
 

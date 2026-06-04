@@ -9,7 +9,7 @@
  * Why a facade: navigation IS selection. Today selection is still a store
  * pointer (`selectedThreadId`) hydrated by `selectThread`, so the facade kicks
  * that hydration internally — but it does so in ONE place. The route-driven
- * migration (see `docs/route-driven-threads-plan.md`) later swaps the internal
+ * migration (see `docs/rfc/route-driven-threads.md`) later swaps the internal
  * `selectThread` for the route boundary's `ensureLoaded` and derives selection
  * from `useParams()`; callers of `goToThread` stay unchanged across that move.
  *

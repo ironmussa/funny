@@ -4,7 +4,7 @@
 
 ## Why it's disabled today
 
-Screenshot in [ToolToolbar.tsx](../packages/client/src/components/browser-panel/ToolToolbar.tsx) calls `browserSessionClient.screenshot(sessionId)` which uses CDP `Page.captureScreenshot`. In iframe mode there is no CDP session, so the call has no backend.
+Screenshot in [ToolToolbar.tsx](../../packages/client/src/components/browser-panel/ToolToolbar.tsx) calls `browserSessionClient.screenshot(sessionId)` which uses CDP `Page.captureScreenshot`. In iframe mode there is no CDP session, so the call has no backend.
 
 `cdpReady = USE_CDP && sessionStatus === 'ready' && sessionId !== null` — when `USE_CDP` is `false`, the button stays disabled with tooltip "Requires browser session".
 

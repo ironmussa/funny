@@ -128,11 +128,14 @@ export function stashFileDiff(
   }
   return ResultAsync.fromPromise(
     (async () => {
-      const result = await gitRead(['stash', 'show', '-p', stashRef, '--', filePath], {
+      // `git stash show -p -- <path>` returns empty for per-file diffs; compare the
+      // stash commit against its first parent instead (matches native getStashFileDiff).
+      const result = await gitRead(['diff', `${stashRef}^1`, stashRef, '--', filePath], {
         cwd,
         reject: false,
       });
-      return result.exitCode === 0 ? result.stdout : '';
+      if (result.exitCode !== 0 && result.exitCode !== 1) return '';
+      return result.stdout;
     })(),
     (error) => internal(String(error)),
   );

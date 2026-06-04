@@ -28,6 +28,7 @@ import {
   stash,
   stashPop,
   stashList,
+  stashFileDiff,
   resetSoft,
   pull,
   push,
@@ -555,6 +556,29 @@ describe('git operations', () => {
         expect(result.value.length).toBe(1);
         expect(result.value[0].index).toBe('stash@{0}');
         expect(result.value[0].message).toContain('my stash message');
+      }
+    });
+  });
+
+  describe('stashFileDiff', () => {
+    test('returns unified diff for a stashed file (CLI fallback)', async () => {
+      writeFileSync(resolve(repoPath, 'stashed.txt'), 'line1\n');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      executeSync('git', ['commit', '-m', 'init'], { cwd: repoPath });
+      writeFileSync(resolve(repoPath, 'stashed.txt'), 'line1\nline2\nline3\n');
+      executeSync('git', ['stash', 'push', '-m', 'test stash', '--', 'stashed.txt'], {
+        cwd: repoPath,
+        reject: false,
+      });
+
+      const result = await stashFileDiff(repoPath, 'stash@{0}', 'stashed.txt');
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toContain('+++ b/stashed.txt');
+        const additions = result.value
+          .split('\n')
+          .filter((line) => line.startsWith('+') && !line.startsWith('+++')).length;
+        expect(additions).toBe(2);
       }
     });
   });

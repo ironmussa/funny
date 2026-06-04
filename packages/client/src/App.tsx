@@ -28,6 +28,7 @@ import { useWS } from '@/hooks/use-ws';
 import { canDoGitOps } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { TOAST_DURATION } from '@/lib/utils';
+import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
@@ -208,6 +209,9 @@ export function App() {
     loadProjects();
     loadTemplates();
     loadScratchThreads();
+    // Load installed visualizer extensions (best-effort; failures are logged
+    // and never block the app). Runs after auth since AuthGate gates App.
+    void loadInstalledVisualizers();
   }, [loadProjects, loadTemplates, loadScratchThreads]);
 
   useDocumentTitle();

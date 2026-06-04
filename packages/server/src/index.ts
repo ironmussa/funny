@@ -277,6 +277,9 @@ app.route('/api/agent-templates', agentTemplateRoutes);
 app.route('/api/orchestrator/system', orchestratorSystemRoutes);
 app.route('/api/orchestrator', orchestratorRoutes);
 
+const { extensionRoutes } = await import('./routes/extensions.js');
+app.route('/api/extensions', extensionRoutes);
+
 // Setup status — proxy to runner
 app.get('/api/setup/status', async (c) => {
   return c.json({
@@ -289,6 +292,30 @@ app.get('/api/setup/status', async (c) => {
 // ── Proxy catch-all: forward remaining API requests to runner ──
 const { proxyToRunner } = await import('./middleware/proxy.js');
 app.all('/api/*', proxyToRunner);
+
+// ── Installed client extensions (visualizer plugins) ──────
+// Serve pre-built ESM assets from <DATA_DIR>/extensions/<name>/. Registered
+// before the static client + SPA catch-all so these paths are not shadowed.
+// Not under /api, so unauthenticated like the rest of the client bundle; the
+// browser dynamically imports these as same-origin modules (script-src 'self').
+// Path traversal + symlink escape are blocked by `resolveExtensionAsset`.
+const { resolveExtensionAsset, extensionAssetContentType } = await import('./lib/extensions.js');
+app.get('/extensions/:name/*', async (c) => {
+  const name = c.req.param('name');
+  const prefix = `/extensions/${name}/`;
+  const rest = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : '';
+  let relPath: string;
+  try {
+    relPath = decodeURIComponent(rest);
+  } catch {
+    return c.notFound();
+  }
+  const file = resolveExtensionAsset(decodeURIComponent(name), relPath);
+  if (!file) return c.notFound();
+  c.header('Content-Type', extensionAssetContentType(file));
+  c.header('Cache-Control', 'public, max-age=3600');
+  return c.body(await Bun.file(file).arrayBuffer());
+});
 
 // Serve static files from client build (only if dist exists)
 // Security L3: static responses inherit X-Content-Type-Options: nosniff from

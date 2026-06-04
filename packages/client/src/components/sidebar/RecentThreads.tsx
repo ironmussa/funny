@@ -9,6 +9,8 @@ import { useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
+import { goToThread } from '@/navigation/go-to-thread';
+import { buildThreadPath } from '@/navigation/thread-paths';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -105,29 +107,8 @@ export function RecentThreads({
             projectColor={thread.projectColor}
             timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
             gitStatus={statusByBranch[computeBranchKey(thread)]}
-            href={buildPath(`/projects/${thread.projectId}/threads/${thread.id}`)}
-            onSelect={() => {
-              // Set project + thread state synchronously in the same React
-              // batch so the sidebar's auto-scroll effect fires *once* with
-              // both new values and scrolls directly to the thread row.
-              // Without setting selectedThreadId now, the effect would fire
-              // first for the project change (scrolling to the header), then
-              // again later when useRouteSync resolves the thread fetch —
-              // producing the visible "first jump to project, then jump to
-              // thread" behavior.
-              const projectStore = useProjectStore.getState();
-              if (!projectStore.expandedProjects.has(thread.projectId)) {
-                projectStore.toggleProject(thread.projectId);
-              }
-              if (projectStore.selectedProjectId !== thread.projectId) {
-                projectStore.selectProject(thread.projectId);
-              }
-              const store = useThreadStore.getState();
-              if (store.selectedThreadId !== thread.id) {
-                store.selectThread(thread.id);
-              }
-              navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-            }}
+            href={buildThreadPath(thread)}
+            onSelect={() => goToThread(navigate, thread)}
             onRename={(newTitle: string) => onRenameThread(thread.id, thread.projectId, newTitle)}
             onArchive={() =>
               onArchiveThread(

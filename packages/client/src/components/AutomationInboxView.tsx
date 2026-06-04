@@ -19,6 +19,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { cleanThreadTitle } from '@/lib/thread-title';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { goToThread } from '@/navigation/go-to-thread';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -313,7 +314,7 @@ export function AutomationInboxView() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setAutomationInboxOpen(false);
-                          navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
+                          goToThread(navigate, thread);
                         }}
                       >
                         View Thread

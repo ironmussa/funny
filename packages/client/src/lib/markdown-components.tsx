@@ -2,10 +2,10 @@ import { Check, Copy } from 'lucide-react';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import remarkGfm from 'remark-gfm';
 
-import { MermaidBlock } from '@/components/MermaidBlock';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import { getVisualizerForFence } from '@/lib/visualizer-registry';
 
 import { cn } from './utils';
 
@@ -51,19 +51,6 @@ const LazyNestedMarkdown = lazy(() =>
     }),
   ),
 );
-
-function MermaidCodeBlock({ chart }: { chart: string }) {
-  return (
-    <div className="my-2">
-      <div className="overflow-x-auto rounded bg-muted p-2">
-        <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
-          mermaid
-        </div>
-        <MermaidBlock chart={chart} />
-      </div>
-    </div>
-  );
-}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, copy] = useCopyToClipboard();
@@ -153,8 +140,9 @@ export const baseMarkdownComponents = {
     const isBlock = className?.startsWith('language-');
     if (isBlock) {
       const language = className.replace('language-', '');
-      // Markdown and mermaid blocks are rendered by the pre handler, just pass children through
-      if (MARKDOWN_LANGS.has(language) || language === 'mermaid') return <>{children}</>;
+      // Markdown and visualizer blocks are rendered by the pre handler — just
+      // pass children through so the pre handler gets the raw source.
+      if (MARKDOWN_LANGS.has(language) || getVisualizerForFence(language)) return <>{children}</>;
       const code = extractText(children).replace(/\n$/, '');
       return <HighlightedCode code={code} language={language} />;
     }
@@ -181,9 +169,21 @@ export const baseMarkdownComponents = {
     const langClass = children?.props?.className;
     const language = langClass?.startsWith('language-') ? langClass.replace('language-', '') : null;
 
-    // Mermaid blocks: render diagram inside a card with expand + copy buttons
-    if (language === 'mermaid') {
-      return <MermaidCodeBlock chart={text} />;
+    // Visualizer blocks (mermaid, installed extensions): render inside a card
+    // with a language header. Dispatched through the visualizer registry.
+    const visualizer = language ? getVisualizerForFence(language) : undefined;
+    if (visualizer) {
+      const Visualizer = visualizer.Component;
+      return (
+        <div className="my-2">
+          <div className="overflow-x-auto rounded bg-muted p-2">
+            <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
+              {language}
+            </div>
+            <Visualizer source={text} />
+          </div>
+        </div>
+      );
     }
 
     const isMarkdown =

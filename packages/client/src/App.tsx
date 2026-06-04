@@ -35,6 +35,11 @@ import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
+import { registerBuiltinVisualizers } from '@/visualizers/builtin';
+
+// Register the built-in visualizers (Mermaid) once, before any markdown or file
+// preview renders. Installed third-party visualizers load on top later.
+registerBuiltinVisualizers();
 
 const AppSidebar = lazy(() =>
   import('@/components/Sidebar').then((m) => ({ default: m.AppSidebar })),

@@ -155,6 +155,8 @@ export type {
 
 export type { PluginCommand, Plugin, PluginListResponse } from './types/plugins.js';
 
+export type { VisualizerContributes, VisualizerManifest } from './types/visualizer.js';
+
 export type {
   FileStatus,
   FileDiffKind,

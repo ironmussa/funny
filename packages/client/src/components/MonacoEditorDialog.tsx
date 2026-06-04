@@ -19,7 +19,6 @@ import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
-import { MermaidBlock } from '@/components/MermaidBlock';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -35,6 +34,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
 import { cn } from '@/lib/utils';
+import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 interface MonacoEditorDialogProps {
@@ -66,14 +66,19 @@ export function MonacoEditorDialog({
   const ext = getFileExtension(filePath);
   const language = getMonacoLanguage(ext, filePath);
   const isMarkdown = language === 'markdown';
+  // A visualizer registered for this file's extension (e.g. an installed CSV
+  // plugin) also enables preview. Built-ins claim no file extensions, so for
+  // them `canPreview` reduces to `isMarkdown` (no behavior change).
+  const fileVisualizer = getVisualizerForFileExt(ext);
+  const canPreview = isMarkdown || !!fileVisualizer;
 
-  const [showPreview, setShowPreview] = useState(isMarkdown);
+  const [showPreview, setShowPreview] = useState(canPreview);
   const [copied, copy] = useCopyToClipboard();
 
-  // When the dialog opens or the file changes, default markdown files to preview mode.
+  // When the dialog opens or the file changes, default previewable files to preview mode.
   useEffect(() => {
-    if (open) setShowPreview(isMarkdown);
-  }, [open, filePath, isMarkdown]);
+    if (open) setShowPreview(canPreview);
+  }, [open, filePath, canPreview]);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -101,7 +106,7 @@ export function MonacoEditorDialog({
   }, [searchQuery]);
 
   const isDirty = content !== originalContent;
-  const inCodeView = !(showPreview && isMarkdown);
+  const inCodeView = !(showPreview && canPreview);
 
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
   const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
@@ -360,7 +365,7 @@ export function MonacoEditorDialog({
             </TooltipTrigger>
             <TooltipContent side="bottom">{t('editor.copy', 'Copy')}</TooltipContent>
           </Tooltip>
-          {isMarkdown && (
+          {canPreview && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -457,6 +462,8 @@ export function MonacoEditorDialog({
                 {renderedMarkdown}
               </div>
             </ScrollArea>
+          ) : showPreview && fileVisualizer ? (
+            <fileVisualizer.Component source={content} fill />
           ) : (
             <Suspense fallback={<div className="h-full" />}>
               <MonacoCodeView
@@ -481,8 +488,10 @@ const markdownPreviewComponents: Components = {
     const match = /language-(\w+)/.exec(className || '');
     const lang = match?.[1];
 
-    if (lang === 'mermaid') {
-      return <MermaidBlock chart={String(children).trim()} />;
+    const visualizer = lang ? getVisualizerForFence(lang) : undefined;
+    if (visualizer) {
+      const Visualizer = visualizer.Component;
+      return <Visualizer source={String(children).trim()} />;
     }
 
     if (className) {

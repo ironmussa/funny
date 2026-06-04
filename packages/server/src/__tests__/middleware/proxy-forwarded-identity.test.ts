@@ -27,7 +27,13 @@ mock.module('../../services/ws-relay.js', () => createWsRelayMock(() => false));
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
   TunnelTimeoutError: MockTunnelTimeoutError,
-  isTunnelTimeoutError: () => false,
+  isTunnelTimeoutError: (err: unknown) =>
+    err instanceof MockTunnelTimeoutError ||
+    (typeof err === 'object' &&
+      err !== null &&
+      (err as Error).name === 'TunnelTimeoutError' &&
+      'runnerId' in err &&
+      'timeoutMs' in err),
   tunnelFetch: async () => {
     throw new Error('not used');
   },
@@ -126,11 +132,6 @@ describe('proxyToRunner — forwarded identity signature payload', () => {
   });
 
   test('regression: parallel proxied requests each produce a unique signature + nonce that verifies', async () => {
-    // Reproduces the browser-refresh 401 burst: many requests in the same ms,
-    // identical signed identity, all must verify. Pre-fix, the runtime's
-    // replay cache rejected all but the first because identical canonical
-    // payloads collapsed to identical signatures. Post-fix, the per-request
-    // nonce makes every signature distinct.
     const app = new Hono<ServerEnv>();
     app.use('*', async (c, next) => {
       c.set('userId', 'user-1');
@@ -149,7 +150,6 @@ describe('proxyToRunner — forwarded identity signature payload', () => {
     expect(sigs.size).toBe(10);
     expect(nonces.size).toBe(10);
 
-    // Every captured request verifies independently.
     for (const h of capturedHeadersByCall) {
       expect(
         verifyForwardedIdentity(

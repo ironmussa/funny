@@ -6,6 +6,8 @@
 # smaller testable modules).
 
 [test]
+# Serial test files — mock.module for ws-tunnel/ws-relay is order-sensitive with proxy.js.
+maxConcurrency = 1
 coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [
   # UI-only routes — no server logic worth gating yet.

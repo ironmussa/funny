@@ -100,9 +100,13 @@ A plugin is an **ESM package** that:
 3. **default-exports** a `VisualizerPlugin`, and
 4. points `package.json` → **`funny.client`** at the built entry.
 
-A complete, working reference lives at
-[`examples/funny-visualizer-csv`](../examples/funny-visualizer-csv) — copy it as
-a starting point.
+Two complete, working references to copy from:
+[`examples/funny-visualizer-csv`](../examples/funny-visualizer-csv) (a simple
+table — minimal, no extra deps) and
+[`examples/funny-visualizer-dbml`](../examples/funny-visualizer-dbml) (a DBML →
+interactive ER diagram built on React Flow — shows how to bundle heavy deps
+`@dbml/parse` + `@xyflow/react` + `@dagrejs/dagre` into a decoupled plugin and
+inject a vendored stylesheet at runtime).
 
 ### The contract
 

@@ -1,0 +1,29 @@
+{
+  "name": "funny-visualizer-dbml",
+  "version": "0.1.0",
+  "description": "DBML ER-diagram visualizer for funny — renders ```dbml fences and .dbml files as an interactive entity-relationship diagram (React Flow).",
+  "type": "module",
+  "private": true,
+  "funny": {
+    "client": "dist/index.mjs"
+  },
+  "scripts": {
+    "build": "esbuild src/index.tsx --bundle --format=esm --jsx=automatic --loader:.css=text --external:react --external:react/jsx-runtime --external:@funny/host --outfile=dist/index.mjs"
+  },
+  "peerDependencies": {
+    "@funny/host": ">=1",
+    "react": ">=19"
+  },
+  "peerDependenciesMeta": {
+    "@funny/host": { "optional": true },
+    "react": { "optional": true }
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
+    "@dbml/parse": "^8.2.3",
+    "@xyflow/react": "^12.10.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

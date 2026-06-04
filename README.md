@@ -354,7 +354,7 @@ Or manage them from **Settings → Extensions** in the UI. Plugins live on the s
 
 > **Full trust, no sandbox** — a plugin runs inside your authenticated session, like installing an npm package. Install only what you trust. Installing/removing is admin-only.
 
-Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference plugin: [`examples/funny-visualizer-csv`](examples/funny-visualizer-csv).
+Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference plugins: [`examples/funny-visualizer-csv`](examples/funny-visualizer-csv) (simple table) and [`examples/funny-visualizer-dbml`](examples/funny-visualizer-dbml) (DBML → interactive ER diagram, React Flow — fully decoupled, bundles its own deps).
 
 ## Development
 

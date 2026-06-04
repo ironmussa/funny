@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const MIN_LINE_COVERAGE = Number(process.env.SERVER_COVERAGE_MIN_LINES ?? 60);
+const MIN_LINE_COVERAGE = Number(process.env.SERVER_COVERAGE_MIN_LINES ?? 65);
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const result = spawnSync('bun', ['test', '--coverage'], {

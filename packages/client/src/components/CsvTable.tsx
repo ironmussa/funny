@@ -1,18 +1,9 @@
-// Reference funny visualizer plugin (authoring source).
-//
-// Demonstrates the full host↔plugin contract:
-//   - peerDependencies on `react` + `@funny/host` (bare ESM imports; the funny
-//     host's import map resolves them to its own instances at runtime),
-//   - a default-exported `VisualizerPlugin`,
-//   - using a host hook (`useFunnyTheme`) — valid because the plugin shares the
-//     host's React tree.
-//
-// Build to ESM with `npm run build` (esbuild externalizes react + @funny/host),
-// then drop the package into `~/.funny/extensions/funny-visualizer-csv/`.
-import { useFunnyTheme, type VisualizerPlugin, type VisualizerProps } from '@funny/host';
+import { useMemo } from 'react';
+
+import { cn } from '@/lib/utils';
 
 /** Minimal RFC-4180-ish CSV parse: handles quoted fields, escaped quotes, and
- *  commas/newlines inside quotes. Good enough for a reference visualizer. */
+ *  commas / newlines inside quotes. */
 function parseCsv(input: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -53,23 +44,30 @@ function parseCsv(input: string): string[][] {
   return rows.filter((r) => r.length > 1 || (r.length === 1 && r[0] !== ''));
 }
 
-function CsvTable({ source }: VisualizerProps) {
-  const theme = useFunnyTheme();
-  const rows = parseCsv(source);
+/**
+ * Built-in CSV visualizer: renders `csv` fenced blocks and `.csv` file previews
+ * as a table. No dependencies — cheap enough to ship in the base bundle (still
+ * lazy-loaded via the visualizer registry). Font size scales with the diff CSS
+ * variable; theme comes from the surrounding CSS variables.
+ */
+export function CsvTable({ source, fill }: { source: string; fill?: boolean }) {
+  const rows = useMemo(() => parseCsv(source), [source]);
+
   if (rows.length === 0) {
-    return <div className="text-muted-foreground text-sm">Empty CSV</div>;
+    return <div className="text-sm text-muted-foreground">Empty CSV</div>;
   }
+
   const [header, ...body] = rows;
-  const border = theme === 'dark' ? '#333' : '#ddd';
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', fontSize: 'var(--diff-font-size, 13px)' }}>
+    <div className={cn('overflow-auto', fill && 'h-full')} data-testid="csv-table">
+      <table className="border-collapse text-[length:var(--diff-font-size,13px)]">
         <thead>
           <tr>
             {header.map((cell, i) => (
               <th
                 key={i}
-                style={{ border: `1px solid ${border}`, padding: '4px 8px', textAlign: 'left' }}
+                className="border border-border bg-muted/50 px-2 py-1 text-left font-medium"
               >
                 {cell}
               </th>
@@ -80,7 +78,7 @@ function CsvTable({ source }: VisualizerProps) {
           {body.map((r, ri) => (
             <tr key={ri}>
               {r.map((cell, ci) => (
-                <td key={ci} style={{ border: `1px solid ${border}`, padding: '4px 8px' }}>
+                <td key={ci} className="border border-border px-2 py-1 align-top">
                   {cell}
                 </td>
               ))}
@@ -91,12 +89,3 @@ function CsvTable({ source }: VisualizerProps) {
     </div>
   );
 }
-
-const plugin: VisualizerPlugin = {
-  id: 'funny-visualizer-csv',
-  version: '0.1.0',
-  contributes: { fences: ['csv'], fileExtensions: ['.csv'] },
-  Component: CsvTable,
-};
-
-export default plugin;

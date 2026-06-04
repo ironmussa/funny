@@ -2,8 +2,9 @@
 
 Visualizer plugins extend how funny renders content — they turn a fenced code
 block or a file preview into a rich, interactive view. funny ships **Mermaid**
-as a built-in visualizer, built on the exact same contract a third-party plugin
-uses, so anything the built-in does, your plugin can too.
+(diagrams) and **CSV** (tables) as built-in visualizers, built on the exact same
+contract a third-party plugin uses, so anything a built-in does, your plugin can
+too. Heavier / more niche renderers (e.g. DBML) ship as installable extensions.
 
 A plugin can claim:
 
@@ -59,9 +60,9 @@ funny ext remove <name>        # Remove an installed extension
 `~/.funny/extensions`. Example — install the bundled reference plugin:
 
 ```bash
-funny ext install examples/funny-visualizer-csv
+funny ext install examples/funny-visualizer-dbml
 funny ext list
-#   funny-visualizer-csv         funny-visualizer-csv@0.1.0
+#   funny-visualizer-dbml         funny-visualizer-dbml@0.1.0
 ```
 
 > The data directory honors `FUNNY_DATA_DIR` / `FUNNY_CENTRAL_DATA_DIR`, so
@@ -70,7 +71,7 @@ funny ext list
 ### 3. Manual copy
 
 ```bash
-cp -r examples/funny-visualizer-csv ~/.funny/extensions/funny-visualizer-csv
+cp -r examples/funny-visualizer-dbml ~/.funny/extensions/funny-visualizer-dbml
 ```
 
 Reload the app and the plugin is discovered.
@@ -100,13 +101,12 @@ A plugin is an **ESM package** that:
 3. **default-exports** a `VisualizerPlugin`, and
 4. points `package.json` → **`funny.client`** at the built entry.
 
-Two complete, working references to copy from:
-[`examples/funny-visualizer-csv`](../examples/funny-visualizer-csv) (a simple
-table — minimal, no extra deps) and
+A complete, working reference to copy from:
 [`examples/funny-visualizer-dbml`](../examples/funny-visualizer-dbml) (a DBML →
 interactive ER diagram built on React Flow — shows how to bundle heavy deps
 `@dbml/parse` + `@xyflow/react` + `@dagrejs/dagre` into a decoupled plugin and
-inject a vendored stylesheet at runtime).
+inject a vendored stylesheet at runtime). The CSV snippet below is an
+illustrative minimal walkthrough (CSV itself ships built-in).
 
 ### The contract
 

@@ -47,7 +47,7 @@ describe('visualizer registry', () => {
   });
 });
 
-describe('built-in visualizers (regression: Mermaid dispatch)', () => {
+describe('built-in visualizers (regression: Mermaid + CSV dispatch)', () => {
   beforeEach(() => {
     registerBuiltinVisualizers();
   });
@@ -60,8 +60,15 @@ describe('built-in visualizers (regression: Mermaid dispatch)', () => {
     expect(hasFileVisualizer('mermaid')).toBe(false);
   });
 
+  test('csv is built-in: fence + .csv file preview', () => {
+    expect(getVisualizerForFence('csv')?.id).toBe('@funny/visualizer-csv');
+    expect(hasFileVisualizer('csv')).toBe(true);
+    expect(getVisualizerForFileExt('.csv')?.id).toBe('@funny/visualizer-csv');
+  });
+
   test('re-registering the built-ins is idempotent', () => {
     registerBuiltinVisualizers();
     expect(getVisualizerForFence('mermaid')?.id).toBe('@funny/visualizer-mermaid');
+    expect(getVisualizerForFence('csv')?.id).toBe('@funny/visualizer-csv');
   });
 });

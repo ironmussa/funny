@@ -87,7 +87,7 @@ loadSavedEnv();
 
 // ── Parse CLI arguments ───────────────────────────────────
 
-const { values } = parseArgs({
+const { values, positionals } = parseArgs({
   options: {
     port: {
       type: 'string',
@@ -113,6 +113,11 @@ const { values } = parseArgs({
   },
   allowPositionals: true,
 });
+
+// ── `funny ext` — manage visualizer extensions (runs without the server) ──
+if (positionals[0] === 'ext') {
+  process.exit(await runExtCommand(positionals.slice(1)));
+}
 
 if (values.help) {
   console.log(`
@@ -236,4 +241,74 @@ if (existsSync(serverEntry)) {
   console.error('[funny] Error: Server files not found.');
   console.error('Please run "bun install" and "bun run build" first.');
   process.exit(1);
+}
+
+// ── `funny ext` implementation ────────────────────────────
+// Reuses the server's extensions lib (built dist, else source) so the on-disk
+// layout + validation stay identical to the running server. Returns an exit code.
+async function runExtCommand(args) {
+  const sub = args[0];
+  const libDist = resolve(import.meta.dir, '../packages/server/dist/lib/extensions.js');
+  const libSrc = resolve(import.meta.dir, '../packages/server/src/lib/extensions.ts');
+  const libPath = existsSync(libDist) ? libDist : libSrc;
+  let lib;
+  try {
+    lib = await import(libPath);
+  } catch (err) {
+    console.error('[funny] Could not load the extensions module:', err.message);
+    return 1;
+  }
+  const { listInstalledExtensions, installExtensionFromPath, removeExtension } = lib;
+
+  if (sub === 'list' || sub === 'ls') {
+    const exts = listInstalledExtensions();
+    if (exts.length === 0) {
+      console.log('No extensions installed.');
+      return 0;
+    }
+    for (const e of exts) {
+      console.log(`  ${e.name.padEnd(28)} ${e.id}@${e.version}`);
+    }
+    return 0;
+  }
+
+  if (sub === 'install' || sub === 'add') {
+    const src = args[1];
+    if (!src) {
+      console.error('Usage: funny ext install <path-to-package-dir>');
+      return 1;
+    }
+    const r = installExtensionFromPath(resolve(src));
+    if (r.ok) {
+      console.log(`Installed ${r.extension.id}@${r.extension.version} → ${r.extension.name}`);
+      return 0;
+    }
+    console.error(`Install failed: ${r.error}`);
+    return 1;
+  }
+
+  if (sub === 'remove' || sub === 'rm' || sub === 'uninstall') {
+    const name = args[1];
+    if (!name) {
+      console.error('Usage: funny ext remove <name>');
+      return 1;
+    }
+    const r = removeExtension(name);
+    if (r.ok) {
+      console.log(`Removed ${name}`);
+      return 0;
+    }
+    console.error(`Remove failed: ${r.error}`);
+    return 1;
+  }
+
+  console.log(`funny ext — manage visualizer extensions
+
+Usage:
+  funny ext list                 List installed extensions
+  funny ext install <path>       Install a local pre-built package directory
+  funny ext remove <name>        Remove an installed extension
+
+Extensions live in ~/.funny/extensions/. See examples/funny-visualizer-csv.`);
+  return sub ? 1 : 0; // unknown subcommand → error
 }

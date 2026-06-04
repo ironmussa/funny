@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { GeneralPage } from '@/components/PreferencesPanel';
 import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
+import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
 import { SettingRow } from '@/components/settings/SettingRow';
@@ -664,6 +665,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'organizations' && <OrganizationManagement />}
         {activePreferencesPage === 'runners' && <RunnersSettings />}
         {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
+        {activePreferencesPage === 'extensions' && <ExtensionsSettings />}
         {activePreferencesPage === 'system' && <SystemSettings />}
 
         {activePreferencesPage === 'email' && (

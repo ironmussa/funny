@@ -7,6 +7,7 @@ import {
   Mail,
   Mic,
   Palette,
+  Puzzle,
   Server,
   SlidersHorizontal,
   Sparkles,
@@ -37,6 +38,7 @@ export type GeneralPage =
   | 'organizations'
   | 'runners'
   | 'system'
+  | 'extensions'
   | 'agent-templates';
 
 export const PREFERENCES_NAV_ITEMS: Array<{
@@ -54,6 +56,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'organizations', label: 'settings.organizations', icon: Building2 },
   { id: 'runners', label: 'settings.runners', icon: Server },
   { id: 'agent-templates', label: 'settings.agentTemplates', icon: Bot },
+  { id: 'extensions', label: 'Extensions', icon: Puzzle },
   { id: 'system', label: 'settings.system', icon: Cpu },
 ];
 

@@ -4,6 +4,7 @@ import { analyticsApi } from './api/analytics';
 import { automationsApi } from './api/automations';
 import { browseApi } from './api/browse';
 import { designsApi } from './api/designs';
+import { extensionsApi } from './api/extensions';
 import { gitApi } from './api/git';
 import { githubApi } from './api/github';
 import { mcpApi } from './api/mcp';
@@ -43,4 +44,5 @@ export const api = {
   ...teamApi, // Team / Organization / Invites / Runners
   ...testsApi, // Test Runner
   ...designsApi, // Designs
+  ...extensionsApi, // Extensions (visualizer plugins)
 };

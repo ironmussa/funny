@@ -1,0 +1,20 @@
+{
+  "name": "funny-visualizer-csv",
+  "version": "0.1.0",
+  "description": "Reference funny visualizer plugin — renders CSV (```csv fences and .csv files) as a table.",
+  "type": "module",
+  "private": true,
+  "funny": {
+    "client": "dist/index.mjs"
+  },
+  "scripts": {
+    "build": "esbuild src/index.tsx --bundle --format=esm --jsx=automatic --external:react --external:react/jsx-runtime --external:@funny/host --outfile=dist/index.mjs"
+  },
+  "peerDependencies": {
+    "@funny/host": ">=1",
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

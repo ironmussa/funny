@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { createClientLogger } from '@/lib/client-logger';
 import { isScratch } from '@/lib/thread-variant';
 import { resolveLocalThreadBranch, resolveThreadBranch } from '@/lib/utils';
@@ -59,9 +60,11 @@ export function branchForDocumentTitle(thread: ThreadLike | null | undefined): s
  */
 export function useDocumentTitle(): void {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  // Focused thread follows the URL, not the async selectedThreadId — the latter
+  // lagged a switch and flashed the previous title for a beat.
+  const activeThreadId = useActiveThreadId();
   const focusThread = useThreadStore((s) => {
-    const id = s.selectedThreadId;
-    if (id && s.threadsById[id]) return s.threadsById[id];
+    if (activeThreadId && s.threadsById[activeThreadId]) return s.threadsById[activeThreadId];
     return s.activeThread;
   });
 

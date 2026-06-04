@@ -1,31 +1,33 @@
 import { startTransition, useEffect, useState } from 'react';
 
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useThreadStore } from '@/stores/thread-store';
 
 /**
- * Thread id used to render the main chat pane. Keeps the previous thread visible
- * until the newly-selected thread's payload exists in `threadDataById`, then
- * swaps via `startTransition` so the heavy message list does not block the
- * click's urgent paint (INP). Sidebar / header use `selectedThreadId` directly.
+ * Thread id used to render the main chat pane. Anchored to the URL (the active
+ * thread), but keeps the previous thread visible until the new thread's payload
+ * exists in `threadDataById`, then swaps via `startTransition` so the heavy
+ * message list does not block the click's urgent paint (INP). Sidebar / header
+ * read the URL id directly (no defer needed).
  */
 export function useDisplayThreadId(): string | null {
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const activeThreadId = useActiveThreadId();
   const isPayloadReady = useThreadStore((s) =>
-    selectedThreadId ? !!s.threadDataById[selectedThreadId] : false,
+    activeThreadId ? !!s.threadDataById[activeThreadId] : false,
   );
 
-  const [displayThreadId, setDisplayThreadId] = useState<string | null>(selectedThreadId);
+  const [displayThreadId, setDisplayThreadId] = useState<string | null>(activeThreadId);
 
   useEffect(() => {
-    if (!selectedThreadId) {
+    if (!activeThreadId) {
       setDisplayThreadId(null);
       return;
     }
     if (!isPayloadReady) return;
     startTransition(() => {
-      setDisplayThreadId(selectedThreadId);
+      setDisplayThreadId(activeThreadId);
     });
-  }, [selectedThreadId, isPayloadReady]);
+  }, [activeThreadId, isPayloadReady]);
 
   return displayThreadId;
 }

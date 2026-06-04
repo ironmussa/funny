@@ -190,7 +190,7 @@ describe('ThreadView', () => {
       } as any,
     });
 
-    renderWithProviders(<ThreadView />);
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
 
     // The user message text may appear in multiple places (message + sticky header)
     expect(screen.getAllByText('Hello agent').length).toBeGreaterThan(0);
@@ -221,7 +221,7 @@ describe('ThreadView', () => {
       } as any,
     });
 
-    renderWithProviders(<ThreadView />);
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
 
     // ToolCallCard mock renders the tool name
     expect(screen.getByText('Read')).toBeInTheDocument();
@@ -240,7 +240,7 @@ describe('ThreadView', () => {
       } as any,
     });
 
-    renderWithProviders(<ThreadView />);
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
     expect(screen.getByText('thread.agentWorking')).toBeInTheDocument();
   });
 
@@ -258,7 +258,7 @@ describe('ThreadView', () => {
       } as any,
     });
 
-    renderWithProviders(<ThreadView />);
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
     expect(screen.getByTestId('agent-result-card')).toBeInTheDocument();
   });
 
@@ -275,7 +275,7 @@ describe('ThreadView', () => {
       } as any,
     });
 
-    renderWithProviders(<ThreadView />);
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
     expect(screen.getByText('thread.acceptContinue')).toBeInTheDocument();
   });
 });

@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadCore } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { NewThreadInput } from './thread/NewThreadInput';
@@ -24,9 +24,10 @@ export function ThreadView() {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const activeThread = useThreadCore();
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // Which thread is active is the URL's call, not the async selectedThreadId.
+  const activeThreadId = useActiveThreadId();
   const isThreadSwitching =
-    !!selectedThreadId && !!activeThread && activeThread.id !== selectedThreadId;
+    !!activeThreadId && !!activeThread && activeThread.id !== activeThreadId;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
@@ -34,7 +35,7 @@ export function ThreadView() {
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
 
   // Scratch compose: no project / no header — just the prompt input.
-  if (newThreadIsScratch && !selectedThreadId) {
+  if (newThreadIsScratch && !activeThreadId) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <NewThreadInput />
@@ -44,7 +45,7 @@ export function ThreadView() {
 
   // Show new thread input when a project's "+" was clicked. ProjectHeader
   // is rendered at the app shell level (top edge group), so no header here.
-  if (newThreadProjectId && !selectedThreadId) {
+  if (newThreadProjectId && !activeThreadId) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <NewThreadInput />
@@ -52,7 +53,7 @@ export function ThreadView() {
     );
   }
 
-  if (!selectedThreadId) {
+  if (!activeThreadId) {
     if (selectedProjectId && hasProjects) {
       return (
         <div className="flex h-full min-w-0 flex-1 flex-col">

@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
@@ -13,7 +14,6 @@ import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadGroup } from './ThreadGroup';
 import { ThreadItem } from './ThreadItem';
@@ -47,7 +47,8 @@ export function RecentThreads({
   useMinuteTick();
   const navigate = useNavigate();
   const threadsByProject = useThreadsByProject();
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // Highlight follows the URL (route-driven), not the async selectedThreadId.
+  const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const { recentThreads, totalCount } = useMemo(() => {
@@ -102,7 +103,7 @@ export function RecentThreads({
             key={thread.id}
             thread={thread}
             projectPath={thread.projectPath}
-            isSelected={selectedThreadId === thread.id}
+            isSelected={activeThreadId === thread.id}
             subtitle={thread.projectName}
             projectColor={thread.projectColor}
             timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}

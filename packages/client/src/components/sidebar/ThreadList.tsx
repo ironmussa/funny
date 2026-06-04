@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { setDashedDragPreview } from '@/lib/drag-preview';
@@ -72,7 +73,8 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   const navigate = useStableNavigate();
   const threadsByProject = useThreadsByProject();
   const scratchThreads = useScratchThreads();
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // Highlight follows the URL (route-driven), not the async selectedThreadId.
+  const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
 
   // Cache enriched threads to maintain stable references across renders.
@@ -271,7 +273,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
           <ThreadListItem
             key={thread.id}
             thread={thread}
-            isSelected={selectedThreadId === thread.id}
+            isSelected={activeThreadId === thread.id}
             isRunning={RUNNING_STATUSES.has(thread.status)}
             gitStatus={gitStatusByThread[thread.id]}
             onSelect={handleSelect}

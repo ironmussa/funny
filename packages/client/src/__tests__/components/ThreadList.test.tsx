@@ -174,4 +174,30 @@ describe('ThreadList', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/projects/p1/threads/t-nav');
     });
   });
+
+  test('highlights the row matching the URL, not selectedThreadId', () => {
+    const a = makeThread('t-a', { status: 'running', title: 'A' });
+    const b = makeThread('t-b', { status: 'running', title: 'B' });
+    useThreadStore.setState({
+      ...seedThreads({ p1: [a, b] }),
+      scratchThreadIds: [],
+      // Store pointer deliberately points at A; the URL points at B. The
+      // highlight must follow the URL (route-driven), proving it no longer
+      // reads selectedThreadId.
+      selectedThreadId: 't-a',
+      activeThread: null,
+    } as any);
+
+    renderWithProviders(<ThreadList {...noopHandlers} />, {
+      route: '/projects/p1/threads/t-b',
+    });
+
+    // Selected rows get `bg-accent text-foreground`; unselected get
+    // `text-muted-foreground` (+ a hover:bg-accent/50, so match the exact combo).
+    const rowB = screen.getByTestId('thread-item-t-b').parentElement;
+    const rowA = screen.getByTestId('thread-item-t-a').parentElement;
+    expect(rowB?.className).toContain('bg-accent text-foreground');
+    expect(rowA?.className).not.toContain('bg-accent text-foreground');
+    expect(rowA?.className).toContain('text-muted-foreground');
+  });
 });

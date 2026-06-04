@@ -313,7 +313,11 @@ app.get('/extensions/:name/*', async (c) => {
   const file = resolveExtensionAsset(decodeURIComponent(name), relPath);
   if (!file) return c.notFound();
   c.header('Content-Type', extensionAssetContentType(file));
-  c.header('Cache-Control', 'public, max-age=3600');
+  // Extension entry URLs are NOT content-hashed (e.g. dist/index.mjs), so they
+  // must revalidate — otherwise reinstalling/updating an extension keeps serving
+  // a stale bundle from the browser cache. `no-store` keeps it always fresh.
+  // (A future optimization could content-hash the URL and cache immutably.)
+  c.header('Cache-Control', 'no-store');
   return c.body(await Bun.file(file).arrayBuffer());
 });
 

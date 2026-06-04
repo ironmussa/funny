@@ -26,6 +26,12 @@ mock.module('../../lib/auth.js', () => ({
             session: { activeOrganizationId: 'org-acme' },
           };
         }
+        if (cookie.includes('funny.session=badrole')) {
+          return {
+            user: { id: sessionUserId, role: 'superadmin' },
+            session: { activeOrganizationId: 'org-acme' },
+          };
+        }
         return null;
       },
     }),
@@ -50,14 +56,19 @@ import {
 } from '../../middleware/auth.js';
 import { inviteLinkPublicRoutes } from '../../routes/invite-links.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedInviteLink } from '../helpers/test-db.js';
+import { seedInviteLink, seedRunner } from '../helpers/test-db.js';
 
 function protectedApp() {
   const app = new Hono<ServerEnv>();
   app.use('*', authMiddleware);
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.get('/api/protected', (c) =>
-    c.json({ userId: c.get('userId') ?? null, isRunner: c.get('isRunner') ?? false }),
+    c.json({
+      userId: c.get('userId') ?? null,
+      isRunner: c.get('isRunner') ?? false,
+      runnerId: c.get('runnerId') ?? null,
+      userRole: c.get('userRole') ?? null,
+    }),
   );
   app.post('/api/runners/register', (c) =>
     c.json({ userId: c.get('userId') ?? null, isRunner: c.get('isRunner') ?? false }),
@@ -89,6 +100,7 @@ describe('authMiddleware (integration)', () => {
   beforeEach(async () => {
     t.cleanup();
     authMockState.hasPermission = true;
+    authMockState.permissionCheckThrows = false;
     resetAuthInstanceForTests();
     await resetAuthMiddlewareCache();
   });
@@ -118,7 +130,47 @@ describe('authMiddleware (integration)', () => {
       headers: { cookie: 'funny.session=valid' },
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ userId: sessionUserId, isRunner: false });
+    expect(await res.json()).toEqual({
+      userId: sessionUserId,
+      isRunner: false,
+      runnerId: null,
+      userRole: 'user',
+    });
+  });
+
+  test('accepts Bearer runner_ token and sets isRunner', async () => {
+    seedRunner(t.db as any, { id: 'r-bearer', token: 'runner_bearer_ok', userId: 'user-1' });
+
+    const res = await app.request('/api/protected', {
+      headers: { Authorization: 'Bearer runner_bearer_ok' },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      userId: null,
+      isRunner: true,
+      runnerId: 'r-bearer',
+      userRole: null,
+    });
+  });
+
+  test('rejects invalid Bearer runner_ token', async () => {
+    const res = await app.request('/api/protected', {
+      headers: { Authorization: 'Bearer runner_unknown' },
+    });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'Invalid runner token' });
+  });
+
+  test('coerces unknown session roles to user', async () => {
+    const res = await app.request('/api/protected', {
+      headers: { cookie: 'funny.session=badrole' },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      userId: sessionUserId,
+      userRole: 'user',
+      isRunner: false,
+    });
   });
 
   test('accepts runner registration with a valid invite token', async () => {
@@ -166,6 +218,48 @@ describe('authMiddleware (integration)', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+
+  test('rejects shared-secret runner registration from non-loopback', async () => {
+    const res = await app.request(
+      '/api/runners/register',
+      {
+        method: 'POST',
+        headers: { 'X-Runner-Auth': 'auth-mw-secret' },
+      },
+      { IP: { address: '10.0.0.1' } },
+    );
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toMatch(/X-Runner-Invite-Token/);
+  });
+
+  test('orchestrator auth with X-Forwarded-User impersonates that user', async () => {
+    const res = await app.request('/api/protected', {
+      headers: {
+        'X-Orchestrator-Auth': 'orch-mw-secret',
+        'X-Forwarded-User': 'user-impersonated',
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      userId: 'user-impersonated',
+      isRunner: false,
+    });
+  });
+
+  test('requirePermission returns 403 when permission check throws', async () => {
+    authMockState.permissionCheckThrows = true;
+
+    const res = await app.request('/api/permission-gated', {
+      method: 'PUT',
+      headers: {
+        cookie: 'funny.session=valid',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'Forbidden: permission check failed' });
   });
 
   test('orchestrator system auth sets isOrchestratorSystem without forwarded user', async () => {

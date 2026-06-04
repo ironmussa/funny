@@ -10,13 +10,17 @@ import { mock } from 'bun:test';
 // Set env vars before any module imports
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
+const relayCalls: Array<{ userId: string; event: Record<string, unknown> }> = [];
+
 // Mock WebSocket/Socket.IO modules to prevent side effects
 mock.module('../../services/ws-relay.js', () => ({
   setIO: () => {},
   addRunnerClient: () => {},
   removeRunnerClient: () => {},
   isRunnerConnected: () => false,
-  relayToUser: () => {},
+  relayToUser: (userId: string, event: Record<string, unknown>) => {
+    relayCalls.push({ userId, event });
+  },
   broadcast: () => {},
   sendToRunner: () => false,
   forwardBrowserMessageToRunner: () => {},
@@ -57,6 +61,7 @@ describe('Thread Routes (Integration)', () => {
 
   beforeEach(() => {
     t.cleanup();
+    relayCalls.length = 0;
   });
 
   // ── GET /api/threads ───────────────────────────────────
@@ -734,6 +739,36 @@ describe('Thread Routes (Integration)', () => {
       const res = await t.requestAs('user-1').get('/api/threads/t1/touched-files');
       expect(res.status).toBe(200);
       expect((await res.json()).files).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+  });
+
+  describe('POST /api/threads/:id/orchestrator/workflow-event', () => {
+    test('relays workflow events to the authenticated user', async () => {
+      const res = await t
+        .requestAs('user-1')
+        .post('/api/threads/t-any/orchestrator/workflow-event', {
+          event: 'workflow:step',
+          data: { step: 1 },
+        });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+      expect(relayCalls).toHaveLength(1);
+      expect(relayCalls[0]?.userId).toBe('user-1');
+      expect(relayCalls[0]?.event).toMatchObject({
+        type: 'workflow:step',
+        threadId: 't-any',
+        data: { step: 1 },
+      });
+    });
+
+    test('rejects events that do not start with workflow:', async () => {
+      const res = await t
+        .requestAs('user-1')
+        .post('/api/threads/t-any/orchestrator/workflow-event', {
+          event: 'agent:result',
+        });
+      expect(res.status).toBe(400);
+      expect(relayCalls).toHaveLength(0);
     });
   });
 

@@ -7,6 +7,7 @@
 
 export const authMockState = {
   hasPermission: true,
+  permissionCheckThrows: false,
   createUserShouldFail: false,
   createUserShouldThrow: false,
   inviteMemberError: null as string | null,
@@ -28,7 +29,12 @@ export function createAuthApiMock(
   extra: Record<string, unknown> = {},
 ): { hasPermission: () => Promise<boolean> } & Record<string, unknown> {
   return {
-    hasPermission: async () => authMockState.hasPermission,
+    hasPermission: async () => {
+      if (authMockState.permissionCheckThrows) {
+        throw new Error('permission service unavailable');
+      }
+      return authMockState.hasPermission;
+    },
     getFullOrganization: async ({ query }: { query: { organizationId: string } }) =>
       authMockState.orgs[query.organizationId] ?? null,
     updateOrganization: async () => {},

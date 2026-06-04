@@ -111,6 +111,10 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setAppNavigate: vi.fn(),
   notifyThreadSelected: vi.fn(),
   setClearThreadSelection: vi.fn(),
+  // URL-thread mirror: in tests the "URL thread" is the selected thread, so
+  // route-driven routing behaves like the old selectedThreadId routing.
+  getUrlThreadId: () => useThreadStore.getState().selectedThreadId,
+  setUrlThreadId: vi.fn(),
 }));
 
 import { prefetchThreadData } from '@/stores/thread-machine-bridge';

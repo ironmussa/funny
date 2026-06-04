@@ -30,7 +30,12 @@ import {
 import * as mutations from './thread-mutations';
 import { useThreadReadStore } from './thread-read-store';
 import type { ThreadState } from './thread-state';
-import { bufferWSEvent, getNavigate, getProjectIdForThread } from './thread-store-internals';
+import {
+  bufferWSEvent,
+  getNavigate,
+  getProjectIdForThread,
+  getUrlThreadId,
+} from './thread-store-internals';
 import type { AgentInitInfo } from './thread-types';
 
 const wsLog = createClientLogger('ws-handlers');
@@ -84,7 +89,7 @@ function isHydrated(state: ThreadState, threadId: string): boolean {
  * Returns true when buffering happened so callers can short-circuit.
  */
 function maybeBuffer(state: ThreadState, threadId: string, type: string, data: unknown): boolean {
-  if (state.selectedThreadId === threadId && !isHydrated(state, threadId)) {
+  if ((getUrlThreadId() ?? state.selectedThreadId) === threadId && !isHydrated(state, threadId)) {
     bufferWSEvent(threadId, type, data);
     return true;
   }
@@ -629,7 +634,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // If the thread the user is currently viewing just finished, mark it as read
   // so it doesn't show an unread blue dot in the sidebar.
   if (
-    state.selectedThreadId === threadId &&
+    (getUrlThreadId() ?? state.selectedThreadId) === threadId &&
     (resultStatus === 'completed' ||
       resultStatus === 'failed' ||
       resultStatus === 'stopped' ||
@@ -763,7 +768,8 @@ export function handleWSContextUsage(
       contextUsageByThread: { ...state.contextUsageByThread, [threadId]: usage },
     };
     if (!isHydrated(state, threadId)) {
-      if (state.selectedThreadId === threadId) bufferWSEvent(threadId, 'context_usage', data);
+      if ((getUrlThreadId() ?? state.selectedThreadId) === threadId)
+        bufferWSEvent(threadId, 'context_usage', data);
       return updates;
     }
     return {

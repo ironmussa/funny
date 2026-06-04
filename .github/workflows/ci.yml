@@ -22,6 +22,17 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies (native-git)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/native-git
+
+      - name: Build native-git (for core parity tests)
+        run: bun run build:native
+
       - name: Run tests (shared)
         run: bun run --cwd packages/shared test
 

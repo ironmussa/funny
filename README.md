@@ -340,6 +340,22 @@ bunx playwright install chromium
 
 The CDP implementation lives in [`packages/runtime/src/services/browser-session-manager.ts`](packages/runtime/src/services/browser-session-manager.ts) (runner side) and [`packages/client/src/components/browser-panel/`](packages/client/src/components/browser-panel/) (client side). Background and design decisions: [`openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/`](openspec/changes/archive/2026-05-24-browser-panel-cdp-runtime/). Screenshot follow-ups for non-CDP contexts: [`docs/design/browser-panel-screenshot.md`](docs/design/browser-panel-screenshot.md).
 
+## Visualizer Plugins
+
+funny renders rich views for fenced code blocks and file previews — diagrams, tables, and more — through **visualizer plugins**. The built-in Mermaid renderer uses the same contract third-party plugins do, so the system is fully extensible without touching the core.
+
+```bash
+funny ext list                                    # List installed visualizer plugins
+funny ext install examples/funny-visualizer-csv   # Install the reference CSV plugin
+funny ext remove funny-visualizer-csv             # Remove it
+```
+
+Or manage them from **Settings → Extensions** in the UI. Plugins live on the server host at `~/.funny/extensions/`.
+
+> **Full trust, no sandbox** — a plugin runs inside your authenticated session, like installing an npm package. Install only what you trust. Installing/removing is admin-only.
+
+Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference plugin: [`examples/funny-visualizer-csv`](examples/funny-visualizer-csv).
+
 ## Development
 
 ```bash

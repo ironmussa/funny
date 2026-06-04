@@ -81,6 +81,7 @@ import {
   rebuildThreadProjectIndex,
   notifyThreadSelected,
   setClearThreadSelection,
+  getUrlThreadId,
 } from './thread-store-internals';
 import * as wsHandlers from './thread-ws-handlers';
 
@@ -89,6 +90,8 @@ export {
   invalidateSelectThread,
   setAppNavigate,
   getSelectingThreadId,
+  getUrlThreadId,
+  setUrlThreadId,
 } from './thread-store-internals';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -226,9 +229,16 @@ function _evictIfUnreferenced(threadId: string): void {
 // the source-of-truth map directly so they survive the eventual removal
 // of the `activeThread` mirror field.
 
-/** Imperative: resolve the currently selected thread from the map. */
+/**
+ * Imperative: resolve the active thread from the map, anchored to the URL
+ * (route-driven). Falls back to `selectedThreadId` when there's no thread route
+ * (e.g. tests with no router, or transient states). Reading the URL here keeps
+ * WS refresh paths (`refreshActiveThread`) targeting the thread the user is
+ * actually viewing even if `selectedThreadId` momentarily diverges.
+ */
 export function getActiveThread(state: ThreadState): ThreadWithMessages | null {
-  return state.selectedThreadId ? (state.threadDataById[state.selectedThreadId] ?? null) : null;
+  const id = getUrlThreadId() ?? state.selectedThreadId;
+  return id ? (state.threadDataById[id] ?? null) : null;
 }
 
 /** Hook: subscribe to the currently selected thread. */

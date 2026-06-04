@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
@@ -18,7 +19,7 @@ import { setDashedDragPreview } from '@/lib/drag-preview';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
-import { getThreadRoute, isScratch } from '@/lib/thread-variant';
+import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import {
   resolveLocalThreadBranch,
@@ -26,6 +27,8 @@ import {
   shouldCheckoutBranchForThreadSelect,
 } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { goToThread } from '@/navigation/go-to-thread';
+import { buildThreadPath } from '@/navigation/thread-paths';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -70,7 +73,8 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   const navigate = useStableNavigate();
   const threadsByProject = useThreadsByProject();
   const scratchThreads = useScratchThreads();
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // Highlight follows the URL (route-driven), not the async selectedThreadId.
+  const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
 
   // Cache enriched threads to maintain stable references across renders.
@@ -211,28 +215,10 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
         if (!canProceed) return;
       }
 
-      // Ensure the project is expanded so the thread row is mounted in the
-      // projects list before we try to scroll to it. Scratch threads live in
-      // their own sidebar section — no project tree to expand.
-      if (!scratch) {
-        const projectStore = useProjectStore.getState();
-        if (!projectStore.expandedProjects.has(projectId)) {
-          projectStore.toggleProject(projectId);
-        }
-      }
-
-      // Start hydration before navigate so it overlaps route-sync instead of
-      // waiting for useThreadProjectSync's effect. selectThread updates
-      // selectedThreadId urgently and defers the heavy chat mount.
-      const store = useThreadStore.getState();
-      if (store.selectedThreadId !== threadId) {
-        void store.selectThread(threadId);
-      } else if (!store.activeThread || store.activeThread.id !== threadId) {
-        void store.selectThread(threadId);
-      }
-      navigate(
-        buildPath(thread ? getThreadRoute(thread) : `/projects/${projectId}/threads/${threadId}`),
-      );
+      // Expand/select project, kick hydration, and navigate — all via the one
+      // facade. Falls back to a non-scratch target when the row isn't in the
+      // current list (e.g. cross-project deep action).
+      goToThread(navigate, thread ?? { id: threadId, projectId, isScratch: false });
     },
     [navigate, ensureBranch],
   );
@@ -287,7 +273,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
           <ThreadListItem
             key={thread.id}
             thread={thread}
-            isSelected={selectedThreadId === thread.id}
+            isSelected={activeThreadId === thread.id}
             isRunning={RUNNING_STATUSES.has(thread.status)}
             gitStatus={gitStatusByThread[thread.id]}
             onSelect={handleSelect}
@@ -374,7 +360,7 @@ const ThreadListItem = memo(function ThreadListItem({
         projectColor={thread.projectColor}
         timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
         gitStatus={gitStatus}
-        href={buildPath(getThreadRoute(thread))}
+        href={buildThreadPath(thread)}
         onSelect={handleSelect}
         onRename={handleRename}
         onArchive={isRunning ? undefined : handleArchive}

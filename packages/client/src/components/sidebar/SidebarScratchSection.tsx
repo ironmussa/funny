@@ -7,12 +7,12 @@ import { ViewAllButton } from '@/components/sidebar/ViewAllButton';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { useScratchThreads } from '@/lib/thread-selectors';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const QUICK_CHATS_VISIBLE = 5;
@@ -26,7 +26,8 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const scratchThreads = useScratchThreads();
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // Highlight follows the URL (route-driven), not the async selectedThreadId.
+  const activeThreadId = useActiveThreadId();
   const startNewScratchThread = useUIStore((s) => s.startNewScratchThread);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -108,7 +109,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
               <ScratchThreadRow
                 key={thread.id}
                 thread={thread}
-                isSelected={selectedThreadId === thread.id}
+                isSelected={activeThreadId === thread.id}
                 onRenameThread={onRenameThread}
                 onDeleteThread={onDeleteThread}
               />

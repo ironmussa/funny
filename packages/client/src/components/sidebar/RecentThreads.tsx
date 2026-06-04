@@ -4,14 +4,16 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
+import { goToThread } from '@/navigation/go-to-thread';
+import { buildThreadPath } from '@/navigation/thread-paths';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadGroup } from './ThreadGroup';
 import { ThreadItem } from './ThreadItem';
@@ -45,7 +47,8 @@ export function RecentThreads({
   useMinuteTick();
   const navigate = useNavigate();
   const threadsByProject = useThreadsByProject();
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // Highlight follows the URL (route-driven), not the async selectedThreadId.
+  const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const { recentThreads, totalCount } = useMemo(() => {
@@ -100,34 +103,13 @@ export function RecentThreads({
             key={thread.id}
             thread={thread}
             projectPath={thread.projectPath}
-            isSelected={selectedThreadId === thread.id}
+            isSelected={activeThreadId === thread.id}
             subtitle={thread.projectName}
             projectColor={thread.projectColor}
             timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
             gitStatus={statusByBranch[computeBranchKey(thread)]}
-            href={buildPath(`/projects/${thread.projectId}/threads/${thread.id}`)}
-            onSelect={() => {
-              // Set project + thread state synchronously in the same React
-              // batch so the sidebar's auto-scroll effect fires *once* with
-              // both new values and scrolls directly to the thread row.
-              // Without setting selectedThreadId now, the effect would fire
-              // first for the project change (scrolling to the header), then
-              // again later when useRouteSync resolves the thread fetch —
-              // producing the visible "first jump to project, then jump to
-              // thread" behavior.
-              const projectStore = useProjectStore.getState();
-              if (!projectStore.expandedProjects.has(thread.projectId)) {
-                projectStore.toggleProject(thread.projectId);
-              }
-              if (projectStore.selectedProjectId !== thread.projectId) {
-                projectStore.selectProject(thread.projectId);
-              }
-              const store = useThreadStore.getState();
-              if (store.selectedThreadId !== thread.id) {
-                store.selectThread(thread.id);
-              }
-              navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-            }}
+            href={buildThreadPath(thread)}
+            onSelect={() => goToThread(navigate, thread)}
             onRename={(newTitle: string) => onRenameThread(thread.id, thread.projectId, newTitle)}
             onArchive={() =>
               onArchiveThread(

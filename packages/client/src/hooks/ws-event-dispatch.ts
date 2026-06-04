@@ -12,7 +12,7 @@ import { buildPath } from '@/lib/url';
 import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
-import { getNavigate } from '@/stores/thread-store-internals';
+import { getNavigate, getUrlThreadId } from '@/stores/thread-store-internals';
 
 import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
@@ -348,7 +348,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       break;
     case 'thread:comment_deleted': {
       const store = useThreadStore.getState();
-      if (store.activeThread?.id === threadId) {
+      if ((getUrlThreadId() ?? store.selectedThreadId) === threadId) {
         store.refreshActiveThread();
       }
       break;
@@ -363,7 +363,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       }
       if (data.branch || data.worktreePath || data.containerUrl || data.mergedAt || data.mode) {
         store2.refreshAllLoadedThreads();
-        if (store2.activeThread?.id === threadId) {
+        if ((getUrlThreadId() ?? store2.selectedThreadId) === threadId) {
           store2.refreshActiveThread();
         }
       }

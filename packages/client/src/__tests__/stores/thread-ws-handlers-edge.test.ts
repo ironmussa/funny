@@ -32,6 +32,9 @@ vi.mock('@/stores/thread-store-internals', () => ({
   bufferWSEvent: mockBuffer,
   getNavigate: vi.fn(() => vi.fn()),
   getProjectIdForThread: vi.fn(() => null),
+  // null → routing gates fall back to the passed state's selectedThreadId.
+  getUrlThreadId: () => null,
+  setUrlThreadId: vi.fn(),
 }));
 
 vi.mock('@/lib/context-usage-events', () => ({ emitContextUsage: mockEmitContextUsage }));

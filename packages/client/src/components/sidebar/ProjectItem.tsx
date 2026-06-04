@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
@@ -43,7 +44,6 @@ import { openProjectTerminal } from '@/lib/open-terminal-tab';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -263,14 +263,16 @@ export const ProjectItem = memo(function ProjectItem({
   // thread IDs. This avoids passing selectedThreadId as a prop from the parent,
   // which caused *every* ProjectItem to re-render on any thread selection.
   const threadIds = useMemo(() => threads.map((t) => t.id), [threads]);
-  // Derive selected thread ID scoped to this project. Also used to dim the
-  // project highlight when a child thread is active.
-  const selectedThreadId = useThreadStore(
-    useCallback(
-      (s: { selectedThreadId: string | null }) =>
-        s.selectedThreadId && threadIds.includes(s.selectedThreadId) ? s.selectedThreadId : null,
-      [threadIds],
-    ),
+  // Highlight follows the URL (route-driven), scoped to this project's threads
+  // so it's null unless one of *this* project's threads is the active one. Also
+  // dims the project row when a child thread is active. ProjectItem re-renders
+  // on every navigation (it reads the URL), but the scoped value only flips when
+  // one of *its* threads gains/loses active status and the row children are
+  // memo'd — so a nav elsewhere does no row-level work here.
+  const activeThreadId = useActiveThreadId();
+  const selectedThreadId = useMemo(
+    () => (activeThreadId && threadIds.includes(activeThreadId) ? activeThreadId : null),
+    [activeThreadId, threadIds],
   );
   // Only highlight the project row when no child thread is selected
   const isProjectHighlighted = isSelected && !selectedThreadId;

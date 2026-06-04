@@ -17,6 +17,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
+import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useDisplayThreadId } from '@/hooks/use-display-thread-id';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
@@ -149,7 +150,10 @@ export function App() {
   const internalEditorOpen = useInternalEditorStore((s) => s.isOpen);
   const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // App-wide thread context is anchored to the URL (route-driven). The chat
+  // pane uses the deferred displayThreadId below for INP; everything else
+  // (header, review pane) reads this immediate, URL-derived id.
+  const activeThreadId = useActiveThreadId();
   const displayThreadId = useDisplayThreadId();
   const activeThreadCanShowGit = useThreadStore((s) => canDoGitOps(s.activeThread));
   const hasSelectedProject = useProjectStore((s) => s.selectedProjectId != null);
@@ -328,7 +332,7 @@ export function App() {
 
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
-      <ThreadProvider threadId={selectedThreadId}>
+      <ThreadProvider threadId={activeThreadId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
           <ReviewPaneStateProvider>
             <SidebarAwareDockview

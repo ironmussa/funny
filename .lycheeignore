@@ -11,3 +11,10 @@
 # The docs site itself isn't published yet (GitHub Pages is disabled), so the
 # canonical/self links would 404 until docs.yml's deploy is turned back on.
 ^https://ironmussa\.github\.io/funny
+
+# `openspec/` is a gitignored, local-only tree (see docs/README.md). Links into
+# it are intentional references to local working files, absent in a checkout.
+openspec
+
+# Internal telemetry backend — not reachable from CI runners.
+^https?://abbacchio\.dev

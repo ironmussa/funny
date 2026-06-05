@@ -6,7 +6,12 @@
 # smaller testable modules).
 
 [test]
-# Serial test files — mock.module for ws-tunnel/ws-relay is order-sensitive with proxy.js.
+# Cross-file mock.module isolation is enforced via the `--isolate` flag on the
+# `test` / `test:coverage` scripts (and in scripts/coverage-gate.ts). Without it,
+# route/proxy suites that mock.module('ws-relay'|'ws-tunnel'|'runner-resolver')
+# leak their stubs into the real-impl suites (ws-tunnel/ws-relay/socketio/runner-
+# manager) on CI's runner, where bun's per-file mock reset doesn't kick in.
+# maxConcurrency stays at 1 for deterministic ordering.
 maxConcurrency = 1
 coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [

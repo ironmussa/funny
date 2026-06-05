@@ -328,6 +328,11 @@ export type KnownAcpProvider = keyof typeof ACP_MANIFESTS;
 /** Runtime list of bundled ACP provider ids. */
 export const KNOWN_ACP_PROVIDER_IDS = Object.keys(ACP_MANIFESTS) as KnownAcpProvider[];
 
+/** ACP providers whose catalog is discovered at runtime (`models.kind: 'dynamic'`). */
+export const DYNAMIC_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(
+  (id) => ACP_MANIFESTS[id].models.kind === 'dynamic',
+);
+
 /** Look up a manifest by provider id (any string; returns undefined if unknown). */
 export function getManifest(providerId: string): ProviderManifest | undefined {
   return (ACP_MANIFESTS as Record<string, ProviderManifest>)[providerId];

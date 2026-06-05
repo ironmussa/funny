@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned versions current. This is what would have
+  # surfaced the actions/checkout + upload-artifact Node 20 deprecation
+  # automatically instead of us catching it by hand.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+
+  # JavaScript/TypeScript dependencies (Bun workspace, bun.lock).
+  # If your Dependabot version doesn't yet support the `bun` ecosystem,
+  # switch this to `npm` once a package-lock/yarn lockfile exists.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      production-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch

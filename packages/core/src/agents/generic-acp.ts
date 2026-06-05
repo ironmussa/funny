@@ -34,6 +34,7 @@ import {
   extractACPToolOutput,
   hasRenderableTodoInput,
   inferACPToolName,
+  parseACPPreambleTitle,
 } from './acp-tool-input.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
@@ -320,22 +321,36 @@ export class GenericACPProcess extends BaseAgentProcess {
     }
   }
 
-  /** Named pre-launch side effect from the manifest (the only imperative selector). */
+  /**
+   * Named pre-launch side effect from the manifest (the only imperative
+   * selector). gemini's trusted-folder write exists solely to keep `--yolo`
+   * from being downgraded, so it runs only when the `--yolo` flag is applied.
+   */
   private async runPrelaunch(): Promise<void> {
-    if (this.manifest.prelaunch === 'gemini-trust-folder') {
+    if (
+      this.manifest.prelaunch === 'gemini-trust-folder' &&
+      this.manifest.modeVia === 'cli-flag' &&
+      this.options.originalPermissionMode === 'autoEdit'
+    ) {
       await ensureGeminiTrustedFolder(this.options.cwd, this.dlog);
     }
   }
 
-  /** Resolve the spawn command from the manifest (env override → npx → default). */
+  /** Resolve the spawn command + args from the manifest (env override → npx → default). */
   private resolveCommand(): { command: string; args: string[] } {
-    const { command, args } = resolveSpawnCommand(this.manifest.spawn);
-    // gemini applies funny's autoEdit (full bypass) via the `--yolo` launch flag.
+    const { command, args: baseArgs } = resolveSpawnCommand(this.manifest.spawn);
+    const args = [...baseArgs];
+    // gemini selects its model via the `--model` CLI arg (modelVia: 'cli-arg').
     if (
-      this.manifest.modeVia === 'cli-flag' &&
-      this.options.originalPermissionMode === 'autoEdit'
+      this.manifest.modelVia === 'cli-arg' &&
+      this.options.model &&
+      this.options.model !== 'default'
     ) {
-      return { command, args: [...args, '--yolo'] };
+      args.push('--model', this.options.model);
+    }
+    // gemini applies funny's autoEdit (full bypass) via the `--yolo` launch flag.
+    if (this.manifest.modeVia === 'cli-flag' && this.options.originalPermissionMode === 'autoEdit') {
+      args.push('--yolo');
     }
     return { command, args };
   }
@@ -669,12 +684,27 @@ export class GenericACPProcess extends BaseAgentProcess {
       }
 
       case 'tool_call': {
-        this.flushPendingThought();
         const toolCallId = update.toolCallId;
-        if (this.toolCallsSeen.has(toolCallId)) return;
-
         const acpKind = (update as any).kind as string | undefined;
         const title = update.title || '';
+
+        // codex/gemini emit "preamble" tool_calls whose title is just
+        // `[cwd …] (reason)` — narration before the next real tool. Buffer them
+        // as Think text so they collapse into one Think card instead of a stack
+        // of broken tool cards; the matching completion is swallowed below.
+        if (this.manifest.quirks.bufferPreambleAsThink) {
+          const preamble = parseACPPreambleTitle(title);
+          if (preamble) {
+            if (!this.pendingThought) this.pendingThought = { id: randomUUID(), text: '' };
+            this.pendingThought.text += (this.pendingThought.text ? '\n' : '') + preamble;
+            this.toolCallsSeen.set(toolCallId, 'preamble');
+            return;
+          }
+        }
+
+        this.flushPendingThought();
+        if (this.toolCallsSeen.has(toolCallId)) return;
+
         const locations = (update as any).locations as
           | Array<{ path: string; line?: number | null }>
           | undefined;
@@ -718,8 +748,11 @@ export class GenericACPProcess extends BaseAgentProcess {
       }
 
       case 'tool_call_update': {
-        this.flushPendingThought();
         const toolCallId = update.toolCallId;
+        // Swallow the completion of a buffered preamble tool_call (codex/gemini)
+        // — its text already went into the Think buffer; no stray tool_result.
+        if (this.toolCallsSeen.get(toolCallId) === 'preamble') return;
+        this.flushPendingThought();
         const updateContent = (update as any).content as unknown[] | undefined;
         const isTerminal = update.status === 'completed' || update.status === 'failed';
 
@@ -812,9 +845,25 @@ export class GenericACPProcess extends BaseAgentProcess {
               .map((e, i) => {
                 const status =
                   e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
-                return `${status} ${i + 1}. ${e.title ?? e.description ?? e.content ?? 'Task'}`;
+                return `${status} ${i + 1}. ${e.title ?? e.description ?? 'Task'}`;
               })
               .join('\n');
+
+            // codex: a `plan` arrives while a Task (switch_mode) tool_call is
+            // still in flight — close it out with the rendered plan as its
+            // tool_result. Harmless for providers with no open Task call.
+            for (const [tcId, tcState] of this.toolCallsSeen) {
+              if (tcState === 'Task') {
+                this.toolCallsSeen.set(tcId, 'done');
+                this.emit('message', {
+                  type: 'user',
+                  message: {
+                    content: [{ type: 'tool_result', tool_use_id: tcId, content: planText }],
+                  },
+                } as CLIMessage);
+              }
+            }
+
             this.emit('message', {
               type: 'assistant',
               message: {

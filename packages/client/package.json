@@ -66,7 +66,7 @@
     "dompurify": "^3.4.0",
     "highlight.js": "^11.11.1",
     "i18next": "^25.8.4",
-    "lucide-react": "^0.564.0",
+    "lucide-react": "^1.17.0",
     "mermaid": "^11.12.3",
     "motion": "^12.34.0",
     "next-themes": "^0.4.6",

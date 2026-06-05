@@ -4,7 +4,12 @@ import { memo, lazy, Suspense } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
-import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
+import {
+  remarkPlugins,
+  baseMarkdownComponents,
+  markdownProseClassName,
+} from '@/lib/markdown-components';
+import { cn } from '@/lib/utils';
 import { useSettingsStore, editorLabels } from '@/stores/settings-store';
 
 // Regex to match file paths like /foo/bar.ts, C:\foo\bar.ts, or file_path:line_number patterns
@@ -84,10 +89,10 @@ const LazyMarkdownRenderer = lazy(() =>
 
 export const MessageContent = memo(function MessageContent({ content }: { content: string }) {
   return (
-    <div className="prose prose-sm max-w-none overflow-hidden">
+    <div className={cn(markdownProseClassName, 'overflow-hidden')}>
       <Suspense
         fallback={
-          <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">{content}</div>
+          <div className={cn(markdownProseClassName, 'text-sm whitespace-pre-wrap')}>{content}</div>
         }
       >
         <LazyMarkdownRenderer content={content} />

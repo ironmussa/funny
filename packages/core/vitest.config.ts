@@ -10,6 +10,8 @@ export default defineConfig({
       'bun:test': 'vitest',
       '@funny/shared/errors': path.join(shared, 'errors.ts'),
       '@funny/shared/models': path.join(shared, 'models.ts'),
+      '@funny/shared/provider-manifest': path.join(shared, 'provider-manifest.ts'),
+      '@funny/shared/provider-manifests': path.join(shared, 'provider-manifests.ts'),
       '@funny/shared/thread-machine': path.join(shared, 'thread-machine.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/core/agents': path.resolve(__dirname, 'src/agents/index.ts'),

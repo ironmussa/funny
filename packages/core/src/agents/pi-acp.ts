@@ -268,7 +268,7 @@ export class PiACPProcess extends BaseAgentProcess {
       // pi-acp to fail. Stdio is mandatory per ACP spec and always allowed.
       const allMcp = toACPMcpServers(this.options.mcpServers);
       const mcpServerList = allMcp.filter((s) => {
-        const t = s.type as string | undefined;
+        const t = (s as { type?: string }).type;
         if (t === 'http') return supportsHttp;
         if (t === 'sse') return supportsSse;
         return true;

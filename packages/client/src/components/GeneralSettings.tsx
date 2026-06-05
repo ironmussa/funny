@@ -23,6 +23,7 @@ import {
 import { projectsApi } from '@/lib/api/projects';
 import { getModelOptions, PROVIDERS } from '@/lib/providers';
 import { useCursorModelsStore } from '@/stores/cursor-models-store';
+import { useOpenCodeModelsStore } from '@/stores/opencode-models-store';
 import { usePiModelsStore } from '@/stores/pi-models-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
@@ -103,6 +104,14 @@ export function GeneralSettings() {
     void fetchCursorModels();
   }, [fetchCursorModels]);
 
+  // Same dynamic-discovery story for opencode (see opencode-discover.ts).
+  const opencodeModels = useOpenCodeModelsStore((s) => s.models);
+  const opencodeStatus = useOpenCodeModelsStore((s) => s.status);
+  const fetchOpenCodeModels = useOpenCodeModelsStore((s) => s.fetch);
+  useEffect(() => {
+    void fetchOpenCodeModels();
+  }, [fetchOpenCodeModels]);
+
   const projectDefaultProvider = (selectedProject?.defaultProvider ||
     DEFAULT_PROVIDER) as AgentProvider;
   const projectModelOptions = (() => {
@@ -119,6 +128,15 @@ export function GeneralSettings() {
     if (projectDefaultProvider === 'cursor' && cursorStatus === 'ready') {
       const seen = new Set(base.map((o) => o.value));
       for (const m of cursorModels) {
+        if (seen.has(m.modelId)) continue;
+        base.push({ value: m.modelId, label: m.name || m.modelId });
+        seen.add(m.modelId);
+      }
+      return base;
+    }
+    if (projectDefaultProvider === 'opencode' && opencodeStatus === 'ready') {
+      const seen = new Set(base.map((o) => o.value));
+      for (const m of opencodeModels) {
         if (seen.has(m.modelId)) continue;
         base.push({ value: m.modelId, label: m.name || m.modelId });
         seen.add(m.modelId);

@@ -80,6 +80,9 @@ const PROVIDER_ENVS = [
   'CURSOR_BINARY_PATH',
   'ACP_CURSOR_BIN',
   'CURSOR_ACP_USE_NPX',
+  'OPENCODE_BIN',
+  'ACP_OPENCODE_BIN',
+  'OPENCODE_ACP_USE_NPX',
 ];
 
 describe('forkAcpSession', () => {
@@ -196,6 +199,44 @@ describe('forkAcpSession', () => {
   test('default cursor command is `cursor-agent acp`', async () => {
     await forkAcpSession({ provider: 'cursor', sessionId: 's', cwd: '/tmp' });
     expect(spawnMock).toHaveBeenCalledWith('cursor-agent', ['acp'], expect.any(Object));
+  });
+
+  test('default opencode command is `opencode acp`', async () => {
+    await forkAcpSession({ provider: 'opencode', sessionId: 's', cwd: '/tmp' });
+    expect(spawnMock).toHaveBeenCalledWith('opencode', ['acp'], expect.any(Object));
+  });
+
+  test('opencode forks via the `sessionCapabilities.fork` shape (not `sessions.fork`)', async () => {
+    // opencode advertises fork under agentCapabilities.sessionCapabilities.fork,
+    // unlike codex/gemini/pi/cursor which use agentCapabilities.sessions.fork.
+    mockInitialize.mockResolvedValueOnce({
+      agentCapabilities: { sessionCapabilities: { fork: {} } },
+    });
+
+    const res = await forkAcpSession({
+      provider: 'opencode',
+      sessionId: 'src-oc',
+      cwd: '/tmp/work',
+    });
+
+    expect(res).toEqual({ ok: true, newSessionId: 'forked-session-id' });
+    expect(mockForkSession).toHaveBeenCalledWith({
+      sessionId: 'src-oc',
+      cwd: '/tmp/work',
+      mcpServers: [],
+    });
+  });
+
+  test('OPENCODE_BIN overrides the opencode command', async () => {
+    process.env.OPENCODE_BIN = '/opt/my-opencode';
+    await forkAcpSession({ provider: 'opencode', sessionId: 's', cwd: '/tmp' });
+    expect(spawnMock).toHaveBeenCalledWith('/opt/my-opencode', ['acp'], expect.any(Object));
+  });
+
+  test('OPENCODE_ACP_USE_NPX=1 switches opencode to npx invocation', async () => {
+    process.env.OPENCODE_ACP_USE_NPX = '1';
+    await forkAcpSession({ provider: 'opencode', sessionId: 's', cwd: '/tmp' });
+    expect(spawnMock).toHaveBeenCalledWith('npx', ['-y', 'opencode-ai', 'acp'], expect.any(Object));
   });
 
   test('CODEX_ACP_BINARY_PATH overrides the codex command', async () => {

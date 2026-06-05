@@ -266,12 +266,29 @@ const cursorModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
+// opencode (https://opencode.ai) routes to many underlying model providers
+// configured by the user and advertises its catalog over ACP — `session/new`
+// returns `models.availableModels: [{ modelId, name }]` (same shape as cursor).
+// The static registry only carries the `default` sentinel; real model IDs are
+// discovered at runtime via `/system/opencode/models` and passed through
+// `resolveModelId` as wire-format strings (e.g. `opencode/gpt-5-nano/high`,
+// where the trailing segment is the reasoning-effort variant).
+const opencodeModels = {
+  default: {
+    id: 'default',
+    label: 'opencode (configured default)',
+    contextWindow: 200_000,
+    i18nKey: 'opencodeDefault',
+  },
+} as const satisfies Record<string, ModelDefinition>;
+
 export const MODEL_REGISTRY = {
   claude: claudeModels,
   codex: codexModels,
   gemini: geminiModels,
   pi: piModels,
   cursor: cursorModels,
+  opencode: opencodeModels,
   deepagent: deepagentModels,
 } as const;
 
@@ -282,6 +299,7 @@ export type CodexModel = keyof typeof codexModels;
 export type GeminiModel = keyof typeof geminiModels;
 export type PiModel = keyof typeof piModels;
 export type CursorModel = keyof typeof cursorModels;
+export type OpenCodeModel = keyof typeof opencodeModels;
 export type DeepAgentModel = keyof typeof deepagentModels;
 export type AgentModel =
   | ClaudeModel
@@ -289,6 +307,7 @@ export type AgentModel =
   | GeminiModel
   | PiModel
   | CursorModel
+  | OpenCodeModel
   | DeepAgentModel;
 
 // Helper: narrow a provider string to keys of its sub-registry.
@@ -304,6 +323,7 @@ const PROVIDER_DEFAULT_MODEL: Record<keyof typeof MODEL_REGISTRY, AgentModel> = 
   gemini: 'gemini-3.1-pro-preview',
   pi: 'default',
   cursor: 'default',
+  opencode: 'default',
   deepagent: 'minimax-m2.7',
 };
 
@@ -325,6 +345,7 @@ const PROVIDER_ATTACHMENT_LIMITS: Record<AgentProvider, AttachmentLimits> = {
   // the smallest common ceiling so we never exceed the weakest backend.
   pi: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   cursor: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  opencode: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   'llm-api': { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   external: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
@@ -343,6 +364,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   pi: 'Pi',
   cursor: 'Cursor',
+  opencode: 'opencode',
   deepagent: 'Deep Agent',
 };
 
@@ -389,6 +411,9 @@ const PI_DEFAULT_TOOLS: string[] = [];
 
 // Cursor manages its own tools via ACP — no default tool list needed
 const CURSOR_DEFAULT_TOOLS: string[] = [];
+
+// opencode manages its own tools via ACP — no default tool list needed
+const OPENCODE_DEFAULT_TOOLS: string[] = [];
 
 // Deep Agent manages its own tools via LangGraph — no default tool list needed
 const DEEPAGENT_DEFAULT_TOOLS: string[] = [];
@@ -508,11 +533,13 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
   }
   const def = getModelDefinition(provider, model);
   if (!def) {
-    // Pi and Cursor expose their catalogs dynamically (see *-discover.ts).
-    // The selected value may already be the wire-format model ID that
-    // pi-acp / cursor-agent's `unstable_setSessionModel` expects — pass it
-    // through instead of throwing.
-    if (provider === 'pi' || provider === 'cursor') return model as string;
+    // Pi, Cursor and opencode expose their catalogs dynamically (see
+    // *-discover.ts). The selected value may already be the wire-format model
+    // ID that pi-acp / cursor-agent's `unstable_setSessionModel` or opencode's
+    // `session/set_model` expects — pass it through instead of throwing.
+    if (provider === 'pi' || provider === 'cursor' || provider === 'opencode') {
+      return model as string;
+    }
     const providerLabel = PROVIDER_LABELS[provider] ?? provider;
     throw new Error(`Unknown ${providerLabel} model: ${model}`);
   }
@@ -572,7 +599,9 @@ export function resolvePermissionMode(
   mode: PermissionMode,
 ): string | undefined {
   if (provider === 'claude') return CLAUDE_PERMISSION_MAP[mode];
-  // Codex and Gemini don't have permission modes — they run autonomously
+  // Codex, Gemini and opencode map permission/session modes inside their own
+  // ACP adapters (e.g. opencode's `session/set_mode`: plan → plan, else build),
+  // so the shared resolver returns undefined for them.
   return undefined;
 }
 
@@ -597,6 +626,7 @@ export function getDefaultAllowedTools(provider: AgentProvider): string[] {
   if (provider === 'gemini') return [...GEMINI_DEFAULT_TOOLS];
   if (provider === 'pi') return [...PI_DEFAULT_TOOLS];
   if (provider === 'cursor') return [...CURSOR_DEFAULT_TOOLS];
+  if (provider === 'opencode') return [...OPENCODE_DEFAULT_TOOLS];
   if (provider === 'deepagent') return [...DEEPAGENT_DEFAULT_TOOLS];
   if (provider === 'llm-api') return [...LLM_API_DEFAULT_TOOLS];
   return [];

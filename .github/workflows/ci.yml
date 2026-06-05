@@ -44,12 +44,8 @@ jobs:
       - name: Lint (oxlint)
         run: bun run lint
 
-      # Advisory for now: the repo isn't fully oxfmt-clean yet. Drop
-      # continue-on-error to make formatting gating after a dedicated
-      # `bun run format` pass lands.
       - name: Format check (oxfmt)
         run: bunx oxfmt --check .
-        continue-on-error: true
 
   test:
     runs-on: ubuntu-latest

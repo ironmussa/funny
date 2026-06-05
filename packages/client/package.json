@@ -112,7 +112,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "@welldone-software/why-did-you-render": "^10.0.1",
     "autoprefixer": "^10.4.20",
-    "jsdom": "^28.0.0",
+    "jsdom": "^29.1.1",
     "monaco-editor": "^0.55.1",
     "playwright": "^1.58.2",
     "postcss": "^8.4.49",

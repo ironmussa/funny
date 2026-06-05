@@ -85,6 +85,16 @@ function saveEnv(updates) {
 // ── Load saved config before parsing CLI args ─────────────
 loadSavedEnv();
 
+// ── `funny ext` — manage visualizer extensions (runs without the server) ──
+// Dispatched BEFORE the strict parseArgs below, because `ext` subcommands carry
+// their own flags (--ref, --subdir) that the top-level parser doesn't know.
+{
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs[0] === 'ext') {
+    process.exit(await runExtCommand(rawArgs.slice(1)));
+  }
+}
+
 // ── Parse CLI arguments ───────────────────────────────────
 
 const { values, positionals } = parseArgs({
@@ -113,11 +123,6 @@ const { values, positionals } = parseArgs({
   },
   allowPositionals: true,
 });
-
-// ── `funny ext` — manage visualizer extensions (runs without the server) ──
-if (positionals[0] === 'ext') {
-  process.exit(await runExtCommand(positionals.slice(1)));
-}
 
 if (values.help) {
   console.log(`
@@ -258,7 +263,12 @@ async function runExtCommand(args) {
     console.error('[funny] Could not load the extensions module:', err.message);
     return 1;
   }
-  const { listInstalledExtensions, installExtensionFromPath, removeExtension } = lib;
+  const {
+    listInstalledExtensions,
+    installExtensionFromPath,
+    installExtensionFromGit,
+    removeExtension,
+  } = lib;
 
   if (sub === 'list' || sub === 'ls') {
     const exts = listInstalledExtensions();
@@ -273,12 +283,29 @@ async function runExtCommand(args) {
   }
 
   if (sub === 'install' || sub === 'add') {
-    const src = args[1];
+    const rest = args.slice(1);
+    const flag = (name) => {
+      const i = rest.indexOf(name);
+      if (i === -1 || i + 1 >= rest.length) return undefined;
+      const v = rest[i + 1];
+      rest.splice(i, 2);
+      return v;
+    };
+    const ref = flag('--ref');
+    const subdir = flag('--subdir');
+    const src = rest.find((a) => !a.startsWith('-'));
     if (!src) {
-      console.error('Usage: funny ext install <path-to-package-dir>');
+      console.error(
+        'Usage: funny ext install <path | git-url> [--ref <branch|tag>] [--subdir <dir>]',
+      );
       return 1;
     }
-    const r = installExtensionFromPath(resolve(src));
+    // A git URL (github:user/repo, https://…, git@host:…) installs remotely;
+    // anything else is treated as a local package directory.
+    const isGit = /^(github:|gh:|https:\/\/|git@|ssh:\/\/)/i.test(src);
+    const r = isGit
+      ? await installExtensionFromGit(src, { ref, subdir })
+      : installExtensionFromPath(resolve(src));
     if (r.ok) {
       console.log(`Installed ${r.extension.id}@${r.extension.version} → ${r.extension.name}`);
       return 0;
@@ -305,10 +332,16 @@ async function runExtCommand(args) {
   console.log(`funny ext — manage visualizer extensions
 
 Usage:
-  funny ext list                 List installed extensions
-  funny ext install <path>       Install a local pre-built package directory
-  funny ext remove <name>        Remove an installed extension
+  funny ext list                       List installed extensions
+  funny ext install <path>             Install a local pre-built package directory
+  funny ext install <git-url>          Install from a git repo (pre-built dist)
+       [--ref <branch|tag>] [--subdir <dir>]
+  funny ext remove <name>              Remove an installed extension
 
-Extensions live in ~/.funny/extensions/. See examples/funny-visualizer-csv.`);
+Git URL forms: github:user/repo · https://host/user/repo(.git) · git@host:user/repo
+A trailing #ref also selects a branch/tag, e.g. github:user/repo#v1.2.0
+
+Extensions live in ~/.funny/extensions/. Starter template and reference
+extensions: https://github.com/ironmussa/funny-extensions`);
   return sub ? 1 : 0; // unknown subcommand → error
 }

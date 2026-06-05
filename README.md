@@ -346,15 +346,15 @@ funny renders rich views for fenced code blocks and file previews — diagrams, 
 
 ```bash
 funny ext list                                     # List installed visualizer plugins
-funny ext install examples/funny-visualizer-dbml   # Install the DBML ER-diagram plugin
-funny ext remove funny-visualizer-dbml             # Remove it
+funny ext install github:ironmussa/funny-extensions --subdir visualizer-dbml   # Install the DBML ER-diagram plugin
+funny ext remove visualizer-dbml                   # Remove it
 ```
 
 Or manage them from **Settings → Extensions** in the UI. Plugins live on the server host at `~/.funny/extensions/`.
 
 > **Full trust, no sandbox** — a plugin runs inside your authenticated session, like installing an npm package. Install only what you trust. Installing/removing is admin-only.
 
-Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference extension: [`examples/funny-visualizer-dbml`](examples/funny-visualizer-dbml) (DBML → interactive ER diagram, React Flow — fully decoupled, bundles its own deps).
+Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference extensions live in their own repo: [`ironmussa/funny-extensions`](https://github.com/ironmussa/funny-extensions) — e.g. [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml) (DBML → interactive ER diagram, React Flow — fully decoupled, bundles its own deps).
 
 ## Development
 

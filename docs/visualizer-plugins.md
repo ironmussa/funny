@@ -53,25 +53,54 @@ removed ones fully unload on the next page reload.
 ```bash
 funny ext list                 # List installed extensions
 funny ext install <path>       # Install a local pre-built package directory
+funny ext install <git-url>    # Install from a git repo (see below)
 funny ext remove <name>        # Remove an installed extension
 ```
 
 `funny ext` runs without starting the server and operates directly on
-`~/.funny/extensions`. Example — install the bundled reference plugin:
+`~/.funny/extensions`. Example — install a reference plugin from the
+[`funny-extensions`](https://github.com/ironmussa/funny-extensions) repo:
 
 ```bash
-funny ext install examples/funny-visualizer-dbml
+funny ext install github:ironmussa/funny-extensions --subdir visualizer-dbml
 funny ext list
-#   funny-visualizer-dbml         funny-visualizer-dbml@0.1.0
+#   visualizer-dbml         funny-visualizer-dbml@0.1.0   (name · runtime id)
 ```
 
 > The data directory honors `FUNNY_DATA_DIR` / `FUNNY_CENTRAL_DATA_DIR`, so
 > `FUNNY_DATA_DIR=/tmp/x funny ext list` targets a different install.
 
+#### Install from a git repo
+
+Point `funny ext install` at a git repository instead of a local directory:
+
+```bash
+funny ext install github:you/my-funny-viz                 # default branch
+funny ext install github:you/my-funny-viz#v1.0.0          # a tag or branch
+funny ext install https://github.com/you/my-funny-viz.git
+funny ext install git@github.com:you/my-funny-viz.git     # ssh
+funny ext install github:you/monorepo --subdir packages/viz   # subdir of a repo
+```
+
+Accepted URL forms are `github:`/`gh:` shorthand, `https://…`, and scp-style
+`git@host:…` / `ssh://…`. A trailing `#ref` or `--ref <branch|tag>` selects a
+ref (shallow clone, so branches and tags work — not arbitrary commit SHAs).
+
+> **funny clones, it does not build.** Like a VSCode `.vsix` or an Obsidian
+> release artifact, the installer fetches your repo's **pre-built** `dist/` and
+> copies it — it never runs your build scripts on the server host. The repo must
+> commit (or release) a built bundle that `package.json` → `funny.client` points
+> at. This keeps install safe (no build-time code execution) and fast. See
+> [Publishing your own extension](#publishing-your-own-extension).
+
+The same applies to the API: `POST /api/extensions/install` accepts
+`{ "git": "github:you/repo", "ref"?: "...", "subdir"?: "..." }` (admin-only).
+
 ### 3. Manual copy
 
 ```bash
-cp -r examples/funny-visualizer-dbml ~/.funny/extensions/funny-visualizer-dbml
+git clone https://github.com/ironmussa/funny-extensions
+cp -r funny-extensions/visualizer-dbml ~/.funny/extensions/visualizer-dbml
 ```
 
 Reload the app and the plugin is discovered.
@@ -83,7 +112,7 @@ Reload the app and the plugin is discovered.
 | On-disk location | `~/.funny/extensions/<dirName>/` (server host) |
 | Discovery / manifest | `GET /api/extensions` |
 | Management list | `GET /api/extensions/installed` |
-| Install (admin) | `POST /api/extensions/install` → `{ "path": "/abs/dir" }` |
+| Install (admin) | `POST /api/extensions/install` → `{ "path": "/abs/dir" }` or `{ "git": "github:you/repo", "ref"?, "subdir"? }` |
 | Remove (admin) | `DELETE /api/extensions/:name` |
 | Asset serving | `GET /extensions/<dirName>/<file>` |
 
@@ -101,12 +130,27 @@ A plugin is an **ESM package** that:
 3. **default-exports** a `VisualizerPlugin`, and
 4. points `package.json` → **`funny.client`** at the built entry.
 
-A complete, working reference to copy from:
-[`examples/funny-visualizer-dbml`](../examples/funny-visualizer-dbml) (a DBML →
-interactive ER diagram built on React Flow — shows how to bundle heavy deps
-`@dbml/parse` + `@xyflow/react` + `@dagrejs/dagre` into a decoupled plugin and
-inject a vendored stylesheet at runtime). The CSV snippet below is an
-illustrative minimal walkthrough (CSV itself ships built-in).
+Start from the bare-bones [`visualizer-template`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-template)
+(zero-dep, copy-and-go), or one of the working heavyweight examples that show how
+to bundle real deps — all in the [`funny-extensions`](https://github.com/ironmussa/funny-extensions) repo:
+
+| Example | Renders | Bundles | Notes |
+|---|---|---|---|
+| [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml) | ` ```dbml `, `.dbml` | `@dbml/parse` + React Flow + dagre | Interactive ER diagram; injects a vendored stylesheet. |
+| [`visualizer-dot`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dot) | ` ```dot `, `.dot`, `.gv` | `@hpcc-js/wasm-graphviz` | GraphViz → SVG; wasm embedded as base64 (self-contained). |
+| [`visualizer-vega`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-vega) | ` ```vega-lite `, ` ```vega ` | `vega-embed` | Declarative charts; imperative widget (no host-React conflict). |
+| [`visualizer-jupyter`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-jupyter) | `.ipynb` | `marked` | Custom nbformat-v4 renderer (cells + outputs). |
+| [`visualizer-openapi`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-openapi) | ` ```openapi `, ` ```swagger ` | `swagger-ui-dist` + `js-yaml` | Swagger UI; bundles its own isolated React. |
+
+Each demonstrates a different bundling trick — embedded wasm, an imperative
+non-React widget, a hand-rolled renderer, and an isolated second React app. The
+CSV snippet below is an illustrative minimal walkthrough (CSV itself ships
+built-in).
+
+> **Binary file formats (e.g. Parquet) aren't supported yet.** A visualizer's
+> `source` is delivered as a UTF-8 **string** (the fenced-block text or file
+> contents), which corrupts binary data. Supporting `.parquet`/Arrow/images
+> would need a bytes channel in the host contract (`VisualizerProps`) first.
 
 ### The contract
 
@@ -204,6 +248,36 @@ Avoid hardcoded colors and pixel font sizes.
 If two plugins claim the same fence or extension, **the last one registered
 wins**. Built-ins register first, so an installed plugin can intentionally
 override a built-in (e.g. Mermaid). Overrides are logged.
+
+---
+
+## Publishing your own extension
+
+To distribute an extension, put it in its **own git repo** and install it with
+`funny ext install <git-url>`. The fastest start is the ready-to-copy template:
+
+```bash
+git clone https://github.com/ironmussa/funny-extensions
+cp -r funny-extensions/visualizer-template ../my-funny-viz
+cd ../my-funny-viz && rm -rf .git && git init
+npm install
+npm run build            # → dist/index.mjs
+funny ext install .      # try it locally first
+git add -A && git commit -m "initial visualizer"
+git push                 # to your GitHub repo
+```
+
+Then anyone (an admin) installs it with `funny ext install github:you/my-funny-viz`.
+
+The template ([`visualizer-template`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-template))
+includes the build script, a `@funny/host` type shim so `tsc` works offline
+(the SDK isn't on npm — it's provided at runtime), and a CI workflow that fails
+if the committed `dist/` is stale.
+
+**Commit your `dist/`.** funny installs the **pre-built** bundle straight from
+the repo and never runs your build — the same model as a VSCode `.vsix` or an
+Obsidian release artifact. Always `npm run build` and commit `dist/` before
+tagging a release; tag releases (`#v1.0.0`) so installs can pin a version.
 
 ---
 

@@ -1,9 +1,9 @@
+import { SiGithub } from '@icons-pack/react-simple-icons';
 import {
   ArrowLeft,
   Bot,
   Building2,
   Cpu,
-  Github,
   Mail,
   Mic,
   Palette,
@@ -49,7 +49,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
   { id: 'models', label: 'settings.models', icon: Sparkles },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
-  { id: 'github', label: 'GitHub', icon: Github },
+  { id: 'github', label: 'GitHub', icon: SiGithub },
   { id: 'ai-keys', label: 'AI Providers', icon: Bot },
   { id: 'speech', label: 'Speech', icon: Mic },
   { id: 'email', label: 'Email (SMTP)', icon: Mail },

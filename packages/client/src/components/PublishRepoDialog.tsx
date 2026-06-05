@@ -1,4 +1,5 @@
-import { Github, Globe, Link2, Loader2, Lock } from 'lucide-react';
+import { SiGithub } from '@icons-pack/react-simple-icons';
+import { Globe, Link2, Loader2, Lock } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -161,7 +162,7 @@ export function PublishRepoDialog({
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'github' | 'remote')}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="github" data-testid="publish-tab-github">
-              <Github className="mr-1.5 size-3.5" />
+              <SiGithub className="mr-1.5 size-3.5" />
               GitHub
             </TabsTrigger>
             <TabsTrigger value="remote" data-testid="publish-tab-remote">

@@ -324,7 +324,7 @@ export class CursorACPProcess extends BaseAgentProcess {
       const requestedModel = this.options.model;
       if (requestedModel && requestedModel !== 'default') {
         try {
-          await connection.unstable_setSessionModel({
+          await (connection as any).unstable_setSessionModel({
             sessionId: this.activeSessionId,
             modelId: requestedModel,
           });

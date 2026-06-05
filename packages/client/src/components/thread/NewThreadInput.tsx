@@ -1,5 +1,6 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { CircleDot, FolderOpen, GitBranch, GitFork, Globe, Github, Loader2 } from 'lucide-react';
+import { SiGithub } from '@icons-pack/react-simple-icons';
+import { CircleDot, FolderOpen, GitBranch, GitFork, Globe, Loader2 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -313,7 +314,7 @@ export function NewThreadInput({
               <span className="shrink-0 text-muted-foreground/40">/</span>
               {(() => {
                 const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
-                const Icon = remoteUrl.includes('github.com') ? Github : Globe;
+                const Icon = remoteUrl.includes('github.com') ? SiGithub : Globe;
                 const formatted = formatRemoteUrl(remoteUrl);
                 const content = (
                   <>

@@ -7,15 +7,15 @@ import type { SymbolInfo, SymbolKind } from './types.js';
 
 // ── Lazy-loaded tree-sitter ──────────────────────────────────
 
-let Parser: typeof import('web-tree-sitter').default | null = null;
+let Parser: typeof import('web-tree-sitter').Parser | null = null;
 let parserReady = false;
 const languageCache = new Map<string, any>();
 
-async function ensureParser(): Promise<typeof import('web-tree-sitter').default> {
+async function ensureParser(): Promise<typeof import('web-tree-sitter').Parser> {
   if (Parser && parserReady) return Parser;
 
   const mod = await import('web-tree-sitter');
-  Parser = mod.default;
+  Parser = mod.Parser;
   await Parser.init();
   parserReady = true;
   return Parser;
@@ -56,7 +56,7 @@ async function loadLanguage(langName: string): Promise<any> {
   const cached = languageCache.get(langName);
   if (cached) return cached;
 
-  const P = await ensureParser();
+  await ensureParser();
 
   // Resolve WASM path from tree-sitter-wasms package
   const wasmFileName = `tree-sitter-${langName}.wasm`;
@@ -71,7 +71,8 @@ async function loadLanguage(langName: string): Promise<any> {
     wasmPath = join(process.cwd(), 'node_modules', 'tree-sitter-wasms', 'out', wasmFileName);
   }
 
-  const lang = await P.Language.load(wasmPath);
+  const { Language } = await import('web-tree-sitter');
+  const lang = await Language.load(wasmPath);
   languageCache.set(langName, lang);
   return lang;
 }
@@ -283,6 +284,8 @@ async function extractSymbolsImpl(content: string, filePath: string): Promise<Sy
 
   const tree = parser.parse(content);
   const symbols: SymbolInfo[] = [];
+  // web-tree-sitter >=0.25 returns Tree | null (e.g. on oversized input).
+  if (!tree) return symbols;
   const defMap = new Map(defs.map((d) => [d.nodeType, d]));
 
   function processNode(node: any, containerName?: string) {

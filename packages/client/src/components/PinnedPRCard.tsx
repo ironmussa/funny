@@ -32,7 +32,11 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { baseMarkdownComponents, remarkPlugins } from '@/lib/markdown-components';
+import {
+  baseMarkdownComponents,
+  remarkPlugins,
+  markdownProseClassName,
+} from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
 
 const log = createClientLogger('pinned-pr-card');
@@ -193,7 +197,7 @@ function MarkdownBody({ body }: { body: string }) {
     return <span className="text-muted-foreground italic">(empty)</span>;
   }
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
+    <div className={markdownProseClassName}>
       <Suspense fallback={<pre className="text-xs whitespace-pre-wrap">{trimmed}</pre>}>
         <LazyMarkdown content={trimmed} />
       </Suspense>

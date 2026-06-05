@@ -8,6 +8,7 @@ import { ImageLightbox } from '@/components/ImageLightbox';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { createClientLogger } from '@/lib/client-logger';
+import { markdownProseClassName } from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
 import {
   EDITOR_FONT_SIZE_PX,
@@ -306,7 +307,7 @@ function MarkdownPreview({
   return (
     <div
       data-testid="media-preview-markdown"
-      className="prose prose-sm dark:prose-invert max-w-none p-4"
+      className={cn(markdownProseClassName, 'p-4')}
       style={{
         fontSize: PROSE_FONT_SIZE_PX[fontSize],
         lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,

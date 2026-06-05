@@ -90,11 +90,11 @@ export function TestIdOverlay() {
         return (
           <div
             key={`${label.testid}-${i}`}
-            className="absolute border border-primary/70"
+            className="border-primary/70 absolute border"
             style={{ left, top, width, height }}
           >
             <span
-              className="absolute -top-4 right-0 rounded-sm bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground"
+              className="bg-primary text-primary-foreground absolute -top-4 right-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium"
               style={{ whiteSpace: 'nowrap' }}
             >
               {label.testid}

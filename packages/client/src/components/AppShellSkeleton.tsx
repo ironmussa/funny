@@ -20,11 +20,11 @@ function getSidebarWidth(): number {
 export function AppShellSkeleton() {
   const sidebarWidth = getSidebarWidth();
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="bg-background flex h-screen overflow-hidden">
       {/* Sidebar skeleton — matches persisted sidebar width from ui/sidebar.tsx */}
       <div
         style={{ width: sidebarWidth }}
-        className="flex flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
+        className="border-sidebar-border bg-sidebar flex shrink-0 flex-col border-r"
       >
         {/* Header — logo + action buttons */}
         <div className="flex items-center justify-between px-4 py-3">
@@ -36,7 +36,7 @@ export function AppShellSkeleton() {
         </div>
 
         {/* "Threads" section */}
-        <div className="px-4 pb-2 pt-3">
+        <div className="px-4 pt-3 pb-2">
           <Skeleton className="h-3 w-16" />
         </div>
         <div className="space-y-1 px-2">
@@ -45,7 +45,7 @@ export function AppShellSkeleton() {
         </div>
 
         {/* "Projects" section */}
-        <div className="flex items-center justify-between px-4 pb-2 pt-4">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <Skeleton className="h-3 w-16" />
           <Skeleton className="size-5 rounded" />
         </div>
@@ -63,9 +63,9 @@ export function AppShellSkeleton() {
       </div>
 
       {/* Main content skeleton */}
-      <div className="flex flex-1 flex-col bg-background">
+      <div className="bg-background flex flex-1 flex-col">
         {/* Thread header */}
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+        <div className="border-border flex items-center gap-3 border-b px-4 py-3">
           <Skeleton className="h-5 w-48" />
         </div>
         {/* Message area */}
@@ -75,7 +75,7 @@ export function AppShellSkeleton() {
           <Skeleton className="h-14 w-2/3 rounded-lg" />
         </div>
         {/* Input area */}
-        <div className="border-t border-border p-4">
+        <div className="border-border border-t p-4">
           <Skeleton className="h-20 w-full rounded-lg" />
         </div>
       </div>

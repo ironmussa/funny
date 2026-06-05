@@ -94,12 +94,12 @@ export const InitInfoCard = memo(function InitInfoCard({
     : null;
 
   return (
-    <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+    <div className="border-border bg-muted/50 text-muted-foreground space-y-1 rounded-lg border px-3 py-2 text-xs">
       <div className="flex items-center gap-2">
         <span className="font-medium">{t('initInfo.model')}</span>
         <span className="font-mono">{resolveModelLabel(initInfo.model, t)}</span>
         {effortLabel && (
-          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+          <span className="bg-secondary rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wide uppercase">
             {effortLabel}
           </span>
         )}
@@ -112,10 +112,10 @@ export const InitInfoCard = memo(function InitInfoCard({
         <span className="shrink-0 font-medium">{t('initInfo.tools')}</span>
         <div className="flex flex-wrap items-start gap-1 font-mono">
           {!hasAnyTools && (
-            <span className="italic text-muted-foreground/60">{t('initInfo.providerManaged')}</span>
+            <span className="text-muted-foreground/60 italic">{t('initInfo.providerManaged')}</span>
           )}
           {builtIn.map((tool) => (
-            <span key={tool} className="rounded bg-secondary px-1.5 py-0.5 text-xs">
+            <span key={tool} className="bg-secondary rounded px-1.5 py-0.5 text-xs">
               {tool}
             </span>
           ))}
@@ -166,13 +166,13 @@ const McpToolGroup = memo(function McpToolGroup({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="inline-flex cursor-pointer items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-xs transition-colors hover:bg-primary/20">
+      <CollapsibleTrigger className="bg-primary/10 hover:bg-primary/20 inline-flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors">
         <ChevronRight className={cn('icon-xs transition-transform', open && 'rotate-90')} />
         {serverName} ({toolNames.length})
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1 flex flex-wrap gap-1">
         {toolNames.map((name) => (
-          <span key={name} className="rounded bg-secondary px-1.5 py-0.5 text-xs">
+          <span key={name} className="bg-secondary rounded px-1.5 py-0.5 text-xs">
             {name}
           </span>
         ))}

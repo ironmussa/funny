@@ -115,15 +115,15 @@ export const AllSizes: Story = {
   render: () => (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <span className="w-16 text-xs text-muted-foreground">sm</span>
+        <span className="text-muted-foreground w-16 text-xs">sm</span>
         <DiffStats linesAdded={5603} linesDeleted={1137} dirtyFileCount={48} size="sm" />
       </div>
       <div className="flex items-center gap-3">
-        <span className="w-16 text-xs text-muted-foreground">xs</span>
+        <span className="text-muted-foreground w-16 text-xs">xs</span>
         <DiffStats linesAdded={5603} linesDeleted={1137} dirtyFileCount={48} size="xs" />
       </div>
       <div className="flex items-center gap-3">
-        <span className="w-16 text-xs text-muted-foreground">xxs</span>
+        <span className="text-muted-foreground w-16 text-xs">xxs</span>
         <DiffStats linesAdded={5603} linesDeleted={1137} dirtyFileCount={48} size="xxs" />
       </div>
     </div>

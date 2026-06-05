@@ -28,7 +28,7 @@ function ListFilterDemo(props: Partial<SearchBarProps>) {
   }, [query, caseSensitive]);
 
   return (
-    <div className="w-[420px] space-y-2 rounded-md border border-border bg-background p-2">
+    <div className="border-border bg-background w-[420px] space-y-2 rounded-md border p-2">
       <SearchBar
         {...props}
         query={query}
@@ -41,11 +41,11 @@ function ListFilterDemo(props: Partial<SearchBarProps>) {
       />
       <ul className="max-h-60 overflow-auto text-xs">
         {filtered.map((s) => (
-          <li key={s} className="border-b border-border/50 px-2 py-1 last:border-b-0">
+          <li key={s} className="border-border/50 border-b px-2 py-1 last:border-b-0">
             {s}
           </li>
         ))}
-        {filtered.length === 0 && <li className="px-2 py-2 text-muted-foreground">No matches</li>}
+        {filtered.length === 0 && <li className="text-muted-foreground px-2 py-2">No matches</li>}
       </ul>
     </div>
   );
@@ -73,7 +73,7 @@ function FindInTextDemo() {
   const safeIndex = matches.length === 0 ? 0 : Math.min(index, matches.length - 1);
 
   return (
-    <div className="w-[480px] space-y-2 rounded-md border border-border bg-background p-2">
+    <div className="border-border bg-background w-[480px] space-y-2 rounded-md border p-2">
       <SearchBar
         query={query}
         onQueryChange={(v) => {
@@ -88,7 +88,7 @@ function FindInTextDemo() {
         caseSensitive={caseSensitive}
         onCaseSensitiveChange={setCaseSensitive}
       />
-      <p className="whitespace-pre-wrap text-xs leading-relaxed">{text}</p>
+      <p className="text-xs leading-relaxed whitespace-pre-wrap">{text}</p>
     </div>
   );
 }
@@ -125,7 +125,7 @@ export const ListFilterNoCase: Story = {
         ? SAMPLE_ITEMS.filter((s) => s.toLowerCase().includes(query.toLowerCase()))
         : SAMPLE_ITEMS;
       return (
-        <div className="w-[420px] rounded-md border border-border bg-background p-2">
+        <div className="border-border bg-background w-[420px] rounded-md border p-2">
           <SearchBar
             query={query}
             onQueryChange={setQuery}
@@ -155,7 +155,7 @@ export const Loading: Story = {
     function Demo() {
       const [query, setQuery] = useState('react');
       return (
-        <div className="w-[420px] rounded-md border border-border bg-background p-2">
+        <div className="border-border bg-background w-[420px] rounded-md border p-2">
           <SearchBar
             query={query}
             onQueryChange={setQuery}
@@ -180,7 +180,7 @@ export const Empty: Story = {
     function Demo() {
       const [query, setQuery] = useState('');
       return (
-        <div className="w-[420px] rounded-md border border-border bg-background p-2">
+        <div className="border-border bg-background w-[420px] rounded-md border p-2">
           <SearchBar
             query={query}
             onQueryChange={setQuery}

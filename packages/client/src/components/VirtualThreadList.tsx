@@ -125,7 +125,7 @@ export function VirtualThreadList({
       <div
         ref={scrollRef}
         data-testid="virtual-thread-list-scroll"
-        className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border/50"
+        className="border-border/50 min-h-0 flex-1 overflow-y-auto rounded-lg border"
       >
         <div
           style={{
@@ -147,7 +147,7 @@ export function VirtualThreadList({
                 {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
                 onMouseMove={() => setHighlightIndex(v.index)}
                 className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 group/row outline-none',
+                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 group/row outline-hidden',
                   onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
                   v.index === highlightIndex && 'bg-accent/50',
                 )}
@@ -179,7 +179,7 @@ export function VirtualThreadList({
                       <HighlightText
                         text={contentSnippets.get(thread.id)!}
                         query={search}
-                        className="block truncate text-[11px] italic text-muted-foreground"
+                        className="text-muted-foreground block truncate text-[11px] italic"
                       />
                     )}
                   <div className="mt-0.5 flex items-center gap-2">
@@ -193,7 +193,7 @@ export function VirtualThreadList({
                     )}
                   </div>
                 </div>
-                <span className="hidden flex-shrink-0 text-xs text-muted-foreground sm:inline">
+                <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
                   {timeAgo(thread.completedAt ?? thread.createdAt, t)}
                 </span>
                 {renderActions?.(thread)}

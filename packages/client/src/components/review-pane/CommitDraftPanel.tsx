@@ -104,8 +104,8 @@ export function CommitDraftPanel({
     <>
       {/* Workflow progress */}
       {commitEntry && (
-        <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-2">
-          <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
+        <div className="border-sidebar-border shrink-0 space-y-2 border-t p-2">
+          <p className="text-foreground text-xs font-medium">{commitEntry.title}</p>
           <InlineProgressSteps steps={commitEntry.steps} />
           {(() => {
             const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
@@ -136,7 +136,7 @@ export function CommitDraftPanel({
 
       {/* Commit input + action selector */}
       {summaries.length > 0 && !commitInProgress && (
-        <div className="flex-shrink-0 space-y-1.5 border-t border-sidebar-border p-2">
+        <div className="border-sidebar-border shrink-0 space-y-1.5 border-t p-2">
           <Input
             type="text"
             placeholder={t('review.commitTitle')}
@@ -147,9 +147,9 @@ export function CommitDraftPanel({
             disabled={!!actionInProgress || generatingMsg}
             className="h-auto px-2 py-1.5 text-xs"
           />
-          <div className="rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
+          <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/50 rounded-md border focus-within:ring-1">
             <textarea
-              className="w-full resize-none bg-transparent px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none"
+              className="placeholder:text-muted-foreground w-full resize-none bg-transparent px-2 py-1.5 text-xs focus-visible:outline-hidden"
               rows={7}
               aria-label={t('review.commitBody', 'Commit body')}
               data-testid="review-commit-body"
@@ -245,7 +245,7 @@ export function CommitDraftPanel({
                     <ActionIcon
                       className={cn('icon-base', selectedAction === value && 'text-primary')}
                     />
-                    <span className="text-xs font-medium leading-tight">{label}</span>
+                    <span className="text-xs leading-tight font-medium">{label}</span>
                   </button>
                 </TooltipTrigger>
                 {isAgentRunning && (
@@ -280,8 +280,8 @@ export function CommitDraftPanel({
 
       {/* Rebase conflict resolution — shown when merge/rebase failed with conflicts */}
       {hasRebaseConflict && (
-        <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
-          <div className="flex items-center gap-2 text-xs text-destructive">
+        <div className="border-sidebar-border shrink-0 space-y-2 border-t p-3">
+          <div className="text-destructive flex items-center gap-2 text-xs">
             <AlertTriangle className="icon-sm" />
             <span>{t('review.mergeConflict', { target: baseBranch || 'main' })}</span>
           </div>

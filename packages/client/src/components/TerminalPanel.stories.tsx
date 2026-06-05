@@ -163,8 +163,8 @@ function seedStores(
 
 function TerminalPanelWrapper() {
   return (
-    <div className="flex h-[400px] w-[900px] flex-col border border-border bg-background">
-      <div className="flex-1 bg-muted/20" />
+    <div className="border-border bg-background flex h-[400px] w-[900px] flex-col border">
+      <div className="bg-muted/20 flex-1" />
       <TerminalPanel />
     </div>
   );

@@ -59,7 +59,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       data-testid="code-block-copy"
       onClick={() => copy(text)}
-      className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
+      className="text-muted-foreground hover:bg-background/50 hover:text-foreground absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity group-hover/codeblock:opacity-100"
       aria-label="Copy code"
     >
       {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
@@ -157,7 +157,7 @@ export const baseMarkdownComponents = {
     }
     return (
       <code
-        className="rounded bg-muted-foreground/20 px-1 py-0.5 font-mono text-xs text-foreground [-webkit-box-decoration-break:clone] [box-decoration-break:clone]"
+        className="bg-muted-foreground/20 text-foreground rounded [box-decoration-break:clone] px-1 py-0.5 font-mono text-xs [-webkit-box-decoration-break:clone]"
         {...props}
       >
         {children}
@@ -176,8 +176,8 @@ export const baseMarkdownComponents = {
       const Visualizer = visualizer.Component;
       return (
         <div className="my-2">
-          <div className="overflow-x-auto rounded bg-muted p-2">
-            <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
+          <div className="bg-muted overflow-x-auto rounded p-2">
+            <div className="text-muted-foreground/80 mb-1 text-[10px] tracking-wider uppercase select-none">
               {language}
             </div>
             <Visualizer source={text} />
@@ -191,8 +191,8 @@ export const baseMarkdownComponents = {
 
     if (isMarkdown) {
       return (
-        <div className="prose prose-sm my-2 max-w-none rounded border border-border bg-muted/30 p-4">
-          <Suspense fallback={<div className="whitespace-pre-wrap text-sm">{text}</div>}>
+        <div className="prose prose-sm border-border bg-muted/30 my-2 max-w-none rounded border p-4">
+          <Suspense fallback={<div className="text-sm whitespace-pre-wrap">{text}</div>}>
             <LazyNestedMarkdown content={text} />
           </Suspense>
         </div>
@@ -201,9 +201,9 @@ export const baseMarkdownComponents = {
 
     return (
       <div className="group/codeblock relative my-2">
-        <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-sm leading-relaxed">
+        <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-sm leading-relaxed">
           {language && (
-            <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
+            <div className="text-muted-foreground/80 mb-1 text-[10px] tracking-wider uppercase select-none">
               {language}
             </div>
           )}

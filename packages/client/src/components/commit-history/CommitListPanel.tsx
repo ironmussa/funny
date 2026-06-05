@@ -103,7 +103,7 @@ export function CommitListPanel({
   return (
     <>
       {logEntries.length > 0 && (
-        <div className="border-b border-sidebar-border bg-background px-2 py-1">
+        <div className="border-sidebar-border bg-background border-b px-2 py-1">
           <SearchBar
             query={commitSearch}
             onQueryChange={setCommitSearch}
@@ -217,7 +217,7 @@ function SentinelRow({
         <button
           type="button"
           onClick={onLoadMore}
-          className="text-xs text-primary hover:underline"
+          className="text-primary text-xs hover:underline"
           data-testid="history-load-more"
         >
           {t('history.loadMore', 'Load more commits')}
@@ -275,9 +275,9 @@ function CommitRow({
         <HighlightText
           text={entry.message}
           query={commitSearch}
-          className="block truncate font-medium text-foreground"
+          className="text-foreground block truncate font-medium"
         />
-        <div className="mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="text-muted-foreground mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px]">
           <AuthorBadge
             name={entry.author}
             email={entry.authorEmail}
@@ -286,22 +286,22 @@ function CommitRow({
           >
             <HighlightText text={entry.author} query={commitSearch} />
           </AuthorBadge>
-          <span className="flex-shrink-0 text-muted-foreground">
+          <span className="text-muted-foreground shrink-0">
             {shortRelativeDate(entry.relativeDate)}
           </span>
-          <span className="flex flex-shrink-0 items-center gap-1">
+          <span className="flex shrink-0 items-center gap-1">
             {unpushed && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <ArrowUpCircle
-                    className="icon-xs flex-shrink-0 text-muted-foreground"
+                    className="icon-xs text-muted-foreground shrink-0"
                     data-testid={`history-unpushed-${entry.shortHash}`}
                   />
                 </TooltipTrigger>
                 <TooltipContent side="top">{t('history.unpushed', 'Not pushed')}</TooltipContent>
               </Tooltip>
             )}
-            <GitCommit className="icon-xs flex-shrink-0" />
+            <GitCommit className="icon-xs shrink-0" />
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -327,7 +327,7 @@ function CommitRow({
                       (e.currentTarget as HTMLSpanElement).click();
                     }
                   }}
-                  className="flex-shrink-0 cursor-pointer font-mono text-primary hover:underline"
+                  className="text-primary shrink-0 cursor-pointer font-mono hover:underline"
                   data-testid={`history-commit-hash-${entry.shortHash}`}
                 >
                   <HighlightText text={entry.shortHash} query={commitSearch} />
@@ -346,7 +346,7 @@ function CommitRow({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="ml-auto flex-shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground ml-auto shrink-0 transition-colors"
                   data-testid={`history-commit-github-${entry.shortHash}`}
                 >
                   <ExternalLink className="icon-xs" />

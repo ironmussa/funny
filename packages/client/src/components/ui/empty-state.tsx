@@ -41,7 +41,7 @@ export function EmptyState({
     >
       {Icon && <Icon className="size-8 opacity-40" />}
       <p className="text-xs">{title}</p>
-      {description && <div className="text-[10px] text-muted-foreground/70">{description}</div>}
+      {description && <div className="text-muted-foreground/70 text-[10px]">{description}</div>}
       {action && <div className="mt-1">{action}</div>}
     </div>
   );

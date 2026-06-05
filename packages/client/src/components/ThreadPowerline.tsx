@@ -127,7 +127,7 @@ export function ThreadPowerline({
           segments={segments}
           size="sm"
           variant={variant}
-          className="min-w-0 flex-shrink"
+          className="min-w-0 shrink"
           data-testid={props['data-testid']}
         />
       )}

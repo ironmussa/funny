@@ -63,7 +63,7 @@ export function TeamSettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
         Loading team settings…
       </div>
     );
@@ -71,7 +71,7 @@ export function TeamSettings() {
 
   if (!settings) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
         No active organization. Join or create an organization to configure team settings.
       </div>
     );
@@ -83,13 +83,13 @@ export function TeamSettings() {
       <h3 className="settings-section-header">Organization</h3>
       <div className="settings-card">
         <SettingRow title="Name" description="Your organization's display name">
-          <span className="text-sm text-foreground" data-testid="team-settings-name">
+          <span className="text-foreground text-sm" data-testid="team-settings-name">
             {settings.name}
           </span>
         </SettingRow>
         <SettingRow title="Slug" description="URL-safe identifier">
           <span
-            className="font-mono text-sm text-muted-foreground"
+            className="text-muted-foreground font-mono text-sm"
             data-testid="team-settings-slug"
           >
             {settings.slug}
@@ -126,7 +126,7 @@ export function TeamSettings() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="shrink-0 text-xs text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive shrink-0 text-xs"
                 onClick={handleClearApiKey}
                 disabled={saving}
                 data-testid="team-settings-api-key-clear"

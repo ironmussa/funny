@@ -303,7 +303,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu({
                       return <StageIcon className="icon-base mr-2" />;
                     })()}
                     {t('kanban.stage', 'Stage')}
-                    <span className="ml-auto pl-2 text-xs text-muted-foreground">
+                    <span className="text-muted-foreground ml-auto pl-2 text-xs">
                       {t(stageConfig[threadStage!].labelKey)}
                     </span>
                   </DropdownMenuSubTrigger>
@@ -481,7 +481,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu({
               <DropdownMenuItem
                 data-testid="header-menu-delete"
                 onClick={() => setDeleteOpen(true)}
-                className="cursor-pointer text-status-error focus:text-status-error"
+                className="text-status-error focus:text-status-error cursor-pointer"
               >
                 <Trash2 className="icon-base mr-2" />
                 {t('common.delete', 'Delete')}
@@ -625,7 +625,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
       </Tooltip>
       <PopoverContent align="end" className="w-64 p-2">
         {commands.length === 0 ? (
-          <p className="py-3 text-center text-xs text-muted-foreground">
+          <p className="text-muted-foreground py-3 text-center text-xs">
             {t('startup.noCommands')}
           </p>
         ) : (
@@ -635,16 +635,16 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
               return (
                 <div
                   key={cmd.id}
-                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50"
+                  className="hover:bg-accent/50 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {isRunning && (
-                        <Loader2 className="icon-xs flex-shrink-0 animate-spin text-status-success" />
+                        <Loader2 className="icon-xs text-status-success shrink-0 animate-spin" />
                       )}
                       <span className="truncate text-sm">{cmd.label}</span>
                     </div>
-                    <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+                    <span className="text-muted-foreground mt-0.5 block truncate font-mono text-xs">
                       {cmd.command}
                     </span>
                   </div>
@@ -653,7 +653,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleStop(cmd)}
-                      className="flex-shrink-0 text-status-error hover:text-status-error/80"
+                      className="text-status-error hover:text-status-error/80 shrink-0"
                     >
                       <Square className="icon-xs" />
                     </Button>
@@ -662,7 +662,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleRun(cmd)}
-                      className="flex-shrink-0 text-status-success hover:text-status-success/80"
+                      className="text-status-success hover:text-status-success/80 shrink-0"
                     >
                       <Play className="icon-xs" />
                     </Button>
@@ -849,7 +849,7 @@ export const ProjectHeader = memo(function ProjectHeader({
   if (!projectId && !activeThreadIsScratch) return null;
 
   return (
-    <div className="h-12 border-b border-border px-4 py-2">
+    <div className="border-border h-12 border-b px-4 py-2">
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {leading}
@@ -861,7 +861,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                   variant="ghost"
                   size="icon-sm"
                   onClick={handleBackToKanban}
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
                 >
                   <ArrowLeft className="icon-base" />
                 </Button>
@@ -887,7 +887,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                       ),
                     )
                   }
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
                 >
                   <ArrowLeft className="icon-base" />
                 </Button>
@@ -907,7 +907,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                       title={project.name}
                       className="flex cursor-pointer items-center gap-1.5 text-sm"
                     >
-                      <FolderOpen className="icon-sm shrink-0 text-muted-foreground" />
+                      <FolderOpen className="icon-sm text-muted-foreground shrink-0" />
                       <span className="whitespace-nowrap">{project.name}</span>
                     </button>
                   </BreadcrumbLink>
@@ -915,12 +915,12 @@ export const ProjectHeader = memo(function ProjectHeader({
               )}
               {project && activeThreadId && <BreadcrumbSeparator />}
               {activeThreadId && (
-                <BreadcrumbItem className="min-w-0 max-w-[240px] sm:max-w-[360px] md:max-w-[520px]">
+                <BreadcrumbItem className="max-w-[240px] min-w-0 sm:max-w-[360px] md:max-w-[520px]">
                   {isEditingTitle ? (
-                    <span className="inline-grid min-w-0 max-w-full justify-start justify-items-start">
+                    <span className="inline-grid max-w-full min-w-0 justify-start justify-items-start">
                       <span
                         aria-hidden
-                        className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre text-left text-sm font-medium"
+                        className="invisible col-start-1 row-start-1 overflow-hidden text-left text-sm font-medium whitespace-pre"
                       >
                         {titleDraft || ' '}
                       </span>
@@ -939,7 +939,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                             cancelTitleEdit();
                           }
                         }}
-                        className="col-start-1 row-start-1 w-full min-w-0 border-0 bg-transparent p-0 text-left text-sm font-medium text-foreground outline-none ring-0 focus:outline-none focus:ring-0"
+                        className="text-foreground col-start-1 row-start-1 w-full min-w-0 border-0 bg-transparent p-0 text-left text-sm font-medium ring-0 outline-hidden focus:ring-0 focus:outline-hidden"
                       />
                     </span>
                   ) : (
@@ -956,7 +956,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                               startEditingTitle();
                             }
                           }}
-                          className="block min-w-0 max-w-full cursor-text truncate text-sm font-medium hover:text-accent-foreground"
+                          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text truncate text-sm font-medium"
                         >
                           {activeThreadTitle}
                         </span>
@@ -969,7 +969,7 @@ export const ProjectHeader = memo(function ProjectHeader({
               {activeTemplate && (
                 <>
                   <BreadcrumbSeparator />
-                  <BreadcrumbItem className="flex-shrink-0">
+                  <BreadcrumbItem className="shrink-0">
                     <span
                       className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
                       style={{
@@ -995,7 +995,7 @@ export const ProjectHeader = memo(function ProjectHeader({
           </Breadcrumb>
         </div>
         {activeThreadStatus !== 'setting_up' && (
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {!hideStartup && !activeThreadIsScratch && projectId && (
               <StartupCommandsPopover projectId={projectId} />
             )}

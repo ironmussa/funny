@@ -119,7 +119,7 @@ export function AllThreadsContent({
                 data-testid={`list-thread-powerline-${thread.id}`}
               />
               {!!thread.archived && (
-                <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-px text-[10px] font-medium leading-tight text-status-warning/80">
+                <span className="bg-muted text-status-warning/80 inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] leading-tight font-medium">
                   <Archive className="icon-2xs" />
                   {t('allThreads.archived')}
                 </span>

@@ -256,7 +256,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
   if (error) {
     return (
       <div
-        className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded border px-3 py-2 text-xs"
         data-testid="mermaid-error"
       >
         <span className="font-medium">Invalid diagram</span>
@@ -268,13 +268,13 @@ export function MermaidBlock({ chart }: { chart: string }) {
   return (
     <>
       <div
-        className="group relative overflow-hidden rounded border border-border bg-card"
+        className="group border-border bg-card relative overflow-hidden rounded border"
         style={{ height: MERMAID_INLINE_HEIGHT }}
         data-testid="mermaid-diagram"
       >
         <div
           ref={pz.containerRef}
-          className="absolute inset-0 flex select-none items-center justify-center"
+          className="absolute inset-0 flex items-center justify-center select-none"
           style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
@@ -296,9 +296,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
           />
         </div>
 
-        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-border bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur">
-            <span className="px-1 text-xs text-muted-foreground">
+        <div className="pointer-events-none absolute top-2 right-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="border-border bg-background/90 pointer-events-auto flex items-center gap-1 rounded-md border px-1 py-0.5 shadow-xs backdrop-blur-sm">
+            <span className="text-muted-foreground px-1 text-xs">
               {Math.round(pz.displayScale * 100)}%
             </span>
             <Tooltip>
@@ -335,7 +335,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
                   variant="ghost"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-xs text-muted-foreground"
+                  className="text-muted-foreground text-xs"
                   data-testid="mermaid-inline-zoom-reset"
                 >
                   1:1
@@ -506,13 +506,13 @@ export function MermaidExpandedDialog({
       <DialogContent
         className={cn(
           isFullscreen
-            ? 'max-w-[100vw] max-h-[100vh] w-[100vw] h-[100vh]'
+            ? 'max-w-[100vw] max-h-screen w-screen h-screen'
             : 'w-[90vw] max-w-[1200px] h-[85vh]',
           'flex flex-col gap-0 overflow-hidden p-0',
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="flex-shrink-0 border-b border-border px-4 py-3">
+        <DialogHeader className="border-border shrink-0 border-b px-4 py-3">
           <DialogTitle className="flex items-center gap-2 text-sm">Mermaid Diagram</DialogTitle>
           <DialogDescription className="sr-only">Expanded Mermaid diagram view</DialogDescription>
           <div className="flex items-center gap-1">
@@ -544,8 +544,8 @@ export function MermaidExpandedDialog({
               </TooltipTrigger>
               <TooltipContent>{copiedImage ? 'Copied!' : 'Copy as image'}</TooltipContent>
             </Tooltip>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <span className="mr-1 text-xs text-muted-foreground">
+            <div className="bg-border mx-1 h-4 w-px" />
+            <span className="text-muted-foreground mr-1 text-xs">
               {Math.round(pz.displayScale * 100)}%
             </span>
             <Tooltip>
@@ -582,7 +582,7 @@ export function MermaidExpandedDialog({
                   variant="ghost"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-xs text-muted-foreground"
+                  className="text-muted-foreground text-xs"
                   data-testid="mermaid-zoom-reset"
                 >
                   1:1
@@ -622,7 +622,7 @@ export function MermaidExpandedDialog({
 
         <div
           ref={pz.containerRef}
-          className="flex min-h-0 flex-1 select-none items-center justify-center overflow-hidden bg-background"
+          className="bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none"
           style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}

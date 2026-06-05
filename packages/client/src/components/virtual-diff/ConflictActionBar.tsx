@@ -13,11 +13,11 @@ export const ConflictActionBar = memo(function ConflictActionBar({
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2 py-0.5 font-sans text-[length:var(--diff-font-size)]"
+      className="flex items-center gap-1.5 px-2 py-0.5 font-sans text-(length:--diff-font-size)"
       style={{ height: 'var(--diff-row-height)', backgroundColor: 'hsl(210 80% 55% / 0.10)' }}
       data-testid={`conflict-actions-${block.id}`}
     >
-      <span className="mr-1 font-medium text-muted-foreground">Conflict {block.id + 1}:</span>
+      <span className="text-muted-foreground mr-1 font-medium">Conflict {block.id + 1}:</span>
       <button
         className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-400 transition-colors hover:bg-blue-500/20 hover:text-blue-300"
         onClick={() => onResolve(block.id, 'ours')}

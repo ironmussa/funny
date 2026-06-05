@@ -32,7 +32,7 @@ export function MobilePage() {
 
   if (!ready) {
     return (
-      <div className="flex h-[100dvh] bg-background text-foreground">
+      <div className="bg-background text-foreground flex h-dvh">
         <LoadingState testId="mobile-page-loading" />
       </div>
     );
@@ -40,7 +40,7 @@ export function MobilePage() {
 
   return (
     <>
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
+      <div className="bg-background text-foreground flex h-dvh flex-col overflow-hidden">
         {view.screen === 'projects' && (
           <ProjectListView
             projects={projects}

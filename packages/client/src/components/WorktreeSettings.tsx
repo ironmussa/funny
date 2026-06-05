@@ -29,21 +29,21 @@ function WorktreeCard({
   removing: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
+    <div className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
-        <GitFork className="icon-base flex-shrink-0 text-status-info" />
+        <GitFork className="icon-base text-status-info shrink-0" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{worktree.branch}</span>
           </div>
           <div className="mt-0.5 flex items-center gap-2">
-            <FolderOpen className="icon-xs flex-shrink-0 text-muted-foreground/70" />
-            <span className="truncate font-mono text-xs text-muted-foreground/70">
+            <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
+            <span className="text-muted-foreground/70 truncate font-mono text-xs">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span className="font-mono text-xs text-muted-foreground/70">
+            <span className="text-muted-foreground/70 font-mono text-xs">
               {worktree.commit.slice(0, 8)}
             </span>
           )}
@@ -55,7 +55,7 @@ function WorktreeCard({
           size="icon-xs"
           onClick={onRemove}
           disabled={removing}
-          className="flex-shrink-0 text-muted-foreground hover:text-destructive"
+          className="text-muted-foreground hover:text-destructive shrink-0"
         >
           {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
         </Button>
@@ -159,7 +159,7 @@ export function WorktreeSettings() {
 
   if (!project) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground py-6 text-center text-sm">
         {t('worktreeSettings.noProject')}
       </div>
     );
@@ -169,8 +169,8 @@ export function WorktreeSettings() {
     <div className="space-y-6">
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <AlertCircle className="icon-sm flex-shrink-0" />
+        <div className="bg-destructive/10 text-destructive flex items-center gap-2 rounded-md px-3 py-2 text-xs">
+          <AlertCircle className="icon-sm shrink-0" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">
             {t('worktreeSettings.dismiss')}
@@ -181,7 +181,7 @@ export function WorktreeSettings() {
       {/* Worktree list */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             {t('worktreeSettings.worktrees')}
           </h3>
           <Button
@@ -202,14 +202,14 @@ export function WorktreeSettings() {
         {/* Create form */}
         {showCreate &&
           (branches.length === 0 ? (
-            <div className="mb-3 flex items-center gap-2 rounded-md bg-status-pending/10 px-3 py-2 text-xs text-status-pending/80">
-              <AlertCircle className="icon-sm flex-shrink-0" />
+            <div className="bg-status-pending/10 text-status-pending/80 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-xs">
+              <AlertCircle className="icon-sm shrink-0" />
               <span>No branches found. Make sure the project has at least one commit.</span>
             </div>
           ) : (
-            <div className="mb-3 space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+            <div className="border-border/50 bg-muted/30 mb-3 space-y-3 rounded-lg border p-3">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">
+                <label className="text-muted-foreground mb-1 block text-xs">
                   {t('worktreeSettings.branchName')}
                 </label>
                 <Input
@@ -223,14 +223,14 @@ export function WorktreeSettings() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">
+                <label className="text-muted-foreground mb-1 block text-xs">
                   {t('worktreeSettings.baseBranch')}
                 </label>
                 <BranchPicker
                   branches={branches}
                   selected={baseBranch}
                   onChange={setBaseBranch}
-                  triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+                  triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50"
                   side="bottom"
                   align="start"
                   showCopy={false}
@@ -263,7 +263,7 @@ export function WorktreeSettings() {
             label={t('worktreeSettings.loadingWorktrees')}
           />
         ) : worktrees.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-6 text-center text-sm">
             {t('worktreeSettings.noWorktrees')}
           </div>
         ) : (

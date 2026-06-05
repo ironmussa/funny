@@ -10,11 +10,11 @@ export function TodoList({ todos }: { todos: TodoItem[] }) {
       {todos.map((todo, i) => (
         <div key={`todo-${i}`} className="flex items-start gap-2">
           {todo.status === 'completed' ? (
-            <CircleCheck className="icon-sm mt-0.5 flex-shrink-0 text-status-success/80" />
+            <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
           ) : todo.status === 'in_progress' ? (
-            <CircleDot className="icon-sm mt-0.5 flex-shrink-0 animate-pulse text-status-info" />
+            <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0 animate-pulse" />
           ) : (
-            <Circle className="icon-sm mt-0.5 flex-shrink-0 text-muted-foreground/50" />
+            <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
           )}
           <span
             className={cn(

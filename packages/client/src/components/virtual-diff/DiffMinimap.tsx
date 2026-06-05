@@ -166,7 +166,7 @@ export const DiffMinimap = memo(function DiffMinimap({
   return (
     <div
       ref={containerRef}
-      className="relative flex-shrink-0 cursor-pointer border-l border-border/50 bg-muted/20"
+      className="border-border/50 bg-muted/20 relative shrink-0 cursor-pointer border-l"
       style={{ width: MINIMAP_WIDTH }}
       onClick={scrollToClick}
       data-testid="diff-minimap"
@@ -174,7 +174,7 @@ export const DiffMinimap = memo(function DiffMinimap({
       <canvas ref={canvasRef} className="block" />
       {/* Viewport indicator */}
       <div
-        className="absolute left-0 right-0 rounded-sm border border-foreground/20 bg-foreground/10"
+        className="border-foreground/20 bg-foreground/10 absolute right-0 left-0 rounded-sm border"
         style={{
           top: viewportTop,
           height: viewportHeight,

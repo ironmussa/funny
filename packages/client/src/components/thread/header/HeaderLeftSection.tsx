@@ -79,10 +79,10 @@ function TitleEditor({
 
   if (isEditingTitle) {
     return (
-      <span className="inline-grid min-w-0 max-w-full justify-start justify-items-start">
+      <span className="inline-grid max-w-full min-w-0 justify-start justify-items-start">
         <span
           aria-hidden
-          className="invisible col-start-1 row-start-1 h-5 max-w-full overflow-hidden whitespace-nowrap text-left text-sm font-medium"
+          className="invisible col-start-1 row-start-1 h-5 max-w-full overflow-hidden text-left text-sm font-medium whitespace-nowrap"
         >
           {titleDraft || ' '}
         </span>
@@ -101,7 +101,7 @@ function TitleEditor({
               cancelTitleEdit();
             }
           }}
-          className="col-start-1 row-start-1 h-5 w-full min-w-0 rounded-none border-0 bg-transparent p-0 text-left text-sm font-medium text-foreground shadow-none focus-visible:ring-0"
+          className="text-foreground col-start-1 row-start-1 h-5 w-full min-w-0 rounded-none border-0 bg-transparent p-0 text-left text-sm font-medium shadow-none focus-visible:ring-0"
         />
       </span>
     );
@@ -120,12 +120,12 @@ function TitleEditor({
               startEditingTitle();
             }
           }}
-          className="block min-w-0 max-w-full cursor-text truncate text-sm font-medium hover:text-accent-foreground"
+          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text truncate text-sm font-medium"
         >
           {activeThreadTitle}
         </span>
       </TooltipTrigger>
-      <TooltipContent className="max-w-xl break-words">{activeThreadTitle}</TooltipContent>
+      <TooltipContent className="max-w-xl wrap-break-word">{activeThreadTitle}</TooltipContent>
     </Tooltip>
   );
 }
@@ -166,7 +166,7 @@ function BackButtons({
             variant="ghost"
             size="icon-sm"
             onClick={handleBackToKanban}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <ArrowLeft className="icon-base" />
           </Button>
@@ -192,7 +192,7 @@ function BackButtons({
                 buildPath(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`),
               )
             }
-            className="shrink-0 text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <ArrowLeft className="icon-base" />
           </Button>
@@ -234,7 +234,7 @@ export function HeaderLeftSection() {
       <Breadcrumb className="min-w-0">
         <BreadcrumbList>
           {project && activeThreadId && (
-            <BreadcrumbItem className="flex-shrink-0">
+            <BreadcrumbItem className="shrink-0">
               <BreadcrumbLink asChild>
                 <button
                   type="button"
@@ -250,7 +250,7 @@ export function HeaderLeftSection() {
                       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                     });
                   }}
-                  className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm hover:text-foreground"
+                  className="hover:text-foreground flex cursor-pointer items-center gap-1.5 text-sm whitespace-nowrap"
                 >
                   <FolderOpen className="icon-sm text-muted-foreground" />
                   {project.name}
@@ -260,7 +260,7 @@ export function HeaderLeftSection() {
           )}
           {project && activeThreadId && <BreadcrumbSeparator />}
           {activeThreadId && (
-            <BreadcrumbItem className="min-w-0 max-w-[240px] sm:max-w-[360px] md:max-w-[520px]">
+            <BreadcrumbItem className="max-w-[240px] min-w-0 sm:max-w-[360px] md:max-w-[520px]">
               <TitleEditor
                 activeThreadId={activeThreadId}
                 activeThreadProjectId={activeThreadProjectId}
@@ -271,7 +271,7 @@ export function HeaderLeftSection() {
           {activeTemplate && (
             <>
               <BreadcrumbSeparator />
-              <BreadcrumbItem className="flex-shrink-0">
+              <BreadcrumbItem className="shrink-0">
                 <span
                   className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
                   style={{
@@ -303,7 +303,7 @@ export function HeaderLeftSection() {
               target="_blank"
               rel="noopener noreferrer"
               data-testid="header-linear-link"
-              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex size-7 shrink-0 items-center justify-center rounded-md"
             >
               <ExternalLink className="icon-base" />
             </a>

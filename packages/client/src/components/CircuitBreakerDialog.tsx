@@ -15,24 +15,24 @@ export function CircuitBreakerDialog() {
   const isHalfOpen = state === 'half-open';
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background">
+    <div className="bg-background fixed inset-0 z-100 flex items-center justify-center">
       <div className="flex max-w-md flex-col items-center gap-6 px-6 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
-          <WifiOff className="size-8 text-destructive" />
+        <div className="bg-destructive/10 flex size-16 items-center justify-center rounded-full">
+          <WifiOff className="text-destructive size-8" />
         </div>
 
         <div className="space-y-2">
           <h2 className="text-xl font-semibold">{t('circuitBreaker.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('circuitBreaker.description')}</p>
+          <p className="text-muted-foreground text-sm">{t('circuitBreaker.description')}</p>
         </div>
 
         {isHalfOpen ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="text-muted-foreground flex items-center gap-2 text-sm">
             <Loader2 className="icon-base animate-spin" />
             {t('circuitBreaker.attemptingReconnect')}
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t('circuitBreaker.willRetryAutomatically')}
           </p>
         )}

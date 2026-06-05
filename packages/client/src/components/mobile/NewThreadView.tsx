@@ -33,20 +33,20 @@ export function NewThreadView({ projectId, onBack, onCreated }: Props) {
 
   return (
     <>
-      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+      <header className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
         <button
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
-          className="-ml-1 rounded p-1 hover:bg-accent"
+          className="hover:bg-accent -ml-1 rounded p-1"
         >
           <ArrowLeft className="icon-lg" />
         </button>
         <h1 className="text-base font-semibold">{t('thread.newThread', 'New Thread')}</h1>
       </header>
-      <div className="flex flex-1 items-center justify-center p-4 text-muted-foreground">
+      <div className="text-muted-foreground flex flex-1 items-center justify-center p-4">
         <div className="text-center">
           <p className="mb-4 text-4xl">✨</p>
-          <p className="text-2xl font-semibold text-foreground">{t('thread.whatShouldAgentDo')}</p>
+          <p className="text-foreground text-2xl font-semibold">{t('thread.whatShouldAgentDo')}</p>
           <p className="mt-2 text-sm">{t('thread.describeTask')}</p>
         </div>
       </div>

@@ -488,7 +488,7 @@ function ReviewPaneWrapper({
        * ensures the portal fills the left portion of the screen correctly.
        */}
       <div
-        className="fixed right-0 top-0 flex flex-col bg-sidebar"
+        className="bg-sidebar fixed top-0 right-0 flex flex-col"
         style={{ width: 400, height: '100vh', overflow: 'hidden' }}
       >
         <div className="flex h-full min-w-0 flex-1 flex-col">

@@ -315,16 +315,16 @@ export function CommitDetailDialog({
           className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
           data-testid="commit-detail-dialog"
         >
-          <div className="shrink-0 border-b border-border px-4 py-3">
+          <div className="border-border shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <DialogTitle className="text-sm font-semibold leading-tight">
+              <DialogTitle className="text-sm leading-tight font-semibold">
                 {selectedCommit?.message ?? 'Commit details'}
               </DialogTitle>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleClose}
-                className="sr-only shrink-0 text-muted-foreground"
+                className="text-muted-foreground sr-only shrink-0"
                 data-testid="commit-detail-close"
               >
                 <X className="icon-xs" />
@@ -334,21 +334,17 @@ export function CommitDetailDialog({
               Commit detail with file changes and diffs
             </DialogDescription>
             {selectedCommit && (
-              <div className="flex items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
-                <GitCommit className="icon-xs flex-shrink-0" />
-                <code className="flex-shrink-0 font-mono text-primary">
-                  {selectedCommit.shortHash}
-                </code>
+              <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
+                <GitCommit className="icon-xs shrink-0" />
+                <code className="text-primary shrink-0 font-mono">{selectedCommit.shortHash}</code>
                 <AuthorBadge
                   name={selectedCommit.author}
                   email={selectedCommit.authorEmail}
                   avatarUrl={githubAvatarBySha.get(selectedCommit.hash)}
                   size="sm"
                 />
-                <span className="flex-shrink-0">
-                  {shortRelativeDate(selectedCommit.relativeDate)}
-                </span>
-                <span className="flex-shrink-0 text-muted-foreground">
+                <span className="shrink-0">{shortRelativeDate(selectedCommit.relativeDate)}</span>
+                <span className="text-muted-foreground shrink-0">
                   &middot; {commitFiles.length} file{commitFiles.length !== 1 ? 's' : ''}
                 </span>
                 <div className="ml-auto flex items-center gap-1">
@@ -404,12 +400,12 @@ export function CommitDetailDialog({
                       {t('history.resetTooltip', 'Hard reset branch to this commit')}
                     </TooltipContent>
                   </Tooltip>
-                  <div className="mx-1 h-4 w-px bg-border" />
+                  <div className="bg-border mx-1 h-4 w-px" />
                   <Button
                     variant="ghost"
                     size="icon-xs"
                     onClick={handleClose}
-                    className="shrink-0 text-muted-foreground"
+                    className="text-muted-foreground shrink-0"
                     data-testid="commit-detail-close"
                   >
                     <X className="icon-xs" />
@@ -419,7 +415,7 @@ export function CommitDetailDialog({
             )}
             {commitBody && (
               <ScrollArea className="mt-1.5 max-h-[80px]">
-                <p className="whitespace-pre-wrap text-[11px] text-muted-foreground">
+                <p className="text-muted-foreground text-[11px] whitespace-pre-wrap">
                   {commitBody}
                 </p>
               </ScrollArea>
@@ -438,7 +434,7 @@ export function CommitDetailDialog({
                 data-testid="commit-detail-file-tree"
               >
                 {commitFiles.length > 0 && (
-                  <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                  <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
                     <SearchBar
                       query={fileSearch}
                       onQueryChange={setFileSearch}
@@ -455,11 +451,11 @@ export function CommitDetailDialog({
                 )}
                 <ScrollArea className="min-h-0 flex-1">
                   {commitFiles.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-muted-foreground">
+                    <div className="text-muted-foreground py-4 text-center text-xs">
                       {t('history.noFiles', 'No files changed')}
                     </div>
                   ) : treeFiles.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-muted-foreground">
+                    <div className="text-muted-foreground py-4 text-center text-xs">
                       {t('history.noMatchingFiles', 'No matching files')}
                     </div>
                   ) : (
@@ -483,7 +479,7 @@ export function CommitDetailDialog({
               />
               <div className="flex min-w-0 flex-1 flex-col" data-testid="commit-detail-diff-pane">
                 {!expandedFile ? (
-                  <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
                     <FileCode className="size-8 opacity-30" />
                     <p className="text-xs">
                       {t('history.selectFile', 'Select a file to view changes')}

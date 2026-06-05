@@ -105,9 +105,9 @@ export function PreviewBrowser() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="bg-background text-foreground flex h-screen flex-col">
       {/* Tab bar */}
-      <div className="flex min-h-[36px] items-center border-b border-border bg-muted/30">
+      <div className="border-border bg-muted/30 flex min-h-[36px] items-center border-b">
         <div className="flex flex-1 items-center overflow-x-auto">
           {tabs.map((tab) => (
             <div
@@ -121,13 +121,13 @@ export function PreviewBrowser() {
               onClick={() => setActiveTabId(tab.commandId)}
             >
               <span className="truncate">{tab.label}</span>
-              <span className="flex-shrink-0 text-xs text-muted-foreground/60">:{tab.port}</span>
+              <span className="text-muted-foreground/60 shrink-0 text-xs">:{tab.port}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseTab(tab.commandId);
                 }}
-                className="ml-auto flex-shrink-0 opacity-0 transition-opacity hover:text-status-error group-hover:opacity-100"
+                className="hover:text-status-error ml-auto shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
               >
                 <X className="icon-xs" />
               </button>
@@ -137,8 +137,8 @@ export function PreviewBrowser() {
 
         {/* Actions */}
         {activeTab && (
-          <div className="flex flex-shrink-0 items-center gap-1 px-2">
-            <span className="mr-1 font-mono text-xs text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-1 px-2">
+            <span className="text-muted-foreground mr-1 font-mono text-xs">
               localhost:{activeTab.port}
             </span>
             <Tooltip>
@@ -183,7 +183,7 @@ export function PreviewBrowser() {
             title={`Preview: ${activeTab.label}`}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
             No previews open. Start a command with a port to see it here.
           </div>
         )}

@@ -87,12 +87,12 @@ export function OrchestratorView() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="orchestrator-view">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <div className="border-border flex items-center gap-3 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="flex items-center gap-2 text-sm font-medium">
             <Activity className="icon-sm text-muted-foreground" /> Orchestrator queue
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-0.5 text-xs">
             Active runs claimed by the orchestrator. Updates in real time.
           </p>
         </div>
@@ -109,7 +109,7 @@ export function OrchestratorView() {
       </div>
 
       {lastError && (
-        <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+        <div className="border-destructive/20 bg-destructive/10 text-destructive border-b px-4 py-2 text-xs">
           {lastError}
         </div>
       )}
@@ -118,11 +118,11 @@ export function OrchestratorView() {
         {loading && runs.length === 0 ? (
           <LoadingState testId="orchestrator-loading" label="Loading…" />
         ) : runs.length === 0 ? (
-          <div className="px-4 py-12 text-center text-xs text-muted-foreground">
+          <div className="text-muted-foreground px-4 py-12 text-center text-xs">
             No runs in flight. The orchestrator picks up queued threads on the next tick.
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-border divide-y">
             {runs.map((run) => {
               const status = deriveStatus(run);
               const thread = findThread(run.threadId);
@@ -134,7 +134,7 @@ export function OrchestratorView() {
               return (
                 <li
                   key={run.threadId}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30"
+                  className="hover:bg-accent/30 flex items-center gap-3 px-4 py-3"
                   data-testid={`orchestrator-run-${run.threadId}`}
                 >
                   <div className="min-w-0 flex-1">
@@ -159,7 +159,7 @@ export function OrchestratorView() {
                         </Badge>
                       )}
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 text-xs">
                       <span className="font-mono">thread {run.threadId.slice(0, 8)}</span>
                       {run.pipelineRunId && (
                         <span className="font-mono">pipeline {run.pipelineRunId.slice(0, 8)}</span>
@@ -168,7 +168,7 @@ export function OrchestratorView() {
                       {run.nextRetryAtMs && <span>retry {formatRelative(run.nextRetryAtMs)}</span>}
                     </div>
                     {run.lastError && (
-                      <div className="mt-1 truncate text-xs text-destructive" title={run.lastError}>
+                      <div className="text-destructive mt-1 truncate text-xs" title={run.lastError}>
                         {run.lastError}
                       </div>
                     )}

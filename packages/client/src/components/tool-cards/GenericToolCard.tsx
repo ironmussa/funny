@@ -73,28 +73,28 @@ export function GenericToolCard({
   }, [output, expanded]);
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
         type="button"
         aria-expanded={expanded}
-        className="w-full cursor-pointer rounded-md text-left transition-colors hover:bg-accent/30"
+        className="hover:bg-accent/30 w-full cursor-pointer rounded-md text-left transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
           <ChevronRight
             className={cn(
-              'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-90',
             )}
           />
           {!hideLabel &&
             (isTodo ? (
-              <ListTodo className="icon-xs flex-shrink-0 text-muted-foreground" />
+              <ListTodo className="icon-xs text-muted-foreground shrink-0" />
             ) : (
-              <Wrench className="icon-xs flex-shrink-0 text-muted-foreground" />
+              <Wrench className="icon-xs text-muted-foreground shrink-0" />
             ))}
           {!hideLabel && (
-            <span className="flex-shrink-0 font-mono font-medium text-foreground">{label}</span>
+            <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>
           )}
           {summary && filePath && (
             <FileLink filePath={filePath} displayPath={displayPath} defaultEditor={defaultEditor} />
@@ -107,7 +107,7 @@ export function GenericToolCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                  className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
                   data-testid="tool-webfetch-url"
                 >
                   {summary}
@@ -117,19 +117,19 @@ export function GenericToolCard({
             </Tooltip>
           )}
           {summary && !filePath && name !== 'WebFetch' && (
-            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+            <span className="text-muted-foreground min-w-0 truncate font-mono text-xs">
               {summary}
             </span>
           )}
           {displayTime && (
-            <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+            <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
               {displayTime}
             </span>
           )}
         </div>
         {!expanded && outputPreview && (
           <div className="-mt-0.5 px-3 pb-1.5">
-            <p className="truncate font-mono text-xs leading-tight text-muted-foreground/70">
+            <p className="text-muted-foreground/70 truncate font-mono text-xs leading-tight">
               → {outputPreview}
             </p>
           </div>
@@ -137,7 +137,7 @@ export function GenericToolCard({
       </button>
       {expanded && (
         <ScrollArea
-          className="border-t border-border/40"
+          className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh]' }}
         >
           {isTodo && todos ? (
@@ -149,22 +149,22 @@ export function GenericToolCard({
               <div className="mt-1.5 space-y-1.5">
                 {Object.entries(parsed).map(([key, value]) => (
                   <div key={key}>
-                    <div className="mb-0.5 text-xs font-semibold uppercase text-muted-foreground">
+                    <div className="text-muted-foreground mb-0.5 text-xs font-semibold uppercase">
                       {key}
                     </div>
-                    <div className="overflow-x-auto rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
+                    <div className="border-border/40 bg-background/80 overflow-x-auto rounded border px-2.5 py-1.5">
                       {name === 'WebFetch' && key === 'url' && typeof value === 'string' ? (
                         <a
                           href={value}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-foreground/80 hover:text-primary hover:underline"
+                          className="text-foreground/80 hover:text-primary block font-mono text-xs leading-relaxed break-all whitespace-pre-wrap hover:underline"
                           data-testid="tool-webfetch-url-detail"
                         >
                           {value}
                         </a>
                       ) : (
-                        <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-foreground/80">
+                        <pre className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                           {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
                         </pre>
                       )}
@@ -174,17 +174,17 @@ export function GenericToolCard({
               </div>
               {output && (
                 <div className="mt-2">
-                  <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                  <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
                     {t('tools.output')}
                   </div>
                   {name === 'WebFetch' || name === 'WebSearch' ? (
-                    <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5 text-sm text-foreground/80">
+                    <div className="border-border/40 bg-background/80 text-foreground/80 rounded border px-2.5 py-1.5 text-sm">
                       <MessageContent content={output} />
                     </div>
                   ) : (
-                    <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
+                    <div className="border-border/40 bg-background/80 rounded border px-2.5 py-1.5">
                       <pre
-                        className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground"
+                        className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
                         dangerouslySetInnerHTML={{ __html: htmlOutput! }}
                       />
                     </div>
@@ -195,7 +195,7 @@ export function GenericToolCard({
                 <div className="flex justify-end pt-2">
                   <button
                     onClick={() => onRespond('Accepted')}
-                    className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors"
                   >
                     <Check className="icon-xs" />
                     {t('tools.respond')}
@@ -232,7 +232,7 @@ function FileLink({
           <a
             href={editorUri}
             onClick={(e) => e.stopPropagation()}
-            className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+            className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
           >
             {displayPath}
           </a>
@@ -242,7 +242,7 @@ function FileLink({
               e.stopPropagation();
               openFileInEditor(filePath, defaultEditor);
             }}
-            className="min-w-0 truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+            className="text-muted-foreground hover:text-primary min-w-0 truncate text-left font-mono text-xs hover:underline"
           >
             {displayPath}
           </button>

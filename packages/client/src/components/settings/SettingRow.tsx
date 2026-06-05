@@ -15,7 +15,7 @@ export function SettingRow({
         <p className="settings-row-title">{title}</p>
         <p className="settings-row-desc">{description}</p>
       </div>
-      <div className="flex-shrink-0">{children}</div>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }

@@ -105,10 +105,10 @@ export function DiffViewerModal({
           <div className="flex min-h-0 flex-1">
             {/* File tree sidebar */}
             <div
-              className="flex w-[280px] shrink-0 flex-col border-r border-border"
+              className="border-border flex w-[280px] shrink-0 flex-col border-r"
               data-testid="expanded-diff-file-tree"
             >
-              <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+              <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
                 <SearchBar
                   query={fileSearch}
                   onQueryChange={setFileSearch}

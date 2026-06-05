@@ -82,12 +82,12 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
   }, [lines]);
 
   return (
-    <pre className="hljs code-viewer m-0 whitespace-pre px-3 py-2 font-mono text-sm leading-relaxed">
+    <pre className="hljs code-viewer m-0 px-3 py-2 font-mono text-sm leading-relaxed whitespace-pre">
       {lines.map((line, i) => (
         <div key={i} className="flex">
           {line.num ? (
             <span
-              className="mr-3 flex-shrink-0 select-none text-right text-muted-foreground/60"
+              className="text-muted-foreground/60 mr-3 shrink-0 text-right select-none"
               style={{ width: numWidth }}
             >
               {line.num}
@@ -155,7 +155,7 @@ export function ReadFileCard({
   };
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div
         role={hasOutput ? 'button' : undefined}
         tabIndex={hasOutput ? 0 : undefined}
@@ -177,16 +177,16 @@ export function ReadFileCard({
         {hasOutput ? (
           <ChevronRight
             className={cn(
-              'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-90',
             )}
           />
         ) : (
-          <span className="icon-xs flex-shrink-0" />
+          <span className="icon-xs shrink-0" />
         )}
-        {!hideLabel && <FileSearch className="icon-xs flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <FileSearch className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (
-          <span className="flex-shrink-0 font-mono font-medium text-foreground">
+          <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.readFile')}
           </span>
         )}
@@ -197,7 +197,7 @@ export function ReadFileCard({
                 <a
                   href={editorUri}
                   onClick={(e) => e.stopPropagation()}
-                  className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                  className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
                   data-testid="read-file-open-link"
                 >
                   {displayPath}
@@ -217,7 +217,7 @@ export function ReadFileCard({
                       openFileInEditor(filePath, defaultEditor);
                     }
                   }}
-                  className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                  className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                   data-testid="read-file-open-link"
                 >
                   {displayPath}
@@ -228,21 +228,21 @@ export function ReadFileCard({
           </Tooltip>
         )}
         {displayTime && (
-          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
             {displayTime}
           </span>
         )}
       </div>
       {expanded && hasOutput && (
         <ScrollArea
-          className="border-t border-border/40"
+          className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh]' }}
         >
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/30 bg-background px-3 py-1 backdrop-blur-sm">
-            <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
-            <div className="flex flex-shrink-0 items-center gap-1">
+          <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
+            <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
+            <div className="flex shrink-0 items-center gap-1">
               {ext && (
-                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">
                   {ext}
                 </span>
               )}

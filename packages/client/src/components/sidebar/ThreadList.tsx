@@ -260,7 +260,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
   if (threads.length === 0) {
     return (
-      <p data-testid="activity-no-threads" className="px-2 py-2 text-xs text-muted-foreground">
+      <p data-testid="activity-no-threads" className="text-muted-foreground px-2 py-2 text-xs">
         {_t('sidebar.noThreads')}
       </p>
     );

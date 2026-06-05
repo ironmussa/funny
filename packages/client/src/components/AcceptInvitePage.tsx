@@ -140,8 +140,8 @@ export function AcceptInvitePage({ token }: Props) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8 text-center shadow-lg">
+    <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="border-border bg-card w-full max-w-sm space-y-6 rounded-lg border p-8 text-center shadow-lg">
         {/* Verifying token */}
         {step === 'verifying' && (
           <LoadingState
@@ -154,10 +154,10 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Registration / Login form */}
         {step === 'register' && (
           <>
-            <UserPlus className="mx-auto size-8 text-primary" />
+            <UserPlus className="text-primary mx-auto size-8" />
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Join {orgName}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <h2 className="text-foreground text-lg font-semibold">Join {orgName}</h2>
+              <p className="text-muted-foreground mt-1 text-sm">
                 You've been invited as <span className="font-medium">{role}</span>.{' '}
                 {isLoginMode ? 'Sign in to accept.' : 'Create an account to get started.'}
               </p>
@@ -168,7 +168,7 @@ export function AcceptInvitePage({ token }: Props) {
               className="space-y-4 text-left"
             >
               <div className="space-y-2">
-                <label htmlFor="invite-username" className="text-sm font-medium text-foreground">
+                <label htmlFor="invite-username" className="text-foreground text-sm font-medium">
                   Username
                 </label>
                 <Input
@@ -187,10 +187,10 @@ export function AcceptInvitePage({ token }: Props) {
                 <div className="space-y-2">
                   <label
                     htmlFor="invite-display-name"
-                    className="text-sm font-medium text-foreground"
+                    className="text-foreground text-sm font-medium"
                   >
                     Display Name
-                    <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+                    <span className="text-muted-foreground ml-1 font-normal">(optional)</span>
                   </label>
                   <Input
                     id="invite-display-name"
@@ -204,7 +204,7 @@ export function AcceptInvitePage({ token }: Props) {
               )}
 
               <div className="space-y-2">
-                <label htmlFor="invite-password" className="text-sm font-medium text-foreground">
+                <label htmlFor="invite-password" className="text-foreground text-sm font-medium">
                   Password
                 </label>
                 <Input
@@ -218,7 +218,7 @@ export function AcceptInvitePage({ token }: Props) {
                 />
               </div>
 
-              {formError && <p className="text-sm text-destructive">{formError}</p>}
+              {formError && <p className="text-destructive text-sm">{formError}</p>}
 
               <Button
                 type="submit"
@@ -231,7 +231,7 @@ export function AcceptInvitePage({ token }: Props) {
               </Button>
             </form>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {isLoginMode ? (
                 <>
                   Don't have an account?{' '}
@@ -280,8 +280,8 @@ export function AcceptInvitePage({ token }: Props) {
         {step === 'success' && (
           <>
             <CheckCircle2 className="mx-auto size-8 text-green-500" />
-            <h2 className="text-lg font-semibold text-foreground">You're in!</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="text-foreground text-lg font-semibold">You're in!</h2>
+            <p className="text-muted-foreground text-sm">
               You've successfully joined <span className="font-medium">{orgName}</span>.
             </p>
             <Button onClick={handleContinue} className="w-full" data-testid="invite-continue">
@@ -294,8 +294,8 @@ export function AcceptInvitePage({ token }: Props) {
         {step === 'already' && (
           <>
             <CheckCircle2 className="mx-auto size-8 text-blue-500" />
-            <h2 className="text-lg font-semibold text-foreground">Already a member</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="text-foreground text-lg font-semibold">Already a member</h2>
+            <p className="text-muted-foreground text-sm">
               You're already a member of <span className="font-medium">{orgName}</span>.
             </p>
             <Button onClick={handleContinue} className="w-full" data-testid="invite-continue">
@@ -307,9 +307,9 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Error */}
         {step === 'error' && (
           <>
-            <XCircle className="mx-auto size-8 text-destructive" />
-            <h2 className="text-lg font-semibold text-foreground">Invitation failed</h2>
-            <p className="text-sm text-muted-foreground">{errorMessage}</p>
+            <XCircle className="text-destructive mx-auto size-8" />
+            <h2 className="text-foreground text-lg font-semibold">Invitation failed</h2>
+            <p className="text-muted-foreground text-sm">{errorMessage}</p>
             <Button
               variant="outline"
               onClick={handleContinue}

@@ -381,14 +381,14 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   if (view === 'error') {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
-        <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10">
+        <div className="bg-destructive/10 flex size-12 items-center justify-center rounded-full">
           <SiGithub className="icon-xl text-destructive" />
         </div>
         <div className="space-y-1 text-center">
           <h3 className="font-medium">
             {t('github.connectionError', { defaultValue: 'Connection Error' })}
           </h3>
-          <p className="max-w-xs text-sm text-muted-foreground">
+          <p className="text-muted-foreground max-w-xs text-sm">
             {t('github.connectionErrorDesc', {
               defaultValue:
                 'Could not check GitHub connection status. The server may be unavailable.',
@@ -412,12 +412,12 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   if (view === 'connect') {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
-        <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+        <div className="bg-muted flex size-12 items-center justify-center rounded-full">
           <SiGithub className="icon-xl" />
         </div>
         <div className="space-y-1 text-center">
           <h3 className="font-medium">{t('github.connectGithub')}</h3>
-          <p className="max-w-xs text-sm text-muted-foreground">{t('github.connectDesc')}</p>
+          <p className="text-muted-foreground max-w-xs text-sm">{t('github.connectDesc')}</p>
         </div>
         <div className="flex w-full max-w-xs flex-col gap-2">
           <Button className="w-full" onClick={startDeviceFlow}>
@@ -425,9 +425,9 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             {t('github.connectGithub')}
           </Button>
           <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground">{t('common.or')}</span>
-            <div className="h-px flex-1 bg-border" />
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">{t('common.or')}</span>
+            <div className="bg-border h-px flex-1" />
           </div>
           <Button
             variant="outline"
@@ -437,7 +437,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             <Settings className="icon-base mr-2" />
             {t('github.useToken')}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-center text-xs">
             <Trans
               i18nKey="github.useTokenHint"
               components={{
@@ -446,7 +446,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
                     href="https://github.com/settings/tokens/new"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:text-foreground"
+                    className="hover:text-foreground underline"
                   />
                 ),
               }}
@@ -463,12 +463,12 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
       <div className="flex flex-col items-center gap-5 py-8">
         <div className="space-y-1 text-center">
           <h3 className="font-medium">{t('github.deviceFlow.title')}</h3>
-          <p className="text-sm text-muted-foreground">{t('github.deviceFlow.desc')}</p>
+          <p className="text-muted-foreground text-sm">{t('github.deviceFlow.desc')}</p>
         </div>
 
         {/* User code display */}
         <div className="flex items-center gap-2">
-          <code className="rounded-md bg-muted px-4 py-2 font-mono text-2xl font-bold tracking-widest">
+          <code className="bg-muted rounded-md px-4 py-2 font-mono text-2xl font-bold tracking-widest">
             {userCode}
           </code>
           <Button variant="outline" size="sm" onClick={() => copyCode(userCode)}>
@@ -516,14 +516,14 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             <img src={ghUser.avatar_url} alt={ghUser.login} className="size-6 rounded-full" />
             <span className="text-sm font-medium">{ghUser.login}</span>
             {tokenSource === 'cli' ? (
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="text-muted-foreground ml-auto text-xs">
                 {t('github.viaGhCli', { defaultValue: 'via gh CLI' })}
               </span>
             ) : (
               <Button
                 variant="ghost"
                 size="sm"
-                className="ml-auto h-7 text-xs text-muted-foreground"
+                className="text-muted-foreground ml-auto h-7 text-xs"
                 onClick={disconnect}
                 data-testid="clone-repo-disconnect"
               >
@@ -547,7 +547,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             onInputKeyDown={handleSearchKeyDown}
             autoFocus={false}
             testIdPrefix="clone-repo-search"
-            className="rounded-md border border-input bg-background px-2"
+            className="border-input bg-background rounded-md border px-2"
           />
         </div>
 
@@ -572,19 +572,19 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
                   className="truncate text-sm font-medium"
                 />
                 {repo.private ? (
-                  <Lock className="icon-xs flex-shrink-0 text-status-pending" />
+                  <Lock className="icon-xs text-status-pending shrink-0" />
                 ) : (
-                  <Globe className="icon-xs flex-shrink-0 text-muted-foreground" />
+                  <Globe className="icon-xs text-muted-foreground shrink-0" />
                 )}
               </div>
               {repo.description && (
                 <HighlightText
                   text={repo.description}
                   query={debouncedSearch}
-                  className="truncate text-xs text-muted-foreground"
+                  className="text-muted-foreground truncate text-xs"
                 />
               )}
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="text-muted-foreground flex items-center gap-3 text-xs">
                 {repo.language && <HighlightText text={repo.language} query={debouncedSearch} />}
                 <span>{relativeTime(repo.updated_at)}</span>
               </div>
@@ -596,7 +596,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           )}
 
           {!loadingRepos && repos.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground py-8 text-center text-sm">
               {t('github.repos.noRepos')}
             </p>
           )}
@@ -614,7 +614,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         <Button
           variant="ghost"
           size="sm"
-          className="-ml-2 text-muted-foreground"
+          className="text-muted-foreground -ml-2"
           onClick={() => setView('repos')}
         >
           <ArrowLeft className="icon-sm mr-1" />
@@ -622,13 +622,13 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         </Button>
 
         {/* Selected repo */}
-        <div className="space-y-1 rounded-md border border-border p-3">
+        <div className="border-border space-y-1 rounded-md border p-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{selectedRepo.full_name}</span>
             {selectedRepo.private && <Lock className="icon-xs text-status-pending" />}
           </div>
           {selectedRepo.description && (
-            <p className="text-xs text-muted-foreground">{selectedRepo.description}</p>
+            <p className="text-muted-foreground text-xs">{selectedRepo.description}</p>
           )}
         </div>
 
@@ -697,7 +697,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
 
     return (
       <div className="flex flex-col items-center gap-4 py-12">
-        <Loader2 className="size-8 animate-spin text-primary" />
+        <Loader2 className="text-primary size-8 animate-spin" />
         <p className="text-sm font-medium">
           {t('github.clone.cloning', { repo: selectedRepo?.full_name })}
         </p>
@@ -705,11 +705,11 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         {/* Progress bar with phase label */}
         <div className="w-full max-w-xs">
           {phaseName && (
-            <p className="mb-1 text-xs font-medium text-muted-foreground">{phaseName}</p>
+            <p className="text-muted-foreground mb-1 text-xs font-medium">{phaseName}</p>
           )}
           {clonePercent !== undefined && (
             <>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
                 <div
                   className={cn(
                     'h-full rounded-full bg-primary',
@@ -718,7 +718,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
                   style={{ width: `${clonePercent}%` }}
                 />
               </div>
-              <p className="mt-1 text-right text-xs text-muted-foreground">{clonePercent}%</p>
+              <p className="text-muted-foreground mt-1 text-right text-xs">{clonePercent}%</p>
             </>
           )}
         </div>

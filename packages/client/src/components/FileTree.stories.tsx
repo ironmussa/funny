@@ -102,7 +102,7 @@ function DefaultStory() {
   const [checked, setChecked] = useState(new Set(mockFiles.map((f) => f.path)));
 
   return (
-    <div className="w-80 rounded-md border border-border bg-sidebar">
+    <div className="border-border bg-sidebar w-80 rounded-md border">
       <FileTree
         files={mockFiles}
         selectedFile={selected}
@@ -140,7 +140,7 @@ function WithoutCheckboxesStory() {
   );
 
   return (
-    <div className="w-80 rounded-md border border-border bg-sidebar">
+    <div className="border-border bg-sidebar w-80 rounded-md border">
       <FileTree
         files={mockFiles}
         selectedFile={selected}
@@ -167,7 +167,7 @@ function LargerFontStory() {
   const [checked, setChecked] = useState(new Set(mockFiles.map((f) => f.path)));
 
   return (
-    <div className="w-80 rounded-md border border-border bg-sidebar">
+    <div className="border-border bg-sidebar w-80 rounded-md border">
       <FileTree
         files={mockFiles}
         selectedFile={selected}
@@ -207,7 +207,7 @@ export const Empty: Story = {
     onFileClick: noop,
   },
   render: () => (
-    <div className="w-80 rounded-md border border-border bg-sidebar p-3 text-xs text-muted-foreground">
+    <div className="border-border bg-sidebar text-muted-foreground w-80 rounded-md border p-3 text-xs">
       <FileTree files={[]} onFileClick={noop} />
       <p className="mt-2">No changes</p>
     </div>
@@ -221,7 +221,7 @@ function SingleFileStory() {
   const [selected, setSelected] = useState<string | null>('index.ts');
 
   return (
-    <div className="w-80 rounded-md border border-border bg-sidebar">
+    <div className="border-border bg-sidebar w-80 rounded-md border">
       <FileTree files={files} selectedFile={selected} onFileClick={(path) => setSelected(path)} />
     </div>
   );
@@ -285,7 +285,7 @@ function DeepNestingStory() {
   const [checked, setChecked] = useState(new Set(files.map((f) => f.path)));
 
   return (
-    <div className="w-80 rounded-md border border-border bg-sidebar">
+    <div className="border-border bg-sidebar w-80 rounded-md border">
       <FileTree
         files={files}
         selectedFile={selected}

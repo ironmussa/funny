@@ -132,12 +132,12 @@ export function SidebarProjectsSection({
 
   return (
     <>
-      <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
+      <div className="flex shrink-0 items-center justify-between px-4 pt-4 pb-2">
         <button
           type="button"
           onClick={() => navigate(buildPath('/list'))}
           data-testid="sidebar-projects-open-list"
-          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground text-xs font-semibold tracking-wider uppercase transition-colors"
         >
           {t('sidebar.projects')}
         </button>
@@ -147,7 +147,7 @@ export function SidebarProjectsSection({
               variant="ghost"
               data-testid="sidebar-add-project"
               size="icon"
-              className="size-5 text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground size-5"
               onClick={() => navigate(buildPath('/new'))}
             >
               <FolderPlus className="icon-sm" />
@@ -168,7 +168,7 @@ export function SidebarProjectsSection({
         <div ref={topSentinelRef} aria-hidden className="h-px shrink-0" />
         <div
           className={cn(
-            'sticky top-0 left-0 right-0 h-8 -mt-px -mb-8 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10 shrink-0',
+            'sticky top-0 left-0 right-0 h-8 -mt-px -mb-8 bg-linear-to-b from-sidebar to-transparent pointer-events-none z-10 shrink-0',
             scrolled ? 'opacity-100' : 'opacity-0',
           )}
         />
@@ -191,7 +191,7 @@ export function SidebarProjectsSection({
           <button
             data-testid="sidebar-no-projects-cta"
             onClick={() => navigate(buildPath('/new'))}
-            className="w-full cursor-pointer px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground w-full cursor-pointer px-2 py-2 text-left text-xs transition-colors"
           >
             {t('sidebar.noProjects')}
           </button>
@@ -219,7 +219,7 @@ export function SidebarProjectsSection({
           >
             <CollapsibleTrigger
               data-testid="sidebar-closed-projects-toggle"
-              className="flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold tracking-wider uppercase"
             >
               <ChevronRight
                 className={cn(
@@ -251,7 +251,7 @@ export function SidebarProjectsSection({
         )}
         <div
           className={cn(
-            'sticky bottom-0 left-0 right-0 h-8 -mt-8 bg-gradient-to-t from-sidebar to-transparent pointer-events-none z-10 shrink-0 transition-opacity',
+            'sticky bottom-0 left-0 right-0 h-8 -mt-8 bg-linear-to-t from-sidebar to-transparent pointer-events-none z-10 shrink-0 transition-opacity',
             atBottom ? 'opacity-0' : 'opacity-100',
           )}
         />

@@ -162,13 +162,13 @@ function ReactionBar({
         </Tooltip>
         {pickerOpen && (
           <div
-            className="absolute left-0 top-full z-10 mt-1 flex gap-0.5 rounded-md border border-border bg-popover p-1 shadow-md"
+            className="border-border bg-popover absolute top-full left-0 z-10 mt-1 flex gap-0.5 rounded-md border p-1 shadow-md"
             data-testid={`${testIdBase}-react-picker`}
           >
             {REACTION_ORDER.map((k) => (
               <button
                 key={k}
-                className="rounded px-1 text-sm hover:bg-accent"
+                className="hover:bg-accent rounded px-1 text-sm"
                 onClick={() => {
                   onReact(k);
                   setPickerOpen(false);
@@ -190,11 +190,11 @@ function ReactionBar({
 function MarkdownBody({ body }: { body: string }) {
   const trimmed = (body ?? '').trim();
   if (!trimmed) {
-    return <span className="italic text-muted-foreground">(empty)</span>;
+    return <span className="text-muted-foreground italic">(empty)</span>;
   }
   return (
     <div className="prose prose-sm dark:prose-invert max-w-none">
-      <Suspense fallback={<pre className="whitespace-pre-wrap text-xs">{trimmed}</pre>}>
+      <Suspense fallback={<pre className="text-xs whitespace-pre-wrap">{trimmed}</pre>}>
         <LazyMarkdown content={trimmed} />
       </Suspense>
     </div>
@@ -220,7 +220,7 @@ function EditForm({
   return (
     <div className="flex flex-col gap-1.5">
       <textarea
-        className="w-full rounded-md border border-border bg-background p-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
         rows={3}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -523,7 +523,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
     return (
       <div
         key={c.id}
-        className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-2"
+        className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2"
         data-testid={`pinned-pr-comment-${c.id}`}
       >
         <div className="flex items-center gap-1.5 text-xs">
@@ -603,7 +603,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
     return (
       <div
         key={rv.id}
-        className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-2"
+        className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2"
         data-testid={`pinned-pr-review-${rv.id}`}
       >
         <div className="flex items-center gap-1.5 text-xs">
@@ -633,7 +633,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
 
   return (
     <div
-      className="flex flex-col gap-3 border-b border-sidebar-border bg-sidebar-accent/10 p-3"
+      className="border-sidebar-border bg-sidebar-accent/10 flex flex-col gap-3 border-b p-3"
       data-testid={`pinned-pr-card-${pr.number}`}
     >
       {/* Header with PR body */}
@@ -645,7 +645,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
                 href={pr.html_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="shrink-0 font-mono text-xs text-muted-foreground hover:underline"
+                className="text-muted-foreground shrink-0 font-mono text-xs hover:underline"
                 data-testid={`pinned-pr-link-${pr.number}`}
               >
                 #{pr.number}
@@ -659,7 +659,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
                 variant="ghost"
                 size="icon-xs"
                 asChild
-                className="shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid={`pinned-pr-open-github-${pr.number}`}
               >
                 <a href={pr.html_url} target="_blank" rel="noopener noreferrer">
@@ -671,21 +671,21 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
           </Tooltip>
         </div>
         {pr.body && (
-          <div className="rounded-md border border-border bg-background p-2">
+          <div className="border-border bg-background rounded-md border p-2">
             <MarkdownBody body={pr.body} />
           </div>
         )}
       </div>
 
       {loading && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
           <Loader2 className="icon-xs animate-spin" />
           {t('review.pullRequests.loadingConversation', 'Loading conversation…')}
         </div>
       )}
 
       {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+        <div className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-2 text-xs">
           {error}
         </div>
       )}
@@ -693,7 +693,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       {/* Review threads */}
       {!loading && threads.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
             <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.reviewThreads', 'Review threads')} ({threads.length}
@@ -704,7 +704,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
             {Array.from(threadsByFile.entries()).map(([filePath, fileThreads]) => (
               <div key={filePath} className="flex flex-col gap-1.5">
                 <div
-                  className="truncate font-mono text-[10px] text-muted-foreground"
+                  className="text-muted-foreground truncate font-mono text-[10px]"
                   title={filePath}
                 >
                   {filePath}
@@ -722,7 +722,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
                       )}
                       data-testid={`pinned-pr-thread-${th.id}`}
                     >
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
                         {th.is_resolved ? (
                           <CheckCircle2 className="size-3 text-green-600" />
                         ) : (
@@ -758,7 +758,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
                       {replyForThread === th.id ? (
                         <div className="flex flex-col gap-1.5 pl-3">
                           <textarea
-                            className="w-full rounded-md border border-border bg-background p-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
                             rows={2}
                             value={replyBody}
                             onChange={(e) => setReplyBody(e.target.value)}
@@ -820,7 +820,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       {/* Reviews */}
       {!loading && conversation && conversation.reviews.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
             <ThumbsUp className="size-3" />
             <span>
               {t('review.pullRequests.reviews', 'Reviews')} ({conversation.reviews.length})
@@ -833,7 +833,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       {/* Conversation comments */}
       {!loading && conversation && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase">
             <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.conversation', 'Conversation')} (
@@ -843,9 +843,9 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
           <div className="flex flex-col gap-2">{conversation.comments.map(renderIssueComment)}</div>
 
           {/* New comment */}
-          <div className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-2">
+          <div className="border-border bg-background flex flex-col gap-1.5 rounded-md border p-2">
             <textarea
-              className="w-full rounded-md border border-border bg-background p-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
               rows={3}
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
@@ -874,7 +874,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       )}
 
       {!loading && threads.length === 0 && conversation && conversation.comments.length === 0 && (
-        <div className="text-xs text-muted-foreground">
+        <div className="text-muted-foreground text-xs">
           {t('review.pullRequests.noConversation', 'No conversation yet.')}
         </div>
       )}

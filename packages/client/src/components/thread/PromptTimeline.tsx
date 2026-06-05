@@ -380,7 +380,7 @@ export function PromptTimeline({
     <TooltipProvider delayDuration={200}>
       <div
         ref={containerRef}
-        className="thread-timeline no-scrollbar flex h-full w-[200px] flex-shrink-0 flex-col overflow-y-auto"
+        className="thread-timeline no-scrollbar flex h-full w-[200px] shrink-0 flex-col overflow-y-auto"
       >
         {/* Timeline */}
         <div className="flex-1 px-3 py-3">
@@ -388,7 +388,7 @@ export function PromptTimeline({
             <div key={group.date}>
               {/* Date separator */}
               {group.date && (
-                <div className="mb-2 mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                <div className="text-muted-foreground/60 mt-1 mb-2 text-[10px] font-medium tracking-wider uppercase">
                   {group.date}
                 </div>
               )}
@@ -449,20 +449,20 @@ function TimelineMilestone({
   return (
     <div className="group/milestone flex gap-2">
       {/* Vertical line + dot/icon */}
-      <div className="flex w-4 flex-shrink-0 flex-col items-center">
+      <div className="flex w-4 shrink-0 flex-col items-center">
         {milestone.inProgress ? (
-          <Loader2 className="icon-sm mt-0.5 flex-shrink-0 animate-spin text-blue-400" />
+          <Loader2 className="icon-sm mt-0.5 shrink-0 animate-spin text-blue-400" />
         ) : Icon ? (
-          <Icon className={cn('icon-sm flex-shrink-0 mt-0.5', colors.icon)} />
+          <Icon className={cn('icon-sm shrink-0 mt-0.5', colors.icon)} />
         ) : (
           <div
             className={cn(
-              'w-2.5 h-2.5 rounded-full border flex-shrink-0 mt-0.5 transition-colors',
+              'w-2.5 h-2.5 rounded-full border shrink-0 mt-0.5 transition-colors',
               isActive ? 'border-primary bg-primary' : 'border-primary bg-transparent',
             )}
           />
         )}
-        {!isLast && <div className="min-h-[16px] w-px flex-1 bg-border" />}
+        {!isLast && <div className="bg-border min-h-[16px] w-px flex-1" />}
       </div>
 
       {/* Content */}
@@ -501,11 +501,11 @@ function TimelineMilestone({
         </TooltipTrigger>
         <TooltipContent side="left" align="start" className="max-w-[300px] p-3">
           <div className="space-y-1.5">
-            <div className="font-mono text-[10px] text-muted-foreground">
+            <div className="text-muted-foreground font-mono text-[10px]">
               {formatRelativeTime(milestone.timestamp)}
             </div>
             <ScrollArea className="max-h-[200px]">
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+              <pre className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
                 {milestone.content.trim()}
               </pre>
             </ScrollArea>

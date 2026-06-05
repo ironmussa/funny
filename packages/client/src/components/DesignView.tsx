@@ -71,7 +71,7 @@ export function DesignView() {
 
   return (
     <div className="flex h-full w-full flex-col" data-testid="design-view">
-      <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+      <header className="border-border bg-background flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Button
           data-testid="design-view-back"
           variant="ghost"
@@ -84,7 +84,7 @@ export function DesignView() {
         <Sparkles className="icon-base text-muted-foreground" />
         <h1 className="text-sm font-semibold">{design?.name ?? t('designView.loading')}</h1>
         {design && (
-          <span className="ml-2 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          <span className="bg-muted text-muted-foreground ml-2 rounded px-2 py-0.5 text-xs">
             {t(`designView.types.${design.type}`, { defaultValue: design.type })}
           </span>
         )}
@@ -94,7 +94,7 @@ export function DesignView() {
         <div className="p-6">
           <p
             data-testid="design-view-error"
-            className="rounded border border-status-error/40 bg-status-error/10 px-3 py-2 text-sm text-status-error"
+            className="border-status-error/40 bg-status-error/10 text-status-error rounded border px-3 py-2 text-sm"
           >
             {designError}
           </p>
@@ -108,7 +108,7 @@ export function DesignView() {
         <div className="flex min-h-0 flex-1">
           {/* Column 1 — chat for the selected thread, or the existing new-thread prompt UI */}
           <div
-            className="flex min-w-0 flex-1 flex-col border-r border-border"
+            className="border-border flex min-w-0 flex-1 flex-col border-r"
             data-testid="design-thread-pane"
           >
             <Suspense
@@ -124,11 +124,11 @@ export function DesignView() {
 
           {/* Column 2 — design preview iframe */}
           <div
-            className="flex w-[40%] min-w-[320px] flex-shrink-0 flex-col bg-background"
+            className="bg-background flex w-[40%] min-w-[320px] shrink-0 flex-col"
             data-testid="design-preview-pane"
           >
-            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="border-border flex items-center gap-2 border-b px-3 py-2">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 {t('designView.previewTitle')}
               </span>
             </div>

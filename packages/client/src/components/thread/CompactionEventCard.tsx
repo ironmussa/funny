@@ -27,7 +27,7 @@ export function CompactionEventCard({ event }: { event: CompactionEvent }) {
         {tokenK}K tokens → summarized ({event.trigger})
       </span>
       {event.timestamp && (
-        <span className="ml-auto shrink-0 text-muted-foreground">
+        <span className="text-muted-foreground ml-auto shrink-0">
           {timeAgo(event.timestamp, t)}
         </span>
       )}

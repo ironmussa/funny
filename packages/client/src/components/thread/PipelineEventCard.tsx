@@ -156,7 +156,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
   switch (event.type) {
     case 'pipeline:started': {
       const sha = metadata.commitSha?.slice(0, 7);
-      detail = sha ? <span className="font-mono text-muted-foreground">{sha}</span> : null;
+      detail = sha ? <span className="text-muted-foreground font-mono">{sha}</span> : null;
       break;
     }
 
@@ -164,7 +164,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
       const iter = metadata.iteration;
       const max = metadata.maxIterations;
       detail = (
-        <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+        <span className="text-muted-foreground inline-flex items-center gap-0.5">
           <Repeat className="icon-2xs" />
           {iter}/{max}
         </span>
@@ -175,7 +175,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
             {detail}
             <button
               data-testid={`pipeline-link-reviewer-${metadata.reviewerThreadId}`}
-              className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+              className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.reviewerThreadId)}
             >
               <ExternalLink className="icon-2xs" />
@@ -195,10 +195,10 @@ export const PipelineEventCard = memo(function PipelineEventCard({
         <AlertTriangle className="icon-xs text-muted-foreground" />
       );
       detail = (
-        <span className="font-medium text-muted-foreground">
+        <span className="text-muted-foreground font-medium">
           {isPassing ? 'PASS' : 'FAIL'}
           {!isPassing && metadata.findingsCount > 0 && (
-            <span className="ml-1 font-normal text-muted-foreground/70">
+            <span className="text-muted-foreground/70 ml-1 font-normal">
               ({metadata.findingsCount} finding{metadata.findingsCount !== 1 ? 's' : ''})
             </span>
           )}
@@ -209,7 +209,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
 
     case 'pipeline:corrector_started': {
       detail = (
-        <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+        <span className="text-muted-foreground inline-flex items-center gap-0.5">
           <Repeat className="icon-2xs" />
           {metadata.iteration}
         </span>
@@ -220,7 +220,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
             {detail}
             <button
               data-testid={`pipeline-link-corrector-${metadata.correctorThreadId}`}
-              className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+              className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.correctorThreadId)}
             >
               <ExternalLink className="icon-2xs" />
@@ -234,7 +234,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
 
     case 'pipeline:fix_applied': {
       detail = (
-        <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+        <span className="text-muted-foreground inline-flex items-center gap-0.5">
           <Repeat className="icon-2xs" />
           {metadata.iteration}
           <ArrowRight className="icon-2xs mx-1 inline" />
@@ -253,10 +253,10 @@ export const PipelineEventCard = memo(function PipelineEventCard({
         <XCircle className="icon-xs text-muted-foreground" />
       );
       detail = (
-        <span className="font-medium text-muted-foreground">
+        <span className="text-muted-foreground font-medium">
           {isPassed ? 'passed' : status === 'failed' ? 'failed' : 'skipped'}
           {metadata.totalIterations > 0 && (
-            <span className="ml-1 font-normal text-muted-foreground/70">
+            <span className="text-muted-foreground/70 ml-1 font-normal">
               (<Repeat className="icon-2xs mr-0.5 inline" />
               {metadata.totalIterations})
             </span>
@@ -281,7 +281,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
             {detail}
             <button
               data-testid={`pipeline-link-fixer-${metadata.fixerThreadId}`}
-              className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+              className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.fixerThreadId)}
             >
               <ExternalLink className="icon-2xs" />
@@ -324,13 +324,13 @@ export const PipelineEventCard = memo(function PipelineEventCard({
   return (
     <div
       data-testid={`pipeline-event-${event.type}`}
-      className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30"
+      className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors"
     >
       {statusIcon || <Icon className={cn('icon-xs shrink-0', config.color)} />}
       <span className={cn('shrink-0 font-mono font-medium', config.color)}>{config.label}</span>
       {detail}
       {event.createdAt && (
-        <span className="ml-auto shrink-0 text-muted-foreground">
+        <span className="text-muted-foreground ml-auto shrink-0">
           {timeAgo(event.createdAt, t)}
         </span>
       )}
@@ -397,16 +397,16 @@ function PrecommitHooksCard({
             isOpen && 'rotate-90',
           )}
         />
-        <Icon className="icon-xs shrink-0 text-muted-foreground" />
-        <span className="shrink-0 font-mono font-medium text-muted-foreground">
+        <Icon className="icon-xs text-muted-foreground shrink-0" />
+        <span className="text-muted-foreground shrink-0 font-mono font-medium">
           Pre-commit hooks
         </span>
-        <span className="font-medium text-muted-foreground">{hasFailed ? 'FAILED' : 'PASSED'}</span>
+        <span className="text-muted-foreground font-medium">{hasFailed ? 'FAILED' : 'PASSED'}</span>
         <span className="text-muted-foreground">
           ({hooks.length} hook{hooks.length !== 1 ? 's' : ''})
         </span>
         {event.createdAt && (
-          <span className="ml-auto shrink-0 text-muted-foreground">
+          <span className="text-muted-foreground ml-auto shrink-0">
             {timeAgo(event.createdAt, t)}
           </span>
         )}
@@ -427,15 +427,15 @@ function PrecommitHooksCard({
                     hook.status === 'pending' && 'text-muted-foreground/40',
                   )}
                 >
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <HookStatusIcon status={hook.status} />
                   </div>
                   <span className="truncate font-mono">{hook.label}</span>
                 </div>
                 {errorHtml && (
-                  <ScrollArea className="ml-4.5 mt-0.5 max-h-60 rounded border border-border/40 bg-background/80">
+                  <ScrollArea className="border-border/40 bg-background/80 mt-0.5 ml-4.5 max-h-60 rounded border">
                     <pre
-                      className="whitespace-pre-wrap break-words px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-muted-foreground"
+                      className="text-muted-foreground px-2.5 py-1.5 font-mono text-[11px] leading-relaxed wrap-break-word whitespace-pre-wrap"
                       dangerouslySetInnerHTML={{ __html: errorHtml }}
                     />
                   </ScrollArea>

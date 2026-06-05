@@ -118,7 +118,7 @@ function PlanMarkdownWithAnchors({ plan, sections }: { plan: string; sections: P
   return (
     <Suspense
       fallback={
-        <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground">
+        <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
           {plan}
         </pre>
       }
@@ -146,7 +146,7 @@ function PlanOutline({
 
   return (
     <ScrollArea
-      className="w-56 flex-shrink-0 border-r border-border/40 py-3"
+      className="border-border/40 w-56 shrink-0 border-r py-3"
       data-testid="plan-review-outline"
     >
       <nav>
@@ -285,9 +285,9 @@ export function PlanReviewDialog({
         data-testid="plan-review-dialog"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="flex-shrink-0 select-none overflow-hidden border-b border-border px-4 py-3">
+        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3 select-none">
           <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden text-sm">
-            <Pencil className="icon-base flex-shrink-0" />
+            <Pencil className="icon-base shrink-0" />
             {t('plan.reviewTitle', 'Review plan')}
           </DialogTitle>
           <Tooltip>
@@ -297,7 +297,7 @@ export function PlanReviewDialog({
                 size="icon-sm"
                 onClick={() => setIsEditing((prev) => !prev)}
                 data-testid="plan-review-toggle-edit"
-                className="flex-shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
               >
                 {isEditing ? <BookOpen className="icon-base" /> : <Code className="icon-base" />}
               </Button>
@@ -318,7 +318,7 @@ export function PlanReviewDialog({
           <div className="min-h-0 flex-1 overflow-hidden" data-testid="plan-review-editor">
             <Suspense
               fallback={
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
                   Loading editor…
                 </div>
               }

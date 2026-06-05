@@ -99,7 +99,7 @@ export function AddProjectView() {
       <div className="mx-auto w-full max-w-md space-y-6 px-4 pb-8">
         {!isCloning && (
           <div className="space-y-2 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10">
+            <div className="bg-primary/10 mx-auto flex size-12 items-center justify-center rounded-full">
               <Plus className="icon-xl text-primary" />
             </div>
             <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>
@@ -111,7 +111,7 @@ export function AddProjectView() {
           <button
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               mode === 'local'
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="add-project-tab-local"
@@ -123,7 +123,7 @@ export function AddProjectView() {
           <button
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               mode === 'github'
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
             data-testid="add-project-tab-clone"
@@ -136,7 +136,7 @@ export function AddProjectView() {
 
         {mode === 'local' ? (
           <div className="space-y-4">
-            <p className="text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-center text-sm">
               {t('sidebar.addProjectDescription', {
                 defaultValue: 'Enter the project name and select the folder path.',
               })}

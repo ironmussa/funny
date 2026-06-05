@@ -44,7 +44,7 @@ export const SplitRow = memo(function SplitRow({
     rightConflictBg ?? (right?.type === 'add' ? GUTTER_BG_ADDED : GUTTER_BG_CARD);
   return (
     <div
-      className="flex font-mono text-[length:var(--diff-font-size)]"
+      className="flex font-mono text-(length:--diff-font-size)"
       style={wrap ? { minHeight: 'var(--diff-row-height)' } : { height: 'var(--diff-row-height)' }}
     >
       {/* Left (old) */}
@@ -57,15 +57,15 @@ export const SplitRow = memo(function SplitRow({
         data-pane="left"
       >
         <div
-          className="relative z-10 flex flex-shrink-0 items-center"
+          className="relative z-10 flex shrink-0 items-center"
           style={{ backgroundColor: leftGutterBg }}
         >
-          <span className="w-11 flex-shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+          <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {left?.oldNo ?? ''}
           </span>
           <span
             className={cn(
-              'w-4 flex-shrink-0 select-none text-center',
+              'w-4 shrink-0 select-none text-center',
               left?.type === 'del' ? 'text-diff-removed' : 'text-foreground/80',
             )}
           >
@@ -102,15 +102,15 @@ export const SplitRow = memo(function SplitRow({
         data-pane="right"
       >
         <div
-          className="relative z-10 flex flex-shrink-0 items-center"
+          className="relative z-10 flex shrink-0 items-center"
           style={{ backgroundColor: rightGutterBg }}
         >
-          <span className="w-11 flex-shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+          <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {right?.newNo ?? ''}
           </span>
           <span
             className={cn(
-              'w-4 flex-shrink-0 select-none text-center',
+              'w-4 shrink-0 select-none text-center',
               right?.type === 'add' ? 'text-diff-added' : 'text-foreground/80',
             )}
           >

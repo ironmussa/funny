@@ -274,12 +274,12 @@ function ActivitySection({
 }) {
   return (
     <div data-testid={testId}>
-      <div className="flex items-center gap-2 border-b border-border/50 px-2 py-1.5">
-        <span className="flex-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="border-border/50 flex items-center gap-2 border-b px-2 py-1.5">
+        <span className="text-muted-foreground flex-1 text-xs font-semibold tracking-wider uppercase">
           {title}
         </span>
         {count !== undefined && count > 0 && (
-          <span className="rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 font-mono text-[10px]">
             {count}
           </span>
         )}
@@ -303,7 +303,7 @@ function InlineTodoList({
     <div className="mt-1.5 space-y-1.5">
       {/* Progress bar */}
       <div className="flex items-center gap-2">
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+        <div className="bg-muted h-1 flex-1 overflow-hidden rounded-full">
           <div
             className={cn(
               'h-full rounded-full transition-all duration-500',
@@ -331,11 +331,11 @@ function InlineTodoList({
             className="flex items-start gap-2"
           >
             {todo.status === 'completed' ? (
-              <CircleCheck className="icon-sm mt-0.5 flex-shrink-0 text-status-success/80" />
+              <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
             ) : todo.status === 'in_progress' ? (
-              <CircleDot className="icon-sm mt-0.5 flex-shrink-0 animate-pulse text-status-info" />
+              <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0 animate-pulse" />
             ) : (
-              <Circle className="icon-sm mt-0.5 flex-shrink-0 text-muted-foreground/50" />
+              <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
             )}
             <span
               className={cn(
@@ -376,15 +376,13 @@ function AgentCard({
     <div data-testid={testId} className="px-2.5 py-2">
       {/* Agent header */}
       <div className="flex items-center gap-2">
-        {isRunning && (
-          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
-        )}
-        <Icon className="icon-sm flex-shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+        {isRunning && <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />}
+        <Icon className="icon-sm text-muted-foreground shrink-0" />
+        <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium">
           {label}
         </span>
         {childToolCallCount !== undefined && childToolCallCount > 0 && (
-          <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]">
             {childToolCallCount} {t('activity.tools', 'tools')}
           </span>
         )}
@@ -400,7 +398,7 @@ function AgentCard({
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="px-4 py-3 text-center text-xs italic text-muted-foreground/50">{message}</div>
+    <div className="text-muted-foreground/50 px-4 py-3 text-center text-xs italic">{message}</div>
   );
 }
 
@@ -517,7 +515,7 @@ export function ActivityPane() {
     return (
       <div
         data-testid="activity-pane"
-        className="flex h-full items-center justify-center text-sm text-muted-foreground"
+        className="text-muted-foreground flex h-full items-center justify-center text-sm"
       >
         {t('activity.noThread', 'Select a thread to see activity')}
       </div>
@@ -527,10 +525,10 @@ export function ActivityPane() {
   return (
     <div data-testid="activity-pane" className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border px-4 py-3">
+      <div className="border-sidebar-border flex shrink-0 items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <Activity className="icon-base text-muted-foreground" />
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
+          <h3 className="text-sidebar-foreground text-xs font-semibold tracking-wider uppercase">
             {t('activity.title', 'Activity')}
           </h3>
         </div>

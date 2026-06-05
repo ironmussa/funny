@@ -63,10 +63,10 @@ export function ThreadView() {
     }
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div className="flex flex-1 items-center justify-center px-6 text-muted-foreground">
+        <div className="text-muted-foreground flex flex-1 items-center justify-center px-6">
           <div className="max-w-3xl text-center">
             <p className="mb-4 text-4xl">{hasProjects ? '🚀' : '📁'}</p>
-            <p className="mb-1 text-2xl font-semibold text-foreground">
+            <p className="text-foreground mb-1 text-2xl font-semibold">
               {hasProjects ? t('thread.selectOrCreate') : t('thread.addProjectFirst')}
             </p>
             <p className="text-sm">
@@ -115,7 +115,7 @@ export function ThreadView() {
       <div className="relative flex h-full min-w-0 flex-1 flex-col" data-testid="thread-switching">
         {threadBody}
         <div
-          className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center bg-background/40 pt-16"
+          className="bg-background/40 pointer-events-none absolute inset-0 z-10 flex items-start justify-center pt-16"
           aria-hidden
         >
           <LoadingState fill={false} testId="thread-switching-spinner" />

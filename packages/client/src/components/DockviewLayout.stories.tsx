@@ -27,7 +27,7 @@ function PanelPlaceholder({
       className={`flex h-full w-full items-center justify-center ${toneClass}`}
       data-testid={`dockview-placeholder-${tone}`}
     >
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground text-sm">{label}</span>
     </div>
   );
 }
@@ -74,7 +74,7 @@ function DockviewLayoutDemo({
 
   return (
     <div className="flex h-[720px] w-full flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
+      <div className="border-border bg-card flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <Button
           size="sm"
           variant={leftOpen ? 'secondary' : 'outline'}

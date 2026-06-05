@@ -163,11 +163,11 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
 
   return (
     <>
-      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+      <header className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
         <button
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
-          className="-ml-1 rounded p-1 hover:bg-accent"
+          className="hover:bg-accent -ml-1 rounded p-1"
         >
           <ArrowLeft className="icon-lg" />
         </button>
@@ -195,14 +195,14 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
                       firstUserEffort)
                     : null;
                   return (
-                    <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    <div className="border-border bg-muted/50 text-muted-foreground space-y-1 rounded-lg border px-3 py-2 text-xs">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{t('initInfo.model')}</span>
                         <span className="font-mono">
                           {resolveModelLabel(activeThread.initInfo.model, t)}
                         </span>
                         {effortLabel && (
-                          <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+                          <span className="bg-secondary rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wide uppercase">
                             {effortLabel}
                           </span>
                         )}
@@ -224,7 +224,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
                   >
                     {msg.role !== 'user' && (
                       <div className="mb-0.5 flex items-start gap-2">
-                        <span className="flex-1 text-xs font-medium uppercase text-muted-foreground">
+                        <span className="text-muted-foreground flex-1 text-xs font-medium uppercase">
                           {msg.role}
                         </span>
                         <CopyButton content={msg.content} />
@@ -239,14 +239,14 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
                             alt={`Attachment ${idx + 1}`}
                             width={128}
                             height={128}
-                            className="max-h-32 rounded border border-border"
+                            className="border-border max-h-32 rounded border"
                           />
                         ))}
                       </div>
                     )}
                     {msg.role === 'user' ? (
                       <>
-                        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+                        <pre className="overflow-x-auto font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
                           {msg.content.trim()}
                         </pre>
                         {(msg.model || msg.permissionMode) && (
@@ -254,7 +254,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
                             {msg.model && (
                               <Badge
                                 variant="outline"
-                                className="h-4 border-primary-foreground/20 bg-primary-foreground/10 px-1.5 py-0 text-[10px] font-medium text-primary-foreground/70"
+                                className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/70 h-4 px-1.5 py-0 text-[10px] font-medium"
                               >
                                 {resolveModelLabel(msg.model, t)}
                               </Badge>
@@ -262,7 +262,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
                             {msg.permissionMode && (
                               <Badge
                                 variant="outline"
-                                className="h-4 border-primary-foreground/20 bg-primary-foreground/10 px-1.5 py-0 text-[10px] font-medium text-primary-foreground/70"
+                                className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/70 h-4 px-1.5 py-0 text-[10px] font-medium"
                               >
                                 {t(`prompt.${msg.permissionMode}`)}
                               </Badge>
@@ -271,7 +271,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
                         )}
                       </>
                     ) : (
-                      <div className="overflow-x-auto break-words text-xs leading-relaxed">
+                      <div className="overflow-x-auto text-xs leading-relaxed wrap-break-word">
                         <MessageContent content={msg.content.trim()} />
                       </div>
                     )}
@@ -298,14 +298,14 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
               ])}
 
               {isRunning && (
-                <div className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground">
+                <div className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm">
                   <D4CAnimation />
                   <span className="text-xs">{t('thread.agentWorking')}</span>
                 </div>
               )}
 
               {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
-                <div className="flex items-center gap-2 text-xs text-status-warning/80">
+                <div className="text-status-warning/80 flex items-center gap-2 text-xs">
                   <Clock className="size-3.5 animate-pulse text-yellow-400" />
                   {t('thread.waitingForResponse')}
                 </div>

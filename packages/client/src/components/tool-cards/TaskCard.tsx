@@ -83,48 +83,46 @@ export const TaskCard = memo(function TaskCard({
   return (
     <div
       data-testid="task-card"
-      className="max-w-full overflow-hidden rounded-lg border border-border text-sm"
+      className="border-border max-w-full overflow-hidden rounded-lg border text-sm"
     >
       <button
         type="button"
         data-testid="task-card-toggle"
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/30"
+        className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
       >
         <ChevronRight
           className={cn(
-            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
-        {!hideLabel && <Bot className="icon-xs flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <Bot className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (
-          <span className="flex-shrink-0 font-mono font-medium text-foreground">
+          <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.subagent')}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+        <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">
           {description}
         </span>
         {hasChildren && (
-          <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]">
             {childToolCalls!.length} tool calls
           </span>
         )}
         {displayTime && (
-          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
             {displayTime}
           </span>
         )}
-        {!output && (
-          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
-        )}
+        {!output && <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />}
       </button>
 
       {expanded && (
         <ScrollArea
-          className="border-t border-border/40"
+          className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[60vh]' }}
         >
           {/* Child tool calls from the subagent (grouped like main thread) */}
@@ -137,13 +135,13 @@ export const TaskCard = memo(function TaskCard({
           {/* Final text output rendered as markdown */}
           {output && (
             <div className="px-3 py-2">
-              <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+              <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
                 {t('tools.output')}
               </div>
-              <div className="prose prose-sm max-w-none rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
+              <div className="prose prose-sm border-border/40 bg-background/80 max-w-none rounded border px-2.5 py-1.5">
                 <Suspense
                   fallback={
-                    <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground">
+                    <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                       {output}
                     </pre>
                   }
@@ -156,7 +154,7 @@ export const TaskCard = memo(function TaskCard({
 
           {/* Waiting state when no children and no output yet */}
           {!hasChildren && !output && (
-            <div className="px-3 py-3 text-center text-xs italic text-muted-foreground/50">
+            <div className="text-muted-foreground/50 px-3 py-3 text-center text-xs italic">
               {t('tools.waitingForOutput')}
             </div>
           )}

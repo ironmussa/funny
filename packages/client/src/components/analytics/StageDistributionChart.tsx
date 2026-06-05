@@ -47,7 +47,7 @@ export function StageDistributionChart({ data }: Props) {
 
   if (chartData.length === 0) {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground">{t('analytics.noData')}</div>
+      <div className="text-muted-foreground py-8 text-center text-sm">{t('analytics.noData')}</div>
     );
   }
 
@@ -83,15 +83,15 @@ export function StageDistributionChart({ data }: Props) {
         {chartData.map((entry) => (
           <div key={entry.stage} className="flex items-center gap-3">
             <div
-              className="size-3 flex-shrink-0 rounded-full"
+              className="size-3 shrink-0 rounded-full"
               style={{ backgroundColor: COLORS[entry.stage] }}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{entry.name}</span>
+                <span className="text-muted-foreground text-xs">{entry.name}</span>
                 <span className="ml-2 text-sm font-medium">{entry.value}</span>
               </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="bg-muted mt-1 h-1.5 overflow-hidden rounded-full">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{

@@ -246,7 +246,7 @@ export function NewThreadInput({
 
   if (creating) {
     return (
-      <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
+      <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
         <LoadingState testId="new-thread-creating" label={t('common.preparing', 'Preparing…')} />
       </div>
     );
@@ -258,12 +258,12 @@ export function NewThreadInput({
     // The handleCreate() branch above routes to api.createScratchThread().
     return (
       <div
-        className="flex flex-1 items-center justify-center px-4 text-muted-foreground"
+        className="text-muted-foreground flex flex-1 items-center justify-center px-4"
         data-testid="new-thread-scratch"
       >
         <div className="w-full max-w-3xl">
           <div
-            className="mb-3 flex h-9 items-center gap-2 text-base text-muted-foreground"
+            className="text-muted-foreground mb-3 flex h-9 items-center gap-2 text-base"
             data-testid="new-thread-context-bar"
           >
             <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
@@ -290,28 +290,28 @@ export function NewThreadInput({
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
+    <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
       <div className="w-full max-w-3xl">
         {/* Context bar: Project / Repo / Branch */}
         <div
-          className="mb-3 flex h-9 items-center gap-2 text-base text-muted-foreground"
+          className="text-muted-foreground mb-3 flex h-9 items-center gap-2 text-base"
           data-testid="new-thread-context-bar"
         >
           {project && (
             <span
-              className="flex h-9 min-w-0 max-w-[140px] items-center gap-1.5 px-2 py-1 md:max-w-[200px]"
+              className="flex h-9 max-w-[140px] min-w-0 items-center gap-1.5 px-2 py-1 md:max-w-[200px]"
               title={project.name}
             >
               <FolderOpen className="size-5 shrink-0" />
               <span className="flex min-w-0 items-center font-medium">
                 <span className="truncate">{project.name.slice(0, -8)}</span>
-                <span className="flex-shrink-0">{project.name.slice(-8)}</span>
+                <span className="shrink-0">{project.name.slice(-8)}</span>
               </span>
             </span>
           )}
           {project && remoteUrl && (
             <>
-              <span className="shrink-0 text-muted-foreground/40">/</span>
+              <span className="text-muted-foreground/40 shrink-0">/</span>
               {(() => {
                 const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
                 const Icon = remoteUrl.includes('github.com') ? SiGithub : Globe;
@@ -321,7 +321,7 @@ export function NewThreadInput({
                     <Icon className="size-5 shrink-0" />
                     <span className="flex min-w-0 items-center font-medium">
                       <span className="truncate">{formatted.slice(0, -8)}</span>
-                      <span className="flex-shrink-0">{formatted.slice(-8)}</span>
+                      <span className="shrink-0">{formatted.slice(-8)}</span>
                     </span>
                   </>
                 );
@@ -330,14 +330,14 @@ export function NewThreadInput({
                     href={browseUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-9 min-w-0 max-w-[180px] items-center gap-1.5 rounded px-2 py-1 transition-colors hover:bg-muted hover:text-foreground md:max-w-[280px]"
+                    className="hover:bg-muted hover:text-foreground flex h-9 max-w-[180px] min-w-0 items-center gap-1.5 rounded px-2 py-1 transition-colors md:max-w-[280px]"
                     data-testid="new-thread-repo-link"
                     title={browseUrl}
                   >
                     {content}
                   </a>
                 ) : (
-                  <span className="flex h-9 min-w-0 max-w-[180px] items-center gap-1.5 px-2 py-1 md:max-w-[280px]">
+                  <span className="flex h-9 max-w-[180px] min-w-0 items-center gap-1.5 px-2 py-1 md:max-w-[280px]">
                     {content}
                   </span>
                 );
@@ -361,7 +361,7 @@ export function NewThreadInput({
                   onChange={handleBranchChange}
                   showCreateNew
                   testId="new-thread-branch-picker"
-                  triggerClassName="flex h-9 max-w-[300px] items-center gap-1.5 truncate rounded px-2 py-1 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none [&_svg]:h-5 [&_svg]:w-5"
+                  triggerClassName="flex h-9 max-w-[300px] items-center gap-1.5 truncate rounded px-2 py-1 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden [&_svg]:h-5 [&_svg]:w-5"
                 />
               )}
             </>
@@ -373,7 +373,7 @@ export function NewThreadInput({
             data-testid="issue-context-banner"
           >
             <CircleDot className="size-3.5 shrink-0 text-emerald-500" />
-            <span className="truncate text-muted-foreground">
+            <span className="text-muted-foreground truncate">
               {t('issues.creatingFromIssue', { title: issueContext.title })}
             </span>
             <Button
@@ -389,7 +389,7 @@ export function NewThreadInput({
         )}
         {isWorktreeMode && previewBranch && (
           <div
-            className="mb-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
+            className="text-muted-foreground/60 mb-1.5 flex items-center gap-1.5 text-[10px]"
             data-testid="worktree-preview"
           >
             <GitFork className="size-3 shrink-0" />

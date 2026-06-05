@@ -279,7 +279,7 @@ export function BrowserPreview({
   return (
     <div ref={browserContainerRef} className="flex h-full flex-col overflow-hidden">
       {/* Browser toolbar */}
-      <div className="flex items-center justify-between border-b bg-muted/30 px-2 py-1">
+      <div className="bg-muted/30 flex items-center justify-between border-b px-2 py-1">
         {/* Left: action navigation */}
         <div className="flex items-center gap-1">
           <TooltipIconButton
@@ -323,7 +323,7 @@ export function BrowserPreview({
 
           {/* Action counter */}
           {hasActions && (
-            <span className="ml-1 text-[10px] tabular-nums text-muted-foreground">
+            <span className="text-muted-foreground ml-1 text-[10px] tabular-nums">
               {activeIndex >= 0 ? activeIndex + 1 : '-'} / {actions.length}
             </span>
           )}
@@ -331,7 +331,7 @@ export function BrowserPreview({
           {/* Live indicator */}
           {isViewingHistorical && (
             <button
-              className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted/80"
+              className="bg-muted text-muted-foreground hover:bg-muted/80 ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium"
               onClick={() => {
                 setSelectedActionIndex(-1);
                 setHoveredActionIndex(-1);
@@ -358,7 +358,7 @@ export function BrowserPreview({
             <TooltipTrigger asChild>
               <button
                 data-testid="browser-zoom-level"
-                className="min-w-[32px] rounded px-1 text-center text-xs tabular-nums text-muted-foreground hover:bg-muted"
+                className="text-muted-foreground hover:bg-muted min-w-[32px] rounded px-1 text-center text-xs tabular-nums"
                 onClick={() => setZoom(1)}
                 aria-label="Reset zoom"
               >
@@ -399,7 +399,7 @@ export function BrowserPreview({
       )}
 
       {/* Action sidebar + Browser canvas */}
-      <div className="flex min-h-0 flex-[2] border-b">
+      <div className="flex min-h-0 flex-2 border-b">
         {/* Action sidebar (appears when actions exist) */}
         {hasActions && (
           <div className="w-[220px] shrink-0 overflow-hidden border-r">
@@ -416,7 +416,7 @@ export function BrowserPreview({
         {/* Canvas area */}
         <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto bg-black/5">
           {!isRunning && !isStreaming ? (
-            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+            <div className="text-muted-foreground flex flex-col items-center gap-2">
               <Monitor className="size-8" />
               <span className="text-sm">No test running</span>
             </div>
@@ -436,7 +436,7 @@ export function BrowserPreview({
       </div>
 
       {/* Detail tabs (Log, Console, Network, Errors, etc.) */}
-      <div className="min-h-0 flex-[2] bg-background">
+      <div className="bg-background min-h-0 flex-2">
         <TestDetailTabs
           outputLines={outputLines}
           consoleEntries={consoleEntries}

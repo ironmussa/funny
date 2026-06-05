@@ -33,10 +33,10 @@ function HorizontalStory() {
   return (
     <div
       ref={containerRef}
-      className="flex h-48 w-[500px] overflow-hidden rounded-md border border-border"
+      className="border-border flex h-48 w-[500px] overflow-hidden rounded-md border"
     >
       <div
-        className="flex items-center justify-center bg-sidebar text-sm text-muted-foreground"
+        className="bg-sidebar text-muted-foreground flex items-center justify-center text-sm"
         style={{ width: `${leftPct}%` }}
       >
         Left ({Math.round(leftPct)}%)
@@ -49,7 +49,7 @@ function HorizontalStory() {
         onPointerUp={handlePointerUp}
         data-testid="story-resize-horizontal"
       />
-      <div className="flex flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
+      <div className="bg-background text-muted-foreground flex flex-1 items-center justify-center text-sm">
         Right ({Math.round(100 - leftPct)}%)
       </div>
     </div>
@@ -76,9 +76,9 @@ function VerticalStory() {
   });
 
   return (
-    <div className="w-[500px] overflow-hidden rounded-md border border-border">
+    <div className="border-border w-[500px] overflow-hidden rounded-md border">
       <div
-        className="flex items-center justify-center bg-sidebar text-sm text-muted-foreground"
+        className="bg-sidebar text-muted-foreground flex items-center justify-center text-sm"
         style={{ height }}
       >
         Top ({height}px)
@@ -91,7 +91,7 @@ function VerticalStory() {
         onPointerUp={handlePointerUp}
         data-testid="story-resize-vertical"
       />
-      <div className="flex h-24 items-center justify-center bg-background text-sm text-muted-foreground">
+      <div className="bg-background text-muted-foreground flex h-24 items-center justify-center text-sm">
         Bottom
       </div>
     </div>

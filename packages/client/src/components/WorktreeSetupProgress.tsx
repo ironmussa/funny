@@ -54,14 +54,14 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
             data-testid={`worktree-setup-step-${focalStep.id}`}
           >
             {/* Icon */}
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               {focalStep.status === 'running' && (
-                <Loader2 className="size-8 animate-spin text-primary" />
+                <Loader2 className="text-primary size-8 animate-spin" />
               )}
               {focalStep.status === 'completed' && <Check className="size-8 text-emerald-500" />}
-              {focalStep.status === 'failed' && <X className="size-8 text-destructive" />}
+              {focalStep.status === 'failed' && <X className="text-destructive size-8" />}
               {focalStep.status === 'pending' && (
-                <Circle className="size-8 text-muted-foreground/40" />
+                <Circle className="text-muted-foreground/40 size-8" />
               )}
             </div>
 
@@ -80,14 +80,14 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
 
             {/* Per-step elapsed */}
             {stepElapsed != null && focalStep.status !== 'pending' && (
-              <span className="text-sm tabular-nums text-muted-foreground/50">
+              <span className="text-muted-foreground/50 text-sm tabular-nums">
                 {formatElapsed(stepElapsed)}
               </span>
             )}
 
             {/* Error message */}
             {focalStep.error && (
-              <pre className="mt-1 max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-destructive/5 p-3 font-mono text-xs text-destructive/80">
+              <pre className="bg-destructive/5 text-destructive/80 mt-1 max-h-40 max-w-full overflow-auto rounded-md p-3 font-mono text-xs wrap-break-word whitespace-pre-wrap">
                 {focalStep.error}
               </pre>
             )}
@@ -115,7 +115,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
 
       {/* Total elapsed */}
       {steps.length > 0 && (
-        <span className="text-xs tabular-nums text-muted-foreground/40">
+        <span className="text-muted-foreground/40 text-xs tabular-nums">
           {completedCount === steps.length && steps.length > 0
             ? `Completed in ${formatElapsed(totalElapsed)}`
             : formatElapsed(totalElapsed)}

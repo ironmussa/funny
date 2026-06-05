@@ -677,9 +677,9 @@ export const MemoizedMessageList = memo(
             <div
               key={key}
               data-item-key={key}
-              className="group/msg relative w-full text-sm text-foreground"
+              className="group/msg text-foreground relative w-full text-sm"
             >
-              <div className="break-words text-sm leading-relaxed">
+              <div className="text-sm leading-relaxed wrap-break-word">
                 <div className="flex items-start gap-2">
                   {msg.author && <AuthorAvatar author={msg.author} />}
                   <div className="min-w-0 flex-1">
@@ -688,7 +688,7 @@ export const MemoizedMessageList = memo(
                   <CopyButton content={msg.content} />
                 </div>
                 <div className="mt-1">
-                  <span className="select-none text-xs text-muted-foreground/80">
+                  <span className="text-muted-foreground/80 text-xs select-none">
                     {timeAgo(msg.timestamp, t)}
                   </span>
                 </div>
@@ -774,7 +774,7 @@ export const MemoizedMessageList = memo(
         const msg = item.msg;
         return (
           <div
-            className="sticky top-0 z-20 pb-3 pt-3"
+            className="sticky top-0 z-20 pt-3 pb-3"
             data-user-msg={msg.id}
             data-item-key={msg.id}
           >

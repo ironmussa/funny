@@ -58,7 +58,7 @@ export function HistoryPopover() {
         <TooltipContent side="bottom">Sent history</TooltipContent>
       </Tooltip>
       <PopoverContent side="bottom" align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="border-border flex items-center justify-between border-b px-3 py-2">
           <span className="text-sm font-semibold">Sent history</span>
           {history.length > 0 && (
             <Button
@@ -66,7 +66,7 @@ export function HistoryPopover() {
               size="sm"
               data-testid="browser-panel-history-clear"
               onClick={clearSentHistory}
-              className="h-6 px-2 text-xs text-muted-foreground"
+              className="text-muted-foreground h-6 px-2 text-xs"
             >
               Clear
             </Button>
@@ -74,24 +74,24 @@ export function HistoryPopover() {
         </div>
         {history.length === 0 ? (
           <div
-            className="px-3 py-6 text-center text-sm text-muted-foreground"
+            className="text-muted-foreground px-3 py-6 text-center text-sm"
             data-testid="browser-panel-history-empty"
           >
             No threads sent yet.
           </div>
         ) : (
           <ScrollArea className="max-h-72">
-            <ul className="flex flex-col divide-y divide-border">
+            <ul className="divide-border flex flex-col divide-y">
               {history.map((entry) => (
                 <li key={entry.threadId}>
                   <button
                     type="button"
                     data-testid={`browser-panel-history-item-${entry.threadId}`}
                     onClick={() => goToThread(entry.threadId)}
-                    className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-muted"
+                    className="hover:bg-muted flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors"
                   >
                     <span className="truncate text-sm">{entry.title}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground text-xs">
                       {projectName(entry.projectId)} · {entry.annotationCount} annotation
                       {entry.annotationCount === 1 ? '' : 's'} · {timeAgo(entry.sentAt)}
                     </span>

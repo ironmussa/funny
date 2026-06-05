@@ -124,7 +124,7 @@ export function TestRunnerPane() {
 
   if (!selectedProjectId) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
         Select a project to run tests
       </div>
     );
@@ -133,8 +133,8 @@ export function TestRunnerPane() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex h-12 items-center justify-between border-b border-sidebar-border px-2">
-        <h3 className="ml-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
+      <div className="border-sidebar-border flex h-12 items-center justify-between border-b px-2">
+        <h3 className="text-sidebar-foreground ml-2 text-xs font-semibold tracking-wider uppercase">
           Test Runner
         </h3>
         <Tooltip>

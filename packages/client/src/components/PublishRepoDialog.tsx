@@ -209,7 +209,7 @@ export function PublishRepoDialog({
 
               <div className="grid gap-1.5">
                 <label className="text-sm font-medium">
-                  Description <span className="font-normal text-muted-foreground">(optional)</span>
+                  Description <span className="text-muted-foreground font-normal">(optional)</span>
                 </label>
                 <Input
                   data-testid="publish-repo-description"
@@ -228,9 +228,9 @@ export function PublishRepoDialog({
               >
                 <div className="flex items-center gap-2">
                   {isPrivate ? (
-                    <Lock className="size-4 text-muted-foreground" />
+                    <Lock className="text-muted-foreground size-4" />
                   ) : (
-                    <Globe className="size-4 text-muted-foreground" />
+                    <Globe className="text-muted-foreground size-4" />
                   )}
                   <span className="text-sm">{isPrivate ? 'Private' : 'Public'}</span>
                 </div>
@@ -243,7 +243,7 @@ export function PublishRepoDialog({
               </div>
 
               {error && (
-                <p className="text-sm text-destructive" data-testid="publish-repo-error">
+                <p className="text-destructive text-sm" data-testid="publish-repo-error">
                   {error}
                 </p>
               )}
@@ -263,7 +263,7 @@ export function PublishRepoDialog({
                   disabled={savingRemote}
                   autoFocus
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   Sets <code className="text-foreground">origin</code> on this project. The remote
                   must already exist; create the empty repository on your provider first, then push
                   from the toolbar.
@@ -271,7 +271,7 @@ export function PublishRepoDialog({
               </div>
 
               {remoteError && (
-                <p className="text-sm text-destructive" data-testid="publish-remote-error">
+                <p className="text-destructive text-sm" data-testid="publish-remote-error">
                   {remoteError}
                 </p>
               )}

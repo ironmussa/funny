@@ -56,10 +56,7 @@ export function SidebarThreadsSection({
     <Collapsible
       open={isExpanded}
       onOpenChange={setIsExpanded}
-      className={cn(
-        'flex shrink-0 flex-col contain-paint',
-        isExpanded && 'max-h-[40%] min-h-[5rem]',
-      )}
+      className={cn('flex shrink-0 flex-col contain-paint', isExpanded && 'max-h-[40%] min-h-20')}
     >
       <CollapsibleTrigger
         data-testid="sidebar-activity-toggle"
@@ -71,11 +68,11 @@ export function SidebarThreadsSection({
         <ChevronRight
           className={cn('icon-sm transition-transform duration-200', isExpanded && 'rotate-90')}
         />
-        <h2 className="text-xs font-semibold uppercase tracking-wider">
+        <h2 className="text-xs font-semibold tracking-wider uppercase">
           {t('sidebar.threadsTitle')}
         </h2>
       </CollapsibleTrigger>
-      <CollapsibleContent className="flex min-h-0 flex-1 flex-col data-[state=open]:animate-slide-down">
+      <CollapsibleContent className="data-[state=open]:animate-slide-down flex min-h-0 flex-1 flex-col">
         <ScrollArea
           viewportRef={scrollRef}
           viewportProps={{
@@ -86,7 +83,7 @@ export function SidebarThreadsSection({
           <div ref={topSentinelRef} aria-hidden className="h-px shrink-0" />
           <div
             className={cn(
-              'sticky top-0 left-0 right-0 h-8 -mt-px -mb-8 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10',
+              'sticky top-0 left-0 right-0 h-8 -mt-px -mb-8 bg-linear-to-b from-sidebar to-transparent pointer-events-none z-10',
               scrolled ? 'opacity-100' : 'opacity-0',
             )}
           />

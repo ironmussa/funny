@@ -198,7 +198,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
       />
       <CommandList ref={listRef}>
         {hasNoResults && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-6 text-center text-sm">
             {t('commandPalette.noResults')}
           </div>
         )}
@@ -211,17 +211,17 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
                 value={`${project.name} ${project.path}`}
                 onSelect={() => handleProjectSelect(project.id)}
               >
-                <FolderOpen className="icon-base flex-shrink-0" />
+                <FolderOpen className="icon-base shrink-0" />
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate">{project.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">{project.path}</span>
+                  <span className="text-muted-foreground truncate text-xs">{project.path}</span>
                 </div>
               </CommandItem>
             ))}
           </CommandGroup>
         )}
         {!searchLower && displayProjects.length === 0 && (
-          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground px-2 py-6 text-center text-sm">
             {t('commandPalette.noProjects')}
           </div>
         )}

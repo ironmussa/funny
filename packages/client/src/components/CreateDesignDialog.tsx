@@ -111,7 +111,7 @@ export function CreateDesignDialog({
       }}
     >
       <DialogContent className="max-w-md p-0" data-testid="create-design-dialog">
-        <DialogHeader className="px-6 pb-2 pt-5">
+        <DialogHeader className="px-6 pt-5 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="icon-base" />
             {t('createDesign.title', { name: projectName, defaultValue: 'Create design' })}
@@ -119,32 +119,32 @@ export function CreateDesignDialog({
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="px-6">
-          <TabsList className="h-7 bg-sidebar-accent/50 p-0.5">
+          <TabsList className="bg-sidebar-accent/50 h-7 p-0.5">
             <TabsTrigger
               value="prototype"
               data-testid="create-design-tab-prototype"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
             >
               {t('createDesign.tabs.prototype', 'Prototype')}
             </TabsTrigger>
             <TabsTrigger
               value="slides"
               data-testid="create-design-tab-slides"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
             >
               {t('createDesign.tabs.slides', 'Slide deck')}
             </TabsTrigger>
             <TabsTrigger
               value="template"
               data-testid="create-design-tab-template"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
             >
               {t('createDesign.tabs.template', 'From template')}
             </TabsTrigger>
             <TabsTrigger
               value="other"
               data-testid="create-design-tab-other"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 data-[state=active]:shadow-xs"
             >
               {t('createDesign.tabs.other', 'Other')}
             </TabsTrigger>
@@ -208,13 +208,13 @@ export function CreateDesignDialog({
 
             <label
               htmlFor="create-design-speaker-notes"
-              className="flex cursor-pointer items-center justify-between rounded-md border border-border p-3"
+              className="border-border flex cursor-pointer items-center justify-between rounded-md border p-3"
             >
               <span className="flex flex-col">
                 <span className="text-sm font-medium">
                   {t('createDesign.slides.speakerNotes', 'Use speaker notes')}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-muted-foreground text-xs">
                   {t('createDesign.slides.speakerNotesHint', 'Less text on slides')}
                 </span>
               </span>
@@ -242,13 +242,13 @@ export function CreateDesignDialog({
           </TabsContent>
 
           <TabsContent value="template" className="mt-4 min-h-[360px]">
-            <p className="py-8 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground py-8 text-center text-sm">
               {t('createDesign.template.empty', 'Templates coming soon.')}
             </p>
           </TabsContent>
 
           <TabsContent value="other" className="mt-4 min-h-[360px]">
-            <p className="py-8 text-center text-sm text-muted-foreground">
+            <p className="text-muted-foreground py-8 text-center text-sm">
               {t('createDesign.other.empty', 'More design types coming soon.')}
             </p>
           </TabsContent>
@@ -257,13 +257,13 @@ export function CreateDesignDialog({
         {error && (
           <p
             data-testid="create-design-error"
-            className="mx-6 mt-2 rounded border border-status-error/40 bg-status-error/10 px-3 py-2 text-xs text-status-error"
+            className="border-status-error/40 bg-status-error/10 text-status-error mx-6 mt-2 rounded border px-3 py-2 text-xs"
           >
             {error}
           </p>
         )}
 
-        <p className="px-6 pb-5 pt-3 text-center text-xs text-muted-foreground">
+        <p className="text-muted-foreground px-6 pt-3 pb-5 text-center text-xs">
           {t('createDesign.privacy', 'Only you can see your project by default.')}
         </p>
       </DialogContent>
@@ -290,7 +290,7 @@ function FidelityCard({ testId, selected, onClick, label, preview }: FidelityCar
         selected ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent/50',
       )}
     >
-      <div className="aspect-[4/3] w-full overflow-hidden rounded-md border border-border bg-muted/40">
+      <div className="border-border bg-muted/40 aspect-4/3 w-full overflow-hidden rounded-md border">
         {preview}
       </div>
       <span className="text-xs font-medium">{label}</span>
@@ -300,7 +300,7 @@ function FidelityCard({ testId, selected, onClick, label, preview }: FidelityCar
 
 function WireframePreview() {
   return (
-    <svg viewBox="0 0 100 75" className="h-full w-full text-muted-foreground/50" fill="none">
+    <svg viewBox="0 0 100 75" className="text-muted-foreground/50 h-full w-full" fill="none">
       <rect x="10" y="10" width="35" height="22" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <rect x="55" y="10" width="35" height="22" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <rect x="10" y="40" width="80" height="3" rx="1" fill="currentColor" />

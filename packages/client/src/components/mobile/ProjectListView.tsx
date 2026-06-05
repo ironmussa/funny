@@ -13,12 +13,12 @@ export function ProjectListView({ projects, onSelect }: Props) {
   const { t } = useTranslation();
   return (
     <>
-      <header className="flex shrink-0 items-center border-b border-border px-4 py-3">
+      <header className="border-border flex shrink-0 items-center border-b px-4 py-3">
         <h1 className="text-base font-semibold">funny</h1>
       </header>
       <ScrollArea className="flex-1">
         {projects.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
             {t('sidebar.noProjects', 'No projects yet. Add one from the desktop app.')}
           </div>
         ) : (
@@ -27,12 +27,12 @@ export function ProjectListView({ projects, onSelect }: Props) {
               <button
                 key={project.id}
                 onClick={() => onSelect(project.id)}
-                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-accent active:bg-accent/80"
+                className="hover:bg-accent active:bg-accent/80 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors"
               >
-                <Folder className="icon-lg shrink-0 text-muted-foreground" />
+                <Folder className="icon-lg text-muted-foreground shrink-0" />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{project.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{project.path}</div>
+                  <div className="text-muted-foreground truncate text-xs">{project.path}</div>
                 </div>
               </button>
             ))}

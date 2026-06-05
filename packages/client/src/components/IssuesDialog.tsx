@@ -158,12 +158,12 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
               label={t('common.loading', 'Loading…')}
             />
           ) : error ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-12 text-center text-sm">
               <p>{t('issues.error')}</p>
               <p className="mt-1 text-xs">{error}</p>
             </div>
           ) : issues.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-12 text-center text-sm">
               {t('issues.noIssues')}
             </div>
           ) : (
@@ -171,13 +171,13 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
               {issues.map((issue) => (
                 <div
                   key={issue.number}
-                  className="group flex items-start gap-2 rounded-md p-2 transition-colors hover:bg-accent/50"
+                  className="group hover:bg-accent/50 flex items-start gap-2 rounded-md p-2 transition-colors"
                   data-testid={`issue-item-${issue.number}`}
                 >
                   {issue.state === 'open' ? (
-                    <CircleDot className="icon-base mt-0.5 flex-shrink-0 text-green-500" />
+                    <CircleDot className="icon-base mt-0.5 shrink-0 text-green-500" />
                   ) : (
-                    <CircleCheck className="icon-base mt-0.5 flex-shrink-0 text-purple-500" />
+                    <CircleCheck className="icon-base mt-0.5 shrink-0 text-purple-500" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-1.5">
@@ -185,21 +185,21 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                         href={issue.html_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="line-clamp-2 text-sm font-medium transition-colors hover:text-primary"
+                        className="hover:text-primary line-clamp-2 text-sm font-medium transition-colors"
                       >
                         {issue.title}
                       </a>
                     </div>
                     {issue.body ? (
                       <p
-                        className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground"
+                        className="text-muted-foreground mt-1 line-clamp-3 text-xs whitespace-pre-wrap"
                         data-testid={`issue-body-${issue.number}`}
                       >
                         {issue.body}
                       </p>
                     ) : null}
                     <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-muted-foreground">#{issue.number}</span>
+                      <span className="text-muted-foreground text-xs">#{issue.number}</span>
                       {issue.labels.map((label) => (
                         <Badge
                           key={label.name}
@@ -242,14 +242,14 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                         </a>
                       )}
 
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-muted-foreground text-xs">
                         {timeAgo(issue.created_at)}
                       </span>
                       {issue.user && (
-                        <span className="text-xs text-muted-foreground">{issue.user.login}</span>
+                        <span className="text-muted-foreground text-xs">{issue.user.login}</span>
                       )}
                       {issue.comments > 0 && (
-                        <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                        <span className="text-muted-foreground flex items-center gap-0.5 text-xs">
                           <MessageSquare className="icon-xs" />
                           {issue.comments}
                         </span>
@@ -308,7 +308,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
               href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
             >
               {t('issues.viewOnGithub')}
               <ExternalLink className="icon-xs" />

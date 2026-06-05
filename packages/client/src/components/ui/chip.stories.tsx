@@ -34,7 +34,7 @@ export const SkillInverse: SkillStory = {
   args: { name: 'query-logs', variant: 'inverse' },
   decorators: [
     (Story) => (
-      <div className="rounded-lg bg-foreground p-4">
+      <div className="bg-foreground rounded-lg p-4">
         <Story />
       </div>
     ),
@@ -59,7 +59,7 @@ export const Folder: StoryObj<typeof FileChip> = {
 
 export const FileInverse: StoryObj<typeof FileChip> = {
   render: (args) => (
-    <div className="rounded-lg bg-foreground p-4">
+    <div className="bg-foreground rounded-lg p-4">
       <FileChip {...args} />
     </div>
   ),
@@ -107,7 +107,7 @@ export const AttachmentReadonly: StoryObj<typeof AttachmentChip> = {
 
 export const AttachmentInverse: StoryObj<typeof AttachmentChip> = {
   render: (args) => (
-    <div className="rounded-lg bg-foreground p-4">
+    <div className="bg-foreground rounded-lg p-4">
       <AttachmentChip {...args} />
     </div>
   ),
@@ -138,7 +138,7 @@ export const Gallery: StoryObj = {
 
       <section>
         <h3 className="mb-2 text-sm font-semibold">Inverse variant (dark surface)</h3>
-        <div className="flex flex-wrap items-center gap-2 rounded bg-foreground p-4">
+        <div className="bg-foreground flex flex-wrap items-center gap-2 rounded p-4">
           <SkillChip name="query-logs" variant="inverse" />
           <FileChip
             name="app-store.ts"

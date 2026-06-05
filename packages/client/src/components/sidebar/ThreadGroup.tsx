@@ -47,15 +47,15 @@ export function ThreadGroup({
     <Collapsible open={isExpanded} onOpenChange={handleOpenChange} className="mb-1 min-w-0">
       <CollapsibleTrigger
         data-testid={props['data-testid']}
-        className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+        className="text-muted-foreground hover:text-foreground flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-xs transition-colors"
       >
         <ChevronRight
           className={cn(
-            'icon-xs flex-shrink-0 transition-transform duration-200',
+            'icon-xs shrink-0 transition-transform duration-200',
             isExpanded && 'rotate-90',
           )}
         />
-        {iconElement ?? (Icon && <Icon className="icon-sm flex-shrink-0" />)}
+        {iconElement ?? (Icon && <Icon className="icon-sm shrink-0" />)}
         <span className="truncate font-medium">
           {title}
           {count !== undefined && ` (${count})`}

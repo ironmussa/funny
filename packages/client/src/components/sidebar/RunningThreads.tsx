@@ -69,9 +69,7 @@ export function RunningThreads() {
     <ThreadGroup
       title={t('sidebar.activeThreads')}
       count={runningThreads.length}
-      iconElement={
-        <span className="size-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
-      }
+      iconElement={<span className="bg-status-info size-1.5 shrink-0 animate-pulse rounded-full" />}
       data-testid="sidebar-running-threads"
     >
       {runningThreads.map((thread) => {

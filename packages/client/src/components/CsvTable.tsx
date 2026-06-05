@@ -54,20 +54,20 @@ export function CsvTable({ source, fill }: { source: string; fill?: boolean }) {
   const rows = useMemo(() => parseCsv(source), [source]);
 
   if (rows.length === 0) {
-    return <div className="text-sm text-muted-foreground">Empty CSV</div>;
+    return <div className="text-muted-foreground text-sm">Empty CSV</div>;
   }
 
   const [header, ...body] = rows;
 
   return (
     <div className={cn('overflow-auto', fill && 'h-full')} data-testid="csv-table">
-      <table className="border-collapse text-[length:var(--diff-font-size,13px)]">
+      <table className="border-collapse text-(length:--diff-font-size,13px)">
         <thead>
           <tr>
             {header.map((cell, i) => (
               <th
                 key={i}
-                className="border border-border bg-muted/50 px-2 py-1 text-left font-medium"
+                className="border-border bg-muted/50 border px-2 py-1 text-left font-medium"
               >
                 {cell}
               </th>
@@ -78,7 +78,7 @@ export function CsvTable({ source, fill }: { source: string; fill?: boolean }) {
           {body.map((r, ri) => (
             <tr key={ri}>
               {r.map((cell, ci) => (
-                <td key={ci} className="border border-border px-2 py-1 align-top">
+                <td key={ci} className="border-border border px-2 py-1 align-top">
                   {cell}
                 </td>
               ))}

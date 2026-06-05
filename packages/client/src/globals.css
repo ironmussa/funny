@@ -1,32 +1,325 @@
-@import 'highlight.js/styles/github-dark.css';
+@import 'highlight.js/styles/github-dark.css' layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
-/* Size-adjusted fallback to minimize CLS during font swap */
-@font-face {
-  font-family: 'Geist Sans Fallback';
-  src: local('Arial');
-  size-adjust: 99.7%;
-  ascent-override: 99%;
-  descent-override: 22%;
-  line-gap-override: 0%;
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-mono-explorer: var(--font-mono-explorer);
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-status-success: hsl(var(--status-success));
+  --color-status-error: hsl(var(--status-error));
+  --color-status-warning: hsl(var(--status-warning));
+  --color-status-info: hsl(var(--status-info));
+  --color-status-pending: hsl(var(--status-pending));
+  --color-status-interrupted: hsl(var(--status-interrupted));
+  --color-status-neutral: hsl(var(--status-neutral));
+  --color-status-violet: hsl(var(--status-violet));
+
+  --color-diff-added: hsl(var(--diff-added));
+  --color-diff-removed: hsl(var(--diff-removed));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-fade-in: fade-in 80ms ease-out;
+  --animate-fade-out: fade-out 60ms ease-in;
+  --animate-scale-in: scale-in 150ms ease-out;
+  --animate-slide-in-right: slide-in-right 200ms ease-out;
+  --animate-slide-down: slide-down 150ms ease-out;
+  --animate-mic-wave: mic-wave 1.5s ease-out infinite;
+  --animate-mic-wave-delayed: mic-wave 1.5s ease-out 0.4s infinite;
+
+  @keyframes thinking {
+    0%,
+    80%,
+    100% {
+      opacity: 0.3;
+      transform: scale(0.8);
+    }
+    40% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes mic-wave {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
 }
 
-/* Show timeline only when thread container is wide enough */
-.thread-container {
-  container-type: inline-size;
-  container-name: thread;
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
 }
 
-.thread-timeline {
-  display: none;
+/* Markdown preview search highlights (MonacoEditorDialog) */
+mark.md-search-match {
+  @apply text-foreground rounded-sm bg-yellow-300/60;
+  padding: 0;
+}
+mark.md-search-match[data-active='true'] {
+  @apply bg-orange-400 text-black;
 }
 
-@container thread (min-width: 600px) {
+@utility monaco-search-match {
+  /* Monaco code-view search highlights (MonacoEditorDialog) */
+  background-color: rgb(253 224 71 / 0.35);
+  border-radius: 2px;
+}
+
+@utility monaco-search-match-active {
+  background-color: rgb(251 146 60 / 0.85);
+  color: #000;
+  border-radius: 2px;
+}
+
+@utility settings-section-header {
+  /* Settings section header */
+  @apply text-muted-foreground px-1 pb-2 text-xs font-semibold tracking-wider uppercase;
+}
+
+@utility settings-card {
+  /* Settings card container */
+  @apply border-border/50 mb-6 overflow-hidden rounded-lg border;
+}
+
+@utility settings-row {
+  /* Settings row */
+  @apply border-border/50 flex items-center justify-between gap-4 border-b px-4 py-3.5 last:border-b-0;
+}
+
+@utility settings-row-title {
+  /* Settings row title */
+  @apply text-foreground text-sm font-medium;
+}
+
+@utility settings-row-desc {
+  /* Settings row description */
+  @apply text-muted-foreground mt-0.5 text-xs;
+}
+
+@utility settings-input {
+  /* Settings compact input (inside setting rows) */
+  @apply h-8 text-sm;
+}
+
+@utility settings-form-input {
+  /* Settings form input (inside edit forms/dialogs) */
+  @apply h-auto py-1.5 text-sm;
+}
+
+@utility settings-label {
+  /* Form label */
+  @apply text-muted-foreground mb-1 block text-xs;
+}
+
+@utility settings-form-panel {
+  /* Edit form panel */
+  @apply border-border bg-muted/30 space-y-2 rounded-lg border p-3;
+}
+
+@utility settings-item-card {
+  /* Item card (for list items like hooks, commands, servers) */
+  @apply border-border/50 bg-card hover:bg-accent/30 rounded-lg border px-3 py-2.5 transition-colors;
+}
+
+@utility icon-2xs {
+  /* ── Icon size tokens ─────────────────────────────────────────
+   * Named to mirror the Tailwind text-* scale so devs can pair
+   * icon-sm with text-sm, icon-xs with text-xs, etc.
+   *
+   * Usage:  <Search className="icon-sm" />
+   *         <ChevronDown className={cn('icon-xs', 'text-muted-foreground')} />
+   *
+   * For hero/display icons (32px+), use native Tailwind: size-8, size-10.
+   * For status dots (6px), keep using h-1.5 w-1.5 rounded-full directly.
+   * ─────────────────────────────────────────────────────────────── */
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+@utility icon-xs {
+  /* 10px — pairs with text-[10px] */
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+@utility icon-sm {
+  /* 12px — pairs with text-xs */
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+@utility icon-base {
+  /* 14px — pairs with text-sm */
+  width: 1rem;
+  height: 1rem;
+}
+
+@utility icon-lg {
+  /* 16px — pairs with text-base */
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+@utility icon-xl {
+  /* 20px — pairs with text-lg/xl */
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+@utility no-scrollbar {
+  /* 24px — pairs with text-2xl */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility contain-layout {
+  /* Layout containment to prevent cross-component layout recalculations */
+  contain: layout;
+}
+
+@utility contain-paint {
+  contain: paint;
+}
+
+@utility contain-strict {
+  contain: layout style paint;
+}
+
+@layer utilities {
+  /* Size-adjusted fallback to minimize CLS during font swap */
+  @font-face {
+    font-family: 'Geist Sans Fallback';
+    src: local('Arial');
+    size-adjust: 99.7%;
+    ascent-override: 99%;
+    descent-override: 22%;
+    line-gap-override: 0%;
+  }
+
+  /* Show timeline only when thread container is wide enough */
+  .thread-container {
+    container-type: inline-size;
+    container-name: thread;
+  }
+
   .thread-timeline {
-    display: block;
+    display: none;
+  }
+
+  @container thread (min-width: 600px) {
+    .thread-timeline {
+      display: block;
+    }
   }
 }
 
@@ -998,283 +1291,156 @@
   }
 }
 
-/* Code blocks in markdown messages — override highlight.js theme background
+@layer utilities {
+  /* Code blocks in markdown messages — override highlight.js theme background
    so they inherit the bg-muted from the parent <pre> instead of adding
    the blue-tinted #22272e from github-dark-dimmed */
-.prose pre .hljs,
-.group\/codeblock .hljs {
-  background: transparent !important;
-}
+  .prose pre .hljs,
+  .group\/codeblock .hljs {
+    background: transparent !important;
+  }
 
-/* Code viewer (highlight.js). The <pre> carries `code-viewer` and `hljs` on
+  /* Code viewer (highlight.js). The <pre> carries `code-viewer` and `hljs` on
    the SAME element, so the descendant rule below can't match it — neutralize
    the blue-tinted github-dark-dimmed background on the compound selector too,
    without touching its Tailwind padding. */
-.code-viewer.hljs {
-  background: transparent !important;
-}
-.code-viewer .hljs {
-  background: transparent !important;
-  padding: 0.5rem 0;
-  margin: 0;
-  overflow: visible;
-}
-
-@layer components {
-  /* Markdown preview search highlights (MonacoEditorDialog) */
-  mark.md-search-match {
-    @apply rounded-sm bg-yellow-300/60 text-foreground;
-    padding: 0;
+  .code-viewer.hljs {
+    background: transparent !important;
   }
-  mark.md-search-match[data-active='true'] {
-    @apply bg-orange-400 text-black;
+  .code-viewer .hljs {
+    background: transparent !important;
+    padding: 0.5rem 0;
+    margin: 0;
+    overflow: visible;
   }
-
-  /* Monaco code-view search highlights (MonacoEditorDialog) */
-  .monaco-search-match {
-    background-color: rgb(253 224 71 / 0.35);
-    border-radius: 2px;
-  }
-  .monaco-search-match-active {
-    background-color: rgb(251 146 60 / 0.85);
-    color: #000;
-    border-radius: 2px;
-  }
-
-  /* Settings section header */
-  .settings-section-header {
-    @apply px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground;
-  }
-
-  /* Settings card container */
-  .settings-card {
-    @apply mb-6 overflow-hidden rounded-lg border border-border/50;
-  }
-
-  /* Settings row */
-  .settings-row {
-    @apply flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3.5 last:border-b-0;
-  }
-
-  /* Settings row title */
-  .settings-row-title {
-    @apply text-sm font-medium text-foreground;
-  }
-
-  /* Settings row description */
-  .settings-row-desc {
-    @apply mt-0.5 text-xs text-muted-foreground;
-  }
-
-  /* Settings compact input (inside setting rows) */
-  .settings-input {
-    @apply h-8 text-sm;
-  }
-
-  /* Settings form input (inside edit forms/dialogs) */
-  .settings-form-input {
-    @apply h-auto py-1.5 text-sm;
-  }
-
-  /* Form label */
-  .settings-label {
-    @apply mb-1 block text-xs text-muted-foreground;
-  }
-
-  /* Edit form panel */
-  .settings-form-panel {
-    @apply space-y-2 rounded-lg border border-border bg-muted/30 p-3;
-  }
-
-  /* Item card (for list items like hooks, commands, servers) */
-  .settings-item-card {
-    @apply rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30;
-  }
-}
-
-/* ── TipTap prompt editor ─────────────────────────────────────── */
-
-/* Hide the default ProseMirror focus outline */
-.tiptap-prompt-editor .tiptap:focus {
-  outline: none;
-}
-
-/* Placeholder */
-.tiptap-prompt-editor .tiptap p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
-  height: 0;
-}
-
-/* Inline chip — file mention (@) */
-.tiptap-prompt-editor .file-mention {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border-radius: 0.25rem;
-  padding: 0 0.375rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.25;
-  vertical-align: middle;
-  background: hsl(var(--foreground) / 0.12);
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--foreground) / 0.2);
-  white-space: nowrap;
-  cursor: default;
-  user-select: all;
-}
-
-.tiptap-prompt-editor .file-mention::before {
-  content: '';
-  display: inline-block;
-  width: 0.75rem;
-  height: 0.75rem;
-  flex-shrink: 0;
-  background-color: currentColor;
-  /* Lucide FolderOpen as mask so it inherits the text color */
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-}
-
-/* Inline chip — slash command (/) */
-.tiptap-prompt-editor .slash-command {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-  border-radius: 0.25rem;
-  padding: 0 0.375rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.25;
-  vertical-align: middle;
-  background: hsl(var(--foreground) / 0.12);
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--foreground) / 0.2);
-  white-space: nowrap;
-  cursor: default;
-  user-select: all;
-}
-
-.tiptap-prompt-editor .slash-command::before {
-  content: '';
-  display: inline-block;
-  width: 0.75rem;
-  height: 0.75rem;
-  flex-shrink: 0;
-  background-color: currentColor;
-  /* Lucide Zap as mask so it inherits the text color */
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z'%3E%3C/path%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z'%3E%3C/path%3E%3C/svg%3E");
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-}
-
-/* Inline chip — symbol mention (#) */
-.tiptap-prompt-editor .symbol-mention {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border-radius: 0.25rem;
-  padding: 0 0.375rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.25;
-  vertical-align: middle;
-  background: hsl(var(--foreground) / 0.12);
-  color: hsl(var(--foreground));
-  border: 1px solid hsl(var(--foreground) / 0.2);
-  white-space: nowrap;
-  cursor: default;
-  user-select: all;
-}
-
-.tiptap-prompt-editor .symbol-mention::before {
-  content: '';
-  display: inline-block;
-  width: 0.75rem;
-  height: 0.75rem;
-  flex-shrink: 0;
-  background-color: currentColor;
-  /* Lucide Code2 as mask so it inherits the text color */
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 16 4-4-4-4'%3E%3C/path%3E%3Cpath d='m6 8-4 4 4 4'%3E%3C/path%3E%3Cpath d='m14.5 4-5 16'%3E%3C/path%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 16 4-4-4-4'%3E%3C/path%3E%3Cpath d='m6 8-4 4 4 4'%3E%3C/path%3E%3Cpath d='m14.5 4-5 16'%3E%3C/path%3E%3C/svg%3E");
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
 }
 
 @layer utilities {
-  /* ── Icon size tokens ─────────────────────────────────────────
-   * Named to mirror the Tailwind text-* scale so devs can pair
-   * icon-sm with text-sm, icon-xs with text-xs, etc.
-   *
-   * Usage:  <Search className="icon-sm" />
-   *         <ChevronDown className={cn('icon-xs', 'text-muted-foreground')} />
-   *
-   * For hero/display icons (32px+), use native Tailwind: size-8, size-10.
-   * For status dots (6px), keep using h-1.5 w-1.5 rounded-full directly.
-   * ─────────────────────────────────────────────────────────────── */
-  .icon-2xs {
-    width: 0.625rem;
-    height: 0.625rem;
-  } /* 10px — pairs with text-[10px] */
-  .icon-xs {
+  /* ── TipTap prompt editor ─────────────────────────────────────── */
+
+  /* Hide the default ProseMirror focus outline */
+  .tiptap-prompt-editor .tiptap:focus {
+    outline: none;
+  }
+
+  /* Placeholder */
+  .tiptap-prompt-editor .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+    height: 0;
+  }
+
+  /* Inline chip — file mention (@) */
+  .tiptap-prompt-editor .file-mention {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.25rem;
+    padding: 0 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.25;
+    vertical-align: middle;
+    background: hsl(var(--foreground) / 0.12);
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--foreground) / 0.2);
+    white-space: nowrap;
+    cursor: default;
+    user-select: all;
+  }
+
+  .tiptap-prompt-editor .file-mention::before {
+    content: '';
+    display: inline-block;
     width: 0.75rem;
     height: 0.75rem;
-  } /* 12px — pairs with text-xs */
-  .icon-sm {
-    width: 0.875rem;
-    height: 0.875rem;
-  } /* 14px — pairs with text-sm */
-  .icon-base {
-    width: 1rem;
-    height: 1rem;
-  } /* 16px — pairs with text-base */
-  .icon-lg {
-    width: 1.25rem;
-    height: 1.25rem;
-  } /* 20px — pairs with text-lg/xl */
-  .icon-xl {
-    width: 1.5rem;
-    height: 1.5rem;
-  } /* 24px — pairs with text-2xl */
-
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    flex-shrink: 0;
+    background-color: currentColor;
+    /* Lucide FolderOpen as mask so it inherits the text color */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
   }
 
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  /* Inline chip — slash command (/) */
+  .tiptap-prompt-editor .slash-command {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    border-radius: 0.25rem;
+    padding: 0 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.25;
+    vertical-align: middle;
+    background: hsl(var(--foreground) / 0.12);
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--foreground) / 0.2);
+    white-space: nowrap;
+    cursor: default;
+    user-select: all;
   }
 
-  /* Layout containment to prevent cross-component layout recalculations */
-  .contain-layout {
-    contain: layout;
+  .tiptap-prompt-editor .slash-command::before {
+    content: '';
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    flex-shrink: 0;
+    background-color: currentColor;
+    /* Lucide Zap as mask so it inherits the text color */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z'%3E%3C/path%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z'%3E%3C/path%3E%3C/svg%3E");
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
   }
 
-  .contain-paint {
-    contain: paint;
+  /* Inline chip — symbol mention (#) */
+  .tiptap-prompt-editor .symbol-mention {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.25rem;
+    padding: 0 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.25;
+    vertical-align: middle;
+    background: hsl(var(--foreground) / 0.12);
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--foreground) / 0.2);
+    white-space: nowrap;
+    cursor: default;
+    user-select: all;
   }
 
-  .contain-strict {
-    contain: layout style paint;
+  .tiptap-prompt-editor .symbol-mention::before {
+    content: '';
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    flex-shrink: 0;
+    background-color: currentColor;
+    /* Lucide Code2 as mask so it inherits the text color */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 16 4-4-4-4'%3E%3C/path%3E%3Cpath d='m6 8-4 4 4 4'%3E%3C/path%3E%3Cpath d='m14.5 4-5 16'%3E%3C/path%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 16 4-4-4-4'%3E%3C/path%3E%3Cpath d='m6 8-4 4 4 4'%3E%3C/path%3E%3Cpath d='m14.5 4-5 16'%3E%3C/path%3E%3C/svg%3E");
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
   }
 }
 

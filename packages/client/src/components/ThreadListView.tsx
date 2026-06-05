@@ -163,7 +163,7 @@ export function ThreadListView({
     <div className={cn('flex flex-col gap-4', className)}>
       {/* Search + optional page size */}
       {!hideSearch && (
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <SearchBar
             inputRef={searchInputRef}
             query={search}
@@ -176,13 +176,13 @@ export function ThreadListView({
             onInputKeyDown={handleSearchKeyDown}
             autoFocus={!!autoFocusSearch}
             testIdPrefix="thread-list-search"
-            className="flex-1 rounded-md border border-input bg-background px-2"
+            className="border-input bg-background flex-1 rounded-md border px-2"
           />
           {pageSizeOptions && onPageSizeChange && (
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="cursor-pointer rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+              className="border-input bg-background text-foreground focus-visible:ring-ring/50 cursor-pointer rounded-md border px-2 py-1.5 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -200,16 +200,16 @@ export function ThreadListView({
           fill={false}
           layout="inline"
           size="compact"
-          className="h-32 flex-shrink-0"
+          className="h-32 shrink-0"
           testId="thread-list-loading"
           label={t('common.loading')}
         />
       ) : threads.length === 0 ? (
-        <div className="flex h-32 flex-shrink-0 items-center justify-center text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex h-32 shrink-0 items-center justify-center text-xs">
           {search ? searchEmptyMessage : emptyMessage}
         </div>
       ) : (
-        <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border/50">
+        <ScrollArea className="border-border/50 min-h-0 flex-1 rounded-lg border">
           {threads.map((thread, i) => {
             const s =
               statusConfig[getDisplayThreadStatus(thread.status, runnerStatus)] ??
@@ -231,12 +231,12 @@ export function ThreadListView({
                   setHighlightIndex(i);
                 }}
                 className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 last:border-b-0 group outline-none',
+                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 last:border-b-0 group outline-hidden',
                   onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
                   i === highlightIndex && 'bg-accent/50',
                 )}
               >
-                <Icon className={cn('icon-base flex-shrink-0', s.className)} />
+                <Icon className={cn('icon-base shrink-0', s.className)} />
                 <div className="min-w-0 flex-1">
                   <ThreadTitle
                     title={thread.title}
@@ -251,7 +251,7 @@ export function ThreadListView({
                       <HighlightText
                         text={contentSnippets.get(thread.id)!}
                         query={search}
-                        className="block truncate text-[11px] italic text-muted-foreground"
+                        className="text-muted-foreground block truncate text-[11px] italic"
                       />
                     )}
                   <div className="mt-0.5 flex items-center gap-2">
@@ -265,7 +265,7 @@ export function ThreadListView({
                     )}
                   </div>
                 </div>
-                <span className="hidden flex-shrink-0 text-xs text-muted-foreground sm:inline">
+                <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
                   {timeAgo(thread.completedAt ?? thread.createdAt, t)}
                 </span>
                 {renderActions?.(thread)}
@@ -277,8 +277,8 @@ export function ThreadListView({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-shrink-0 items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex shrink-0 items-center justify-between">
+          <span className="text-muted-foreground text-sm">
             {paginationLabel({ from, to, total: totalCount })}
           </span>
           <div className="flex items-center gap-1.5">
@@ -290,7 +290,7 @@ export function ThreadListView({
             >
               <ChevronLeft className="icon-sm" />
             </TooltipIconButton>
-            <span className="px-2 text-sm text-muted-foreground">
+            <span className="text-muted-foreground px-2 text-sm">
               {currentPage} / {totalPages}
             </span>
             <TooltipIconButton

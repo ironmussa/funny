@@ -61,7 +61,7 @@ export function CreatePRDialog({
             onChange={(e) => onChange(draft ? { ...draft, title: e.target.value } : draft)}
           />
           <textarea
-            className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+            className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring/50 w-full resize-none rounded-md border px-2 py-1.5 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
             rows={4}
             placeholder={t('review.commitBody', 'Description (optional)')}
             data-testid="history-pr-body"

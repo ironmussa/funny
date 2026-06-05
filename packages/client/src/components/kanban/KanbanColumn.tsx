@@ -83,13 +83,13 @@ export const KanbanColumn = memo(function KanbanColumn({
     <div
       ref={ref}
       className={cn(
-        'flex flex-col w-[23rem] min-w-[23rem] flex-shrink-0 rounded-lg bg-secondary/30 transition-colors',
+        'flex flex-col w-92 min-w-92 shrink-0 rounded-lg bg-secondary/30 transition-colors',
         isDraggedOver && 'ring-2 ring-ring bg-secondary/50',
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
+      <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2.5">
         <span className="text-sm font-medium">{t(stageConfig[stage].labelKey)}</span>
-        <span className="text-xs text-muted-foreground">({threads.length})</span>
+        <span className="text-muted-foreground text-xs">({threads.length})</span>
         {projects.length > 0 && stage !== 'review' && stage !== 'done' && stage !== 'archived' && (
           <AddThreadButton
             projectId={projectId}
@@ -101,7 +101,7 @@ export const KanbanColumn = memo(function KanbanColumn({
 
       <div ref={scrollRef} className="min-h-[200px] flex-1 space-y-2 overflow-y-auto p-2">
         {threads.length === 0 ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">
+          <div className="text-muted-foreground py-8 text-center text-xs">
             {t('kanban.emptyColumn')}
           </div>
         ) : (
@@ -126,7 +126,7 @@ export const KanbanColumn = memo(function KanbanColumn({
               <button
                 data-testid={`kanban-load-more-${stage}`}
                 onClick={() => setVisibleCount((prev) => prev + 20)}
-                className="w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
               >
                 {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
               </button>

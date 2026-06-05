@@ -134,7 +134,7 @@ const meta = {
       return (
         <MemoryRouter>
           <TooltipProvider>
-            <div className="h-[600px] w-full bg-background">
+            <div className="bg-background h-[600px] w-full">
               <Story />
             </div>
           </TooltipProvider>

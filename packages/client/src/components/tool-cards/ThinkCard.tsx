@@ -37,29 +37,29 @@ export function ThinkCard({
   if (!content) return null;
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
-        {!hideLabel && <Brain className="icon-xs flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <Brain className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (
-          <span className="flex-shrink-0 font-mono font-medium text-foreground">
+          <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.thinking')}
           </span>
         )}
         {displayTime && (
-          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
             {displayTime}
           </span>
         )}
       </div>
       <ScrollArea
-        className="border-t border-border/40"
+        className="border-border/40 border-t"
         viewportProps={{ className: 'max-h-[50vh]' }}
       >
         <div className="px-4 py-3" data-testid="think-card-content">
           <div className="prose prose-xs prose-invert prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-strong:text-foreground max-w-none">
             <Suspense
               fallback={
-                <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground">
+                <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                   {content}
                 </pre>
               }

@@ -76,28 +76,28 @@ export const PipelineEventGroup = memo(function PipelineEventGroup({
       >
         <ChevronRight
           className={cn(
-            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
         {status.running ? (
-          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
+          <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />
         ) : (
-          <StatusIcon className="icon-xs flex-shrink-0 text-muted-foreground" />
+          <StatusIcon className="icon-xs text-muted-foreground shrink-0" />
         )}
-        <span className="flex-shrink-0 font-mono font-medium text-foreground">Pipeline</span>
-        <span className="font-mono font-medium text-muted-foreground">{status.label}</span>
-        <span className="inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 text-xs font-medium leading-4 text-muted-foreground">
+        <span className="text-foreground shrink-0 font-mono font-medium">Pipeline</span>
+        <span className="text-muted-foreground font-mono font-medium">{status.label}</span>
+        <span className="bg-muted-foreground/20 text-muted-foreground inline-flex items-center justify-center rounded-full px-1.5 text-xs leading-4 font-medium">
           {events.length}
         </span>
         {timestamp && (
-          <span className="ml-auto shrink-0 text-muted-foreground">{timeAgo(timestamp, t)}</span>
+          <span className="text-muted-foreground ml-auto shrink-0">{timeAgo(timestamp, t)}</span>
         )}
       </button>
 
       {/* Expanded content — all pipeline events */}
       {expanded && (
-        <div className="space-y-0 border-t border-border/40 pb-1 pt-0.5">
+        <div className="border-border/40 space-y-0 border-t pt-0.5 pb-1">
           {events.map((evt) =>
             evt.type.startsWith('git:') ? (
               <GitEventCard key={evt.id} event={evt} />

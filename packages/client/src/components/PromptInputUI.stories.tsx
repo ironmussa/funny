@@ -209,9 +209,9 @@ function DictationPushToTalkStory(args: ComponentProps<typeof PromptInputUI>) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        Hold <kbd className="rounded border bg-background px-1 py-0.5 font-mono">Ctrl</kbd> +{' '}
-        <kbd className="rounded border bg-background px-1 py-0.5 font-mono">Alt</kbd> to simulate
+      <div className="border-border/40 bg-muted/30 text-muted-foreground rounded-md border px-3 py-2 text-xs">
+        Hold <kbd className="bg-background rounded border px-1 py-0.5 font-mono">Ctrl</kbd> +{' '}
+        <kbd className="bg-background rounded border px-1 py-0.5 font-mono">Alt</kbd> to simulate
         recording. Release to stop.
         <span className="ml-2 font-semibold">
           Status: {isRecording ? '🔴 Recording' : '⚪ Idle'}
@@ -295,11 +295,11 @@ function MinimalStory() {
 
   return (
     <div className="mx-auto max-w-lg space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         Minimal variant used inside tool cards (Plan, AskQuestion). Only mic + send buttons.
       </p>
 
-      <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
+      <div className="border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-primary/20 rounded-md border focus-within:ring-1">
         <div className="px-2.5 py-1.5">
           <PromptEditor
             ref={editorRef}
@@ -309,7 +309,7 @@ function MinimalStory() {
             className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
           />
         </div>
-        <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
+        <div className="border-border/20 flex items-center justify-end gap-1 border-t px-1.5 py-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -347,11 +347,11 @@ function MinimalStory() {
       </div>
 
       {submitted && (
-        <div className="rounded-md border border-border/40 bg-muted/30 p-3">
-          <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+        <div className="border-border/40 bg-muted/30 rounded-md border p-3">
+          <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
             Submitted
           </div>
-          <pre className="whitespace-pre-wrap text-xs text-foreground">{submitted}</pre>
+          <pre className="text-foreground text-xs whitespace-pre-wrap">{submitted}</pre>
         </div>
       )}
     </div>

@@ -73,7 +73,7 @@ export function ThreadStatusPin({
   );
 
   return (
-    <div className={cn('relative size-3.5 flex-shrink-0', className)}>
+    <div className={cn('relative size-3.5 shrink-0', className)}>
       {showPinRest ? (
         <span
           className={cn(

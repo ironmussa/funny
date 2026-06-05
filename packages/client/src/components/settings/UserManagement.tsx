@@ -94,22 +94,22 @@ export function UserManagement() {
   };
 
   if (loading) {
-    return <p className="p-4 text-sm text-muted-foreground">{t('common.loading')}</p>;
+    return <p className="text-muted-foreground p-4 text-sm">{t('common.loading')}</p>;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between px-4 pt-2">
-        <h3 className="text-sm font-medium text-foreground">{t('users.title')}</h3>
+        <h3 className="text-foreground text-sm font-medium">{t('users.title')}</h3>
         <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)}>
           {showCreate ? t('common.cancel') : t('users.addUser')}
         </Button>
       </div>
 
       {showCreate && (
-        <div className="mx-4 space-y-3 rounded-md border border-border p-3">
+        <div className="border-border mx-4 space-y-3 rounded-md border p-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-muted-foreground text-xs font-medium">
               {t('users.username')}
             </label>
             <Input
@@ -120,7 +120,7 @@ export function UserManagement() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-muted-foreground text-xs font-medium">
               {t('users.displayName')}
             </label>
             <Input
@@ -130,7 +130,7 @@ export function UserManagement() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
+            <label className="text-muted-foreground text-xs font-medium">
               {t('users.password')}
             </label>
             <Input
@@ -141,7 +141,7 @@ export function UserManagement() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t('users.role')}</label>
+            <label className="text-muted-foreground text-xs font-medium">{t('users.role')}</label>
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -159,7 +159,7 @@ export function UserManagement() {
               </Button>
             </div>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-destructive text-xs">{error}</p>}
           <Button
             size="sm"
             onClick={handleCreate}
@@ -174,24 +174,24 @@ export function UserManagement() {
         {users.map((user) => (
           <div
             key={user.id}
-            className="flex items-center justify-between rounded-md px-3 py-2 hover:bg-accent/50"
+            className="hover:bg-accent/50 flex items-center justify-between rounded-md px-3 py-2"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
+              <p className="text-foreground truncate text-sm font-medium">
                 {user.name || user.username}
                 {user.role === 'admin' && (
-                  <span className="ml-2 text-xs font-normal text-primary">
+                  <span className="text-primary ml-2 text-xs font-normal">
                     {t('users.roleAdmin')}
                   </span>
                 )}
               </p>
-              <p className="text-xs text-muted-foreground">@{user.username}</p>
+              <p className="text-muted-foreground text-xs">@{user.username}</p>
             </div>
             {user.id !== currentUser?.id && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive text-xs"
                 onClick={() => handleRemove(user.id)}
               >
                 {t('common.delete')}

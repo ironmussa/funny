@@ -70,7 +70,7 @@ export function CreatePRDialog({
             }
           />
           <textarea
-            className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+            className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring/50 w-full resize-none rounded-md border px-2 py-1.5 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
             rows={4}
             placeholder={t('review.commitBody', 'Description (optional)')}
             data-testid="review-pr-body"
@@ -150,11 +150,11 @@ export function MergeBranchDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label className="text-muted-foreground text-xs font-medium">
             {t('review.targetBranch', 'Target branch')}
           </label>
           {mergeDialog?.loading ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2 py-2 text-xs">
               <Loader2 className="icon-sm animate-spin" />
               {t('common.loading', 'Loading...')}
             </div>

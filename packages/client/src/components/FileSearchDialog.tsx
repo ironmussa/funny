@@ -235,7 +235,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
         <DialogOverlay />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-[50%] top-[20%] z-50 w-full max-w-lg translate-x-[-50%] overflow-hidden rounded-lg border bg-card p-0 shadow-xl data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in"
+          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[20%] left-[50%] z-50 w-full max-w-lg translate-x-[-50%] overflow-hidden rounded-lg border p-0 shadow-xl"
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             inputRef.current?.focus();
@@ -252,7 +252,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="placeholder:text-muted-foreground flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
@@ -303,7 +303,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
                     >
                       <FileExtensionIcon
                         filePath={item.match.path}
-                        className="icon-base flex-shrink-0"
+                        className="icon-base shrink-0"
                       />
                       <HighlightText
                         text={item.filename}
@@ -311,7 +311,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
                         indices={item.filenameIndices}
                         className="truncate text-xs"
                       />
-                      <span className="ml-auto truncate text-xs text-muted-foreground">
+                      <span className="text-muted-foreground ml-auto truncate text-xs">
                         {item.match.path}
                       </span>
                     </div>
@@ -320,7 +320,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
               </div>
             ) : null}
             {truncated && items.length > 0 && (
-              <div className="border-t px-3 py-1.5 text-center text-xs text-muted-foreground">
+              <div className="text-muted-foreground border-t px-3 py-1.5 text-center text-xs">
                 {t('fileSearch.truncated', 'Showing first {{count}} results — refine your search', {
                   count: RESULT_LIMIT,
                 })}
@@ -334,7 +334,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
 }
 
 function EmptyRow({ text }: { text: string }) {
-  return <div className="px-3 py-6 text-center text-sm text-muted-foreground">{text}</div>;
+  return <div className="text-muted-foreground px-3 py-6 text-center text-sm">{text}</div>;
 }
 
 function LoadingRow({ text }: { text: string }) {

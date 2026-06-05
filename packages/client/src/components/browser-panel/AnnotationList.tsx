@@ -50,7 +50,7 @@ export function AnnotationList() {
   if (annotations.length === 0) {
     return (
       <div
-        className="flex h-full items-center justify-center px-3 py-2 text-muted-foreground"
+        className="text-muted-foreground flex h-full items-center justify-center px-3 py-2"
         style={fontStyle}
         data-testid="browser-panel-annotation-list-empty"
       >
@@ -63,7 +63,7 @@ export function AnnotationList() {
     <ScrollArea className="h-full">
       <ul
         data-testid="browser-panel-annotation-list"
-        className="flex flex-col divide-y divide-border"
+        className="divide-border flex flex-col divide-y"
         style={fontStyle}
       >
         {annotations.map((a, i) => {
@@ -77,11 +77,11 @@ export function AnnotationList() {
             >
               <span
                 aria-hidden="true"
-                className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground"
+                className="bg-muted text-foreground mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
               >
                 {i + 1}
               </span>
-              <Icon className="mt-1 size-3.5 shrink-0 text-muted-foreground" aria-label={a.kind} />
+              <Icon className="text-muted-foreground mt-1 size-3.5 shrink-0" aria-label={a.kind} />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-muted-foreground">{summarize(a)}</span>
                 {snippet && <span className="truncate">{snippet}</span>}
@@ -93,7 +93,7 @@ export function AnnotationList() {
                 data-testid={`browser-panel-annotation-remove-${a.id}`}
                 aria-label={`Remove annotation ${i + 1}`}
                 onClick={() => removeAnnotation(a.id)}
-                className="shrink-0 text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive shrink-0"
               >
                 <Trash2 className="icon-base" />
               </Button>

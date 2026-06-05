@@ -31,7 +31,7 @@ export function TriCheckbox({
       aria-label={ariaLabel}
       onClick={onToggle}
       className={cn(
-        'flex items-center justify-center cursor-pointer rounded border transition-colors flex-shrink-0',
+        'flex items-center justify-center cursor-pointer rounded border transition-colors shrink-0',
         sizeClass,
         state === 'checked'
           ? 'bg-primary border-primary text-primary-foreground'
@@ -43,7 +43,7 @@ export function TriCheckbox({
       data-testid={testId}
     >
       {state === 'indeterminate' ? (
-        <Minus className={cn(iconClass, 'stroke-[3]')} />
+        <Minus className={cn(iconClass, 'stroke-3')} />
       ) : state === 'checked' ? (
         <Check className={iconClass} />
       ) : null}

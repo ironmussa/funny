@@ -301,46 +301,46 @@ export function ReviewPane() {
         style={{ contain: 'strict' }}
       >
         {/* Header with tabs */}
-        <div className="flex h-12 items-center justify-between border-b border-sidebar-border px-2">
-          <TabsList className="h-7 bg-sidebar-accent/50 p-0.5">
+        <div className="border-sidebar-border flex h-12 items-center justify-between border-b px-2">
+          <TabsList className="bg-sidebar-accent/50 h-7 p-0.5">
             <TabsTrigger
               value="changes"
-              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-changes"
             >
               {t('review.changes', 'Changes')}
             </TabsTrigger>
             <TabsTrigger
               value="history"
-              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-history"
             >
               {t('review.history', 'History')}
             </TabsTrigger>
             <TabsTrigger
               value="stash"
-              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-stash"
             >
               {t('review.stash', 'Stash')}
             </TabsTrigger>
             <TabsTrigger
               value="prs"
-              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-prs"
             >
               {t('review.prs', 'PRs')}
             </TabsTrigger>
             <TabsTrigger
               value="ci"
-              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-ci"
             >
               {t('review.ci.tab', 'CI')}
             </TabsTrigger>
             <TabsTrigger
               value="issues"
-              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-issues"
             >
               {t('review.issues.tab', 'Issues')}

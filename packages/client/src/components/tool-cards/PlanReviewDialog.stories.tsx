@@ -64,12 +64,12 @@ function PlanReviewTrigger({ plan }: { plan: string }) {
       </Button>
 
       {comments.length > 0 && (
-        <div className="rounded-md border border-border/40 bg-muted/30 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+        <div className="border-border/40 bg-muted/30 rounded-md border p-3">
+          <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
             Comments ({comments.length})
           </p>
           {comments.map((c, i) => (
-            <div key={i} className="mb-1 text-xs text-foreground">
+            <div key={i} className="text-foreground mb-1 text-xs">
               <span className="font-medium">{c.emoji || 'Comment'}</span>:{' '}
               <span className="text-muted-foreground">
                 &quot;{c.selectedText.slice(0, 50)}

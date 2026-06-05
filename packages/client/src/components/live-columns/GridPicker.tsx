@@ -68,7 +68,7 @@ export function GridPicker({ cols, rows, onChange }: Props) {
             }),
           )}
         </div>
-        <p className="mt-2 text-center text-[10px] text-muted-foreground">
+        <p className="text-muted-foreground mt-2 text-center text-[10px]">
           {displayCol}×{displayRow}
         </p>
       </PopoverContent>

@@ -91,7 +91,7 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
                 className={cn(
                   'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
                   'hover:bg-accent hover:text-accent-foreground',
-                  'focus:bg-accent focus:text-accent-foreground focus:outline-none',
+                  'focus:bg-accent focus:text-accent-foreground focus:outline-hidden',
                   isActive && 'text-accent-foreground',
                 )}
               >
@@ -107,7 +107,7 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
                 </span>
                 <span className="flex-1">{opt.label}</span>
                 {count != null && count > 0 && (
-                  <span className="tabular-nums text-muted-foreground">{count}</span>
+                  <span className="text-muted-foreground tabular-nums">{count}</span>
                 )}
               </button>
             );

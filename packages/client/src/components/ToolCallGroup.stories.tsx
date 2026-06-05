@@ -13,7 +13,7 @@ const meta = {
   decorators: [
     (Story) => (
       <TooltipProvider>
-        <div className="min-w-0 max-w-3xl">
+        <div className="max-w-3xl min-w-0">
           <Story />
         </div>
       </TooltipProvider>

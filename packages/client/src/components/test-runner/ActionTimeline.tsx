@@ -60,11 +60,11 @@ export function ActionTimeline({
 
   return (
     <div
-      className="relative flex h-6 items-center border-b bg-muted/20 px-1"
+      className="bg-muted/20 relative flex h-6 items-center border-b px-1"
       data-testid="action-timeline"
     >
       {/* Track background */}
-      <div className="relative h-3 w-full rounded-sm bg-muted/40">
+      <div className="bg-muted/40 relative h-3 w-full rounded-sm">
         {/* Action markers */}
         {visibleActions.map((action) => {
           const origIndex = actions.indexOf(action);
@@ -100,7 +100,7 @@ export function ActionTimeline({
         {/* Playhead for active action */}
         {activeIndex >= 0 && activeIndex < actions.length && (
           <div
-            className="absolute top-0 h-full w-px bg-foreground/70"
+            className="bg-foreground/70 absolute top-0 h-full w-px"
             style={{
               left: `${Math.min(
                 ((actions[activeIndex].startTime - testStart) / totalDuration) * 100,
@@ -113,8 +113,8 @@ export function ActionTimeline({
 
       {/* Time labels */}
       <div className="pointer-events-none absolute inset-x-1 top-0 flex h-full items-center justify-between">
-        <span className="text-[9px] text-muted-foreground/60">0s</span>
-        <span className="text-[9px] text-muted-foreground/60">
+        <span className="text-muted-foreground/60 text-[9px]">0s</span>
+        <span className="text-muted-foreground/60 text-[9px]">
           {formatTimeLabel(totalDuration)}
         </span>
       </div>

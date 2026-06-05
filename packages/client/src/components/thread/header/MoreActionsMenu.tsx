@@ -159,7 +159,7 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
           <DropdownMenuItem
             data-testid="header-menu-delete"
             onClick={() => setDeleteOpen(true)}
-            className="cursor-pointer text-status-error focus:text-status-error"
+            className="text-status-error focus:text-status-error cursor-pointer"
           >
             <Trash2 className="icon-base mr-2" />
             {t('common.delete', 'Delete')}

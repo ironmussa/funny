@@ -86,7 +86,7 @@ export const SizeComparison: Story = {
   render: () => (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="mb-1 text-xs text-muted-foreground">md (default)</p>
+        <p className="text-muted-foreground mb-1 text-xs">md (default)</p>
         <div className="flex flex-col">
           <NavItem icon={Inbox} label="Inbox" count={3} />
           <NavItem icon={Zap} label="Automations" isActive />
@@ -96,7 +96,7 @@ export const SizeComparison: Story = {
         </div>
       </div>
       <div>
-        <p className="mb-1 text-xs text-muted-foreground">sm</p>
+        <p className="text-muted-foreground mb-1 text-xs">sm</p>
         <div className="flex flex-col">
           <NavItem icon={Inbox} label="Inbox" count={3} size="sm" />
           <NavItem icon={Zap} label="Automations" isActive size="sm" />

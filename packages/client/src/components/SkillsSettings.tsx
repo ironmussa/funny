@@ -43,32 +43,32 @@ function InstalledSkillCard({
   const { t } = useTranslation();
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5"
+      className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
       style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <Sparkles className="icon-base flex-shrink-0 text-status-warning" />
+        <Sparkles className="icon-base text-status-warning shrink-0" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{skill.name}</span>
           </div>
           {skill.description && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{skill.description}</p>
+            <p className="text-muted-foreground mt-0.5 truncate text-xs">{skill.description}</p>
           )}
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-xs text-muted-foreground/70">{skill.source}</span>
+            <span className="text-muted-foreground/70 text-xs">{skill.source}</span>
             {skill.sourceUrl && (
               <a
                 href={skill.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/70 hover:text-foreground"
+                className="text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-0.5 text-xs"
               >
                 <ExternalLink className="icon-2xs" />
               </a>
             )}
             {skill.installedAt && (
-              <span className="text-xs text-muted-foreground/70">
+              <span className="text-muted-foreground/70 text-xs">
                 installed {new Date(skill.installedAt).toLocaleDateString()}
               </span>
             )}
@@ -79,7 +79,7 @@ function InstalledSkillCard({
         <TooltipIconButton
           onClick={onRemove}
           disabled={removing}
-          className="flex-shrink-0 text-muted-foreground hover:text-destructive"
+          className="text-muted-foreground hover:text-destructive shrink-0"
           tooltip={t('common.remove')}
         >
           {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
@@ -104,22 +104,22 @@ function RecommendedSkillCard({
 
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5"
+      className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
       style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{skill.name}</span>
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">{skill.description}</p>
-        <p className="mt-0.5 font-mono text-xs text-muted-foreground/70">{skill.identifier}</p>
+        <p className="text-muted-foreground mt-0.5 text-xs">{skill.description}</p>
+        <p className="text-muted-foreground/70 mt-0.5 font-mono text-xs">{skill.identifier}</p>
       </div>
       <Button
         variant={installed ? 'ghost' : 'outline'}
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="flex-shrink-0"
+        className="shrink-0"
       >
         {installing ? (
           <Loader2 className="icon-xs mr-1 animate-spin" />
@@ -139,9 +139,9 @@ function RecommendedSkillCard({
 function PluginCommandRow({ command }: { command: PluginCommand }) {
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-      <span className="font-mono text-foreground/80">/{command.name}</span>
+      <span className="text-foreground/80 font-mono">/{command.name}</span>
       {command.description && (
-        <span className="truncate text-muted-foreground/70">{command.description}</span>
+        <span className="text-muted-foreground/70 truncate">{command.description}</span>
       )}
     </div>
   );
@@ -155,39 +155,39 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div
-        className="rounded-md border border-border/50 bg-card"
+        className="border-border/50 bg-card rounded-md border"
         style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(plugin.name) }}
       >
         <CollapsibleTrigger asChild>
           <button
-            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
+            className="hover:bg-muted/30 flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors"
             disabled={!hasCommands}
           >
             <div className="flex min-w-0 items-center gap-3">
-              <Puzzle className="icon-base flex-shrink-0 text-purple-500" />
+              <Puzzle className="icon-base shrink-0 text-purple-500" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{plugin.name}</span>
                   {hasCommands && (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium">
                       {plugin.commands.length}{' '}
                       {plugin.commands.length === 1 ? t('plugins.command') : t('plugins.commands')}
                     </span>
                   )}
                 </div>
                 {plugin.description && (
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  <p className="text-muted-foreground mt-0.5 truncate text-xs">
                     {plugin.description}
                   </p>
                 )}
                 <div className="mt-1 flex items-center gap-2">
                   {plugin.author && (
-                    <span className="text-xs text-muted-foreground/70">
+                    <span className="text-muted-foreground/70 text-xs">
                       {t('plugins.by')} {plugin.author}
                     </span>
                   )}
                   {plugin.installedAt && (
-                    <span className="text-xs text-muted-foreground/70">
+                    <span className="text-muted-foreground/70 text-xs">
                       installed {new Date(plugin.installedAt).toLocaleDateString()}
                     </span>
                   )}
@@ -197,7 +197,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
             {hasCommands && (
               <ChevronDown
                 className={cn(
-                  'icon-sm text-muted-foreground transition-transform flex-shrink-0',
+                  'icon-sm text-muted-foreground transition-transform shrink-0',
                   open && 'rotate-180',
                 )}
               />
@@ -206,7 +206,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
         </CollapsibleTrigger>
         {hasCommands && (
           <CollapsibleContent>
-            <div className="border-t border-border/50 py-1">
+            <div className="border-border/50 border-t py-1">
               {plugin.commands.map((cmd) => (
                 <PluginCommandRow key={cmd.name} command={cmd} />
               ))}
@@ -328,7 +328,7 @@ export function SkillsSettings() {
       {/* Project skills */}
       {projectSkills.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
             {t('skills.projectSkills')}
           </h3>
           <div className="space-y-1.5">
@@ -347,7 +347,7 @@ export function SkillsSettings() {
       {/* Global skills */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             {t('skills.globalSkills')}
           </h3>
           <Button
@@ -367,10 +367,10 @@ export function SkillsSettings() {
 
         {/* Custom install form */}
         {showCustom && (
-          <div className="mb-3 space-y-2 rounded-lg border border-border/50 bg-muted/30 p-3">
-            <label className="block text-xs text-muted-foreground">
+          <div className="border-border/50 bg-muted/30 mb-3 space-y-2 rounded-lg border p-3">
+            <label className="text-muted-foreground block text-xs">
               {t('skills.skillIdentifier')} (e.g.{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">owner/repo@skill-name</code>)
+              <code className="bg-muted rounded px-1 py-0.5 text-xs">owner/repo@skill-name</code>)
             </label>
             <div className="flex gap-2">
               <Input
@@ -407,7 +407,7 @@ export function SkillsSettings() {
             label={t('skills.loadingSkills')}
           />
         ) : globalSkills.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-6 text-center text-sm">
             {t('skills.noGlobalSkills')}
           </div>
         ) : (
@@ -427,10 +427,10 @@ export function SkillsSettings() {
       {/* Installed plugins */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             {t('plugins.installedPlugins')}
           </h3>
-          <span className="text-xs text-muted-foreground/60">
+          <span className="text-muted-foreground/60 text-xs">
             {t('plugins.managedByClaudeCode')}
           </span>
         </div>
@@ -444,7 +444,7 @@ export function SkillsSettings() {
             label={t('plugins.loadingPlugins')}
           />
         ) : plugins.length === 0 ? (
-          <div className="py-4 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-4 text-center text-sm">
             {t('plugins.noPlugins')}
           </div>
         ) : (
@@ -459,7 +459,7 @@ export function SkillsSettings() {
       {/* Recommended skills */}
       {recommended.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
             {t('skills.recommendedSkills')}
           </h3>
           <div className="space-y-1.5">

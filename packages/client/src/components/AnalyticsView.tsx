@@ -99,7 +99,7 @@ export function AnalyticsView() {
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <div className="border-border flex items-center gap-3 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="flex items-center gap-2 text-sm font-medium">
             <BarChart3 className="icon-sm text-muted-foreground" /> {t('analytics.title')}
@@ -108,7 +108,7 @@ export function AnalyticsView() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
+      <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -178,7 +178,7 @@ export function AnalyticsView() {
           </PopoverContent>
         </Popover>
 
-        <div className="h-4 w-px bg-border" />
+        <div className="bg-border h-4 w-px" />
 
         <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
       </div>
@@ -191,7 +191,7 @@ export function AnalyticsView() {
           <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">
             {!overview ? (
               <div
-                className="py-16 text-center text-sm text-muted-foreground"
+                className="text-muted-foreground py-16 text-center text-sm"
                 data-testid="analytics-no-data"
               >
                 {t('analytics.noData')}
@@ -244,14 +244,14 @@ export function AnalyticsView() {
                 {/* Cost card */}
                 {overview.totalCost > 0 && (
                   <div
-                    className="flex items-center justify-between rounded-lg border border-border p-4"
+                    className="border-border flex items-center justify-between rounded-lg border p-4"
                     data-testid="analytics-cost-card"
                   >
                     <div>
-                      <p className="text-xs text-muted-foreground">{t('analytics.totalCost')}</p>
+                      <p className="text-muted-foreground text-xs">{t('analytics.totalCost')}</p>
                       <p className="mt-1 text-xl font-bold">${overview.totalCost.toFixed(4)}</p>
                     </div>
-                    <div className="rounded-md bg-status-success/10 p-2 text-status-success/80">
+                    <div className="bg-status-success/10 text-status-success/80 rounded-md p-2">
                       <DollarSign className="icon-base" />
                     </div>
                   </div>
@@ -259,7 +259,7 @@ export function AnalyticsView() {
 
                 {/* Stage Distribution */}
                 <div
-                  className="rounded-lg border border-border p-5"
+                  className="border-border rounded-lg border p-5"
                   data-testid="analytics-stage-chart"
                 >
                   <h3 className="mb-4 text-sm font-semibold">
@@ -273,7 +273,7 @@ export function AnalyticsView() {
                 {/* Timeline */}
                 {timeline && (
                   <div
-                    className="rounded-lg border border-border p-5"
+                    className="border-border rounded-lg border p-5"
                     data-testid="analytics-timeline-chart"
                   >
                     <h3 className="mb-4 text-sm font-semibold">{t('analytics.timeline')}</h3>

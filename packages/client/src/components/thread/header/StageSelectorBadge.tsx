@@ -44,7 +44,7 @@ export const StageSelectorBadge = memo(function StageSelectorBadge({
         <TooltipTrigger asChild>
           <SelectTrigger
             data-testid="header-stage-select"
-            className="h-7 w-auto shrink-0 gap-0.5 border border-border/60 bg-transparent px-1.5 py-0 shadow-none hover:bg-accent [&>svg:last-child]:ml-0"
+            className="border-border/60 hover:bg-accent h-7 w-auto shrink-0 gap-0.5 border bg-transparent px-1.5 py-0 shadow-none [&>svg:last-child]:ml-0"
           >
             <StageIcon className={cn('icon-base', stageConfig[stage].className)} />
           </SelectTrigger>

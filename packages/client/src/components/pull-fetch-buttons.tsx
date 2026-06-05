@@ -34,12 +34,12 @@ export function PullFetchButtons({
             size="icon-sm"
             onClick={onPull}
             disabled={pullInProgress}
-            className="relative text-muted-foreground"
+            className="text-muted-foreground relative"
             data-testid={`${testIdPrefix}-pull`}
           >
             <Download className={cn('icon-base', pullInProgress && 'animate-pulse')} />
             {unpulledCommitCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] leading-none font-bold text-white">
                 {unpulledCommitCount}
               </span>
             )}

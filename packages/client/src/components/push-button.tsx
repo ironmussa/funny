@@ -31,12 +31,12 @@ export function PushButton({
           size="icon-sm"
           onClick={onPush}
           disabled={disabled ?? (pushInProgress || unpushedCommitCount === 0)}
-          className="relative text-muted-foreground"
+          className="text-muted-foreground relative"
           data-testid={`${testIdPrefix}-push`}
         >
           <Upload className={cn('icon-base', pushInProgress && 'animate-pulse')} />
           {unpushedCommitCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] leading-none font-bold text-white">
               {unpushedCommitCount}
             </span>
           )}

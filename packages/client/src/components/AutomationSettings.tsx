@@ -162,7 +162,7 @@ export function AutomationSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground py-6 text-center text-sm">
         Select a project to manage automations.
       </div>
     );
@@ -181,7 +181,7 @@ export function AutomationSettings() {
       {/* Automation list */}
       {automations.length === 0 ? (
         <div className="py-8 text-center">
-          <p className="mb-3 text-sm text-muted-foreground">No automations yet.</p>
+          <p className="text-muted-foreground mb-3 text-sm">No automations yet.</p>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
             <Plus className="icon-sm" />
             Create your first automation
@@ -195,35 +195,35 @@ export function AutomationSettings() {
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      'h-2 w-2 rounded-full flex-shrink-0',
+                      'h-2 w-2 rounded-full shrink-0',
                       a.enabled ? 'bg-status-success/80' : 'bg-muted-foreground/30',
                     )}
                   />
                   <span className="truncate text-sm font-medium">{a.name}</span>
-                  <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                  <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-xs">
                     {getScheduleLabel(a.schedule)}
                   </span>
-                  <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                  <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-xs">
                     {a.model}
                   </span>
                   {a.source === 'config' && (
                     <span
-                      className="flex-shrink-0 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-xs text-blue-500"
+                      className="shrink-0 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-xs text-blue-500"
                       data-testid={`automation-config-badge-${a.id}`}
                     >
                       .funny.json
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 truncate pl-4 text-xs text-muted-foreground">{a.prompt}</p>
+                <p className="text-muted-foreground mt-0.5 truncate pl-4 text-xs">{a.prompt}</p>
                 {a.lastRunAt && (
-                  <p className="mt-0.5 pl-4 text-xs text-muted-foreground/70">
+                  <p className="text-muted-foreground/70 mt-0.5 pl-4 text-xs">
                     Last run: {new Date(a.lastRunAt).toLocaleString()}
                   </p>
                 )}
               </div>
 
-              <div className="flex flex-shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -300,17 +300,17 @@ export function AutomationSettings() {
             {runsAutomationId === a.id && (
               <div className="ml-4 space-y-1">
                 {selectedAutomationRuns.length === 0 ? (
-                  <p className="py-2 pl-2 text-xs text-muted-foreground">No runs yet.</p>
+                  <p className="text-muted-foreground py-2 pl-2 text-xs">No runs yet.</p>
                 ) : (
                   selectedAutomationRuns.slice(0, 10).map((run) => (
                     <div
                       key={run.id}
-                      className="flex items-center justify-between gap-2 rounded border border-border/30 px-2 py-1.5 text-xs"
+                      className="border-border/30 flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-xs"
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span
                           className={cn(
-                            'h-1.5 w-1.5 rounded-full flex-shrink-0',
+                            'h-1.5 w-1.5 rounded-full shrink-0',
                             run.status === 'running'
                               ? 'bg-status-info animate-pulse'
                               : run.status === 'completed'
@@ -320,7 +320,7 @@ export function AutomationSettings() {
                                   : 'bg-muted-foreground/30',
                           )}
                         />
-                        <span className="truncate text-muted-foreground">
+                        <span className="text-muted-foreground truncate">
                           {new Date(run.startedAt).toLocaleString()}
                         </span>
                         <span className="text-muted-foreground/70">{run.status}</span>
@@ -413,7 +413,7 @@ export function AutomationSettings() {
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
                   />
                 )}
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-xs">
                   Cron: min hour day month weekday
                 </p>
               </div>
@@ -426,7 +426,7 @@ export function AutomationSettings() {
                 />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Automations run locally in read-only mode (no file writes).
             </p>
           </div>

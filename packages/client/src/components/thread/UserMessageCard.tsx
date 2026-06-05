@@ -139,7 +139,7 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-background/70 underline decoration-background/45 underline-offset-2 hover:text-background hover:decoration-background/75"
+          className="text-background/70 decoration-background/45 hover:text-background hover:decoration-background/75 underline underline-offset-2"
           onClick={(e) => e.stopPropagation()}
         >
           {url}
@@ -199,7 +199,7 @@ function UserMessageContent({
         ref={preRef}
         onScroll={expanded ? checkScrollEnd : undefined}
         className={cn(
-          'whitespace-pre-wrap font-sans text-sm leading-relaxed break-words overflow-x-auto',
+          'whitespace-pre-wrap font-sans text-sm leading-relaxed wrap-break-word overflow-x-auto',
           !expanded && isOverflowing && 'overflow-hidden',
           expanded && 'max-h-[40vh] overflow-y-auto',
         )}
@@ -208,10 +208,10 @@ function UserMessageContent({
         {inlineNodes}
       </pre>
       {isOverflowing && !expanded && (
-        <div className="pointer-events-none absolute bottom-6 left-0 right-0 h-10 bg-gradient-to-t from-foreground to-transparent" />
+        <div className="from-foreground pointer-events-none absolute right-0 bottom-6 left-0 h-10 bg-linear-to-t to-transparent" />
       )}
       {expanded && !isScrolledToBottom && (
-        <div className="pointer-events-none absolute bottom-6 left-0 right-0 h-10 bg-gradient-to-t from-foreground to-transparent" />
+        <div className="from-foreground pointer-events-none absolute right-0 bottom-6 left-0 h-10 bg-linear-to-t to-transparent" />
       )}
       {isOverflowing && (
         <button
@@ -226,7 +226,7 @@ function UserMessageContent({
             }
             setExpanded(!expanded);
           }}
-          className="mt-1 flex items-center gap-1 text-[11px] font-medium text-background transition-colors hover:text-background/80"
+          className="text-background hover:text-background/80 mt-1 flex items-center gap-1 text-[11px] font-medium transition-colors"
         >
           {expanded ? (
             <>
@@ -364,7 +364,7 @@ export function UserMessageCard({
               src={img.src}
               alt={img.alt}
               loading="lazy"
-              className="max-h-10 min-h-10 min-w-10 max-w-24 cursor-pointer rounded border border-border object-cover transition-opacity hover:opacity-80"
+              className="border-border max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border object-cover transition-opacity hover:opacity-80"
               onClick={(e) => {
                 e.stopPropagation();
                 onImageClick?.(allImages, idx);
@@ -392,7 +392,7 @@ export function UserMessageCard({
           {model && (
             <Badge
               variant="outline"
-              className="h-4 border-background/20 bg-background/10 px-1.5 py-0 text-[10px] font-medium text-background/60"
+              className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
             >
               {resolveModelLabel(model, t)}
               {effort && (
@@ -406,14 +406,14 @@ export function UserMessageCard({
           {permissionMode && (
             <Badge
               variant="outline"
-              className="h-4 border-background/20 bg-background/10 px-1.5 py-0 text-[10px] font-medium text-background/60"
+              className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
             >
               {t(`prompt.${permissionMode}`)}
             </Badge>
           )}
         </div>
         {timestamp && (
-          <span className="text-[10px] text-background/50">{timeAgo(timestamp, t)}</span>
+          <span className="text-background/50 text-[10px]">{timeAgo(timestamp, t)}</span>
         )}
       </div>
     </div>

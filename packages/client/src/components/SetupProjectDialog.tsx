@@ -61,7 +61,7 @@ export function SetupProjectDialog({
           </DialogHeader>
 
           {error && (
-            <p className="text-sm text-status-error" data-testid="setup-project-error">
+            <p className="text-status-error text-sm" data-testid="setup-project-error">
               {error}
             </p>
           )}

@@ -192,7 +192,7 @@ function SendDialog({
 
         {noProject ? (
           <div
-            className="text-sm text-muted-foreground"
+            className="text-muted-foreground text-sm"
             data-testid="browser-panel-send-no-project"
           >
             Open the panel from inside a project to send annotations.
@@ -202,7 +202,7 @@ function SendDialog({
             <FieldRow label="Project">
               <div
                 data-testid="browser-panel-send-project"
-                className="rounded-md border border-border bg-muted/30 px-3 py-1.5 text-sm text-foreground"
+                className="border-border bg-muted/30 text-foreground rounded-md border px-3 py-1.5 text-sm"
               >
                 {activeProject.name}
               </div>
@@ -256,7 +256,7 @@ function SendDialog({
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[80px_1fr] items-center gap-3">
-      <label className="text-sm text-muted-foreground">{label}</label>
+      <label className="text-muted-foreground text-sm">{label}</label>
       <div>{children}</div>
     </div>
   );

@@ -136,11 +136,11 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
       className="h-full font-mono text-xs"
     >
       {outputLines.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
+        <div className="text-muted-foreground flex h-full items-center justify-center">
           Test output will appear here…
         </div>
       ) : (
-        <pre className="whitespace-pre-wrap break-words px-3 py-1 leading-relaxed text-foreground">
+        <pre className="text-foreground px-3 py-1 leading-relaxed wrap-break-word whitespace-pre-wrap">
           {outputLines.map((line, i) => (
             <div
               key={i}
@@ -178,7 +178,7 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
       className="h-full font-mono text-xs"
     >
       {entries.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
+        <div className="text-muted-foreground flex h-full items-center justify-center">
           Browser console messages will appear here…
         </div>
       ) : (
@@ -194,9 +194,9 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
               <span className="mt-0.5 w-3 shrink-0 text-center font-bold opacity-60">
                 {CONSOLE_LEVEL_ICONS[entry.level] ?? '>'}
               </span>
-              <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">{entry.text}</span>
+              <span className="min-w-0 flex-1 break-all whitespace-pre-wrap">{entry.text}</span>
               {entry.url && (
-                <span className="shrink-0 text-muted-foreground" title={entry.url}>
+                <span className="text-muted-foreground shrink-0" title={entry.url}>
                   {shortenUrl(entry.url)}
                   {entry.line != null ? `:${entry.line}` : ''}
                 </span>
@@ -215,26 +215,26 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
   return (
     <ScrollArea className="h-full font-mono text-xs">
       {entries.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
+        <div className="text-muted-foreground flex h-full items-center justify-center">
           No errors captured
         </div>
       ) : (
         <div>
           {entries.map((entry, i) => (
-            <div key={i} className="border-b border-border/30 px-3 py-2">
+            <div key={i} className="border-border/30 border-b px-3 py-2">
               <div className="flex items-start gap-2 text-red-500">
                 <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-                <span className="whitespace-pre-wrap break-all">{entry.message}</span>
+                <span className="break-all whitespace-pre-wrap">{entry.message}</span>
               </div>
               {entry.source && (
-                <div className="ml-5 mt-1 text-muted-foreground">
+                <div className="text-muted-foreground mt-1 ml-5">
                   {entry.source}
                   {entry.line != null ? `:${entry.line}` : ''}
                   {entry.column != null ? `:${entry.column}` : ''}
                 </div>
               )}
               {entry.stack && (
-                <pre className="ml-5 mt-1 whitespace-pre-wrap text-muted-foreground/80">
+                <pre className="text-muted-foreground/80 mt-1 ml-5 whitespace-pre-wrap">
                   {entry.stack}
                 </pre>
               )}
@@ -343,7 +343,7 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
           className={cn('min-h-0 border-r', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
         >
           {filtered.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
+            <div className="text-muted-foreground flex h-full items-center justify-center">
               {entries.length === 0
                 ? 'Network requests will appear here...'
                 : 'No matching requests'}
@@ -351,7 +351,7 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
           ) : selectedEntry ? (
             /* Compact name-only list when detail is open */
             <div className="font-mono">
-              <div className="sticky top-0 border-b bg-muted/80 px-3 py-1 font-medium text-muted-foreground">
+              <div className="bg-muted/80 text-muted-foreground sticky top-0 border-b px-3 py-1 font-medium">
                 Name
               </div>
               {filtered.map((entry) => (
@@ -374,7 +374,7 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
           ) : (
             /* Full table when no detail selected */
             <table className="w-full font-mono">
-              <thead className="sticky top-0 bg-muted/80 text-left text-muted-foreground">
+              <thead className="bg-muted/80 text-muted-foreground sticky top-0 text-left">
                 <tr>
                   <th className="px-3 py-1 font-medium">Status</th>
                   <th className="px-3 py-1 font-medium">Method</th>
@@ -403,15 +403,15 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                         errorText={entry.errorText}
                       />
                     </td>
-                    <td className="px-3 py-1 text-muted-foreground">{entry.method}</td>
+                    <td className="text-muted-foreground px-3 py-1">{entry.method}</td>
                     <td className="max-w-[300px] truncate px-3 py-1" title={entry.url}>
                       {shortenUrl(entry.url)}
                     </td>
-                    <td className="px-3 py-1 text-muted-foreground">{entry.resourceType ?? '-'}</td>
-                    <td className="px-3 py-1 text-right text-muted-foreground">
+                    <td className="text-muted-foreground px-3 py-1">{entry.resourceType ?? '-'}</td>
+                    <td className="text-muted-foreground px-3 py-1 text-right">
                       {formatSize(entry.size)}
                     </td>
-                    <td className="px-3 py-1 text-right text-muted-foreground">
+                    <td className="text-muted-foreground px-3 py-1 text-right">
                       {formatDuration(entry.duration)}
                     </td>
                   </tr>
@@ -489,7 +489,7 @@ function NetworkDetailPanel({ entry, onClose }: { entry: TestNetworkEntry; onClo
         <div className="flex items-center gap-1">
           <button
             onClick={onClose}
-            className="mr-1 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground mr-1 rounded p-0.5"
             data-testid="network-detail-close"
           >
             &times;
@@ -512,7 +512,7 @@ function NetworkDetailPanel({ entry, onClose }: { entry: TestNetworkEntry; onClo
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 rounded px-2 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1 rounded px-2 py-0.5"
           data-testid="network-copy-request"
         >
           Copy request
@@ -573,7 +573,7 @@ function HeadersDetail({ entry }: { entry: TestNetworkEntry }) {
         {reqHeaders.length > 0 ? (
           reqHeaders.map(([k, v]) => <HeaderRow key={k} label={k} value={v} />)
         ) : (
-          <div className="py-1 text-muted-foreground">No request headers captured</div>
+          <div className="text-muted-foreground py-1">No request headers captured</div>
         )}
       </CollapsibleSection>
 
@@ -586,7 +586,7 @@ function HeadersDetail({ entry }: { entry: TestNetworkEntry }) {
         {resHeaders.length > 0 ? (
           resHeaders.map(([k, v]) => <HeaderRow key={k} label={k} value={v} />)
         ) : (
-          <div className="py-1 text-muted-foreground">No response headers captured</div>
+          <div className="text-muted-foreground py-1">No response headers captured</div>
         )}
       </CollapsibleSection>
     </div>
@@ -632,7 +632,7 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   }, [entry.postData]);
 
   if (queryParams.length === 0 && !hasBody) {
-    return <div className="py-4 text-center text-muted-foreground">No payload data</div>;
+    return <div className="text-muted-foreground py-4 text-center">No payload data</div>;
   }
 
   return (
@@ -655,11 +655,11 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
           open={bodyOpen}
           onToggle={() => setBodyOpen(!bodyOpen)}
         >
-          <div className="overflow-x-auto rounded bg-muted/30">
-            <pre className="whitespace-pre text-xs">
+          <div className="bg-muted/30 overflow-x-auto rounded">
+            <pre className="text-xs whitespace-pre">
               {bodyLines.map((line, i) => (
                 <div key={i} className="flex">
-                  <span className="w-8 shrink-0 select-none pr-2 text-right text-muted-foreground/50">
+                  <span className="text-muted-foreground/50 w-8 shrink-0 pr-2 text-right select-none">
                     {i + 1}
                   </span>
                   <span className="break-all">{line}</span>
@@ -693,7 +693,7 @@ function ResponseDetail({ entry }: { entry: TestNetworkEntry }) {
 
   if (!entry.responseBody) {
     return (
-      <div className="py-4 text-center text-muted-foreground">
+      <div className="text-muted-foreground py-4 text-center">
         {entry.status ? 'Response body not captured' : 'Waiting for response...'}
       </div>
     );
@@ -717,18 +717,18 @@ function ResponseDetail({ entry }: { entry: TestNetworkEntry }) {
       );
     }
     return (
-      <div className="py-4 text-center text-muted-foreground">
+      <div className="text-muted-foreground py-4 text-center">
         Binary response ({entry.mimeType ?? 'unknown type'} - {formatSize(entry.size)})
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded bg-muted/30">
-      <pre className="whitespace-pre text-xs">
+    <div className="bg-muted/30 overflow-x-auto rounded">
+      <pre className="text-xs whitespace-pre">
         {lines.map((line, i) => (
           <div key={i} className="flex">
-            <span className="w-8 shrink-0 select-none pr-2 text-right text-muted-foreground/50">
+            <span className="text-muted-foreground/50 w-8 shrink-0 pr-2 text-right select-none">
               {i + 1}
             </span>
             <span className={cn('break-all', isJson && 'text-foreground')}>{line}</span>
@@ -754,9 +754,9 @@ function CollapsibleSection({
     <div>
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-1 rounded-sm bg-muted/50 px-2 py-1.5 font-semibold text-foreground hover:bg-muted"
+        className="bg-muted/50 text-foreground hover:bg-muted flex w-full items-center gap-1 rounded-sm px-2 py-1.5 font-semibold"
       >
-        <span className="w-4 text-center text-muted-foreground">{open ? '▾' : '▸'}</span>
+        <span className="text-muted-foreground w-4 text-center">{open ? '▾' : '▸'}</span>
         {title}
       </button>
       {open && <div className="px-3 py-2">{children}</div>}
@@ -775,7 +775,7 @@ function HeaderRow({
 }) {
   return (
     <div className="flex gap-4 py-0.5">
-      <span className="w-[160px] shrink-0 text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground w-[160px] shrink-0">{label}</span>
       <span className="min-w-0 break-all">
         {statusDot != null && (
           <span
@@ -843,7 +843,7 @@ function SourceTab({
 
   if (!activeFile) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+      <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
         Run a test to view its source
       </div>
     );
@@ -853,14 +853,14 @@ function SourceTab({
   }
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-destructive">
+      <div className="text-destructive flex h-full items-center justify-center text-xs">
         {error}
       </div>
     );
   }
   if (!code) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+      <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
         No source available
       </div>
     );
@@ -868,7 +868,7 @@ function SourceTab({
 
   return (
     <div className="h-full overflow-auto">
-      <div className="border-b px-3 py-1 text-xs text-muted-foreground">{activeFile}</div>
+      <div className="text-muted-foreground border-b px-3 py-1 text-xs">{activeFile}</div>
       <CodeViewer code={code} language={language} maxHeight="none" className="h-full" />
     </div>
   );
@@ -950,7 +950,7 @@ function CallTab({
 
   if (itemCount === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+      <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
         Playwright actions will appear here during test execution…
       </div>
     );
@@ -978,7 +978,7 @@ function CallTab({
               </span>
               {action.title}
               {action.duration != null && (
-                <span className="ml-2 text-muted-foreground">
+                <span className="text-muted-foreground ml-2">
                   {action.duration < 1000
                     ? `${Math.round(action.duration)}ms`
                     : `${(action.duration / 1000).toFixed(1)}s`}
@@ -1047,13 +1047,13 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
   return (
     <ScrollArea className="h-full text-xs">
       {annotations.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
+        <div className="text-muted-foreground flex h-full items-center justify-center">
           No annotations found
         </div>
       ) : (
         <div>
           {annotations.map((anno, i) => (
-            <div key={i} className="flex items-start gap-2 border-b border-border/30 px-3 py-1.5">
+            <div key={i} className="border-border/30 flex items-start gap-2 border-b px-3 py-1.5">
               <Badge variant="outline" className="shrink-0 text-[10px]">
                 @{anno.type}
               </Badge>
@@ -1072,7 +1072,7 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
 
 function PlaceholderTab({ label }: { label: string }) {
   return (
-    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+    <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
       {label}
     </div>
   );
@@ -1174,7 +1174,7 @@ function TabTrigger({
   return (
     <TabsTrigger
       value={value}
-      className="gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+      className="data-[state=active]:border-primary gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
       data-testid={`test-detail-tab-${value}`}
     >
       {icon}

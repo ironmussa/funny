@@ -46,7 +46,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
   }, [navigate]);
 
   return (
-    <div className="shrink-0 px-2 pb-2 pt-2" data-testid="sidebar-scratch-section">
+    <div className="shrink-0 px-2 pt-2 pb-2" data-testid="sidebar-scratch-section">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="min-w-0">
         <div
           className={cn(
@@ -58,7 +58,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
             data-testid="sidebar-scratch-toggle"
             className="flex min-w-0 flex-1 cursor-pointer items-center gap-0 px-2 py-1 text-left text-xs"
           >
-            <span className="-ml-0.5 flex-shrink-0 rounded p-0.5">
+            <span className="-ml-0.5 shrink-0 rounded p-0.5">
               <ChevronRight
                 className={cn(
                   'icon-sm transition-transform duration-200',
@@ -67,7 +67,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
               />
             </span>
             <span className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5">
-              <NotebookPen className="icon-sm flex-shrink-0 text-muted-foreground" />
+              <NotebookPen className="icon-sm text-muted-foreground shrink-0" />
               <span className="truncate text-sm font-medium">
                 {t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })}
               </span>
@@ -101,7 +101,7 @@ export function SidebarScratchSection({ onRenameThread, onDeleteThread }: Props)
         <CollapsibleContent className="data-[state=open]:animate-slide-down">
           <div className="mt-0.5 min-w-0">
             {visibleThreads.length === 0 && (
-              <p className="px-2 py-2 text-xs text-muted-foreground">
+              <p className="text-muted-foreground px-2 py-2 text-xs">
                 {t('sidebar.noQuickChats', { defaultValue: 'No quick chats yet' })}
               </p>
             )}

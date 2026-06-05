@@ -11,12 +11,12 @@ interface RowProps {
 /** Setting row: label/description on the left, control on the right. */
 export function SettingRow({ title, description, children }: RowProps) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3.5 last:border-b-0">
+    <div className="border-border/50 flex items-center justify-between gap-4 border-b px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        <p className="text-foreground text-sm font-medium">{title}</p>
+        <p className="text-muted-foreground mt-0.5 text-xs">{description}</p>
       </div>
-      <div className="flex-shrink-0">{children}</div>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
@@ -34,7 +34,7 @@ export function SegmentedControl<T extends string>({
   onChange,
 }: SegmentedControlProps<T>) {
   return (
-    <div className="flex rounded-md border border-border bg-muted/30 p-0.5">
+    <div className="border-border bg-muted/30 flex rounded-md border p-0.5">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -44,7 +44,7 @@ export function SegmentedControl<T extends string>({
           className={cn(
             'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
             value === opt.value
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-background text-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground',
           )}
         >

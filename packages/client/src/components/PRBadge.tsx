@@ -17,17 +17,17 @@ export interface PRBadgeProps {
 const CONFIG = {
   MERGED: {
     icon: GitMerge,
-    color: '!text-purple-500',
+    color: 'text-purple-500!',
     label: 'merged',
   },
   CLOSED: {
     icon: GitPullRequestClosed,
-    color: '!text-red-500',
+    color: 'text-red-500!',
     label: 'closed',
   },
   OPEN: {
     icon: GitPullRequest,
-    color: '!text-green-500',
+    color: 'text-green-500!',
     label: 'open',
   },
 } as const;
@@ -75,7 +75,7 @@ export function PRBadge({
               window.open(prUrl, '_blank', 'noopener,noreferrer');
             }}
             className={cn(
-              'flex flex-shrink-0 items-center gap-0.5 font-mono hover:underline',
+              'flex shrink-0 items-center gap-0.5 font-mono hover:underline',
               textSize,
               color,
               className,
@@ -97,12 +97,7 @@ export function PRBadge({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={cn(
-            'flex flex-shrink-0 items-center gap-0.5 font-mono',
-            textSize,
-            color,
-            className,
-          )}
+          className={cn('flex shrink-0 items-center gap-0.5 font-mono', textSize, color, className)}
           data-testid={props['data-testid']}
         >
           <Icon className={iconSize} />

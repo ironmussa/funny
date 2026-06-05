@@ -37,7 +37,7 @@ export function ThreadAttachmentsBadge({
           data-testid={props['data-testid']}
           onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
           className={cn(
-            'inline-flex flex-shrink-0 items-center gap-0.5 text-muted-foreground',
+            'inline-flex shrink-0 items-center gap-0.5 text-muted-foreground',
             className,
           )}
         >

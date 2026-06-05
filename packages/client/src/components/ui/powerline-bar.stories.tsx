@@ -142,19 +142,19 @@ export const VariantsComparison: Story = {
     return (
       <div className="flex flex-col gap-4">
         <div>
-          <p className="mb-2 text-xs text-muted-foreground">Arrow (md)</p>
+          <p className="text-muted-foreground mb-2 text-xs">Arrow (md)</p>
           <PowerlineBar segments={segments} variant="arrow" size="md" />
         </div>
         <div>
-          <p className="mb-2 text-xs text-muted-foreground">Arrow (sm)</p>
+          <p className="text-muted-foreground mb-2 text-xs">Arrow (sm)</p>
           <PowerlineBar segments={segments} variant="arrow" size="sm" />
         </div>
         <div>
-          <p className="mb-2 text-xs text-muted-foreground">Chips (md)</p>
+          <p className="text-muted-foreground mb-2 text-xs">Chips (md)</p>
           <PowerlineBar segments={segments} variant="chips" size="md" />
         </div>
         <div>
-          <p className="mb-2 text-xs text-muted-foreground">Chips (sm)</p>
+          <p className="text-muted-foreground mb-2 text-xs">Chips (sm)</p>
           <PowerlineBar segments={segments} variant="chips" size="sm" />
         </div>
       </div>

@@ -90,12 +90,12 @@ export function TeamInvitations() {
   return (
     <>
       {/* Invite form */}
-      <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <h3 className="text-muted-foreground px-1 pb-2 text-xs font-semibold tracking-wider uppercase">
         Invite Member
       </h3>
-      <div className="mb-6 overflow-hidden rounded-lg border border-border/50">
+      <div className="border-border/50 mb-6 overflow-hidden rounded-lg border">
         <div className="px-4 py-3.5">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mb-3 text-xs">
             Send an invitation to join this organization.
           </p>
           <div className="flex items-center gap-2">
@@ -136,26 +136,26 @@ export function TeamInvitations() {
       </div>
 
       {/* Pending invitations */}
-      <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <h3 className="text-muted-foreground px-1 pb-2 text-xs font-semibold tracking-wider uppercase">
         Pending Invitations{!loading && invitations.length > 0 && ` (${invitations.length})`}
       </h3>
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      <div className="border-border/50 overflow-hidden rounded-lg border">
         {loading ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">Loading…</div>
+          <div className="text-muted-foreground px-4 py-6 text-center text-sm">Loading…</div>
         ) : invitations.length === 0 ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             No pending invitations
           </div>
         ) : (
           invitations.map((inv) => (
             <div
               key={inv.id}
-              className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0"
+              className="border-border/50 flex items-center justify-between gap-4 border-b px-4 py-3 last:border-b-0"
               data-testid={`team-invitation-${inv.id}`}
             >
               <div className="min-w-0">
-                <p className="truncate text-sm text-foreground">{inv.email}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-foreground truncate text-sm">{inv.email}</p>
+                <p className="text-muted-foreground text-xs">
                   Expires {new Date(inv.expiresAt).toLocaleDateString()}
                 </p>
               </div>
@@ -163,7 +163,7 @@ export function TeamInvitations() {
                 <Badge variant="secondary">{inv.role}</Badge>
                 <TooltipIconButton
                   size="icon"
-                  className="size-7 text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive size-7"
                   onClick={() => handleCancel(inv.id)}
                   data-testid={`team-invitation-cancel-${inv.id}`}
                   tooltip={t('common.cancel')}

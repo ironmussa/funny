@@ -24,13 +24,13 @@ export function BrowserPanel() {
   return (
     <div
       data-testid="browser-panel"
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card"
+      className="bg-card flex h-full min-h-0 w-full flex-col overflow-hidden"
     >
-      <section className="shrink-0 border-b border-border" data-section="url-bar">
+      <section className="border-border shrink-0 border-b" data-section="url-bar">
         <BrowserUrlBar />
       </section>
 
-      <section className="shrink-0 border-b border-border" data-section="toolbar">
+      <section className="border-border shrink-0 border-b" data-section="toolbar">
         <ToolToolbar />
       </section>
 
@@ -38,12 +38,12 @@ export function BrowserPanel() {
         <BrowserViewport />
       </section>
 
-      <section className="max-h-48 shrink-0 border-t border-border" data-section="annotations">
+      <section className="border-border max-h-48 shrink-0 border-t" data-section="annotations">
         <AnnotationList />
       </section>
 
       <section
-        className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2"
+        className="border-border flex shrink-0 items-center justify-end gap-2 border-t px-3 py-2"
         data-section="footer"
       >
         <BrowserPanelFooter />

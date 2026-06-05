@@ -157,7 +157,7 @@ function DiffViewerWrapper({
 }) {
   const unifiedDiff = computeUnifiedDiff(oldValue, newValue);
   return (
-    <div className="overflow-hidden rounded-md border border-border" style={{ height: 400 }}>
+    <div className="border-border overflow-hidden rounded-md border" style={{ height: 400 }}>
       <VirtualDiff
         unifiedDiff={unifiedDiff}
         splitView={splitView}

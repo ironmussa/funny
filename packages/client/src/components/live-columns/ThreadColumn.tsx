@@ -239,7 +239,7 @@ export const ThreadColumn = memo(function ThreadColumn({
 
   if (loading) {
     return (
-      <div className="flex min-h-0 flex-1 rounded-sm border border-border">
+      <div className="border-border flex min-h-0 flex-1 rounded-sm border">
         <LoadingState testId={`grid-column-loading-${threadId}`} />
       </div>
     );
@@ -247,7 +247,7 @@ export const ThreadColumn = memo(function ThreadColumn({
 
   if (!thread) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center rounded-sm border border-border text-xs text-muted-foreground">
+      <div className="border-border text-muted-foreground flex min-h-0 flex-1 items-center justify-center rounded-sm border text-xs">
         {t('thread.notFound', 'Thread not found')}
       </div>
     );
@@ -271,7 +271,7 @@ export const ThreadColumn = memo(function ThreadColumn({
           isHoveredRef.current = false;
         }}
       >
-        <div ref={dragHandleRef} className="flex-shrink-0 cursor-grab active:cursor-grabbing">
+        <div ref={dragHandleRef} className="shrink-0 cursor-grab active:cursor-grabbing">
           <ProjectHeader
             hideFiles
             hideTests
@@ -280,7 +280,7 @@ export const ThreadColumn = memo(function ThreadColumn({
             hideTimeline
             leading={
               <>
-                <GripVertical className="icon-xs shrink-0 text-muted-foreground" />
+                <GripVertical className="icon-xs text-muted-foreground shrink-0" />
                 <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
               </>
             }
@@ -305,7 +305,7 @@ export const ThreadColumn = memo(function ThreadColumn({
           onClose={handleSearchClose}
           onNavigateToMessage={handleSearchNavigate}
           testIdPrefix={`grid-search-${threadId}`}
-          className="absolute right-2 top-9 z-30 gap-1.5 rounded-md border border-border bg-popover px-2 py-1.5 shadow-md"
+          className="border-border bg-popover absolute top-9 right-2 z-30 gap-1.5 rounded-md border px-2 py-1.5 shadow-md"
         />
 
         <MessageStream

@@ -138,7 +138,7 @@ export const KanbanCard = memo(function KanbanCard({
               </span>
             )}
             <span
-              className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/card:flex"
+              className="text-muted-foreground hover:text-foreground absolute inset-0 hidden cursor-pointer items-center justify-center group-hover/card:flex"
               onClick={(e) => {
                 e.stopPropagation();
                 pinThread(thread.id, thread.projectId, !thread.pinned);
@@ -152,7 +152,7 @@ export const KanbanCard = memo(function KanbanCard({
             search={search || ''}
             multiline
             containerClassName="flex-1"
-            className="line-clamp-6 text-sm font-medium leading-relaxed text-muted-foreground transition-colors group-hover/card:text-foreground"
+            className="text-muted-foreground group-hover/card:text-foreground line-clamp-6 text-sm leading-relaxed font-medium transition-colors"
             stopBadgePropagation
             badgeTestId={`kanban-card-attachments-${thread.id}`}
           />
@@ -172,13 +172,13 @@ export const KanbanCard = memo(function KanbanCard({
           <HighlightText
             text={contentSnippet}
             query={search}
-            className="mb-1 line-clamp-2 block text-[11px] italic text-muted-foreground"
+            className="text-muted-foreground mb-1 line-clamp-2 block text-[11px] italic"
           />
         )}
       </div>
 
       <div className="flex shrink-0 items-center px-1.5">
-        <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
+        <div className="grid min-w-10 place-items-center justify-items-center">
           <span
             className={cn(
               'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/card:opacity-0 group-hover/card:pointer-events-none',
@@ -190,7 +190,7 @@ export const KanbanCard = memo(function KanbanCard({
           <div
             className={cn(
               'col-start-1 row-start-1 flex items-center opacity-0 group-hover/card:opacity-100',
-              openDropdown && '!opacity-100',
+              openDropdown && 'opacity-100!',
             )}
           >
             <DropdownMenu onOpenChange={handleDropdownChange}>

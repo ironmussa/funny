@@ -67,7 +67,7 @@ function SidebarPlaceholder() {
     if (s) w = Number(s);
   } catch {}
   return (
-    <div style={{ width: w }} className="flex-shrink-0 border-r border-sidebar-border bg-sidebar" />
+    <div style={{ width: w }} className="border-sidebar-border bg-sidebar shrink-0 border-r" />
   );
 }
 
@@ -263,7 +263,7 @@ export function App() {
     : undefined;
 
   const singleRightPanel = !useReviewTabs ? (
-    <div className="h-full w-full overflow-hidden bg-sidebar">
+    <div className="bg-sidebar h-full w-full overflow-hidden">
       <ErrorBoundary area="right-pane">
         <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
           {rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (

@@ -106,18 +106,18 @@ function SpecItem({
     <>
       <div
         data-testid={`test-spec-${spec.file}-${spec.line}`}
-        className="group flex h-[24px] cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+        className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
         style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
         onClick={hasMultipleProjects ? () => setExpanded(!expanded) : undefined}
       >
         {hasMultipleProjects ? (
           <ChevronRight
-            className={cn('icon-sm flex-shrink-0 transition-transform', expanded && 'rotate-90')}
+            className={cn('icon-sm shrink-0 transition-transform', expanded && 'rotate-90')}
           />
         ) : (
           <StatusDot status={fileStatus} />
         )}
-        <span className="flex-1 truncate font-mono-explorer text-xs" title={spec.title}>
+        <span className="font-mono-explorer flex-1 truncate text-xs" title={spec.title}>
           {spec.title}
         </span>
         {!hasMultipleProjects &&
@@ -125,7 +125,7 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
               size="icon"
-              className="size-5 text-destructive opacity-100 hover:text-destructive"
+              className="text-destructive hover:text-destructive size-5 opacity-100"
               onClick={onStop}
               tooltip={t('common.stop')}
             >
@@ -150,11 +150,11 @@ function SpecItem({
           <div
             key={project}
             data-testid={`test-spec-${spec.file}-${spec.line}-${project}`}
-            className="group flex h-[24px] cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+            className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
             style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <StatusDot status={fileStatus} />
-            <span className="flex-1 truncate font-mono-explorer text-xs">{project}</span>
+            <span className="font-mono-explorer flex-1 truncate text-xs">{project}</span>
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}-${project}`}
               size="icon"
@@ -229,11 +229,11 @@ function SuiteItem({
         onClick={() => toggleSuite(suiteKey)}
       >
         <ChevronRight
-          className={cn('icon-sm flex-shrink-0 transition-transform', isExpanded && 'rotate-90')}
+          className={cn('icon-sm shrink-0 transition-transform', isExpanded && 'rotate-90')}
         />
         <StatusDot status={fileStatus} />
         <span
-          className="flex-1 truncate font-mono-explorer text-xs font-medium"
+          className="font-mono-explorer flex-1 truncate text-xs font-medium"
           title={suite.title}
         >
           {suite.title}
@@ -335,14 +335,14 @@ function TreeItem({
           style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
         >
           <ChevronRight
-            className={cn('icon-sm flex-shrink-0 transition-transform', isExpanded && 'rotate-90')}
+            className={cn('icon-sm shrink-0 transition-transform', isExpanded && 'rotate-90')}
           />
           {isExpanded ? (
-            <FolderOpen className="icon-base flex-shrink-0 text-muted-foreground/70" />
+            <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
           ) : (
-            <Folder className="icon-base flex-shrink-0 text-muted-foreground/70" />
+            <Folder className="icon-base text-muted-foreground/70 shrink-0" />
           )}
-          <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
+          <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
         </div>
         {isExpanded &&
           node.children.map((child) => (
@@ -400,7 +400,7 @@ function TreeItem({
       >
         <button
           data-testid={`test-file-expand-${node.path}`}
-          className="flex-shrink-0"
+          className="shrink-0"
           onClick={(e) => {
             e.stopPropagation();
             handleToggleFile();
@@ -408,23 +408,23 @@ function TreeItem({
         >
           <ChevronRight
             className={cn(
-              'icon-sm flex-shrink-0 transition-transform text-muted-foreground',
+              'icon-sm shrink-0 transition-transform text-muted-foreground',
               isFileExpanded && 'rotate-90',
             )}
           />
         </button>
         <FileExtensionIcon
           filePath={node.path}
-          className="size-4 flex-shrink-0 text-muted-foreground/80"
+          className="text-muted-foreground/80 size-4 shrink-0"
         />
-        <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
+        <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
         <StatusDot status={status} />
         {status === 'running' ? (
           <Button
             data-testid={`test-stop-${node.path}`}
             variant="ghost"
             size="icon"
-            className="size-5 text-destructive opacity-100 hover:text-destructive"
+            className="text-destructive hover:text-destructive size-5 opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               onStop();
@@ -452,7 +452,7 @@ function TreeItem({
             <button
               data-testid={`test-file-menu-${node.path}`}
               className={cn(
-                'flex size-6 flex-shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',
+                'flex size-6 shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',
                 menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
               )}
               onClick={(e) => e.stopPropagation()}
@@ -481,7 +481,7 @@ function TreeItem({
       {isFileExpanded &&
         (isSpecsLoading ? (
           <div
-            className="flex h-6 items-center gap-2 text-xs text-muted-foreground"
+            className="text-muted-foreground flex h-6 items-center gap-2 text-xs"
             style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <Loader2 className="icon-xs animate-spin" />
@@ -517,7 +517,7 @@ function TreeItem({
           ))
         ) : specs ? (
           <div
-            className="flex h-6 items-center text-xs text-muted-foreground"
+            className="text-muted-foreground flex h-6 items-center text-xs"
             style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             No tests found
@@ -715,7 +715,7 @@ export function TestFileBrowser({
       {/* Browser project selector */}
       {availableProjects.length > 1 && (
         <div className="flex items-center gap-3 border-b px-3 py-1.5">
-          <span className="text-xs text-muted-foreground">Projects:</span>
+          <span className="text-muted-foreground text-xs">Projects:</span>
           {availableProjects.map((project) => (
             <label
               key={project}
@@ -726,7 +726,7 @@ export function TestFileBrowser({
                 checked={selectedProjects.includes(project)}
                 onCheckedChange={() => onToggleProject(project)}
               />
-              <span className="text-xs text-muted-foreground">{project}</span>
+              <span className="text-muted-foreground text-xs">{project}</span>
             </label>
           ))}
         </div>
@@ -743,11 +743,11 @@ export function TestFileBrowser({
             label="Loading tests…"
           />
         ) : files.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground px-4 py-8 text-center text-sm">
             No test files found
           </div>
         ) : filteredFiles.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground px-4 py-8 text-center text-sm">
             No tests matching "{search}"
           </div>
         ) : (

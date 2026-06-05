@@ -56,7 +56,7 @@ export function PullStrategyDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs text-muted-foreground">
+        <div className="bg-muted/30 text-muted-foreground rounded-md border p-3 font-mono text-xs">
           {errorMessage}
         </div>
 
@@ -74,10 +74,10 @@ export function PullStrategyDialog({
           >
             <RotateCcw className="icon-base mt-0.5 shrink-0" />
             <span className="flex flex-col">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-foreground text-sm font-medium">
                 {t('review.pullStrategy.rebase', 'Rebase')}
               </span>
-              <span className="mt-1.5 text-xs text-muted-foreground">
+              <span className="text-muted-foreground mt-1.5 text-xs">
                 {t(
                   'review.pullStrategy.rebaseHint',
                   'Replay your local commits on top of the remote (linear history).',
@@ -99,10 +99,10 @@ export function PullStrategyDialog({
           >
             <GitMerge className="icon-base mt-0.5 shrink-0" />
             <span className="flex flex-col">
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-foreground text-sm font-medium">
                 {t('review.pullStrategy.merge', 'Merge')}
               </span>
-              <span className="mt-1.5 text-xs text-muted-foreground">
+              <span className="text-muted-foreground mt-1.5 text-xs">
                 {t(
                   'review.pullStrategy.mergeHint',
                   'Create a merge commit that joins both histories.',

@@ -63,6 +63,6 @@ export function SettingsPageContent({ page, label }: Props) {
     case 'team-members':
       return <TeamMembers />;
     default:
-      return <p className="text-sm text-muted-foreground">{t('settings.comingSoon', { label })}</p>;
+      return <p className="text-muted-foreground text-sm">{t('settings.comingSoon', { label })}</p>;
   }
 }

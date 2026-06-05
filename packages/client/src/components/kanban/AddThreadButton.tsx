@@ -32,7 +32,7 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
         <TooltipTrigger asChild>
           <button
             data-testid="kanban-add-thread"
-            className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto rounded p-0.5 transition-colors"
             onClick={() => onSelect(projectId)}
             aria-label={t('kanban.addThread')}
           >
@@ -61,7 +61,7 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
           <PopoverTrigger asChild>
             <button
               data-testid="kanban-add-thread"
-              className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto rounded p-0.5 transition-colors"
               aria-label={t('kanban.addThread')}
             >
               <Plus className="icon-base" />
@@ -71,7 +71,7 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
         <TooltipContent>{t('kanban.addThread')}</TooltipContent>
       </Tooltip>
       <PopoverContent align="start" className="w-64 p-0">
-        <div className="border-b border-border/50 px-2 py-1.5">
+        <div className="border-border/50 border-b px-2 py-1.5">
           <SearchBar
             inputRef={inputRef}
             query={search}
@@ -85,14 +85,14 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
         </div>
         <ScrollArea className="max-h-56 py-1">
           {filtered.length === 0 ? (
-            <div className="py-3 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-3 text-center text-sm">
               {t('commandPalette.noResults')}
             </div>
           ) : (
             filtered.map((p) => (
               <button
                 key={p.id}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
                 onClick={() => {
                   setOpen(false);
                   setSearch('');

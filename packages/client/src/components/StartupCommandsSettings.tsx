@@ -146,7 +146,7 @@ export function StartupCommandsSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground py-6 text-center text-sm">
         {t('startup.noCommands')}
       </div>
     );
@@ -175,7 +175,7 @@ export function StartupCommandsSettings() {
       {/* Command list */}
       {commands.length === 0 && !adding && (
         <div className="py-8 text-center">
-          <p className="mb-3 text-sm text-muted-foreground">{t('startup.noCommands')}</p>
+          <p className="text-muted-foreground mb-3 text-sm">{t('startup.noCommands')}</p>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
             <Plus className="icon-sm" />
             {t('startup.addFirst')}
@@ -236,7 +236,7 @@ export function StartupCommandsSettings() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {isRunning && (
-                  <Loader2 className="icon-sm flex-shrink-0 animate-spin text-status-success" />
+                  <Loader2 className="icon-sm text-status-success shrink-0 animate-spin" />
                 )}
                 <span className="truncate text-sm font-medium">{cmd.label}</span>
               </div>
@@ -244,7 +244,7 @@ export function StartupCommandsSettings() {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
               {isRunning ? (
                 <Tooltip>
                   <TooltipTrigger asChild>

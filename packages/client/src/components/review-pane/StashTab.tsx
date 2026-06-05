@@ -73,7 +73,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
   return (
     <>
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
-        <div className="flex flex-col divide-y divide-sidebar-border">
+        <div className="divide-sidebar-border flex flex-col divide-y">
           {filteredStashEntries.map((entry) => {
             const idx = entry.index.replace('stash@{', '').replace('}', '');
             return (
@@ -81,7 +81,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 key={entry.index}
                 role="button"
                 tabIndex={0}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent/50"
+                className="hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs transition-colors"
                 onClick={() => setSelectedStashIndex(idx)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -91,17 +91,17 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 }}
                 data-testid={`stash-entry-${idx}`}
               >
-                <Archive className="size-3 shrink-0 text-muted-foreground" />
+                <Archive className="text-muted-foreground size-3 shrink-0" />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{entry.message}</span>
-                  <span className="text-[10px] text-muted-foreground">{entry.relativeDate}</span>
+                  <span className="text-muted-foreground text-[10px]">{entry.relativeDate}</span>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="shrink-0 text-muted-foreground"
+                      className="text-muted-foreground shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleStashPop();
@@ -127,7 +127,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      className="text-muted-foreground hover:text-destructive shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         onRequestDrop(idx);
@@ -163,16 +163,16 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
           className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
           data-testid="stash-detail-dialog"
         >
-          <div className="shrink-0 border-b border-border px-4 py-3">
+          <div className="border-border shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <DialogTitle className="text-sm font-semibold leading-tight">
+              <DialogTitle className="text-sm leading-tight font-semibold">
                 {selectedStashEntry?.message ?? t('review.stashDetails', 'Stash details')}
               </DialogTitle>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setSelectedStashIndex(null)}
-                className="shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid="stash-detail-close"
               >
                 <X className="icon-xs" />
@@ -182,13 +182,11 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
               {t('review.stashDetailsDesc', 'Stash detail with file changes and diffs')}
             </DialogDescription>
             {selectedStashEntry && (
-              <div className="flex items-center gap-1.5 pt-1 text-[11px] text-muted-foreground">
-                <Archive className="icon-xs flex-shrink-0" />
-                <code className="flex-shrink-0 font-mono text-primary">
-                  {selectedStashEntry.index}
-                </code>
-                <span className="flex-shrink-0">{selectedStashEntry.relativeDate}</span>
-                <span className="flex-shrink-0 text-muted-foreground">
+              <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
+                <Archive className="icon-xs shrink-0" />
+                <code className="text-primary shrink-0 font-mono">{selectedStashEntry.index}</code>
+                <span className="shrink-0">{selectedStashEntry.relativeDate}</span>
+                <span className="text-muted-foreground shrink-0">
                   &middot; {stashFiles.length} file{stashFiles.length !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -203,11 +201,11 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
           ) : (
             <div className="flex min-h-0 flex-1">
               <div
-                className="flex w-[280px] shrink-0 flex-col border-r border-border"
+                className="border-border flex w-[280px] shrink-0 flex-col border-r"
                 data-testid="stash-detail-file-tree"
               >
                 {stashFiles.length > 0 && (
-                  <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                  <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
                     <SearchBar
                       query={stashFileSearch}
                       onQueryChange={setStashFileSearch}
@@ -226,11 +224,11 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 )}
                 <ScrollArea className="min-h-0 flex-1">
                   {stashFiles.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-muted-foreground">
+                    <div className="text-muted-foreground py-4 text-center text-xs">
                       {t('review.noFiles', 'No files')}
                     </div>
                   ) : stashTreeFiles.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-muted-foreground">
+                    <div className="text-muted-foreground py-4 text-center text-xs">
                       {t('history.noMatchingFiles', 'No matching files')}
                     </div>
                   ) : (
@@ -249,7 +247,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
 
               <div className="flex min-w-0 flex-1 flex-col" data-testid="stash-detail-diff-pane">
                 {!stashDialogFile ? (
-                  <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
                     <FileCode className="size-8 opacity-30" />
                     <p className="text-xs">
                       {t('history.selectFile', 'Select a file to view changes')}

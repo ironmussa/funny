@@ -593,6 +593,12 @@ export const RECOMMENDED_SERVERS = [
     url: 'https://mcp.sentry.dev/sse',
   },
   {
+    name: 'linear',
+    description: 'Linear issues, projects, and team workflows',
+    type: 'http' as McpServerType,
+    url: 'https://mcp.linear.app/mcp',
+  },
+  {
     name: 'cloudflare',
     description: 'Manage Cloudflare Workers, DNS, R2, and other Cloudflare services',
     type: 'http' as McpServerType,

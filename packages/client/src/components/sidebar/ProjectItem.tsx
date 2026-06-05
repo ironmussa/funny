@@ -14,7 +14,6 @@ import {
   Settings,
   Pencil,
   BarChart3,
-  CircleDot,
   Sparkles,
   EyeOff,
   RotateCcw,
@@ -454,17 +453,6 @@ export const ProjectItem = memo(function ProjectItem({
                 >
                   <BarChart3 className="icon-sm" />
                   {t('sidebar.analytics')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-github-issues"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    onShowIssues(project.id);
-                  }}
-                >
-                  <CircleDot className="icon-sm" />
-                  {t('sidebar.githubIssues')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   data-testid="project-menu-view-designs"

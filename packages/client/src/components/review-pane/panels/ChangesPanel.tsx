@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { CommitHistoryTab } from '@/components/CommitHistoryTab';
+import { IssuesTab } from '@/components/IssuesTab';
 import { PullRequestsTab } from '@/components/PullRequestsTab';
 
 import { ReviewChangesTabContent } from '../ReviewChangesTab';
@@ -170,6 +171,15 @@ export function PRsPanel() {
   return (
     <div className="flex h-full w-full flex-col text-xs">
       <PullRequestsTab visible />
+    </div>
+  );
+}
+
+/** Dockview panel: Issues — self-contained. */
+export function IssuesPanel() {
+  return (
+    <div className="flex h-full w-full flex-col text-xs">
+      <IssuesTab visible />
     </div>
   );
 }

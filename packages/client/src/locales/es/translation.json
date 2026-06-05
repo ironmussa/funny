@@ -345,6 +345,27 @@
       "loadMore": "Cargar más",
       "openOnGithub": "Abrir en GitHub"
     },
+    "ci": {
+      "tab": "CI",
+      "loading": "Cargando estado de CI…",
+      "noProject": "Selecciona un proyecto para ver el estado de CI",
+      "noPR": "Aún no hay pull request para esta rama",
+      "noPRHint": "El estado de CI aparece cuando se abre un pull request.",
+      "noChecks": "No hay checks de CI para este PR",
+      "passedCount": "{{passed}}/{{total}} aprobados",
+      "failedCount": "{{count}} fallidos",
+      "pendingCount": "{{count}} pendientes",
+      "rateLimited": "Límite alcanzado",
+      "rateLimitedHint": "Se alcanzó el límite de la API de GitHub. Sondeo en pausa.",
+      "openOnGithub": "Abrir PR en GitHub"
+    },
+    "issues": {
+      "tab": "Issues",
+      "loading": "Cargando issues…",
+      "noProject": "Selecciona un proyecto para ver issues",
+      "noOpenIssues": "No hay issues abiertos",
+      "noClosedIssues": "No hay issues cerrados"
+    },
     "progress": {
       "description": "Progreso de operación git",
       "done": "Listo",

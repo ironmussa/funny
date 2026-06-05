@@ -137,8 +137,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     useGitStatusStore.setState({
       statusByBranch: {},
       threadToBranchKey: {},
-      fetchingKeys: new Set(),
-      cooldownUntil: {},
+      _loadingBranchKeys: new Set(),
     });
   });
 

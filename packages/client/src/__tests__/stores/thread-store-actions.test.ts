@@ -691,7 +691,7 @@ describe('thread store actions', () => {
       } as any);
       mockArchiveThread.mockReturnValue(okAsync({ ok: true }));
 
-      await useThreadStore.getState().archiveThread('t1');
+      await useThreadStore.getState().archiveThread('t1', 'p1');
 
       expect(useThreadStore.getState().threadsById.t1.archived).toBe(true);
       expect(mockArchiveThread).toHaveBeenCalledWith('t1', true);
@@ -703,7 +703,7 @@ describe('thread store actions', () => {
       } as any);
       mockArchiveThread.mockReturnValue(errAsync(new Error('nope')));
 
-      await useThreadStore.getState().archiveThread('t1');
+      await useThreadStore.getState().archiveThread('t1', 'p1');
 
       expect(useThreadStore.getState().threadsById.t1.archived).not.toBe(true);
     });
@@ -833,7 +833,7 @@ describe('thread store actions', () => {
       } as any);
       mockStopThread.mockReturnValue(okAsync({ ok: true }));
 
-      await useThreadStore.getState().deleteThread('t1');
+      await useThreadStore.getState().deleteThread('t1', 'p1');
 
       expect(mockStopThread).toHaveBeenCalledWith('t1');
       expect(mockCleanupThreadActor).toHaveBeenCalledWith('t1');

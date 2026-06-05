@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   ChangesPanel,
   HistoryPanel,
+  IssuesPanel,
   PRsPanel,
   StashPanel,
 } from '@/components/review-pane/panels/ChangesPanel';
@@ -246,7 +247,7 @@ export function App() {
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
 
   // When the user is on the review tab and has git context, the right pane
-  // is split into 4 native dockview tabs (Changes/History/Stash/PRs). For the
+  // is split into 5 native dockview tabs (Changes/History/Stash/PRs/Issues). For the
   // other top-level tabs (files / activity / project-mode), we fall back to a
   // single header-less panel.
   const useReviewTabs = rightPaneTab === 'review' && (activeThreadCanShowGit || hasSelectedProject);
@@ -257,6 +258,7 @@ export function App() {
         { id: 'history', title: 'History', content: <HistoryPanel /> },
         { id: 'stash', title: 'Stash', content: <StashPanel /> },
         { id: 'prs', title: 'PRs', content: <PRsPanel /> },
+        { id: 'issues', title: 'Issues', content: <IssuesPanel /> },
       ]
     : undefined;
 

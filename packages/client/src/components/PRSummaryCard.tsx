@@ -36,7 +36,7 @@ interface PRSummaryCardProps {
   visible: boolean;
 }
 
-function CheckIcon({ check }: { check: CICheck }) {
+export function CheckIcon({ check }: { check: CICheck }) {
   if (check.status !== 'completed') {
     return <Loader2 className="size-3.5 shrink-0 animate-spin text-yellow-500" />;
   }
@@ -113,7 +113,7 @@ export function PRStateBadge({
   );
 }
 
-function ReviewDecisionBadge({ decision }: { decision: string | null }) {
+export function ReviewDecisionBadge({ decision }: { decision: string | null }) {
   if (!decision) return null;
   switch (decision) {
     case 'APPROVED':
@@ -139,7 +139,7 @@ function ReviewDecisionBadge({ decision }: { decision: string | null }) {
   }
 }
 
-function MergeStatus({ mergeable, merged }: { mergeable: string; merged: boolean }) {
+export function MergeStatus({ mergeable, merged }: { mergeable: string; merged: boolean }) {
   if (merged) return null;
   switch (mergeable) {
     case 'mergeable':

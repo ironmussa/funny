@@ -15,13 +15,17 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   realpathSync,
   rmSync,
   statSync,
 } from 'fs';
+import { tmpdir } from 'os';
 import { basename, join, resolve, sep } from 'path';
+
+import { execute } from '@funny/core/git';
 
 import { DATA_DIR } from './data-dir.js';
 
@@ -195,6 +199,139 @@ export function installExtensionFromPath(
   const installed = readExtension(dir, dirName);
   if (!installed) return { ok: false, error: 'installed package was not discoverable' };
   return { ok: true, extension: installed };
+}
+
+/** A validated git clone target derived from a user-supplied spec. */
+export interface GitSpec {
+  /** Clone URL, passed verbatim to `git clone` after a `--` separator. */
+  url: string;
+  /** Optional branch or tag to check out (shallow). */
+  ref?: string;
+}
+
+export type GitSpecResult = { ok: true; spec: GitSpec } | { ok: false; error: string };
+
+/** A git ref we'll pass to `git clone --branch`: branch/tag chars only, no
+ *  leading dash (arg injection) and no `..` (path-ish escapes). */
+function isValidGitRef(ref: string): boolean {
+  return /^[\w][\w./-]*$/.test(ref) && !ref.includes('..');
+}
+
+/**
+ * Parse + validate a git install spec into a safe `{ url, ref }`.
+ *
+ * Accepts only forms we can vouch for, because the URL is handed to `git clone`:
+ *   - `github:user/repo` / `gh:user/repo`  → expanded to https
+ *   - `https://host/path(.git)`
+ *   - `git@host:path` (scp-style ssh) / `ssh://…`
+ * Everything else is rejected — notably git's `ext::<cmd>` transport (which runs
+ * an arbitrary command) and any URL that could be read as a `git` flag. A
+ * trailing `#ref` selects a branch/tag.
+ */
+export function parseGitSpec(raw: string): GitSpecResult {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: false, error: 'empty git spec' };
+
+  // A repo URL never contains '#', so a trailing '#…' is the ref selector.
+  let url = trimmed;
+  let ref: string | undefined;
+  const hash = trimmed.indexOf('#');
+  if (hash !== -1) {
+    url = trimmed.slice(0, hash).trim();
+    ref = trimmed.slice(hash + 1).trim() || undefined;
+  }
+
+  // Expand github:/gh: shorthand → https clone URL.
+  const shorthand = /^(?:github|gh):([\w.-]+\/[\w.-]+?)(?:\.git)?$/i.exec(url);
+  if (shorthand) url = `https://github.com/${shorthand[1]}.git`;
+
+  const isHttps = /^https:\/\/\S+$/.test(url);
+  const isSsh = /^(?:ssh:\/\/)?git@[\w.-]+:[\w./~-]+$/.test(url);
+  if (!isHttps && !isSsh) {
+    return {
+      ok: false,
+      error: 'unsupported git URL — use https://…, git@host:…, or github:user/repo',
+    };
+  }
+  // Refuse argument injection (leading '-') and shell/transport metacharacters.
+  if (url.startsWith('-') || /[\s'"\\;|&$`<>(){}]/.test(url)) {
+    return { ok: false, error: 'git URL contains unsafe characters' };
+  }
+  if (ref !== undefined && !isValidGitRef(ref)) {
+    return { ok: false, error: 'invalid git ref' };
+  }
+  return { ok: true, spec: { url, ref } };
+}
+
+/**
+ * Install an extension by cloning a remote git repository. The repo (or an
+ * optional subdirectory of it, for monorepos) must be a **pre-built** package:
+ * its `package.json` `funny.client` must point at a committed bundle. We never
+ * run the repo's build — matching the VSCode/Obsidian/npm norm where CI builds
+ * the artifact and the installer only fetches + copies it.
+ *
+ * The clone is shallow, into a temp dir that is always removed, and uses a
+ * whitelisted URL form (see {@link parseGitSpec}) with interactive auth prompts
+ * disabled so a private/unknown repo fails fast instead of hanging.
+ */
+export async function installExtensionFromGit(
+  spec: string,
+  opts: { ref?: string; subdir?: string; dir?: string } = {},
+): Promise<InstallResult> {
+  const dir = opts.dir ?? EXTENSIONS_DIR;
+  const parsed = parseGitSpec(spec);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  // An explicit ref option (CLI `--ref` / API `ref`) overrides an inline `#ref`.
+  if (opts.ref?.trim()) {
+    const ref = opts.ref.trim();
+    if (!isValidGitRef(ref)) return { ok: false, error: 'invalid git ref' };
+    parsed.spec.ref = ref;
+  }
+
+  // Validate the optional subdir before doing any work.
+  let subdir = '';
+  if (opts.subdir) {
+    const s = opts.subdir.replace(/\\/g, '/').replace(/^\.?\/+/, '');
+    if (s.startsWith('/') || s.split('/').includes('..')) {
+      return { ok: false, error: 'invalid subdir' };
+    }
+    subdir = s;
+  }
+
+  let tmp: string;
+  try {
+    tmp = mkdtempSync(join(tmpdir(), 'funny-ext-git-'));
+  } catch (err) {
+    return { ok: false, error: `could not create temp dir: ${String(err)}` };
+  }
+  const checkout = join(tmp, 'repo');
+
+  try {
+    const args = ['clone', '--depth', '1'];
+    if (parsed.spec.ref) args.push('--branch', parsed.spec.ref);
+    args.push('--', parsed.spec.url, checkout);
+    const res = await execute('git', args, {
+      timeout: 120_000,
+      reject: false,
+      // Fail fast on private/unknown repos instead of blocking on a credential
+      // prompt that has no TTY to answer it.
+      env: { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/echo', GCM_INTERACTIVE: 'never' },
+    });
+    if (res.exitCode !== 0) {
+      const detail = (res.stderr || res.stdout).trim().split('\n').slice(-2).join(' ');
+      return { ok: false, error: `git clone failed: ${detail || `exit ${res.exitCode}`}` };
+    }
+
+    const pkgRoot = subdir ? join(checkout, subdir) : checkout;
+    if (!isInside(checkout, pkgRoot)) {
+      return { ok: false, error: 'subdir escapes the repository' };
+    }
+    return installExtensionFromPath(pkgRoot, dir);
+  } catch (err) {
+    return { ok: false, error: `git install failed: ${String(err)}` };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 /** Remove an installed extension by its on-disk directory name. */

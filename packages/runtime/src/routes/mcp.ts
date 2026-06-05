@@ -10,6 +10,7 @@ import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
+import { log } from '../lib/logger.js';
 import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
 import {
   listMcpServers,
@@ -126,6 +127,16 @@ app.post('/oauth/start', async (c) => {
         const u = new URL(c.req.url);
         return `${u.protocol}//${u.host}`;
       })();
+
+  log.info('OAuth start: reconstructed callback base URL', {
+    namespace: 'mcp',
+    serverName,
+    fwdHost: fwdHost ?? null,
+    fwdProto: fwdProto ?? null,
+    reqUrl: c.req.url,
+    callbackBaseUrl,
+    usedForwardedHost: Boolean(fwdHost),
+  });
 
   const oauthResult = await startOAuthFlow(serverName, server.url, projectPath, callbackBaseUrl);
   if (oauthResult.isErr()) return resultToResponse(c, oauthResult);

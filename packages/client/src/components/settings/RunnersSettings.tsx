@@ -193,9 +193,13 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   const projects = useAppStore((s) => s.projects);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="overflow-hidden rounded-lg border border-border/50 bg-card"
+    >
       <div
-        className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-3 py-2.5"
+        className="flex items-center gap-3 px-3 py-2.5"
         data-testid={`runner-item-${runner.runnerId}`}
       >
         {/* Status dot */}
@@ -375,7 +379,7 @@ export function RunnersSettings() {
       <h3 className="settings-section-header">Runners</h3>
 
       {/* Install command */}
-      <div className="settings-card space-y-3">
+      <div className="settings-card space-y-3 p-4">
         <div>
           <p className="text-sm font-medium">Connect a new runner</p>
           <p className="mt-0.5 text-xs text-muted-foreground">

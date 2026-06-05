@@ -89,7 +89,7 @@ describe('UserMessageCard', () => {
     renderWithProviders(
       <UserMessageCard
         content="hello"
-        model="claude-sonnet-4-6"
+        model="sonnet-4.6"
         permissionMode="autoEdit"
         effort="high"
         timestamp={new Date().toISOString()}
@@ -97,7 +97,7 @@ describe('UserMessageCard', () => {
       />,
     );
 
-    expect(screen.getByText(/claude-sonnet-4-6/)).toBeInTheDocument();
+    expect(screen.getByText(/sonnet-4.6/)).toBeInTheDocument();
     expect(screen.getByText('prompt.autoEdit')).toBeInTheDocument();
     expect(screen.getByText(/High/)).toBeInTheDocument();
     expect(screen.getByText('time.now')).toBeInTheDocument();

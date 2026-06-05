@@ -84,11 +84,7 @@ export function CommitListPanel({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => commitScrollRef.current,
-    estimateSize: (index) => {
-      const entry = filteredEntries[index];
-      if (!entry) return 48;
-      return entry.body.trim() ? 72 : 48;
-    },
+    estimateSize: () => 48,
     getItemKey: (index) =>
       index >= filteredEntries.length ? '__sentinel__' : filteredEntries[index].hash,
     overscan: 10,
@@ -281,13 +277,6 @@ function CommitRow({
           query={commitSearch}
           className="block truncate font-medium text-foreground"
         />
-        {entry.body.trim() ? (
-          <HighlightText
-            text={entry.body}
-            query={commitSearch}
-            className="mt-0.5 block whitespace-pre-wrap text-[10px] leading-snug text-muted-foreground"
-          />
-        ) : null}
         <div className="mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
           <AuthorBadge
             name={entry.author}

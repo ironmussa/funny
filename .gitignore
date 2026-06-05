@@ -37,3 +37,7 @@ openspec/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
 /.codegraph
+
+# VitePress
+docs/.vitepress/cache/
+docs/.vitepress/dist/

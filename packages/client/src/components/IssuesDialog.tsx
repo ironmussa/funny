@@ -25,6 +25,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
+import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
 
 export interface IssueThreadParams {
   prompt: string;
@@ -90,18 +91,8 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
   const handleCreateThread = useCallback(
     (issue: EnrichedGitHubIssue) => {
       if (!onCreateThread || !repoInfo) return;
-      const lines = [
-        `Fix GitHub issue #${issue.number}: ${issue.title}`,
-        `URL: https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${issue.number}`,
-      ];
-      if (issue.body) {
-        lines.push('', 'Issue description:', issue.body);
-      }
-      if (issue.labels.length > 0) {
-        lines.push('', `Labels: ${issue.labels.map((l) => l.name).join(', ')}`);
-      }
       onCreateThread({
-        prompt: lines.join('\n'),
+        prompt: buildIssueThreadPrompt(issue, repoInfo),
         branchName: issue.suggestedBranchName,
         title: issue.title,
       });
@@ -199,6 +190,14 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                         {issue.title}
                       </a>
                     </div>
+                    {issue.body ? (
+                      <p
+                        className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground"
+                        data-testid={`issue-body-${issue.number}`}
+                      >
+                        {issue.body}
+                      </p>
+                    ) : null}
                     <div className="mt-0.5 flex flex-wrap items-center gap-2">
                       <span className="text-xs text-muted-foreground">#{issue.number}</span>
                       {issue.labels.map((label) => (

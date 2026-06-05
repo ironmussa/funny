@@ -16,4 +16,11 @@ describe('RECOMMENDED_SERVERS', () => {
     expect(cloudflare?.type).toBe('http');
     expect(cloudflare?.url).toBe('https://mcp.cloudflare.com/mcp');
   });
+
+  test('includes Linear hosted MCP server', () => {
+    const linear = RECOMMENDED_SERVERS.find((s) => s.name === 'linear');
+    expect(linear).toBeDefined();
+    expect(linear?.type).toBe('http');
+    expect(linear?.url).toBe('https://mcp.linear.app/mcp');
+  });
 });

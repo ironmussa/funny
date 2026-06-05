@@ -195,12 +195,26 @@ async function startOAuthFlowImpl(
 ): Promise<{ authUrl: string; state: string }> {
   const redirectUri = `${callbackBaseUrl}/api/mcp/oauth/callback`;
 
+  log.info('OAuth flow starting', {
+    namespace: 'mcp-oauth',
+    serverName,
+    serverUrl,
+    callbackBaseUrl,
+    redirectUri,
+  });
+
   // Step 1: Discover resource metadata URL
   let resourceMetadataUrl: string;
   try {
     resourceMetadataUrl = await discoverResourceMetadata(serverUrl);
-  } catch {
+  } catch (e) {
     resourceMetadataUrl = serverUrl;
+    log.warn('OAuth resource metadata discovery failed; falling back to serverUrl', {
+      namespace: 'mcp-oauth',
+      serverName,
+      serverUrl,
+      error: String((e as Error)?.message ?? e),
+    });
   }
 
   // Step 2: Get protected resource metadata → auth server URL
@@ -220,6 +234,15 @@ async function startOAuthFlowImpl(
   // Step 3: Get auth server metadata
   const authMeta = await fetchAuthServerMetadata(authServerUrl);
 
+  log.info('OAuth auth server resolved', {
+    namespace: 'mcp-oauth',
+    serverName,
+    authServerUrl,
+    authorizationEndpoint: authMeta.authorization_endpoint,
+    tokenEndpoint: authMeta.token_endpoint,
+    hasRegistrationEndpoint: Boolean(authMeta.registration_endpoint),
+  });
+
   // Step 4: Dynamic client registration
   let clientId: string;
   let clientSecret: string | undefined;
@@ -228,7 +251,17 @@ async function startOAuthFlowImpl(
     const client = await registerClient(authMeta.registration_endpoint, redirectUri, serverName);
     clientId = client.client_id;
     clientSecret = client.client_secret;
+    log.info('OAuth dynamic client registration succeeded', {
+      namespace: 'mcp-oauth',
+      serverName,
+      clientId,
+    });
   } else {
+    log.warn('OAuth auth server has no registration_endpoint; DCR unavailable', {
+      namespace: 'mcp-oauth',
+      serverName,
+      authServerUrl,
+    });
     throw badRequest(
       'This MCP server does not support dynamic client registration. ' +
         'You may need to authenticate via the Claude Code terminal (/mcp) instead.',
@@ -267,6 +300,13 @@ async function startOAuthFlowImpl(
   }
 
   const authUrl = `${authMeta.authorization_endpoint}?${authParams.toString()}`;
+  log.info('OAuth authorization URL built; awaiting callback', {
+    namespace: 'mcp-oauth',
+    serverName,
+    state,
+    redirectUri,
+    authUrl,
+  });
   return { authUrl, state };
 }
 
@@ -276,8 +316,20 @@ export async function handleOAuthCallback(
 ): Promise<{ serverName: string; success: boolean; error?: string }> {
   const pending = pendingStates.get(state);
   if (!pending) {
+    log.warn('OAuth callback received unknown state (wrong runner or restart?)', {
+      namespace: 'mcp-oauth',
+      state,
+      knownStateCount: pendingStates.size,
+    });
     return { serverName: 'unknown', success: false, error: 'Invalid or expired state parameter' };
   }
+
+  log.info('OAuth callback matched pending state', {
+    namespace: 'mcp-oauth',
+    serverName: pending.serverName,
+    state,
+    redirectUri: pending.redirectUri,
+  });
 
   pendingStates.delete(state);
 

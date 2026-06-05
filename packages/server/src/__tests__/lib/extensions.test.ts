@@ -12,8 +12,10 @@ import { join } from 'path';
 import {
   discoverExtensions,
   extensionAssetContentType,
+  installExtensionFromGit,
   installExtensionFromPath,
   listInstalledExtensions,
+  parseGitSpec,
   removeExtension,
   resolveExtensionAsset,
 } from '../../lib/extensions.js';
@@ -176,6 +178,67 @@ describe('install + remove round-trip', () => {
   test('remove refuses unsafe names and reports missing', () => {
     expect(removeExtension('../escape', target).ok).toBe(false);
     expect(removeExtension('nope', target)).toEqual({ ok: false, error: 'extension not found' });
+  });
+});
+
+describe('parseGitSpec', () => {
+  test('expands github:/gh: shorthand to an https clone URL', () => {
+    expect(parseGitSpec('github:acme/funny-viz')).toEqual({
+      ok: true,
+      spec: { url: 'https://github.com/acme/funny-viz.git', ref: undefined },
+    });
+    expect(parseGitSpec('gh:acme/funny-viz.git')).toEqual({
+      ok: true,
+      spec: { url: 'https://github.com/acme/funny-viz.git', ref: undefined },
+    });
+  });
+
+  test('accepts https and scp-style ssh URLs', () => {
+    expect(parseGitSpec('https://gitlab.com/a/b.git').ok).toBe(true);
+    expect(parseGitSpec('git@github.com:acme/funny-viz.git').ok).toBe(true);
+  });
+
+  test('captures a trailing #ref as the branch/tag', () => {
+    const r = parseGitSpec('github:acme/funny-viz#v1.2.0');
+    expect(r).toEqual({
+      ok: true,
+      spec: { url: 'https://github.com/acme/funny-viz.git', ref: 'v1.2.0' },
+    });
+  });
+
+  test('rejects dangerous transports and argument injection', () => {
+    // git's ext:: transport runs an arbitrary command — must never be allowed.
+    expect(parseGitSpec('ext::sh -c whoami').ok).toBe(false);
+    expect(parseGitSpec('file:///etc/passwd').ok).toBe(false);
+    expect(parseGitSpec('--upload-pack=touch /tmp/x').ok).toBe(false);
+    // A URL that smuggles shell metacharacters.
+    expect(parseGitSpec('https://h/x;rm -rf').ok).toBe(false);
+    expect(parseGitSpec('').ok).toBe(false);
+  });
+
+  test('rejects refs with unsafe characters or leading dash', () => {
+    expect(parseGitSpec('github:a/b#--flag').ok).toBe(false);
+    expect(parseGitSpec('github:a/b#../escape').ok).toBe(false);
+  });
+});
+
+describe('installExtensionFromGit (validation, no network)', () => {
+  test('fails fast on an invalid git URL without cloning', async () => {
+    const r = await installExtensionFromGit('ext::sh -c id', { dir });
+    expect(r.ok).toBe(false);
+  });
+
+  test('rejects a subdir that escapes the repo', async () => {
+    const r = await installExtensionFromGit('github:acme/funny-viz', {
+      subdir: '../../etc',
+      dir,
+    });
+    expect(r).toEqual({ ok: false, error: 'invalid subdir' });
+  });
+
+  test('rejects an invalid explicit ref', async () => {
+    const r = await installExtensionFromGit('github:acme/funny-viz', { ref: '--exec=x', dir });
+    expect(r).toEqual({ ok: false, error: 'invalid git ref' });
   });
 });
 

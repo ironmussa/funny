@@ -95,7 +95,7 @@ export function ExtensionsSettings() {
         with full access to your session — install only extensions you trust.
       </p>
 
-      <div className="settings-card mb-4 flex items-start gap-2 border-amber-500/30 bg-amber-500/5">
+      <div className="settings-card mb-4 flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3">
         <AlertTriangle className="icon-base mt-0.5 flex-shrink-0 text-amber-500" />
         <span className="text-xs text-muted-foreground">
           Installing an extension runs its code inside your authenticated session, like installing
@@ -105,7 +105,7 @@ export function ExtensionsSettings() {
 
       {/* Install by local path (admin only) */}
       {isAdmin && (
-        <div className="settings-card mb-4">
+        <div className="settings-card mb-4 p-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             Install from a local package directory (on the server)
           </label>
@@ -138,7 +138,7 @@ export function ExtensionsSettings() {
 
       {/* Installed list */}
       {extensions.length === 0 ? (
-        <div className="settings-card flex flex-col items-center gap-2 py-8 text-center">
+        <div className="settings-card flex flex-col items-center gap-2 px-4 py-8 text-center">
           <Puzzle className="size-6 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">
             {loading ? 'Loading…' : 'No extensions installed.'}
@@ -149,7 +149,7 @@ export function ExtensionsSettings() {
           {extensions.map((ext) => (
             <div
               key={ext.name}
-              className="settings-card flex items-center gap-3"
+              className="settings-card flex items-center gap-3 px-3 py-2.5"
               data-testid={`extension-item-${ext.name}`}
             >
               <Puzzle className="icon-base flex-shrink-0 text-muted-foreground" />

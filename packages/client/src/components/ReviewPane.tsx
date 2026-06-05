@@ -20,7 +20,9 @@ import {
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
+import { CITab } from './CITab';
 import { CommitHistoryTab } from './CommitHistoryTab';
+import { IssuesTab } from './IssuesTab';
 import { PullRequestsTab } from './PullRequestsTab';
 import { DiffViewerModal } from './review-pane/DiffViewerModal';
 import { ReviewChangesTab } from './review-pane/ReviewChangesTab';
@@ -303,31 +305,45 @@ export function ReviewPane() {
           <TabsList className="h-7 bg-sidebar-accent/50 p-0.5">
             <TabsTrigger
               value="changes"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-changes"
             >
               {t('review.changes', 'Changes')}
             </TabsTrigger>
             <TabsTrigger
               value="history"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-history"
             >
               {t('review.history', 'History')}
             </TabsTrigger>
             <TabsTrigger
               value="stash"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-stash"
             >
               {t('review.stash', 'Stash')}
             </TabsTrigger>
             <TabsTrigger
               value="prs"
-              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-prs"
             >
               {t('review.prs', 'PRs')}
+            </TabsTrigger>
+            <TabsTrigger
+              value="ci"
+              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              data-testid="review-tab-ci"
+            >
+              {t('review.ci.tab', 'CI')}
+            </TabsTrigger>
+            <TabsTrigger
+              value="issues"
+              className="h-6 px-2.5 focus-visible:ring-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              data-testid="review-tab-issues"
+            >
+              {t('review.issues.tab', 'Issues')}
             </TabsTrigger>
           </TabsList>
           <Tooltip>
@@ -500,6 +516,29 @@ export function ReviewPane() {
           forceMount
         >
           <PullRequestsTab visible={reviewSubTab === 'prs'} />
+        </TabsContent>
+
+        {/* CI tab */}
+        <TabsContent
+          value="ci"
+          className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
+          forceMount
+        >
+          <CITab
+            projectId={threadProjectId ?? selectedProjectId ?? ''}
+            prNumber={gitStatus?.prNumber ?? undefined}
+            prUrl={gitStatus?.prUrl ?? undefined}
+            visible={reviewSubTab === 'ci' && reviewPaneOpen}
+          />
+        </TabsContent>
+
+        {/* Issues tab */}
+        <TabsContent
+          value="issues"
+          className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
+          forceMount
+        >
+          <IssuesTab visible={reviewSubTab === 'issues'} />
         </TabsContent>
       </Tabs>
 

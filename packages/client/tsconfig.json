@@ -3,6 +3,11 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // The client is a leaf app — nothing consumes its .d.ts. Skipping declaration
+    // emit keeps the tsc gate fast and avoids TS2742 from non-portable inferred
+    // types (e.g. better-auth's zod-backed client) that only surface during emit.
+    "declaration": false,
+    "declarationMap": false,
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": ".",

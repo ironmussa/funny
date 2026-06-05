@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import {
   discoverExtensions,
+  installExtensionFromGit,
   installExtensionFromPath,
   listInstalledExtensions,
   removeExtension,
@@ -28,23 +29,38 @@ extensionRoutes.get('/installed', (c) => {
   return c.json(listInstalledExtensions());
 });
 
-// Install by copying a local pre-built package directory on the server host.
-// Admin-only: extensions are global and the installed JS is dynamically
-// imported into EVERY user's client, so a non-admin must not be able to push
-// code (or read arbitrary server-host directories via the `path` arg).
+// Install an extension, either from a remote git repo (`git`, optional `ref` /
+// `subdir`) or by copying a local pre-built package directory on the server host
+// (`path`). Admin-only: extensions are global and the installed JS is
+// dynamically imported into EVERY user's client, so a non-admin must not be able
+// to push code (or read arbitrary server-host directories via the `path` arg).
 extensionRoutes.post('/install', requireAdmin, async (c) => {
-  let body: { path?: unknown };
+  let body: { path?: unknown; git?: unknown; ref?: unknown; subdir?: unknown };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: 'invalid JSON body' }, 400);
   }
-  if (typeof body.path !== 'string' || !body.path.trim()) {
-    return c.json({ error: 'a local "path" to the extension package is required' }, 400);
+
+  if (typeof body.git === 'string' && body.git.trim()) {
+    const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim() : undefined;
+    const subdir =
+      typeof body.subdir === 'string' && body.subdir.trim() ? body.subdir.trim() : undefined;
+    const result = await installExtensionFromGit(body.git.trim(), { ref, subdir });
+    if (!result.ok) return c.json({ error: result.error }, 400);
+    return c.json({ extension: result.extension });
   }
-  const result = installExtensionFromPath(body.path.trim());
-  if (!result.ok) return c.json({ error: result.error }, 400);
-  return c.json({ extension: result.extension });
+
+  if (typeof body.path === 'string' && body.path.trim()) {
+    const result = installExtensionFromPath(body.path.trim());
+    if (!result.ok) return c.json({ error: result.error }, 400);
+    return c.json({ extension: result.extension });
+  }
+
+  return c.json(
+    { error: 'a "git" URL or a local "path" to the extension package is required' },
+    400,
+  );
 });
 
 // Remove an installed extension by its on-disk directory name. Admin-only —

@@ -38,6 +38,9 @@
     "build:railway": "bun install && bun run build",
     "start:railway": "cd packages/server && bun run start",
     "prepublishOnly": "npm run build",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "db:push": "bun run --cwd packages/runtime db:push",
     "db:studio": "bun run --cwd packages/runtime db:studio",
     "tauri": "tauri",
@@ -88,7 +91,8 @@
     "neverthrow": "^8.2.0",
     "oxfmt": "^0.35.0",
     "oxlint": "^1.50.0",
-    "secretlint": "^11.3.1"
+    "secretlint": "^11.3.1",
+    "vitepress": "^1.6.4"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0",

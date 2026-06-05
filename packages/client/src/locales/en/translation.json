@@ -348,6 +348,27 @@
       "loadMore": "Load more",
       "openOnGithub": "Open on GitHub"
     },
+    "ci": {
+      "tab": "CI",
+      "loading": "Loading CI status…",
+      "noProject": "Select a project to view CI status",
+      "noPR": "No pull request for this branch yet",
+      "noPRHint": "CI status appears once a pull request is open.",
+      "noChecks": "No CI checks reported for this PR",
+      "passedCount": "{{passed}}/{{total}} passed",
+      "failedCount": "{{count}} failed",
+      "pendingCount": "{{count}} pending",
+      "rateLimited": "Rate limited",
+      "rateLimitedHint": "GitHub API rate limit reached. Polling paused.",
+      "openOnGithub": "Open PR on GitHub"
+    },
+    "issues": {
+      "tab": "Issues",
+      "loading": "Loading issues…",
+      "noProject": "Select a project to view issues",
+      "noOpenIssues": "No open issues",
+      "noClosedIssues": "No closed issues"
+    },
     "progress": {
       "description": "Git operation progress",
       "done": "Done",

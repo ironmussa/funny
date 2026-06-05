@@ -1,6 +1,6 @@
 import type { GitHubRepo } from '@funny/shared';
+import { SiGithub } from '@icons-pack/react-simple-icons';
 import {
-  Github,
   Copy,
   ExternalLink,
   Loader2,
@@ -382,7 +382,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
         <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10">
-          <Github className="icon-xl text-destructive" />
+          <SiGithub className="icon-xl text-destructive" />
         </div>
         <div className="space-y-1 text-center">
           <h3 className="font-medium">
@@ -413,7 +413,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
         <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-          <Github className="icon-xl" />
+          <SiGithub className="icon-xl" />
         </div>
         <div className="space-y-1 text-center">
           <h3 className="font-medium">{t('github.connectGithub')}</h3>
@@ -421,7 +421,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         </div>
         <div className="flex w-full max-w-xs flex-col gap-2">
           <Button className="w-full" onClick={startDeviceFlow}>
-            <Github className="icon-base mr-2" />
+            <SiGithub className="icon-base mr-2" />
             {t('github.connectGithub')}
           </Button>
           <div className="flex items-center gap-3">

@@ -1,4 +1,5 @@
-import { FolderOpen, Loader2, Plus, Github } from 'lucide-react';
+import { SiGithub } from '@icons-pack/react-simple-icons';
+import { FolderOpen, Loader2, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -128,7 +129,7 @@ export function AddProjectView() {
             data-testid="add-project-tab-clone"
             onClick={() => setMode('github')}
           >
-            <Github className="icon-sm" />
+            <SiGithub className="icon-sm" />
             {t('github.cloneFromGithub')}
           </button>
         </div>

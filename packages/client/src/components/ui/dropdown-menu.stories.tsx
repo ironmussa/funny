@@ -1,8 +1,8 @@
+import { SiGithub } from '@icons-pack/react-simple-icons';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import {
   Cloud,
   CreditCard,
-  Github,
   Keyboard,
   LogOut,
   Mail,
@@ -99,7 +99,7 @@ export const Default: Story = {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem data-testid="dropdown-item-github">
-          <Github />
+          <SiGithub />
           GitHub
         </DropdownMenuItem>
         <DropdownMenuItem data-testid="dropdown-item-support">
@@ -141,7 +141,7 @@ export const ExtraSmall: Story = {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem size="xs">
-          <Github />
+          <SiGithub />
           GitHub
         </DropdownMenuItem>
         <DropdownMenuSeparator />

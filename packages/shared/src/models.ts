@@ -8,6 +8,19 @@
  */
 
 import type { AgentProvider, FollowUpMode, PermissionMode, ThreadMode } from './primitives.js';
+// ACP provider catalogs + manifests are the single source of truth for every
+// ACP provider's models, labels, defaults, and attachment limits. This file
+// composes them with the non-ACP (Claude SDK, DeepAgent) catalogs below.
+// The back-import from provider-manifests.ts to this module is type-only, so
+// there is no runtime import cycle.
+import {
+  ACP_MANIFESTS,
+  codexModels,
+  cursorModels,
+  geminiModels,
+  opencodeModels,
+  piModels,
+} from './provider-manifests.js';
 
 // ── Application defaults ────────────────────────────────────────
 // Change these values to update defaults across the entire codebase.
@@ -91,71 +104,7 @@ const claudeModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
-const codexModels = {
-  'gpt-5.4': {
-    id: 'gpt-5.4',
-    label: 'GPT-5.4',
-    contextWindow: 400_000,
-    i18nKey: 'gpt54',
-  },
-  'gpt-5.4-mini': {
-    id: 'gpt-5.4-mini',
-    label: 'GPT-5.4 Mini',
-    contextWindow: 400_000,
-    i18nKey: 'gpt54mini',
-  },
-  'gpt-5.3-codex': {
-    id: 'gpt-5.3-codex',
-    label: 'GPT-5.3 Codex',
-    contextWindow: 400_000,
-    i18nKey: 'gpt53codex',
-  },
-  'gpt-5.2': {
-    id: 'gpt-5.2',
-    label: 'GPT-5.2',
-    contextWindow: 400_000,
-    i18nKey: 'gpt52',
-  },
-} as const satisfies Record<string, ModelDefinition>;
-
-const geminiModels = {
-  'gemini-3.1-pro-preview': {
-    id: 'gemini-3.1-pro-preview',
-    label: 'Gemini 3.1 Pro',
-    contextWindow: 1_000_000,
-    i18nKey: 'gemini31pro',
-  },
-  'gemini-3-flash-preview': {
-    id: 'gemini-3-flash-preview',
-    label: 'Gemini 3 Flash',
-    contextWindow: 1_000_000,
-    i18nKey: 'gemini3flash',
-  },
-  'gemini-3.1-flash-lite-preview': {
-    id: 'gemini-3.1-flash-lite-preview',
-    label: 'Gemini 3.1 Flash Lite',
-    contextWindow: 1_000_000,
-    i18nKey: 'gemini31flashLite',
-  },
-  'gemini-2.5-pro': {
-    id: 'gemini-2.5-pro',
-    label: 'Gemini 2.5 Pro',
-    contextWindow: 1_048_576,
-    i18nKey: 'gemini25pro',
-  },
-  'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash',
-    label: 'Gemini 2.5 Flash',
-    contextWindow: 1_048_576,
-    i18nKey: 'gemini25flash',
-  },
-  'gemini-2.0-flash': {
-    id: 'gemini-2.0-flash',
-    label: 'Gemini 2.0 Flash',
-    contextWindow: 1_048_576,
-    i18nKey: 'gemini20flash',
-  },
-} as const satisfies Record<string, ModelDefinition>;
+// codex + gemini static catalogs are owned by their manifests (imported above).
 
 const deepagentModels = {
   'minimax-m2.7': {
@@ -238,49 +187,10 @@ const deepagentModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
-// Pi (https://github.com/badlogic/pi-mono) routes through multiple
-// underlying providers and exposes its catalog dynamically. The static
-// registry only carries the `default` sentinel — actual model IDs are
-// discovered at runtime via the `/system/pi/models` endpoint and passed
-// through `resolveModelId` as wire-format strings (e.g. `google/gemini-3.1-pro`).
-const piModels = {
-  default: {
-    id: 'default',
-    label: 'Pi (configured default)',
-    contextWindow: 200_000,
-    i18nKey: 'piDefault',
-  },
-} as const satisfies Record<string, ModelDefinition>;
-
-// Cursor CLI (https://cursor.com/docs/cli/acp) exposes its catalog through
-// the ACP session/new response. Like pi, the static registry only carries
-// the `default` sentinel — real model IDs are discovered at runtime via
-// `/system/cursor/models` and passed through `resolveModelId` as wire-format
-// strings that cursor's `unstable_setSessionModel` accepts.
-const cursorModels = {
-  default: {
-    id: 'default',
-    label: 'Cursor (configured default)',
-    contextWindow: 200_000,
-    i18nKey: 'cursorDefault',
-  },
-} as const satisfies Record<string, ModelDefinition>;
-
-// opencode (https://opencode.ai) routes to many underlying model providers
-// configured by the user and advertises its catalog over ACP — `session/new`
-// returns `models.availableModels: [{ modelId, name }]` (same shape as cursor).
-// The static registry only carries the `default` sentinel; real model IDs are
-// discovered at runtime via `/system/opencode/models` and passed through
-// `resolveModelId` as wire-format strings (e.g. `opencode/gpt-5-nano/high`,
-// where the trailing segment is the reasoning-effort variant).
-const opencodeModels = {
-  default: {
-    id: 'default',
-    label: 'opencode (configured default)',
-    contextWindow: 200_000,
-    i18nKey: 'opencodeDefault',
-  },
-} as const satisfies Record<string, ModelDefinition>;
+// pi / cursor / opencode dynamic sentinel catalogs are owned by their manifests
+// (imported above). Real model IDs are discovered at runtime via
+// `/system/:provider/models` and passed through `resolveModelId` as wire-format
+// strings that each agent's set-model method accepts.
 
 export const MODEL_REGISTRY = {
   claude: claudeModels,
@@ -317,14 +227,14 @@ export const DEFAULT_MODEL: AgentModel = 'opus-4.8';
 
 // ── Per-provider defaults ─────────────────────────────────────
 
-const PROVIDER_DEFAULT_MODEL: Record<keyof typeof MODEL_REGISTRY, AgentModel> = {
+// ACP defaults derive from each manifest's `models.defaultModel`; non-ACP
+// providers (Claude SDK, DeepAgent) are listed explicitly.
+const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
   claude: DEFAULT_MODEL,
-  codex: 'gpt-5.4',
-  gemini: 'gemini-3.1-pro-preview',
-  pi: 'default',
-  cursor: 'default',
-  opencode: 'default',
   deepagent: 'minimax-m2.7',
+  ...Object.fromEntries(
+    Object.values(ACP_MANIFESTS).map((m) => [m.id, m.models.defaultModel as AgentModel]),
+  ),
 };
 
 // ── Per-provider attachment limits ────────────────────────────
@@ -337,18 +247,15 @@ const PROVIDER_DEFAULT_MODEL: Record<keyof typeof MODEL_REGISTRY, AgentModel> = 
 const KB = 1024;
 const MB = 1024 * 1024;
 
-const PROVIDER_ATTACHMENT_LIMITS: Record<AgentProvider, AttachmentLimits> = {
+// codex / gemini / pi / cursor / opencode ceilings come from their manifests.
+// Non-ACP providers route through multiple upstream providers — use the
+// smallest common ceiling so we never exceed the weakest backend.
+const PROVIDER_ATTACHMENT_LIMITS: Record<string, AttachmentLimits> = {
   claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
-  codex: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
-  gemini: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 18 * MB, hardMaxBytes: 20 * MB },
-  // Pi, Cursor and DeepAgent route through multiple upstream providers — use
-  // the smallest common ceiling so we never exceed the weakest backend.
-  pi: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
-  cursor: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
-  opencode: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   'llm-api': { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   external: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  ...Object.fromEntries(Object.values(ACP_MANIFESTS).map((m) => [m.id, m.attachmentLimits])),
 };
 
 // ── Provider labels ──────────────────────────────────────────
@@ -358,15 +265,26 @@ export interface ModelInfo {
   label: string;
 }
 
+// codex / gemini / pi / cursor / opencode labels come from their manifests.
 export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
-  codex: 'Codex',
-  gemini: 'Gemini',
-  pi: 'Pi',
-  cursor: 'Cursor',
-  opencode: 'opencode',
   deepagent: 'Deep Agent',
+  ...Object.fromEntries(Object.values(ACP_MANIFESTS).map((m) => [m.id, m.label])),
 };
+
+/**
+ * Every provider id funny knows at compile time: the non-ACP bespoke providers
+ * (Claude SDK, DeepAgent, llm-api, external) plus every bundled ACP manifest id.
+ * Validation and discovery accept this set; unbundled (future Phase B) provider
+ * ids fall through the runtime provider registry rather than a hardcoded union.
+ */
+export const KNOWN_PROVIDER_IDS: string[] = [
+  'claude',
+  'deepagent',
+  'llm-api',
+  'external',
+  ...Object.keys(ACP_MANIFESTS),
+];
 
 // ── Permission mode mapping (Claude SDK specific) ─────────────
 // See PermissionMode in shared/primitives.ts for the canonical mapping table

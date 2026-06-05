@@ -32,6 +32,12 @@ export {
   type ForkAcpSessionUnsupported,
 } from './acp-fork.js';
 export {
+  discoverAcpModels,
+  type DiscoveredAcpModel,
+  type DiscoverAcpModelsResult,
+  type DiscoverAcpModelsOptions,
+} from './acp-discover.js';
+export {
   discoverPiModels,
   type DiscoveredPiModel,
   type DiscoverPiModelsResult,

@@ -4,6 +4,7 @@
  * @domain layer: domain
  */
 
+import type { AgentProvider } from '@funny/shared';
 import { validationErr, type DomainError } from '@funny/shared/errors';
 import {
   DEFAULT_MODEL,
@@ -11,6 +12,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   MODEL_REGISTRY,
 } from '@funny/shared/models';
+import { getManifest, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { ok, err, type Result } from 'neverthrow';
 import { z } from 'zod';
 
@@ -24,15 +26,14 @@ function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
 
 export const threadModeSchema = z.enum(['local', 'worktree']);
 export const threadRuntimeSchema = z.enum(['local', 'remote']);
+// The ACP providers derive from the manifest registry; the non-ACP bespoke
+// providers (Claude SDK, DeepAgent) are listed explicitly. Adding an ACP
+// manifest auto-extends the accepted provider set.
 export const agentProviderSchema = z.enum([
   'claude',
-  'codex',
-  'gemini',
-  'pi',
-  'cursor',
-  'opencode',
   'deepagent',
-]);
+  ...KNOWN_ACP_PROVIDER_IDS,
+] as [AgentProvider, ...AgentProvider[]]);
 export const claudeModelSchema = registryEnum('claude');
 export const codexModelSchema = registryEnum('codex');
 export const geminiModelSchema = registryEnum('gemini');
@@ -68,7 +69,9 @@ function validateProviderModel(
   const provider = data.provider;
   const model = data.model;
   if (!provider || !model) return;
-  if (provider === 'pi' || provider === 'cursor' || provider === 'opencode') return; // dynamic catalogs
+  // Providers with a dynamic catalog (manifest `models.kind: 'dynamic'`) accept
+  // any non-empty string — their real ids are discovered at runtime.
+  if (getManifest(provider)?.models.kind === 'dynamic') return;
   if (!(provider in MODEL_REGISTRY)) return;
   const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
   if (!(model in bucket)) {

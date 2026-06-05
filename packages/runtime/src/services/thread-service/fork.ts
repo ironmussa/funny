@@ -18,6 +18,7 @@
 import { forkSession, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk';
 import { forkAcpSession } from '@funny/core/agents';
+import { KNOWN_ACP_PROVIDER_IDS, type KnownAcpProvider } from '@funny/shared/provider-manifests';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
 
@@ -28,7 +29,9 @@ import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { ThreadServiceError } from './helpers.js';
 
-const ACP_PROVIDERS = new Set(['codex', 'gemini', 'pi', 'cursor', 'opencode']);
+// Derived from the manifest registry — adding an ACP manifest makes its
+// threads forkable here automatically.
+const ACP_PROVIDERS = new Set<string>(KNOWN_ACP_PROVIDER_IDS);
 
 export interface ForkThreadParams {
   sourceThreadId: string;
@@ -166,7 +169,7 @@ async function forkThreadImpl(params: ForkThreadParams) {
     }
   } else if (ACP_PROVIDERS.has(provider)) {
     const acpResult = await forkAcpSession({
-      provider: provider as 'codex' | 'gemini' | 'pi' | 'cursor' | 'opencode',
+      provider: provider as KnownAcpProvider,
       sessionId: source.sessionId,
       cwd,
     });

@@ -48,14 +48,14 @@ jobs:
         run: bun run docs:build
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           # Auto-create the Pages site via the API when it isn't enabled yet,
           # so the deploy doesn't fail with "Get Pages site failed / Not Found".
           enablement: true
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs/.vitepress/dist
 
@@ -68,4 +68,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import '@/i18n/config';
+
 import { TodoList } from './TodoList';
 
 const meta = {

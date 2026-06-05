@@ -12,6 +12,7 @@ import { useTheme } from 'next-themes';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import 'dockview-react/dist/styles/dockview.css';
+
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
 import type { RightTabSpec } from './DockviewLayout';
 

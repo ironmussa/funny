@@ -23,6 +23,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import 'dockview-react/dist/styles/dockview.css';
+
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
 import { useLeftPaneSync } from './dockview/use-left-pane-sync';
 

@@ -85,7 +85,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/cli": "^2.10.0",
     "@tauri-apps/plugin-shell": "^2.3.5",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "husky": "^9.1.7",
     "neverthrow": "^8.2.0",

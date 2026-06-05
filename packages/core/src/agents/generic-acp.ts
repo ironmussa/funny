@@ -1,54 +1,42 @@
 /**
- * CursorACPProcess — adapter that wraps the Cursor CLI behind the
- * IAgentProcess EventEmitter interface, communicating via the Agent Client
- * Protocol (ACP) over stdio.
+ * GenericACPProcess — one manifest-parameterized adapter that wraps any
+ * ACP-compliant agent CLI behind the IAgentProcess EventEmitter interface,
+ * communicating via the Agent Client Protocol (ACP) over stdio.
  *
- * Spawns `cursor-agent acp` as a subprocess and translates ACP session
- * updates into CLIMessage format so that AgentMessageHandler works unchanged
- * (same pattern as GeminiACPProcess and PiACPProcess).
+ * This is the hoist of the ~700-line skeleton that was duplicated across the
+ * five per-provider adapters (codex/gemini/pi/cursor/opencode). All of the
+ * shared lifecycle — spawn, initialize, newSession/loadSession, emitInit,
+ * model-select, mode-set, the prompt turn loop, permission handling, and the
+ * `translateUpdate` switch — lives here ONCE, parameterized by a
+ * {@link ProviderManifest}. The small per-provider divergences are toggled by
+ * the manifest's {@link QuirkFlags} (the Phase-0 audited set).
  *
- * Authentication: the user must either run `cursor-agent login` once on the
- * runner host, or set `CURSOR_API_KEY` in their funny provider keys (which
- * the runtime injects as an env var when spawning agent subprocesses).
- *
- * Model selection: cursor's catalog is discovered at runtime via
- * `cursor-discover.ts` and persisted as `provider:model` keys on the client.
- * On `runProcess` we call `unstable_setSessionModel(modelId)` if a non-default
- * model is requested; the model id flows through unchanged from the registry
- * (`resolveModelId('cursor', …)` passes pi-style).
- *
- * Permissions: mirrors `gemini-acp.ts` — checks funny's persisted permission
- * rules first, then if no rule matches, surfaces a synthetic tool_use +
- * tool_result so the PermissionApprovalCard renders. Under `autoEdit` mode
- * (funny's full-bypass) the handler short-circuits to allow_always without
- * consulting rules, matching the bypass semantics of other providers.
- *
- * The child process and ACP session are kept alive across turns: the initial
- * prompt is run inline from `runProcess()`, after which the run loop awaits
- * shutdown. Follow-up prompts are issued via `sendPrompt()` which calls
- * `connection.prompt()` on the same session — no respawn, no history replay.
+ * Each provider becomes a zero-logic constructor shim that binds its manifest
+ * (see `opencode-acp.ts`), so the existing per-provider test suites pass
+ * unchanged.
  */
 
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { Readable, Writable } from 'stream';
 
-import { createDebugLogger } from '../debug.js';
+import type { ProviderManifest } from '@funny/shared/provider-manifest';
+import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
+
+import { createDebugLogger, type DebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
 import { toACPMcpServers } from './acp-mcp.js';
 import {
-  inferACPToolName,
   buildACPToolInput,
   buildTodoWriteInputFromPlanEntries,
   buildTodoWriteInputFromRaw,
   enrichTodoWriteInputFromOutput,
   extractACPToolOutput,
   hasRenderableTodoInput,
+  inferACPToolName,
 } from './acp-tool-input.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
-import type { CLIMessage } from './types.js';
-
-const dlog = createDebugLogger('acp-cursor');
+import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
 type ACPSDK = typeof import('@agentclientprotocol/sdk');
@@ -60,26 +48,9 @@ type ACPRequestPermissionRequest = import('@agentclientprotocol/sdk').RequestPer
 type ACPRequestPermissionResponse = import('@agentclientprotocol/sdk').RequestPermissionResponse;
 type ACPConnection = import('@agentclientprotocol/sdk').ClientSideConnection;
 
-/**
- * Cursor CLI built-in tools surfaced via system:init. ACP doesn't expose a
- * listTools API, so this list is best-effort based on Cursor's public docs.
- * It only drives the tool-name column on the init card — runtime tool calls
- * are translated by `inferACPToolName` regardless of whether they appear here.
- */
-const CURSOR_BUILTIN_TOOLS = [
-  'read_file',
-  'write_file',
-  'edit_file',
-  'list_dir',
-  'glob_file_search',
-  'grep_search',
-  'run_terminal_cmd',
-  'web_search',
-  'fetch_url',
-  'todo_write',
-];
-
-export class CursorACPProcess extends BaseAgentProcess {
+export class GenericACPProcess extends BaseAgentProcess {
+  protected readonly manifest: ProviderManifest;
+  private readonly dlog: DebugLogger;
   private childProcess: ChildProcess | null = null;
 
   // ── Long-lived per-process state ─────────────────────────────────
@@ -97,17 +68,23 @@ export class CursorACPProcess extends BaseAgentProcess {
   private lastAssistantText = '';
   /** Buffer for `agent_thought_chunk` text — collapsed into a single Think tool call. */
   private pendingThought: { id: string; text: string } | null = null;
+  /** First agent_message_chunk of the turn not yet seen (for banner strip). */
+  private firstMessageChunkPending = true;
   /**
-   * Tool calls whose initial event lacked the field its card needs to render
-   * (e.g. a `read` whose path only arrives in a later `tool_call_update`).
-   * Buffered here and emitted once an update carries the missing field, or at
-   * terminal status. The server freezes a tool's input at first emission, so
-   * emitting too early would permanently strand an empty card.
+   * Tool calls whose initial event lacked the field its card needs to render.
+   * Buffered until an update carries the missing field, or dropped at terminal
+   * status. Only used when `quirks.deferUnrenderableToolInput`.
    */
   private deferredToolInputs = new Map<string, { name: string; input: Record<string, unknown> }>();
 
   /** True while loadSession is replaying historical events. */
   private replayingHistory = false;
+
+  constructor(options: ClaudeProcessOptions, manifest: ProviderManifest) {
+    super(options);
+    this.manifest = manifest;
+    this.dlog = createDebugLogger(`acp-${manifest.id}`);
+  }
 
   private flushPendingThought(): void {
     if (!this.pendingThought) return;
@@ -167,15 +144,16 @@ export class CursorACPProcess extends BaseAgentProcess {
     } catch {
       throw new Error(
         'ACP SDK not installed. Run: bun add @agentclientprotocol/sdk\n' +
-          'Also ensure cursor-agent is installed: curl https://cursor.com/install -fsS | bash\n' +
-          'See https://cursor.com/docs/cli/acp for details.',
+          `Also ensure ${this.manifest.label} is installed and on PATH.`,
       );
     }
 
     const { ClientSideConnection, ndJsonStream } = SDK;
 
-    const { command, args } = this.resolveCursorAcpCommand();
-    dlog.info('spawning cursor-agent acp', { command, args, cwd: this.options.cwd });
+    await this.runPrelaunch();
+
+    const { command, args } = this.resolveCommand();
+    this.dlog.info('spawning acp agent', { command, args, cwd: this.options.cwd });
 
     const child = spawn(command, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -193,10 +171,8 @@ export class CursorACPProcess extends BaseAgentProcess {
           this.emit(
             'error',
             new Error(
-              "'cursor-agent' binary not found in PATH or failed to spawn.\n" +
-                'Install via: curl https://cursor.com/install -fsS | bash\n' +
-                'Or set CURSOR_BINARY_PATH to a custom location.\n' +
-                'See https://cursor.com/docs/cli/acp for details.',
+              `'${this.manifest.spawn.command}' binary not found in PATH or failed to spawn. ` +
+                `Install ${this.manifest.label}, or set ${this.manifest.spawn.binEnvVars[0]} to a custom location.`,
             ),
           );
         } else {
@@ -208,7 +184,7 @@ export class CursorACPProcess extends BaseAgentProcess {
     // If the child exits unexpectedly, wake the run loop so cleanup happens.
     child.on('exit', (code, signal) => {
       if (!this.isAborted && !this._exited) {
-        dlog.warn('cursor-agent child exited unexpectedly', { code, signal });
+        this.dlog.warn('acp child exited unexpectedly', { code, signal });
         this.abortController.abort();
       }
     });
@@ -271,25 +247,28 @@ export class CursorACPProcess extends BaseAgentProcess {
       const supportsSse = mcpCaps?.sse === true;
 
       const allMcp = toACPMcpServers(this.options.mcpServers);
-      const mcpServerList = allMcp.filter((s) => {
-        const t = (s as { type?: string }).type;
-        if (t === 'http') return supportsHttp;
-        if (t === 'sse') return supportsSse;
-        return true;
-      });
+      const mcpServerList = this.manifest.quirks.filterMcpByCapability
+        ? allMcp.filter((s) => {
+            const t = (s as { type?: string }).type;
+            if (t === 'http') return supportsHttp;
+            if (t === 'sse') return supportsSse;
+            return true;
+          })
+        : allMcp;
       if (allMcp.length !== mcpServerList.length) {
-        dlog.warn('dropped MCP servers unsupported by agent', {
+        this.dlog.warn('dropped MCP servers unsupported by agent', {
           dropped: allMcp.length - mcpServerList.length,
           mcpCapabilities: mcpCaps,
         });
       }
 
-      if (this.options.sessionId && supportsLoadSession) {
-        this.activeSessionId = this.options.sessionId;
+      const isResume = Boolean(this.options.sessionId && supportsLoadSession);
+      if (isResume) {
+        this.activeSessionId = this.options.sessionId!;
         this.replayingHistory = true;
         try {
           await connection.loadSession({
-            sessionId: this.options.sessionId,
+            sessionId: this.options.sessionId!,
             cwd: this.options.cwd,
             mcpServers: mcpServerList,
           });
@@ -306,36 +285,13 @@ export class CursorACPProcess extends BaseAgentProcess {
 
       this.emitInit(
         this.activeSessionId,
-        CURSOR_BUILTIN_TOOLS,
+        this.manifest.builtinTools,
         this.options.model ?? 'default',
         this.options.cwd,
       );
 
-      const sessionModels = (sessionResponse as any)?.models;
-      if (sessionModels) {
-        dlog.info('session/new advertised models', {
-          availableModels: JSON.stringify(sessionModels.availableModels),
-          currentModelId: sessionModels.currentModelId,
-        });
-      }
-
-      // Select the requested model via ACP if specified and not the sentinel
-      // `default` (which means "use cursor's configured default").
-      const requestedModel = this.options.model;
-      if (requestedModel && requestedModel !== 'default') {
-        try {
-          await (connection as any).unstable_setSessionModel({
-            sessionId: this.activeSessionId,
-            modelId: requestedModel,
-          });
-          dlog.info('session/set_model applied', { modelId: requestedModel });
-        } catch (e) {
-          dlog.warn('session/set_model failed — falling back to cursor default', {
-            modelId: requestedModel,
-            error: (e as Error)?.message,
-          });
-        }
-      }
+      await this.applyModelSelection(connection);
+      await this.applySessionMode(connection, isResume);
 
       // Run initial prompt inline so a setup error surfaces as a failed turn.
       await this.runOnePrompt(this.options.prompt, this.options.images);
@@ -366,11 +322,87 @@ export class CursorACPProcess extends BaseAgentProcess {
     }
   }
 
+  /** Named pre-launch side effect from the manifest (the only imperative selector). */
+  private async runPrelaunch(): Promise<void> {
+    if (this.manifest.prelaunch === 'gemini-trust-folder') {
+      await ensureGeminiTrustedFolder(this.options.cwd, this.dlog);
+    }
+  }
+
+  /** Resolve the spawn command from the manifest (env override → npx → default). */
+  private resolveCommand(): { command: string; args: string[] } {
+    const { command, args } = resolveSpawnCommand(this.manifest.spawn);
+    // gemini applies funny's autoEdit (full bypass) via the `--yolo` launch flag.
+    if (
+      this.manifest.modeVia === 'cli-flag' &&
+      this.options.originalPermissionMode === 'autoEdit'
+    ) {
+      return { command, args: [...args, '--yolo'] };
+    }
+    return { command, args };
+  }
+
+  /**
+   * Select the requested model after session setup, per the manifest's
+   * `setModel` strategy. Skips the sentinel `default` (= the provider's
+   * configured default). For `modelVia: 'cli-arg'` (gemini) the model is
+   * already on the launch args — nothing to do here.
+   */
+  private async applyModelSelection(connection: ACPConnection): Promise<void> {
+    if (this.manifest.modelVia !== 'acp-method' || !this.manifest.setModel) return;
+    const requestedModel = this.options.model;
+    if (!requestedModel || requestedModel === 'default' || !this.activeSessionId) return;
+
+    const method = this.manifest.setModel.method;
+    try {
+      if (method === 'session/set_model') {
+        // opencode implements the raw method without advertising the capability.
+        await (connection as any).extMethod('session/set_model', {
+          sessionId: this.activeSessionId,
+          modelId: requestedModel,
+        });
+      } else {
+        await (connection as any).unstable_setSessionModel({
+          sessionId: this.activeSessionId,
+          modelId: requestedModel,
+        });
+      }
+      this.dlog.info('model selected', { method, modelId: requestedModel });
+    } catch (e) {
+      this.dlog.warn('set-model failed — falling back to provider default', {
+        method,
+        modelId: requestedModel,
+        error: (e as Error)?.message,
+      });
+    }
+  }
+
+  /**
+   * Apply the session/permission mode per the manifest. Only `acp-setSessionMode`
+   * providers call `setSessionMode`; `cli-flag` (gemini) and `none` (pi/cursor)
+   * are handled at spawn time or not at all. Mode is set only on a fresh session
+   * — a resumed session keeps its previously approved mode.
+   */
+  private async applySessionMode(connection: ACPConnection, isResume: boolean): Promise<void> {
+    if (this.manifest.modeVia !== 'acp-setSessionMode' || isResume || !this.activeSessionId) return;
+    const funnyMode = this.options.originalPermissionMode ?? this.options.permissionMode;
+    const desiredMode = this.manifest.modeMap[funnyMode as keyof typeof this.manifest.modeMap];
+    if (!desiredMode) return;
+    try {
+      await connection.setSessionMode({ sessionId: this.activeSessionId, modeId: desiredMode });
+      this.dlog.info('session mode applied', { modeId: desiredMode });
+    } catch (e) {
+      this.emitErrorToolCall(
+        `**${this.manifest.label}:** unable to switch to session mode "${desiredMode}" — ${this.extractErrorMessage(e)}`,
+      );
+    }
+  }
+
   // ── Per-turn execution ──────────────────────────────────────────
 
   protected async runOnePrompt(prompt: string, images?: unknown[]): Promise<void> {
     if (!this.connection || !this.activeSessionId) {
-      throw new Error('CursorACPProcess: connection not initialized');
+      throw new Error(`${this.manifest.label} ACP: connection not initialized`);
     }
 
     // Reset per-turn state.
@@ -380,6 +412,7 @@ export class CursorACPProcess extends BaseAgentProcess {
     this.deferredToolInputs.clear();
     this.lastAssistantText = '';
     this.pendingThought = null;
+    this.firstMessageChunkPending = true;
 
     const startTime = Date.now();
 
@@ -391,7 +424,7 @@ export class CursorACPProcess extends BaseAgentProcess {
       if (this.supportsImages) {
         promptBlocks.push(...imageBlocks);
       } else {
-        dlog.warn('agent does not advertise promptCapabilities.image — dropping images', {
+        this.dlog.warn('agent does not advertise promptCapabilities.image — dropping images', {
           count: imageBlocks.length,
         });
       }
@@ -448,19 +481,12 @@ export class CursorACPProcess extends BaseAgentProcess {
   // ── Permission request handling ─────────────────────────────
 
   /**
-   * Handle an ACP `session/request_permission` from cursor-agent.
-   *
-   * Mirrors gemini-acp.ts so the existing UI (PermissionApprovalCard) and
-   * persisted "always allow / always deny" rules light up unchanged:
-   *
-   * 1. In `autoEdit` mode, short-circuit to allow_always (funny's full-bypass
-   *    semantics — equivalent to Claude's bypassPermissions / Gemini --yolo).
-   * 2. Otherwise consult `permissionRuleLookup` for a saved rule → auto-resolve.
-   * 3. Otherwise emit a synthetic `tool_use` + `tool_result` whose denial text
-   *    matches the regex in `agent-message-handler.ts` so the client renders
-   *    the approval card. Then PAUSE on `abortController.signal` until the
-   *    runner kills the process (user approves and the new rule takes effect
-   *    on the next run).
+   * Handle an ACP `session/request_permission`. The manifest's
+   * `quirks.permissionModel` selects the behavior:
+   *   - `auto-allow` (pi): approve every request without gating.
+   *   - `gated` (default): autoEdit → allow; else consult persisted rules; else
+   *     surface a synthetic tool_use + tool_result so the PermissionApprovalCard
+   *     renders, and PAUSE until the runner kills the process.
    */
   private async handleRequestPermission(
     params: ACPRequestPermissionRequest,
@@ -475,9 +501,14 @@ export class CursorACPProcess extends BaseAgentProcess {
     const rejectOptionId =
       findOption(['reject_once']) ?? findOption(['reject_always']) ?? options[0]?.optionId ?? '';
 
+    // auto-allow providers (pi) never gate.
+    if (this.manifest.quirks.permissionModel === 'auto-allow') {
+      return { outcome: { outcome: 'selected', optionId: allowOptionId } };
+    }
+
     // 1. autoEdit mode: full-bypass, never prompt.
-    if (isAutoEditMode(this.options.originalPermissionMode)) {
-      dlog.info('requestPermission ALLOW via autoEdit mode');
+    if (this.options.originalPermissionMode === 'autoEdit') {
+      this.dlog.info('requestPermission ALLOW via autoEdit mode');
       return { outcome: { outcome: 'selected', optionId: allowOptionId } };
     }
 
@@ -500,15 +531,15 @@ export class CursorACPProcess extends BaseAgentProcess {
           toolInput: toolInputForRule,
         });
         if (match?.decision === 'allow') {
-          dlog.info('requestPermission ALLOW via persisted rule', { toolName });
+          this.dlog.info('requestPermission ALLOW via persisted rule', { toolName });
           return { outcome: { outcome: 'selected', optionId: allowOptionId } };
         }
         if (match?.decision === 'deny') {
-          dlog.info('requestPermission DENY via persisted rule', { toolName });
+          this.dlog.info('requestPermission DENY via persisted rule', { toolName });
           return { outcome: { outcome: 'selected', optionId: rejectOptionId } };
         }
       } catch (err) {
-        dlog.warn('permissionRuleLookup threw — falling through', {
+        this.dlog.warn('permissionRuleLookup threw — falling through', {
           toolName,
           error: String(err).slice(0, 200),
         });
@@ -518,45 +549,29 @@ export class CursorACPProcess extends BaseAgentProcess {
     // 3. Surface a permission request via synthetic tool_use + tool_result.
     const toolUseId = toolCall.toolCallId ?? randomUUID();
     const denialText =
-      `Cursor requested permissions to use ${toolName} but the user hasn't been granted approval. ` +
+      `${this.manifest.label} requested permissions to use ${toolName} but the user hasn't been granted approval. ` +
       `Waiting for user approval.`;
 
     this.emit('message', {
       type: 'assistant',
       message: {
         id: randomUUID(),
-        content: [
-          {
-            type: 'tool_use',
-            id: toolUseId,
-            name: toolName,
-            input: toolInput,
-          },
-        ],
+        content: [{ type: 'tool_use', id: toolUseId, name: toolName, input: toolInput }],
       },
     } as CLIMessage);
 
     this.emit('message', {
       type: 'user',
       message: {
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: toolUseId,
-            content: denialText,
-          },
-        ],
+        content: [{ type: 'tool_result', tool_use_id: toolUseId, content: denialText }],
       },
     } as CLIMessage);
 
-    dlog.info('requestPermission PAUSING for user approval', {
-      toolName,
-      toolCallId: toolUseId,
-    });
+    this.dlog.info('requestPermission PAUSING for user approval', { toolName, toolCallId: toolUseId });
 
     return await new Promise<ACPRequestPermissionResponse>((resolve) => {
       const onAbort = () => {
-        dlog.info('requestPermission RESUMED (abort signal)', { toolName });
+        this.dlog.info('requestPermission RESUMED (abort signal)', { toolName });
         resolve({ outcome: { outcome: 'selected', optionId: rejectOptionId } });
       };
       if (this.abortController.signal.aborted) {
@@ -599,11 +614,9 @@ export class CursorACPProcess extends BaseAgentProcess {
   }
 
   /**
-   * Emit any tool calls still waiting for a renderable field at turn end. In
-   * the normal flow every deferred call resolves via a later `tool_call_update`;
-   * this is the safety net for a call that never updates (e.g. a dropped event).
-   * A still-unrenderable call is discarded — an empty card (no path / no
-   * command / no todos) is worse than no card at all.
+   * Emit any tool calls still waiting for a renderable field at turn end. Only
+   * relevant for `deferUnrenderableToolInput` providers. A still-unrenderable
+   * call is discarded — an empty card is worse than no card.
    */
   private flushDeferredToolInputs(): void {
     if (this.deferredToolInputs.size === 0) return;
@@ -614,7 +627,7 @@ export class CursorACPProcess extends BaseAgentProcess {
     this.deferredToolInputs.clear();
   }
 
-  private translateUpdate(update: ACPSessionUpdate): void {
+  protected translateUpdate(update: ACPSessionUpdate): void {
     if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
     if (this.handleAcpUsageUpdate(update)) return;
 
@@ -635,14 +648,22 @@ export class CursorACPProcess extends BaseAgentProcess {
         const content = update.content;
         if (content.type === 'text' && content.text) {
           this.accumulatedText += content.text;
+          let visible = this.accumulatedText;
+          // pi prefixes its first agent message with a banner — strip it (data
+          // regex from the manifest) so the user never sees the boilerplate.
+          const bannerSrc = this.manifest.quirks.stripFirstMessageBanner;
+          if (bannerSrc && this.firstMessageChunkPending) {
+            visible = stripBanner(this.accumulatedText, bannerSrc);
+          }
+          this.firstMessageChunkPending = false;
           this.emit('message', {
             type: 'assistant',
             message: {
               id: this.assistantMsgId,
-              content: [{ type: 'text', text: this.accumulatedText }],
+              content: [{ type: 'text', text: visible }],
             },
           } as CLIMessage);
-          this.lastAssistantText = this.accumulatedText;
+          this.lastAssistantText = visible;
         }
         return;
       }
@@ -660,16 +681,6 @@ export class CursorACPProcess extends BaseAgentProcess {
         const updateContent = (update as any).content as unknown[] | undefined;
         const toolName = inferACPToolName(acpKind, title, undefined, update.rawInput);
 
-        dlog.debug('tool_call', {
-          toolCallId,
-          kind: acpKind,
-          title,
-          rawInput: update.rawInput,
-          locations,
-          content: updateContent,
-          status: (update as any).status,
-        });
-
         let input = buildACPToolInput(toolName, {
           kind: acpKind,
           title,
@@ -686,12 +697,10 @@ export class CursorACPProcess extends BaseAgentProcess {
         const tcStatus = (update as any).status as string | undefined;
         const isTerminal = tcStatus === 'completed' || tcStatus === 'failed';
 
-        // Defer when the card isn't renderable yet. A non-terminal call waits
-        // for a later tool_call_update to supply the missing field; a terminal
-        // call that still lacks it (e.g. Cursor fires a completed edit with no
-        // diff/path) is dropped rather than emitted as an empty card — the
-        // server freezes a tool's input at first emission.
-        if (!isRenderableToolInput(toolName, input)) {
+        // Defer when the card isn't renderable yet (deferUnrenderableToolInput
+        // providers). A non-terminal call waits for a later tool_call_update; a
+        // terminal call that still lacks the field is dropped, not emitted empty.
+        if (this.manifest.quirks.deferUnrenderableToolInput && !isRenderableToolInput(toolName, input)) {
           if (!isTerminal) {
             this.deferredToolInputs.set(toolCallId, { name: toolName, input });
           } else {
@@ -712,34 +721,28 @@ export class CursorACPProcess extends BaseAgentProcess {
         this.flushPendingThought();
         const toolCallId = update.toolCallId;
         const updateContent = (update as any).content as unknown[] | undefined;
-
-        dlog.debug('tool_call_update', {
-          toolCallId,
-          kind: (update as any).kind,
-          title: update.title,
-          rawInput: (update as any).rawInput,
-          rawOutput: update.rawOutput,
-          locations: (update as any).locations,
-          content: updateContent,
-          status: update.status,
-        });
-
         const isTerminal = update.status === 'completed' || update.status === 'failed';
 
-        // Cursor can fire a completed tool_call_update without an emitted
-        // tool_call — either because it skipped the initial event, or because
-        // we deferred it waiting for the path. Merge any buffered input with
-        // the update's richer data (locations / rawInput / content) and emit.
+        // An update for a tool call we never emitted: either the agent skipped
+        // the initial event, or we deferred it. Synthesize the tool_use from the
+        // richer update data. Only for synthToolUseFromOrphanUpdate providers.
         if (!this.toolCallsSeen.has(toolCallId)) {
+          if (!this.manifest.quirks.synthToolUseFromOrphanUpdate) {
+            if (isTerminal) {
+              const output = extractACPToolOutput(update.rawOutput, updateContent, update.title || '');
+              this.emitToolResult(toolCallId, output);
+            }
+            return;
+          }
           const buffered = this.deferredToolInputs.get(toolCallId);
           const acpKind = (update as any).kind as string | undefined;
           const title = update.title || '';
           const locations = (update as any).locations as
             | Array<{ path: string; line?: number | null }>
             | undefined;
-          // Trust the original tool name from the deferred tool_call — an
-          // update often omits kind/title, which would degrade to 'Tool'.
           const rawInput = (update as any).rawInput;
+          // Trust the original tool name from the deferred tool_call — an update
+          // often omits kind/title, which would degrade to 'Tool'.
           const toolName = buffered?.name ?? inferACPToolName(acpKind, title, undefined, rawInput);
           const built = buildACPToolInput(toolName, {
             kind: acpKind,
@@ -755,14 +758,10 @@ export class CursorACPProcess extends BaseAgentProcess {
             if (clean) input = { todos: clean.todos };
           }
 
-          if (!isRenderableToolInput(toolName, input)) {
+          if (this.manifest.quirks.deferUnrenderableToolInput && !isRenderableToolInput(toolName, input)) {
             if (!isTerminal) {
               this.deferredToolInputs.set(toolCallId, { name: toolName, input });
             } else {
-              // Terminal but still missing its renderable field (e.g. Cursor
-              // fires a completed edit update with no diff/path). Drop it
-              // entirely — no card and no dangling tool_result — rather than
-              // surface an empty card.
               this.deferredToolInputs.delete(toolCallId);
             }
             return;
@@ -780,28 +779,46 @@ export class CursorACPProcess extends BaseAgentProcess {
 
       case 'plan': {
         this.flushPendingThought();
-        const input = buildTodoWriteInputFromPlanEntries(update.entries);
-        if (input.todos.length > 0) {
-          // Render as a TodoWrite card (rich checklist) rather than a text
-          // bubble. ACP replaces the whole plan on each update, so each
-          // emission is its own card with a fresh id — matching how the Claude
-          // SDK surfaces successive TodoWrite calls.
-          const toolCallId = randomUUID();
-          this.emit('message', {
-            type: 'assistant',
-            message: {
-              id: randomUUID(),
-              content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
-            },
-          } as CLIMessage);
-          this.emit('message', {
-            type: 'user',
-            message: {
-              content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
-            },
-          } as CLIMessage);
-          this.accumulatedText = '';
-          this.assistantMsgId = randomUUID();
+        if (this.manifest.quirks.planRender === 'todoCard') {
+          const input = buildTodoWriteInputFromPlanEntries(update.entries);
+          if (input.todos.length > 0) {
+            // ACP replaces the whole plan on each update, so each emission is its
+            // own card with a fresh id — matching how the Claude SDK surfaces
+            // successive TodoWrite calls.
+            const toolCallId = randomUUID();
+            this.emit('message', {
+              type: 'assistant',
+              message: {
+                id: randomUUID(),
+                content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
+              },
+            } as CLIMessage);
+            this.emit('message', {
+              type: 'user',
+              message: {
+                content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
+              },
+            } as CLIMessage);
+            this.accumulatedText = '';
+            this.assistantMsgId = randomUUID();
+          }
+        } else {
+          // planRender 'text': render the plan as a plain assistant text bubble.
+          const input = buildTodoWriteInputFromPlanEntries(update.entries);
+          if (input.todos.length > 0) {
+            const text = input.todos
+              .map((t) => `- [${t.status === 'completed' ? 'x' : ' '}] ${t.content}`)
+              .join('\n');
+            this.emit('message', {
+              type: 'assistant',
+              message: {
+                id: randomUUID(),
+                content: [{ type: 'text', text }],
+              },
+            } as CLIMessage);
+            this.accumulatedText = '';
+            this.assistantMsgId = randomUUID();
+          }
         }
         return;
       }
@@ -811,26 +828,13 @@ export class CursorACPProcess extends BaseAgentProcess {
         return;
     }
   }
-
-  // ── Binary resolution ───────────────────────────────────────
-
-  private resolveCursorAcpCommand(): { command: string; args: string[] } {
-    const explicit = process.env.CURSOR_BINARY_PATH || process.env.ACP_CURSOR_BIN;
-    if (explicit) return { command: explicit, args: ['acp'] };
-    if (process.env.CURSOR_ACP_USE_NPX === '1') {
-      return { command: 'npx', args: ['-y', 'cursor-agent', 'acp'] };
-    }
-    return { command: 'cursor-agent', args: ['acp'] };
-  }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
 
 /**
  * Whether a built tool input has the primary field its client card needs to
- * render a meaningful summary. When it doesn't, the emission is deferred until
- * a later ACP update fills it in — otherwise the card renders empty (the
- * server freezes a tool's input at first emission).
+ * render a meaningful summary. Used by `deferUnrenderableToolInput` providers.
  */
 function isRenderableToolInput(toolName: string, input: Record<string, unknown>): boolean {
   const has = (key: string) => typeof input[key] === 'string' && (input[key] as string).length > 0;
@@ -847,16 +851,13 @@ function isRenderableToolInput(toolName: string, input: Record<string, unknown>)
     case 'TodoWrite':
       return hasRenderableTodoInput(input);
     default:
-      // Task / Think / WebFetch / etc. derive a usable summary from the
-      // title-backed `description`, which buildACPToolInput always sets.
       return true;
   }
 }
 
 /**
  * Merge a buffered tool input with a freshly built one, preferring non-empty
- * values from `next`. Lets a later update supply the field (e.g. file_path)
- * that the initial deferred event was missing.
+ * values from `next` (e.g. a file_path the initial deferred event was missing).
  */
 function mergeToolInput(
   prev: Record<string, unknown>,
@@ -872,9 +873,8 @@ function mergeToolInput(
 }
 
 /**
- * Match the serialization Claude SDK uses for permission-rule lookup so a
- * single rule (e.g. "Bash: git status") behaves the same regardless of
- * provider. Bash gets the raw command; everything else gets stable JSON.
+ * Match the serialization Claude SDK uses for permission-rule lookup so a single
+ * rule (e.g. "Bash: git status") behaves the same regardless of provider.
  */
 function serializeToolInputForRule(
   toolName: string,
@@ -891,11 +891,40 @@ function serializeToolInputForRule(
   }
 }
 
+/** Strip a provider banner (manifest regex-as-data) from the start of text. */
+function stripBanner(text: string, regexSource: string): string {
+  try {
+    const re = new RegExp(regexSource);
+    return text.replace(re, '').replace(/^\s+/, '');
+  } catch {
+    return text;
+  }
+}
+
 /**
- * Detect funny's `autoEdit` mode — full permission bypass, equivalent to
- * Claude's `bypassPermissions` and Gemini `--yolo`. In this mode we
- * auto-approve every `session/request_permission` so cursor never pauses.
+ * Mark the cwd as a trusted folder for gemini's `--yolo` mode by writing to
+ * `~/.gemini/trustedFolders.json`. gemini-cli silently downgrades `--yolo` to
+ * default approval unless the folder is pre-trusted. The ONLY imperative
+ * prelaunch selector — named in core, never authored by a manifest.
  */
-function isAutoEditMode(originalPermissionMode: string | undefined): boolean {
-  return originalPermissionMode === 'autoEdit';
+async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promise<void> {
+  try {
+    const os = await import('os');
+    const path = await import('path');
+    const fs = await import('fs/promises');
+    const trustedPath = path.join(os.homedir(), '.gemini', 'trustedFolders.json');
+    let trusted: Record<string, string> = {};
+    try {
+      trusted = JSON.parse(await fs.readFile(trustedPath, 'utf-8')) as Record<string, string>;
+    } catch {
+      // file missing / unreadable — start fresh
+    }
+    if (trusted[cwd] === 'TRUST_FOLDER') return;
+    trusted[cwd] = 'TRUST_FOLDER';
+    await fs.mkdir(path.dirname(trustedPath), { recursive: true });
+    await fs.writeFile(trustedPath, JSON.stringify(trusted, null, 2));
+    dlog.info('marked folder as TRUST_FOLDER for gemini yolo mode', { cwd, trustedPath });
+  } catch (e) {
+    dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
+  }
 }

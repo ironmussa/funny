@@ -15,9 +15,9 @@
  * gets dropped by `Object.values`) and treats `args`/`env`/`headers` as
  * required, so we always include them with sane defaults.
  */
-export function toACPMcpServers(
-  mcpServers: Record<string, any> | undefined,
-): Array<Record<string, unknown>> {
+type ACPMcpServer = import('@agentclientprotocol/sdk').McpServer;
+
+export function toACPMcpServers(mcpServers: Record<string, any> | undefined): ACPMcpServer[] {
   if (!mcpServers) return [];
 
   const recordToPairs = (rec: unknown): Array<{ name: string; value: string }> => {
@@ -39,6 +39,10 @@ export function toACPMcpServers(
     return [];
   };
 
+  // Built loosely (the ACP schema's discriminated union is awkward to satisfy
+  // field-by-field); each entry matches one of McpServerStdio/Http/Sse exactly,
+  // validated by opencode/cursor/codex/gemini/pi at runtime. Cast at the return
+  // boundary so callers get the precise `McpServer[]` type.
   const out: Array<Record<string, unknown>> = [];
   for (const [name, raw] of Object.entries(mcpServers)) {
     if (!raw || typeof raw !== 'object') continue;
@@ -61,5 +65,5 @@ export function toACPMcpServers(
       });
     }
   }
-  return out;
+  return out as unknown as ACPMcpServer[];
 }

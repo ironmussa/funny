@@ -229,7 +229,11 @@ describe('PromptInput', () => {
 
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(textarea.value).toBe('my task');
+    // The editor is cleared optimistically and only restored after onSubmit
+    // resolves false (an extra microtask + re-render later), so poll for the
+    // restored value instead of asserting synchronously — a bare expect here
+    // races the restore and reads '' intermittently.
+    await waitFor(() => expect(textarea.value).toBe('my task'));
   });
 
   test('textarea is disabled when loading=true', () => {

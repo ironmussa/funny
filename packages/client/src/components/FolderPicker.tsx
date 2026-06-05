@@ -238,12 +238,12 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         </DialogHeader>
 
         {/* Navigation bar: back/forward + breadcrumbs */}
-        <div className="flex items-center gap-1 border-b border-border bg-muted/30 px-4 py-2">
+        <div className="border-border bg-muted/30 flex items-center gap-1 border-b px-4 py-2">
           <TooltipIconButton
             size="icon"
             onClick={goBack}
             disabled={!canGoBack}
-            className="size-6 flex-shrink-0"
+            className="size-6 shrink-0"
             tooltip={t('folderPicker.back')}
           >
             <ArrowLeft className="icon-sm" />
@@ -252,7 +252,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             size="icon"
             onClick={goForward}
             disabled={!canGoForward}
-            className="size-6 flex-shrink-0"
+            className="size-6 shrink-0"
             tooltip={t('folderPicker.forward')}
           >
             <ArrowRight className="icon-sm" />
@@ -261,18 +261,16 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
           {/* Breadcrumb path */}
           <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
             {breadcrumbs.length === 0 && (
-              <span className="text-xs text-muted-foreground">{t('folderPicker.loading')}</span>
+              <span className="text-muted-foreground text-xs">{t('folderPicker.loading')}</span>
             )}
             {breadcrumbs.map((crumb, i) => (
-              <div key={crumb.path} className="flex flex-shrink-0 items-center gap-0.5">
-                {i > 0 && (
-                  <ChevronRight className="icon-xs flex-shrink-0 text-muted-foreground/50" />
-                )}
+              <div key={crumb.path} className="flex shrink-0 items-center gap-0.5">
+                {i > 0 && <ChevronRight className="icon-xs text-muted-foreground/50 shrink-0" />}
                 <button
                   onClick={() => loadDir(crumb.path)}
-                  className={`max-w-[120px] truncate rounded px-1 py-0.5 text-xs transition-colors hover:bg-accent hover:text-foreground ${
+                  className={`hover:bg-accent hover:text-foreground max-w-[120px] truncate rounded px-1 py-0.5 text-xs transition-colors ${
                     i === breadcrumbs.length - 1
-                      ? 'font-medium text-foreground'
+                      ? 'text-foreground font-medium'
                       : 'text-muted-foreground'
                   }`}
                   title={crumb.path}
@@ -285,12 +283,12 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         </div>
 
         {/* Quick navigation buttons */}
-        <div className="flex gap-1 border-b border-border px-4 py-1.5">
+        <div className="border-border flex gap-1 border-b px-4 py-1.5">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => loadDir(home)}
-            className="h-6 px-2 text-xs text-muted-foreground"
+            className="text-muted-foreground h-6 px-2 text-xs"
           >
             <Home className="icon-xs mr-1" />
             {t('folderPicker.home')}
@@ -301,7 +299,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               variant="ghost"
               size="sm"
               onClick={() => loadDir(root)}
-              className="h-6 px-2 text-xs text-muted-foreground"
+              className="text-muted-foreground h-6 px-2 text-xs"
               title={root}
             >
               <HardDrive className="icon-xs mr-1" />
@@ -318,7 +316,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                 setNewFolderError('');
               }}
               disabled={!currentPath || loading}
-              className="h-6 px-2 text-xs text-muted-foreground"
+              className="text-muted-foreground h-6 px-2 text-xs"
               data-testid="folder-picker-new-folder"
             >
               <FolderPlus className="icon-xs mr-1" />
@@ -329,15 +327,15 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
         {/* Search filter */}
         {!loading && dirs.length > 0 && (
-          <div className="border-b border-border px-4 py-2">
+          <div className="border-border border-b px-4 py-2">
             <div className="relative">
-              <Search className="icon-xs absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="icon-xs text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2" />
               <Input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('folderPicker.searchPlaceholder')}
-                className="h-7 pl-7 pr-2 text-xs"
+                className="h-7 pr-2 pl-7 text-xs"
                 autoFocus={false}
               />
             </div>
@@ -348,8 +346,8 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         <ScrollArea className="flex-1 p-2">
           {/* Inline new folder creation */}
           {creatingFolder && (
-            <div className="mb-1 flex items-center gap-2 rounded-md bg-accent/50 px-2 py-1.5">
-              <FolderPlus className="icon-sm flex-shrink-0 text-status-info" />
+            <div className="bg-accent/50 mb-1 flex items-center gap-2 rounded-md px-2 py-1.5">
+              <FolderPlus className="icon-sm text-status-info shrink-0" />
               <Input
                 ref={newFolderInputRef}
                 type="text"
@@ -363,14 +361,14 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                   if (e.key === 'Escape') cancelCreateFolder();
                 }}
                 placeholder={t('folderPicker.newFolderPlaceholder')}
-                className="h-6 flex-1 font-mono-explorer text-xs"
+                className="font-mono-explorer h-6 flex-1 text-xs"
                 data-testid="folder-picker-new-folder-input"
               />
               <TooltipIconButton
                 size="icon"
                 onClick={handleCreateFolder}
                 disabled={!newFolderName.trim()}
-                className="size-6 flex-shrink-0"
+                className="size-6 shrink-0"
                 tooltip={t('folderPicker.create')}
                 data-testid="folder-picker-new-folder-confirm"
               >
@@ -379,7 +377,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               <TooltipIconButton
                 size="icon"
                 onClick={cancelCreateFolder}
-                className="size-6 flex-shrink-0"
+                className="size-6 shrink-0"
                 tooltip={t('folderPicker.cancel')}
                 data-testid="folder-picker-new-folder-cancel"
               >
@@ -388,21 +386,21 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             </div>
           )}
           {newFolderError && (
-            <p className="mb-1 px-2 text-xs text-status-error">{newFolderError}</p>
+            <p className="text-status-error mb-1 px-2 text-xs">{newFolderError}</p>
           )}
-          {error && <p className="px-2 py-1 text-xs text-status-error">{error}</p>}
+          {error && <p className="text-status-error px-2 py-1 text-xs">{error}</p>}
           {loading && !error && (
-            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-2 py-4 text-center text-xs">
               {t('folderPicker.loading')}
             </p>
           )}
           {!loading && dirs.length === 0 && !error && (
-            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-2 py-4 text-center text-xs">
               {t('folderPicker.noSubdirs')}
             </p>
           )}
           {!loading && dirs.length > 0 && filteredDirs.length === 0 && (
-            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-2 py-4 text-center text-xs">
               {t('folderPicker.noResults')}
             </p>
           )}
@@ -410,17 +408,17 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             <button
               key={dir.path}
               onClick={() => loadDir(dir.path)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors"
             >
-              <Folder className="icon-sm flex-shrink-0 text-status-info" />
-              <span className="truncate font-mono-explorer">{dir.name}</span>
-              <ChevronRight className="icon-xs ml-auto flex-shrink-0 opacity-40" />
+              <Folder className="icon-sm text-status-info shrink-0" />
+              <span className="font-mono-explorer truncate">{dir.name}</span>
+              <ChevronRight className="icon-xs ml-auto shrink-0 opacity-40" />
             </button>
           ))}
         </ScrollArea>
 
         {/* Actions */}
-        <DialogFooter className="border-t border-border p-4">
+        <DialogFooter className="border-border border-t p-4">
           <Button variant="outline" size="sm" onClick={onClose}>
             {t('folderPicker.cancel')}
           </Button>

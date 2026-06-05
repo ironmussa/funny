@@ -40,18 +40,18 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
 
   return (
     <>
-      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+      <header className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
         <button
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
-          className="-ml-1 rounded p-1 hover:bg-accent"
+          className="hover:bg-accent -ml-1 rounded p-1"
         >
           <ArrowLeft className="icon-lg" />
         </button>
         <h1 className="flex-1 truncate text-base font-semibold">{project?.name ?? 'Project'}</h1>
         <button
           onClick={onNewThread}
-          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground active:bg-primary/80"
+          className="bg-primary text-primary-foreground active:bg-primary/80 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium"
         >
           <Plus className="icon-sm" />
           {t('sidebar.newThread', 'New')}
@@ -59,7 +59,7 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
       </header>
       <ScrollArea className="flex-1">
         {sortedThreads.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
             {t('sidebar.noThreads', 'No threads yet. Create one to start.')}
           </div>
         ) : (
@@ -68,11 +68,11 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
               <button
                 key={thread.id}
                 onClick={() => onSelectThread(thread.id)}
-                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-accent active:bg-accent/80"
+                className="hover:bg-accent active:bg-accent/80 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{thread.title}</div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
+                  <div className="text-muted-foreground mt-0.5 text-xs">
                     {threadDateFormatter.format(new Date(thread.createdAt))}
                   </div>
                 </div>

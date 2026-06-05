@@ -104,7 +104,7 @@ function useActiveProgress(
 function StepStatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'running':
-      return <Loader2 className="icon-xs animate-spin text-muted-foreground" />;
+      return <Loader2 className="icon-xs text-muted-foreground animate-spin" />;
     case 'completed':
       return <Check className="icon-xs text-muted-foreground" />;
     case 'failed':
@@ -118,7 +118,7 @@ function StepStatusIcon({ status }: { status: string }) {
 function LiveStepRow({ step }: { step: GitProgressStep }) {
   return (
     <div className="flex w-full items-start gap-2 px-3 py-1 text-xs">
-      <div className="mt-0.5 flex-shrink-0">
+      <div className="mt-0.5 shrink-0">
         <StepStatusIcon status={step.status} />
       </div>
       <div className="min-w-0 flex-1">
@@ -134,7 +134,7 @@ function LiveStepRow({ step }: { step: GitProgressStep }) {
           <SubItemsList subItems={step.subItems} parentStatus={step.status} />
         )}
         {step.error && !(step.subItems && step.subItems.length > 0) && (
-          <div className="min-w-0 truncate text-destructive">{step.error}</div>
+          <div className="text-destructive min-w-0 truncate">{step.error}</div>
         )}
       </div>
     </div>
@@ -202,7 +202,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
   return (
     <div
       data-testid="workflow-event-group"
-      className="max-w-full overflow-hidden rounded-lg border border-border text-sm"
+      className="border-border max-w-full overflow-hidden rounded-lg border text-sm"
     >
       {/* Header row — clickable to expand/collapse */}
       <button
@@ -215,16 +215,16 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
       >
         <ChevronRight
           className={cn(
-            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
         {status.running ? (
-          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
+          <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />
         ) : (
-          <StatusIcon className="icon-xs flex-shrink-0 text-muted-foreground" />
+          <StatusIcon className="icon-xs text-muted-foreground shrink-0" />
         )}
-        <span className="flex-shrink-0 font-mono font-medium text-foreground">
+        <span className="text-foreground shrink-0 font-mono font-medium">
           {status.action || 'Workflow'}
         </span>
         <span
@@ -236,23 +236,23 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
           {status.label}
         </span>
         {activeProgress.stepLabel && (
-          <span className="truncate font-mono text-muted-foreground/70">
+          <span className="text-muted-foreground/70 truncate font-mono">
             : {activeProgress.stepLabel}
           </span>
         )}
         {badgeCount > 0 && (
-          <span className="inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 text-xs font-medium leading-4 text-muted-foreground">
+          <span className="bg-muted-foreground/20 text-muted-foreground inline-flex items-center justify-center rounded-full px-1.5 text-xs leading-4 font-medium">
             {badgeCount}
           </span>
         )}
         {timestamp && (
-          <span className="ml-auto shrink-0 text-muted-foreground">{timeAgo(timestamp, t)}</span>
+          <span className="text-muted-foreground ml-auto shrink-0">{timeAgo(timestamp, t)}</span>
         )}
       </button>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="space-y-0 border-t border-border/40 pb-1 pt-0.5">
+        <div className="border-border/40 space-y-0 border-t pt-0.5 pb-1">
           {status.running && activeProgress.steps.length > 0 ? (
             <>
               {/* Show persisted detail events that have arrived so far */}
@@ -278,8 +278,8 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
               ))}
               {status.error && innerEvents.length === 0 && (
                 <div className="px-3 py-1.5">
-                  <ScrollArea className="max-h-40 rounded bg-destructive/5">
-                    <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] text-destructive/80">
+                  <ScrollArea className="bg-destructive/5 max-h-40 rounded">
+                    <pre className="text-destructive/80 p-2 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
                       {status.error}
                     </pre>
                   </ScrollArea>

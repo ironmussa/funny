@@ -172,7 +172,7 @@ export function AttachmentChip({
           onClick={onRemove}
           aria-label={removeLabel}
           disabled={removeDisabled}
-          className="rounded p-0.5 opacity-70 hover:bg-destructive hover:text-destructive-foreground hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+          className="hover:bg-destructive hover:text-destructive-foreground rounded p-0.5 opacity-70 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <X className="icon-xs" />
         </button>

@@ -235,15 +235,15 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
         data-testid="pr-detail-dialog"
       >
         {/* ── Header ── */}
-        <div className="shrink-0 border-b border-border px-4 py-3">
+        <div className="border-border shrink-0 border-b px-4 py-3">
           {/* Row 1: Title + close button */}
           <div className="flex items-start justify-between gap-2">
-            <DialogTitle className="text-sm font-semibold leading-tight">{prTitle}</DialogTitle>
+            <DialogTitle className="text-sm leading-tight font-semibold">{prTitle}</DialogTitle>
             <Button
               variant="ghost"
               size="icon-xs"
               onClick={() => onOpenChange(false)}
-              className="shrink-0 text-muted-foreground"
+              className="text-muted-foreground shrink-0"
               data-testid="pr-detail-close"
             >
               <X className="icon-xs" />
@@ -256,7 +256,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
           {/* Row 2: author wants to merge N commits into [base] from [head] + PR badge + State badge */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[11px]">
             <span className="text-muted-foreground">
-              <span className="font-medium text-foreground">{pr.user?.login ?? 'unknown'}</span>
+              <span className="text-foreground font-medium">{pr.user?.login ?? 'unknown'}</span>
               {' wants to merge '}
               {commits.length > 0 ? (
                 <>
@@ -287,7 +287,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
                 className="h-6 w-auto max-w-[400px] text-[11px]"
                 data-testid="pr-detail-commit-select"
               >
-                <GitCommitHorizontal className="mr-1 size-3 shrink-0 text-muted-foreground" />
+                <GitCommitHorizontal className="text-muted-foreground mr-1 size-3 shrink-0" />
                 <SelectValue placeholder="All commits">
                   {selectedCommit === 'all' ? (
                     <span className="text-[11px]">All commits ({commits.length})</span>
@@ -312,7 +312,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
                   >
                     <div className="flex flex-col gap-0.5 py-0.5">
                       <span className="truncate text-[11px]">{firstLine(c.message)}</span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-muted-foreground text-[10px]">
                         <span className="font-mono">{shortSha(c.sha)}</span>
                         {c.author?.login && <> &middot; {c.author.login}</>}
                         {c.date && <> &middot; {new Date(c.date).toLocaleDateString()}</>}
@@ -337,19 +337,19 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
         {isLoading ? (
           <LoadingState testId="pr-detail-loading" label="Loading PR data…" />
         ) : error ? (
-          <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex flex-1 items-center justify-center text-xs">
             {error}
           </div>
         ) : (
           <div className="flex min-h-0 flex-1">
             {/* ── File tree sidebar (reuses existing FileTree component) ── */}
             <div
-              className="flex w-[280px] shrink-0 flex-col border-r border-border"
+              className="border-border flex w-[280px] shrink-0 flex-col border-r"
               data-testid="pr-detail-file-tree"
             >
               {/* File search */}
               {displayedFiles.length > 0 && (
-                <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
                   <SearchBar
                     query={fileSearch}
                     onQueryChange={setFileSearch}
@@ -371,7 +371,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
                 {loadingCommitFiles ? (
                   <LoadingState testId="pr-detail-files-loading" label="Loading…" />
                 ) : fileSummaries.length === 0 ? (
-                  <div className="py-4 text-center text-xs text-muted-foreground">
+                  <div className="text-muted-foreground py-4 text-center text-xs">
                     {fileSearch ? 'No matching files' : 'No files changed'}
                   </div>
                 ) : (
@@ -392,7 +392,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
             {/* ── Diff viewer ── */}
             <div className="flex min-w-0 flex-1 flex-col" data-testid="pr-detail-diff-pane">
               {!selectedFile ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+                <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
                   <FileCode className="size-8 opacity-30" />
                   <p className="text-xs">Select a file to view changes</p>
                 </div>

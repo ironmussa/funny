@@ -68,7 +68,7 @@ export function SelectionPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute z-[100]"
+      className="absolute z-100"
       style={{
         left: position.x,
         top: position.y,
@@ -77,7 +77,7 @@ export function SelectionPopover({
       onMouseDown={(e) => e.stopPropagation()}
       data-testid="plan-selection-popover"
     >
-      <div className="rounded-lg border border-border bg-card shadow-xl">
+      <div className="border-border bg-card rounded-lg border shadow-xl">
         {!showInput ? (
           <div className="flex items-center gap-0.5 px-1 py-1">
             {EMOJI_OPTIONS.map((emoji) => (
@@ -88,16 +88,16 @@ export function SelectionPopover({
                   onClose();
                 }}
                 data-testid={`plan-emoji-${emoji}`}
-                className="rounded px-1.5 py-1 text-sm transition-colors hover:bg-accent"
+                className="hover:bg-accent rounded px-1.5 py-1 text-sm transition-colors"
               >
                 {emoji}
               </button>
             ))}
-            <div className="mx-0.5 h-5 w-px bg-border" />
+            <div className="bg-border mx-0.5 h-5 w-px" />
             <button
               onClick={() => setShowInput(true)}
               data-testid="plan-comment-button"
-              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              className="text-foreground hover:bg-accent flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors"
             >
               <MessageSquare className="size-3.5" />
               {t('plan.comment', 'Comment')}
@@ -123,7 +123,7 @@ export function SelectionPopover({
               }}
               placeholder={t('plan.addComment', 'Add comment...')}
               data-testid="plan-selection-comment-input"
-              className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-foreground shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0"
+              className="text-foreground placeholder:text-muted-foreground/50 h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
             />
             <Button
               size="sm"
@@ -290,11 +290,11 @@ export function MarginAnnotations({
   if (groups.length === 0) return null;
 
   return (
-    <div className="absolute right-1 top-0 w-10" data-testid="plan-margin-annotations">
+    <div className="absolute top-0 right-1 w-10" data-testid="plan-margin-annotations">
       {groups.map((group) => (
         <div
           key={group.top}
-          className="absolute right-0 flex items-center gap-px rounded-full border border-border/60 bg-card px-px py-px"
+          className="border-border/60 bg-card absolute right-0 flex items-center gap-px rounded-full border px-px py-px"
           style={{ top: group.top }}
         >
           {group.items.map((a) => (
@@ -302,10 +302,10 @@ export function MarginAnnotations({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onRemove(a.index)}
-                  className="flex size-4 items-center justify-center rounded-full text-[10px] transition-colors hover:bg-destructive/20"
+                  className="hover:bg-destructive/20 flex size-4 items-center justify-center rounded-full text-[10px] transition-colors"
                   data-testid={`plan-margin-annotation-${a.index}`}
                 >
-                  {a.emoji || <MessageSquare className="size-3 text-primary" />}
+                  {a.emoji || <MessageSquare className="text-primary size-3" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left" className="max-w-56 text-xs">

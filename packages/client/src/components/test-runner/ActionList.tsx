@@ -103,7 +103,7 @@ export function ActionList({
 
   if (visibleActions.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
+      <div className="text-muted-foreground flex h-full items-center justify-center px-2 text-center text-xs">
         Actions will appear here during test execution…
       </div>
     );
@@ -149,7 +149,7 @@ export function ActionList({
                 {shortTitle(action.title)}
               </div>
               {action.duration != null && (
-                <div className="mt-0.5 text-muted-foreground">{formatMs(action.duration)}</div>
+                <div className="text-muted-foreground mt-0.5">{formatMs(action.duration)}</div>
               )}
             </div>
           </div>

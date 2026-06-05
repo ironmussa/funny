@@ -70,18 +70,18 @@ export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabl
               className={cn('transition-[stroke-dasharray] duration-500', color)}
             />
           </svg>
-          <span className="tabular-nums leading-none">{Math.round(clamped)}% de contexto</span>
+          <span className="leading-none tabular-nums">{Math.round(clamped)}% de contexto</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="end" className="w-64 text-sm">
         <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
         {showTokens && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-xs">
             {formatTokens(usedTokens)} / {formatTokens(maxTokens)} tokens used ·{' '}
             {formatTokens(remainingTokens)} left
           </p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">Click to compact now.</p>
+        <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
       </HoverCardContent>
     </HoverCard>
   );

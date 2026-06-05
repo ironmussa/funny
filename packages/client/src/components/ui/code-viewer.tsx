@@ -42,7 +42,7 @@ export function CodeViewer({
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="whitespace-pre px-10 py-2 font-mono text-xs leading-relaxed text-foreground/80">
+        <pre className="text-foreground/80 px-10 py-2 font-mono text-xs leading-relaxed whitespace-pre">
           {code}
         </pre>
       )}

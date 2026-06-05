@@ -41,12 +41,12 @@ export function ProjectUrlPatterns({
   };
 
   return (
-    <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3.5 last:border-b-0">
+    <div className="border-border/50 flex flex-col gap-3 border-b px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-foreground text-sm font-medium">
           {t('settings.projectUrls', 'Extension URLs')}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mt-0.5 text-xs">
           {t(
             'settings.projectUrlsDesc',
             'URLs for Chrome extension auto-detection. The extension will auto-select this project when you visit a matching URL.',
@@ -120,15 +120,15 @@ export function ProjectSystemPrompt({
   };
 
   return (
-    <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3.5 last:border-b-0">
+    <div className="border-border/50 flex flex-col gap-3 border-b px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <MessageSquareText className="icon-base text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-foreground text-sm font-medium">
             {t('settings.systemPrompt', 'System Prompt')}
           </p>
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mt-0.5 text-xs">
           {t(
             'settings.systemPromptDesc',
             'Custom instructions prepended to every agent message in this project. Use this for project-specific conventions, coding standards, or context.',
@@ -217,7 +217,7 @@ export function DefaultTemplateSetting({
       description="Auto-select this template when creating new Deep Agent threads in this project."
     >
       <select
-        className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+        className="border-input bg-background h-9 rounded-md border px-3 text-xs"
         value={currentTemplateId ?? ''}
         onChange={(e) => {
           const val = e.target.value || null;
@@ -279,7 +279,7 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
           'Reduces false merge conflicts using semantic analysis',
         )}
       >
-        <div className="h-8 w-[140px] animate-pulse rounded-md bg-muted" />
+        <div className="bg-muted h-8 w-[140px] animate-pulse rounded-md" />
       </SettingRow>
     );
   }
@@ -293,7 +293,7 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
           'Reduces false merge conflicts using semantic analysis',
         )}
       >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <span data-testid="settings-weave-status">
             {t('settings.weaveNotInstalled', 'weave-driver not found')}
           </span>

@@ -11,7 +11,7 @@ const MermaidBlock = lazy(() =>
 const CsvTable = lazy(() => import('@/components/CsvTable').then((m) => ({ default: m.CsvTable })));
 
 function VisualizerFallback() {
-  return <div className="h-8 animate-pulse rounded bg-muted/50" />;
+  return <div className="bg-muted/50 h-8 animate-pulse rounded" />;
 }
 
 function MermaidVisualizer({ source }: VisualizerProps) {

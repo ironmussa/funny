@@ -21,7 +21,7 @@ export function GroupBySelector({ value, onChange }: Props) {
 
   return (
     <div
-      className="flex rounded-md border border-border bg-muted/30 p-0.5"
+      className="border-border bg-muted/30 flex rounded-md border p-0.5"
       data-testid="analytics-group-by"
     >
       {options.map((opt) => (
@@ -32,7 +32,7 @@ export function GroupBySelector({ value, onChange }: Props) {
           className={cn(
             'px-3 py-1.5 text-xs rounded-sm transition-colors whitespace-nowrap',
             value === opt.value
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-background text-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground',
           )}
         >

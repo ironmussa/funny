@@ -61,7 +61,7 @@ function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean })
   }, [active]);
 
   return (
-    <div className="relative h-full w-full bg-background">
+    <div className="bg-background relative h-full w-full">
       {searchVisible && active && (
         <TerminalSearchOverlay activeTabId={tab.id} onClose={() => setSearchVisible(false)} />
       )}
@@ -88,7 +88,7 @@ function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean })
       ) : isTauri ? (
         <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={true} />
       ) : (
-        <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
           (unknown terminal type)
         </div>
       )}
@@ -169,7 +169,7 @@ function NewTerminalButton() {
             <Button
               variant="ghost"
               data-testid="terminal-new"
-              className="h-full rounded-none px-2.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-full rounded-none px-2.5"
             >
               <Plus className="icon-sm" />
             </Button>
@@ -217,7 +217,7 @@ function DetachTerminalButton({ activeTabId }: { activeTabId: string | undefined
           variant="ghost"
           onClick={onClick}
           data-testid="terminal-detach"
-          className="h-full rounded-none px-2.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-full rounded-none px-2.5"
         >
           <PictureInPicture2 className="icon-sm" />
         </Button>
@@ -243,7 +243,7 @@ function HideTerminalPanelButton() {
           variant="ghost"
           onClick={() => togglePanel(selectedProjectId)}
           data-testid="terminal-hide-panel"
-          className="h-full rounded-none px-2.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="text-muted-foreground hover:bg-accent hover:text-accent-foreground h-full rounded-none px-2.5"
         >
           <PanelBottomClose className="icon-sm" />
         </Button>

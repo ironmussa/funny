@@ -158,7 +158,7 @@ export const KanbanCard = memo(function KanbanCard({
             search={search || ''}
             multiline
             containerClassName="flex-1"
-            className="line-clamp-6 text-sm font-medium leading-relaxed text-muted-foreground transition-colors group-hover/card:text-foreground"
+            className="text-muted-foreground group-hover/card:text-foreground line-clamp-6 text-sm leading-relaxed font-medium transition-colors"
             stopBadgePropagation
             badgeTestId={`kanban-view-card-attachments-${thread.id}`}
           />
@@ -178,14 +178,14 @@ export const KanbanCard = memo(function KanbanCard({
           <HighlightText
             text={contentSnippet}
             query={search}
-            className="mb-1 line-clamp-2 block text-[11px] italic text-muted-foreground"
+            className="text-muted-foreground mb-1 line-clamp-2 block text-[11px] italic"
           />
         )}
       </div>
 
       {/* Right: time / more menu overlay */}
       <div className="flex shrink-0 items-center px-1.5">
-        <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
+        <div className="grid min-w-10 place-items-center justify-items-center">
           <span
             className={cn(
               'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/card:opacity-0 group-hover/card:pointer-events-none',
@@ -197,7 +197,7 @@ export const KanbanCard = memo(function KanbanCard({
           <div
             className={cn(
               'col-start-1 row-start-1 flex items-center opacity-0 group-hover/card:opacity-100',
-              openDropdown && '!opacity-100',
+              openDropdown && 'opacity-100!',
             )}
           >
             <DropdownMenu onOpenChange={handleDropdownChange}>
@@ -320,7 +320,7 @@ function AddThreadButton({
     return (
       <button
         data-testid="kanban-add-thread"
-        className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto rounded p-0.5 transition-colors"
         onClick={() => onSelect(projectId)}
         title={t('kanban.addThread')}
       >
@@ -344,34 +344,34 @@ function AddThreadButton({
       <PopoverTrigger asChild>
         <button
           data-testid="kanban-add-thread"
-          className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto rounded p-0.5 transition-colors"
           title={t('kanban.addThread')}
         >
           <Plus className="icon-base" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
-        <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-          <Search className="icon-base shrink-0 text-muted-foreground" />
+        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2.5">
+          <Search className="icon-base text-muted-foreground shrink-0" />
           <Input
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('kanban.searchProject')}
-            className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+            className="placeholder:text-muted-foreground h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
             autoFocus
           />
         </div>
         <div className="max-h-56 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="py-3 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-3 text-center text-sm">
               {t('commandPalette.noResults')}
             </div>
           ) : (
             filtered.map((p) => (
               <button
                 key={p.id}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
                 onClick={() => {
                   setOpen(false);
                   setSearch('');
@@ -466,13 +466,13 @@ const KanbanColumn = memo(function KanbanColumn({
     <div
       ref={ref}
       className={cn(
-        'flex flex-col w-[23rem] min-w-[23rem] flex-shrink-0 rounded-lg bg-secondary/30 transition-colors',
+        'flex flex-col w-92 min-w-92 shrink-0 rounded-lg bg-secondary/30 transition-colors',
         isDraggedOver && 'ring-2 ring-ring bg-secondary/50',
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
+      <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2.5">
         <span className="text-sm font-medium">{t(stageConfig[stage].labelKey)}</span>
-        <span className="text-xs text-muted-foreground">({threads.length})</span>
+        <span className="text-muted-foreground text-xs">({threads.length})</span>
         {projects.length > 0 && stage !== 'review' && stage !== 'done' && stage !== 'archived' && (
           <AddThreadButton
             projectId={projectId}
@@ -484,7 +484,7 @@ const KanbanColumn = memo(function KanbanColumn({
 
       <div ref={scrollRef} className="min-h-[200px] flex-1 space-y-2 overflow-y-auto p-2">
         {threads.length === 0 ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">
+          <div className="text-muted-foreground py-8 text-center text-xs">
             {t('kanban.emptyColumn')}
           </div>
         ) : (
@@ -509,7 +509,7 @@ const KanbanColumn = memo(function KanbanColumn({
               <button
                 data-testid={`kanban-load-more-${stage}`}
                 onClick={() => setVisibleCount((prev) => prev + 20)}
-                className="w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
               >
                 {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
               </button>

@@ -523,10 +523,10 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'models' && (
           <>
             <h3 className="settings-section-header">{t('settings.models')}</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-1 pb-3 text-xs">
               {t('settings.promptModelVisibilityDesc')}
             </p>
-            <div className="settings-card !overflow-visible">
+            <div className="settings-card overflow-visible!">
               <PromptModelVisibilitySettings showHeader={false} />
             </div>
           </>
@@ -535,7 +535,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'appearance' && (
           <>
             <h3 className="settings-section-header">{t('settings.appearance')}</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">{t('settings.themeDesc')}</p>
+            <p className="text-muted-foreground px-1 pb-3 text-xs">{t('settings.themeDesc')}</p>
             <div className="grid grid-cols-3 gap-2">
               {THEME_OPTIONS.map((opt) => (
                 <ThemeCard
@@ -587,10 +587,10 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'ai-keys' && (
           <>
             <h3 className="settings-section-header">AI Providers</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-1 pb-3 text-xs">
               Configure API keys for AI providers. Keys are encrypted at rest.
             </p>
-            <div className="settings-card space-y-0 divide-y divide-border">
+            <div className="settings-card divide-border space-y-0 divide-y">
               {PROVIDER_KEY_REGISTRY.filter((k) => k.id !== 'github' && k.id !== 'assemblyai').map(
                 (keyConfig) => (
                   <div key={keyConfig.id} className="px-4 py-3.5">
@@ -628,7 +628,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'speech' && (
           <>
             <h3 className="settings-section-header">Speech</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-1 pb-3 text-xs">
               Configure an AssemblyAI API key to enable voice dictation in the prompt input.
             </p>
             <div className="settings-card">
@@ -738,7 +738,7 @@ function ProviderKeyRow({
         <Button
           variant="ghost"
           size="sm"
-          className="shrink-0 text-xs text-destructive hover:text-destructive"
+          className="text-destructive hover:text-destructive shrink-0 text-xs"
           onClick={() => handleClear(id)}
           disabled={!!keySaving[id]}
           data-testid={`preferences-clear-${id}-key`}
@@ -801,7 +801,7 @@ function ProviderKeyPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="shrink-0 text-xs text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive shrink-0 text-xs"
                 onClick={() => handleClear(id)}
                 disabled={!!keySaving[id]}
                 data-testid={clearTestId}
@@ -871,7 +871,7 @@ function SmtpPanel({
           </span>
         )}
       </div>
-      <p className="px-1 pb-3 text-xs text-muted-foreground">
+      <p className="text-muted-foreground px-1 pb-3 text-xs">
         Used for sending team invitation emails. Set via env vars (SMTP_HOST, SMTP_USER, SMTP_PASS)
         or configure below.
       </p>
@@ -879,7 +879,7 @@ function SmtpPanel({
         <div className="space-y-3 px-4 py-3.5">
           <div className="grid grid-cols-[1fr_80px] gap-2">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Host</label>
+              <label className="text-muted-foreground mb-1 block text-xs">Host</label>
               <Input
                 value={smtpHost}
                 onChange={(e) => setSmtpHost(e.target.value)}
@@ -889,7 +889,7 @@ function SmtpPanel({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Port</label>
+              <label className="text-muted-foreground mb-1 block text-xs">Port</label>
               <Input
                 value={smtpPort}
                 onChange={(e) => setSmtpPort(e.target.value)}
@@ -900,7 +900,7 @@ function SmtpPanel({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Username</label>
+            <label className="text-muted-foreground mb-1 block text-xs">Username</label>
             <Input
               value={smtpUser}
               onChange={(e) => setSmtpUser(e.target.value)}
@@ -910,7 +910,7 @@ function SmtpPanel({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Password</label>
+            <label className="text-muted-foreground mb-1 block text-xs">Password</label>
             <Input
               type="password"
               value={smtpPass}
@@ -925,7 +925,7 @@ function SmtpPanel({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">From address</label>
+            <label className="text-muted-foreground mb-1 block text-xs">From address</label>
             <Input
               value={smtpFrom}
               onChange={(e) => setSmtpFrom(e.target.value)}

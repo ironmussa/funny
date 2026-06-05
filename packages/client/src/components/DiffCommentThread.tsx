@@ -32,7 +32,7 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
       data-testid={`comment-thread-${thread.id}`}
     >
       {/* Thread header */}
-      <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+      <div className="text-muted-foreground mb-2 flex items-center gap-2 text-[10px]">
         <MessageSquare className="size-3" />
         <span className="font-mono">{thread.path}</span>
         {thread.line && <span>line {thread.line}</span>}
@@ -54,7 +54,7 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
         {thread.comments.map((comment) => (
           <div
             key={comment.id}
-            className="rounded-md border border-border/50 p-2"
+            className="border-border/50 rounded-md border p-2"
             data-testid={`comment-${comment.id}`}
           >
             <div className="mb-1 flex items-center gap-1.5">
@@ -67,15 +67,15 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
               )}
               <span className="text-[11px] font-medium">{comment.author}</span>
               {comment.author_association && comment.author_association !== 'NONE' && (
-                <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">
+                <span className="bg-muted text-muted-foreground rounded px-1 text-[9px]">
                   {comment.author_association.toLowerCase()}
                 </span>
               )}
-              <span className="ml-auto text-[10px] text-muted-foreground">
+              <span className="text-muted-foreground ml-auto text-[10px]">
                 {formatRelativeTime(comment.created_at)}
               </span>
             </div>
-            <div className="whitespace-pre-wrap text-[11px] leading-relaxed text-foreground/90">
+            <div className="text-foreground/90 text-[11px] leading-relaxed whitespace-pre-wrap">
               {comment.body}
             </div>
           </div>

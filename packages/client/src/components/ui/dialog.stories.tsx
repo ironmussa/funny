@@ -46,7 +46,7 @@ export const Default: Story = {
             This is a description of the dialog. It provides context about the action being taken.
           </DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">Dialog body content goes here.</p>
+        <p className="text-muted-foreground text-sm">Dialog body content goes here.</p>
         <DialogFooter>
           <DialogCancelButton data-testid="dialog-cancel" />
           <Button data-testid="dialog-confirm">Confirm</Button>
@@ -115,7 +115,7 @@ export const TitleOnly: Story = {
         <DialogHeader>
           <DialogTitle>Are you sure?</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+        <p className="text-muted-foreground text-sm">This action cannot be undone.</p>
         <DialogFooter>
           <DialogCancelButton data-testid="dialog-cancel" />
           <Button variant="destructive" data-testid="dialog-confirm">
@@ -141,7 +141,7 @@ export const LongContent: Story = {
           <DialogTitle>Terms of Service</DialogTitle>
           <DialogDescription>Please read the following terms carefully.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 text-sm text-muted-foreground">
+        <div className="text-muted-foreground space-y-4 text-sm">
           {Array.from({ length: 10 }, (_, i) => (
             <p key={i}>
               Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor

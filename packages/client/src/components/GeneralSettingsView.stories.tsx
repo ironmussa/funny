@@ -10,7 +10,7 @@ import { GeneralSettingsView } from './GeneralSettingsView';
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
     <MemoryRouter>
-      <div className="flex h-[700px] w-[800px] overflow-hidden rounded-lg border border-border">
+      <div className="border-border flex h-[700px] w-[800px] overflow-hidden rounded-lg border">
         {children}
       </div>
     </MemoryRouter>

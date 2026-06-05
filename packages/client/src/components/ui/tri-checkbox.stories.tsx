@@ -55,29 +55,29 @@ export const AllStates: Story = {
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
           <TriCheckbox state="unchecked" data-testid="tri-unchecked" />
-          <span className="text-xs text-muted-foreground">Unchecked</span>
+          <span className="text-muted-foreground text-xs">Unchecked</span>
         </div>
         <div className="flex items-center gap-2">
           <TriCheckbox state="checked" data-testid="tri-checked" />
-          <span className="text-xs text-muted-foreground">Checked</span>
+          <span className="text-muted-foreground text-xs">Checked</span>
         </div>
         <div className="flex items-center gap-2">
           <TriCheckbox state="indeterminate" data-testid="tri-indeterminate" />
-          <span className="text-xs text-muted-foreground">Indeterminate</span>
+          <span className="text-muted-foreground text-xs">Indeterminate</span>
         </div>
       </div>
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
           <TriCheckbox state="unchecked" size="sm" data-testid="tri-sm-unchecked" />
-          <span className="text-xs text-muted-foreground">sm Unchecked</span>
+          <span className="text-muted-foreground text-xs">sm Unchecked</span>
         </div>
         <div className="flex items-center gap-2">
           <TriCheckbox state="checked" size="sm" data-testid="tri-sm-checked" />
-          <span className="text-xs text-muted-foreground">sm Checked</span>
+          <span className="text-muted-foreground text-xs">sm Checked</span>
         </div>
         <div className="flex items-center gap-2">
           <TriCheckbox state="indeterminate" size="sm" data-testid="tri-sm-indeterminate" />
-          <span className="text-xs text-muted-foreground">sm Indeterminate</span>
+          <span className="text-muted-foreground text-xs">sm Indeterminate</span>
         </div>
       </div>
     </div>
@@ -100,7 +100,7 @@ function InteractiveStory() {
         data-testid="tri-interactive"
         aria-label="Toggle state"
       />
-      <span className="text-sm text-foreground">{state}</span>
+      <span className="text-foreground text-sm">{state}</span>
     </div>
   );
 }
@@ -133,15 +133,15 @@ function FileListExampleStory() {
     selected.size === files.length ? 'checked' : selected.size > 0 ? 'indeterminate' : 'unchecked';
 
   return (
-    <div className="w-64 rounded-md border border-sidebar-border bg-sidebar p-2">
-      <div className="mb-2 flex items-center gap-2 border-b border-sidebar-border pb-2">
+    <div className="border-sidebar-border bg-sidebar w-64 rounded-md border p-2">
+      <div className="border-sidebar-border mb-2 flex items-center gap-2 border-b pb-2">
         <TriCheckbox
           state={headerState as 'checked' | 'unchecked' | 'indeterminate'}
           onToggle={toggleAll}
           data-testid="tri-select-all"
           aria-label="Select all files"
         />
-        <span className="text-xs text-muted-foreground">
+        <span className="text-muted-foreground text-xs">
           {selected.size}/{files.length} selected
         </span>
       </div>
@@ -153,7 +153,7 @@ function FileListExampleStory() {
             data-testid={`tri-file-${f}`}
             aria-label={`Select ${f}`}
           />
-          <span className="font-mono text-xs text-foreground">{f}</span>
+          <span className="text-foreground font-mono text-xs">{f}</span>
         </div>
       ))}
     </div>

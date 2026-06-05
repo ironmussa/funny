@@ -47,7 +47,7 @@ export function SidebarFooter() {
               <Button
                 variant="ghost"
                 data-testid="sidebar-user-menu"
-                className="h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1 hover:bg-sidebar-accent"
+                className="hover:bg-sidebar-accent h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1"
               >
                 <Avatar size="sm">
                   <AvatarFallback className="text-xs" name={authUser.displayName || undefined}>
@@ -60,10 +60,10 @@ export function SidebarFooter() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1 text-left">
-                  <p className="truncate text-sm font-medium text-sidebar-foreground">
+                  <p className="text-sidebar-foreground truncate text-sm font-medium">
                     {authUser.displayName}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">@{authUser.username}</p>
+                  <p className="text-muted-foreground truncate text-xs">@{authUser.username}</p>
                 </div>
               </Button>
             </DropdownMenuTrigger>

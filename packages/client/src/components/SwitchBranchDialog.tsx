@@ -74,13 +74,13 @@ export function SwitchBranchDialog({
               loading && 'cursor-not-allowed opacity-60',
             )}
           >
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-foreground text-sm font-medium">
               {t('switchBranch.leaveChanges', {
                 branch: truncate(currentBranch),
                 defaultValue: `Leave my changes on ${truncate(currentBranch)}`,
               })}
             </p>
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-1.5 text-xs">
               {t(
                 'switchBranch.leaveChangesDesc',
                 'Your in-progress work will be stashed on this branch for you to return to later',
@@ -102,13 +102,13 @@ export function SwitchBranchDialog({
               loading && 'cursor-not-allowed opacity-60',
             )}
           >
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-foreground text-sm font-medium">
               {t('switchBranch.bringChanges', {
                 branch: truncate(targetBranch),
                 defaultValue: `Bring my changes to ${truncate(targetBranch)}`,
               })}
             </p>
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-1.5 text-xs">
               {t(
                 'switchBranch.bringChangesDesc',
                 'Your in-progress work will follow you to the new branch',

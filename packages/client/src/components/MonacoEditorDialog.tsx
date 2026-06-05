@@ -333,15 +333,15 @@ export function MonacoEditorDialog({
       <DialogContent
         className={cn(
           isFullscreen
-            ? 'max-w-[100vw] max-h-[100vh] w-[100vw] h-[100vh] flex flex-col gap-0 p-0'
+            ? 'max-w-[100vw] max-h-screen w-screen h-screen flex flex-col gap-0 p-0'
             : 'flex h-[85vh] w-[90vw] max-w-[850px] flex-col gap-0 p-0',
           'overflow-hidden',
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogHeader className="flex-shrink-0 overflow-hidden border-b border-border px-4 py-3">
+        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3">
           <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
-            <FileCode className="icon-base flex-shrink-0" />
+            <FileCode className="icon-base shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
               style={{ direction: 'rtl', textAlign: 'left' }}
@@ -356,7 +356,7 @@ export function MonacoEditorDialog({
                 size="icon-sm"
                 onClick={() => copy(content)}
                 disabled={!content}
-                className="flex-shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid="editor-copy-content"
                 aria-label={t('editor.copy', 'Copy')}
               >
@@ -372,7 +372,7 @@ export function MonacoEditorDialog({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setShowPreview((prev) => !prev)}
-                  className="flex-shrink-0 text-muted-foreground"
+                  className="text-muted-foreground shrink-0"
                   data-testid="editor-toggle-preview"
                 >
                   {showPreview ? (
@@ -396,7 +396,7 @@ export function MonacoEditorDialog({
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => setShowMinimap((prev) => !prev)}
-                  className="flex-shrink-0 text-muted-foreground"
+                  className="text-muted-foreground shrink-0"
                   data-testid="editor-toggle-minimap"
                 >
                   {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
@@ -413,7 +413,7 @@ export function MonacoEditorDialog({
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setIsFullscreen((prev) => !prev)}
-                className="flex-shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid="editor-toggle-fullscreen"
               >
                 {isFullscreen ? (
@@ -453,7 +453,7 @@ export function MonacoEditorDialog({
               regex={showAdvancedToggles ? regex : undefined}
               onRegexChange={showAdvancedToggles ? setRegex : undefined}
               testIdPrefix="editor-search"
-              className="absolute right-4 top-3 z-10 rounded-md border border-border bg-popover px-2 py-1 shadow-md"
+              className="border-border bg-popover absolute top-3 right-4 z-10 rounded-md border px-2 py-1 shadow-md"
             />
           )}
           {showPreview && isMarkdown ? (
@@ -503,13 +503,13 @@ const markdownPreviewComponents: Components = {
     }
 
     return (
-      <code className="rounded bg-muted px-1.5 py-0.5 text-xs" {...props}>
+      <code className="bg-muted rounded px-1.5 py-0.5 text-xs" {...props}>
         {children}
       </code>
     );
   },
   pre({ children }) {
-    return <pre className="overflow-auto rounded-md bg-muted/50 p-3 text-sm">{children}</pre>;
+    return <pre className="bg-muted/50 overflow-auto rounded-md p-3 text-sm">{children}</pre>;
   },
 };
 

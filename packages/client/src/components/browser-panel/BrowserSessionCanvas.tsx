@@ -66,7 +66,7 @@ export function BrowserSessionCanvas({ canvasRef }: BrowserSessionCanvasProps) {
       ref={canvasRef}
       data-testid="browser-panel-canvas"
       data-session-status={sessionStatus}
-      className="block h-full w-full bg-background"
+      className="bg-background block h-full w-full"
       style={{ imageRendering: 'auto' }}
     />
   );

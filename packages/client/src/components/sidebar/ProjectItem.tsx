@@ -347,7 +347,7 @@ export const ProjectItem = memo(function ProjectItem({
         >
           <CollapsibleTrigger
             data-testid={`project-toggle-${project.id}`}
-            className="-ml-0.5 flex-shrink-0 rounded p-0.5 hover:bg-accent/80"
+            className="hover:bg-accent/80 -ml-0.5 shrink-0 rounded p-0.5"
             onClick={(e) => {
               e.stopPropagation();
               onToggle(project.id);
@@ -361,7 +361,7 @@ export const ProjectItem = memo(function ProjectItem({
             data-testid={`project-name-${project.id}`}
             className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5"
           >
-            <Folder className="icon-sm flex-shrink-0 text-muted-foreground" />
+            <Folder className="icon-sm text-muted-foreground shrink-0" />
             <span className="truncate text-sm font-medium">{project.name}</span>
             {project.needsSetup && (
               <Tooltip>
@@ -539,7 +539,7 @@ export const ProjectItem = memo(function ProjectItem({
             </div>
           )}
           {threads.length === 0 && threadsLoaded && (
-            <p className="px-2 py-2 text-xs text-muted-foreground">{t('sidebar.noThreads')}</p>
+            <p className="text-muted-foreground px-2 py-2 text-xs">{t('sidebar.noThreads')}</p>
           )}
           {visibleThreads.map((th) => (
             <ProjectThreadItem

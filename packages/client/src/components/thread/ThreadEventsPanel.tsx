@@ -104,7 +104,7 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
 
   if (events.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center p-8 text-sm">
         No git events yet
       </div>
     );
@@ -129,27 +129,27 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <EventBadge type={event.type} />
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {formatTimestamp(event.createdAt)}
                   </span>
                 </div>
                 {Object.keys(metadata).length > 0 && (
                   <div className="space-y-1 text-sm">
                     {metadata.message && (
-                      <div className="font-medium text-foreground">{metadata.message}</div>
+                      <div className="text-foreground font-medium">{metadata.message}</div>
                     )}
                     {metadata.commitSha && (
-                      <div className="font-mono text-xs text-muted-foreground">
+                      <div className="text-muted-foreground font-mono text-xs">
                         {metadata.commitSha.substring(0, 7)}
                       </div>
                     )}
                     {metadata.branch && (
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-muted-foreground text-xs">
                         Branch: <span className="font-mono">{metadata.branch}</span>
                       </div>
                     )}
                     {metadata.sourceBranch && metadata.targetBranch && (
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-muted-foreground text-xs">
                         <span className="font-mono">{metadata.sourceBranch}</span>
                         {' → '}
                         <span className="font-mono">{metadata.targetBranch}</span>

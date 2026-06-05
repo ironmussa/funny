@@ -81,7 +81,7 @@ export function ArchivedThreadsSettings() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         {total} {t('archived.archivedCount')}
         {debouncedSearch && ` ${t('allThreads.found')}`}
       </p>
@@ -101,7 +101,7 @@ export function ArchivedThreadsSettings() {
         emptyMessage={t('archived.noArchived')}
         searchEmptyMessage={t('allThreads.noMatch')}
         renderExtraBadges={(thread) => (
-          <span className="max-w-[150px] truncate rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
+          <span className="bg-secondary text-muted-foreground max-w-[150px] truncate rounded px-1.5 py-0.5 text-xs">
             {projectMap[thread.projectId]?.name ?? '—'}
           </span>
         )}

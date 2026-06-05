@@ -88,22 +88,22 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
         {threadId && (
           <div
             data-testid="startup-worktree-banner"
-            className="mb-2 flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground"
+            className="border-border/60 bg-muted/40 text-muted-foreground mb-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs"
           >
-            <GitBranch className="icon-xs flex-shrink-0" />
+            <GitBranch className="icon-xs shrink-0" />
             <span className="min-w-0 flex-1 truncate">
               {t('startup.inWorktree', 'In worktree')}
               {worktreeBranch ? (
                 <>
                   {': '}
-                  <span className="font-mono text-foreground">{worktreeBranch}</span>
+                  <span className="text-foreground font-mono">{worktreeBranch}</span>
                 </>
               ) : null}
             </span>
           </div>
         )}
         {commands.length === 0 ? (
-          <p className="py-3 text-center text-xs text-muted-foreground">
+          <p className="text-muted-foreground py-3 text-center text-xs">
             {t('startup.noCommands')}
           </p>
         ) : (
@@ -113,16 +113,16 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
               return (
                 <div
                   key={cmd.id}
-                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50"
+                  className="hover:bg-accent/50 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {isRunning && (
-                        <Loader2 className="icon-xs flex-shrink-0 animate-spin text-status-success" />
+                        <Loader2 className="icon-xs text-status-success shrink-0 animate-spin" />
                       )}
                       <span className="truncate text-sm">{cmd.label}</span>
                     </div>
-                    <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+                    <span className="text-muted-foreground mt-0.5 block truncate font-mono text-xs">
                       {cmd.command}
                     </span>
                   </div>
@@ -131,7 +131,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleStop(cmd)}
-                      className="flex-shrink-0 text-status-error hover:text-status-error/80"
+                      className="text-status-error hover:text-status-error/80 shrink-0"
                     >
                       <Square className="icon-xs" />
                     </Button>
@@ -140,7 +140,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleRun(cmd)}
-                      className="flex-shrink-0 text-status-success hover:text-status-success/80"
+                      className="text-status-success hover:text-status-success/80 shrink-0"
                     >
                       <Play className="icon-xs" />
                     </Button>

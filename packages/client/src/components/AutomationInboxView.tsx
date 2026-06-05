@@ -112,7 +112,7 @@ export function AutomationInboxView() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+      <div className="border-border flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-2">
           <Inbox className="icon-base text-muted-foreground" />
           <h2 className="text-sm font-medium">Automation Inbox</h2>
@@ -125,7 +125,7 @@ export function AutomationInboxView() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1.5 text-xs text-muted-foreground"
+          className="text-muted-foreground h-7 gap-1.5 text-xs"
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >
@@ -135,7 +135,7 @@ export function AutomationInboxView() {
       </div>
 
       {/* Triage Status Filter Tabs */}
-      <div className="flex items-center gap-0 border-b border-border/40 px-6">
+      <div className="border-border/40 flex items-center gap-0 border-b px-6">
         {(['all', 'pending', 'reviewed', 'dismissed'] as const).map((status) => {
           const isActive = triageStatusFilter === status;
           const count =
@@ -172,7 +172,7 @@ export function AutomationInboxView() {
       </div>
 
       {/* Search Bar */}
-      <div className="border-b border-border px-6 py-2">
+      <div className="border-border border-b px-6 py-2">
         <SearchBar
           query={searchQuery}
           onQueryChange={setSearchQuery}
@@ -189,7 +189,7 @@ export function AutomationInboxView() {
 
       {/* Project filter */}
       {projectsWithItems.length > 1 && (
-        <div className="flex items-center gap-2 border-b border-border px-6 py-2">
+        <div className="border-border flex items-center gap-2 border-b px-6 py-2">
           <Popover open={filterOpen} onOpenChange={setFilterOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -259,7 +259,7 @@ export function AutomationInboxView() {
       <ScrollArea className="flex-1">
         <div className="p-6">
           {filteredInbox.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+            <div className="text-muted-foreground flex h-full flex-col items-center justify-center">
               <Inbox className="mb-3 size-8 opacity-50" />
               <p className="text-sm">No pending reviews.</p>
               <p className="mt-1 text-xs">Automation results that need review will appear here.</p>
@@ -282,7 +282,7 @@ export function AutomationInboxView() {
                     <div className="flex items-center justify-between">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{automation.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="text-muted-foreground truncate text-xs">
                           {itemProject && (
                             <span className="font-medium">{itemProject.name} · </span>
                           )}
@@ -300,12 +300,12 @@ export function AutomationInboxView() {
                         >
                           {run.hasFindings ? 'Has findings' : 'No findings'}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-muted-foreground text-xs">
                           {run.completedAt ? new Date(run.completedAt).toLocaleString() : ''}
                         </span>
                       </div>
                     </div>
-                    {run.summary && <p className="text-xs text-muted-foreground">{run.summary}</p>}
+                    {run.summary && <p className="text-muted-foreground text-xs">{run.summary}</p>}
                     <div className="flex items-center justify-end gap-2">
                       <Button
                         variant="ghost"

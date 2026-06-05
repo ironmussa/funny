@@ -71,7 +71,7 @@ function ShellEditor({
   const height = Math.min(Math.max(lineCount * 22 + 16, 100), 400);
 
   return (
-    <div className="overflow-hidden rounded-md border border-input" data-testid={testId}>
+    <div className="border-input overflow-hidden rounded-md border" data-testid={testId}>
       <Editor
         height={height}
         language="shell"
@@ -176,7 +176,7 @@ function HookItem({
       {/* Drag handle */}
       <div
         ref={handleRef}
-        className="flex-shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+        className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing"
         data-testid={`hook-drag-${key}`}
       >
         <GripVertical className="icon-sm" />
@@ -189,7 +189,7 @@ function HookItem({
       </div>
 
       {/* Actions */}
-      <div className="flex flex-shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <div>
@@ -407,7 +407,7 @@ export function ProjectHooksSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">{t('hooks.noHooks')}</div>
+      <div className="text-muted-foreground py-6 text-center text-sm">{t('hooks.noHooks')}</div>
     );
   }
 
@@ -433,7 +433,7 @@ export function ProjectHooksSettings() {
       {/* Empty state */}
       {hooks.length === 0 && !adding && (
         <div className="py-8 text-center">
-          <p className="mb-3 text-sm text-muted-foreground">{t('hooks.noHooks')}</p>
+          <p className="text-muted-foreground mb-3 text-sm">{t('hooks.noHooks')}</p>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
             <Plus className="icon-sm" />
             {t('hooks.addFirst')}
@@ -444,7 +444,7 @@ export function ProjectHooksSettings() {
       {/* Hook list grouped by type */}
       {hookGroups.map(([type, groupHooks]) => (
         <div key={type} className="space-y-2">
-          <h3 className="px-1 text-sm font-semibold text-muted-foreground">
+          <h3 className="text-muted-foreground px-1 text-sm font-semibold">
             {hookTypeLabelFn(type)}
           </h3>
           {groupHooks.map((hook) => {

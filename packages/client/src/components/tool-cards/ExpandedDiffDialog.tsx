@@ -234,7 +234,7 @@ function DiffContent({
   }
 
   if (!unifiedDiff) {
-    return <p className="p-4 text-xs text-muted-foreground">No diff available</p>;
+    return <p className="text-muted-foreground p-4 text-xs">No diff available</p>;
   }
 
   return (
@@ -429,9 +429,9 @@ export function ExpandedDiffDialog({
           if (showSearch) e.preventDefault();
         }}
       >
-        <DialogHeader className="flex-shrink-0 select-none overflow-hidden border-b border-border px-4 py-3">
+        <DialogHeader className="border-border shrink-0 overflow-hidden border-b px-4 py-3 select-none">
           <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
-            <Icon className="icon-base flex-shrink-0" />
+            <Icon className="icon-base shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
               style={{ direction: 'rtl', textAlign: 'left' }}
@@ -446,14 +446,14 @@ export function ExpandedDiffDialog({
               value={viewMode}
               onValueChange={handleViewModeChange}
               disabled={isPending}
-              className="flex-shrink-0 gap-0 rounded-md border border-border"
+              className="border-border shrink-0 gap-0 rounded-md border"
               data-testid="diff-view-mode-group"
             >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <ToggleGroupItem
                     value="unified"
-                    className="rounded-none rounded-l-md border-0 px-1.5 data-[state=on]:bg-accent"
+                    className="data-[state=on]:bg-accent rounded-none rounded-l-md border-0 px-1.5"
                     data-testid="diff-view-mode-unified"
                   >
                     <RectangleVertical className="icon-base" />
@@ -465,7 +465,7 @@ export function ExpandedDiffDialog({
                 <TooltipTrigger asChild>
                   <ToggleGroupItem
                     value="split"
-                    className="rounded-none border-x border-border px-1.5 data-[state=on]:bg-accent"
+                    className="border-border data-[state=on]:bg-accent rounded-none border-x px-1.5"
                     data-testid="diff-view-mode-split"
                   >
                     <Columns2 className="icon-base" />
@@ -477,7 +477,7 @@ export function ExpandedDiffDialog({
                 <TooltipTrigger asChild>
                   <ToggleGroupItem
                     value="three-pane"
-                    className="rounded-none rounded-r-md border-0 px-1.5 data-[state=on]:bg-accent"
+                    className="data-[state=on]:bg-accent rounded-none rounded-r-md border-0 px-1.5"
                     data-testid="diff-view-mode-three-pane"
                   >
                     <Columns3 className="icon-base" />
@@ -494,7 +494,7 @@ export function ExpandedDiffDialog({
                 size="icon-sm"
                 onClick={() => setWordWrap((w) => !w)}
                 className={cn(
-                  'flex-shrink-0 text-muted-foreground',
+                  'shrink-0 text-muted-foreground',
                   wordWrap && 'bg-accent text-accent-foreground',
                 )}
                 data-testid="diff-toggle-word-wrap"
@@ -514,7 +514,7 @@ export function ExpandedDiffDialog({
                 onClick={toggleFullFile}
                 disabled={isPending || loadingFullDiff}
                 className={cn(
-                  'flex-shrink-0 text-muted-foreground',
+                  'shrink-0 text-muted-foreground',
                   showFullFile && 'bg-accent text-accent-foreground',
                 )}
                 data-testid="diff-toggle-full-file"
@@ -537,7 +537,7 @@ export function ExpandedDiffDialog({
                 size="icon-sm"
                 onClick={toggleSearch}
                 className={cn(
-                  'flex-shrink-0 text-muted-foreground',
+                  'shrink-0 text-muted-foreground',
                   showSearch && 'bg-accent text-accent-foreground',
                 )}
                 data-testid="diff-toggle-search"
@@ -574,13 +574,13 @@ export function ExpandedDiffDialog({
               placeholder="Search in diff..."
               showIcon={false}
               testIdPrefix="diff-search"
-              className="absolute right-4 top-0 z-30 gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md"
+              className="border-border bg-popover absolute top-0 right-4 z-30 gap-1.5 rounded-b-lg border border-t-0 px-2 py-1.5 shadow-md"
             />
           )}
           {/* File tree sidebar */}
           {hasFileSidebar && (
-            <div className="flex w-80 flex-shrink-0 flex-col border-r border-border">
-              <div className="border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="border-border flex w-80 shrink-0 flex-col border-r">
+              <div className="border-border text-muted-foreground border-b px-3 py-2 text-xs font-semibold tracking-wider uppercase">
                 Files
               </div>
               <div className="min-h-0 flex-1">
@@ -625,10 +625,10 @@ export function ExpandedDiffDialog({
             {/* Inline PR review threads */}
             {fileThreads.length > 0 && (
               <div
-                className="border-t border-border bg-muted/20 px-4 py-3"
+                className="border-border bg-muted/20 border-t px-4 py-3"
                 data-testid="diff-review-threads"
               >
-                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium">
                   <MessageSquare className="size-3.5" />
                   {fileThreads.length} review {fileThreads.length === 1 ? 'thread' : 'threads'}
                 </div>
@@ -934,12 +934,12 @@ export function ExpandedDiffView({
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.newValue : newValue;
 
   return (
-    <div className="flex h-full flex-col bg-background" data-testid="expanded-diff-view">
+    <div className="bg-background flex h-full flex-col" data-testid="expanded-diff-view">
       {/* Header toolbar */}
-      <div className="flex h-12 flex-shrink-0 select-none items-center gap-2 border-b border-border px-4">
-        <Icon className="icon-base flex-shrink-0 text-muted-foreground" />
+      <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4 select-none">
+        <Icon className="icon-base text-muted-foreground shrink-0" />
         <span
-          className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-foreground"
+          className="text-foreground min-w-0 flex-1 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap"
           style={{ direction: 'rtl', textAlign: 'left' }}
         >
           {filePath}
@@ -951,14 +951,14 @@ export function ExpandedDiffView({
             value={viewMode}
             onValueChange={handleViewModeChange}
             disabled={isPending}
-            className="flex-shrink-0 gap-0 rounded-md border border-border"
+            className="border-border shrink-0 gap-0 rounded-md border"
             data-testid="diff-view-view-mode-group"
           >
             <Tooltip>
               <TooltipTrigger asChild>
                 <ToggleGroupItem
                   value="unified"
-                  className="rounded-none rounded-l-md border-0 px-1.5 data-[state=on]:bg-accent"
+                  className="data-[state=on]:bg-accent rounded-none rounded-l-md border-0 px-1.5"
                   data-testid="diff-view-view-mode-unified"
                 >
                   <RectangleVertical className="icon-base" />
@@ -970,7 +970,7 @@ export function ExpandedDiffView({
               <TooltipTrigger asChild>
                 <ToggleGroupItem
                   value="split"
-                  className="rounded-none border-x border-border px-1.5 data-[state=on]:bg-accent"
+                  className="border-border data-[state=on]:bg-accent rounded-none border-x px-1.5"
                   data-testid="diff-view-view-mode-split"
                 >
                   <Columns2 className="icon-base" />
@@ -982,7 +982,7 @@ export function ExpandedDiffView({
               <TooltipTrigger asChild>
                 <ToggleGroupItem
                   value="three-pane"
-                  className="rounded-none rounded-r-md border-0 px-1.5 data-[state=on]:bg-accent"
+                  className="data-[state=on]:bg-accent rounded-none rounded-r-md border-0 px-1.5"
                   data-testid="diff-view-view-mode-three-pane"
                 >
                   <Columns3 className="icon-base" />
@@ -999,7 +999,7 @@ export function ExpandedDiffView({
               size="icon-sm"
               onClick={() => setWordWrap((w) => !w)}
               className={cn(
-                'flex-shrink-0 text-muted-foreground',
+                'shrink-0 text-muted-foreground',
                 wordWrap && 'bg-accent text-accent-foreground',
               )}
               data-testid="diff-view-toggle-word-wrap"
@@ -1019,7 +1019,7 @@ export function ExpandedDiffView({
               onClick={toggleFullFile}
               disabled={isPending || loadingFullDiff}
               className={cn(
-                'flex-shrink-0 text-muted-foreground',
+                'shrink-0 text-muted-foreground',
                 showFullFile && 'bg-accent text-accent-foreground',
               )}
               data-testid="diff-view-toggle-full-file"
@@ -1042,7 +1042,7 @@ export function ExpandedDiffView({
               size="icon-sm"
               onClick={toggleSearch}
               className={cn(
-                'flex-shrink-0 text-muted-foreground',
+                'shrink-0 text-muted-foreground',
                 showSearch && 'bg-accent text-accent-foreground',
               )}
               data-testid="diff-view-toggle-search"
@@ -1057,7 +1057,7 @@ export function ExpandedDiffView({
             variant="ghost"
             size="icon-sm"
             onClick={onClose}
-            className="flex-shrink-0 text-muted-foreground"
+            className="text-muted-foreground shrink-0"
             data-testid="expanded-diff-close"
           >
             <X className="icon-base" />
@@ -1088,7 +1088,7 @@ export function ExpandedDiffView({
             placeholder="Search in diff..."
             showIcon={false}
             testIdPrefix="diff-view-search"
-            className="absolute right-4 top-0 z-30 gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md"
+            className="border-border bg-popover absolute top-0 right-4 z-30 gap-1.5 rounded-b-lg border border-t-0 px-2 py-1.5 shadow-md"
           />
         )}
         <div className="min-h-0 flex-1 overflow-auto">
@@ -1116,10 +1116,10 @@ export function ExpandedDiffView({
         </div>
         {fileThreads.length > 0 && (
           <div
-            className="border-t border-border bg-muted/20 px-4 py-3"
+            className="border-border bg-muted/20 border-t px-4 py-3"
             data-testid="diff-view-review-threads"
           >
-            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-medium">
               <MessageSquare className="size-3.5" />
               {fileThreads.length} review {fileThreads.length === 1 ? 'thread' : 'threads'}
             </div>

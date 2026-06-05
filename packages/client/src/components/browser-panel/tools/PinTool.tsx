@@ -98,7 +98,7 @@ export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
               type="button"
               data-pin-marker="true"
               data-testid={`browser-panel-pin-${index}`}
-              className="absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-background bg-primary text-xs font-semibold text-primary-foreground shadow-md transition-transform hover:scale-110"
+              className="border-background bg-primary text-primary-foreground absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-md transition-transform hover:scale-110"
               style={{ left: a.x, top: a.y, pointerEvents: 'auto' }}
               onClick={(e) => {
                 e.stopPropagation();

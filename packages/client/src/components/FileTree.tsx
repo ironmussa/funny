@@ -456,15 +456,12 @@ export function FileTree({
           data-testid={`${testIdPrefix}-folder-${row.path}`}
         >
           <ChevronRight
-            className={cn(
-              'icon-sm flex-shrink-0 transition-transform',
-              !isCollapsed && 'rotate-90',
-            )}
+            className={cn('icon-sm shrink-0 transition-transform', !isCollapsed && 'rotate-90')}
           />
           {isCollapsed ? (
-            <Folder className="icon-base flex-shrink-0 text-muted-foreground/70" />
+            <Folder className="icon-base text-muted-foreground/70 shrink-0" />
           ) : (
-            <FolderOpen className="icon-base flex-shrink-0 text-muted-foreground/70" />
+            <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
           )}
           {searchQuery ? (
             <HighlightText
@@ -485,9 +482,7 @@ export function FileTree({
             />
           )}
           {/* Spacer to align with file rows (status letter) */}
-          {!hideStatus && (
-            <span className={cn('invisible flex-shrink-0 font-medium', fontSize)}>M</span>
-          )}
+          {!hideStatus && <span className={cn('invisible shrink-0 font-medium', fontSize)}>M</span>}
           {basePath ? (
             <DropdownMenu
               onOpenChange={(open) => {
@@ -499,7 +494,7 @@ export function FileTree({
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   aria-label={t('review.moreActions', 'More actions')}
-                  className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100 data-[state=open]:opacity-100"
                   data-testid={`${testIdPrefix}-folder-menu-${row.path}`}
                 >
                   <MoreHorizontal className="icon-sm" />
@@ -542,7 +537,7 @@ export function FileTree({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <span className="size-6 flex-shrink-0" />
+            <span className="size-6 shrink-0" />
           )}
         </div>
       );
@@ -595,7 +590,7 @@ export function FileTree({
               onToggleFile(f.path);
             }}
             className={cn(
-              'flex items-center justify-center size-3.5 rounded border transition-colors flex-shrink-0',
+              'flex items-center justify-center size-3.5 rounded border transition-colors shrink-0',
               isChecked
                 ? 'bg-primary border-primary text-primary-foreground'
                 : 'border-muted-foreground/40',
@@ -616,7 +611,7 @@ export function FileTree({
                 ? t('review.collapseSubmodule', { defaultValue: 'Collapse submodule' })
                 : t('review.expandSubmodule', { defaultValue: 'Expand submodule' })
             }
-            className="flex size-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground flex size-4 shrink-0 items-center justify-center rounded"
             data-testid={`${testIdPrefix}-submodule-toggle-${f.path}`}
           >
             <ChevronRight
@@ -626,13 +621,13 @@ export function FileTree({
         )}
         {isSubmodule ? (
           <GitBranch
-            className="size-4 flex-shrink-0 text-purple-500 dark:text-purple-400"
+            className="size-4 shrink-0 text-purple-500 dark:text-purple-400"
             data-testid={`${testIdPrefix}-submodule-icon-${f.path}`}
           />
         ) : (
           <FileExtensionIcon
             filePath={f.path}
-            className="size-4 flex-shrink-0 text-muted-foreground/80"
+            className="text-muted-foreground/80 size-4 shrink-0"
           />
         )}
         {searchQuery ? (
@@ -651,7 +646,7 @@ export function FileTree({
             <TooltipTrigger asChild>
               <span
                 className={cn(
-                  'flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300',
+                  'shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300',
                 )}
                 data-testid={`${testIdPrefix}-submodule-badge-${f.path}`}
               >
@@ -696,7 +691,7 @@ export function FileTree({
                 </div>
               )}
               {canExpandSubmodule && (
-                <div className="mt-1 text-muted-foreground">
+                <div className="text-muted-foreground mt-1">
                   {t('review.submoduleExpandHint', {
                     defaultValue: 'Click the arrow to expand inner files.',
                   })}
@@ -715,7 +710,7 @@ export function FileTree({
           })()}
         {!hideStatus && (
           <span
-            className={cn('flex-shrink-0 font-medium', fontSize)}
+            className={cn('shrink-0 font-medium', fontSize)}
             style={{ color: statusColor(f.status) }}
           >
             {statusLetter(f.status)}
@@ -731,7 +726,7 @@ export function FileTree({
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               aria-label={t('review.moreActions', 'More actions')}
-              className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+              className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100 data-[state=open]:opacity-100"
               data-testid={`${testIdPrefix}-menu-${f.path}`}
             >
               <MoreHorizontal className="icon-sm" />

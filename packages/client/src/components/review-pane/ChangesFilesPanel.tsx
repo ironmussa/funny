@@ -193,7 +193,7 @@ export function ChangesFilesPanel({
     <>
       {/* Select all / count */}
       {summaries.length > 0 && (
-        <div className="flex h-8 items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-2">
+        <div className="border-sidebar-border flex h-8 items-center gap-1.5 border-b py-1.5 pr-2 pl-2">
           <TriCheckbox
             state={
               checkedCount === totalCount && totalCount > 0
@@ -206,7 +206,7 @@ export function ChangesFilesPanel({
             aria-label={t('review.selectAll', 'Select all files')}
             data-testid="review-select-all"
           />
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {checkedCount}/{totalCount} {t('review.selected', 'selected')}
           </span>
           {hasFolders && (
@@ -305,7 +305,7 @@ export function ChangesFilesPanel({
                   return (
                     <div
                       key={`submodule-status-${row.submodulePath}-${row.state}`}
-                      className="flex items-center gap-1.5 text-xs italic text-muted-foreground/80"
+                      className="text-muted-foreground/80 flex items-center gap-1.5 text-xs italic"
                       style={{
                         position: 'absolute',
                         top: 0,
@@ -327,7 +327,7 @@ export function ChangesFilesPanel({
                   return (
                     <div
                       key={`folder-${row.path}`}
-                      className="group flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent/50"
+                      className="group text-muted-foreground hover:bg-sidebar-accent/50 flex cursor-pointer items-center gap-1.5 text-xs select-none"
                       style={{
                         position: 'absolute',
                         top: 0,
@@ -349,19 +349,19 @@ export function ChangesFilesPanel({
                     >
                       <ChevronRight
                         className={cn(
-                          'icon-sm flex-shrink-0 transition-transform',
+                          'icon-sm shrink-0 transition-transform',
                           !isCollapsed && 'rotate-90',
                         )}
                       />
                       {isCollapsed ? (
-                        <Folder className="icon-base flex-shrink-0 text-muted-foreground/70" />
+                        <Folder className="icon-base text-muted-foreground/70 shrink-0" />
                       ) : (
-                        <FolderOpen className="icon-base flex-shrink-0 text-muted-foreground/70" />
+                        <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
                       )}
                       <HighlightText
                         text={row.label}
                         query={fileSearch}
-                        className="flex-1 truncate font-mono-explorer text-xs"
+                        className="font-mono-explorer flex-1 truncate text-xs"
                       />
                       <DiffStats
                         linesAdded={row.additions}
@@ -369,7 +369,7 @@ export function ChangesFilesPanel({
                         size="xs"
                       />
                       {/* Spacer to align with file rows' status letter */}
-                      <span className="invisible flex-shrink-0 text-xs font-medium">M</span>
+                      <span className="invisible shrink-0 text-xs font-medium">M</span>
                       <DropdownMenu
                         onOpenChange={(open) => {
                           if (!open) dropdownCloseRef.current = Date.now();
@@ -380,7 +380,7 @@ export function ChangesFilesPanel({
                             onClick={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             aria-label={t('review.moreActions', 'More actions')}
-                            className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100 data-[state=open]:opacity-100"
                             data-testid={`review-folder-menu-${row.path}`}
                           >
                             <MoreHorizontal className="icon-sm" />
@@ -553,7 +553,7 @@ export function ChangesFilesPanel({
                             ? t('review.collapseSubmodule', { defaultValue: 'Collapse submodule' })
                             : t('review.expandSubmodule', { defaultValue: 'Expand submodule' })
                         }
-                        className="flex size-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground flex size-4 shrink-0 items-center justify-center rounded"
                         data-testid={`review-submodule-toggle-${f.path}`}
                       >
                         <ChevronRight
@@ -566,25 +566,25 @@ export function ChangesFilesPanel({
                     )}
                     {f.kind === 'submodule' ? (
                       <GitBranch
-                        className="icon-base flex-shrink-0 text-purple-500 dark:text-purple-400"
+                        className="icon-base shrink-0 text-purple-500 dark:text-purple-400"
                         data-testid={`review-submodule-icon-${f.path}`}
                       />
                     ) : (
                       <FileExtensionIcon
                         filePath={f.path}
-                        className="icon-base flex-shrink-0 text-muted-foreground/80"
+                        className="icon-base text-muted-foreground/80 shrink-0"
                       />
                     )}
                     <HighlightText
                       text={f.path.split('/').pop() || f.path}
                       query={fileSearch}
-                      className="flex-1 truncate font-mono-explorer text-xs"
+                      className="font-mono-explorer flex-1 truncate text-xs"
                     />
                     {f.kind === 'submodule' && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span
-                            className="flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300"
+                            className="shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] tracking-wide text-purple-600 uppercase dark:text-purple-300"
                             data-testid={`review-submodule-badge-${f.path}`}
                           >
                             {f.nestedDirty && f.nestedDirty.dirtyFileCount > 0
@@ -631,7 +631,7 @@ export function ChangesFilesPanel({
                               )}
                             </div>
                           )}
-                          <div className="mt-1 text-muted-foreground">
+                          <div className="text-muted-foreground mt-1">
                             {t('review.submoduleExpandHint', {
                               defaultValue: 'Click the arrow to expand inner files.',
                             })}
@@ -653,7 +653,7 @@ export function ChangesFilesPanel({
                       size="xs"
                     />
                     <span
-                      className="flex-shrink-0 text-xs font-medium"
+                      className="shrink-0 text-xs font-medium"
                       style={{
                         color:
                           f.status === 'conflicted'
@@ -691,7 +691,7 @@ export function ChangesFilesPanel({
                             e.stopPropagation();
                           }}
                           aria-label={t('review.moreActions', 'More actions')}
-                          className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
                           <MoreHorizontal className="icon-sm" />
                         </button>

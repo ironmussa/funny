@@ -43,7 +43,7 @@ const ModelSelect = memo(function ModelSelect({
       <PopoverTrigger asChild>
         <button
           data-testid={testId}
-          className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-accent hover:text-accent-foreground"
+          className="border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs"
         >
           <span>{currentLabel}</span>
           <ChevronDown className="icon-xs opacity-50" />
@@ -52,21 +52,21 @@ const ModelSelect = memo(function ModelSelect({
       <PopoverContent
         side="bottom"
         align="end"
-        className="w-auto min-w-[10rem] p-1 data-[state=closed]:animate-none data-[state=open]:animate-none"
+        className="w-auto min-w-40 p-1 data-[state=closed]:animate-none data-[state=open]:animate-none"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {PROVIDERS.map((provider) => {
           const models = PROVIDER_MODELS[provider.value] ?? [];
           return (
             <div key={provider.value}>
-              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+              <div className="text-muted-foreground px-2 py-1.5 text-xs font-semibold">
                 {provider.label}
               </div>
               {models.map((m) => (
                 <button
                   key={m.value}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none transition-colors hover:bg-accent hover:text-accent-foreground',
+                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground',
                     m.value === value && 'bg-accent text-accent-foreground',
                   )}
                   onClick={() => {
@@ -190,7 +190,7 @@ export function PipelineSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground py-6 text-center text-sm">
         Select a project to manage pipeline settings.
       </div>
     );
@@ -203,8 +203,8 @@ export function PipelineSettings() {
   return (
     <div className="space-y-4">
       {/* Description */}
-      <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
-        <p className="text-sm text-muted-foreground">
+      <div className="border-border/50 bg-muted/20 rounded-lg border px-4 py-3">
+        <p className="text-muted-foreground text-sm">
           The pipeline automatically reviews and fixes your code after each commit. Every successful
           commit triggers a Reviewer agent that analyzes the diff. If issues are found, a Corrector
           agent creates fixes in an isolated worktree.
@@ -213,8 +213,8 @@ export function PipelineSettings() {
 
       {/* Pre-commit fixer section */}
       <div className="settings-card mb-0">
-        <div className="flex items-center justify-between bg-muted/30 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="bg-muted/30 flex items-center justify-between px-3 py-2">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Pre-commit Auto-fix
           </p>
           <Switch
@@ -254,8 +254,8 @@ export function PipelineSettings() {
 
       {/* Post-commit review section */}
       <div className="settings-card mb-0">
-        <div className="flex items-center justify-between bg-muted/30 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="bg-muted/30 flex items-center justify-between px-3 py-2">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Post-commit Review
           </p>
           <Switch
@@ -297,8 +297,8 @@ export function PipelineSettings() {
 
       {/* Test Auto-Fix section */}
       <div className="settings-card mb-0">
-        <div className="flex items-center justify-between bg-muted/30 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="bg-muted/30 flex items-center justify-between px-3 py-2">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Test Auto-Fix
           </p>
           <Switch
@@ -360,15 +360,15 @@ export function PipelineSettings() {
       {/* Custom Prompts section */}
       <Collapsible>
         <div className="settings-card mb-0">
-          <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <CollapsibleTrigger className="bg-muted/30 hover:bg-muted/50 flex w-full items-center justify-between px-3 py-2 transition-colors">
+            <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
               Custom Prompts
             </p>
-            <ChevronDown className="icon-sm text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
+            <ChevronDown className="icon-sm text-muted-foreground transition-transform in-data-[state=open]:rotate-180" />
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 p-3">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 Override default prompts for each pipeline stage. Leave empty to use built-in
                 defaults.
               </p>
@@ -443,7 +443,7 @@ function PromptField({
 
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-foreground">{label}</label>
+      <label className="text-foreground text-xs font-medium">{label}</label>
       <Textarea
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}

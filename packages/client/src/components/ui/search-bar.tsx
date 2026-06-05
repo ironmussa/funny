@@ -168,7 +168,7 @@ export function SearchBar({
       }}
       data-testid={`${testIdPrefix}-bar`}
     >
-      {showIcon && <Search className="size-3.5 flex-shrink-0 text-muted-foreground" />}
+      {showIcon && <Search className="text-muted-foreground size-3.5 shrink-0" />}
       <Input
         ref={setInputRef}
         value={query}
@@ -178,14 +178,11 @@ export function SearchBar({
         className="h-7 flex-1 rounded-none border-none bg-transparent text-xs shadow-none focus-visible:ring-0"
         data-testid={`${testIdPrefix}-input`}
       />
-      <span
-        aria-hidden={!loading}
-        className="flex size-3.5 flex-shrink-0 items-center justify-center"
-      >
-        {loading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+      <span aria-hidden={!loading} className="flex size-3.5 shrink-0 items-center justify-center">
+        {loading && <Loader2 className="text-muted-foreground size-3.5 animate-spin" />}
       </span>
       <span
-        className="min-w-[2.5rem] flex-shrink-0 text-center text-xs tabular-nums text-muted-foreground"
+        className="text-muted-foreground min-w-10 shrink-0 text-center text-xs tabular-nums"
         data-testid={`${testIdPrefix}-count`}
       >
         {label}

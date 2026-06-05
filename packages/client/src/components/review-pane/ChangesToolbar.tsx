@@ -103,7 +103,7 @@ export function ChangesToolbar({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1">
+    <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -133,12 +133,12 @@ export function ChangesToolbar({
               variant="ghost"
               size="icon-sm"
               onClick={() => setPublishDialogOpen(true)}
-              className="relative text-muted-foreground"
+              className="text-muted-foreground relative"
               data-testid="review-publish-toolbar"
             >
               <Upload className="icon-base" />
               {unpushedCommitCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] leading-none font-bold text-white">
                   {unpushedCommitCount}
                 </span>
               )}

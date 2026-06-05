@@ -83,25 +83,25 @@ function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
           <DialogTitle>
             Pipeline approval
             {queueDepth > 1 ? (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
+              <span className="text-muted-foreground ml-2 text-sm font-normal">
                 (1 of {queueDepth})
               </span>
             ) : null}
           </DialogTitle>
           <DialogDescription>
-            Gate <code className="rounded bg-muted px-1 py-0.5 text-xs">{approval.gateId}</code> is
+            Gate <code className="bg-muted rounded px-1 py-0.5 text-xs">{approval.gateId}</code> is
             waiting for your decision.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <p className="whitespace-pre-wrap text-sm text-foreground">{approval.message}</p>
+          <p className="text-foreground text-sm whitespace-pre-wrap">{approval.message}</p>
 
           {approval.captureResponse ? (
             <div className="space-y-2">
               <label
                 htmlFor={`approval-comment-${approval.approvalId}`}
-                className="text-sm font-medium text-foreground"
+                className="text-foreground text-sm font-medium"
               >
                 Comment (optional)
               </label>
@@ -120,7 +120,7 @@ function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
           <div className="space-y-2">
             <label
               htmlFor={`approval-reason-${approval.approvalId}`}
-              className="text-sm font-medium text-foreground"
+              className="text-foreground text-sm font-medium"
             >
               Rejection reason (only required if rejecting)
             </label>
@@ -136,7 +136,7 @@ function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
           </div>
 
           {submitError ? (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="text-destructive text-sm" role="alert">
               {submitError}
             </p>
           ) : null}

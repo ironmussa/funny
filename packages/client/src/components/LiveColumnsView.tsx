@@ -321,7 +321,7 @@ export function LiveColumnsView() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border px-4 py-2">
+      <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2">
         <span className="flex items-center gap-2 text-sm font-medium">
           <LayoutGrid className="icon-sm text-muted-foreground" /> {t('live.title', 'Grid')}
         </span>

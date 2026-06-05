@@ -59,11 +59,11 @@ export const AllSizes: Story = {
 export const WithLabel: Story = {
   render: () => (
     <div className="grid w-full max-w-sm gap-1.5">
-      <label htmlFor="message" className="text-sm font-medium text-foreground">
+      <label htmlFor="message" className="text-foreground text-sm font-medium">
         Message
       </label>
       <Textarea id="message" placeholder="Type your message here..." />
-      <p className="text-xs text-muted-foreground">Enter your message above.</p>
+      <p className="text-muted-foreground text-xs">Enter your message above.</p>
     </div>
   ),
 };

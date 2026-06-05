@@ -49,7 +49,7 @@ export const ThreePaneRow = memo(function ThreePaneRow({
     rightConflictBg ?? (right?.type === 'add' ? GUTTER_BG_ADDED : GUTTER_BG_CARD);
   return (
     <div
-      className="flex font-mono text-[length:var(--diff-font-size)]"
+      className="flex font-mono text-(length:--diff-font-size)"
       style={wrap ? { minHeight: 'var(--diff-row-height)' } : { height: 'var(--diff-row-height)' }}
     >
       {/* Left (old) */}
@@ -59,15 +59,15 @@ export const ThreePaneRow = memo(function ThreePaneRow({
         data-pane="left"
       >
         <div
-          className="relative z-10 flex flex-shrink-0 items-center"
+          className="relative z-10 flex shrink-0 items-center"
           style={{ backgroundColor: leftGutterBg }}
         >
-          <span className="w-11 flex-shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+          <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {left?.oldNo ?? ''}
           </span>
           <span
             className={cn(
-              'w-4 flex-shrink-0 select-none text-center',
+              'w-4 shrink-0 select-none text-center',
               left?.type === 'del' ? 'text-diff-removed' : 'text-foreground/80',
             )}
           >
@@ -97,10 +97,10 @@ export const ThreePaneRow = memo(function ThreePaneRow({
       {/* Center (result — clean, no diff highlighting) */}
       <div className={cn('flex flex-1 border-r border-border/30', align)} data-pane="center">
         <div
-          className="relative z-10 flex flex-shrink-0 items-center"
+          className="relative z-10 flex shrink-0 items-center"
           style={{ backgroundColor: GUTTER_BG_CARD }}
         >
-          <span className="w-11 flex-shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+          <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {center?.newNo ?? ''}
           </span>
         </div>
@@ -108,8 +108,8 @@ export const ThreePaneRow = memo(function ThreePaneRow({
           <span
             className={
               wrap
-                ? 'whitespace-pre-wrap break-all pr-2 text-foreground'
-                : 'whitespace-pre pr-2 text-foreground'
+                ? 'text-foreground pr-2 break-all whitespace-pre-wrap'
+                : 'text-foreground pr-2 whitespace-pre'
             }
             style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
@@ -132,15 +132,15 @@ export const ThreePaneRow = memo(function ThreePaneRow({
         data-pane="right"
       >
         <div
-          className="relative z-10 flex flex-shrink-0 items-center"
+          className="relative z-10 flex shrink-0 items-center"
           style={{ backgroundColor: rightGutterBg }}
         >
-          <span className="w-11 flex-shrink-0 select-none pr-1 text-right text-muted-foreground/40">
+          <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {right?.newNo ?? ''}
           </span>
           <span
             className={cn(
-              'w-4 flex-shrink-0 select-none text-center',
+              'w-4 shrink-0 select-none text-center',
               right?.type === 'add' ? 'text-diff-added' : 'text-foreground/80',
             )}
           >

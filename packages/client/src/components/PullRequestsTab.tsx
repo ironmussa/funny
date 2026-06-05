@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
+import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -203,7 +204,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       <button
         key={pr.number}
         onClick={() => setSelectedPR(pr)}
-        className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent/50"
+        className="hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2 text-left text-xs transition-colors"
         data-testid={`pr-item-${pr.number}`}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -218,9 +219,9 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             >
               #{pr.number}
             </a>
-            <span className="font-medium leading-tight">{pr.title}</span>
+            <span className="leading-tight font-medium">{pr.title}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
             {pr.user && (
               <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
             )}
@@ -237,7 +238,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+              <div className="text-muted-foreground flex min-w-0 items-center gap-1 text-[10px]">
                 <GitBranch className="size-3 shrink-0" />
                 <span
                   className="block max-w-[45%] overflow-hidden text-ellipsis whitespace-nowrap"
@@ -260,19 +261,18 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           </Tooltip>
           {pr.labels.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-0.5">
-              {pr.labels.map((label) => (
-                <span
-                  key={label.name}
-                  className="rounded-full px-1.5 py-0 text-[9px] leading-4"
-                  style={{
-                    backgroundColor: `#${label.color}20`,
-                    color: `#${label.color}`,
-                    border: `1px solid #${label.color}40`,
-                  }}
-                >
-                  {label.name}
-                </span>
-              ))}
+              {pr.labels.map((label) => {
+                const bg = pastelize(`#${label.color}`);
+                return (
+                  <span
+                    key={label.name}
+                    className="rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium"
+                    style={{ backgroundColor: bg, color: contrastText(bg) }}
+                  >
+                    {label.name}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
@@ -292,7 +292,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="pull-requests-tab">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1">
+      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
         {/* Refresh */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -301,7 +301,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               size="icon-sm"
               onClick={refresh}
               disabled={loading}
-              className="shrink-0 text-muted-foreground"
+              className="text-muted-foreground shrink-0"
               data-testid="prs-refresh"
             >
               <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
@@ -334,7 +334,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
         {/* Branch-focus indicator + escape hatch */}
         {branchFocusMode && currentBranch && (
           <div
-            className="flex min-w-0 items-center gap-1.5 rounded-md bg-sidebar-accent/50 px-2 py-0.5 text-xs text-muted-foreground"
+            className="bg-sidebar-accent/50 text-muted-foreground flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs"
             data-testid="prs-branch-focus-indicator"
           >
             <GitBranch className="size-3 shrink-0" />
@@ -375,7 +375,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                 variant="ghost"
                 size="icon-sm"
                 asChild
-                className="shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid="prs-open-github"
               >
                 <a
@@ -470,7 +470,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               {currentBranchPRs.length > 0 && (
                 <>
                   <div
-                    className="flex items-center gap-1.5 border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                    className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground flex items-center gap-1.5 border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
                     data-testid="prs-current-branch-header"
                   >
                     <GitBranch className="size-3" />
@@ -500,13 +500,13 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                 <>
                   {currentBranchPRs.length > 0 && (
                     <div
-                      className="border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                      className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
                       data-testid="prs-other-header"
                     >
                       {t('review.pullRequests.otherPRs', 'Other pull requests')}
                     </div>
                   )}
-                  <div className="flex flex-col divide-y divide-sidebar-border">
+                  <div className="divide-sidebar-border flex flex-col divide-y">
                     {otherPRs.map(renderPRRow)}
                   </div>
                 </>

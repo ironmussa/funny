@@ -149,7 +149,7 @@ export function HeaderRightActions() {
   if (activeThreadStatus === 'setting_up') return null;
 
   return (
-    <div className="flex flex-shrink-0 items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
       {activeThreadId && activeThreadStage && activeThreadStage !== 'archived' && (
         <StageSelectorBadge
           threadId={activeThreadId!}
@@ -340,7 +340,7 @@ function ReviewToggle({
             type="button"
             onClick={onToggle}
             data-testid="header-sync-arrows"
-            className="inline-flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2 py-0.5 font-mono text-sm font-semibold"
+            className="border-border inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 py-0.5 font-mono text-sm font-semibold"
           >
             <SyncArrows hasPendingPush={hasPendingPush} hasPendingPull={hasPendingPull} />
           </button>
@@ -381,7 +381,7 @@ function SyncArrows({
     <>
       {withSeparator && <span className="text-muted-foreground">·</span>}
       <span
-        className="inline-flex items-center text-foreground"
+        className="text-foreground inline-flex items-center"
         data-testid="header-review-sync-arrows"
       >
         {hasPendingPush && <ArrowUp className="size-3" strokeWidth={2.5} />}

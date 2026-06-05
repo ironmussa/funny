@@ -84,7 +84,7 @@ export function RightPane({ visible }: RightPaneProps) {
           width can animate open/closed; inner content unmounts when hidden. */}
       <div
         className={cn(
-          'flex min-w-0 flex-shrink-0 flex-col overflow-hidden bg-sidebar',
+          'flex min-w-0 shrink-0 flex-col overflow-hidden bg-sidebar',
           !resizing && !reviewPaneResizing && 'transition-[width] duration-200 ease-linear',
         )}
         style={{ width: visible ? `${reviewPaneWidth}vw` : 0 }}

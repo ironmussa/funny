@@ -226,7 +226,7 @@ function SuggestionPopup({
           !containerRef?.current && 'w-80',
         )}
       >
-        <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
           {type === 'file'
             ? t('prompt.loadingFiles', 'Loading files\u2026')
@@ -249,7 +249,7 @@ function SuggestionPopup({
           !containerRef?.current && 'w-80',
         )}
       >
-        <div className="px-3 py-2 text-xs text-muted-foreground">
+        <div className="text-muted-foreground px-3 py-2 text-xs">
           {type === 'file'
             ? t('prompt.noFilesMatch', 'No files match')
             : type === 'symbol'
@@ -294,16 +294,16 @@ function SuggestionPopup({
           {type === 'symbol' ? (
             <SymbolKindIcon
               kind={item.symbolKind}
-              className="icon-sm mt-0.5 shrink-0 text-muted-foreground"
+              className="icon-sm text-muted-foreground mt-0.5 shrink-0"
             />
           ) : type === 'file' ? (
             item.fileType === 'folder' ? (
-              <FolderOpen className="icon-sm mt-0.5 shrink-0 text-muted-foreground" />
+              <FolderOpen className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
             ) : (
-              <FileText className="icon-sm mt-0.5 shrink-0 text-muted-foreground" />
+              <FileText className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
             )
           ) : (
-            <Zap className="icon-base mt-0.5 shrink-0 text-muted-foreground" />
+            <Zap className="icon-base text-muted-foreground mt-0.5 shrink-0" />
           )}
           <div className="min-w-0">
             <HighlightText
@@ -318,7 +318,7 @@ function SuggestionPopup({
               className="block truncate font-mono text-xs font-medium"
             />
             {type === 'symbol' && item.path && (
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="text-muted-foreground block truncate text-xs">
                 {middleTruncate(item.path, 50)}
                 {item.symbolLine ? `:${item.symbolLine}` : ''}
               </span>
@@ -327,14 +327,14 @@ function SuggestionPopup({
               <HighlightText
                 text={item.description}
                 query={query}
-                className="block truncate text-xs text-muted-foreground"
+                className="text-muted-foreground block truncate text-xs"
               />
             )}
           </div>
         </button>
       ))}
       {truncated && (
-        <div className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+        <div className="border-border text-muted-foreground border-t px-3 py-1.5 text-xs">
           {t('prompt.moreFilesHint', 'Type to narrow results\u2026')}
         </div>
       )}
@@ -931,7 +931,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         'data-testid': 'prompt-editor',
         'aria-label': 'Message',
         class:
-          'w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none min-h-[1.5rem] max-h-[35vh] overflow-y-auto',
+          'w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden min-h-6 max-h-[35vh] overflow-y-auto',
         role: 'textbox',
       },
       handleKeyDown: (_view, event) => {

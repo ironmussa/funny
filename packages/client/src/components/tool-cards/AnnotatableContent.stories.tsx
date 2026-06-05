@@ -36,7 +36,7 @@ function InteractiveWrapper({
   return (
     <div className="w-[500px]">
       <AnnotatableContent
-        className="rounded-md border border-border p-4 pr-14"
+        className="border-border rounded-md border p-4 pr-14"
         planComments={comments}
         onAddComment={onAddComment}
         onAddEmoji={onAddEmoji}
@@ -46,12 +46,12 @@ function InteractiveWrapper({
       </AnnotatableContent>
 
       {comments.length > 0 && (
-        <div className="mt-3 rounded-md border border-border/40 bg-muted/30 p-3">
-          <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+        <div className="border-border/40 bg-muted/30 mt-3 rounded-md border p-3">
+          <p className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
             Annotations ({comments.length})
           </p>
           {comments.map((c, i) => (
-            <div key={i} className="text-xs text-muted-foreground">
+            <div key={i} className="text-muted-foreground text-xs">
               {c.emoji || 'Comment'}: &quot;{c.selectedText.slice(0, 40)}
               {c.selectedText.length > 40 ? '...' : ''}&quot;
               {c.comment && <span className="text-foreground">: {c.comment}</span>}
@@ -137,7 +137,7 @@ function DisabledStory() {
   return (
     <div className="w-[500px]">
       <AnnotatableContent
-        className="rounded-md border border-border p-4 pr-14 opacity-60"
+        className="border-border rounded-md border p-4 pr-14 opacity-60"
         planComments={comments}
         onAddComment={() => {}}
         onAddEmoji={() => {}}
@@ -146,7 +146,7 @@ function DisabledStory() {
       >
         {SAMPLE_TEXT}
       </AnnotatableContent>
-      <p className="mt-2 text-xs text-muted-foreground">Selection is disabled (active=false)</p>
+      <p className="text-muted-foreground mt-2 text-xs">Selection is disabled (active=false)</p>
     </div>
   );
 }
@@ -162,7 +162,7 @@ export const PlainText: Story = {
   args: DUMMY_ARGS,
   render: () => (
     <InteractiveWrapper>
-      <p className="text-sm text-foreground">
+      <p className="text-foreground text-sm">
         This is a simple paragraph of text. Select any portion to add an emoji reaction or a
         comment. The annotations will appear in the right margin. You can click an annotation icon
         to remove it.

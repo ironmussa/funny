@@ -34,10 +34,10 @@ interface Props {
  */
 export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3.5 last:border-b-0">
+    <div className="border-border/50 flex flex-col gap-3 border-b px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">Project Color</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">Pick any color for this project</p>
+        <p className="text-foreground text-sm font-medium">Project Color</p>
+        <p className="text-muted-foreground mt-0.5 text-xs">Pick any color for this project</p>
       </div>
       <div className="flex items-center gap-1.5">
         <button
@@ -45,14 +45,14 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
           className={cn(
             'size-7 rounded-md border-2 transition-all flex items-center justify-center',
             !currentColor
-              ? 'border-primary shadow-sm'
+              ? 'border-primary shadow-xs'
               : 'border-border hover:border-muted-foreground',
           )}
           aria-label="No color"
           aria-pressed={!currentColor}
           data-testid="project-color-none"
         >
-          <div className="size-4 rounded-sm bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/40" />
+          <div className="from-muted-foreground/20 to-muted-foreground/40 size-4 rounded-sm bg-linear-to-br" />
         </button>
         {PASTEL_COLORS.map((color) => (
           <button
@@ -61,7 +61,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
             className={cn(
               'size-7 rounded-md border-2 transition-all',
               currentColor === color
-                ? 'border-primary shadow-sm scale-110'
+                ? 'border-primary shadow-xs scale-110'
                 : 'border-transparent hover:border-muted-foreground',
             )}
             style={{ backgroundColor: color }}
@@ -78,14 +78,14 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               aria-label="Open custom color picker"
               data-testid="project-color-custom-trigger"
               className={cn(
-                'size-8 rounded-lg border-2 shadow-sm cursor-pointer transition-all hover:scale-105',
+                'size-8 rounded-lg border-2 shadow-xs cursor-pointer transition-all hover:scale-105',
                 currentColor ? 'border-primary/50' : 'border-border',
               )}
               style={{ backgroundColor: currentColor || 'transparent' }}
             >
               {!currentColor && (
-                <div className="flex size-full items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30">
-                  <span className="text-xs text-muted-foreground">-</span>
+                <div className="from-muted-foreground/10 to-muted-foreground/30 flex size-full items-center justify-center rounded-md bg-linear-to-br">
+                  <span className="text-muted-foreground text-xs">-</span>
                 </div>
               )}
             </button>
@@ -110,9 +110,9 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
             </ColorPicker>
           </PopoverContent>
         </Popover>
-        <span className="text-xs text-muted-foreground">Custom color</span>
+        <span className="text-muted-foreground text-xs">Custom color</span>
         {currentColor && (
-          <span className="font-mono text-xs text-muted-foreground">{currentColor}</span>
+          <span className="text-muted-foreground font-mono text-xs">{currentColor}</span>
         )}
       </div>
     </div>

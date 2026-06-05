@@ -190,19 +190,19 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   );
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <FileCode2 className="icon-xs flex-shrink-0 text-muted-foreground" />
-        <span className="font-medium text-foreground">{t('tools.plan')}</span>
+        <FileCode2 className="icon-xs text-muted-foreground shrink-0" />
+        <span className="text-foreground font-medium">{t('tools.plan')}</span>
         {!submitted && (
           <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
         )}
         {displayTime && (
-          <span className="text-[10px] tabular-nums text-muted-foreground/50">{displayTime}</span>
+          <span className="text-muted-foreground/50 text-[10px] tabular-nums">{displayTime}</span>
         )}
         <span className="ml-auto flex items-center gap-1.5">
           {submitted && (
-            <span className="flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
+            <span className="bg-status-success/10 text-status-success/80 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">
               {t('tools.answered')}
             </span>
           )}
@@ -242,7 +242,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
 
       {plan && (
         <AnnotatableContent
-          className="max-h-[500px] overflow-y-auto border-t border-border/40 px-4 py-3 pr-14"
+          className="border-border/40 max-h-[500px] overflow-y-auto border-t px-4 py-3 pr-14"
           planComments={planComments}
           onAddComment={handleAddComment}
           onAddEmoji={handleAddEmoji}
@@ -251,7 +251,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
           <div className="prose prose-xs prose-invert prose-headings:text-foreground prose-headings:font-semibold prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0 prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5 prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2 prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0 prose-ul:my-0.5 prose-ol:my-0.5 prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1 prose-strong:text-foreground max-w-none">
             <Suspense
               fallback={
-                <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground">
+                <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                   {plan}
                 </pre>
               }
@@ -263,20 +263,20 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
       )}
 
       {alreadyAnswered && (
-        <div className="border-t border-border/40 px-3 py-2">
-          <p className="text-xs font-medium text-primary">→ {output}</p>
+        <div className="border-border/40 border-t px-3 py-2">
+          <p className="text-primary text-xs font-medium">→ {output}</p>
         </div>
       )}
 
       {onRespond && !submitted && (
-        <div className="border-t border-border/40">
+        <div className="border-border/40 border-t">
           {/* Row 1: Approve */}
           <button
             onClick={handleAccept}
             data-testid="plan-accept"
-            className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="border-border/40 text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-3 border-b px-4 py-2.5 text-left text-sm transition-colors"
           >
-            <CheckCircle2 className="size-4 flex-shrink-0 text-muted-foreground/60" />
+            <CheckCircle2 className="text-muted-foreground/60 size-4 shrink-0" />
             <span>{t('plan.approveAndStart', 'Approve plan and start coding')}</span>
           </button>
 
@@ -284,18 +284,18 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
           <button
             onClick={handleReject}
             data-testid="plan-reject"
-            className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="border-border/40 text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-3 border-b px-4 py-2.5 text-left text-sm transition-colors"
           >
-            <XCircle className="size-4 flex-shrink-0 text-muted-foreground/60" />
+            <XCircle className="text-muted-foreground/60 size-4 shrink-0" />
             <span>{t('thread.rejectPlan', 'Reject plan')}</span>
           </button>
 
           {/* Row 3: Custom response — single row with inline editor */}
           <div className="flex items-center gap-3 px-4 py-2.5">
-            <Pencil className="size-4 flex-shrink-0 text-muted-foreground/60" />
+            <Pencil className="text-muted-foreground/60 size-4 shrink-0" />
             <div
               ref={editorContainerRef}
-              className="min-w-0 flex-1 rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50"
+              className="border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-ring/50 min-w-0 flex-1 rounded-md border focus-within:ring-1"
             >
               <div className="px-2.5 py-1.5">
                 <PromptEditor
@@ -308,7 +308,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
                   className="max-h-[120px] min-h-[20px] overflow-y-auto text-sm"
                 />
               </div>
-              <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
+              <div className="border-border/20 flex items-center justify-end gap-1 border-t px-1.5 py-0.5">
                 {hasAssemblyaiKey && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -385,7 +385,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
                   setSubmitted(true);
                 }}
                 data-testid="plan-send-comments"
-                className="h-7 shrink-0 bg-primary px-3 text-xs"
+                className="bg-primary h-7 shrink-0 px-3 text-xs"
               >
                 {t('plan.sendComments', 'Send {{count}} comments', { count: planComments.length })}
               </Button>

@@ -95,7 +95,7 @@ export function DiffStats({
   return (
     <span
       className={cn(
-        'inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-border font-mono',
+        'inline-flex shrink-0 items-center gap-1 rounded-lg border border-border font-mono',
         textSize,
         padding,
         className,
@@ -103,7 +103,7 @@ export function DiffStats({
     >
       {hasDirty && (
         <>
-          <FileIcon size={iconSize} className="shrink-0 text-muted-foreground" />
+          <FileIcon size={iconSize} className="text-muted-foreground shrink-0" />
           <Stat
             value={dirtyFileCount}
             colorClass="text-muted-foreground"

@@ -37,10 +37,10 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
               step.status === 'running' && 'bg-primary/8',
             )}
           >
-            <div className="mt-0.5 flex-shrink-0">
+            <div className="mt-0.5 shrink-0">
               {step.status === 'completed' && <Check className="icon-base text-emerald-500" />}
               {step.status === 'running' && (
-                <Loader2 className="icon-base animate-spin text-primary" />
+                <Loader2 className="icon-base text-primary animate-spin" />
               )}
               {step.status === 'failed' && <X className="icon-base text-destructive" />}
             </div>
@@ -57,7 +57,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   {step.label}
                 </span>
                 {stepElapsed != null && (
-                  <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
+                  <span className="text-muted-foreground/60 shrink-0 text-[10px] tabular-nums">
                     {formatElapsed(stepElapsed)}
                   </span>
                 )}
@@ -67,7 +67,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   href={step.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-0.5 flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  className="text-primary mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
                 >
                   <ExternalLink className="icon-xs" />
                   {step.url}
@@ -77,8 +77,8 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                 <SubItemsList subItems={step.subItems} parentStatus={step.status} />
               )}
               {step.error && !(step.subItems && step.subItems.length > 0) && (
-                <ScrollArea className="mt-0.5 max-h-40 rounded bg-destructive/5">
-                  <pre className="whitespace-pre-wrap break-words p-1.5 font-mono text-[11px] text-destructive/80">
+                <ScrollArea className="bg-destructive/5 mt-0.5 max-h-40 rounded">
+                  <pre className="text-destructive/80 p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
                     {step.error}
                   </pre>
                 </ScrollArea>
@@ -89,7 +89,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
       })}
       {showTotal && visibleSteps.length > 0 && (
         <div className="flex justify-end">
-          <span className="text-[10px] tabular-nums text-muted-foreground/50">
+          <span className="text-muted-foreground/50 text-[10px] tabular-nums">
             {formatElapsed(totalElapsed)}
           </span>
         </div>

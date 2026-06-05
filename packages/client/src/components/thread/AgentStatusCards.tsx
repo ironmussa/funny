@@ -43,9 +43,9 @@ export function AgentResultCard({
     >
       <div className="flex items-center gap-3">
         {isSuccess ? (
-          <CheckCircle2 className="icon-base flex-shrink-0 text-status-success/80" />
+          <CheckCircle2 className="icon-base text-status-success/80 shrink-0" />
         ) : (
-          <AlertTriangle className="icon-base flex-shrink-0 text-status-interrupted/80" />
+          <AlertTriangle className="icon-base text-status-interrupted/80 shrink-0" />
         )}
         <span
           className={cn(
@@ -55,7 +55,7 @@ export function AgentResultCard({
         >
           {isSuccess ? t('thread.taskCompleted') : t('thread.taskFailed')}
         </span>
-        <div className="ml-auto flex items-center gap-3 text-muted-foreground">
+        <div className="text-muted-foreground ml-auto flex items-center gap-3">
           {duration > 0 && (
             <span className="flex items-center gap-1">
               <Clock className="icon-xs" />
@@ -65,7 +65,7 @@ export function AgentResultCard({
           {!isSuccess && onContinue && (
             <button
               onClick={onContinue}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
             >
               <Play className="icon-xs" />
               {t('thread.acceptContinue')}
@@ -74,7 +74,7 @@ export function AgentResultCard({
         </div>
       </div>
       {!isSuccess && error && (
-        <pre className="overflow-x-auto whitespace-pre-wrap pl-7 font-mono text-[10px] text-status-interrupted/80">
+        <pre className="text-status-interrupted/80 overflow-x-auto pl-7 font-mono text-[10px] whitespace-pre-wrap">
           {error}
         </pre>
       )}
@@ -86,18 +86,18 @@ export function AgentInterruptedCard({ onContinue }: { onContinue?: () => void }
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-status-interrupted/20 bg-status-interrupted/5 px-3 py-2 text-xs">
-      <AlertTriangle className="icon-base flex-shrink-0 text-status-interrupted/80" />
+    <div className="border-status-interrupted/20 bg-status-interrupted/5 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
+      <AlertTriangle className="icon-base text-status-interrupted/80 shrink-0" />
       <div>
-        <span className="font-medium text-status-interrupted/80">
+        <span className="text-status-interrupted/80 font-medium">
           {t('thread.taskInterrupted')}
         </span>
-        <p className="mt-0.5 text-muted-foreground">{t('thread.serverRestarted')}</p>
+        <p className="text-muted-foreground mt-0.5">{t('thread.serverRestarted')}</p>
       </div>
       {onContinue && (
         <button
           onClick={onContinue}
-          className="ml-auto flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
         >
           <Play className="icon-xs" />
           {t('thread.acceptContinue')}
@@ -111,16 +111,16 @@ export function AgentStoppedCard({ onContinue }: { onContinue?: () => void }) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-status-info/20 bg-status-info/5 px-3 py-2 text-xs">
-      <XCircle className="icon-base flex-shrink-0 text-status-info/80" />
+    <div className="border-status-info/20 bg-status-info/5 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
+      <XCircle className="icon-base text-status-info/80 shrink-0" />
       <div>
-        <span className="font-medium text-status-info/80">{t('thread.taskStopped')}</span>
-        <p className="mt-0.5 text-muted-foreground">{t('thread.manuallyStopped')}</p>
+        <span className="text-status-info/80 font-medium">{t('thread.taskStopped')}</span>
+        <p className="text-muted-foreground mt-0.5">{t('thread.manuallyStopped')}</p>
       </div>
       {onContinue && (
         <button
           onClick={onContinue}
-          className="ml-auto flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
         >
           <Play className="icon-xs" />
           {t('thread.acceptContinue')}

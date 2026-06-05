@@ -249,7 +249,7 @@ function InstalledServerCard({
             {server.url || [server.command, ...(server.args || [])].join(' ')}
           </CardDescription>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {showClaudeSettingsEditor && !needsAuthActions && <ClaudeSettingsEditorButton />}
           <McpServerToggle
             server={server}
@@ -360,7 +360,7 @@ function RecommendedServerCard({
     >
       <CardHeader className="flex-1 space-y-2 p-4 pb-2">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-sm font-medium leading-snug">{server.name}</CardTitle>
+          <CardTitle className="text-sm leading-snug font-medium">{server.name}</CardTitle>
           <McpProtocolBadge type={server.type} />
         </div>
         <CardDescription className="line-clamp-3 text-xs leading-relaxed">
@@ -601,7 +601,7 @@ export function McpServerSettings() {
 
   if (!projectPath) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center gap-2 text-sm">
         <AlertCircle className="icon-base" />
         {t('mcp.selectProject')}
       </div>
@@ -612,8 +612,8 @@ export function McpServerSettings() {
     <div className="space-y-6">
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <AlertCircle className="icon-sm flex-shrink-0" />
+        <div className="bg-destructive/10 text-destructive flex items-center gap-2 rounded-md px-3 py-2 text-xs">
+          <AlertCircle className="icon-sm shrink-0" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">
             {t('mcp.dismiss')}
@@ -727,7 +727,7 @@ export function McpServerSettings() {
             label={t('mcp.loadingServers')}
           />
         ) : servers.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">{t('mcp.noServers')}</div>
+          <div className="text-muted-foreground py-6 text-center text-sm">{t('mcp.noServers')}</div>
         ) : (
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {servers.map((server) => (

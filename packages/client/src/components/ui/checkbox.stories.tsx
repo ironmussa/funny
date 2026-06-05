@@ -33,7 +33,7 @@ export const WithLabel: Story = {
   render: () => (
     <div className="flex items-center gap-2">
       <Checkbox id="terms" data-testid="checkbox-terms" />
-      <label htmlFor="terms" className="text-sm font-medium text-foreground">
+      <label htmlFor="terms" className="text-foreground text-sm font-medium">
         Accept terms and conditions
       </label>
     </div>

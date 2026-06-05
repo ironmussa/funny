@@ -87,7 +87,7 @@ export const MessageContent = memo(function MessageContent({ content }: { conten
     <div className="prose prose-sm max-w-none overflow-hidden">
       <Suspense
         fallback={
-          <div className="prose prose-sm max-w-none whitespace-pre-wrap text-sm">{content}</div>
+          <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">{content}</div>
         }
       >
         <LazyMarkdownRenderer content={content} />
@@ -102,7 +102,7 @@ export function CopyButton({ content }: { content: string }) {
   return (
     <button
       onClick={() => copy(content)}
-      className="msg-copy-btn shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/msg:opacity-100"
+      className="msg-copy-btn text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded p-1 opacity-0 transition-opacity group-hover/msg:opacity-100"
       aria-label="Copy message"
       data-testid="message-copy"
     >

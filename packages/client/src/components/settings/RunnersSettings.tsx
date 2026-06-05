@@ -93,8 +93,8 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
   };
 
   return (
-    <div className="mt-3 flex flex-col gap-2 rounded border border-border/50 bg-muted/30 p-3">
-      <p className="text-xs text-muted-foreground">
+    <div className="border-border/50 bg-muted/30 mt-3 flex flex-col gap-2 rounded border p-3">
+      <p className="text-muted-foreground text-xs">
         Assign a project and provide its local path on this runner's machine.
       </p>
       <Select value={projectId} onValueChange={setProjectId}>
@@ -196,7 +196,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="overflow-hidden rounded-lg border border-border/50 bg-card"
+      className="border-border/50 bg-card overflow-hidden rounded-lg border"
     >
       <div
         className="flex items-center gap-3 px-3 py-2.5"
@@ -217,7 +217,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
               {statusLabel(runner.status)}
             </Badge>
           </div>
-          <div className="truncate text-xs text-muted-foreground">
+          <div className="text-muted-foreground truncate text-xs">
             {runner.hostname} · last seen {formatRelativeTime(runner.lastHeartbeatAt)}
             {runner.assignedProjectIds.length > 0 && (
               <>
@@ -252,7 +252,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           </Tooltip>
           <TooltipIconButton
             size="icon"
-            className="size-6 text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive size-6"
             onClick={handleDelete}
             disabled={deleting}
             data-testid={`runner-item-${runner.runnerId}-delete`}
@@ -266,19 +266,19 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
       <CollapsibleContent className="px-3 pb-3">
         <div className="mt-2 space-y-1">
           {assignments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No projects assigned yet.</p>
+            <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
           ) : (
             assignments.map((a) => {
               const project = projects.find((p) => p.id === a.projectId);
               return (
                 <div
                   key={a.projectId}
-                  className="flex items-center justify-between rounded px-2 py-1 text-xs hover:bg-muted/40"
+                  className="hover:bg-muted/40 flex items-center justify-between rounded px-2 py-1 text-xs"
                 >
                   <span className="truncate">{project?.name ?? a.projectId}</span>
                   <TooltipIconButton
                     size="icon"
-                    className="size-5 text-destructive hover:text-destructive"
+                    className="text-destructive hover:text-destructive size-5"
                     onClick={() => handleUnassign(a.projectId)}
                     data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
                     tooltip={t('common.unassign')}
@@ -291,7 +291,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           )}
 
           <button
-            className="mt-1 flex items-center gap-1 text-xs text-primary hover:underline"
+            className="text-primary mt-1 flex items-center gap-1 text-xs hover:underline"
             onClick={() => setShowAssignForm((v) => !v)}
             data-testid={`runner-item-${runner.runnerId}-add-project`}
           >
@@ -382,7 +382,7 @@ export function RunnersSettings() {
       <div className="settings-card space-y-3 p-4">
         <div>
           <p className="text-sm font-medium">Connect a new runner</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-0.5 text-xs">
             Run this command on any machine you want to use as a runner. It will connect to this
             server under your account.
           </p>
@@ -390,7 +390,7 @@ export function RunnersSettings() {
 
         <div className="flex items-center gap-2">
           <code
-            className="flex-1 truncate rounded bg-muted px-3 py-2 font-mono text-xs text-foreground"
+            className="bg-muted text-foreground flex-1 truncate rounded px-3 py-2 font-mono text-xs"
             data-testid="runners-install-command"
           >
             {loadingToken ? 'Loading...' : installCommand}
@@ -408,7 +408,7 @@ export function RunnersSettings() {
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             <Server className="icon-xs mr-1 inline" />
             The token is specific to your account. Anyone with this token can register a runner
             under your name.
@@ -418,7 +418,7 @@ export function RunnersSettings() {
             variant="ghost"
             onClick={handleRotate}
             disabled={rotating || loadingToken}
-            className="h-6 text-xs text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground h-6 text-xs"
             data-testid="runners-rotate-token"
           >
             <RefreshCw className={cn('mr-1 icon-xs', rotating && 'animate-spin')} />
@@ -445,12 +445,12 @@ export function RunnersSettings() {
         </div>
 
         {loadingRunners && runners.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
+          <p className="text-muted-foreground text-xs">Loading…</p>
         ) : runners.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/50 px-4 py-6 text-center">
-            <Server className="mx-auto mb-2 size-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">No runners connected yet.</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+          <div className="border-border/50 rounded-lg border border-dashed px-4 py-6 text-center">
+            <Server className="text-muted-foreground/50 mx-auto mb-2 size-8" />
+            <p className="text-muted-foreground text-sm">No runners connected yet.</p>
+            <p className="text-muted-foreground mt-1 text-xs">
               Copy the install command above and run it on any machine.
             </p>
           </div>

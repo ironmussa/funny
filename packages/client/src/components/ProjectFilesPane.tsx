@@ -170,7 +170,7 @@ export function ProjectFilesPane() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex flex-shrink-0 items-center gap-0.5 border-b border-border px-2 py-1">
+      <div className="border-border flex shrink-0 items-center gap-0.5 border-b px-2 py-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -222,7 +222,7 @@ export function ProjectFilesPane() {
         </Tooltip>
       </div>
 
-      <div className="flex-shrink-0 border-b border-sidebar-border px-2 py-1">
+      <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
         <SearchBar
           query={query}
           onQueryChange={setQuery}
@@ -239,7 +239,7 @@ export function ProjectFilesPane() {
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {!basePath ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
             {t('projectFiles.noProject', 'Select a project first')}
           </div>
         ) : loading && files.length === 0 ? (
@@ -248,7 +248,7 @@ export function ProjectFilesPane() {
             label={t('projectFiles.loading', 'Loading files...')}
           />
         ) : filteredSummaries.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
             {query
               ? t('projectFiles.noMatches', 'No files match your filter')
               : t('projectFiles.empty', 'No files in this project')}
@@ -270,7 +270,7 @@ export function ProjectFilesPane() {
       </div>
 
       {truncated && (
-        <div className="flex-shrink-0 border-t border-border px-3 py-1.5 text-center text-xs text-muted-foreground">
+        <div className="border-border text-muted-foreground shrink-0 border-t px-3 py-1.5 text-center text-xs">
           {t('projectFiles.truncated', {
             limit: MAX_FILES,
             defaultValue: `Showing first ${MAX_FILES} files`,

@@ -137,7 +137,7 @@ export function SubItemsList({
             item.status === 'pending' && 'text-muted-foreground/40',
           )}
         >
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {item.status === 'completed' && <Check className="icon-xs text-emerald-500" />}
             {item.status === 'running' && <ArrowRight className="icon-xs text-primary" />}
             {item.status === 'failed' && <X className="icon-xs text-destructive" />}
@@ -147,7 +147,7 @@ export function SubItemsList({
             {item.label}
           </span>
           {item.error && (
-            <pre className="mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-1.5 font-mono text-[11px] text-destructive/80">
+            <pre className="bg-destructive/5 text-destructive/80 mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
               {item.error}
             </pre>
           )}
@@ -194,7 +194,7 @@ export function GitProgressModal({
           if (!isFinished) e.preventDefault();
         }}
       >
-        <DialogHeader className="flex-shrink-0">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="sr-only">
             {t('review.progress.description', 'Git operation progress')}
@@ -211,10 +211,10 @@ export function GitProgressModal({
                   step.status === 'running' && 'bg-primary/8',
                 )}
               >
-                <div className="mt-0.5 flex-shrink-0">
+                <div className="mt-0.5 shrink-0">
                   {step.status === 'completed' && <Check className="icon-base text-emerald-500" />}
                   {step.status === 'running' && (
-                    <Loader2 className="icon-base animate-spin text-primary" />
+                    <Loader2 className="icon-base text-primary animate-spin" />
                   )}
                   {step.status === 'failed' && <X className="icon-base text-destructive" />}
                 </div>
@@ -231,7 +231,7 @@ export function GitProgressModal({
                       {step.label}
                     </span>
                     {stepElapsed != null && (
-                      <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
+                      <span className="text-muted-foreground/60 shrink-0 text-[10px] tabular-nums">
                         {formatElapsed(stepElapsed)}
                       </span>
                     )}
@@ -241,7 +241,7 @@ export function GitProgressModal({
                       href={step.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-0.5 flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      className="text-primary mt-0.5 flex items-center gap-1 text-[11px] hover:underline"
                       data-testid="git-progress-pr-link"
                     >
                       <ExternalLink className="icon-xs" />
@@ -252,7 +252,7 @@ export function GitProgressModal({
                     <SubItemsList subItems={step.subItems} parentStatus={step.status} />
                   )}
                   {step.error && !(step.subItems && step.subItems.length > 0) && (
-                    <pre className="mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-1.5 font-mono text-[11px] text-destructive/80">
+                    <pre className="bg-destructive/5 text-destructive/80 mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
                       {step.error}
                     </pre>
                   )}
@@ -261,8 +261,8 @@ export function GitProgressModal({
             );
           })}
         </div>
-        <div className="flex flex-shrink-0 flex-col items-end gap-2">
-          <span className="text-[10px] tabular-nums text-muted-foreground/50">
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <span className="text-muted-foreground/50 text-[10px] tabular-nums">
             {formatElapsed(totalElapsed)}
           </span>
           {showButton && (

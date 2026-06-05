@@ -118,15 +118,15 @@ export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
       className="pointer-events-none absolute inset-0"
     >
       <div
-        className="absolute border-2 border-primary bg-primary/10"
+        className="border-primary bg-primary/10 absolute border-2"
         style={{ left: hlLeft, top: hlTop, width: hlW, height: hlH }}
       />
       <div
         data-testid="browser-panel-inspect-tooltip"
-        className="absolute max-w-[320px] rounded-md border border-border bg-card p-2 text-xs shadow-md"
+        className="border-border bg-card absolute max-w-[320px] rounded-md border p-2 text-xs shadow-md"
         style={{ left: tooltipLeft, top: tooltipTop }}
       >
-        <div className="font-mono text-foreground">
+        <div className="text-foreground font-mono">
           {hover.info.tagName.toLowerCase()}
           {hover.info.classes.length > 0 && (
             <span className="text-muted-foreground">
@@ -135,16 +135,16 @@ export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
           )}
         </div>
         {hover.info.testid && (
-          <div className="mt-1 text-muted-foreground">
+          <div className="text-muted-foreground mt-1">
             <span className="font-mono">data-testid</span>="{hover.info.testid}"
           </div>
         )}
         {hover.info.componentName && (
-          <div className="mt-1 text-muted-foreground">
+          <div className="text-muted-foreground mt-1">
             component: <span className="font-mono">{hover.info.componentName}</span>
           </div>
         )}
-        <div className="mt-1 text-muted-foreground">
+        <div className="text-muted-foreground mt-1">
           {Math.round(bb.w)} × {Math.round(bb.h)}
         </div>
       </div>

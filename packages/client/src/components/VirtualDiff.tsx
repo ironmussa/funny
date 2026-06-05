@@ -637,7 +637,7 @@ export const VirtualDiff = memo(function VirtualDiff({
         {stickyHunk && (
           <div
             className={cn(
-              'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-[length:var(--diff-font-size)] text-muted-foreground backdrop-blur-sm border-b border-border/50 px-1',
+              'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-(length:--diff-font-size) text-muted-foreground backdrop-blur-xs border-b border-border/50 px-1',
             )}
             style={{ height: rowHeight, marginBottom: -rowHeight }}
             data-testid="diff-sticky-hunk"
@@ -649,7 +649,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                 const allChecked = indices.length > 0 && count === indices.length;
                 const isPartial = count > 0 && count < indices.length;
                 return (
-                  <span className="flex w-5 flex-shrink-0 items-center justify-center">
+                  <span className="flex w-5 shrink-0 items-center justify-center">
                     <TriCheckbox
                       state={isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'}
                       onToggle={() => {
@@ -661,9 +661,9 @@ export const VirtualDiff = memo(function VirtualDiff({
                 );
               })()
             ) : selectable ? (
-              <span className="w-5 flex-shrink-0" />
+              <span className="w-5 shrink-0" />
             ) : null}
-            <span className={cn(gutterWidth, 'flex-shrink-0')} />
+            <span className={cn(gutterWidth, 'shrink-0')} />
             <span className="truncate">{stickyHunk.text}</span>
           </div>
         )}
@@ -703,7 +703,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                 ) : row.type === 'hunk' ? (
                   <div
                     className={cn(
-                      'flex select-none items-center bg-accent font-mono text-[length:var(--diff-font-size)] text-muted-foreground px-1',
+                      'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
                     )}
                     style={{ height: rowHeight }}
                   >
@@ -714,7 +714,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                         const allChecked = indices.length > 0 && count === indices.length;
                         const isPartial = count > 0 && count < indices.length;
                         return (
-                          <span className="flex w-5 flex-shrink-0 items-center justify-center">
+                          <span className="flex w-5 shrink-0 items-center justify-center">
                             <TriCheckbox
                               state={
                                 isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'
@@ -728,22 +728,22 @@ export const VirtualDiff = memo(function VirtualDiff({
                         );
                       })()
                     ) : selectable ? (
-                      <span className="w-5 flex-shrink-0" />
+                      <span className="w-5 shrink-0" />
                     ) : null}
-                    <span className={cn(gutterWidth, 'flex-shrink-0')} />
+                    <span className={cn(gutterWidth, 'shrink-0')} />
                     <span className="truncate">{row.text}</span>
                   </div>
                 ) : row.type === 'fold' ? (
                   <button
                     className={cn(
-                      'flex w-full select-none items-center bg-muted/50 font-mono text-[length:var(--diff-font-size)] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
+                      'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
                     )}
                     style={{ height: rowHeight }}
                     onClick={() => toggleFold(row.sectionIdx)}
                     data-testid="diff-fold-toggle"
                   >
-                    {selectable && <span className="w-5 flex-shrink-0" />}
-                    <span className={cn(gutterWidth, 'flex-shrink-0')} />
+                    {selectable && <span className="w-5 shrink-0" />}
+                    <span className={cn(gutterWidth, 'shrink-0')} />
                     <span className="truncate">
                       @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ ·{' '}
                       {row.lineCount} lines hidden
@@ -796,7 +796,7 @@ export const VirtualDiff = memo(function VirtualDiff({
       {needsHScroll && (
         <div
           ref={hScrollBarRef}
-          className="flex-shrink-0 overflow-x-auto overflow-y-hidden"
+          className="shrink-0 overflow-x-auto overflow-y-hidden"
           style={{ height: 10 }}
           data-testid="diff-h-scrollbar"
         >
@@ -808,7 +808,7 @@ export const VirtualDiff = memo(function VirtualDiff({
 
   if (!hasLines) {
     return (
-      <p className="p-4 text-xs text-muted-foreground" data-testid={props['data-testid']}>
+      <p className="text-muted-foreground p-4 text-xs" data-testid={props['data-testid']}>
         No diff available
       </p>
     );

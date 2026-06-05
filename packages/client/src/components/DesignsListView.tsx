@@ -70,7 +70,7 @@ export function DesignsListView() {
 
   return (
     <div className="flex size-full flex-col" data-testid="designs-list-view">
-      <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+      <header className="border-border bg-background flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Button
           data-testid="designs-list-back"
           variant="ghost"
@@ -85,7 +85,7 @@ export function DesignsListView() {
           <h1 className="truncate text-sm font-semibold">
             {t('designsList.title', { defaultValue: 'Designs' })}
           </h1>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-muted-foreground truncate text-xs">
             {designs.length === 0
               ? t('designsList.subtitleZero', {
                   name: projectName,
@@ -105,13 +105,13 @@ export function DesignsListView() {
           {loading ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="aspect-[4/3] w-full" />
+                <Skeleton key={i} className="aspect-4/3 w-full" />
               ))}
             </div>
           ) : error ? (
             <p
               data-testid="designs-list-error"
-              className="rounded border border-status-error/40 bg-status-error/10 px-3 py-2 text-sm text-status-error"
+              className="border-status-error/40 bg-status-error/10 text-status-error rounded border px-3 py-2 text-sm"
             >
               {error}
             </p>
@@ -135,7 +135,7 @@ export function DesignsListView() {
               {designs.length === 0 && (
                 <p
                   data-testid="designs-list-empty"
-                  className="col-span-full text-center text-sm text-muted-foreground"
+                  className="text-muted-foreground col-span-full text-center text-sm"
                 >
                   {t('designsList.empty', {
                     defaultValue: 'No designs yet. Create your first one.',
@@ -175,15 +175,15 @@ function NewDesignCard({ onClick, label, hint }: NewDesignCardProps) {
       data-testid="designs-list-new-card"
       onClick={onClick}
       className={cn(
-        'group flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-card transition-colors',
+        'group flex aspect-4/3 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-card transition-colors',
         'hover:border-primary hover:bg-accent/30',
       )}
     >
-      <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-primary/20">
+      <div className="bg-primary/10 text-primary group-hover:bg-primary/20 flex size-12 items-center justify-center rounded-full">
         <Plus className="icon-base" />
       </div>
       <span className="text-sm font-medium">{label}</span>
-      <span className="px-3 text-center text-xs text-muted-foreground">{hint}</span>
+      <span className="text-muted-foreground px-3 text-center text-xs">{hint}</span>
     </button>
   );
 }
@@ -205,12 +205,12 @@ function DesignCard({ design, typeLabel, onClick }: DesignCardProps) {
         'hover:border-primary hover:bg-accent/30',
       )}
     >
-      <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted/40">
-        <Sparkles className="size-8 text-muted-foreground/60" />
+      <div className="bg-muted/40 flex aspect-4/3 w-full items-center justify-center">
+        <Sparkles className="text-muted-foreground/60 size-8" />
       </div>
-      <div className="flex flex-col gap-1 border-t border-border px-3 py-2">
+      <div className="border-border flex flex-col gap-1 border-t px-3 py-2">
         <span className="truncate text-sm font-medium">{design.name}</span>
-        <span className="text-xs text-muted-foreground">{typeLabel}</span>
+        <span className="text-muted-foreground text-xs">{typeLabel}</span>
       </div>
     </button>
   );

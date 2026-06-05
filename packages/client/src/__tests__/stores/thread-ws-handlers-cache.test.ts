@@ -256,7 +256,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     );
   });
 
-  test('handleWSCompactBoundary resets contextUsage so the ring updates', () => {
+  test('handleWSCompactBoundary resets contextUsage so the ring-3 updates', () => {
     const usageBefore = {
       cumulativeInputTokens: 175_000,
       lastInputTokens: 5_000,

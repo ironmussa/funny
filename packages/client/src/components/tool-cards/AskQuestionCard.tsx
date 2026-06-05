@@ -356,41 +356,39 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   if (!hasQuestions) return null;
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        {!hideLabel && (
-          <MessageCircleQuestion className="icon-xs flex-shrink-0 text-muted-foreground" />
-        )}
-        {!hideLabel && <span className="font-medium text-foreground">{t('tools.question')}</span>}
-        <span className="text-sm text-muted-foreground">
+        {!hideLabel && <MessageCircleQuestion className="icon-xs text-muted-foreground shrink-0" />}
+        {!hideLabel && <span className="text-foreground font-medium">{t('tools.question')}</span>}
+        <span className="text-muted-foreground text-sm">
           {questions.length}{' '}
           {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
         </span>
         {displayTime && (
-          <span className="text-[10px] tabular-nums text-muted-foreground/50">{displayTime}</span>
+          <span className="text-muted-foreground/50 text-[10px] tabular-nums">{displayTime}</span>
         )}
         {submitted && (
-          <span className="ml-auto flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
+          <span className="bg-status-success/10 text-status-success/80 ml-auto shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">
             {t('tools.answered')}
           </span>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="border-t border-border/40">
+      <div className="border-border/40 border-t">
         {/* Fallback: when output exists but couldn't be parsed into selections, show the raw answer */}
         {rawAnswerFallback ? (
           <div className="px-3 py-2">
-            <p className="text-xs leading-relaxed text-foreground">{questions[0]?.question}</p>
-            <div className="mt-1.5 rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+            <p className="text-foreground text-xs leading-relaxed">{questions[0]?.question}</p>
+            <div className="border-border/40 bg-background/50 text-muted-foreground mt-1.5 rounded-md border px-2.5 py-1.5 text-xs">
               {rawAnswerFallback}
             </div>
           </div>
         ) : (
           <>
             {questions.length > 1 && (
-              <div className="flex gap-0 border-b border-border/40">
+              <div className="border-border/40 flex gap-0 border-b">
                 {questions.map((q, i) => (
                   <button
                     key={q.header}
@@ -404,10 +402,10 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                   >
                     {q.header}
                     {selections.get(i)?.size ? (
-                      <Check className="icon-2xs ml-1 inline text-status-success/80" />
+                      <Check className="icon-2xs text-status-success/80 ml-1 inline" />
                     ) : null}
                     {i === activeTab && (
-                      <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
+                      <div className="bg-primary absolute right-0 bottom-0 left-0 h-[2px] rounded-full" />
                     )}
                   </button>
                 ))}
@@ -437,7 +435,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                   transition={{ duration: prefersReducedMotion ? 0 : 0.18, ease: 'easeOut' }}
                   className="space-y-2 px-3 py-2"
                 >
-                  <p className="text-xs leading-relaxed text-foreground">{activeQ.question}</p>
+                  <p className="text-foreground text-xs leading-relaxed">{activeQ.question}</p>
 
                   {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
                   <div
@@ -465,18 +463,18 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                         >
                           <div
                             className={cn(
-                              'mt-0.5 flex-shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
+                              'mt-0.5 shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
                               activeQ.multiSelect && 'rounded-sm',
                               isSelected
                                 ? 'border-primary bg-primary'
                                 : 'border-muted-foreground/40',
                             )}
                           >
-                            {isSelected && <Check className="size-2 text-primary-foreground" />}
+                            {isSelected && <Check className="text-primary-foreground size-2" />}
                           </div>
                           <div className="min-w-0">
-                            <span className="text-xs font-medium text-foreground">{opt.label}</span>
-                            <p className="text-xs leading-snug text-muted-foreground">
+                            <span className="text-foreground text-xs font-medium">{opt.label}</span>
+                            <p className="text-muted-foreground text-xs leading-snug">
                               {opt.description}
                             </p>
                           </div>
@@ -498,19 +496,19 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                     >
                       <div
                         className={cn(
-                          'mt-0.5 flex-shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
+                          'mt-0.5 shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
                           activeQ.multiSelect && 'rounded-sm',
                           isOtherSelected
                             ? 'border-primary bg-primary'
                             : 'border-muted-foreground/40',
                         )}
                       >
-                        {isOtherSelected && <Check className="size-2 text-primary-foreground" />}
+                        {isOtherSelected && <Check className="text-primary-foreground size-2" />}
                       </div>
                       <div className="flex min-w-0 items-center gap-1.5">
                         <PenLine
                           className={cn(
-                            'icon-xs flex-shrink-0 transition-colors',
+                            'icon-xs shrink-0 transition-colors',
                             isOtherSelected ? 'text-primary' : 'text-muted-foreground',
                           )}
                         />
@@ -538,7 +536,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                           e.preventDefault();
                           otherEditorRef.current?.focus();
                         }}
-                        className="rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50"
+                        className="border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-ring/50 rounded-md border focus-within:ring-1"
                       >
                         <div className="px-2.5 py-1.5">
                           <PromptEditor
@@ -566,7 +564,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                           />
                         </div>
                         {hasAssemblyaiKey && (
-                          <div className="flex items-center justify-end border-t border-border/20 px-1.5 py-0.5">
+                          <div className="border-border/20 flex items-center justify-end border-t px-1.5 py-0.5">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -608,7 +606,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                       </div>
                     )}
                     {isOtherSelected && submitted && otherText.trim() && (
-                      <div className="rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground opacity-70">
+                      <div className="border-border/40 bg-background/50 text-muted-foreground rounded-md border px-2.5 py-1.5 text-xs opacity-70">
                         {otherText}
                       </div>
                     )}

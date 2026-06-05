@@ -234,7 +234,7 @@ export const ThreadItem = memo(function ThreadItem({
             );
           }
         }}
-        className="flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden py-1.5 pl-2 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden py-1.5 pl-2 text-left focus:outline-hidden focus-visible:ring-1"
       >
         {/* Row 1: Status icon + Title */}
         <div className="flex min-w-0 items-center gap-1.5">
@@ -255,7 +255,7 @@ export const ThreadItem = memo(function ThreadItem({
           {thread.createdBy && thread.createdBy !== 'user' && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Bot className="icon-xs flex-shrink-0 text-muted-foreground" />
+                <Bot className="icon-xs text-muted-foreground shrink-0" />
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
                 {t('thread.createdBy', { creator: thread.createdBy })}
@@ -264,7 +264,7 @@ export const ThreadItem = memo(function ThreadItem({
           )}
           {/* Remote runtime badge */}
           {thread.runtime === 'remote' && (
-            <span className="flex-shrink-0 rounded bg-violet-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-violet-500">
+            <span className="shrink-0 rounded bg-violet-500/15 px-1 py-0.5 text-[10px] leading-none font-medium text-violet-500">
               Remote
             </span>
           )}
@@ -273,7 +273,7 @@ export const ThreadItem = memo(function ThreadItem({
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
-                  className="flex flex-shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-medium leading-none"
+                  className="flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
                   style={{
                     backgroundColor: agentTemplate.color
                       ? `${agentTemplate.color}22`
@@ -317,7 +317,7 @@ export const ThreadItem = memo(function ThreadItem({
                 <TooltipTrigger asChild>
                   <span
                     data-testid={`thread-scratch-badge-${thread.id}`}
-                    className="flex flex-shrink-0 items-center rounded bg-muted/60 p-1 leading-none text-muted-foreground"
+                    className="bg-muted/60 text-muted-foreground flex shrink-0 items-center rounded p-1 leading-none"
                   >
                     <NotebookPen className="icon-xs" />
                   </span>
@@ -339,23 +339,23 @@ export const ThreadItem = memo(function ThreadItem({
               />
             )}
             {hasSnippet ? (
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/50">
+              <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs">
                 {thread.lastAssistantMessage}
               </span>
             ) : showLaunching ? (
-              <span className="min-w-0 flex-1 truncate text-xs italic text-muted-foreground/50">
+              <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs italic">
                 {t('thread.launching', 'Launching...')}
               </span>
             ) : isBacklog ? (
-              <span className="min-w-0 flex-1 truncate text-xs italic text-muted-foreground/50">
+              <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs italic">
                 {t('thread.readyToLaunch', 'Ready to Launch')}
               </span>
             ) : null}
           </div>
         )}
       </div>
-      <div className="flex flex-shrink-0 items-center gap-1.5 py-1 pl-2 pr-1.5">
-        <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
+      <div className="flex shrink-0 items-center gap-1.5 py-1 pr-1.5 pl-2">
+        <div className="grid min-w-10 place-items-center justify-items-center">
           <span
             className={cn(
               'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
@@ -367,7 +367,7 @@ export const ThreadItem = memo(function ThreadItem({
           <div
             className={cn(
               'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
-              openDropdown && '!opacity-100',
+              openDropdown && 'opacity-100!',
             )}
           >
             <DropdownMenu onOpenChange={handleDropdownChange}>

@@ -136,11 +136,11 @@ function InteractiveWrapper({
         hideLabel={hideLabel}
       />
       {output && (
-        <div className="rounded-md border border-border/40 bg-muted/30 p-3">
-          <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+        <div className="border-border/40 bg-muted/30 rounded-md border p-3">
+          <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
             Submitted answer
           </div>
-          <pre className="whitespace-pre-wrap text-xs text-foreground">{output}</pre>
+          <pre className="text-foreground text-xs whitespace-pre-wrap">{output}</pre>
         </div>
       )}
     </div>

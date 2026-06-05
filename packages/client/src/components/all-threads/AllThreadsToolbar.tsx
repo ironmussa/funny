@@ -120,7 +120,7 @@ export function AllThreadsToolbar(props: Props) {
   } = props;
 
   return (
-    <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
+    <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
       <SearchBar
         inputRef={searchInputRef}
         query={search}
@@ -134,10 +134,10 @@ export function AllThreadsToolbar(props: Props) {
         autoFocus={false}
         placeholder={searchPlaceholder}
         testIdPrefix="all-threads-search"
-        className="h-7 w-72 flex-shrink-0 rounded-md border border-input bg-transparent px-2"
+        className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
       />
 
-      <div className="h-4 w-px bg-border" />
+      <div className="bg-border h-4 w-px" />
 
       <ProjectFilterPopover
         open={projectFilterOpen}
@@ -198,7 +198,7 @@ export function AllThreadsToolbar(props: Props) {
         counts={typeCounts}
       />
 
-      <div className="h-4 w-px bg-border" />
+      <div className="bg-border h-4 w-px" />
 
       <SortPopover
         sortField={sortField}
@@ -225,7 +225,7 @@ export function AllThreadsToolbar(props: Props) {
         <button
           data-testid="all-threads-clear-filters"
           onClick={onResetFilters}
-          className="whitespace-nowrap px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground px-2 py-1 text-xs whitespace-nowrap transition-colors"
         >
           {t('allThreads.clearFilters')}
         </button>
@@ -278,7 +278,7 @@ function SortPopover({
       <PopoverTrigger asChild>
         <button
           data-testid="all-threads-sort"
-          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+          className="border-border text-muted-foreground hover:bg-accent/50 hover:text-foreground inline-flex items-center gap-1 rounded-md border bg-transparent px-2 py-1 text-xs whitespace-nowrap transition-colors"
         >
           {t('allThreads.sortLabel')}:{' '}
           {sortField === 'updated' ? t('allThreads.sortUpdated') : t('allThreads.sortCreated')}
@@ -310,13 +310,13 @@ function SortPopover({
             onSelect={() => setSortField('created')}
             label={t('allThreads.sortCreated')}
           />
-          <div className="my-1 h-px bg-border" />
+          <div className="bg-border my-1 h-px" />
           <button
             role="menuitem"
             tabIndex={-1}
             data-testid="all-threads-sort-direction"
             onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none"
+            className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors focus:outline-hidden"
           >
             {sortDir === 'desc' ? (
               <>
@@ -357,7 +357,7 @@ function SortFieldOption({
       className={cn(
         'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
         'hover:bg-accent hover:text-accent-foreground',
-        'focus:bg-accent focus:text-accent-foreground focus:outline-none',
+        'focus:bg-accent focus:text-accent-foreground focus:outline-hidden',
       )}
     >
       <span

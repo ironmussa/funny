@@ -132,7 +132,7 @@ export function AgentTemplateSettings() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="settings-section-header !mb-0">Agent Templates</h3>
+          <h3 className="settings-section-header mb-0!">Agent Templates</h3>
           <p className="settings-row-desc mt-1">
             Deep Agent configurations selectable when creating threads.
           </p>
@@ -158,7 +158,7 @@ export function AgentTemplateSettings() {
       {ownTemplates.length === 0 &&
         sharedTemplates.length === 0 &&
         builtinTemplates.length === 0 && (
-          <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground">
+          <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center">
             <Bot className="mx-auto mb-2 size-8 opacity-50" />
             <p>No agent templates yet.</p>
             <p className="text-xs">Create one to define a reusable Deep Agent configuration.</p>
@@ -191,9 +191,9 @@ export function AgentTemplateSettings() {
       {/* Shared templates from other users */}
       {sharedTemplates.length > 0 && (
         <>
-          <div className="mb-2 mt-6 flex items-center gap-2">
-            <Share2 className="size-3 text-muted-foreground" />
-            <h4 className="text-xs font-medium text-muted-foreground">Shared Templates</h4>
+          <div className="mt-6 mb-2 flex items-center gap-2">
+            <Share2 className="text-muted-foreground size-3" />
+            <h4 className="text-muted-foreground text-xs font-medium">Shared Templates</h4>
           </div>
           <div className="space-y-2">
             {sharedTemplates.map((tpl) => (
@@ -215,9 +215,9 @@ export function AgentTemplateSettings() {
       {/* Built-in templates */}
       {builtinTemplates.length > 0 && (
         <>
-          <div className="mb-2 mt-6 flex items-center gap-2">
-            <Lock className="size-3 text-muted-foreground" />
-            <h4 className="text-xs font-medium text-muted-foreground">Built-in Templates</h4>
+          <div className="mt-6 mb-2 flex items-center gap-2">
+            <Lock className="text-muted-foreground size-3" />
+            <h4 className="text-muted-foreground text-xs font-medium">Built-in Templates</h4>
           </div>
           <div className="space-y-2">
             {builtinTemplates.map((tpl) => (
@@ -268,36 +268,33 @@ function TemplateCard({
       data-testid={`agent-template-card-${template.id}`}
     >
       {template.color && (
-        <div
-          className="size-3 flex-shrink-0 rounded-full"
-          style={{ backgroundColor: template.color }}
-        />
+        <div className="size-3 shrink-0 rounded-full" style={{ backgroundColor: template.color }} />
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="truncate text-sm font-medium">{template.name}</p>
           {isBuiltin && (
-            <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+            <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium">
               Built-in
             </span>
           )}
         </div>
         {template.description && (
-          <p className="truncate text-xs text-muted-foreground">{template.description}</p>
+          <p className="text-muted-foreground truncate text-xs">{template.description}</p>
         )}
       </div>
       <span
-        className="flex-shrink-0 text-[10px] text-muted-foreground"
+        className="text-muted-foreground shrink-0 text-[10px]"
         data-testid={`agent-template-thread-count-${template.id}`}
       >
         {threadCount} {threadCount === 1 ? 'thread' : 'threads'}
       </span>
       {template.model && (
-        <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px]">
           {template.model}
         </span>
       )}
-      <div className="flex flex-shrink-0 gap-1 opacity-0 group-hover:opacity-100">
+      <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100">
         <Button
           variant="ghost"
           size="icon"
@@ -326,7 +323,7 @@ function TemplateCard({
           <Button
             variant="ghost"
             size="icon"
-            className="size-6 text-destructive"
+            className="text-destructive size-6"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
@@ -362,7 +359,7 @@ function TemplateEditor({
   );
 
   return (
-    <div className="rounded-md border bg-card">
+    <div className="bg-card rounded-md border">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h4 className="text-sm font-medium">Edit Template</h4>
@@ -443,12 +440,12 @@ function CollapsibleSection({
 }) {
   return (
     <Collapsible defaultOpen={defaultOpen}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50">
-        <ChevronDown className="size-3 transition-transform [[data-state=closed]>&]:rotate-[-90deg]" />
+      <CollapsibleTrigger className="text-muted-foreground hover:bg-accent/50 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium">
+        <ChevronDown className="size-3 transition-transform [[data-state=closed]>&]:-rotate-90" />
         {title}
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="px-2 pb-2 pt-1">{children}</div>
+        <div className="px-2 pt-1 pb-2">{children}</div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -467,7 +464,7 @@ function IdentitySection({
     <div className="space-y-3">
       <div className="flex gap-2">
         <div className="flex-1">
-          <label className="mb-1 block text-xs text-muted-foreground">Name</label>
+          <label className="text-muted-foreground mb-1 block text-xs">Name</label>
           <Input
             defaultValue={template.name}
             onBlur={(e) => {
@@ -478,7 +475,7 @@ function IdentitySection({
         </div>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Description</label>
+        <label className="text-muted-foreground mb-1 block text-xs">Description</label>
         <Input
           defaultValue={template.description ?? ''}
           placeholder="What does this agent do?"
@@ -490,7 +487,7 @@ function IdentitySection({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Color</label>
+        <label className="text-muted-foreground mb-1 block text-xs">Color</label>
         <div className="flex gap-1.5">
           {PASTEL_COLORS.map((color) => (
             <button
@@ -506,7 +503,7 @@ function IdentitySection({
           ))}
           {template.color && (
             <button
-              className="ml-1 text-[10px] text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground ml-1 text-[10px]"
               onClick={() => onSave({ color: undefined })}
             >
               clear
@@ -515,7 +512,7 @@ function IdentitySection({
         </div>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Agent Name</label>
+        <label className="text-muted-foreground mb-1 block text-xs">Agent Name</label>
         <Input
           defaultValue={template.agentName ?? ''}
           placeholder="funny-coding-assistant"
@@ -543,7 +540,7 @@ function ModelSection({
 
   return (
     <div>
-      <label className="mb-1 block text-xs text-muted-foreground">Default Model</label>
+      <label className="text-muted-foreground mb-1 block text-xs">Default Model</label>
       <Select value={template.model ?? ''} onValueChange={(v) => onSave({ model: v as any })}>
         <SelectTrigger className="w-full" data-testid="agent-template-model">
           <SelectValue placeholder="Use project default" />
@@ -556,7 +553,7 @@ function ModelSection({
           ))}
         </SelectContent>
       </Select>
-      <p className="mt-1 text-[10px] text-muted-foreground">
+      <p className="text-muted-foreground mt-1 text-[10px]">
         Provider is always Deep Agent. Model can be overridden per-thread.
       </p>
     </div>
@@ -577,7 +574,7 @@ function SystemPromptSection({
   return (
     <div className="space-y-2">
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Mode</label>
+        <label className="text-muted-foreground mb-1 block text-xs">Mode</label>
         <div className="flex gap-1">
           {(['prepend', 'replace', 'append'] as const).map((mode) => (
             <button
@@ -595,7 +592,7 @@ function SystemPromptSection({
             </button>
           ))}
         </div>
-        <p className="mt-1 text-[10px] text-muted-foreground">
+        <p className="text-muted-foreground mt-1 text-[10px]">
           {template.systemPromptMode === 'replace'
             ? 'Replaces the default Deep Agent system prompt entirely.'
             : template.systemPromptMode === 'append'
@@ -604,9 +601,9 @@ function SystemPromptSection({
         </p>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Prompt</label>
+        <label className="text-muted-foreground mb-1 block text-xs">Prompt</label>
         <textarea
-          className="w-full rounded-md border bg-background px-3 py-2 text-xs leading-relaxed placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-3 py-2 text-xs leading-relaxed focus:ring-1 focus:outline-hidden"
           rows={6}
           value={promptText}
           onChange={(e) => setPromptText(e.target.value)}
@@ -646,14 +643,14 @@ function ToolsSection({
 
   return (
     <div>
-      <p className="mb-2 text-[10px] text-muted-foreground">
+      <p className="text-muted-foreground mb-2 text-[10px]">
         Uncheck tools to disable them for this agent template.
       </p>
       <div className="grid grid-cols-2 gap-1.5">
         {DEEPAGENT_TOOLS.map((tool) => (
           <label
             key={tool}
-            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent/50"
+            className="hover:bg-accent/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs"
           >
             <Checkbox
               checked={!disallowed.has(tool)}
@@ -693,14 +690,14 @@ function SkillsSection({
 
   return (
     <div>
-      <p className="mb-2 text-[10px] text-muted-foreground">
+      <p className="text-muted-foreground mb-2 text-[10px]">
         Toggle built-in skills for this agent template.
       </p>
       <div className="space-y-1">
         {BUILTIN_SKILLS.map((skill) => (
           <label
             key={skill}
-            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent/50"
+            className="hover:bg-accent/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs"
           >
             <Checkbox
               checked={!disabled.has(skill)}
@@ -749,7 +746,7 @@ function McpServersSection({
 
   return (
     <div>
-      <p className="mb-2 text-[10px] text-muted-foreground">
+      <p className="text-muted-foreground mb-2 text-[10px]">
         Configure MCP servers that will be attached to this agent at startup.
       </p>
 
@@ -769,25 +766,25 @@ function McpServersSection({
                 className="flex items-center gap-2 rounded border px-2 py-1.5 text-xs"
                 data-testid={`agent-template-mcp-server-${idx}`}
               >
-                <Server className="size-3 flex-shrink-0 text-muted-foreground" />
+                <Server className="text-muted-foreground size-3 shrink-0" />
                 <span className="font-medium">{srv.name}</span>
-                <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
+                <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[10px]">
                   {srv.type}
                 </span>
-                <span className="truncate text-muted-foreground">
+                <span className="text-muted-foreground truncate">
                   {srv.type === 'stdio' ? srv.command : srv.url}
                 </span>
                 <div className="ml-auto flex gap-1">
                   <button
                     onClick={() => setEditingIdx(idx)}
-                    className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground rounded p-0.5"
                     data-testid={`agent-template-mcp-edit-${idx}`}
                   >
                     <Pencil className="size-3" />
                   </button>
                   <button
                     onClick={() => removeServer(idx)}
-                    className="rounded p-0.5 text-muted-foreground hover:text-destructive"
+                    className="text-muted-foreground hover:text-destructive rounded p-0.5"
                     data-testid={`agent-template-mcp-delete-${idx}`}
                   >
                     <Trash2 className="size-3" />
@@ -866,10 +863,10 @@ function McpServerForm({
   };
 
   return (
-    <div className="space-y-2 rounded border bg-muted/30 p-2">
+    <div className="bg-muted/30 space-y-2 rounded border p-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] text-muted-foreground">Name</label>
+          <label className="text-muted-foreground text-[10px]">Name</label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -879,7 +876,7 @@ function McpServerForm({
           />
         </div>
         <div>
-          <label className="text-[10px] text-muted-foreground">Type</label>
+          <label className="text-muted-foreground text-[10px]">Type</label>
           <Select value={type} onValueChange={(v) => setType(v as McpServerType)}>
             <SelectTrigger className="h-7 text-xs" data-testid="agent-template-mcp-type">
               <SelectValue />
@@ -896,7 +893,7 @@ function McpServerForm({
       {type === 'stdio' ? (
         <>
           <div>
-            <label className="text-[10px] text-muted-foreground">Command</label>
+            <label className="text-muted-foreground text-[10px]">Command</label>
             <Input
               value={command}
               onChange={(e) => setCommand(e.target.value)}
@@ -906,7 +903,7 @@ function McpServerForm({
             />
           </div>
           <div>
-            <label className="text-[10px] text-muted-foreground">
+            <label className="text-muted-foreground text-[10px]">
               Args <span className="text-muted-foreground">(comma-separated)</span>
             </label>
             <Input
@@ -920,7 +917,7 @@ function McpServerForm({
         </>
       ) : (
         <div>
-          <label className="text-[10px] text-muted-foreground">URL</label>
+          <label className="text-muted-foreground text-[10px]">URL</label>
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -932,7 +929,7 @@ function McpServerForm({
       )}
 
       <div>
-        <label className="text-[10px] text-muted-foreground">
+        <label className="text-muted-foreground text-[10px]">
           Environment Variables{' '}
           <span className="text-muted-foreground">(KEY=VALUE, one per line)</span>
         </label>
@@ -941,7 +938,7 @@ function McpServerForm({
           onChange={(e) => setEnvStr(e.target.value)}
           placeholder="API_KEY=sk-..."
           rows={2}
-          className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+          className="bg-background w-full rounded-md border px-2 py-1 text-xs"
           data-testid="agent-template-mcp-env"
         />
       </div>
@@ -1000,9 +997,9 @@ function VariablesSection({
 
   return (
     <div>
-      <p className="mb-2 text-[10px] text-muted-foreground">
+      <p className="text-muted-foreground mb-2 text-[10px]">
         Define variables that users fill in when selecting this template. Use{' '}
-        <code className="rounded bg-muted px-1">{'{{VARIABLE_NAME}}'}</code> in your system prompt.
+        <code className="bg-muted rounded px-1">{'{{VARIABLE_NAME}}'}</code> in your system prompt.
       </p>
 
       {variables.length > 0 && (
@@ -1010,7 +1007,7 @@ function VariablesSection({
           {variables.map((v, idx) => (
             <div
               key={idx}
-              className="flex items-start gap-2 rounded border bg-muted/30 p-2"
+              className="bg-muted/30 flex items-start gap-2 rounded border p-2"
               data-testid={`agent-template-variable-${idx}`}
             >
               <div className="flex-1 space-y-1">
@@ -1038,7 +1035,7 @@ function VariablesSection({
               </div>
               <button
                 onClick={() => removeVariable(idx)}
-                className="mt-1 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive mt-1 rounded p-0.5"
                 data-testid={`agent-template-variable-delete-${idx}`}
               >
                 <Trash2 className="size-3" />
@@ -1076,7 +1073,7 @@ function SharingSection({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-medium">Share with all users</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-muted-foreground text-[10px]">
             Shared templates are visible to everyone on this instance.
           </p>
         </div>
@@ -1086,7 +1083,7 @@ function SharingSection({
             onCheckedChange={(checked) => onSave({ shared: checked === true })}
             data-testid="agent-template-shared"
           />
-          <Share2 className="size-3 text-muted-foreground" />
+          <Share2 className="text-muted-foreground size-3" />
         </label>
       </div>
     </div>

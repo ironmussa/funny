@@ -233,7 +233,7 @@ export function TeamMembers() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
         Loading members…
       </div>
     );
@@ -257,7 +257,7 @@ export function TeamMembers() {
               </span>
             </div>
           )}
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mb-3 text-xs">
             Send an invitation to join this organization.
           </p>
           <div className="flex items-center gap-2">
@@ -306,7 +306,7 @@ export function TeamMembers() {
       <h3 className="settings-section-header">Invite Link</h3>
       <div className="settings-card">
         <div className="px-4 py-3.5">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mb-3 text-xs">
             Generate a shareable link to invite people to this organization.
           </p>
           <div className="flex items-center gap-2">
@@ -342,12 +342,12 @@ export function TeamMembers() {
                 return (
                   <div
                     key={link.id}
-                    className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2"
+                    className="border-border/50 flex items-center gap-2 rounded-md border px-3 py-2"
                     data-testid={`team-link-${link.id}`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <code className="truncate text-xs text-muted-foreground">
+                        <code className="text-muted-foreground truncate text-xs">
                           {window.location.origin}/invite/{link.token}
                         </code>
                         <Badge
@@ -361,7 +361,7 @@ export function TeamMembers() {
                           {isExpired ? 'expired' : isMaxed ? 'maxed' : link.role}
                         </Badge>
                       </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <p className="text-muted-foreground mt-0.5 text-xs">
                         {link.useCount} use{link.useCount !== 1 ? 's' : ''}
                         {link.expiresAt &&
                           ` · expires ${new Date(link.expiresAt).toLocaleDateString()}`}
@@ -383,7 +383,7 @@ export function TeamMembers() {
                     </TooltipIconButton>
                     <TooltipIconButton
                       size="icon"
-                      className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      className="text-muted-foreground hover:text-destructive size-7 shrink-0"
                       onClick={() => handleRevokeLink(link.id)}
                       data-testid={`team-link-revoke-${link.id}`}
                       tooltip={t('common.revoke')}
@@ -413,10 +413,10 @@ export function TeamMembers() {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-medium text-foreground">
+                  <p className="text-foreground truncate text-sm font-medium">
                     {member.user.name}
                     {isCurrentUser && (
-                      <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                      <span className="text-muted-foreground ml-1 text-xs">(you)</span>
                     )}
                   </p>
                   <Badge
@@ -427,7 +427,7 @@ export function TeamMembers() {
                     {member.role}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                <p className="text-muted-foreground text-xs">{member.user.email}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Select
@@ -452,7 +452,7 @@ export function TeamMembers() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8 text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive size-8"
                   onClick={() => setRemoveConfirm(member)}
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
@@ -473,8 +473,8 @@ export function TeamMembers() {
             {invitations.map((inv) => (
               <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-foreground">{inv.email}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-foreground truncate text-sm">{inv.email}</p>
+                  <p className="text-muted-foreground text-xs">
                     Expires {new Date(inv.expiresAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -483,7 +483,7 @@ export function TeamMembers() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-7 text-muted-foreground hover:text-destructive"
+                    className="text-muted-foreground hover:text-destructive size-7"
                     onClick={() => handleCancelInvitation(inv.id)}
                     data-testid={`team-invitation-cancel-${inv.id}`}
                   >

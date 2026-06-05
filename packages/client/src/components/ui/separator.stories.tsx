@@ -15,9 +15,9 @@ type Story = StoryObj<typeof meta>;
 export const Horizontal: Story = {
   render: () => (
     <div className="w-64 space-y-3">
-      <p className="text-sm text-foreground">Section above</p>
+      <p className="text-foreground text-sm">Section above</p>
       <Separator />
-      <p className="text-sm text-foreground">Section below</p>
+      <p className="text-foreground text-sm">Section below</p>
     </div>
   ),
 };
@@ -25,9 +25,9 @@ export const Horizontal: Story = {
 export const Vertical: Story = {
   render: () => (
     <div className="flex h-8 items-center gap-3">
-      <span className="text-sm text-foreground">Left</span>
+      <span className="text-foreground text-sm">Left</span>
       <Separator orientation="vertical" />
-      <span className="text-sm text-foreground">Right</span>
+      <span className="text-foreground text-sm">Right</span>
     </div>
   ),
 };

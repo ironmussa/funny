@@ -128,7 +128,7 @@ export function TimelineChart({
 
   if (chartData.length === 0) {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground">{t('analytics.noData')}</div>
+      <div className="text-muted-foreground py-8 text-center text-sm">{t('analytics.noData')}</div>
     );
   }
 

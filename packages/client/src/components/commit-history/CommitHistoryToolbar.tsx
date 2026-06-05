@@ -59,7 +59,7 @@ export function CommitHistoryToolbar({
 }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1">
+    <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -89,12 +89,12 @@ export function CommitHistoryToolbar({
               variant="ghost"
               size="icon-sm"
               onClick={onPublish}
-              className="relative text-muted-foreground"
+              className="text-muted-foreground relative"
               data-testid="history-publish-toolbar"
             >
               <Upload className="icon-base" />
               {unpushedCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] leading-none font-bold text-white">
                   {unpushedCount}
                 </span>
               )}
@@ -125,7 +125,7 @@ export function CommitHistoryToolbar({
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => window.open(prUrl, '_blank')}
-                className="ml-auto text-muted-foreground"
+                className="text-muted-foreground ml-auto"
                 data-testid="history-view-pr"
               >
                 {prState === 'MERGED' ? (
@@ -140,7 +140,7 @@ export function CommitHistoryToolbar({
                 size="icon-sm"
                 onClick={onCreatePR}
                 disabled={isAgentRunning}
-                className="ml-auto text-muted-foreground"
+                className="text-muted-foreground ml-auto"
                 data-testid="history-create-pr"
               >
                 <GitPullRequest className="icon-base" />

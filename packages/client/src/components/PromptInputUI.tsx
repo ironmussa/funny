@@ -142,19 +142,19 @@ export const TemplateSelect = memo(function TemplateSelect({
       <span className="flex items-center gap-1.5">
         {tpl.color && (
           <span
-            className="inline-block size-2 flex-shrink-0 rounded-full"
+            className="inline-block size-2 shrink-0 rounded-full"
             style={{ backgroundColor: tpl.color }}
           />
         )}
         <span className="truncate">{tpl.name}</span>
         {tpl.model && (
-          <span className="flex-shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground">
+          <span className="bg-muted text-muted-foreground shrink-0 rounded px-1 py-0.5 text-[9px]">
             {tpl.model}
           </span>
         )}
       </span>
       {tpl.description && (
-        <span className="block truncate pl-3.5 text-[10px] text-muted-foreground">
+        <span className="text-muted-foreground block truncate pl-3.5 text-[10px]">
           {tpl.description}
         </span>
       )}
@@ -932,7 +932,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   // ── Render ──
   return (
     <div className={cn(!isNewThread && 'px-3 sm:px-4')}>
-      <div className="mx-auto w-full min-w-0 max-w-3xl pb-4">
+      <div className="mx-auto w-full max-w-3xl min-w-0 pb-4">
         {/* Image lightbox */}
         <ImageLightbox
           images={images.map((img, idx) => ({
@@ -948,11 +948,11 @@ export const PromptInputUI = memo(function PromptInputUI({
         {(queuedCount > 0 || queuedMessagesProp.length > 0) && (
           <div
             data-testid="queue-indicator"
-            className="mb-2 space-y-2 rounded-md border border-border/40 px-2.5 py-2"
+            className="border-border/40 mb-2 space-y-2 rounded-md border px-2.5 py-2"
           >
             <div className="flex items-center gap-1.5">
-              <ListOrdered className="icon-xs shrink-0 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
+              <ListOrdered className="icon-xs text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground text-xs">
                 {(queuedMessagesProp.length > 0 ? queuedMessagesProp.length : queuedCount) === 1
                   ? t('prompt.queuedOne', '1 message in queue')
                   : t('prompt.queuedMany', '{{count}} messages in queue', {
@@ -963,12 +963,12 @@ export const PromptInputUI = memo(function PromptInputUI({
             </div>
 
             {queueLoading ? (
-              <div className="flex items-center gap-2 rounded-md border border-dashed border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+              <div className="border-border/60 bg-background/60 text-muted-foreground flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
                 <Loader2 className="icon-xs animate-spin" />
                 {t('prompt.loadingQueuedMessages', 'Loading queued messages...')}
               </div>
             ) : (
-              <div className="divide-y divide-border [&>*]:bg-transparent">
+              <div className="divide-border divide-y *:bg-transparent">
                 {queuedMessagesProp.map((message, index) => {
                   const isEditing = editingQueuedMessageId === message.id;
                   const isBusy = queueActionMessageId === message.id;
@@ -981,7 +981,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                     >
                       {isEditing ? (
                         <div className="flex items-center gap-2">
-                          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          <span className="text-muted-foreground shrink-0 text-[10px] font-medium tracking-wide uppercase">
                             #{index + 1}
                           </span>
                           <Input
@@ -989,7 +989,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                             value={editingQueuedMessageContent}
                             onChange={(event) => setEditingQueuedMessageContent(event.target.value)}
                             disabled={isBusy}
-                            className="h-7 flex-1 bg-background text-xs"
+                            className="bg-background h-7 flex-1 text-xs"
                           />
                           <div className="flex shrink-0 items-center gap-0.5">
                             <Tooltip>
@@ -1037,11 +1037,11 @@ export const PromptInputUI = memo(function PromptInputUI({
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          <span className="text-muted-foreground shrink-0 text-[10px] font-medium tracking-wide uppercase">
                             #{index + 1}
                           </span>
                           <p
-                            className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                            className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
                             title={message.content}
                           >
                             {message.content}
@@ -1123,7 +1123,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                   <img
                     src={`data:${img.source.media_type};base64,${img.source.data}`}
                     alt={`Attachment ${idx + 1}`}
-                    className="max-h-10 min-h-10 min-w-10 max-w-24 cursor-pointer rounded border border-input object-cover transition-opacity hover:opacity-80"
+                    className="border-input max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border object-cover transition-opacity hover:opacity-80"
                     onClick={() => {
                       setLightboxIndex(idx);
                       setLightboxOpen(true);
@@ -1132,7 +1132,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                   <button
                     onClick={() => removeImage(idx)}
                     aria-label={t('prompt.removeImage', 'Remove image')}
-                    className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                    className="bg-destructive text-destructive-foreground absolute -top-1 -right-1 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
                     disabled={loading}
                   >
                     <X className="icon-xs" />
@@ -1194,7 +1194,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                 {templateVars.map((v) => (
                   <div key={v.name} className="flex items-center gap-1.5">
                     <label
-                      className="text-[10px] font-medium text-muted-foreground"
+                      className="text-muted-foreground text-[10px] font-medium"
                       title={v.description || v.name}
                     >
                       {v.name}
@@ -1329,12 +1329,12 @@ export const PromptInputUI = memo(function PromptInputUI({
             </div>
           </div>
           {/* Separator + Bottom bar */}
-          <div className="flex items-center gap-2 border-t border-border px-2 py-1.5">
+          <div className="border-border flex items-center gap-2 border-t px-2 py-1.5">
             <div className="min-w-0 flex-1">
               {isNewThread ? (
                 <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
                   {!isScratch && (
-                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                    <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs">
                       <Switch
                         data-testid="prompt-worktree-switch"
                         checked={createWorktree}
@@ -1378,12 +1378,12 @@ export const PromptInputUI = memo(function PromptInputUI({
                 <div className="flex flex-col">
                   {effectiveCwd && (
                     <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                      <span className="group/cwd flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs text-muted-foreground">
+                      <span className="group/cwd text-muted-foreground flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs">
                         <FolderOpen className="icon-xs shrink-0" />
                         <span className="truncate font-mono">{effectiveCwd}</span>
                         <button
                           type="button"
-                          className="shrink-0 opacity-0 transition-colors hover:text-foreground group-hover/cwd:opacity-100"
+                          className="hover:text-foreground shrink-0 opacity-0 transition-colors group-hover/cwd:opacity-100"
                           onClick={() => {
                             navigator.clipboard.writeText(effectiveCwd);
                             toast.success('Path copied');
@@ -1406,20 +1406,20 @@ export const PromptInputUI = memo(function PromptInputUI({
                         />
                       )}
                       {activeThreadBranch && followUpBranches.length > 0 && (
-                        <ArrowLeft className="icon-xs shrink-0 text-muted-foreground" />
+                        <ArrowLeft className="icon-xs text-muted-foreground shrink-0" />
                       )}
                       {activeThreadBranch && (
                         <button
                           type="button"
                           data-testid="prompt-branch-readonly"
-                          className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+                          className="text-muted-foreground hover:bg-muted flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
                           onClick={() => {
                             navigator.clipboard.writeText(activeThreadBranch);
                             toast.success(t('prompt.branchCopied', 'Branch copied'));
                           }}
                         >
                           <GitBranch className="icon-xs shrink-0" />
-                          <span className="font-mono font-medium text-foreground">
+                          <span className="text-foreground font-mono font-medium">
                             {activeThreadBranch}
                           </span>
                         </button>

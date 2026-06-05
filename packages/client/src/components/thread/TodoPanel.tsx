@@ -43,10 +43,10 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="absolute right-4 top-1/2 z-20 w-64 -translate-y-1/2 rounded-lg border border-border bg-card/95 shadow-lg backdrop-blur-sm"
+      className="border-border bg-card/95 absolute top-1/2 right-4 z-20 w-64 -translate-y-1/2 rounded-lg border shadow-lg backdrop-blur-xs"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
+      <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
         <ListTodo className="icon-sm text-muted-foreground" />
         <span className="flex-1 text-xs font-medium">{t('todoPanel.title')}</span>
         <m.span
@@ -67,7 +67,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           <TooltipTrigger asChild>
             <button
               onClick={() => setMinimized((v) => !v)}
-              className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+              className="text-muted-foreground hover:bg-muted rounded p-0.5 transition-colors"
               aria-label={minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
             >
               {minimized ? <ChevronDown className="icon-xs" /> : <ChevronUp className="icon-xs" />}
@@ -81,7 +81,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           <TooltipTrigger asChild>
             <button
               onClick={onDismiss}
-              className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+              className="text-muted-foreground hover:bg-muted rounded p-0.5 transition-colors"
               aria-label={t('todoPanel.dismiss')}
             >
               <X className="icon-xs" />
@@ -95,7 +95,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
         <>
           {/* Progress bar */}
           <div className="px-3 pt-2">
-            <div className="h-1 overflow-hidden rounded-full bg-muted">
+            <div className="bg-muted h-1 overflow-hidden rounded-full">
               <m.div
                 className={cn(
                   'h-full rounded-full',
@@ -120,7 +120,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                   transition={{ duration: 0.2, delay: i * 0.03 }}
                 >
                   <m.div
-                    className="mt-0.5 flex-shrink-0"
+                    className="mt-0.5 shrink-0"
                     key={`${todo.content}-${todo.status}`}
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -129,7 +129,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                     {todo.status === 'completed' ? (
                       <CircleCheck className="icon-sm text-status-success/80" />
                     ) : todo.status === 'in_progress' ? (
-                      <CircleDot className="icon-sm animate-pulse text-status-info" />
+                      <CircleDot className="icon-sm text-status-info animate-pulse" />
                     ) : (
                       <Circle className="icon-sm text-muted-foreground/50" />
                     )}

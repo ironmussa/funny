@@ -226,7 +226,7 @@ function CollapsedSidebarRail() {
   const { t } = useTranslation();
   const { toggleSidebar } = useSidebar();
   return (
-    <div className="flex h-full w-full flex-col items-center border-r border-sidebar-border bg-sidebar py-2">
+    <div className="border-sidebar-border bg-sidebar flex h-full w-full flex-col items-center border-r py-2">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

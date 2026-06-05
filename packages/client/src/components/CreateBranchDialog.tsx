@@ -72,7 +72,7 @@ export function CreateBranchDialog({
           <DialogTitle>{t('dialog.createBranchTitle')}</DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-1">
             <span>{t('dialog.createBranchBasedOn', 'Your new branch will be based on')}</span>
-            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+            <span className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs">
               <GitBranch className="icon-xs" />
               {sourceBranch || t('dialog.createBranchBasedOnUnknown', 'current branch')}
             </span>

@@ -45,8 +45,8 @@ export const WithCustomLabels: Story = {
 export const InContext: Story = {
   args: { value: 'bunx funny' },
   render: (args) => (
-    <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
-      <code className="text-sm text-foreground">bunx funny</code>
+    <div className="border-border flex items-center gap-2 rounded-md border px-3 py-2">
+      <code className="text-foreground text-sm">bunx funny</code>
       <CopyButton {...args} />
     </div>
   ),
@@ -58,15 +58,15 @@ export const Sizes: Story = {
     <div className="flex items-center gap-4">
       <div className="flex flex-col items-center gap-1">
         <CopyButton value="xs" size="icon-xs" />
-        <span className="text-xs text-muted-foreground">xs</span>
+        <span className="text-muted-foreground text-xs">xs</span>
       </div>
       <div className="flex flex-col items-center gap-1">
         <CopyButton value="sm" size="icon-sm" />
-        <span className="text-xs text-muted-foreground">sm</span>
+        <span className="text-muted-foreground text-xs">sm</span>
       </div>
       <div className="flex flex-col items-center gap-1">
         <CopyButton value="default" size="icon" />
-        <span className="text-xs text-muted-foreground">default</span>
+        <span className="text-muted-foreground text-xs">default</span>
       </div>
     </div>
   ),

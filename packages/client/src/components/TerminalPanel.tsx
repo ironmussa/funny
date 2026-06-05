@@ -589,7 +589,7 @@ export function WebTerminalTabContent({
 
   return (
     <div className={cn('absolute inset-0', active ? 'z-10' : 'z-0 invisible pointer-events-none')}>
-      <div ref={containerRef} className="size-full bg-background pl-2" />
+      <div ref={containerRef} className="bg-background size-full pl-2" />
       <TerminalPhaseOverlay phase={phase} error={tabError} onRestart={handleRestart} />
     </div>
   );
@@ -608,9 +608,9 @@ function TerminalPhaseOverlay({
 
   if (phase === 'error') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-background">
-        <div className="flex items-center gap-2 text-xs text-destructive">
-          <AlertCircle className="icon-base flex-shrink-0" />
+      <div className="bg-background absolute inset-0 flex items-center justify-center">
+        <div className="text-destructive flex items-center gap-2 text-xs">
+          <AlertCircle className="icon-base shrink-0" />
           <span>{error}</span>
         </div>
       </div>
@@ -637,7 +637,7 @@ function TerminalPhaseOverlay({
   if (phase === 'awaiting-runner') {
     return (
       <div
-        className="absolute inset-0 flex items-center justify-center bg-background"
+        className="bg-background absolute inset-0 flex items-center justify-center"
         data-testid="terminal-awaiting-runner"
       >
         <LoadingState
@@ -658,7 +658,7 @@ function TerminalPhaseOverlay({
     phase === 'restoring'
   ) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-background">
+      <div className="bg-background absolute inset-0 flex items-center justify-center">
         <LoadingState
           fill={false}
           layout="inline"
@@ -736,10 +736,10 @@ export function CommandTabContent({
       )}
     >
       {alive && (
-        <div className="flex flex-shrink-0 items-center gap-3 px-2 py-0.5">
+        <div className="flex shrink-0 items-center gap-3 px-2 py-0.5">
           {metrics && (
             <div
-              className="flex items-center gap-3 text-[10px] text-muted-foreground"
+              className="text-muted-foreground flex items-center gap-3 text-[10px]"
               data-testid="command-metrics"
             >
               <span>
@@ -761,7 +761,7 @@ export function CommandTabContent({
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleStop}
-                className="ml-auto text-status-error hover:text-status-error/80"
+                className="text-status-error hover:text-status-error/80 ml-auto"
                 data-testid="command-stop"
               >
                 <Square className="icon-xs" />
@@ -773,7 +773,7 @@ export function CommandTabContent({
       )}
       <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-1">
         <pre
-          className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[#fafafa]"
+          className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap text-[#fafafa]"
           dangerouslySetInnerHTML={{ __html: htmlOutput }}
         />
       </div>
@@ -891,7 +891,7 @@ export function TerminalSearchOverlay({
       onWholeWordChange={setWholeWord}
       regex={regex}
       onRegexChange={setRegex}
-      className="absolute right-3 top-2 z-20 w-[26rem] rounded-md border bg-popover px-1.5 py-1 shadow-md"
+      className="bg-popover absolute top-2 right-3 z-20 w-104 rounded-md border px-1.5 py-1 shadow-md"
     />
   );
 }
@@ -1048,7 +1048,7 @@ function DraggableTerminalTab({
             <span>{tab.label}</span>
           )}
           {!tab.alive && (sessionsChecked || !tab.type || tab.type !== 'pty') && (
-            <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
+            <span className="text-status-pending text-xs">{t('terminal.exited')}</span>
           )}
           <X
             className="icon-xs ml-1 opacity-60 hover:opacity-100"
@@ -1303,7 +1303,7 @@ export function TerminalPanel() {
   return (
     <div
       className={cn(
-        'flex-shrink-0 overflow-hidden',
+        'shrink-0 overflow-hidden',
         !dragging && 'transition-[height] duration-200 ease-in-out',
       )}
       style={{
@@ -1311,7 +1311,7 @@ export function TerminalPanel() {
       }}
     >
       {/* Inner wrapper always keeps full height so xterm terminals preserve their buffer */}
-      <div className="flex flex-col bg-background" style={{ height: panelHeight }}>
+      <div className="bg-background flex flex-col" style={{ height: panelHeight }}>
         {/* Drag handle — matches sidebar rail style */}
         <ResizeHandle
           direction="vertical"
@@ -1322,7 +1322,7 @@ export function TerminalPanel() {
         />
 
         {/* Tab bar */}
-        <div className="flex h-8 flex-shrink-0 items-center gap-0.5 bg-background px-2">
+        <div className="bg-background flex h-8 shrink-0 items-center gap-0.5 px-2">
           <div className="flex flex-1 items-center gap-0.5 overflow-x-auto">
             {visibleTabs.map((tab, index) => (
               <DraggableTerminalTab
@@ -1425,12 +1425,12 @@ export function TerminalPanel() {
         </div>
 
         {/* Terminal content area */}
-        <div className="relative m-2 min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="bg-background relative m-2 min-h-0 flex-1 overflow-hidden">
           {searchVisible && effectiveActiveTabId && (
             <TerminalSearchOverlay activeTabId={effectiveActiveTabId} onClose={closeSearch} />
           )}
           {visibleTabs.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+            <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
               {t('terminal.noProcesses')}
             </div>
           ) : (

@@ -47,7 +47,7 @@ export function KeyboardShortcutsDialog() {
           <DialogTitle>{t('shortcuts.title')}</DialogTitle>
           <DialogDescription>{t('shortcuts.description')}</DialogDescription>
         </DialogHeader>
-        <ul className="flex flex-col divide-y divide-border">
+        <ul className="divide-border flex flex-col divide-y">
           {SHORTCUTS.map((s) => (
             <li
               key={s.labelKey}

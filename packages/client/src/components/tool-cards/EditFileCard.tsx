@@ -172,21 +172,21 @@ export function EditFileCard({
   }, [hasDiff, oldString, newString, snippetBaseLine]);
 
   return (
-    <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border w-full min-w-0 overflow-hidden rounded-lg border text-sm">
       <div className="flex w-full items-center overflow-hidden">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/30"
+          className="hover:bg-accent/30 flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
         >
           <ChevronRight
             className={cn(
-              'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-90',
             )}
           />
-          {!hideLabel && <FilePen className="icon-xs flex-shrink-0 text-muted-foreground" />}
+          {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
           {!hideLabel && (
-            <span className="flex-shrink-0 font-mono font-medium text-foreground">
+            <span className="text-foreground shrink-0 font-mono font-medium">
               {t('tools.editFile')}
             </span>
           )}
@@ -204,7 +204,7 @@ export function EditFileCard({
                       <a
                         href={editorUri}
                         onClick={(e) => e.stopPropagation()}
-                        className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                        className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
                       >
                         {displayPath}
                       </a>
@@ -222,7 +222,7 @@ export function EditFileCard({
                             openFileInEditor(filePath, defaultEditor);
                           }
                         }}
-                        className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                       >
                         {displayPath}
                       </span>
@@ -233,7 +233,7 @@ export function EditFileCard({
               );
             })()}
           {displayTime && (
-            <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+            <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
               {displayTime}
             </span>
           )}
@@ -245,7 +245,7 @@ export function EditFileCard({
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setShowExpandedDiff(true)}
-                className="mr-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground mr-1 shrink-0"
               >
                 <Maximize2 className="icon-sm" />
               </Button>
@@ -255,7 +255,7 @@ export function EditFileCard({
         )}
       </div>
       {expanded && hasDiff && (
-        <div ref={diffSlotRef} className="max-h-[50vh] overflow-hidden border-t border-border/40">
+        <div ref={diffSlotRef} className="border-border/40 max-h-[50vh] overflow-hidden border-t">
           {diffMounted ? (
             <VirtualDiff
               unifiedDiff={unifiedDiff}

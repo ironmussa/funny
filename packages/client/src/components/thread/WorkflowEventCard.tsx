@@ -123,11 +123,11 @@ const HooksEventCard = memo(function HooksEventCard({
         disabled={!hasError}
       >
         {hasFailed ? (
-          <XCircle className="icon-xs shrink-0 text-muted-foreground" />
+          <XCircle className="icon-xs text-muted-foreground shrink-0" />
         ) : (
-          <CheckCircle2 className="icon-xs shrink-0 text-muted-foreground" />
+          <CheckCircle2 className="icon-xs text-muted-foreground shrink-0" />
         )}
-        <span className="shrink-0 font-mono font-medium text-muted-foreground">
+        <span className="text-muted-foreground shrink-0 font-mono font-medium">
           Pre-commit hooks
         </span>
         <Badge
@@ -149,15 +149,15 @@ const HooksEventCard = memo(function HooksEventCard({
           />
         )}
         {!hasError && event.createdAt && (
-          <span className="ml-auto shrink-0 text-muted-foreground">
+          <span className="text-muted-foreground ml-auto shrink-0">
             {timeAgo(event.createdAt, t)}
           </span>
         )}
       </button>
       {expanded && errorOutput && (
-        <ScrollArea className="mx-3 mb-2 mt-1 max-h-60 rounded border border-border/50 bg-black/80">
+        <ScrollArea className="border-border/50 mx-3 mt-1 mb-2 max-h-60 rounded border bg-black/80">
           <pre
-            className="whitespace-pre-wrap break-all p-2 font-mono text-[11px] leading-relaxed text-[#d4d4d4]"
+            className="p-2 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-[#d4d4d4]"
             dangerouslySetInnerHTML={{ __html: errorOutput }}
           />
         </ScrollArea>
@@ -206,7 +206,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
             {isPassed ? 'completed' : 'failed'}
           </span>
           {!isPassed && metadata.error && (
-            <span className="min-w-0 truncate font-mono text-destructive/80">
+            <span className="text-destructive/80 min-w-0 truncate font-mono">
               : {metadata.error}
             </span>
           )}
@@ -236,18 +236,18 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
             {isPassing ? 'PASS' : 'FAIL'}
           </Badge>
           {!isPassing && metadata.findingsCount > 0 && (
-            <span className="font-normal text-muted-foreground/70">
+            <span className="text-muted-foreground/70 font-normal">
               ({metadata.findingsCount} finding{metadata.findingsCount !== 1 ? 's' : ''})
             </span>
           )}
-          <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+          <span className="text-muted-foreground inline-flex items-center gap-0.5">
             <Repeat className="icon-2xs" />
             {metadata.iteration}
           </span>
           {metadata.reviewerThreadId && (
             <button
               data-testid={`workflow-link-reviewer-${metadata.reviewerThreadId}`}
-              className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+              className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.reviewerThreadId)}
             >
               <ExternalLink className="icon-2xs" />
@@ -262,17 +262,17 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     case 'workflow:fix': {
       detail = (
         <>
-          <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+          <span className="text-muted-foreground inline-flex items-center gap-0.5">
             <Repeat className="icon-2xs" />
             {metadata.iteration}
             {metadata.hasChanges === false && (
-              <span className="ml-1 text-muted-foreground/70">(no changes)</span>
+              <span className="text-muted-foreground/70 ml-1">(no changes)</span>
             )}
           </span>
           {metadata.correctorThreadId && (
             <button
               data-testid={`workflow-link-corrector-${metadata.correctorThreadId}`}
-              className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+              className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.correctorThreadId)}
             >
               <ExternalLink className="icon-2xs" />
@@ -287,7 +287,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     case 'workflow:precommit_fix': {
       const isRunning = metadata.status === 'running';
       statusIcon = isRunning ? (
-        <Loader2 className="icon-xs animate-spin text-muted-foreground" />
+        <Loader2 className="icon-xs text-muted-foreground animate-spin" />
       ) : (
         <CheckCircle2 className="icon-xs text-muted-foreground" />
       );
@@ -295,12 +295,12 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
         <>
           <span className="text-muted-foreground">
             {metadata.hookLabel}
-            <span className="ml-1 text-muted-foreground/70">(attempt {metadata.attempt})</span>
+            <span className="text-muted-foreground/70 ml-1">(attempt {metadata.attempt})</span>
           </span>
           {metadata.fixerThreadId && (
             <button
               data-testid={`workflow-link-fixer-${metadata.fixerThreadId}`}
-              className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+              className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.fixerThreadId)}
             >
               <ExternalLink className="icon-2xs" />
@@ -315,7 +315,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     // Git events rendered inside the workflow group
     case 'git:commit': {
       detail = metadata.message ? (
-        <span className="min-w-0 truncate font-mono text-muted-foreground">{metadata.message}</span>
+        <span className="text-muted-foreground min-w-0 truncate font-mono">{metadata.message}</span>
       ) : null;
       break;
     }
@@ -331,7 +331,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
             href={metadata.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-w-0 truncate font-mono text-muted-foreground hover:text-primary hover:underline"
+            className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono hover:underline"
           >
             {metadata.title}
           </a>
@@ -344,7 +344,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       const paths = metadata.paths;
       detail =
         paths && Array.isArray(paths) ? (
-          <span className="min-w-0 truncate font-mono text-muted-foreground">
+          <span className="text-muted-foreground min-w-0 truncate font-mono">
             {paths.length === 1 ? paths[0] : `${paths.length} files`}
           </span>
         ) : null;
@@ -355,13 +355,13 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
   return (
     <div
       data-testid={`workflow-event-${event.type}`}
-      className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30"
+      className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors"
     >
       {statusIcon || <Icon className={cn('icon-xs shrink-0 text-muted-foreground')} />}
-      <span className="shrink-0 font-mono font-medium text-muted-foreground">{config.label}</span>
+      <span className="text-muted-foreground shrink-0 font-mono font-medium">{config.label}</span>
       {detail}
       {event.createdAt && (
-        <span className="ml-auto shrink-0 text-muted-foreground">
+        <span className="text-muted-foreground ml-auto shrink-0">
           {timeAgo(event.createdAt, t)}
         </span>
       )}

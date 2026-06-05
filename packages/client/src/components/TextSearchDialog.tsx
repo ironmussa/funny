@@ -246,7 +246,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
         <DialogOverlay />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-[50%] top-[15%] z-50 flex w-full max-w-2xl translate-x-[-50%] flex-col overflow-hidden rounded-lg border bg-card shadow-xl data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in"
+          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[15%] left-[50%] z-50 flex w-full max-w-2xl translate-x-[-50%] flex-col overflow-hidden rounded-lg border shadow-xl"
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             inputRef.current?.focus();
@@ -353,7 +353,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
               </div>
             )}
             {response?.truncated && (
-              <div className="border-t px-3 py-1.5 text-center text-xs text-muted-foreground">
+              <div className="text-muted-foreground border-t px-3 py-1.5 text-center text-xs">
                 {t('textSearch.truncated', 'Showing first {{count}} matches — refine your search', {
                   count: response.totalMatches,
                 })}
@@ -384,8 +384,8 @@ function FileHeader({
       <Chevron className="icon-xs mr-1 shrink-0 opacity-60" />
       <FileExtensionIcon filePath={path} className="icon-base mr-1.5 shrink-0" />
       <span className="truncate text-xs font-medium">{filename}</span>
-      {dir && <span className="ml-2 truncate text-xs text-muted-foreground">{dir}</span>}
-      <span className="ml-auto pl-2 text-[10px] tabular-nums text-muted-foreground">
+      {dir && <span className="text-muted-foreground ml-2 truncate text-xs">{dir}</span>}
+      <span className="text-muted-foreground ml-auto pl-2 text-[10px] tabular-nums">
         {matchCount}
       </span>
     </>
@@ -403,7 +403,7 @@ function MatchLine({
 }) {
   return (
     <div className="flex w-full min-w-0 items-baseline gap-2 pl-6">
-      <span className="w-10 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+      <span className="text-muted-foreground w-10 shrink-0 text-right text-[10px] tabular-nums">
         {line}
       </span>
       <HighlightText text={text} ranges={ranges} className="truncate font-mono text-xs" />
@@ -412,7 +412,7 @@ function MatchLine({
 }
 
 function EmptyRow({ text }: { text: string }) {
-  return <div className="px-3 py-6 text-center text-sm text-muted-foreground">{text}</div>;
+  return <div className="text-muted-foreground px-3 py-6 text-center text-sm">{text}</div>;
 }
 
 function LoadingRow({ text }: { text: string }) {

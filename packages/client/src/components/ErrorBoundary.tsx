@@ -37,8 +37,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           className="flex size-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
           data-testid={`error-boundary-${this.props.area ?? 'unknown'}`}
         >
-          <AlertTriangle className="size-8 text-status-warning" />
-          <p className="text-sm text-muted-foreground">
+          <AlertTriangle className="text-status-warning size-8" />
+          <p className="text-muted-foreground text-sm">
             Something went wrong{this.props.area ? ` in ${this.props.area}` : ''}.
           </p>
           <Button

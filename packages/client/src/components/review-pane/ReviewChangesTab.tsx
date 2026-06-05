@@ -48,7 +48,7 @@ export function ReviewChangesTabContent({
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         {truncatedInfo.truncated && (
-          <div className="border-b border-sidebar-border bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
+          <div className="border-sidebar-border border-b bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
             {t('review.truncatedWarning', {
               shown: summaries.length,
               total: truncatedInfo.total,
@@ -61,7 +61,7 @@ export function ReviewChangesTabContent({
 
         <ChangesToolbar {...toolbar} />
 
-        <div className="border-b border-sidebar-border bg-background px-2 py-1">
+        <div className="border-sidebar-border bg-background border-b px-2 py-1">
           <SearchBar {...search} />
         </div>
 

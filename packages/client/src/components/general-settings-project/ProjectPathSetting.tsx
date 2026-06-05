@@ -87,12 +87,12 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
 
   return (
     <>
-      <div className="flex flex-col gap-2 border-b border-border/50 px-4 py-3.5 last:border-b-0">
+      <div className="border-border/50 flex flex-col gap-2 border-b px-4 py-3.5 last:border-b-0">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-foreground text-sm font-medium">
             {t('settings.projectPath', 'Project Path')}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-0.5 text-xs">
             {t(
               'settings.projectPathDesc',
               'Absolute path to the git repository. Existing threads keep their original worktrees; new threads will use the updated path.',

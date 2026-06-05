@@ -33,8 +33,8 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
   };
 
   return (
-    <div className="space-y-2.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
-      <div className="flex items-center gap-2 text-xs text-status-warning/80">
+    <div className="border-status-warning/20 bg-status-warning/5 space-y-2.5 rounded-lg border p-3">
+      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
         <Clock className="icon-sm" />
         {t('thread.waitingForResponse')}
       </div>
@@ -43,7 +43,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
         <button
           data-testid="waiting-accept"
           onClick={() => onSend('Continue')}
-          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
         >
           <CheckCircle2 className="icon-sm" />
           {t('thread.acceptContinue')}
@@ -51,7 +51,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
         <button
           data-testid="waiting-reject"
           onClick={() => onSend('No, do not proceed with that action.')}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+          className="border-border bg-muted text-muted-foreground hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
         >
           <XCircle className="icon-sm" />
           {t('thread.reject')}
@@ -161,35 +161,35 @@ export function PermissionApprovalCard({
   };
 
   return (
-    <div className="space-y-2.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
-      <div className="flex items-center gap-2 text-xs text-status-warning/80">
+    <div className="border-status-warning/20 bg-status-warning/5 space-y-2.5 rounded-lg border p-3">
+      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
         <ShieldQuestion className="icon-sm" />
         {t('thread.permissionRequired')}
       </div>
-      <p className="text-xs text-foreground">{t('thread.permissionMessage', { tool: toolName })}</p>
+      <p className="text-foreground text-xs">{t('thread.permissionMessage', { tool: toolName })}</p>
       {displayedInput && (
         <div className="space-y-1">
           {bashCommand && highlightedBash ? (
-            <ScrollArea className="max-h-32 rounded bg-muted">
+            <ScrollArea className="bg-muted max-h-32 rounded">
               <pre
                 data-testid="permission-card-tool-input"
                 style={{
                   fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
                   lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
                 }}
-                className="hljs whitespace-pre-wrap break-all p-2 font-mono"
+                className="hljs p-2 font-mono break-all whitespace-pre-wrap"
                 dangerouslySetInnerHTML={{ __html: highlightedBash }}
               />
             </ScrollArea>
           ) : (
-            <ScrollArea className="max-h-32 rounded bg-muted">
+            <ScrollArea className="bg-muted max-h-32 rounded">
               <pre
                 data-testid="permission-card-tool-input"
                 style={{
                   fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
                   lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
                 }}
-                className="whitespace-pre-wrap break-all p-2 font-mono text-muted-foreground"
+                className="text-muted-foreground p-2 font-mono break-all whitespace-pre-wrap"
               >
                 {displayedInput}
               </pre>
@@ -199,7 +199,7 @@ export function PermissionApprovalCard({
             <button
               data-testid="permission-card-tool-input-toggle"
               onClick={() => setShowFullInput((v) => !v)}
-              className="text-xs text-muted-foreground underline hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground text-xs underline"
             >
               {showFullInput ? t('common.showLess') : t('common.showMore')}
             </button>

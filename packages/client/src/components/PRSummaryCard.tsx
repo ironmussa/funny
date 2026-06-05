@@ -50,7 +50,7 @@ export function CheckIcon({ check }: { check: CICheck }) {
     case 'action_required':
       return <XCircle className="size-3.5 shrink-0 text-red-500" />;
     case 'cancelled':
-      return <Circle className="size-3.5 shrink-0 text-muted-foreground" />;
+      return <Circle className="text-muted-foreground size-3.5 shrink-0" />;
     default:
       return <Clock className="size-3.5 shrink-0 text-yellow-500" />;
   }
@@ -94,7 +94,7 @@ export function PRStateBadge({
       <Badge
         variant="outline"
         size="xxs"
-        className="gap-1 border-muted-foreground/30 bg-muted text-muted-foreground"
+        className="border-muted-foreground/30 bg-muted text-muted-foreground gap-1"
       >
         <GitPullRequest className="size-2.5" />
         Draft
@@ -225,7 +225,7 @@ export function PRSummaryCard({
 
   return (
     <div
-      className="border-b border-sidebar-border bg-muted/30 px-3 py-2 text-xs"
+      className="border-sidebar-border bg-muted/30 border-b px-3 py-2 text-xs"
       data-testid="pr-summary-card"
     >
       {/* Header row: DiffStats → PRBadge → StateBadge (consistent with sidebar order) */}
@@ -298,7 +298,7 @@ export function PRSummaryCard({
       {/* PR title */}
       {detail && (
         <p
-          className="mt-1 truncate text-[11px] text-muted-foreground"
+          className="text-muted-foreground mt-1 truncate text-[11px]"
           title={detail.title}
           data-testid="pr-summary-title"
         >
@@ -318,7 +318,7 @@ export function PRSummaryCard({
       {detail && totalChecks > 0 && (
         <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
           <CollapsibleTrigger
-            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px]"
             data-testid="pr-summary-checks-toggle"
           >
             {checksOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
@@ -339,14 +339,14 @@ export function PRSummaryCard({
                   <CheckIcon check={check} />
                   <span className="truncate">{check.name}</span>
                   {check.app_name && (
-                    <span className="shrink-0 text-muted-foreground">({check.app_name})</span>
+                    <span className="text-muted-foreground shrink-0">({check.app_name})</span>
                   )}
                   {check.html_url && (
                     <a
                       href={check.html_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                      className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
                       data-testid={`pr-check-link-${check.id}`}
                     >
                       <ExternalLink className="size-2.5" />
@@ -356,7 +356,7 @@ export function PRSummaryCard({
               ))}
               {hasMoreChecks && !checksOpen && (
                 <button
-                  className="text-[10px] text-primary hover:underline"
+                  className="text-primary text-[10px] hover:underline"
                   onClick={() => setChecksOpen(true)}
                   data-testid="pr-summary-show-more-checks"
                 >
@@ -370,7 +370,7 @@ export function PRSummaryCard({
 
       {/* Loading skeleton when no detail yet */}
       {!detail && loadingDetail && (
-        <div className="mt-1 flex items-center gap-2 text-muted-foreground">
+        <div className="text-muted-foreground mt-1 flex items-center gap-2">
           <Loader2 className="size-3 animate-spin" />
           <span className="text-[10px]">Loading PR details…</span>
         </div>

@@ -77,7 +77,7 @@ export function CommandHighlight({ command }: { command: string }) {
   }
 
   return (
-    <div className="mt-0.5 min-w-0 overflow-hidden truncate rounded px-1.5 py-0.5 font-mono text-[11px]">
+    <div className="mt-0.5 min-w-0 truncate overflow-hidden rounded px-1.5 py-0.5 font-mono text-[11px]">
       {parts.length > 0 ? parts : command}
     </div>
   );

@@ -66,7 +66,7 @@ const sizeConfig = {
 } as const;
 
 /**
- * Compute a drop-shadow filter that gives the clipped arrow shape a visible
+ * Compute a drop-shadow-sm filter that gives the clipped arrow shape a visible
  * edge.  Uses a darkened shade of the segment's own color so the divider
  * blends naturally instead of appearing as a harsh white/black line.
  */
@@ -160,7 +160,7 @@ export function PowerlineBar({
           return (
             <Tooltip key={segment.key}>
               <TooltipTrigger asChild>
-                {/* Outer wrapper applies drop-shadow that follows the clipped
+                {/* Outer wrapper applies drop-shadow-sm that follows the clipped
                     arrow shape of the inner div, creating a visible edge
                     between segments even when they share the same color. */}
                 <div

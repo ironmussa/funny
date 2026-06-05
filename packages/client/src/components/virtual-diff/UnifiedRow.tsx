@@ -46,7 +46,7 @@ export const UnifiedRow = memo(function UnifiedRow({
   return (
     <div
       className={cn(
-        'flex font-mono text-[length:var(--diff-font-size)]',
+        'flex font-mono text-(length:--diff-font-size)',
         wrap ? 'items-start' : 'items-center',
         selectable && 'pl-1',
       )}
@@ -58,7 +58,7 @@ export const UnifiedRow = memo(function UnifiedRow({
       {...(selectable && isChangeLine && lineIdx != null ? { 'data-line-idx': lineIdx } : {})}
     >
       {selectable && (
-        <span className="flex w-5 flex-shrink-0 items-center justify-center" data-gutter>
+        <span className="flex w-5 shrink-0 items-center justify-center" data-gutter>
           {isChangeLine && (
             <TriCheckbox
               state={selected ? 'checked' : 'unchecked'}
@@ -69,20 +69,18 @@ export const UnifiedRow = memo(function UnifiedRow({
         </span>
       )}
       <span
-        className="w-11 flex-shrink-0 select-none pr-1 pt-px text-right text-muted-foreground/40"
+        className="text-muted-foreground/40 w-11 shrink-0 pt-px pr-1 text-right select-none"
         data-gutter
       >
         {line.oldNo ?? ''}
       </span>
       <span
-        className="w-11 flex-shrink-0 select-none pr-1 pt-px text-right text-muted-foreground/40"
+        className="text-muted-foreground/40 w-11 shrink-0 pt-px pr-1 text-right select-none"
         data-gutter
       >
         {line.newNo ?? ''}
       </span>
-      <span className={cn('w-4 flex-shrink-0 select-none pt-px text-center', textClass)}>
-        {prefix}
-      </span>
+      <span className={cn('w-4 shrink-0 select-none pt-px text-center', textClass)}>{prefix}</span>
       <span
         className={cn(
           wrap ? 'whitespace-pre-wrap break-all pr-4' : 'whitespace-pre pr-4',

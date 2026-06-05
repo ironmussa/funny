@@ -31,11 +31,11 @@ export const BothSizes: Story = {
     <div className="flex items-center gap-6">
       <div className="flex flex-col items-center gap-2">
         <D4CAnimation size="default" />
-        <span className="text-xs text-muted-foreground">Default</span>
+        <span className="text-muted-foreground text-xs">Default</span>
       </div>
       <div className="flex flex-col items-center gap-2">
         <D4CAnimation size="sm" />
-        <span className="text-xs text-muted-foreground">Small</span>
+        <span className="text-muted-foreground text-xs">Small</span>
       </div>
     </div>
   ),

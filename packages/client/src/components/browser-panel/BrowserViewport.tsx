@@ -166,7 +166,7 @@ export function BrowserViewport() {
   // `bg-background`. Canvas + overlay both fill that wrapper exactly, so
   // click coords map cleanly 1:1 to the visible content.
   return (
-    <div className="relative flex h-full w-full items-center justify-center bg-background p-2">
+    <div className="bg-background relative flex h-full w-full items-center justify-center p-2">
       {sessionId ? (
         <div
           className="relative max-h-full max-w-full"
@@ -184,7 +184,7 @@ export function BrowserViewport() {
             ref={overlayRef}
             data-testid="browser-panel-overlay"
             tabIndex={0}
-            className="absolute inset-0 select-none focus:outline-none"
+            className="absolute inset-0 select-none focus:outline-hidden"
             style={{
               pointerEvents: overlayPointer,
               visibility: overlaysVisible ? 'visible' : 'hidden',
@@ -209,7 +209,7 @@ export function BrowserViewport() {
         </div>
       ) : (
         <div
-          className="text-center text-sm text-muted-foreground"
+          className="text-muted-foreground text-center text-sm"
           data-testid="browser-panel-empty"
         >
           {loadedUrl ? null : 'Paste a URL above to start.'}
@@ -219,7 +219,7 @@ export function BrowserViewport() {
       {showCdpSpinner && (
         <div
           data-testid="browser-panel-spawning"
-          className="absolute inset-0 flex items-center justify-center bg-background/80 text-sm text-muted-foreground"
+          className="bg-background/80 text-muted-foreground absolute inset-0 flex items-center justify-center text-sm"
         >
           Spawning Chrome…
         </div>
@@ -228,13 +228,13 @@ export function BrowserViewport() {
       {showCdpDisconnected && (
         <div
           data-testid="browser-panel-disconnected"
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/90 px-6 text-center text-sm text-muted-foreground"
+          className="bg-background/90 text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-sm"
         >
           <div>Browser session disconnected.</div>
           {useBrowserPanelStore.getState().sessionError && (
             <pre
               data-testid="browser-panel-session-error"
-              className="max-h-40 max-w-full overflow-auto whitespace-pre-wrap rounded-md border border-destructive/30 bg-destructive/5 p-2 text-left text-xs text-destructive"
+              className="border-destructive/30 bg-destructive/5 text-destructive max-h-40 max-w-full overflow-auto rounded-md border p-2 text-left text-xs whitespace-pre-wrap"
             >
               {useBrowserPanelStore.getState().sessionError}
             </pre>
@@ -245,7 +245,7 @@ export function BrowserViewport() {
             onClick={() => {
               if (loadedUrl) void useBrowserPanelStore.getState().openBrowserSession(loadedUrl);
             }}
-            className="rounded-md border border-border bg-card px-3 py-1 text-foreground hover:bg-muted"
+            className="border-border bg-card text-foreground hover:bg-muted rounded-md border px-3 py-1"
           >
             Reconnect
           </button>

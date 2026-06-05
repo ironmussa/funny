@@ -141,7 +141,7 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
       {liveRect && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute border-2 border-dashed border-primary bg-primary/10"
+          className="border-primary bg-primary/10 pointer-events-none absolute border-2 border-dashed"
           style={{
             left: liveRect.x,
             top: liveRect.y,
@@ -162,7 +162,7 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
               type="button"
               data-region-marker="true"
               data-testid={`browser-panel-region-${index}`}
-              className="absolute flex items-start justify-end border-2 border-dashed border-primary bg-primary/5 transition-colors hover:bg-primary/15"
+              className="border-primary bg-primary/5 hover:bg-primary/15 absolute flex items-start justify-end border-2 border-dashed transition-colors"
               style={{
                 left: a.x,
                 top: a.y,
@@ -175,7 +175,7 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
                 setOpenRegionId(a.id);
               }}
             >
-              <span className="m-0.5 inline-flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              <span className="bg-primary text-primary-foreground m-0.5 inline-flex size-5 items-center justify-center rounded-full text-[10px] font-semibold">
                 {index}
               </span>
             </button>

@@ -96,7 +96,7 @@ export function WorktreeDeleteDialog({
         {/* Worktree status section */}
         <div className="space-y-2">
           {statusLoading ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2 py-2 text-xs">
               <Loader2 className="size-3.5 animate-spin" />
               {t('dialog.worktreeStatusLoading')}
             </div>
@@ -147,14 +147,14 @@ export function WorktreeDeleteDialog({
           {/* Branch cleanup option */}
           {target?.branchName && (
             <label
-              className="flex cursor-pointer items-center gap-2 rounded-md border border-border/50 px-3 py-2"
+              className="border-border/50 flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2"
               data-testid="worktree-delete-branch-checkbox"
             >
               <Checkbox
                 checked={deleteBranch}
                 onCheckedChange={(v) => setDeleteBranch(v === true)}
               />
-              <GitBranch className="size-3.5 text-muted-foreground" />
+              <GitBranch className="text-muted-foreground size-3.5" />
               <span className="text-xs">
                 {t('dialog.deleteBranchOption', { branch: target.branchName })}
               </span>

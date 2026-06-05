@@ -180,7 +180,7 @@ function DrawToolbar({
   return (
     <div
       data-testid="browser-panel-draw-toolbar"
-      className="absolute bottom-2 left-1/2 z-10 flex max-w-[90%] -translate-x-1/2 flex-col gap-2 rounded-md border border-border bg-card/95 p-2 shadow-md backdrop-blur"
+      className="border-border bg-card/95 absolute bottom-2 left-1/2 z-10 flex max-w-[90%] -translate-x-1/2 flex-col gap-2 rounded-md border p-2 shadow-md backdrop-blur-sm"
     >
       <div className="flex items-center gap-2">
         {DRAW_COLORS.map((color) => {

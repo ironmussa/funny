@@ -56,12 +56,12 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
   const metadata = parseEventData(event.data);
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
-      <div className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30">
-        <Icon className="icon-xs shrink-0 text-muted-foreground" />
-        <span className="shrink-0 font-mono font-medium text-foreground">{config.label}</span>
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
+      <div className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors">
+        <Icon className="icon-xs text-muted-foreground shrink-0" />
+        <span className="text-foreground shrink-0 font-mono font-medium">{config.label}</span>
         {metadata.message && (
-          <span className="min-w-0 truncate font-mono text-muted-foreground">
+          <span className="text-muted-foreground min-w-0 truncate font-mono">
             {metadata.message}
           </span>
         )}
@@ -70,28 +70,28 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
             href={metadata.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-w-0 truncate font-mono text-muted-foreground hover:text-primary hover:underline"
+            className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono hover:underline"
           >
             {metadata.title}
           </a>
         )}
         {metadata.sourceBranch && metadata.targetBranch && (
-          <span className="font-mono text-muted-foreground">
+          <span className="text-muted-foreground font-mono">
             {metadata.sourceBranch} → {metadata.targetBranch}
           </span>
         )}
         {metadata.paths && Array.isArray(metadata.paths) && (
-          <span className="min-w-0 truncate font-mono text-muted-foreground">
+          <span className="text-muted-foreground min-w-0 truncate font-mono">
             {metadata.paths.length === 1 ? metadata.paths[0] : `${metadata.paths.length} files`}
           </span>
         )}
         {metadata.output && !metadata.paths && !metadata.message && !metadata.title && (
-          <span className="min-w-0 truncate font-mono text-muted-foreground">
+          <span className="text-muted-foreground min-w-0 truncate font-mono">
             {metadata.output.split('\n')[0].slice(0, 80)}
           </span>
         )}
         {event.createdAt && (
-          <span className="ml-auto shrink-0 text-muted-foreground">
+          <span className="text-muted-foreground ml-auto shrink-0">
             {timeAgo(event.createdAt, t)}
           </span>
         )}

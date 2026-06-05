@@ -156,7 +156,7 @@ export function ProjectConfigSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground py-6 text-center text-sm">
         {t('projectConfig.noProject')}
       </div>
     );
@@ -164,7 +164,7 @@ export function ProjectConfigSettings() {
 
   if (loading) {
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">{t('common.loading')}</div>
+      <div className="text-muted-foreground py-6 text-center text-sm">{t('common.loading')}</div>
     );
   }
 
@@ -176,7 +176,7 @@ export function ProjectConfigSettings() {
           <FileText className="icon-base text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('projectConfig.envFiles')}</h3>
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mb-3 text-xs">
           {t('projectConfig.envFilesDescription')}
         </p>
 
@@ -194,7 +194,7 @@ export function ProjectConfigSettings() {
               />
               <TooltipIconButton
                 onClick={() => removeEnvFile(i)}
-                className="text-muted-foreground opacity-0 hover:text-status-error group-hover:opacity-100"
+                className="text-muted-foreground hover:text-status-error opacity-0 group-hover:opacity-100"
                 data-testid={`env-file-remove-${i}`}
                 tooltip={t('common.delete')}
               >
@@ -233,7 +233,7 @@ export function ProjectConfigSettings() {
           <Network className="icon-base text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('projectConfig.portGroups')}</h3>
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mb-3 text-xs">
           {t('projectConfig.portGroupsDescription')}
         </p>
 
@@ -241,7 +241,7 @@ export function ProjectConfigSettings() {
           {(config.portGroups ?? []).map((group, gi) => (
             <div
               key={gi}
-              className="group rounded-lg border border-border/50 bg-card p-3"
+              className="group border-border/50 bg-card rounded-lg border p-3"
               data-testid={`port-group-${gi}`}
             >
               <div className="flex items-center justify-between">
@@ -268,7 +268,7 @@ export function ProjectConfigSettings() {
                 </div>
                 <TooltipIconButton
                   onClick={() => removePortGroup(gi)}
-                  className="text-muted-foreground opacity-0 hover:text-status-error group-hover:opacity-100"
+                  className="text-muted-foreground hover:text-status-error opacity-0 group-hover:opacity-100"
                   data-testid={`port-group-remove-${gi}`}
                   tooltip={t('common.delete')}
                 >
@@ -281,7 +281,7 @@ export function ProjectConfigSettings() {
                   <Badge
                     key={vi}
                     variant="outline"
-                    className="cursor-pointer gap-1 font-mono text-xs hover:bg-destructive/10 hover:text-status-error"
+                    className="hover:bg-destructive/10 hover:text-status-error cursor-pointer gap-1 font-mono text-xs"
                     onClick={() => removeEnvVarFromGroup(gi, vi)}
                     data-testid={`port-group-${gi}-var-${vi}`}
                   >
@@ -377,7 +377,7 @@ export function ProjectConfigSettings() {
           <Terminal className="icon-base text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('projectConfig.postCreate')}</h3>
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="text-muted-foreground mb-3 text-xs">
           {t('projectConfig.postCreateDescription')}
         </p>
 
@@ -397,7 +397,7 @@ export function ProjectConfigSettings() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => removePostCreate(i)}
-                className="text-muted-foreground opacity-0 hover:text-status-error group-hover:opacity-100"
+                className="text-muted-foreground hover:text-status-error opacity-0 group-hover:opacity-100"
                 data-testid={`post-create-remove-${i}`}
               >
                 <Trash2 className="icon-xs" />

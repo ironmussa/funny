@@ -133,10 +133,10 @@ export function GeneralSettings() {
       {/* Project section (only shown when a project is selected) */}
       {selectedProject && (
         <>
-          <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-muted-foreground px-1 pb-2 text-xs font-semibold tracking-wider uppercase">
             Project
           </h3>
-          <div className="mb-6 overflow-hidden rounded-lg border border-border/50">
+          <div className="border-border/50 mb-6 overflow-hidden rounded-lg border">
             <ProjectPathSetting projectId={selectedProject.id} currentPath={selectedProject.path} />
             <ProjectColorPicker
               projectId={selectedProject.id}
@@ -322,24 +322,24 @@ export function GeneralSettings() {
       )}
 
       {/* Permissions */}
-      <h3 className="mt-6 px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <h3 className="text-muted-foreground mt-6 px-1 pb-2 text-xs font-semibold tracking-wider uppercase">
         {t('settings.permissions')}
       </h3>
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      <div className="border-border/50 overflow-hidden rounded-lg border">
         <div className="px-4 py-3.5">
-          <p className="text-sm font-medium text-foreground">{t('settings.toolPermissions')}</p>
-          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+          <p className="text-foreground text-sm font-medium">{t('settings.toolPermissions')}</p>
+          <p className="text-muted-foreground mt-0.5 mb-3 text-xs">
             {t('settings.toolPermissionsDesc')}
           </p>
           <div className="space-y-1">
             {ALL_STANDARD_TOOLS.map((tool) => (
               <div
                 key={tool}
-                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50"
+                className="hover:bg-muted/50 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors"
               >
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="font-mono text-sm text-foreground">{tool}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-foreground font-mono text-sm">{tool}</span>
+                  <span className="text-muted-foreground text-xs">
                     {t(TOOL_LABELS[tool] ?? tool)}
                   </span>
                 </div>
@@ -359,7 +359,7 @@ export function GeneralSettings() {
             <button
               onClick={() => saveResetToolPermissions()}
               data-testid="settings-reset-defaults"
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors"
             >
               <RotateCcw className="icon-xs" />
               {t('settings.resetDefaults')}

@@ -137,7 +137,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="issues-tab">
-      <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1">
+      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -145,7 +145,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
               size="icon-sm"
               onClick={refresh}
               disabled={loading}
-              className="shrink-0 text-muted-foreground"
+              className="text-muted-foreground shrink-0"
               data-testid="issues-refresh"
             >
               <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
@@ -187,7 +187,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
                 variant="ghost"
                 size="icon-sm"
                 asChild
-                className="shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid="issues-open-github"
               >
                 <a
@@ -213,7 +213,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
           label={t('review.issues.loading', 'Loading issues…')}
         />
       ) : error ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center text-sm text-muted-foreground">
+        <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center px-4 py-12 text-center text-sm">
           <p>{t('issues.error', 'Failed to load issues')}</p>
           <p className="mt-1 text-xs">{error}</p>
         </div>
@@ -228,11 +228,11 @@ export function IssuesTab({ visible }: IssuesTabProps) {
         />
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="divide-y divide-sidebar-border">
+          <div className="divide-sidebar-border divide-y">
             {issues.map((issue) => (
               <div
                 key={issue.number}
-                className="group flex items-start gap-2 px-3 py-2 transition-colors hover:bg-sidebar-accent/50"
+                className="group hover:bg-sidebar-accent/50 flex items-start gap-2 px-3 py-2 transition-colors"
                 data-testid={`issue-item-${issue.number}`}
               >
                 {issue.state === 'open' ? (
@@ -246,21 +246,21 @@ export function IssuesTab({ visible }: IssuesTabProps) {
                       href={issue.html_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="line-clamp-2 text-xs font-medium leading-tight transition-colors hover:text-primary"
+                      className="hover:text-primary line-clamp-2 text-xs leading-tight font-medium transition-colors"
                     >
                       {issue.title}
                     </a>
                   </div>
                   {issue.body ? (
                     <p
-                      className="mt-1 line-clamp-3 whitespace-pre-wrap text-[10px] text-muted-foreground"
+                      className="text-muted-foreground mt-1 line-clamp-3 text-[10px] whitespace-pre-wrap"
                       data-testid={`issue-body-${issue.number}`}
                     >
                       {issue.body}
                     </p>
                   ) : null}
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] text-muted-foreground">#{issue.number}</span>
+                    <span className="text-muted-foreground text-[10px]">#{issue.number}</span>
                     {issue.labels.map((label) => (
                       <Badge
                         key={label.name}
@@ -298,14 +298,14 @@ export function IssuesTab({ visible }: IssuesTabProps) {
                         </Badge>
                       </a>
                     )}
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-muted-foreground text-[10px]">
                       {timeAgo(issue.created_at)}
                     </span>
                     {issue.user && (
-                      <span className="text-[10px] text-muted-foreground">{issue.user.login}</span>
+                      <span className="text-muted-foreground text-[10px]">{issue.user.login}</span>
                     )}
                     {issue.comments > 0 && (
-                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                      <span className="text-muted-foreground flex items-center gap-0.5 text-[10px]">
                         <MessageSquare className="icon-xs" />
                         {issue.comments}
                       </span>
@@ -336,7 +336,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
           </div>
 
           {hasMore && (
-            <div className="flex justify-center border-t border-sidebar-border py-2">
+            <div className="border-sidebar-border flex justify-center border-t py-2">
               <Button
                 variant="ghost"
                 size="sm"

@@ -27,16 +27,16 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8 shadow-lg">
+    <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="border-border bg-card w-full max-w-sm space-y-6 rounded-lg border p-8 shadow-lg">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-foreground">{t('app.title')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t('auth.signInPrompt')}</p>
+          <h1 className="text-foreground text-2xl font-semibold">{t('app.title')}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{t('auth.signInPrompt')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="username" className="text-sm font-medium text-foreground">
+            <label htmlFor="username" className="text-foreground text-sm font-medium">
               {t('auth.username')}
             </label>
             <Input
@@ -51,7 +51,7 @@ export function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-foreground">
+            <label htmlFor="password" className="text-foreground text-sm font-medium">
               {t('auth.password')}
             </label>
             <Input
@@ -64,7 +64,7 @@ export function LoginPage() {
             />
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={loading || !username || !password}>
             {loading ? t('auth.signingIn') : t('auth.signIn')}

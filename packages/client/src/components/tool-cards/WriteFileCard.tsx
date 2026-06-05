@@ -62,20 +62,20 @@ export function WriteFileCard({
   }, [content, hljsLang]);
 
   return (
-    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+    <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/30"
+        className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
       >
         <ChevronRight
           className={cn(
-            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
-        {!hideLabel && <FileText className="icon-xs flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <FileText className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (
-          <span className="flex-shrink-0 font-mono font-medium text-foreground">
+          <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.writeFile')}
           </span>
         )}
@@ -93,7 +93,7 @@ export function WriteFileCard({
                     <a
                       href={editorUri}
                       onClick={(e) => e.stopPropagation()}
-                      className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                      className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
                     >
                       {displayPath}
                     </a>
@@ -111,7 +111,7 @@ export function WriteFileCard({
                           openFileInEditor(filePath, defaultEditor);
                         }
                       }}
-                      className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                      className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                     >
                       {displayPath}
                     </span>
@@ -122,21 +122,21 @@ export function WriteFileCard({
             );
           })()}
         {displayTime && (
-          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
             {displayTime}
           </span>
         )}
       </button>
       {expanded && content != null && (
         <ScrollArea
-          className="border-t border-border/40"
+          className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh]' }}
         >
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/30 bg-background px-3 py-1 backdrop-blur-sm">
-            <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
-            <div className="flex flex-shrink-0 items-center gap-1">
+          <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
+            <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
+            <div className="flex shrink-0 items-center gap-1">
               {ext && (
-                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">
                   {ext}
                 </span>
               )}
@@ -188,14 +188,14 @@ export function WriteFileCard({
                 <MessageContent content={content} />
               </div>
             ) : highlighted ? (
-              <pre className="code-viewer whitespace-pre-wrap break-all px-3 py-2 font-mono text-sm leading-relaxed text-foreground/80">
+              <pre className="code-viewer text-foreground/80 px-3 py-2 font-mono text-sm leading-relaxed break-all whitespace-pre-wrap">
                 <code
                   className={`hljs language-${hljsLang}`}
                   dangerouslySetInnerHTML={{ __html: highlighted }}
                 />
               </pre>
             ) : (
-              <pre className="whitespace-pre-wrap break-all px-3 py-2 font-mono text-sm leading-relaxed text-foreground/80">
+              <pre className="text-foreground/80 px-3 py-2 font-mono text-sm leading-relaxed break-all whitespace-pre-wrap">
                 {content}
               </pre>
             )}

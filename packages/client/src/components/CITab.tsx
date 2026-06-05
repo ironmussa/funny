@@ -93,7 +93,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="ci-tab">
       {/* Toolbar / summary */}
-      <div className="flex items-center gap-3 border-b border-sidebar-border px-3 py-1.5 text-xs">
+      <div className="border-sidebar-border flex items-center gap-3 border-b px-3 py-1.5 text-xs">
         {detail && total > 0 && (
           <span className="font-medium" data-testid="ci-summary-counts">
             {t('review.ci.passedCount', '{{passed}}/{{total}} passed', {
@@ -139,7 +139,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
               size="icon-sm"
               onClick={handleRefresh}
               disabled={loadingDetail}
-              className="shrink-0 text-muted-foreground"
+              className="text-muted-foreground shrink-0"
               data-testid="ci-refresh"
             >
               <RefreshCw className={cn('icon-base', loadingDetail && 'animate-spin')} />
@@ -155,7 +155,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
                 variant="ghost"
                 size="icon-sm"
                 asChild
-                className="shrink-0 text-muted-foreground"
+                className="text-muted-foreground shrink-0"
                 data-testid="ci-open-github"
               >
                 <a href={prUrl} target="_blank" rel="noopener noreferrer">
@@ -179,7 +179,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
       ) : (
         <ScrollArea className="flex min-h-0 flex-1 flex-col">
           <div
-            className="flex flex-col divide-y divide-sidebar-border"
+            className="divide-sidebar-border flex flex-col divide-y"
             data-testid="ci-checks-list"
           >
             {checks.map((check) => (
@@ -191,7 +191,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
                 <CheckIcon check={check} />
                 <span className="truncate font-medium">{check.name}</span>
                 {check.app_name && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                  <span className="text-muted-foreground shrink-0 text-[10px]">
                     ({check.app_name})
                   </span>
                 )}
@@ -200,7 +200,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
                     href={check.html_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
                     data-testid={`ci-check-link-${check.id}`}
                   >
                     <ExternalLink className="size-3" />

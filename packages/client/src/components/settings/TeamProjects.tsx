@@ -124,9 +124,9 @@ export function TeamProjects() {
             </Badge>
           )}
         </h3>
-        <div className="settings-card divide-y divide-border">
+        <div className="settings-card divide-border divide-y">
           {teamProjects.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-muted-foreground">
+            <p className="text-muted-foreground px-4 py-3 text-sm">
               No projects shared with the team yet. Use the dropdown above to share one.
             </p>
           ) : (
@@ -144,11 +144,11 @@ export function TeamProjects() {
                     />
                   )}
                   <span className="truncate text-sm font-medium">{project.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">{project.path}</span>
+                  <span className="text-muted-foreground truncate text-xs">{project.path}</span>
                 </div>
                 <TooltipIconButton
                   onClick={() => setRemoving(project.id)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive shrink-0"
                   data-testid={`team-project-remove-${project.id}`}
                   tooltip={t('common.remove')}
                 >

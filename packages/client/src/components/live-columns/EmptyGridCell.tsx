@@ -45,7 +45,7 @@ export const EmptyGridCell = memo(function EmptyGridCell({
   if (scratchMode) {
     return (
       <div
-        className="flex h-full w-full flex-col rounded-sm border-2 border-dashed border-border/60 bg-muted/10"
+        className="border-border/60 bg-muted/10 flex h-full w-full flex-col rounded-sm border-2 border-dashed"
         data-testid={`grid-empty-cell-${cellIndex}`}
       >
         <NewThreadInput isScratchOverride onCreated={onCreated} onCancel={handleCancel} />
@@ -56,7 +56,7 @@ export const EmptyGridCell = memo(function EmptyGridCell({
   if (!selectedProject) {
     return (
       <div
-        className="flex h-full w-full items-center justify-center gap-2 rounded-sm border-2 border-dashed border-border/60 bg-muted/10 p-4 transition-colors hover:border-primary/50 hover:bg-muted/30"
+        className="border-border/60 bg-muted/10 hover:border-primary/50 hover:bg-muted/30 flex h-full w-full items-center justify-center gap-2 rounded-sm border-2 border-dashed p-4 transition-colors"
         data-testid={`grid-empty-cell-${cellIndex}`}
       >
         <Button
@@ -85,7 +85,7 @@ export const EmptyGridCell = memo(function EmptyGridCell({
 
   return (
     <div
-      className="flex h-full w-full flex-col rounded-sm border-2 border-dashed border-border/60 bg-muted/10"
+      className="border-border/60 bg-muted/10 flex h-full w-full flex-col rounded-sm border-2 border-dashed"
       data-testid={`grid-empty-cell-${cellIndex}`}
     >
       <NewThreadInput

@@ -64,10 +64,10 @@ export function PromptModelVisibilitySettings({
     <div className="px-4 py-3.5">
       {showHeader && (
         <>
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-foreground text-sm font-medium">
             {t('settings.promptModelVisibility')}
           </p>
-          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-0.5 mb-3 text-xs">
             {t('settings.promptModelVisibilityDesc')}
           </p>
         </>
@@ -100,9 +100,9 @@ export function PromptModelVisibilitySettings({
             return (
               <div
                 key={model.value}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50"
+                className="hover:bg-muted/50 flex min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors"
               >
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                <span className="text-foreground min-w-0 flex-1 truncate text-sm">
                   {model.label}
                 </span>
                 <Switch

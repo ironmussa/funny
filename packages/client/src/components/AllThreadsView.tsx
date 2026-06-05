@@ -445,7 +445,7 @@ export function AllThreadsView() {
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <div className="border-border flex items-center gap-3 border-b px-4 py-3">
         {projectFilter && (
           <TooltipIconButton
             onClick={() => {
@@ -470,7 +470,7 @@ export function AllThreadsView() {
                 ? t('allThreads.title')
                 : t('allThreads.globalTitle')}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {scratchOnlyFilter
               ? `${allThreads.length} ${t('allThreads.threads')}`
               : projectFilter && filteredProject

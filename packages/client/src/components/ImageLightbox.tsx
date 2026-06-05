@@ -52,13 +52,13 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 duration-200 animate-in fade-in-0"
+      className="animate-in fade-in-0 fixed inset-0 z-100 flex items-center justify-center bg-black/80 duration-200"
       onClick={onClose}
     >
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
+        className="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
       >
         <X className="icon-lg" />
       </button>

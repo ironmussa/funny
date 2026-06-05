@@ -187,8 +187,8 @@ function AuthGate() {
     return (
       <Suspense
         fallback={
-          <div className="flex min-h-screen items-center justify-center bg-background">
-            <div className="text-sm text-muted-foreground">Loading…</div>
+          <div className="bg-background flex min-h-screen items-center justify-center">
+            <div className="text-muted-foreground text-sm">Loading…</div>
           </div>
         }
       >

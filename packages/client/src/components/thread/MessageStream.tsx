@@ -493,7 +493,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         style={{ contain: 'layout style', scrollbarGutter: compact ? undefined : 'stable' }}
       >
         {/* Spacer pushes content to bottom */}
-        <div className="flex-grow" aria-hidden="true" />
+        <div className="grow" aria-hidden="true" />
 
         <div
           ref={contentStackRef}
@@ -517,7 +517,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           {/* Beginning of conversation marker */}
           {pagination && !hasMore && !loadingMore && messages.length > 0 && (
             <div className="py-2 text-center">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-muted-foreground text-xs">
                 {t('thread.beginningOfConversation', 'Beginning of conversation')}
                 {createdAt && <> &middot; {timeAgo(createdAt, t)}</>}
               </span>
@@ -561,7 +561,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground"
+              className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm"
             >
               <D4CAnimation size={compact ? 'sm' : undefined} />
               <span className="text-xs">{t('thread.agentWorking')}</span>
@@ -573,12 +573,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground"
+              className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm"
             >
               <div className="flex items-center gap-1">
-                <span className="inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_infinite] rounded-full bg-muted-foreground/60" />
-                <span className="inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.2s_infinite] rounded-full bg-muted-foreground/60" />
-                <span className="inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.4s_infinite] rounded-full bg-muted-foreground/60" />
+                <span className="bg-muted-foreground/60 inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_infinite] rounded-full" />
+                <span className="bg-muted-foreground/60 inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.2s_infinite] rounded-full" />
+                <span className="bg-muted-foreground/60 inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.4s_infinite] rounded-full" />
               </div>
               <span className="text-xs">
                 {t('thread.runningExternally', 'Running externally\u2026')}
@@ -592,7 +592,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="flex items-center gap-2 text-xs text-status-warning/80"
+              className="text-status-warning/80 flex items-center gap-2 text-xs"
             >
               <Clock className="size-3.5 animate-pulse text-yellow-400" />
               {t('thread.waitingForResponse')}
@@ -681,14 +681,14 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         </div>
 
         {/* Sticky bottom dock: scroll-to-bottom button + footer (PromptInput) */}
-        <div className="sticky bottom-0 z-30 bg-background">
+        <div className="bg-background sticky bottom-0 z-30">
           {/* Scroll to bottom button */}
           <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
             <button
               onClick={scrollToBottom}
               data-testid="scroll-to-bottom"
               aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
-              className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-muted-foreground/40 bg-secondary px-3 py-1.5 text-xs text-muted-foreground shadow-md transition-colors hover:bg-muted"
+              className="border-muted-foreground/40 bg-secondary text-muted-foreground hover:bg-muted absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border px-3 py-1.5 text-xs shadow-md transition-colors"
             >
               <ArrowDown className="icon-xs" />
               {t('thread.scrollToBottom', 'Scroll to bottom')}

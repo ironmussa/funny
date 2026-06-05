@@ -33,7 +33,7 @@ export const WithLabel: Story = {
   render: () => (
     <div className="flex items-center gap-2">
       <Switch id="airplane-mode" data-testid="switch-label" />
-      <label htmlFor="airplane-mode" className="text-sm font-medium text-foreground">
+      <label htmlFor="airplane-mode" className="text-foreground text-sm font-medium">
         Airplane Mode
       </label>
     </div>

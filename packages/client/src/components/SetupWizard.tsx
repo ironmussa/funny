@@ -38,26 +38,26 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
     <>
       <div className="space-y-3 text-center">
         <div className="flex items-center justify-center">
-          <Terminal className="size-8 text-primary" />
+          <Terminal className="text-primary size-8" />
         </div>
-        <h1 className="text-2xl font-semibold text-foreground">Welcome to funny</h1>
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <h1 className="text-foreground text-2xl font-semibold">Welcome to funny</h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
           Orchestrate multiple Claude Code agents in parallel. Each agent works on its own git
           branch, so they never conflict.
         </p>
       </div>
 
-      <div className="space-y-2 text-sm text-muted-foreground">
+      <div className="text-muted-foreground space-y-2 text-sm">
         <div className="flex items-start gap-2">
-          <span className="mt-0.5 font-mono text-xs text-primary">1.</span>
+          <span className="text-primary mt-0.5 font-mono text-xs">1.</span>
           <span>Create a project by pointing to any git repository</span>
         </div>
         <div className="flex items-start gap-2">
-          <span className="mt-0.5 font-mono text-xs text-primary">2.</span>
+          <span className="text-primary mt-0.5 font-mono text-xs">2.</span>
           <span>Spin up threads: each runs a Claude Code agent</span>
         </div>
         <div className="flex items-start gap-2">
-          <span className="mt-0.5 font-mono text-xs text-primary">3.</span>
+          <span className="text-primary mt-0.5 font-mono text-xs">3.</span>
           <span>Review changes, commit, and merge when ready</span>
         </div>
       </div>
@@ -97,13 +97,13 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
   return (
     <>
       <div className="space-y-1 text-center">
-        <h2 className="text-lg font-semibold text-foreground">Claude Code CLI</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-foreground text-lg font-semibold">Claude Code CLI</h2>
+        <p className="text-muted-foreground text-sm">
           funny needs the Claude Code CLI to run agents.
         </p>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+      <div className="border-border bg-muted/30 space-y-3 rounded-lg border p-4">
         {checking ? (
           <LoadingState
             fill={false}
@@ -116,22 +116,22 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
           <>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="icon-lg text-status-success" />
-              <span className="text-sm font-medium text-foreground">Claude CLI found</span>
+              <span className="text-foreground text-sm font-medium">Claude CLI found</span>
             </div>
             {status.version && (
-              <div className="font-mono text-xs text-muted-foreground">{status.version}</div>
+              <div className="text-muted-foreground font-mono text-xs">{status.version}</div>
             )}
             {status.path && (
-              <div className="truncate font-mono text-xs text-muted-foreground">{status.path}</div>
+              <div className="text-muted-foreground truncate font-mono text-xs">{status.path}</div>
             )}
           </>
         ) : status?.error === 'server_unreachable' ? (
           <>
             <div className="flex items-center gap-2">
               <XCircle className="icon-lg text-status-error" />
-              <span className="text-sm font-medium text-foreground">Server not reachable</span>
+              <span className="text-foreground text-sm font-medium">Server not reachable</span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Could not connect to the funny server. Make sure the server is running and try again.
             </p>
           </>
@@ -139,9 +139,9 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
           <>
             <div className="flex items-center gap-2">
               <XCircle className="icon-lg text-status-error" />
-              <span className="text-sm font-medium text-foreground">Claude CLI not found</span>
+              <span className="text-foreground text-sm font-medium">Claude CLI not found</span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Install the Claude Code CLI to continue. Visit the official documentation for
               installation instructions.
             </p>
@@ -149,7 +149,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
               href="https://docs.anthropic.com/en/docs/claude-code/overview"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+              className="text-primary inline-flex items-center gap-1.5 text-xs hover:underline"
             >
               Installation Guide
               <ExternalLink className="icon-xs" />
@@ -181,9 +181,9 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
   return (
     <>
       <div className="space-y-3 text-center">
-        <CheckCircle2 className="mx-auto size-10 text-status-success" />
-        <h2 className="text-lg font-semibold text-foreground">You're all set!</h2>
-        <p className="text-sm text-muted-foreground">
+        <CheckCircle2 className="text-status-success mx-auto size-10" />
+        <h2 className="text-foreground text-lg font-semibold">You're all set!</h2>
+        <p className="text-muted-foreground text-sm">
           Everything is configured. Add your first project to get started.
         </p>
       </div>
@@ -210,8 +210,8 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-md space-y-6 rounded-lg border border-border bg-card p-8 shadow-lg">
+    <div className="bg-background flex min-h-screen items-center justify-center">
+      <div className="border-border bg-card w-full max-w-md space-y-6 rounded-lg border p-8 shadow-lg">
         <StepIndicator current={step} total={3} />
 
         {step === 0 && <WelcomeSlide onNext={() => setStep(1)} />}

@@ -33,7 +33,7 @@ export function SearchablePicker({
   onCopy,
   triggerClassName,
   triggerTitle,
-  width = 'w-[28rem]',
+  width = 'w-md',
   side = 'top',
   align = 'start',
   icon,
@@ -183,7 +183,7 @@ export function SearchablePicker({
           data-testid={testId}
           className={
             triggerClassName ??
-            'flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none'
+            'text-muted-foreground hover:bg-muted hover:text-foreground flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs transition-colors focus-visible:outline-hidden'
           }
           title={triggerTitle}
           tabIndex={-1}
@@ -203,7 +203,7 @@ export function SearchablePicker({
           searchInputRef.current?.focus();
         }}
       >
-        <div className="border-b border-border px-2 py-1.5">
+        <div className="border-border border-b px-2 py-1.5">
           <Input
             ref={searchInputRef}
             type="text"
@@ -222,13 +222,13 @@ export function SearchablePicker({
           style={{ maxHeight: 'min(60vh, 440px)' }}
         >
           {loading && items.length === 0 && loadingText && (
-            <p className="py-3 text-center text-sm text-muted-foreground">{loadingText}</p>
+            <p className="text-muted-foreground py-3 text-center text-sm">{loadingText}</p>
           )}
           {!loading && items.length === 0 && emptyText && (
-            <p className="py-3 text-center text-sm text-muted-foreground">{emptyText}</p>
+            <p className="text-muted-foreground py-3 text-center text-sm">{emptyText}</p>
           )}
           {!loading && items.length > 0 && filtered.length === 0 && (
-            <p className="py-3 text-center text-sm text-muted-foreground">{noMatchText}</p>
+            <p className="text-muted-foreground py-3 text-center text-sm">{noMatchText}</p>
           )}
           {filtered.length > 0 && (
             <div
@@ -244,7 +244,7 @@ export function SearchablePicker({
                 return (
                   <div
                     key={item.key}
-                    className="group/item absolute left-0 top-0 w-full"
+                    className="group/item absolute top-0 left-0 w-full"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -262,7 +262,7 @@ export function SearchablePicker({
                         setHighlightIndex(i);
                       }}
                       className={cn(
-                        'w-full h-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-none',
+                        'w-full h-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-hidden',
                         onCopy ? 'pr-7' : 'pr-2',
                         i === highlightIndex
                           ? 'bg-accent text-foreground'
@@ -280,23 +280,23 @@ export function SearchablePicker({
                             className="truncate font-mono font-medium"
                           />
                           {item.badge && (
-                            <span className="rounded bg-muted px-1 py-0.5 text-[9px] leading-none text-muted-foreground">
+                            <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[9px] leading-none">
                               {item.badge}
                             </span>
                           )}
                         </div>
                         {item.detail && (
-                          <span className="block truncate font-mono text-xs text-muted-foreground/70">
+                          <span className="text-muted-foreground/70 block truncate font-mono text-xs">
                             {item.detail}
                           </span>
                         )}
                       </div>
-                      {item.isSelected && <Check className="icon-xs shrink-0 text-status-info" />}
+                      {item.isSelected && <Check className="icon-xs text-status-info shrink-0" />}
                     </button>
                     {onCopy && (
                       <button
                         type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/item:opacity-100"
+                        className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/item:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           onCopy(item.label);
@@ -327,7 +327,7 @@ export function BranchPicker({
   selected,
   onChange,
   triggerClassName,
-  width = 'w-[30rem]',
+  width = 'w-120',
   side = 'top',
   align = 'start',
   extraItems,
@@ -440,7 +440,7 @@ export function BranchPicker({
   if (creatingNew) {
     return (
       <div className="flex items-center gap-1" data-testid={testId ? `${testId}-new` : undefined}>
-        <Plus className="icon-xs shrink-0 text-muted-foreground" />
+        <Plus className="icon-xs text-muted-foreground shrink-0" />
         <Input
           ref={newBranchInputRef}
           type="text"
@@ -465,14 +465,14 @@ export function BranchPicker({
           }}
           placeholder={t('newThread.newBranchPlaceholder', 'new-branch-name')}
           data-testid={testId ? `${testId}-new-input` : undefined}
-          className="h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs text-foreground shadow-none focus-visible:ring-0"
+          className="text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs shadow-none focus-visible:ring-0"
         />
         <button
           type="button"
           onClick={handleConfirmNewBranch}
           disabled={!newBranchName.trim()}
           data-testid={testId ? `${testId}-new-confirm` : undefined}
-          className="rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground rounded px-1.5 py-0.5 text-xs transition-colors disabled:opacity-40"
         >
           <Check className="icon-xs" />
         </button>

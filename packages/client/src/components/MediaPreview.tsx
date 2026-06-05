@@ -173,7 +173,7 @@ function ImagePreview({
         type="button"
         data-testid="media-preview-image-button"
         onClick={() => setOpen(true)}
-        className="group flex items-center justify-center bg-muted/30 p-2"
+        className="group bg-muted/30 flex items-center justify-center p-2"
       >
         <img
           src={src}
@@ -203,7 +203,7 @@ function AudioPreview({
 }) {
   return (
     <div className="flex flex-col gap-2 p-3">
-      {name && <div className="truncate text-sm text-muted-foreground">{name}</div>}
+      {name && <div className="text-muted-foreground truncate text-sm">{name}</div>}
       <audio
         controls
         src={src}
@@ -343,7 +343,7 @@ function TextPreview({
   return (
     <pre
       data-testid="media-preview-text"
-      className="m-0 max-h-[70vh] overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-foreground"
+      className="text-foreground m-0 max-h-[70vh] overflow-auto p-4 font-mono wrap-break-word whitespace-pre-wrap"
       style={{ fontSize: EDITOR_FONT_SIZE_PX[fontSize] }}
     >
       {content}
@@ -358,7 +358,7 @@ function UnknownPreview({ src, name }: { src: string; name?: string }) {
       className="flex flex-col items-center gap-3 p-6 text-center"
     >
       <FileQuestion className="icon-xl text-muted-foreground" />
-      <div className="text-sm text-muted-foreground">
+      <div className="text-muted-foreground text-sm">
         No preview available{name ? ` for ${name}` : ''}.
       </div>
       <Button asChild variant="outline" size="sm" data-testid="media-preview-download">
@@ -379,7 +379,7 @@ function PreviewSpinner() {
 
 function PreviewError() {
   return (
-    <div className="p-6 text-sm text-destructive" data-testid="media-preview-error">
+    <div className="text-destructive p-6 text-sm" data-testid="media-preview-error">
       Failed to load preview.
     </div>
   );

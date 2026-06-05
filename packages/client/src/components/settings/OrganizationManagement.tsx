@@ -145,7 +145,7 @@ export function OrganizationManagement() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
         Loading organizations…
       </div>
     );
@@ -157,12 +157,12 @@ export function OrganizationManagement() {
       <h3 className="settings-section-header">Create Organization</h3>
       <div className="settings-card">
         <div className="px-4 py-3.5">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mb-3 text-xs">
             Create a new organization to manage team members and projects.
           </p>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <label className="text-muted-foreground text-xs font-medium">Name</label>
               <Input
                 value={name}
                 onChange={(e) => {
@@ -177,7 +177,7 @@ export function OrganizationManagement() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Slug</label>
+              <label className="text-muted-foreground text-xs font-medium">Slug</label>
               <Input
                 value={slug}
                 onChange={(e) => {
@@ -205,7 +205,7 @@ export function OrganizationManagement() {
       <h3 className="settings-section-header">Your Organizations ({orgs.length})</h3>
       <div className="settings-card">
         {orgs.length === 0 ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             No organizations yet. Create one above to get started.
           </div>
         ) : (
@@ -218,8 +218,8 @@ export function OrganizationManagement() {
               <div key={org.id} className="settings-row" data-testid={`org-item-${org.id}`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Building2 className="icon-base shrink-0 text-muted-foreground" />
-                    <p className="truncate text-sm font-medium text-foreground">{org.name}</p>
+                    <Building2 className="icon-base text-muted-foreground shrink-0" />
+                    <p className="text-foreground truncate text-sm font-medium">{org.name}</p>
                     <Badge variant="secondary" className="text-xs">
                       {role}
                     </Badge>
@@ -232,7 +232,7 @@ export function OrganizationManagement() {
                       </Badge>
                     )}
                   </div>
-                  <p className="ml-6 text-xs text-muted-foreground">{org.slug}</p>
+                  <p className="text-muted-foreground ml-6 text-xs">{org.slug}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {!isActive && (
@@ -250,7 +250,7 @@ export function OrganizationManagement() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
+                      className="text-muted-foreground hover:text-destructive size-8"
                       onClick={() => setDeleteConfirm(org)}
                       data-testid={`org-delete-${org.id}`}
                     >

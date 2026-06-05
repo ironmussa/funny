@@ -13,6 +13,8 @@
     },
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
+    "./provider-manifest": "./src/provider-manifest.ts",
+    "./provider-manifests": "./src/provider-manifests.ts",
     "./thread-machine": "./src/thread-machine.ts",
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",

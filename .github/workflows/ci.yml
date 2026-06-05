@@ -44,15 +44,8 @@ jobs:
       - name: Lint (oxlint)
         run: bun run lint
 
-      # Advisory: the repo is oxfmt-clean, but `.oxfmtrc.json`'s sortTailwindcss
-      # makes oxfmt load packages/client/tailwind.config.ts, whose
-      # `require('tailwindcss-animate')` fails to resolve under CI's isolated bun
-      # install (crashes with exit 2, not a format violation). Keep non-gating
-      # until that resolution is fixed (e.g. hoist the dep or point
-      # sortTailwindcss at an explicit config path).
       - name: Format check (oxfmt)
         run: bunx oxfmt --check .
-        continue-on-error: true
 
   test:
     runs-on: ubuntu-latest

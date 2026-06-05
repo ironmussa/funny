@@ -150,7 +150,8 @@
       "deepagentGemini25flash": "Gemini 2.5 Flash",
       "deepagentGemini25pro": "Gemini 2.5 Pro",
       "deepagentGemini3flash": "Gemini 3 Flash",
-      "deepagentGemini3pro": "Gemini 3 Pro"
+      "deepagentGemini3pro": "Gemini 3 Pro",
+      "opencodeDefault": "opencode (padrão configurado)"
     },
     "createdBy": "Criado por {{creator}}",
     "readyToLaunch": "Pronto para lançar",

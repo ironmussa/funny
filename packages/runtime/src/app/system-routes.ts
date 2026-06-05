@@ -109,6 +109,48 @@ export function registerSystemRoutes(app: Hono): void {
     return c.json(payload);
   });
 
+  let opencodeModelsCache: { at: number; payload: unknown } | null = null;
+  const OPENCODE_MODELS_TTL_MS = 60_000;
+  app.get('/api/system/opencode/models', async (c) => {
+    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+    if (
+      !refresh &&
+      opencodeModelsCache &&
+      Date.now() - opencodeModelsCache.at < OPENCODE_MODELS_TTL_MS
+    ) {
+      return c.json(opencodeModelsCache.payload);
+    }
+    const { discoverOpenCodeModels } = await import('@funny/core/agents');
+    const result = await discoverOpenCodeModels();
+    const payload = result.ok
+      ? {
+          ok: true as const,
+          models: result.models,
+          currentModelId: result.currentModelId,
+          discoveredAt: Date.now(),
+        }
+      : {
+          ok: false as const,
+          reason: result.reason,
+          message: result.message ?? null,
+          discoveredAt: Date.now(),
+        };
+    opencodeModelsCache = { at: Date.now(), payload };
+    if (!result.ok) {
+      log.warn('opencode model discovery failed', {
+        namespace: 'opencode-discover',
+        reason: result.reason,
+        message: result.message,
+      });
+    } else {
+      log.info('opencode model discovery ok', {
+        namespace: 'opencode-discover',
+        count: result.models.length,
+      });
+    }
+    return c.json(payload);
+  });
+
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();
     resetBinaryCache();

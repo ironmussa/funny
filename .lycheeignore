@@ -1,0 +1,13 @@
+# URLs lychee should skip. One regex per line, matched against the full URL.
+
+# Local / dev URLs that aren't reachable from CI (examples in the docs).
+^https?://localhost
+^https?://127\.0\.0\.1
+^https?://0\.0\.0\.0
+
+# Placeholder / example URLs used in documentation.
+^https?://([a-z0-9-]+\.)?example\.(com|org|net)
+
+# The docs site itself isn't published yet (GitHub Pages is disabled), so the
+# canonical/self links would 404 until docs.yml's deploy is turned back on.
+^https://ironmussa\.github\.io/funny

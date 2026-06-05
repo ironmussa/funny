@@ -17,7 +17,7 @@
     "@funny/core": "workspace:*",
     "@funny/sdk": "workspace:*",
     "@funny/shared": "workspace:*",
-    "@hono/zod-validator": "^0.4.0",
+    "@hono/zod-validator": "^0.8.0",
     "eventemitter3": "^5.0.1",
     "hono": "^4.11.9",
     "nanoid": "^5.0.9",

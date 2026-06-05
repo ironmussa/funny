@@ -96,6 +96,7 @@ funny-server --port 3002
 ```
 
 On first start, a default admin account is created:
+
 - **Username:** `admin`
 - **Password:** `admin`
 
@@ -118,6 +119,7 @@ funny
 ```
 
 This starts the full funny app locally (UI, git, agents) **and** connects to the central server to:
+
 - Authenticate and see team projects
 - Sync thread state across the team
 - Receive dispatched tasks from the central server
@@ -149,22 +151,22 @@ Team member A                    Team member B
 
 **funny** (local app)
 
-| Option                | Description                              | Default     |
-| --------------------- | ---------------------------------------- | ----------- |
-| `-p, --port <port>`   | Server port                              | `3001`      |
-| `-h, --host <host>`   | Server host                              | `127.0.0.1` |
-| `--auth-mode <mode>`  | Authentication mode: `local` or `multi`  | `local`     |
-| `--team <url>`        | Connect to a central team server         | -           |
-| `--token <token>`     | Runner invite token for team registration | -          |
-| `--help`              | Show help message                        | -           |
+| Option               | Description                               | Default     |
+| -------------------- | ----------------------------------------- | ----------- |
+| `-p, --port <port>`  | Server port                               | `3001`      |
+| `-h, --host <host>`  | Server host                               | `127.0.0.1` |
+| `--auth-mode <mode>` | Authentication mode: `local` or `multi`   | `local`     |
+| `--team <url>`       | Connect to a central team server          | -           |
+| `--token <token>`    | Runner invite token for team registration | -           |
+| `--help`             | Show help message                         | -           |
 
 **funny-server** (team coordination server)
 
-| Option                | Description                              | Default     |
-| --------------------- | ---------------------------------------- | ----------- |
-| `-p, --port <port>`   | Server port                              | `3002`      |
-| `-h, --host <host>`   | Server host                              | `0.0.0.0`   |
-| `--help`              | Show help message                        | -           |
+| Option              | Description       | Default   |
+| ------------------- | ----------------- | --------- |
+| `-p, --port <port>` | Server port       | `3002`    |
+| `-h, --host <host>` | Server host       | `0.0.0.0` |
+| `--help`            | Show help message | -         |
 
 ### Persistent Configuration
 
@@ -184,16 +186,16 @@ To change the server, simply pass `--team` again with a new URL — the saved co
 
 ### Environment Variables
 
-| Variable                 | Description                           | Default         | Used by          |
-| ------------------------ | ------------------------------------- | --------------- | ---------------- |
-| `PORT`                   | Server port                           | `3001` / `3002` | both             |
-| `HOST`                   | Server hostname                       | `127.0.0.1`     | both             |
-| `AUTH_MODE`              | Authentication mode (`local`/`multi`) | `local`         | funny            |
-| `TEAM_SERVER_URL`        | Central server URL (same as `--team`) | -               | funny            |
-| `RUNNER_INVITE_TOKEN`    | Runner invite token (same as `--token`)| -               | funny            |
-| `CORS_ORIGIN`            | Custom CORS origins (comma-separated) | Auto-configured | both             |
-| `FUNNY_CENTRAL_DATA_DIR` | Central server data directory         | `~/.funny-central` | funny-server |
-| `LOG_LEVEL`              | Log level (debug/info/warn/error)     | `info`          | funny-server    |
+| Variable                 | Description                             | Default            | Used by      |
+| ------------------------ | --------------------------------------- | ------------------ | ------------ |
+| `PORT`                   | Server port                             | `3001` / `3002`    | both         |
+| `HOST`                   | Server hostname                         | `127.0.0.1`        | both         |
+| `AUTH_MODE`              | Authentication mode (`local`/`multi`)   | `local`            | funny        |
+| `TEAM_SERVER_URL`        | Central server URL (same as `--team`)   | -                  | funny        |
+| `RUNNER_INVITE_TOKEN`    | Runner invite token (same as `--token`) | -                  | funny        |
+| `CORS_ORIGIN`            | Custom CORS origins (comma-separated)   | Auto-configured    | both         |
+| `FUNNY_CENTRAL_DATA_DIR` | Central server data directory           | `~/.funny-central` | funny-server |
+| `LOG_LEVEL`              | Log level (debug/info/warn/error)       | `info`             | funny-server |
 
 ## Orchestrator
 
@@ -210,25 +212,25 @@ It runs as **its own process** — the `@funny/thread-orchestrator` binary — a
 
 1. **On the server**, pick a shared secret (`openssl rand -hex 32`) and set it before starting:
 
-    ```bash
-    ORCHESTRATOR_AUTH_SECRET=<long-random-string>
-    ```
+   ```bash
+   ORCHESTRATOR_AUTH_SECRET=<long-random-string>
+   ```
 
-    The server uses this to authenticate the brain's HTTP calls.
+   The server uses this to authenticate the brain's HTTP calls.
 
 2. **On the orchestrator process**, set the same secret plus the server URL and run the binary:
 
-    ```bash
-    FUNNY_SERVER_URL=http://localhost:3001 \
-    ORCHESTRATOR_AUTH_SECRET=<same-secret> \
-    bun run --filter @funny/thread-orchestrator start
-    ```
+   ```bash
+   FUNNY_SERVER_URL=http://localhost:3001 \
+   ORCHESTRATOR_AUTH_SECRET=<same-secret> \
+   bun run --filter @funny/thread-orchestrator start
+   ```
 
-    Or equivalently from the workspace root:
+   Or equivalently from the workspace root:
 
-    ```bash
-    FUNNY_SERVER_URL=... ORCHESTRATOR_AUTH_SECRET=... bun packages/orchestrator/src/bin/orchestrator.ts
-    ```
+   ```bash
+   FUNNY_SERVER_URL=... ORCHESTRATOR_AUTH_SECRET=... bun packages/orchestrator/src/bin/orchestrator.ts
+   ```
 
 3. The brain auto-starts its loops and begins dispatching. Stop with `SIGTERM` / `SIGINT` for graceful shutdown.
 
@@ -238,20 +240,20 @@ It runs as **its own process** — the `@funny/thread-orchestrator` binary — a
 
 All knobs are optional with sensible defaults — only override what you need. These all live on the orchestrator process (the server doesn't read them):
 
-| Variable                     | Description                                                                                | Default        |
-| ---------------------------- | ------------------------------------------------------------------------------------------ | -------------- |
-| `FUNNY_SERVER_URL`           | **Required.** Base URL of the funny server.                                                | —              |
-| `ORCHESTRATOR_AUTH_SECRET`   | **Required.** Must match the server's value.                                               | —              |
-| `ORCHESTRATOR_POLL_MS`       | Poll loop interval (how often eligible threads are scanned).                               | `5000`         |
-| `ORCHESTRATOR_RECONCILE_MS`  | Reconcile loop interval (stall detection, orphan recovery, backoff sweep).                | `30000`        |
-| `ORCHESTRATOR_MAX_GLOBAL`    | Maximum concurrent dispatched runs across all users.                                       | `16`           |
-| `ORCHESTRATOR_MAX_PER_USER`  | Maximum concurrent dispatched runs per user (tenant fairness cap).                         | `4`            |
-| `ORCHESTRATOR_MAX_BACKOFF_MS`| Cap for exponential retry backoff between failed attempts.                                 | `300000`       |
-| `ORCHESTRATOR_STALL_MS`      | Time without an event before a claimed run is considered stalled.                          | `1800000`      |
-| `ORCHESTRATOR_PIPELINE_NAME` | Override the default pipeline name passed to the runner.                                   | runner default |
-| `ORCHESTRATOR_LONG_POLL_MS`  | Long-poll timeout for the events stream (the brain reacts to terminal runs via this loop). | `25000`        |
-| `ORCHESTRATOR_LOG_FORMAT`    | `text` (single-line, human-readable) or `json` (ndjson).                                   | `text`         |
-| `ORCHESTRATOR_LOG_LEVEL`     | `debug` / `info` / `warn` / `error`.                                                       | `info`         |
+| Variable                      | Description                                                                                | Default        |
+| ----------------------------- | ------------------------------------------------------------------------------------------ | -------------- |
+| `FUNNY_SERVER_URL`            | **Required.** Base URL of the funny server.                                                | —              |
+| `ORCHESTRATOR_AUTH_SECRET`    | **Required.** Must match the server's value.                                               | —              |
+| `ORCHESTRATOR_POLL_MS`        | Poll loop interval (how often eligible threads are scanned).                               | `5000`         |
+| `ORCHESTRATOR_RECONCILE_MS`   | Reconcile loop interval (stall detection, orphan recovery, backoff sweep).                 | `30000`        |
+| `ORCHESTRATOR_MAX_GLOBAL`     | Maximum concurrent dispatched runs across all users.                                       | `16`           |
+| `ORCHESTRATOR_MAX_PER_USER`   | Maximum concurrent dispatched runs per user (tenant fairness cap).                         | `4`            |
+| `ORCHESTRATOR_MAX_BACKOFF_MS` | Cap for exponential retry backoff between failed attempts.                                 | `300000`       |
+| `ORCHESTRATOR_STALL_MS`       | Time without an event before a claimed run is considered stalled.                          | `1800000`      |
+| `ORCHESTRATOR_PIPELINE_NAME`  | Override the default pipeline name passed to the runner.                                   | runner default |
+| `ORCHESTRATOR_LONG_POLL_MS`   | Long-poll timeout for the events stream (the brain reacts to terminal runs via this loop). | `25000`        |
+| `ORCHESTRATOR_LOG_FORMAT`     | `text` (single-line, human-readable) or `json` (ndjson).                                   | `text`         |
+| `ORCHESTRATOR_LOG_LEVEL`      | `debug` / `info` / `warn` / `error`.                                                       | `info`         |
 
 ### Operational notes
 

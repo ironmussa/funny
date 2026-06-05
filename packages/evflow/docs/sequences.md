@@ -15,9 +15,12 @@ const CheckoutStarted = system.event('CheckoutStarted', { fields: {} });
 
 const { flow } = system;
 
-system.sequence('Happy Path', flow`
+system.sequence(
+  'Happy Path',
+  flow`
   ${AddItem} -> ${ItemAdded} -> ${StartCheckout} -> ${CheckoutStarted}
-`);
+`,
+);
 ```
 
 **Why this is the recommended approach:**
@@ -59,7 +62,9 @@ Both approaches support multiline for readability:
 
 ```typescript
 // Tagged template — naturally multiline
-system.sequence('Full Checkout', flow`
+system.sequence(
+  'Full Checkout',
+  flow`
   ${AddItem}
   -> ${ItemAdded}
   -> ${StartCheckout}
@@ -67,15 +72,19 @@ system.sequence('Full Checkout', flow`
   -> ${ProcessPayment}
   -> ${PaymentSucceeded}
   -> ${OrderConfirmed}
-`);
+`,
+);
 
 // String — also works multiline
-system.sequence('Full Checkout', `
+system.sequence(
+  'Full Checkout',
+  `
   AddItem -> ItemAdded
   -> StartCheckout -> CheckoutStarted
   -> ProcessPayment -> PaymentSucceeded
   -> OrderConfirmed
-`);
+`,
+);
 ```
 
 ## Multiple Sequences (Happy Path + Sad Paths)
@@ -83,17 +92,26 @@ system.sequence('Full Checkout', `
 Define multiple sequences to cover different scenarios:
 
 ```typescript
-system.sequence('Happy Path', flow`
+system.sequence(
+  'Happy Path',
+  flow`
   ${PlaceOrder} -> ${OrderPlaced} -> ${ProcessPayment} -> ${PaymentSucceeded} -> ${OrderConfirmed}
-`);
+`,
+);
 
-system.sequence('Payment Fails', flow`
+system.sequence(
+  'Payment Fails',
+  flow`
   ${PlaceOrder} -> ${OrderPlaced} -> ${ProcessPayment} -> ${PaymentFailed} -> ${NotifyCustomer}
-`);
+`,
+);
 
-system.sequence('Order Cancelled', flow`
+system.sequence(
+  'Order Cancelled',
+  flow`
   ${CancelOrder} -> ${OrderCancelled} -> ${RefundPayment} -> ${PaymentRefunded}
-`);
+`,
+);
 ```
 
 ## Sequences with Automations
@@ -106,9 +124,12 @@ const TriggerPayment = system.automation('TriggerPayment', {
   triggers: 'ProcessPayment',
 });
 
-system.sequence('With Automation', flow`
+system.sequence(
+  'With Automation',
+  flow`
   ${PlaceOrder} -> ${OrderPlaced} -> ${TriggerPayment} -> ${ProcessPayment} -> ${PaymentSucceeded}
-`);
+`,
+);
 ```
 
 This makes it clear that `ProcessPayment` is not triggered by a user — it's an automatic reaction to `OrderPlaced`.
@@ -118,24 +139,30 @@ This makes it clear that `ProcessPayment` is not triggered by a user — it's an
 The `flow` tag is a [tagged template literal](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#tagged_templates) — a function that intercepts the template before it becomes a string.
 
 When you write:
+
 ```typescript
-flow`${AddItem} -> ${ItemAdded} -> ${CheckoutStarted}`
+flow`${AddItem} -> ${ItemAdded} -> ${CheckoutStarted}`;
 ```
 
 JavaScript calls `flow` with:
+
 ```typescript
 flow(
-  ['', ' -> ', ' -> ', ''],           // static string parts
-  AddItem, ItemAdded, CheckoutStarted  // interpolated values (ElementRef objects)
-)
+  ['', ' -> ', ' -> ', ''], // static string parts
+  AddItem,
+  ItemAdded,
+  CheckoutStarted, // interpolated values (ElementRef objects)
+);
 ```
 
 The function:
+
 1. Validates that all static parts between elements are `->` arrows
 2. Validates that all interpolated values are `ElementRef` objects
 3. Returns a `SequenceStep[]` array
 
 This means:
+
 - **Non-ElementRef values are rejected** — `flow\`${"hello"} -> ${42}\`` throws
 - **Missing arrows are rejected** — `flow\`${A} then ${B}\`` throws
 - **Undefined variables are rejected** — JavaScript itself throws `ReferenceError`
@@ -146,7 +173,7 @@ This means:
 
 ```typescript
 const system = new EventModel('Shop');
-const { flow } = system;  // works because flow is an arrow function
+const { flow } = system; // works because flow is an arrow function
 
 system.sequence('Flow', flow`${A} -> ${B}`);
 ```

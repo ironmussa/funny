@@ -288,11 +288,11 @@ sqld --http-listen-addr 0.0.0.0:8080 \
 
 ### Sync modes summary
 
-| Config | Behavior | Use case |
-|--------|----------|----------|
-| `PP_DB_URL=file:memory.db` | Local only — single SQLite file, no sync | Solo developer |
-| `PP_DB_URL=libsql://host` | Direct remote — all I/O goes to the server | Low-latency server nearby |
-| `PP_DB_URL=file:replica.db` + `PP_SYNC_URL` | Embedded replica — local reads, remote writes, auto-sync | Team (recommended) |
+| Config                                      | Behavior                                                 | Use case                  |
+| ------------------------------------------- | -------------------------------------------------------- | ------------------------- |
+| `PP_DB_URL=file:memory.db`                  | Local only — single SQLite file, no sync                 | Solo developer            |
+| `PP_DB_URL=libsql://host`                   | Direct remote — all I/O goes to the server               | Low-latency server nearby |
+| `PP_DB_URL=file:replica.db` + `PP_SYNC_URL` | Embedded replica — local reads, remote writes, auto-sync | Team (recommended)        |
 
 ### Consolidation
 
@@ -343,8 +343,8 @@ const memory = new PaisleyPark({
   projectName: 'My Project',
   // Optional — without this, only mechanical GC runs (decay + dedup)
   llm: {
-    baseUrl: 'http://localhost:4010',  // api-acp URL
-    model: 'claude-haiku',             // cheap model for maintenance tasks
+    baseUrl: 'http://localhost:4010', // api-acp URL
+    model: 'claude-haiku', // cheap model for maintenance tasks
     apiKey: 'optional-key',
   },
 });
@@ -358,18 +358,18 @@ Paisley Park runs as a standalone HTTP server on port 4020 (configurable via `PP
 
 ### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/v1/recall` | Recall relevant facts for a query |
-| `POST` | `/v1/facts` | Add a new fact |
-| `GET` | `/v1/facts` | List facts (with filters) |
-| `PATCH` | `/v1/facts/:id/invalidate` | Mark a fact as invalid |
-| `PATCH` | `/v1/facts/:id/evolve` | Evolve a fact with new information |
-| `POST` | `/v1/search` | Search with filters |
-| `GET` | `/v1/timeline` | Chronological fact view |
-| `POST` | `/v1/consolidate` | Trigger consolidation manually |
-| `POST` | `/v1/gc` | Trigger garbage collection manually |
+| Method  | Path                       | Description                         |
+| ------- | -------------------------- | ----------------------------------- |
+| `GET`   | `/health`                  | Health check                        |
+| `POST`  | `/v1/recall`               | Recall relevant facts for a query   |
+| `POST`  | `/v1/facts`                | Add a new fact                      |
+| `GET`   | `/v1/facts`                | List facts (with filters)           |
+| `PATCH` | `/v1/facts/:id/invalidate` | Mark a fact as invalid              |
+| `PATCH` | `/v1/facts/:id/evolve`     | Evolve a fact with new information  |
+| `POST`  | `/v1/search`               | Search with filters                 |
+| `GET`   | `/v1/timeline`             | Chronological fact view             |
+| `POST`  | `/v1/consolidate`          | Trigger consolidation manually      |
+| `POST`  | `/v1/gc`                   | Trigger garbage collection manually |
 
 ### Example: recall
 
@@ -393,24 +393,24 @@ For direct integration with Claude Code, Cursor, or any MCP-aware agent.
 
 ### Tools
 
-| Tool | Description |
-|------|-------------|
-| `pp_recall` | Retrieve relevant project memories for a query |
-| `pp_add` | Add a new fact to project memory |
-| `pp_invalidate` | Mark a fact as no longer valid |
-| `pp_search` | Search memories with type/tag/date filters |
+| Tool            | Description                                    |
+| --------------- | ---------------------------------------------- |
+| `pp_recall`     | Retrieve relevant project memories for a query |
+| `pp_add`        | Add a new fact to project memory               |
+| `pp_invalidate` | Mark a fact as no longer valid                 |
+| `pp_search`     | Search memories with type/tag/date filters     |
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `PP_PROJECT_ID` | Project identifier (default: `default`) |
-| `PP_PROJECT_NAME` | Project display name (default: `default`) |
-| `PP_DB_URL` | libSQL connection URL (default: `file:memory.db`) |
-| `PP_SYNC_URL` | Sync URL for embedded replicas |
-| `PP_AUTH_TOKEN` | Auth token for remote connections |
-| `PP_LLM_URL` | api-acp base URL (enables consolidation) |
-| `PP_LLM_MODEL` | Model for consolidation (default: `claude-haiku`) |
+| Variable          | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `PP_PROJECT_ID`   | Project identifier (default: `default`)           |
+| `PP_PROJECT_NAME` | Project display name (default: `default`)         |
+| `PP_DB_URL`       | libSQL connection URL (default: `file:memory.db`) |
+| `PP_SYNC_URL`     | Sync URL for embedded replicas                    |
+| `PP_AUTH_TOKEN`   | Auth token for remote connections                 |
+| `PP_LLM_URL`      | api-acp base URL (enables consolidation)          |
+| `PP_LLM_MODEL`    | Model for consolidation (default: `claude-haiku`) |
 
 ## Architecture
 
@@ -428,14 +428,14 @@ Schema is auto-created on first connection. Works with local SQLite, remote sqld
 
 ### Fact types and decay
 
-| Type | Decay class | Lambda | Half-life | Description |
-|------|-------------|--------|-----------|-------------|
-| `decision` | slow | 0.003 | ~231 days | Architectural/design decisions |
-| `bug` | normal | 0.015 | ~46 days | Known issues, debugging notes |
-| `pattern` | slow | 0.003 | ~231 days | Recurring code/architecture patterns |
-| `convention` | slow | 0.003 | ~231 days | Project standards and rules |
-| `insight` | normal | 0.015 | ~46 days | Non-obvious observations |
-| `context` | fast | 0.05 | ~14 days | Ephemeral context (sprints, freezes) |
+| Type         | Decay class | Lambda | Half-life | Description                          |
+| ------------ | ----------- | ------ | --------- | ------------------------------------ |
+| `decision`   | slow        | 0.003  | ~231 days | Architectural/design decisions       |
+| `bug`        | normal      | 0.015  | ~46 days  | Known issues, debugging notes        |
+| `pattern`    | slow        | 0.003  | ~231 days | Recurring code/architecture patterns |
+| `convention` | slow        | 0.003  | ~231 days | Project standards and rules          |
+| `insight`    | normal      | 0.015  | ~46 days  | Non-obvious observations             |
+| `context`    | fast        | 0.05   | ~14 days  | Ephemeral context (sprints, freezes) |
 
 Decay formula: `score = exp(-λ × days_since_last_access)`
 
@@ -450,11 +450,11 @@ Four-stage pipeline:
 
 ### Embedding providers (`embedding.ts`)
 
-| Provider | Model | Dimensions | Config |
-|----------|-------|------------|--------|
-| Ollama (default) | `nomic-embed-text` | 768 | Auto-detected on `localhost:11434` |
-| OpenAI | `text-embedding-3-small` | 1536 | `MEMORY_EMBEDDING_PROVIDER=openai` + `OPENAI_API_KEY` |
-| Null (fallback) | — | 0 | Keyword-only search when no provider available |
+| Provider         | Model                    | Dimensions | Config                                                |
+| ---------------- | ------------------------ | ---------- | ----------------------------------------------------- |
+| Ollama (default) | `nomic-embed-text`       | 768        | Auto-detected on `localhost:11434`                    |
+| OpenAI           | `text-embedding-3-small` | 1536       | `MEMORY_EMBEDDING_PROVIDER=openai` + `OPENAI_API_KEY` |
+| Null (fallback)  | —                        | 0          | Keyword-only search when no provider available        |
 
 ### Consolidation agent (`consolidator.ts`)
 
@@ -649,28 +649,28 @@ bun run bench locomo --model gpt-4o-mini --judge-model gpt-4o
 
 ### Options
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--model` | `claude-haiku` | Model for extraction and answer generation |
-| `--judge-model` | `claude-sonnet` | Model for LLM-as-Judge evaluation |
-| `--recall-limit` | `15` | Number of facts to retrieve per query |
-| `--min-confidence` | `0.3` | Minimum confidence threshold for recall |
-| `--size` | `S` | LongMemEval dataset size (`S`, `M`, or `L`) |
-| `--ingest-only` | `false` | Extract and store facts, skip evaluation |
-| `--reuse-cache` | `false` | Skip ingestion if DB already has facts |
+| Flag               | Default         | Description                                 |
+| ------------------ | --------------- | ------------------------------------------- |
+| `--model`          | `claude-haiku`  | Model for extraction and answer generation  |
+| `--judge-model`    | `claude-sonnet` | Model for LLM-as-Judge evaluation           |
+| `--recall-limit`   | `15`            | Number of facts to retrieve per query       |
+| `--min-confidence` | `0.3`           | Minimum confidence threshold for recall     |
+| `--size`           | `S`             | LongMemEval dataset size (`S`, `M`, or `L`) |
+| `--ingest-only`    | `false`         | Extract and store facts, skip evaluation    |
+| `--reuse-cache`    | `false`         | Skip ingestion if DB already has facts      |
 
 ### Time estimates
 
 The LOCOMO benchmark processes 10 conversations (5,882 turns, 1,986 questions). All LLM calls are sequential.
 
-| Phase | LLM calls | Description | Est. time |
-|-------|-----------|-------------|-----------|
-| Extraction | ~392 | Chunk conversations → extract facts | ~1–2 hours |
-| Answer generation | 1,986 | Recall facts + generate answer per question | ~4–5 hours |
-| Judge evaluation | 1,986 | LLM-as-Judge scores each answer | ~5–7 hours |
-| **Full run** | **~4,364** | | **~10–14 hours** |
-| **`--ingest-only`** | **~392** | Extraction only, no evaluation | **~1–2 hours** |
-| **`--reuse-cache`** | **~3,972** | Evaluation only, reuses cached facts | **~8–12 hours** |
+| Phase               | LLM calls  | Description                                 | Est. time        |
+| ------------------- | ---------- | ------------------------------------------- | ---------------- |
+| Extraction          | ~392       | Chunk conversations → extract facts         | ~1–2 hours       |
+| Answer generation   | 1,986      | Recall facts + generate answer per question | ~4–5 hours       |
+| Judge evaluation    | 1,986      | LLM-as-Judge scores each answer             | ~5–7 hours       |
+| **Full run**        | **~4,364** |                                             | **~10–14 hours** |
+| **`--ingest-only`** | **~392**   | Extraction only, no evaluation              | **~1–2 hours**   |
+| **`--reuse-cache`** | **~3,972** | Evaluation only, reuses cached facts        | **~8–12 hours**  |
 
 **Recommended workflow:**
 
@@ -686,28 +686,29 @@ This lets you validate extraction quality before committing to the full evaluati
 
 ### Comparison targets
 
-| System | LOCOMO | LongMemEval | Source |
-|--------|--------|-------------|--------|
-| Mem0 | 67.13% | — | ArXiv 2504.19413 |
-| Zep (Mem0 paper) | 65.99% | — | ArXiv 2504.19413 |
-| Zep (self-reported) | 75.14% | — | Zep blog |
-| LangMem | 58.10% | — | ArXiv 2504.19413 |
-| Hindsight | — | 91.4% | Hindsight paper |
-| Full-context GPT-4o | — | ~70% | LongMemEval paper |
-| **Paisley Park** | **?** | **?** | **This benchmark** |
+| System              | LOCOMO | LongMemEval | Source             |
+| ------------------- | ------ | ----------- | ------------------ |
+| Mem0                | 67.13% | —           | ArXiv 2504.19413   |
+| Zep (Mem0 paper)    | 65.99% | —           | ArXiv 2504.19413   |
+| Zep (self-reported) | 75.14% | —           | Zep blog           |
+| LangMem             | 58.10% | —           | ArXiv 2504.19413   |
+| Hindsight           | —      | 91.4%       | Hindsight paper    |
+| Full-context GPT-4o | —      | ~70%        | LongMemEval paper  |
+| **Paisley Park**    | **?**  | **?**       | **This benchmark** |
 
 ### Environment variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENAI_API_BASE_URL` | `http://localhost:4010/v1` | LLM API base URL |
-| `OPENAI_API_KEY` | `no-key-needed` | API key (not required for local api-acp) |
-| `BENCH_MODEL` | `claude-haiku` | Default extraction/answer model |
-| `BENCH_JUDGE_MODEL` | `claude-sonnet` | Default judge model |
+| Variable              | Default                    | Description                              |
+| --------------------- | -------------------------- | ---------------------------------------- |
+| `OPENAI_API_BASE_URL` | `http://localhost:4010/v1` | LLM API base URL                         |
+| `OPENAI_API_KEY`      | `no-key-needed`            | API key (not required for local api-acp) |
+| `BENCH_MODEL`         | `claude-haiku`             | Default extraction/answer model          |
+| `BENCH_JUDGE_MODEL`   | `claude-sonnet`            | Default judge model                      |
 
 ### Cost estimate
 
 When using OpenAI, a full run costs approximately $15–25 in API calls:
+
 - Extraction: ~$2–5 (GPT-4o-mini on conversation chunks)
 - Answer generation: ~$5–10 (~1,986 questions)
 - Evaluation: ~$3–5 (GPT-4o judge)
@@ -718,12 +719,12 @@ Results are saved to `~/.funny/benchmark/data/results/` as JSON files with full 
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `@libsql/client` | Database (local SQLite + remote sync) |
-| `hono` | REST API server |
-| `@modelcontextprotocol/sdk` | MCP server transport |
-| `neverthrow` | Result type for error handling |
-| `zod` | Schema validation |
+| Package                     | Purpose                               |
+| --------------------------- | ------------------------------------- |
+| `@libsql/client`            | Database (local SQLite + remote sync) |
+| `hono`                      | REST API server                       |
+| `@modelcontextprotocol/sdk` | MCP server transport                  |
+| `neverthrow`                | Result type for error handling        |
+| `zod`                       | Schema validation                     |
 
 No LLM SDK dependencies. Consolidation uses plain HTTP calls to api-acp.

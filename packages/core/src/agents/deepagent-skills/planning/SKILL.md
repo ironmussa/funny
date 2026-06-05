@@ -10,23 +10,27 @@ Use this skill when starting a new coding task to create a thorough implementati
 ## Steps
 
 ### 1. Understand the Task
+
 - Read the issue/task description completely
 - Identify the expected outcome and acceptance criteria
 - Note any constraints or requirements mentioned
 
 ### 2. Explore the Codebase
+
 - Find the repository root and read the project structure
 - Identify the tech stack (language, framework, test runner)
 - Read README, CONTRIBUTING, or similar docs if they exist
 - Find existing tests to understand testing patterns
 
 ### 3. Identify Relevant Files
+
 - Use `grep` to find code related to the task
 - Read the most relevant files (entry points, related modules)
 - Identify which files need to be modified vs. created
 - Check for existing patterns you should follow
 
 ### 4. Write the Plan
+
 Use `write_todos` to create a structured plan:
 
 ```
@@ -40,6 +44,7 @@ write_todos([
 ```
 
 ### 5. Assess Risks
+
 - Are there breaking changes?
 - Are there edge cases to handle?
 - Does this affect other parts of the codebase?

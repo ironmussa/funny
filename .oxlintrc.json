@@ -26,7 +26,10 @@
     "react/iframe-missing-sandbox": "off",
     "no-unmodified-loop-condition": "off",
     "max-lines": ["warn", { "max": 800, "skipBlankLines": true, "skipComments": true }],
-    "max-lines-per-function": ["warn", { "max": 250, "skipBlankLines": true, "skipComments": true, "IIFEs": true }]
+    "max-lines-per-function": [
+      "warn",
+      { "max": 250, "skipBlankLines": true, "skipComments": true, "IIFEs": true }
+    ]
   },
   "overrides": [
     {

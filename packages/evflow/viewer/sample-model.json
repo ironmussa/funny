@@ -183,52 +183,28 @@
     "ClaudeAgentSDK": {
       "kind": "external",
       "name": "ClaudeAgentSDK",
-      "receives": [
-        "StartAgent",
-        "StopAgent"
-      ],
-      "emits": [
-        "AgentStarted",
-        "AgentCompleted"
-      ],
+      "receives": ["StartAgent", "StopAgent"],
+      "emits": ["AgentStarted", "AgentCompleted"],
       "description": "Claude Agent SDK (@anthropic-ai/claude-agent-sdk) — spawned as subprocess via packages/core/src/agents/, session resumption via sessionId"
     },
     "Sidebar": {
       "kind": "screen",
       "name": "Sidebar",
-      "displays": [
-        "ThreadListView"
-      ],
-      "triggers": [
-        "CreateThread",
-        "DeleteThread"
-      ],
+      "displays": ["ThreadListView"],
+      "triggers": ["CreateThread", "DeleteThread"],
       "description": "Sidebar.tsx — project list with collapsible accordion, thread list with status badges, \"New Thread\" button"
     },
     "ThreadView": {
       "kind": "screen",
       "name": "ThreadView",
-      "displays": [
-        "ThreadListView",
-        "ActiveAgentView"
-      ],
-      "triggers": [
-        "StartAgent",
-        "StopAgent",
-        "SendFollowUp",
-        "ChangeStage"
-      ],
+      "displays": ["ThreadListView", "ActiveAgentView"],
+      "triggers": ["StartAgent", "StopAgent", "SendFollowUp", "ChangeStage"],
       "description": "ThreadView.tsx — chat-style message display, tool call cards, prompt input with model/mode selectors, stop button"
     },
     "ThreadListView": {
       "kind": "readModel",
       "name": "ThreadListView",
-      "from": [
-        "ThreadCreated",
-        "ThreadStageChanged",
-        "ThreadDeleted",
-        "AgentCompleted"
-      ],
+      "from": ["ThreadCreated", "ThreadStageChanged", "ThreadDeleted", "AgentCompleted"],
       "fields": {
         "threads": "Thread[]",
         "activeCount": "number",
@@ -239,10 +215,7 @@
     "ActiveAgentView": {
       "kind": "readModel",
       "name": "ActiveAgentView",
-      "from": [
-        "AgentStarted",
-        "AgentCompleted"
-      ],
+      "from": ["AgentStarted", "AgentCompleted"],
       "fields": {
         "runningAgents": "string[]",
         "isRunning": "boolean"
@@ -273,14 +246,10 @@
     "FollowUpQueueSaga": {
       "kind": "saga",
       "name": "FollowUpQueueSaga",
-      "on": [
-        "AgentCompleted"
-      ],
+      "on": ["AgentCompleted"],
       "correlationKey": "threadId",
       "when": "queued messages exist for threadId",
-      "triggers": [
-        "StartAgent"
-      ],
+      "triggers": ["StartAgent"],
       "description": "Process manager that drains queued follow-up messages — on AgentCompleted, checks if thread has pending messages, dequeues next and triggers StartAgent"
     },
     "GitStage": {
@@ -623,21 +592,14 @@
     "GitHubAPI": {
       "kind": "external",
       "name": "GitHubAPI",
-      "receives": [
-        "GitPush"
-      ],
-      "emits": [
-        "GitPushed"
-      ],
+      "receives": ["GitPush"],
+      "emits": ["GitPushed"],
       "description": "GitHub CLI (gh) integration via packages/core/src/git/github.ts — push, PR creation, repo operations, uses GH_TOKEN from user profile"
     },
     "ReviewPane": {
       "kind": "screen",
       "name": "ReviewPane",
-      "displays": [
-        "GitStatusView",
-        "CommitHistoryView"
-      ],
+      "displays": ["GitStatusView", "CommitHistoryView"],
       "triggers": [
         "GitStage",
         "GitUnstage",
@@ -672,11 +634,7 @@
     "CommitHistoryView": {
       "kind": "readModel",
       "name": "CommitHistoryView",
-      "from": [
-        "GitCommitted",
-        "GitPushed",
-        "GitMerged"
-      ],
+      "from": ["GitCommitted", "GitPushed", "GitMerged"],
       "fields": {
         "commits": "Commit[]",
         "isPushed": "boolean",
@@ -803,10 +761,7 @@
     "FileSystemWatcher": {
       "kind": "external",
       "name": "FileSystemWatcher",
-      "receives": [
-        "StartGitWatcher",
-        "StopGitWatcher"
-      ],
+      "receives": ["StartGitWatcher", "StopGitWatcher"],
       "emits": [],
       "description": "File system watcher (chokidar/fs.watch) — monitors project directories for changes, emits GitChanged events"
     },
@@ -965,21 +920,8 @@
     "PtySession": {
       "kind": "aggregate",
       "name": "PtySession",
-      "handles": [
-        "SpawnPty",
-        "WritePty",
-        "ResizePty",
-        "KillPty",
-        "RestorePty",
-        "RenamePty"
-      ],
-      "emits": [
-        "PtySpawned",
-        "PtyDataReceived",
-        "PtyExited",
-        "PtyError",
-        "PtyRestored"
-      ],
+      "handles": ["SpawnPty", "WritePty", "ResizePty", "KillPty", "RestorePty", "RenamePty"],
+      "emits": ["PtySpawned", "PtyDataReceived", "PtyExited", "PtyError", "PtyRestored"],
       "invariants": [
         "cwd must resolve to absolute path within user project directories or worktrees",
         "session id must not already exist in activeSessions (duplicate spawn → auto-restore)",
@@ -999,40 +941,20 @@
         "ListPtySessions",
         "RenamePty"
       ],
-      "emits": [
-        "PtyDataReceived",
-        "PtyExited",
-        "PtyError",
-        "PtySessionsListed",
-        "PtyRestored"
-      ],
+      "emits": ["PtyDataReceived", "PtyExited", "PtyError", "PtySessionsListed", "PtyRestored"],
       "description": "Socket.IO server (socketio.ts) — authenticates browser session, resolves runner for project, forwards pty:* events via central:browser_ws tunnel, relays runner responses back to user room"
     },
     "TerminalPanel": {
       "kind": "screen",
       "name": "TerminalPanel",
-      "displays": [
-        "TerminalSessionView"
-      ],
-      "triggers": [
-        "SpawnPty",
-        "WritePty",
-        "ResizePty",
-        "KillPty",
-        "RenamePty"
-      ],
+      "displays": ["TerminalSessionView"],
+      "triggers": ["SpawnPty", "WritePty", "ResizePty", "KillPty", "RenamePty"],
       "description": "TerminalPanel.tsx — tab bar with \"+\" button, shell picker dropdown, xterm.js instances, resize observer"
     },
     "TerminalSessionView": {
       "kind": "readModel",
       "name": "TerminalSessionView",
-      "from": [
-        "PtySpawned",
-        "PtyExited",
-        "PtyError",
-        "PtySessionsListed",
-        "PtyRestored"
-      ],
+      "from": ["PtySpawned", "PtyExited", "PtyError", "PtySessionsListed", "PtyRestored"],
       "fields": {
         "tabs": "TerminalTab[]",
         "activeTabId": "string?",
@@ -1072,103 +994,51 @@
   "sequences": [
     {
       "name": "Thread Happy Path",
-      "steps": [
-        "CreateThread",
-        "ThreadCreated",
-        "StartAgent",
-        "AgentStarted",
-        "AgentCompleted"
-      ]
+      "steps": ["CreateThread", "ThreadCreated", "StartAgent", "AgentStarted", "AgentCompleted"]
     },
     {
       "name": "Follow-up via Saga",
-      "steps": [
-        "AgentCompleted",
-        "SendFollowUp",
-        "StartAgent",
-        "AgentStarted",
-        "AgentCompleted"
-      ]
+      "steps": ["AgentCompleted", "SendFollowUp", "StartAgent", "AgentStarted", "AgentCompleted"]
     },
     {
       "name": "Delete Thread",
-      "steps": [
-        "DeleteThread",
-        "ThreadDeleted"
-      ]
+      "steps": ["DeleteThread", "ThreadDeleted"]
     },
     {
       "name": "Stage Transition",
-      "steps": [
-        "ChangeStage",
-        "ThreadStageChanged"
-      ]
+      "steps": ["ChangeStage", "ThreadStageChanged"]
     },
     {
       "name": "Stage and Commit",
-      "steps": [
-        "GitStage",
-        "GitStaged",
-        "GitCommit",
-        "GitCommitted"
-      ]
+      "steps": ["GitStage", "GitStaged", "GitCommit", "GitCommitted"]
     },
     {
       "name": "Commit triggers Pipeline Review",
-      "steps": [
-        "GitCommit",
-        "GitCommitted",
-        "StartPipelineReview"
-      ]
+      "steps": ["GitCommit", "GitCommitted", "StartPipelineReview"]
     },
     {
       "name": "Full PR Flow",
-      "steps": [
-        "GitStage",
-        "GitStaged",
-        "GitCommit",
-        "GitCommitted",
-        "GitPush",
-        "GitPushed"
-      ]
+      "steps": ["GitStage", "GitStaged", "GitCommit", "GitCommitted", "GitPush", "GitPushed"]
     },
     {
       "name": "Agent triggers Git Status",
-      "steps": [
-        "AgentCompleted",
-        "EmitGitStatus"
-      ]
+      "steps": ["AgentCompleted", "EmitGitStatus"]
     },
     {
       "name": "Pull and Merge",
-      "steps": [
-        "GitPull",
-        "GitPulled",
-        "GitMerge",
-        "GitMerged"
-      ]
+      "steps": ["GitPull", "GitPulled", "GitMerge", "GitMerged"]
     },
     {
       "name": "Terminal Spawn Happy Path",
-      "steps": [
-        "SpawnPty",
-        "PtySpawned",
-        "PtyDataReceived"
-      ]
+      "steps": ["SpawnPty", "PtySpawned", "PtyDataReceived"]
     },
     {
       "name": "Terminal Input Loop",
-      "steps": [
-        "WritePty",
-        "PtyDataReceived"
-      ]
+      "steps": ["WritePty", "PtyDataReceived"]
     },
     {
       "name": "Terminal Close",
-      "steps": [
-        "KillPty",
-        "PtyExited"
-      ]
+      "steps": ["KillPty", "PtyExited"]
     },
     {
       "name": "Terminal Restore on Reconnect",
@@ -1182,10 +1052,7 @@
     },
     {
       "name": "Terminal Spawn Error",
-      "steps": [
-        "SpawnPty",
-        "PtyError"
-      ]
+      "steps": ["SpawnPty", "PtyError"]
     }
   ],
   "slices": [
@@ -1207,24 +1074,11 @@
         "ThreadStageChanged",
         "ThreadDeleted"
       ],
-      "readModels": [
-        "ThreadListView",
-        "ActiveAgentView"
-      ],
-      "automations": [
-        "TransitionStageOnAgentStart",
-        "CommentOnAgentCompletion"
-      ],
-      "aggregates": [
-        "Thread"
-      ],
-      "screens": [
-        "Sidebar",
-        "ThreadView"
-      ],
-      "externals": [
-        "ClaudeAgentSDK"
-      ],
+      "readModels": ["ThreadListView", "ActiveAgentView"],
+      "automations": ["TransitionStageOnAgentStart", "CommentOnAgentCompletion"],
+      "aggregates": ["Thread"],
+      "screens": ["Sidebar", "ThreadView"],
+      "externals": ["ClaudeAgentSDK"],
       "sagas": []
     },
     {
@@ -1255,10 +1109,7 @@
         "GitStashPopped",
         "GitResetSoftDone"
       ],
-      "readModels": [
-        "GitStatusView",
-        "CommitHistoryView"
-      ],
+      "readModels": ["GitStatusView", "CommitHistoryView"],
       "automations": [
         "EmitGitStatusOnChange",
         "RefreshGitStatusOnAgentComplete",
@@ -1273,30 +1124,17 @@
         "PersistGitStashPop",
         "PersistGitResetSoft"
       ],
-      "aggregates": [
-        "GitRepository"
-      ],
-      "screens": [
-        "ReviewPane"
-      ],
-      "externals": [
-        "GitCLI",
-        "GitHubAPI"
-      ],
+      "aggregates": ["GitRepository"],
+      "screens": ["ReviewPane"],
+      "externals": ["GitCLI", "GitHubAPI"],
       "sagas": []
     },
     {
       "name": "Pipeline",
-      "commands": [
-        "StartPipelineReview"
-      ],
-      "events": [
-        "GitCommitted"
-      ],
+      "commands": ["StartPipelineReview"],
+      "events": ["GitCommitted"],
       "readModels": [],
-      "automations": [
-        "TriggerPipelineOnCommit"
-      ],
+      "automations": ["TriggerPipelineOnCommit"],
       "aggregates": [],
       "screens": [],
       "externals": [],
@@ -1304,24 +1142,13 @@
     },
     {
       "name": "Watcher Lifecycle",
-      "commands": [
-        "StartGitWatcher",
-        "StopGitWatcher"
-      ],
-      "events": [
-        "ThreadCreated",
-        "ThreadDeleted"
-      ],
+      "commands": ["StartGitWatcher", "StopGitWatcher"],
+      "events": ["ThreadCreated", "ThreadDeleted"],
       "readModels": [],
-      "automations": [
-        "StartWatcherOnThreadCreated",
-        "StopWatcherOnThreadDeleted"
-      ],
+      "automations": ["StartWatcherOnThreadCreated", "StopWatcherOnThreadDeleted"],
       "aggregates": [],
       "screens": [],
-      "externals": [
-        "FileSystemWatcher"
-      ],
+      "externals": ["FileSystemWatcher"],
       "sagas": []
     },
     {
@@ -1344,24 +1171,16 @@
         "PtyRestored",
         "PtySessionsListed"
       ],
-      "readModels": [
-        "TerminalSessionView"
-      ],
+      "readModels": ["TerminalSessionView"],
       "automations": [
         "PersistSessionOnSpawn",
         "CleanupSessionOnExit",
         "BufferDataBeforeCallback",
         "ReattachOnServerRestart"
       ],
-      "aggregates": [
-        "PtySession"
-      ],
-      "screens": [
-        "TerminalPanel"
-      ],
-      "externals": [
-        "ServerSocketProxy"
-      ],
+      "aggregates": ["PtySession"],
+      "screens": ["TerminalPanel"],
+      "externals": ["ServerSocketProxy"],
       "sagas": []
     }
   ],

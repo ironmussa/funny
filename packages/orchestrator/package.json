@@ -2,6 +2,9 @@
   "name": "@funny/thread-orchestrator",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "funny-orchestrator": "./src/bin/orchestrator.ts"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -9,9 +12,6 @@
     ".": "./src/index.ts",
     "./standalone": "./src/standalone.ts",
     "./logger": "./src/logger.ts"
-  },
-  "bin": {
-    "funny-orchestrator": "./src/bin/orchestrator.ts"
   },
   "scripts": {
     "test": "bun test",

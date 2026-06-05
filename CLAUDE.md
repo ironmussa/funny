@@ -104,6 +104,7 @@ bun run db:studio
 **Unified thread index.** Every thread row lives once in `useThreadStore.threadsById: Record<string, Thread>`. Order per bucket is preserved by sibling arrays — `threadIdsByProject: Record<string, string[]>` for project threads and `scratchThreadIds: string[]` for scratch. **Never store a Thread object in two places.** Helpers for atomic writes live in [`stores/thread-mutations.ts`](packages/client/src/stores/thread-mutations.ts) (`replaceProjectThreads`, `appendProjectThreads`, `prependScratchThread`, `removeThread`, `patchThread`, etc.); WS handlers and store actions go through these instead of touching `threadsById` directly. The helper `patchThread(state, id, updater)` also mirrors the change onto `activeThread` when the patched thread is currently active, keeping the right pane in sync without a second write.
 
 **Read-side selectors.** Components consume threads through hooks in [`lib/thread-selectors.ts`](packages/client/src/lib/thread-selectors.ts) — never read `threadsById` / `threadIdsByProject` directly from a component:
+
 - `useThreadById(id)` — single thread, reactive
 - `useThreadsForProject(pid)` — ordered Thread[] for one project (shallow-equal)
 - `useScratchThreads()` — ordered scratch list (shallow-equal)
@@ -173,6 +174,7 @@ The server and runner are **always separate processes** — the runner is never 
 Data flow: `Client → Server → Runner (via WS tunnel or direct HTTP)`
 
 Configuration:
+
 - `TEAM_SERVER_URL` — **Required** on the runner to connect it to the server
 - `RUNNER_AUTH_SECRET` — **Required** shared secret for runner ↔ server authentication
 - `DATABASE_URL` — Optional PostgreSQL connection string on the server (default: SQLite at `~/.funny/data.db`)

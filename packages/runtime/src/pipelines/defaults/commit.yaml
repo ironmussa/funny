@@ -18,7 +18,7 @@ inputs:
 nodes:
   - id: commit
     git_commit:
-      message: "{{commit_message}}"
+      message: '{{commit_message}}'
     retry:
       max_attempts: 3
       before_retry:

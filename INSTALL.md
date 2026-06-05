@@ -21,8 +21,9 @@ bunx @ironmussa/funny@latest
 Open `http://localhost:3001` in your browser.
 
 Default credentials on first startup:
+
 - **Username:** `admin`
-- **Password:** `admin` *(change immediately)*
+- **Password:** `admin` _(change immediately)_
 
 **Environment variables (all optional for this mode):**
 
@@ -241,7 +242,7 @@ funny --team http://<central-server-ip>:3002
 > - Access to files under `$HOME` that the path-scope allowlist permits (project dirs, worktrees, the file picker's `$HOME` scope), subject to the credential-dir blocklist (`.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gcloud`, `.docker`).
 > - Write access to `~/.funny/scratch/<userId>/<threadId>/` for any **scratch thread** the user creates. Scratch threads have no project, no git, and no worktree — they are sandboxed only by being a per-thread directory under `~/.funny/scratch/`, so a malicious central server can ask the runner to write arbitrary files under that path.
 >
-> Treat `TEAM_SERVER_URL` like an SSH destination: only point runners at a central server you *already trust* to run arbitrary code on the runner host. Hardening options:
+> Treat `TEAM_SERVER_URL` like an SSH destination: only point runners at a central server you _already trust_ to run arbitrary code on the runner host. Hardening options:
 >
 > - Run each runner inside a dedicated unprivileged OS user, VM, or container with only the repos it needs mounted in.
 > - Use `FUNNY_DATA_DIR` to keep runner state out of the invoking user's main `$HOME`.
@@ -249,6 +250,7 @@ funny --team http://<central-server-ip>:3002
 > - Rotate `RUNNER_AUTH_SECRET` if a central server is ever decommissioned — any party with that secret and network reach to a runner inherits the same trust level.
 
 The runner machine needs:
+
 - Claude CLI installed and authenticated
 - Git installed and configured
 - Access to your project repositories
@@ -334,17 +336,17 @@ TEAM_SERVER_URL=http://central:3002 RUNNER_AUTH_SECRET=shared-secret funny
 
 **Runner data stored on the central server:**
 
-| Field             | Value                                     |
-|-------------------|-------------------------------------------|
-| `id`              | Auto-generated unique ID                  |
-| `name`            | `<hostname>-funny`                        |
-| `hostname`        | Machine hostname                          |
-| `os`              | `linux` / `darwin` / `win32`             |
-| `token`           | Bearer token for authenticated requests   |
-| `status`          | `online` / `offline` / `busy`            |
-| `userId`          | Associated user (assigned by admin)       |
-| `registeredAt`    | Registration timestamp                    |
-| `lastHeartbeatAt` | Updated every 15 s (offline after 60 s)  |
+| Field             | Value                                   |
+| ----------------- | --------------------------------------- |
+| `id`              | Auto-generated unique ID                |
+| `name`            | `<hostname>-funny`                      |
+| `hostname`        | Machine hostname                        |
+| `os`              | `linux` / `darwin` / `win32`            |
+| `token`           | Bearer token for authenticated requests |
+| `status`          | `online` / `offline` / `busy`           |
+| `userId`          | Associated user (assigned by admin)     |
+| `registeredAt`    | Registration timestamp                  |
+| `lastHeartbeatAt` | Updated every 15 s (offline after 60 s) |
 
 ---
 
@@ -424,13 +426,13 @@ DATABASE_URL=postgresql://user:pass@db.example.com/funny?sslmode=require
 
 **SQLite vs PostgreSQL:**
 
-|                     | SQLite                          | PostgreSQL                        |
-|---------------------|---------------------------------|-----------------------------------|
-| Setup               | Zero-config                     | Requires a running Postgres server |
-| Best for            | Single user, small team         | Large teams, production, HA        |
-| Data location       | `~/.funny/data.db`              | Your Postgres server               |
-| Backup              | Copy the `.db` file             | Standard Postgres backup tools     |
-| Concurrent writers  | Limited                         | Full concurrent access             |
+|                    | SQLite                  | PostgreSQL                         |
+| ------------------ | ----------------------- | ---------------------------------- |
+| Setup              | Zero-config             | Requires a running Postgres server |
+| Best for           | Single user, small team | Large teams, production, HA        |
+| Data location      | `~/.funny/data.db`      | Your Postgres server               |
+| Backup             | Copy the `.db` file     | Standard Postgres backup tools     |
+| Concurrent writers | Limited                 | Full concurrent access             |
 
 ---
 
@@ -438,38 +440,38 @@ DATABASE_URL=postgresql://user:pass@db.example.com/funny?sslmode=require
 
 ### `funny` (runner + UI)
 
-| Variable             | Description                                              | Default        | Required            |
-|----------------------|----------------------------------------------------------|----------------|---------------------|
-| `PORT`               | Port to listen on                                        | `3001`         | No                  |
-| `HOST`               | Host to bind to                                          | `127.0.0.1`    | No                  |
-| `TEAM_SERVER_URL`    | Central server URL — **activates team/runner mode**      | —              | Only in team mode   |
-| `RUNNER_AUTH_SECRET` | Shared secret for runner ↔ server authentication         | Auto-generated | Yes in team mode    |
-| `RUNNER_HTTP_URL`    | Runner's own HTTP URL (enables direct HTTP fallback)     | —              | No                  |
-| `DATABASE_URL`       | PostgreSQL connection URL                                | SQLite         | No                  |
-| `CORS_ORIGIN`        | Allowed CORS origins (comma-separated)                   | Auto           | No                  |
-| `CLAUDE_BINARY_PATH` | Explicit path to the Claude CLI binary                   | Auto-detected  | No                  |
-| `FUNNY_DATA_DIR`     | Data directory for DB, secrets, keys                     | `~/.funny`     | No                  |
-| `OTLP_ENDPOINT`      | OpenTelemetry collector endpoint                         | —              | No                  |
+| Variable             | Description                                          | Default        | Required          |
+| -------------------- | ---------------------------------------------------- | -------------- | ----------------- |
+| `PORT`               | Port to listen on                                    | `3001`         | No                |
+| `HOST`               | Host to bind to                                      | `127.0.0.1`    | No                |
+| `TEAM_SERVER_URL`    | Central server URL — **activates team/runner mode**  | —              | Only in team mode |
+| `RUNNER_AUTH_SECRET` | Shared secret for runner ↔ server authentication     | Auto-generated | Yes in team mode  |
+| `RUNNER_HTTP_URL`    | Runner's own HTTP URL (enables direct HTTP fallback) | —              | No                |
+| `DATABASE_URL`       | PostgreSQL connection URL                            | SQLite         | No                |
+| `CORS_ORIGIN`        | Allowed CORS origins (comma-separated)               | Auto           | No                |
+| `CLAUDE_BINARY_PATH` | Explicit path to the Claude CLI binary               | Auto-detected  | No                |
+| `FUNNY_DATA_DIR`     | Data directory for DB, secrets, keys                 | `~/.funny`     | No                |
+| `OTLP_ENDPOINT`      | OpenTelemetry collector endpoint                     | —              | No                |
 
 ### `funny-server` (central server)
 
-| Variable                 | Description                                          | Default            | Required          |
-|--------------------------|------------------------------------------------------|--------------------|-------------------|
-| `PORT`                   | Port to listen on                                    | `3002`             | No                |
-| `HOST`                   | Host to bind to                                      | `0.0.0.0`          | No                |
-| `RUNNER_AUTH_SECRET`     | Shared secret runners must send to authenticate      | —                  | Yes               |
-| `DATABASE_URL`           | PostgreSQL connection URL                            | SQLite             | No                |
-| `CORS_ORIGIN`            | Allowed CORS origins (comma-separated)               | Auto               | Yes (remote)      |
-| `FUNNY_CENTRAL_DATA_DIR` | Data directory for auth secrets and keys             | `~/.funny-server`  | No                |
-| `LOG_LEVEL`              | Log level: `debug` / `info` / `warn` / `error`      | `info`             | No                |
+| Variable                 | Description                                     | Default           | Required     |
+| ------------------------ | ----------------------------------------------- | ----------------- | ------------ |
+| `PORT`                   | Port to listen on                               | `3002`            | No           |
+| `HOST`                   | Host to bind to                                 | `0.0.0.0`         | No           |
+| `RUNNER_AUTH_SECRET`     | Shared secret runners must send to authenticate | —                 | Yes          |
+| `DATABASE_URL`           | PostgreSQL connection URL                       | SQLite            | No           |
+| `CORS_ORIGIN`            | Allowed CORS origins (comma-separated)          | Auto              | Yes (remote) |
+| `FUNNY_CENTRAL_DATA_DIR` | Data directory for auth secrets and keys        | `~/.funny-server` | No           |
+| `LOG_LEVEL`              | Log level: `debug` / `info` / `warn` / `error`  | `info`            | No           |
 
 ### `packages/client` (separate client build only)
 
-| Variable          | Description                                       | Default              |
-|-------------------|---------------------------------------------------|----------------------|
-| `VITE_SERVER_URL` | Backend server URL (overrides dev proxy)          | `http://localhost:3001` |
-| `VITE_PORT`       | Dev server port                                   | `5173`               |
-| `VITE_HOST`       | Dev server host                                   | `localhost`          |
+| Variable          | Description                              | Default                 |
+| ----------------- | ---------------------------------------- | ----------------------- |
+| `VITE_SERVER_URL` | Backend server URL (overrides dev proxy) | `http://localhost:3001` |
+| `VITE_PORT`       | Dev server port                          | `5173`                  |
+| `VITE_HOST`       | Dev server host                          | `localhost`             |
 
 ---
 

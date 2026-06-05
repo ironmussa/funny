@@ -10,13 +10,13 @@ Memory is **not** a notebook or a log. It is a curated knowledge base. Every fac
 
 ## Available Tools
 
-| Tool | Purpose |
-|------|---------|
-| `pp_recall` | Search memory for facts relevant to a query |
-| `pp_add` | Store a new fact |
-| `pp_invalidate` | Mark a fact as no longer valid |
-| `pp_search` | Search with filters (type, tags) |
-| `pp_evolve` | Update an existing fact with new information |
+| Tool            | Purpose                                      |
+| --------------- | -------------------------------------------- |
+| `pp_recall`     | Search memory for facts relevant to a query  |
+| `pp_add`        | Store a new fact                             |
+| `pp_invalidate` | Mark a fact as no longer valid               |
+| `pp_search`     | Search with filters (type, tags)             |
+| `pp_evolve`     | Update an existing fact with new information |
 
 ## When to Use Memory
 
@@ -74,14 +74,14 @@ pp_evolve("fact-2025-03-15-a1b2", "Pool size was later increased to 20, but the 
 
 Choose the most specific type when adding a fact:
 
-| Type | Decay | Use when... |
-|------|-------|-------------|
-| `decision` | slow (~231 day half-life) | Recording an architectural or design choice and its rationale |
-| `bug` | normal (~46 day half-life) | Documenting a root cause, workaround, or debugging insight |
-| `pattern` | slow (~231 day half-life) | Describing a recurring code/architecture pattern in the project |
-| `convention` | slow (~231 day half-life) | Recording a team agreement or project standard |
-| `insight` | normal (~46 day half-life) | Noting a non-obvious observation or learning |
-| `context` | fast (~14 day half-life) | Capturing temporary information (sprint goals, freezes, incidents) |
+| Type         | Decay                      | Use when...                                                        |
+| ------------ | -------------------------- | ------------------------------------------------------------------ |
+| `decision`   | slow (~231 day half-life)  | Recording an architectural or design choice and its rationale      |
+| `bug`        | normal (~46 day half-life) | Documenting a root cause, workaround, or debugging insight         |
+| `pattern`    | slow (~231 day half-life)  | Describing a recurring code/architecture pattern in the project    |
+| `convention` | slow (~231 day half-life)  | Recording a team agreement or project standard                     |
+| `insight`    | normal (~46 day half-life) | Noting a non-obvious observation or learning                       |
+| `context`    | fast (~14 day half-life)   | Capturing temporary information (sprint goals, freezes, incidents) |
 
 Decay means facts that are never accessed again gradually lose relevance. Important facts that keep getting recalled stay fresh.
 
@@ -104,23 +104,30 @@ Memories may be stale. The codebase evolves faster than memory can track. When y
 ## How Memory Works Internally
 
 ### Storage
+
 Facts are stored in a libSQL database (SQLite-compatible). In team setups, all instances sync via embedded replicas — writes from any team member propagate to everyone automatically.
 
 ### Retrieval
+
 When you call `pp_recall`, the system:
+
 1. Runs **embedding search** (70% weight) — semantic similarity via vector embeddings
 2. Runs **keyword search** (30% weight) — term matching on content and tags
 3. **Graph traversal** — follows `related` links from top results to find connected facts
 4. **Ranking** — filters by validity and confidence, applies temporal decay
 
 ### Garbage Collection
+
 A background process periodically:
+
 - Archives facts with very low decay scores (not accessed in a long time)
 - Deduplicates near-identical facts
 - Cleans up orphaned fast-decay facts
 
 ### Consolidation
+
 If an LLM consolidation agent is configured, it periodically:
+
 - Groups similar facts and merges them into concise summaries
 - Rejects new facts that contain derivable information (admission filter)
 - Ensures only one instance consolidates at a time (distributed lock)

@@ -27,7 +27,7 @@ nodes:
     pipeline:
       name: commit
       inputs:
-        commit_message: "{{commit_message}}"
+        commit_message: '{{commit_message}}'
 
   # ── 2. Code review (review → fix loop) ────────────────
   - id: review
@@ -35,7 +35,7 @@ nodes:
     pipeline:
       name: code-review
       inputs:
-        commit_sha: "{{commit_sha}}"
+        commit_sha: '{{commit_sha}}'
 
   # ── 3. Tests with auto-fix ────────────────────────────
   - id: test
@@ -44,13 +44,13 @@ nodes:
     pipeline:
       name: pre-push
       inputs:
-        test_command: "{{test_command}}"
+        test_command: '{{test_command}}'
 
   # ── 4. Push to remote ─────────────────────────────────
   - id: push
     depends_on: [test]
     git_push:
-      branch: "{{branch}}"
+      branch: '{{branch}}'
       set_upstream: true
     retry:
       max_attempts: 2
@@ -70,12 +70,12 @@ nodes:
     depends_on: [push]
     on_error: continue
     create_pr:
-      title: "{{commit_message}}"
-      base: "{{base_branch}}"
+      title: '{{commit_message}}'
+      base: '{{base_branch}}'
 
   # ── 6. Notify completion ──────────────────────────────
   - id: done
     depends_on: [pr]
     notify:
-      message: "Pipeline complete. Branch {{branch}} pushed."
+      message: 'Pipeline complete. Branch {{branch}} pushed.'
       level: info

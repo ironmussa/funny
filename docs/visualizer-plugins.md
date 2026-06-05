@@ -32,7 +32,7 @@ host hook directly (theme, font size) without a permission layer.
 
 Because a plugin is global to the server and its code is loaded into **every**
 user's browser, **installing and removing plugins is admin-only.** Any logged-in
-user can *see* what is installed.
+user can _see_ what is installed.
 
 ---
 
@@ -107,14 +107,14 @@ Reload the app and the plugin is discovered.
 
 ### Where plugins live & how they're served
 
-| | |
-|---|---|
-| On-disk location | `~/.funny/extensions/<dirName>/` (server host) |
-| Discovery / manifest | `GET /api/extensions` |
-| Management list | `GET /api/extensions/installed` |
-| Install (admin) | `POST /api/extensions/install` → `{ "path": "/abs/dir" }` or `{ "git": "github:you/repo", "ref"?, "subdir"? }` |
-| Remove (admin) | `DELETE /api/extensions/:name` |
-| Asset serving | `GET /extensions/<dirName>/<file>` |
+|                      |                                                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| On-disk location     | `~/.funny/extensions/<dirName>/` (server host)                                                                 |
+| Discovery / manifest | `GET /api/extensions`                                                                                          |
+| Management list      | `GET /api/extensions/installed`                                                                                |
+| Install (admin)      | `POST /api/extensions/install` → `{ "path": "/abs/dir" }` or `{ "git": "github:you/repo", "ref"?, "subdir"? }` |
+| Remove (admin)       | `DELETE /api/extensions/:name`                                                                                 |
+| Asset serving        | `GET /extensions/<dirName>/<file>`                                                                             |
 
 Removing a plugin deletes its directory. Discovery is resilient: a malformed or
 unsafe package is skipped silently rather than breaking the others.
@@ -134,13 +134,13 @@ Start from the bare-bones [`visualizer-template`](https://github.com/ironmussa/f
 (zero-dep, copy-and-go), or one of the working heavyweight examples that show how
 to bundle real deps — all in the [`funny-extensions`](https://github.com/ironmussa/funny-extensions) repo:
 
-| Example | Renders | Bundles | Notes |
-|---|---|---|---|
-| [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml) | ` ```dbml `, `.dbml` | `@dbml/parse` + React Flow + dagre | Interactive ER diagram; injects a vendored stylesheet. |
-| [`visualizer-dot`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dot) | ` ```dot `, `.dot`, `.gv` | `@hpcc-js/wasm-graphviz` | GraphViz → SVG; wasm embedded as base64 (self-contained). |
-| [`visualizer-vega`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-vega) | ` ```vega-lite `, ` ```vega ` | `vega-embed` | Declarative charts; imperative widget (no host-React conflict). |
-| [`visualizer-jupyter`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-jupyter) | `.ipynb` | `marked` | Custom nbformat-v4 renderer (cells + outputs). |
-| [`visualizer-openapi`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-openapi) | ` ```openapi `, ` ```swagger ` | `swagger-ui-dist` + `js-yaml` | Swagger UI; bundles its own isolated React. |
+| Example                                                                                              | Renders                        | Bundles                            | Notes                                                           |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------ | ---------------------------------- | --------------------------------------------------------------- |
+| [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml)       | ` ```dbml `, `.dbml`           | `@dbml/parse` + React Flow + dagre | Interactive ER diagram; injects a vendored stylesheet.          |
+| [`visualizer-dot`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dot)         | ` ```dot `, `.dot`, `.gv`      | `@hpcc-js/wasm-graphviz`           | GraphViz → SVG; wasm embedded as base64 (self-contained).       |
+| [`visualizer-vega`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-vega)       | ` ```vega-lite `, ` ```vega `  | `vega-embed`                       | Declarative charts; imperative widget (no host-React conflict). |
+| [`visualizer-jupyter`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-jupyter) | `.ipynb`                       | `marked`                           | Custom nbformat-v4 renderer (cells + outputs).                  |
+| [`visualizer-openapi`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-openapi) | ` ```openapi `, ` ```swagger ` | `swagger-ui-dist` + `js-yaml`      | Swagger UI; bundles its own isolated React.                     |
 
 Each demonstrates a different bundling trick — embedded wasm, an imperative
 non-React widget, a hand-rolled renderer, and an isolated second React app. The
@@ -156,7 +156,7 @@ built-in).
 
 The public author SDK is the **`@funny/host`** package. Keep your imports to it:
 
-```ts
+````ts
 import {
   useFunnyTheme,
   useFunnyFontSize,
@@ -165,30 +165,30 @@ import {
 } from '@funny/host';
 
 function CsvTable({ source, fill }: VisualizerProps) {
-  const theme = useFunnyTheme();      // 'light' | 'dark'
-  const fontPx = useFunnyFontSize();  // number (px)
+  const theme = useFunnyTheme(); // 'light' | 'dark'
+  const fontPx = useFunnyFontSize(); // number (px)
   // …render `source`…
 }
 
 const plugin: VisualizerPlugin = {
-  id: 'funny-visualizer-csv',         // stable, unique
+  id: 'funny-visualizer-csv', // stable, unique
   version: '0.1.0',
   contributes: {
-    fences: ['csv'],                  // ```csv blocks
-    fileExtensions: ['.csv'],         // .csv file previews (leading dot optional)
+    fences: ['csv'], // ```csv blocks
+    fileExtensions: ['.csv'], // .csv file previews (leading dot optional)
   },
   Component: CsvTable,
 };
 
 export default plugin;
-```
+````
 
 `VisualizerProps`:
 
-| prop | type | meaning |
-|---|---|---|
-| `source` | `string` | the fenced-block contents, or the full file contents |
-| `fill` | `boolean?` | `true` when rendered as a full file-preview pane (vs. an inline block) — use it to fill available height |
+| prop     | type       | meaning                                                                                                  |
+| -------- | ---------- | -------------------------------------------------------------------------------------------------------- |
+| `source` | `string`   | the fenced-block contents, or the full file contents                                                     |
+| `fill`   | `boolean?` | `true` when rendered as a full file-preview pane (vs. an inline block) — use it to fill available height |
 
 Props are intentionally minimal: because your component shares the host's React
 tree, read theme / font size from the host hooks rather than threading them
@@ -225,7 +225,7 @@ esbuild src/index.tsx \
   --outfile=dist/index.mjs
 ```
 
-> **Critical: never bundle React.** Your plugin must use the *host's* single
+> **Critical: never bundle React.** Your plugin must use the _host's_ single
 > React instance. Bundling a second copy triggers the classic
 > `Invalid hook call` error. `peerDependencies` + `--external:react` is what
 > keeps React external; an import map in the host then points the bare `react`

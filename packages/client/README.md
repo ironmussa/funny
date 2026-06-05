@@ -120,13 +120,13 @@ The client ships logs, metrics and traces to [Abbacchio](https://abbacchio.dev) 
 
 ### Levels and when they fire
 
-| Level   | Use for                                                          | Prod default |
-| ------- | ---------------------------------------------------------------- | ------------ |
-| `error` | Unexpected failure paths                                         | **on**       |
-| `warn`  | Recoverable anomalies, unexpected branches                       | **on**       |
-| `info`  | Per-session milestones (WS connect, `agent:result`, route change)| **on**       |
-| `debug` | High-frequency traces (every WS chunk, RAF flush, status txn)    | off          |
-| `trace` | Extreme detail (per-keystroke, per-frame)                        | off          |
+| Level   | Use for                                                           | Prod default |
+| ------- | ----------------------------------------------------------------- | ------------ |
+| `error` | Unexpected failure paths                                          | **on**       |
+| `warn`  | Recoverable anomalies, unexpected branches                        | **on**       |
+| `info`  | Per-session milestones (WS connect, `agent:result`, route change) | **on**       |
+| `debug` | High-frequency traces (every WS chunk, RAF flush, status txn)     | off          |
+| `trace` | Extreme detail (per-keystroke, per-frame)                         | off          |
 
 In dev the floor is `debug` (everything visible). In prod the floor is `info` — `debug` and `trace` are dropped unless you opt in.
 
@@ -149,10 +149,10 @@ The setting persists across reloads via `localStorage`. Reload after changing th
 
 You can also set the keys directly:
 
-| Key                          | Value                                            | Effect                          |
-| ---------------------------- | ------------------------------------------------ | ------------------------------- |
-| `funny:log-level`            | `trace` \| `debug` \| `info` \| `warn` \| `error`| Global floor                    |
-| `funny:log-ns:<namespace>`   | same as above                                    | Override one namespace          |
+| Key                        | Value                                             | Effect                 |
+| -------------------------- | ------------------------------------------------- | ---------------------- |
+| `funny:log-level`          | `trace` \| `debug` \| `info` \| `warn` \| `error` | Global floor           |
+| `funny:log-ns:<namespace>` | same as above                                     | Override one namespace |
 
 Example: `localStorage.setItem('funny:log-ns:ws', 'debug')` and reload to debug just the WebSocket layer in production.
 

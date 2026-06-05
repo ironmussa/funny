@@ -193,12 +193,12 @@ tail -f ~/.funny/logs/server-2026-02-22.log
 | File                                                  | Role                                               |
 | ----------------------------------------------------- | -------------------------------------------------- |
 | `packages/core/src/agents/sdk-claude.ts`              | Root cause fix: custom spawn with handle isolation |
-| `packages/runtime/src/services/shutdown-manager.ts`    | Centralized shutdown registry                      |
-| `packages/runtime/src/kill-port.ts`                    | Pre-startup ghost socket cleanup                   |
-| `packages/runtime/src/dev-watch.ts`                    | Dev wrapper: file watch + process tree kill        |
+| `packages/runtime/src/services/shutdown-manager.ts`   | Centralized shutdown registry                      |
+| `packages/runtime/src/kill-port.ts`                   | Pre-startup ghost socket cleanup                   |
+| `packages/runtime/src/dev-watch.ts`                   | Dev wrapper: file watch + process tree kill        |
 | `packages/client/vite.config.ts`                      | Proxy timeout (10s) to prevent infinite hangs      |
 | `packages/client/src/hooks/use-ws.ts`                 | WebSocket reconnection + circuit breaker reset     |
 | `packages/client/src/stores/circuit-breaker-store.ts` | HTTP circuit breaker (opens after 3 failures)      |
 | `packages/client/src/stores/auth-store.ts`            | Auth init (`_bootstrapPromise` at module load)     |
-| `packages/runtime/src/services/pty-manager.ts`         | PTY helper with handle isolation pattern           |
+| `packages/runtime/src/services/pty-manager.ts`        | PTY helper with handle isolation pattern           |
 | `packages/core/src/containers/sandbox-manager.ts`     | Sandbox spawn with same handle isolation pattern   |

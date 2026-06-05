@@ -10,12 +10,12 @@ Este documento expande las decisiones técnicas clave declaradas en [open-design
 
 **Por qué:**
 
-| Alternativa | Problema |
-|-------------|---------|
-| React JSX | Requiere bundler; los modelos lo generan peor que HTML; harder to sandbox |
-| JSON estructurado (Figma-like) | Necesitas un renderer custom que se queda atrás del estándar |
-| DSL propio | Aprendizaje del modelo + del usuario; ecosistema cero |
-| HTML + Tailwind ✅ | Modelos lo generan excelente; ejecuta en cualquier `<iframe>`; exporta nativo |
+| Alternativa                    | Problema                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| React JSX                      | Requiere bundler; los modelos lo generan peor que HTML; harder to sandbox     |
+| JSON estructurado (Figma-like) | Necesitas un renderer custom que se queda atrás del estándar                  |
+| DSL propio                     | Aprendizaje del modelo + del usuario; ecosistema cero                         |
+| HTML + Tailwind ✅             | Modelos lo generan excelente; ejecuta en cualquier `<iframe>`; exporta nativo |
 
 **Cómo:**
 
@@ -55,12 +55,12 @@ HAST = **H**ypertext **A**bstract **S**yntax **T**ree. Parte del ecosistema [uni
 
 ### Por qué HAST + JSONPatch en vez de regex sobre HTML
 
-| Problema con regex/string-replace | Solución con HAST |
-|---|---|
-| `<div class="x">` aparece 50 veces — ¿cuál editas? | Cada nodo tiene un path único: `children[0].children[2]` |
-| HTML mal-cerrado o comentarios rompen el regex | Parser robusto, normaliza |
-| Atributos quoted/unquoted, espacios, mayúsculas | Normalizado automáticamente |
-| Edits concurrentes generan conflictos | JSONPatch (RFC 6902) es estándar mergeable |
+| Problema con regex/string-replace                         | Solución con HAST                                                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `<div class="x">` aparece 50 veces — ¿cuál editas?        | Cada nodo tiene un path único: `children[0].children[2]`                                               |
+| HTML mal-cerrado o comentarios rompen el regex            | Parser robusto, normaliza                                                                              |
+| Atributos quoted/unquoted, espacios, mayúsculas           | Normalizado automáticamente                                                                            |
+| Edits concurrentes generan conflictos                     | JSONPatch (RFC 6902) es estándar mergeable                                                             |
 | Ediciones del LLM como "remplaza el texto X" son ambiguas | Patch operacional explícito: `{ op: 'replace', path: '/children/0/children/0/value', value: 'Nuevo' }` |
 
 ### Pipeline
@@ -84,14 +84,17 @@ HTML' (nuevo render)
 
 ### Ejemplo de patch del LLM
 
-Usuario: *"cambia el botón principal a verde"*.
+Usuario: _"cambia el botón principal a verde"_.
 
 LLM responde con:
+
 ```json
 [
-  { "op": "replace",
+  {
+    "op": "replace",
     "path": "/children/1/children/0/properties/className",
-    "value": ["bg-green-500", "text-white", "px-4", "py-2", "rounded"] }
+    "value": ["bg-green-500", "text-white", "px-4", "py-2", "rounded"]
+  }
 ]
 ```
 
@@ -197,7 +200,7 @@ Usuario B: "Cambia el título"      ├─► cola por design_id
 </style>
 ```
 
-**Paso 2.** El system prompt instruye al LLM: *"si el usuario pide un ajuste estético modulable, responde con un bloque `sliders` en vez de regenerar HTML"*.
+**Paso 2.** El system prompt instruye al LLM: _"si el usuario pide un ajuste estético modulable, responde con un bloque `sliders` en vez de regenerar HTML"_.
 
 **Paso 3.** El LLM responde con un bloque estructurado:
 
@@ -208,17 +211,26 @@ Usuario B: "Cambia el título"      ├─► cola por design_id
     {
       "var": "--primary-hue",
       "label": "Tono",
-      "min": 0, "max": 360, "value": 220, "unit": ""
+      "min": 0,
+      "max": 360,
+      "value": 220,
+      "unit": ""
     },
     {
       "var": "--radius",
       "label": "Redondez",
-      "min": 0, "max": 24, "value": 8, "unit": "px"
+      "min": 0,
+      "max": 24,
+      "value": 8,
+      "unit": "px"
     },
     {
       "var": "--spacing-scale",
       "label": "Espaciado",
-      "min": 0.5, "max": 2, "step": 0.1, "value": 1
+      "min": 0.5,
+      "max": 2,
+      "step": 0.1,
+      "value": 1
     }
   ]
 }

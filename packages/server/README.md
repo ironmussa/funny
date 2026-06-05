@@ -25,10 +25,10 @@ Click **+ New** → **GitHub Repo** and connect this repository, or use **Empty 
 
 #### Build & start commands
 
-| Setting | Value |
-|---------|-------|
+| Setting           | Value                                                |
+| ----------------- | ---------------------------------------------------- |
 | **Build Command** | `bun install && cd packages/server && bun run build` |
-| **Start Command** | `cd packages/server && bun run start` |
+| **Start Command** | `cd packages/server && bun run start`                |
 
 > Railway auto-detects Bun if a `bun.lock` or `bun.lockb` file is present. If not, set the builder to **Nixpacks** and add `bun` as a dependency.
 
@@ -40,14 +40,14 @@ If you want Railway to scope the build to just this package, set the **Root Dire
 
 In the Railway service settings, add these variables:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string. Use Railway's `${{Postgres.DATABASE_URL}}` reference variable to auto-link. |
-| `RUNNER_AUTH_SECRET` | Yes | Shared secret between the server and runners. Generate one: `openssl rand -hex 32` |
-| `PORT` | No | Railway injects this automatically. Default: `3002`. |
-| `HOST` | No | Default: `0.0.0.0` (correct for Railway). |
-| `CORS_ORIGIN` | Yes | Comma-separated origins allowed to connect. Set to your frontend URL (e.g. `https://your-app.railway.app`). |
-| `DEFAULT_RUNNER_URL` | No | Fallback runner URL when no runner is assigned to a project. |
+| Variable             | Required | Description                                                                                                 |
+| -------------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | Yes      | PostgreSQL connection string. Use Railway's `${{Postgres.DATABASE_URL}}` reference variable to auto-link.   |
+| `RUNNER_AUTH_SECRET` | Yes      | Shared secret between the server and runners. Generate one: `openssl rand -hex 32`                          |
+| `PORT`               | No       | Railway injects this automatically. Default: `3002`.                                                        |
+| `HOST`               | No       | Default: `0.0.0.0` (correct for Railway).                                                                   |
+| `CORS_ORIGIN`        | Yes      | Comma-separated origins allowed to connect. Set to your frontend URL (e.g. `https://your-app.railway.app`). |
+| `DEFAULT_RUNNER_URL` | No       | Fallback runner URL when no runner is assigned to a project.                                                |
 
 Example:
 
@@ -118,27 +118,27 @@ cd packages/server && bun run dev
 
 ## Environment variables reference
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | — | PostgreSQL connection string (required) |
-| `RUNNER_AUTH_SECRET` | — | Shared secret for runner authentication (required) |
-| `PORT` | `3002` | HTTP server port |
-| `HOST` | `0.0.0.0` | Bind address |
-| `CORS_ORIGIN` | `http://localhost:5173` | Comma-separated allowed origins |
-| `DEFAULT_RUNNER_URL` | — | Fallback runner URL |
-| `FUNNY_CENTRAL_DATA_DIR` | `~/.funny-central` | Directory for auth secrets and encryption keys |
+| Variable                 | Default                 | Description                                        |
+| ------------------------ | ----------------------- | -------------------------------------------------- |
+| `DATABASE_URL`           | —                       | PostgreSQL connection string (required)            |
+| `RUNNER_AUTH_SECRET`     | —                       | Shared secret for runner authentication (required) |
+| `PORT`                   | `3002`                  | HTTP server port                                   |
+| `HOST`                   | `0.0.0.0`               | Bind address                                       |
+| `CORS_ORIGIN`            | `http://localhost:5173` | Comma-separated allowed origins                    |
+| `DEFAULT_RUNNER_URL`     | —                       | Fallback runner URL                                |
+| `FUNNY_CENTRAL_DATA_DIR` | `~/.funny-central`      | Directory for auth secrets and encryption keys     |
 
 ## API endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/health` | Health check |
-| `GET` | `/api/auth/mode` | Returns `{ mode: "multi" }` |
-| `*` | `/api/auth/*` | Better Auth endpoints (login, signup, session) |
-| `*` | `/api/projects/*` | Project CRUD + membership |
-| `*` | `/api/runners/*` | Runner registration + management |
-| `*` | `/api/profile/*` | User profile (git identity, GitHub token) |
-| `*` | `/api/threads/*` | Thread routing + status |
-| `*` | `/api/*` | Catch-all proxy to assigned runner |
-| `WS` | `/ws` | Browser WebSocket |
-| `WS` | `/ws/runner` | Runner WebSocket |
+| Method | Path              | Description                                    |
+| ------ | ----------------- | ---------------------------------------------- |
+| `GET`  | `/api/health`     | Health check                                   |
+| `GET`  | `/api/auth/mode`  | Returns `{ mode: "multi" }`                    |
+| `*`    | `/api/auth/*`     | Better Auth endpoints (login, signup, session) |
+| `*`    | `/api/projects/*` | Project CRUD + membership                      |
+| `*`    | `/api/runners/*`  | Runner registration + management               |
+| `*`    | `/api/profile/*`  | User profile (git identity, GitHub token)      |
+| `*`    | `/api/threads/*`  | Thread routing + status                        |
+| `*`    | `/api/*`          | Catch-all proxy to assigned runner             |
+| `WS`   | `/ws`             | Browser WebSocket                              |
+| `WS`   | `/ws/runner`      | Runner WebSocket                               |

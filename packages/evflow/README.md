@@ -36,10 +36,7 @@ const OrderPlaced = system.event('OrderPlaced', {
 system.aggregate('Cart', {
   handles: [AddItem, Checkout],
   emits: [ItemAdded, OrderPlaced],
-  invariants: [
-    'Cannot add items to a checked-out cart',
-    'Cannot checkout an empty cart',
-  ],
+  invariants: ['Cannot add items to a checked-out cart', 'Cannot checkout an empty cart'],
 });
 
 // Read model (projection from events)
@@ -117,18 +114,18 @@ bun install
 
 evflow models systems using the building blocks from [Event Modeling](https://eventmodeling.org/):
 
-| Concept | What it represents | DSL method |
-|---------|-------------------|------------|
-| **Command** | A user intention / action | `system.command()` |
-| **Event** | An immutable fact that happened | `system.event()` |
-| **Read Model** | A projection built from events | `system.readModel()` |
-| **Automation** | A reaction: event triggers command | `system.automation()` |
-| **Aggregate** | Decision boundary that validates commands and emits events | `system.aggregate()` |
-| **Screen** | UI view that displays read models and triggers commands | `system.screen()` |
-| **External System** | Third-party service at the system boundary | `system.external()` |
-| **Saga** | Process manager correlating events across time | `system.saga()` |
-| **Sequence** | A temporal flow showing order of operations | `system.sequence()` |
-| **Slice** | A vertical cut through the system (feature) | `system.slice()` |
+| Concept             | What it represents                                         | DSL method            |
+| ------------------- | ---------------------------------------------------------- | --------------------- |
+| **Command**         | A user intention / action                                  | `system.command()`    |
+| **Event**           | An immutable fact that happened                            | `system.event()`      |
+| **Read Model**      | A projection built from events                             | `system.readModel()`  |
+| **Automation**      | A reaction: event triggers command                         | `system.automation()` |
+| **Aggregate**       | Decision boundary that validates commands and emits events | `system.aggregate()`  |
+| **Screen**          | UI view that displays read models and triggers commands    | `system.screen()`     |
+| **External System** | Third-party service at the system boundary                 | `system.external()`   |
+| **Saga**            | Process manager correlating events across time             | `system.saga()`       |
+| **Sequence**        | A temporal flow showing order of operations                | `system.sequence()`   |
+| **Slice**           | A vertical cut through the system (feature)                | `system.slice()`      |
 
 ### How they connect
 
@@ -166,10 +163,10 @@ Commands represent user intentions. They carry the data needed to perform an act
 
 ```typescript
 const AddItem = system.command('AddItemToCart', {
-  actor: 'Customer',           // who initiates this
+  actor: 'Customer', // who initiates this
   fields: { cart_id: 'string', product_id: 'string', quantity: 'number' },
   description: 'Add a product to the shopping cart',
-  version: 1,                  // optional schema version
+  version: 1, // optional schema version
 });
 ```
 
@@ -181,7 +178,7 @@ Events are immutable facts that happened. They're the source of truth.
 const ItemAdded = system.event('ItemAddedToCart', {
   fields: { cart_id: 'string', product_id: 'string', price: 'decimal' },
   description: 'An item was added to the cart',
-  version: 1,                  // optional schema version
+  version: 1, // optional schema version
 });
 ```
 
@@ -191,7 +188,7 @@ Read models are projections built from events. They represent the current state 
 
 ```typescript
 system.readModel('CartView', {
-  from: [ItemAdded, 'ItemRemovedFromCart'],  // accepts ElementRefs or strings
+  from: [ItemAdded, 'ItemRemovedFromCart'], // accepts ElementRefs or strings
   fields: { cart_id: 'string', items: 'CartItem[]', subtotal: 'decimal' },
 });
 ```
@@ -202,7 +199,7 @@ Aggregates are the decision boundary between commands and events. They validate 
 
 ```typescript
 system.aggregate('Cart', {
-  handles: [AddItem, RemoveItem, Checkout],   // commands it processes
+  handles: [AddItem, RemoveItem, Checkout], // commands it processes
   emits: [ItemAdded, ItemRemoved, OrderPlaced], // events it produces
   invariants: [
     'Cannot add items to a checked-out cart',
@@ -218,8 +215,8 @@ Screens represent UI views. They display read models and allow users to trigger 
 
 ```typescript
 system.screen('ShoppingCartPage', {
-  displays: ['CartView', 'RecommendationsView'],  // read models shown
-  triggers: [AddItem, RemoveItem, Checkout],       // commands the user can fire
+  displays: ['CartView', 'RecommendationsView'], // read models shown
+  triggers: [AddItem, RemoveItem, Checkout], // commands the user can fire
 });
 ```
 
@@ -229,8 +226,8 @@ External systems are third-party services at the system boundary. They receive c
 
 ```typescript
 system.external('PaymentGateway', {
-  receives: [ProcessPayment],    // commands sent to it
-  emits: [PaymentConfirmed],     // events it produces
+  receives: [ProcessPayment], // commands sent to it
+  emits: [PaymentConfirmed], // events it produces
 });
 
 // External that only receives (fire-and-forget)
@@ -250,8 +247,8 @@ Automations are reactive handlers: when an event occurs, trigger a command.
 
 ```typescript
 system.automation('RefreshInventoryOnOrder', {
-  on: 'OrderPlaced',              // the event that triggers it
-  triggers: 'UpdateInventory',     // the command it fires
+  on: 'OrderPlaced', // the event that triggers it
+  triggers: 'UpdateInventory', // the command it fires
 });
 ```
 
@@ -261,9 +258,9 @@ Sagas (process managers) coordinate long-running processes across multiple event
 
 ```typescript
 system.saga('OrderFulfillment', {
-  on: [OrderPlaced, PaymentConfirmed],    // events it listens to
-  correlationKey: 'order_id',              // how to correlate events
-  when: 'payment confirmed and inventory reserved',  // condition
+  on: [OrderPlaced, PaymentConfirmed], // events it listens to
+  correlationKey: 'order_id', // how to correlate events
+  when: 'payment confirmed and inventory reserved', // condition
   triggers: [ShipOrder, SendConfirmation], // commands it fires
 });
 ```
@@ -276,14 +273,10 @@ Sequences define temporal flows — the order in which things happen. Use tagged
 const { flow } = system;
 
 // Tagged template literal (type-safe, refactoring-friendly)
-system.sequence('Checkout Flow',
-  flow`${AddItem} -> ${ItemAdded} -> ${Checkout} -> ${OrderPlaced}`
-);
+system.sequence('Checkout Flow', flow`${AddItem} -> ${ItemAdded} -> ${Checkout} -> ${OrderPlaced}`);
 
 // Plain string (simpler, but no compile-time checks)
-system.sequence('Checkout Flow',
-  'AddItemToCart -> ItemAddedToCart -> Checkout -> OrderPlaced'
-);
+system.sequence('Checkout Flow', 'AddItemToCart -> ItemAddedToCart -> Checkout -> OrderPlaced');
 ```
 
 ### Slices
@@ -306,13 +299,13 @@ system.slice('Shopping Cart', {
 
 ## Output Formats
 
-| Method | Output | Purpose |
-|--------|--------|---------|
-| `toJSON()` | JSON | Serialization, tooling integration |
-| `toAIPrompt()` | Markdown | Structured spec for AI code generation |
-| `toMermaid()` | Mermaid text | Flowchart or sequence diagrams |
-| `toReactFlowGraph()` | `{ nodes, edges }` | Interactive graph visualization |
-| `validate()` | `Result<issues>` | Consistency checks (orphans, unknown refs, cycles) |
+| Method               | Output             | Purpose                                            |
+| -------------------- | ------------------ | -------------------------------------------------- |
+| `toJSON()`           | JSON               | Serialization, tooling integration                 |
+| `toAIPrompt()`       | Markdown           | Structured spec for AI code generation             |
+| `toMermaid()`        | Mermaid text       | Flowchart or sequence diagrams                     |
+| `toReactFlowGraph()` | `{ nodes, edges }` | Interactive graph visualization                    |
+| `validate()`         | `Result<issues>`   | Consistency checks (orphans, unknown refs, cycles) |
 
 ### Mermaid Diagrams
 
@@ -347,9 +340,9 @@ const graph = system.toReactFlowGraph();
 
 // Or from raw EventModelData
 const graph = generateReactFlowGraph(model.getData(), {
-  slice: 'Shopping Cart',    // filter to slice
-  groupBySlice: true,        // create group nodes for slices
-  direction: 'LR',           // layout direction
+  slice: 'Shopping Cart', // filter to slice
+  groupBySlice: true, // create group nodes for slices
+  direction: 'LR', // layout direction
 });
 
 // graph.nodes — React Flow nodes with kind, description, fields, slices
@@ -369,6 +362,7 @@ cd packages/evflow && bun run viewer:build
 ```
 
 The viewer accepts a JSON file (generated by `model.toJSON()`) and provides:
+
 - Interactive graph with Dagre auto-layout
 - Sidebar with search, kind filters, and slice filters
 - Element details panel (fields, invariants, description)

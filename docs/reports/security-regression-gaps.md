@@ -94,13 +94,13 @@ since been covered:
 
 ## Coverage by severity
 
-| Severity | Findings | With test | Coverage |
-|---|---|---|---|
-| CRITICAL | 8 | 7 | 87% (CR-8 = pipeline mock complexity) |
-| HIGH     | 15 | 14 | 93% (HI-11 = config-only) |
-| MEDIUM   | 11 | 11 | 100% |
-| LOW      | 3 | 3 | 100% |
-| **Total** | **37** | **35** | **95%** |
+| Severity  | Findings | With test | Coverage                              |
+| --------- | -------- | --------- | ------------------------------------- |
+| CRITICAL  | 8        | 7         | 87% (CR-8 = pipeline mock complexity) |
+| HIGH      | 15       | 14        | 93% (HI-11 = config-only)             |
+| MEDIUM    | 11       | 11        | 100%                                  |
+| LOW       | 3        | 3         | 100%                                  |
+| **Total** | **37**   | **35**    | **95%**                               |
 
 The 2 untested fixes are: CR-8 (large mock surface) and HI-11 (no
 behaviour). HI-6 has partial coverage (validation predicates tested; full

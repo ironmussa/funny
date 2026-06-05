@@ -14,7 +14,6 @@
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
     "./thread-machine": "./src/thread-machine.ts",
-
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
     "./socket-events": "./src/socket-events.ts",

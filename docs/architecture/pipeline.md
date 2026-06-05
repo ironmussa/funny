@@ -47,6 +47,7 @@ WITH ISOLATION (proposed):
 ```
 
 **Benefits:**
+
 - No checkout conflicts between parallel agents
 - Parent thread (Agent A) can keep working while pipeline runs
 - Clean worktree lifecycle — create, use, delete
@@ -116,20 +117,20 @@ WITH ISOLATION (proposed):
 
 ### Auto-fixable hooks
 
-| Hook | Auto-fixable? |
-|------|:---:|
-| oxlint | Yes |
-| Conflict markers | Yes |
-| Console/debugger statements | Yes |
-| secretlint | **No** (security — requires manual review) |
+| Hook                        |               Auto-fixable?                |
+| --------------------------- | :----------------------------------------: |
+| oxlint                      |                    Yes                     |
+| Conflict markers            |                    Yes                     |
+| Console/debugger statements |                    Yes                     |
+| secretlint                  | **No** (security — requires manual review) |
 
 ### Configuration
 
-| Setting | Default | Range |
-|---------|---------|-------|
-| `precommitFixEnabled` | `false` | on/off |
-| `precommitFixModel` | sonnet | haiku/sonnet/opus |
-| `precommitFixMaxIterations` | 3 | 1-5 |
+| Setting                     | Default | Range             |
+| --------------------------- | ------- | ----------------- |
+| `precommitFixEnabled`       | `false` | on/off            |
+| `precommitFixModel`         | sonnet  | haiku/sonnet/opus |
+| `precommitFixMaxIterations` | 3       | 1-5               |
 
 ---
 
@@ -226,10 +227,10 @@ WITH ISOLATION (proposed):
 
 ### Configuration
 
-| Setting | Default | Range |
-|---------|---------|-------|
-| `reviewModel` | sonnet | haiku/sonnet/opus |
-| `maxIterations` | 10 | 1-20 |
+| Setting         | Default | Range             |
+| --------------- | ------- | ----------------- |
+| `reviewModel`   | sonnet  | haiku/sonnet/opus |
+| `maxIterations` | 10      | 1-20              |
 
 ---
 
@@ -317,10 +318,10 @@ WITH ISOLATION (proposed):
 
 ### Configuration
 
-| Setting | Default | Range |
-|---------|---------|-------|
-| `fixModel` | sonnet | haiku/sonnet/opus |
-| `maxIterations` | 10 | 1-20 (shared with reviewer) |
+| Setting         | Default | Range                       |
+| --------------- | ------- | --------------------------- |
+| `fixModel`      | sonnet  | haiku/sonnet/opus           |
+| `maxIterations` | 10      | 1-20 (shared with reviewer) |
 
 ---
 
@@ -563,6 +564,7 @@ The pipeline works the same way regardless of how the parent thread was created.
 ```
 
 **Key:** The patch is applied to the **user's actual project directory**. This is riskier because:
+
 - The user may be editing files in their IDE while the pipeline runs
 - If the user has unstaged changes, `git apply` could fail
 - Only one agent can safely use local mode at a time
@@ -571,22 +573,24 @@ The pipeline works the same way regardless of how the parent thread was created.
 
 ### Comparison table
 
-| Aspect | Worktree mode (A) | Local mode (B) |
-|--------|-------------------|----------------|
-| Parent thread's cwd | `~/.funny-worktrees/<project>/<branch>/` | `/home/user/<project>/` |
-| Pipeline stages | Own worktrees (same for both) | Own worktrees (same for both) |
-| Patch destination | Parent's worktree (isolated) | User's actual directory |
-| Safe for parallel agents? | **Yes** — each agent has its own worktree | **No** — only one local agent at a time |
-| Risk of conflict with user? | **None** — user's directory untouched | **Possible** — user may be editing same files |
-| Recommended for pipelines? | **Yes** | Use with caution |
+| Aspect                      | Worktree mode (A)                         | Local mode (B)                                |
+| --------------------------- | ----------------------------------------- | --------------------------------------------- |
+| Parent thread's cwd         | `~/.funny-worktrees/<project>/<branch>/`  | `/home/user/<project>/`                       |
+| Pipeline stages             | Own worktrees (same for both)             | Own worktrees (same for both)                 |
+| Patch destination           | Parent's worktree (isolated)              | User's actual directory                       |
+| Safe for parallel agents?   | **Yes** — each agent has its own worktree | **No** — only one local agent at a time       |
+| Risk of conflict with user? | **None** — user's directory untouched     | **Possible** — user may be editing same files |
+| Recommended for pipelines?  | **Yes**                                   | Use with caution                              |
 
 ### Pipeline code — same in both cases
 
 The pipeline orchestrator doesn't need to know whether the parent thread is local or worktree. It just uses `parentCwd` (the thread's working directory) which is:
+
 - **Worktree mode:** the worktree path (e.g., `~/.funny-worktrees/my-app/feat-auth/`)
 - **Local mode:** the project path (e.g., `/home/user/my-app/`)
 
 The pipeline always:
+
 1. Creates its own worktrees for reviewer and corrector stages
 2. Uses `parentCwd` as the target when applying patches
 3. Commits on the parent thread's branch
@@ -599,14 +603,15 @@ No special handling is needed — the `parentCwd` abstraction makes both scenari
 
 Each pipeline stage thread gets a worktree with a predictable branch name:
 
-| Stage | Branch pattern | Example |
-|-------|---------------|---------|
-| Parent thread | `<branch>` | `feat-auth` |
-| Reviewer (iter 1) | `<branch>-pipeline-review-1` | `feat-auth-pipeline-review-1` |
-| Corrector (iter 1) | `<branch>-pipeline-fix-1` | `feat-auth-pipeline-fix-1` |
-| Reviewer (iter 2) | `<branch>-pipeline-review-2` | `feat-auth-pipeline-review-2` |
+| Stage              | Branch pattern               | Example                       |
+| ------------------ | ---------------------------- | ----------------------------- |
+| Parent thread      | `<branch>`                   | `feat-auth`                   |
+| Reviewer (iter 1)  | `<branch>-pipeline-review-1` | `feat-auth-pipeline-review-1` |
+| Corrector (iter 1) | `<branch>-pipeline-fix-1`    | `feat-auth-pipeline-fix-1`    |
+| Reviewer (iter 2)  | `<branch>-pipeline-review-2` | `feat-auth-pipeline-review-2` |
 
 Worktree paths follow the existing convention:
+
 ```
 ~/.funny-worktrees/<project-name>/<branch-name>/
 ```
@@ -664,19 +669,19 @@ The system prevents infinite review loops using metadata:
 
 ### Internal events (threadEventBus)
 
-| Event | Emitter | Listener |
-|-------|---------|----------|
-| `git:committed` | git-workflow-service | pipeline-trigger-handler |
-| `agent:completed` | agent-runner | pipeline-completed-handler |
-| `thread:created` | thread-service | pipeline-orchestrator |
+| Event             | Emitter              | Listener                   |
+| ----------------- | -------------------- | -------------------------- |
+| `git:committed`   | git-workflow-service | pipeline-trigger-handler   |
+| `agent:completed` | agent-runner         | pipeline-completed-handler |
+| `thread:created`  | thread-service       | pipeline-orchestrator      |
 
 ### WebSocket events (to client)
 
-| Event | When | Key data |
-|-------|------|----------|
-| `pipeline:run_started` | New run begins | `pipelineId`, `runId`, `commitSha` |
-| `pipeline:stage_update` | Stage changes | `stage`, `iteration`, `verdict`, `findings` |
-| `pipeline:run_completed` | Run finishes | `status` (completed/failed/skipped), `totalIterations` |
+| Event                    | When           | Key data                                               |
+| ------------------------ | -------------- | ------------------------------------------------------ |
+| `pipeline:run_started`   | New run begins | `pipelineId`, `runId`, `commitSha`                     |
+| `pipeline:stage_update`  | Stage changes  | `stage`, `iteration`, `verdict`, `findings`            |
+| `pipeline:run_completed` | Run finishes   | `status` (completed/failed/skipped), `totalIterations` |
 
 ---
 
@@ -684,35 +689,35 @@ The system prevents infinite review loops using metadata:
 
 ### `pipelines` (configuration)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | TEXT PK | Pipeline ID |
-| `projectId` | TEXT FK | Associated project |
-| `userId` | TEXT | Owner |
-| `name` | TEXT | Display name |
-| `enabled` | INTEGER | Toggle (0/1) |
-| `reviewModel` | TEXT | Model for reviewer |
-| `fixModel` | TEXT | Model for corrector |
-| `maxIterations` | INTEGER | Max review-fix cycles (default: 10) |
-| `precommitFixEnabled` | INTEGER | Toggle pre-commit fixer (0/1) |
-| `precommitFixModel` | TEXT | Model for pre-commit fixer |
-| `precommitFixMaxIterations` | INTEGER | Max fix attempts (default: 3) |
+| Column                      | Type    | Description                         |
+| --------------------------- | ------- | ----------------------------------- |
+| `id`                        | TEXT PK | Pipeline ID                         |
+| `projectId`                 | TEXT FK | Associated project                  |
+| `userId`                    | TEXT    | Owner                               |
+| `name`                      | TEXT    | Display name                        |
+| `enabled`                   | INTEGER | Toggle (0/1)                        |
+| `reviewModel`               | TEXT    | Model for reviewer                  |
+| `fixModel`                  | TEXT    | Model for corrector                 |
+| `maxIterations`             | INTEGER | Max review-fix cycles (default: 10) |
+| `precommitFixEnabled`       | INTEGER | Toggle pre-commit fixer (0/1)       |
+| `precommitFixModel`         | TEXT    | Model for pre-commit fixer          |
+| `precommitFixMaxIterations` | INTEGER | Max fix attempts (default: 3)       |
 
 ### `pipeline_runs` (execution state)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | TEXT PK | Run ID |
-| `pipelineId` | TEXT FK | Parent pipeline |
-| `threadId` | TEXT | Source thread |
-| `status` | TEXT | running/reviewing/fixing/completed/failed/skipped |
-| `currentStage` | TEXT | reviewer/corrector |
-| `iteration` | INTEGER | Current iteration |
-| `commitSha` | TEXT | Commit being reviewed |
-| `verdict` | TEXT | pass/fail |
-| `findings` | TEXT | JSON array of issues |
-| `fixerThreadId` | TEXT | Corrector's worktree thread |
-| `reviewerThreadId` | TEXT | Reviewer's worktree thread (**new**) |
+| Column             | Type    | Description                                       |
+| ------------------ | ------- | ------------------------------------------------- |
+| `id`               | TEXT PK | Run ID                                            |
+| `pipelineId`       | TEXT FK | Parent pipeline                                   |
+| `threadId`         | TEXT    | Source thread                                     |
+| `status`           | TEXT    | running/reviewing/fixing/completed/failed/skipped |
+| `currentStage`     | TEXT    | reviewer/corrector                                |
+| `iteration`        | INTEGER | Current iteration                                 |
+| `commitSha`        | TEXT    | Commit being reviewed                             |
+| `verdict`          | TEXT    | pass/fail                                         |
+| `findings`         | TEXT    | JSON array of issues                              |
+| `fixerThreadId`    | TEXT    | Corrector's worktree thread                       |
+| `reviewerThreadId` | TEXT    | Reviewer's worktree thread (**new**)              |
 
 ---
 
@@ -720,27 +725,27 @@ The system prevents infinite review loops using metadata:
 
 All stages now use full worktree isolation:
 
-| Stage | Isolation | Status |
-|-------|-----------|--------|
-| **Stage 0** (Pre-commit fixer) | Same worktree (agent already owns it) | Done |
-| **Stage 1** (Reviewer) | Own worktree thread (`plan` mode) | Done |
-| **Stage 2** (Corrector) | Own worktree thread (`autoEdit` mode) | Done |
-| Pipeline run tracking | `reviewerThreadId` + `fixerThreadId` in DB | Done |
-| Worktree cleanup | Auto-cleanup after each stage completes | Done |
+| Stage                          | Isolation                                  | Status |
+| ------------------------------ | ------------------------------------------ | ------ |
+| **Stage 0** (Pre-commit fixer) | Same worktree (agent already owns it)      | Done   |
+| **Stage 1** (Reviewer)         | Own worktree thread (`plan` mode)          | Done   |
+| **Stage 2** (Corrector)        | Own worktree thread (`autoEdit` mode)      | Done   |
+| Pipeline run tracking          | `reviewerThreadId` + `fixerThreadId` in DB | Done   |
+| Worktree cleanup               | Auto-cleanup after each stage completes    | Done   |
 
 ---
 
 ## Key Files
 
-| File | Role |
-|------|------|
-| `server/src/services/pipeline-orchestrator.ts` | Core orchestration — stages 1 & 2 |
-| `server/src/services/git-workflow-service.ts` | Stage 0 (pre-commit auto-fix) |
-| `server/src/services/handlers/pipeline-trigger-handler.ts` | Listens for `git:committed` → starts review |
+| File                                                         | Role                                           |
+| ------------------------------------------------------------ | ---------------------------------------------- |
+| `server/src/services/pipeline-orchestrator.ts`               | Core orchestration — stages 1 & 2              |
+| `server/src/services/git-workflow-service.ts`                | Stage 0 (pre-commit auto-fix)                  |
+| `server/src/services/handlers/pipeline-trigger-handler.ts`   | Listens for `git:committed` → starts review    |
 | `server/src/services/handlers/pipeline-completed-handler.ts` | Listens for `agent:completed` → advances stage |
-| `server/src/routes/pipelines.ts` | REST API endpoints |
-| `client/src/components/PipelineProgressBanner.tsx` | Real-time status banner |
-| `client/src/components/PipelineSettings.tsx` | Configuration dialog |
-| `client/src/stores/pipeline-store.ts` | Client state (Zustand) |
-| `core/src/git/worktree.ts` | Worktree creation/deletion utilities |
-| `server/src/services/thread-service.ts` | Thread creation with worktree setup |
+| `server/src/routes/pipelines.ts`                             | REST API endpoints                             |
+| `client/src/components/PipelineProgressBanner.tsx`           | Real-time status banner                        |
+| `client/src/components/PipelineSettings.tsx`                 | Configuration dialog                           |
+| `client/src/stores/pipeline-store.ts`                        | Client state (Zustand)                         |
+| `core/src/git/worktree.ts`                                   | Worktree creation/deletion utilities           |
+| `server/src/services/thread-service.ts`                      | Thread creation with worktree setup            |

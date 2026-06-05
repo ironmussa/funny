@@ -1,6 +1,6 @@
 # Open Design — Especificación de Producto
 
-> Clon open source de **Claude Design** (Anthropic Labs, lanzado 2026-04-17). El objetivo es replicar el ciclo *prompt → prototipo interactivo → handoff a código de producción*, sobre proveedores LLM intercambiables, y publicarlo bajo licencia OSS.
+> Clon open source de **Claude Design** (Anthropic Labs, lanzado 2026-04-17). El objetivo es replicar el ciclo _prompt → prototipo interactivo → handoff a código de producción_, sobre proveedores LLM intercambiables, y publicarlo bajo licencia OSS.
 
 ---
 
@@ -19,13 +19,13 @@ Diferenciador OSS: proveedor LLM intercambiable (Anthropic / OpenAI / local), da
 
 ## 2. Casos de Uso Núcleo
 
-| # | Caso | Output |
-|---|------|--------|
-| 1 | Landing page desde un brief | HTML interactivo + assets |
-| 2 | Pitch deck / one-pager | PPTX, PDF, Canva |
-| 3 | Wireframes / flows de producto | HTML + JSON de pantallas |
-| 4 | Mockup con componentes funcionales (chat, video, 3D) | HTML con dependencias declaradas |
-| 5 | Handoff a Claude Code / agente | Bundle (`design.json` + assets + prompt) |
+| #   | Caso                                                 | Output                                   |
+| --- | ---------------------------------------------------- | ---------------------------------------- |
+| 1   | Landing page desde un brief                          | HTML interactivo + assets                |
+| 2   | Pitch deck / one-pager                               | PPTX, PDF, Canva                         |
+| 3   | Wireframes / flows de producto                       | HTML + JSON de pantallas                 |
+| 4   | Mockup con componentes funcionales (chat, video, 3D) | HTML con dependencias declaradas         |
+| 5   | Handoff a Claude Code / agente                       | Bundle (`design.json` + assets + prompt) |
 
 ---
 
@@ -64,13 +64,13 @@ Tres modos coexistentes (no excluyentes):
 
 ### 3.4 Export
 
-| Formato | Implementación |
-|---------|---------------|
-| HTML standalone | bundle estático (HTML + CSS + JS inline o assets) |
-| PDF | Playwright `page.pdf()` |
-| PPTX | `pptxgenjs` con captura por slide |
-| Canva | Canva Connect API (OAuth) |
-| URL compartida | hosteo interno con ACL (org-only / public) |
+| Formato            | Implementación                                                                    |
+| ------------------ | --------------------------------------------------------------------------------- |
+| HTML standalone    | bundle estático (HTML + CSS + JS inline o assets)                                 |
+| PDF                | Playwright `page.pdf()`                                                           |
+| PPTX               | `pptxgenjs` con captura por slide                                                 |
+| Canva              | Canva Connect API (OAuth)                                                         |
+| URL compartida     | hosteo interno con ACL (org-only / public)                                        |
 | **Handoff bundle** | ZIP con `design.json` (intent + tokens + componentes) + HTML + prompt para agente |
 
 ### 3.5 Colaboración
@@ -126,13 +126,13 @@ packages/
 ### 4.3 Modelo de datos (Drizzle)
 
 ```ts
-designs         // id, orgId, ownerId, title, currentVersionId, createdAt
-design_versions // id, designId, html, css, tokensSnapshot, parentVersionId, prompt, createdBy, createdAt
-design_systems  // id, orgId, name, tokens(JSON), components(JSON), sourceRepo
-ds_imports      // id, designSystemId, sourceType (repo|figma|tokens|css), payload, status
-design_comments // id, versionId, selector, body, authorId, resolvedAt
-design_assets   // id, designId, kind (image|font|model3d), url, sha256
-share_links     // id, designId, scope (org|public), permission (view|comment|edit), token
+designs; // id, orgId, ownerId, title, currentVersionId, createdAt
+design_versions; // id, designId, html, css, tokensSnapshot, parentVersionId, prompt, createdBy, createdAt
+design_systems; // id, orgId, name, tokens(JSON), components(JSON), sourceRepo
+ds_imports; // id, designSystemId, sourceType (repo|figma|tokens|css), payload, status
+design_comments; // id, versionId, selector, body, authorId, resolvedAt
+design_assets; // id, designId, kind (image|font|model3d), url, sha256
+share_links; // id, designId, scope (org|public), permission (view|comment|edit), token
 ```
 
 ### 4.4 API (HTTP/WS)
@@ -189,9 +189,9 @@ emit `design:patch` por WS  + persiste design_version
 
 ```ts
 interface LLMProvider {
-  generateDesign(req: DesignRequest): AsyncIterable<DesignChunk>
-  patchDesign(req: PatchRequest): AsyncIterable<PatchChunk>
-  vision(req: VisionRequest): Promise<VisionResult>
+  generateDesign(req: DesignRequest): AsyncIterable<DesignChunk>;
+  patchDesign(req: PatchRequest): AsyncIterable<PatchChunk>;
+  vision(req: VisionRequest): Promise<VisionResult>;
 }
 ```
 
@@ -220,11 +220,13 @@ El handoff bundle es un thread input nativo:
 ## 6. Roadmap por fases
 
 ### Fase 0 — Spike (1 semana)
+
 - Prompt → HTML standalone en iframe sandbox.
 - Chat refinement (sin inline edit).
 - Provider Anthropic únicamente.
 
 ### Fase 1 — MVP (3-4 semanas)
+
 - Inspector + comentarios inline.
 - Edición directa (`contenteditable` + JSONPatch).
 - Export PDF + HTML.
@@ -232,17 +234,20 @@ El handoff bundle es un thread input nativo:
 - Auth multiusuario (Better Auth).
 
 ### Fase 2 — Design Systems
+
 - Extracción desde `tailwind.config` + CSS variables.
 - Aplicación en generación (prompt caching del DS).
 - UI de gestión de DS.
 
 ### Fase 3 — Avanzado
+
 - Sliders dinámicos.
 - Export PPTX + Canva.
 - Handoff a `funny`.
 - Provider OpenAI + local.
 
 ### Fase 4 — Colaboración
+
 - Multi-usuario en vivo (CRDT o turn-based).
 - Share links + ACL.
 - Comentarios threaded.
@@ -251,15 +256,15 @@ El handoff bundle es un thread input nativo:
 
 ## 7. Trade-offs y decisiones abiertas
 
-| Decisión | Opciones | Recomendación inicial | Detalle |
-|----------|----------|----------------------|---------|
-| Output del LLM | HTML directo / JSON estructurado / React | **HTML + Tailwind** | [decisions §1](./decisions.md#1-output-html--tailwind) |
-| Edición | Re-prompt full / regex / AST diff | **HAST + JSONPatch** | [decisions §2](./decisions.md#2-edición-hast--jsonpatch) |
-| Sandbox | iframe srcdoc / iframe + workerd / Shadow DOM | **iframe srcdoc + CSP** | [decisions §3](./decisions.md#3-sandbox-iframe-srcdoc--csp) |
-| Multiplayer | CRDT (Yjs) / turn-based | **Turn-based** en MVP | [decisions §4](./decisions.md#4-multiplayer) |
-| Sliders | Re-prompt / CSS vars | **CSS vars sin re-prompt** | [decisions §5](./decisions.md#5-sliders-dinámicos) |
-| Storage de versiones | Snapshot completo / delta | Snapshot + GC tras N versiones | — |
-| Vision | Modelo del provider / OCR adicional | Modelo del provider | — |
+| Decisión             | Opciones                                      | Recomendación inicial          | Detalle                                                     |
+| -------------------- | --------------------------------------------- | ------------------------------ | ----------------------------------------------------------- |
+| Output del LLM       | HTML directo / JSON estructurado / React      | **HTML + Tailwind**            | [decisions §1](./decisions.md#1-output-html--tailwind)      |
+| Edición              | Re-prompt full / regex / AST diff             | **HAST + JSONPatch**           | [decisions §2](./decisions.md#2-edición-hast--jsonpatch)    |
+| Sandbox              | iframe srcdoc / iframe + workerd / Shadow DOM | **iframe srcdoc + CSP**        | [decisions §3](./decisions.md#3-sandbox-iframe-srcdoc--csp) |
+| Multiplayer          | CRDT (Yjs) / turn-based                       | **Turn-based** en MVP          | [decisions §4](./decisions.md#4-multiplayer)                |
+| Sliders              | Re-prompt / CSS vars                          | **CSS vars sin re-prompt**     | [decisions §5](./decisions.md#5-sliders-dinámicos)          |
+| Storage de versiones | Snapshot completo / delta                     | Snapshot + GC tras N versiones | —                                                           |
+| Vision               | Modelo del provider / OCR adicional           | Modelo del provider            | —                                                           |
 
 ---
 

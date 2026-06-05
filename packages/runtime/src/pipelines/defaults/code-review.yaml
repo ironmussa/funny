@@ -82,7 +82,7 @@ nodes:
     depends_on: [fix]
     when: 'review.json.verdict = "fail"'
     git_commit:
-      message: "fix: address review findings"
+      message: 'fix: address review findings'
       no_verify: true
     loop:
       until: 'review.json.verdict = "pass"'

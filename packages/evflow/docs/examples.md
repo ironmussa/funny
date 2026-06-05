@@ -27,6 +27,7 @@ We need to build an online store where customers can browse products, add items 
 Let's start by asking the key questions:
 
 **Who are the actors?**
+
 - **Customer** — browses, adds items, checks out
 - **System** — processes payments, sends emails (no human involved)
 
@@ -45,13 +46,13 @@ Walking through a customer's journey chronologically:
 
 Each event has a cause:
 
-| Event | Caused by | Who |
-|-------|-----------|-----|
-| ItemAddedToCart | **AddItemToCart** | Customer |
-| ItemRemovedFromCart | **RemoveItemFromCart** | Customer |
-| CheckoutStarted | **StartCheckout** | Customer |
-| PaymentSucceeded / PaymentFailed | **ProcessPayment** | System (automated) |
-| OrderConfirmed | (automation after payment) | System |
+| Event                            | Caused by                  | Who                |
+| -------------------------------- | -------------------------- | ------------------ |
+| ItemAddedToCart                  | **AddItemToCart**          | Customer           |
+| ItemRemovedFromCart              | **RemoveItemFromCart**     | Customer           |
+| CheckoutStarted                  | **StartCheckout**          | Customer           |
+| PaymentSucceeded / PaymentFailed | **ProcessPayment**         | System (automated) |
+| OrderConfirmed                   | (automation after payment) | System             |
 
 **What does the UI need to display? (Read Models)**
 
@@ -104,8 +105,12 @@ const SendEmail = system.command('SendEmail', {
 
 const ItemAddedToCart = system.event('ItemAddedToCart', {
   fields: {
-    cart_id: 'string', product_id: 'string',
-    name: 'string', price: 'decimal', quantity: 'number', added_at: 'datetime',
+    cart_id: 'string',
+    product_id: 'string',
+    name: 'string',
+    price: 'decimal',
+    quantity: 'number',
+    added_at: 'datetime',
   },
 });
 
@@ -115,15 +120,20 @@ const ItemRemovedFromCart = system.event('ItemRemovedFromCart', {
 
 const CheckoutStarted = system.event('CheckoutStarted', {
   fields: {
-    cart_id: 'string', order_id: 'string',
-    items: 'CartItem[]', subtotal: 'decimal', started_at: 'datetime',
+    cart_id: 'string',
+    order_id: 'string',
+    items: 'CartItem[]',
+    subtotal: 'decimal',
+    started_at: 'datetime',
   },
 });
 
 const PaymentSucceeded = system.event('PaymentSucceeded', {
   fields: {
-    order_id: 'string', amount: 'decimal',
-    transaction_id: 'string', paid_at: 'datetime',
+    order_id: 'string',
+    amount: 'decimal',
+    transaction_id: 'string',
+    paid_at: 'datetime',
   },
 });
 
@@ -134,8 +144,10 @@ const PaymentFailed = system.event('PaymentFailed', {
 
 const OrderConfirmed = system.event('OrderConfirmed', {
   fields: {
-    order_id: 'string', items: 'CartItem[]',
-    total: 'decimal', confirmed_at: 'datetime',
+    order_id: 'string',
+    items: 'CartItem[]',
+    total: 'decimal',
+    confirmed_at: 'datetime',
   },
 });
 
@@ -160,7 +172,7 @@ system.readModel('OrderStatus', {
   from: ['CheckoutStarted', 'PaymentSucceeded', 'PaymentFailed', 'OrderConfirmed'],
   fields: {
     order_id: 'string',
-    status: 'string',   // pending_payment | paid | confirmed | failed
+    status: 'string', // pending_payment | paid | confirmed | failed
     items: 'CartItem[]',
     total: 'decimal',
   },
@@ -190,26 +202,35 @@ const ConfirmOrder = system.automation('ConfirmOrder', {
 const { flow } = system;
 
 // The happy path: customer buys something successfully
-system.sequence('Happy Path — Purchase', flow`
+system.sequence(
+  'Happy Path — Purchase',
+  flow`
   ${AddItemToCart} -> ${ItemAddedToCart}
   -> ${StartCheckout} -> ${CheckoutStarted}
   -> ${TriggerPayment} -> ${ProcessPayment} -> ${PaymentSucceeded}
   -> ${ConfirmOrder} -> ${OrderConfirmed}
-`);
+`,
+);
 
 // The sad path: payment fails, customer can retry
-system.sequence('Payment Fails', flow`
+system.sequence(
+  'Payment Fails',
+  flow`
   ${AddItemToCart} -> ${ItemAddedToCart}
   -> ${StartCheckout} -> ${CheckoutStarted}
   -> ${TriggerPayment} -> ${ProcessPayment} -> ${PaymentFailed}
-`);
+`,
+);
 // Note: cart is NOT cleared on failure — customer can fix payment and retry
 
 // Customer browsing: adding and removing items
-system.sequence('Modify Cart', flow`
+system.sequence(
+  'Modify Cart',
+  flow`
   ${AddItemToCart} -> ${ItemAddedToCart}
   -> ${RemoveItemFromCart} -> ${ItemRemovedFromCart}
-`);
+`,
+);
 
 // ─── Step 6: Define Slices (vertical cuts for implementation) ─
 //
@@ -299,20 +320,24 @@ We need a user authentication system with registration, login, and password rese
 Let's walk through each user journey:
 
 **Registration journey:**
+
 1. Visitor fills the registration form and submits → **Register** (command)
 2. Account is created → **UserRegistered** (event)
 3. System sends welcome email → **SendEmail** (automation)
 
 **Login journey (success):**
+
 1. User enters credentials → **Login** (command)
 2. Credentials match → **LoginSucceeded** (event)
 
 **Login journey (failure):**
+
 1. User enters wrong credentials → **Login** (command)
 2. Credentials don't match → **LoginFailed** (event)
 3. After 5 failures → account locked (the read model tracks this)
 
 **Password reset journey:**
+
 1. User clicks "Forgot password" → **RequestPasswordReset** (command)
 2. Reset token is generated → **PasswordResetRequested** (event)
 3. System sends reset email → **SendEmail** (automation)
@@ -368,8 +393,10 @@ const SendEmail = system.command('SendEmail', {
 
 const UserRegistered = system.event('UserRegistered', {
   fields: {
-    user_id: 'uuid', email: 'string',
-    name: 'string', registered_at: 'datetime',
+    user_id: 'uuid',
+    email: 'string',
+    name: 'string',
+    registered_at: 'datetime',
   },
 });
 
@@ -396,7 +423,9 @@ system.readModel('UserProfile', {
   description: 'User settings page — name, email, last password change',
   from: ['UserRegistered', 'PasswordChanged'],
   fields: {
-    user_id: 'uuid', email: 'string', name: 'string',
+    user_id: 'uuid',
+    email: 'string',
+    name: 'string',
     last_password_change: 'datetime',
   },
 });
@@ -406,9 +435,9 @@ system.readModel('LoginAttempts', {
   from: ['LoginSucceeded', 'LoginFailed'],
   fields: {
     email: 'string',
-    attempts: 'number',         // failed attempts since last success
+    attempts: 'number', // failed attempts since last success
     last_attempt: 'datetime',
-    locked: 'boolean',          // derived: attempts >= 5
+    locked: 'boolean', // derived: attempts >= 5
   },
 });
 
@@ -430,28 +459,40 @@ const ResetEmail = system.automation('ResetEmail', {
 
 const { flow } = system;
 
-system.sequence('Registration', flow`
+system.sequence(
+  'Registration',
+  flow`
   ${Register} -> ${UserRegistered} -> ${WelcomeEmail}
-`);
+`,
+);
 // Visitor registers → account created → welcome email sent automatically
 
-system.sequence('Login Success', flow`
+system.sequence(
+  'Login Success',
+  flow`
   ${Login} -> ${LoginSucceeded}
-`);
+`,
+);
 // User logs in → session created. LoginAttempts resets the counter.
 
-system.sequence('Login Failure', flow`
+system.sequence(
+  'Login Failure',
+  flow`
   ${Login} -> ${LoginFailed}
-`);
+`,
+);
 // Wrong password → failure recorded. LoginAttempts increments counter.
 // After 5 failures, the read model sets locked=true.
 // The Login command handler checks LoginAttempts.locked before proceeding.
 
-system.sequence('Password Reset', flow`
+system.sequence(
+  'Password Reset',
+  flow`
   ${RequestPasswordReset} -> ${PasswordResetRequested}
   -> ${ResetEmail}
   -> ${ResetPassword} -> ${PasswordChanged}
-`);
+`,
+);
 // User requests reset → token generated → email sent automatically
 // → user clicks link → password changed
 
@@ -478,16 +519,17 @@ A simple Kanban board where teams can create tasks, move them across columns (To
 
 Walking through a task's lifecycle:
 
-| What happens | Event | Who causes it |
-|-------------|-------|---------------|
-| New task is created | **TaskCreated** | Team Member |
-| Task is assigned to someone | **TaskAssigned** | Team Member |
-| Task moves to a new column | **TaskMoved** | Team Member |
-| Someone adds a comment | **CommentAdded** | Team Member |
-| Task is completed | **TaskCompleted** | Team Member |
-| Task is archived | **TaskArchived** | Manager |
+| What happens                | Event             | Who causes it |
+| --------------------------- | ----------------- | ------------- |
+| New task is created         | **TaskCreated**   | Team Member   |
+| Task is assigned to someone | **TaskAssigned**  | Team Member   |
+| Task moves to a new column  | **TaskMoved**     | Team Member   |
+| Someone adds a comment      | **CommentAdded**  | Team Member   |
+| Task is completed           | **TaskCompleted** | Team Member   |
+| Task is archived            | **TaskArchived**  | Manager       |
 
 **Read models needed:**
+
 - **BoardView** — the Kanban board itself: columns with tasks
 - **TaskDetail** — a single task with its history and comments
 - **WorkloadDashboard** — how many tasks per person, per status
@@ -536,29 +578,41 @@ const NotifyUser = system.command('NotifyUser', {
 
 const TaskCreated = system.event('TaskCreated', {
   fields: {
-    task_id: 'uuid', title: 'string', description: 'string',
-    column: 'string', created_by: 'uuid', created_at: 'datetime',
+    task_id: 'uuid',
+    title: 'string',
+    description: 'string',
+    column: 'string',
+    created_by: 'uuid',
+    created_at: 'datetime',
   },
 });
 
 const TaskAssigned = system.event('TaskAssigned', {
   fields: {
-    task_id: 'uuid', assignee_id: 'uuid',
-    assigned_by: 'uuid', assigned_at: 'datetime',
+    task_id: 'uuid',
+    assignee_id: 'uuid',
+    assigned_by: 'uuid',
+    assigned_at: 'datetime',
   },
 });
 
 const TaskMoved = system.event('TaskMoved', {
   fields: {
-    task_id: 'uuid', from_column: 'string',
-    to_column: 'string', moved_by: 'uuid', moved_at: 'datetime',
+    task_id: 'uuid',
+    from_column: 'string',
+    to_column: 'string',
+    moved_by: 'uuid',
+    moved_at: 'datetime',
   },
 });
 
 const CommentAdded = system.event('CommentAdded', {
   fields: {
-    task_id: 'uuid', comment_id: 'uuid',
-    body: 'string', author_id: 'uuid', added_at: 'datetime',
+    task_id: 'uuid',
+    comment_id: 'uuid',
+    body: 'string',
+    author_id: 'uuid',
+    added_at: 'datetime',
   },
 });
 
@@ -577,7 +631,7 @@ system.readModel('BoardView', {
   description: 'The Kanban board — tasks grouped by column',
   from: ['TaskCreated', 'TaskMoved', 'TaskArchived'],
   fields: {
-    columns: 'Column[]',   // each column has a list of task cards
+    columns: 'Column[]', // each column has a list of task cards
   },
 });
 
@@ -585,8 +639,12 @@ system.readModel('TaskDetail', {
   description: 'Full task view — info, history, and comments thread',
   from: ['TaskCreated', 'TaskAssigned', 'TaskMoved', 'CommentAdded', 'TaskCompleted'],
   fields: {
-    task_id: 'uuid', title: 'string', description: 'string',
-    assignee: 'User', column: 'string', comments: 'Comment[]',
+    task_id: 'uuid',
+    title: 'string',
+    description: 'string',
+    assignee: 'User',
+    column: 'string',
+    comments: 'Comment[]',
     history: 'HistoryEntry[]',
   },
 });
@@ -595,7 +653,7 @@ system.readModel('WorkloadDashboard', {
   description: 'Manager view — tasks per person, per status',
   from: ['TaskCreated', 'TaskAssigned', 'TaskMoved', 'TaskCompleted'],
   fields: {
-    members: 'MemberWorkload[]',  // { user, todo_count, in_progress_count, done_count }
+    members: 'MemberWorkload[]', // { user, todo_count, in_progress_count, done_count }
     total_tasks: 'number',
     completion_rate: 'number',
   },
@@ -620,24 +678,33 @@ const NotifyOnComment = system.automation('NotifyOnComment', {
 const { flow } = system;
 
 // Full lifecycle of a task
-system.sequence('Task Lifecycle', flow`
+system.sequence(
+  'Task Lifecycle',
+  flow`
   ${CreateTask} -> ${TaskCreated}
   -> ${AssignTask} -> ${TaskAssigned} -> ${NotifyAssignee}
   -> ${MoveTask} -> ${TaskMoved}
   -> ${MoveTask} -> ${TaskCompleted}
   -> ${ArchiveTask} -> ${TaskArchived}
-`);
+`,
+);
 
 // Collaboration: someone comments on a task
-system.sequence('Comment on Task', flow`
+system.sequence(
+  'Comment on Task',
+  flow`
   ${AddComment} -> ${CommentAdded} -> ${NotifyOnComment}
-`);
+`,
+);
 
 // Quick task: create and assign immediately
-system.sequence('Create and Assign', flow`
+system.sequence(
+  'Create and Assign',
+  flow`
   ${CreateTask} -> ${TaskCreated}
   -> ${AssignTask} -> ${TaskAssigned} -> ${NotifyAssignee}
-`);
+`,
+);
 
 // ─── Slices ──────────────────────────────────────────────────
 

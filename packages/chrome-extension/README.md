@@ -59,6 +59,7 @@ This creates `funny-annotator-v0.1.0.zip` in the extension folder. Send that fil
 1. **Create a developer account** at https://chrome.google.com/webstore/devconsole (one-time $5 fee)
 
 2. **Build and package:**
+
    ```bash
    cd packages/chrome-extension
    bun run build

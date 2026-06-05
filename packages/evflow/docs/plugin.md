@@ -18,9 +18,7 @@ This compiles the plugin to `plugin/index.cjs`.
 ```json
 {
   "compilerOptions": {
-    "plugins": [
-      { "name": "@funny/evflow/plugin" }
-    ]
+    "plugins": [{ "name": "@funny/evflow/plugin" }]
   }
 }
 ```
@@ -58,16 +56,16 @@ system.readModel('CartView', { from: ['AddItem'], fields: {} });
 
 #### What gets validated
 
-| Location | What's checked |
-|----------|---------------|
-| `readModel({ from: ['...'] })` | Each string must be an existing **event** |
-| `automation({ on: '...' })` | Must be an existing **event** |
-| `automation({ triggers: '...' })` | Must be an existing **command** |
-| `sequence('name', '... -> ...')` | Each step must be a defined element |
-| `slice({ commands: ['...'] })` | Must be an existing **command** |
-| `slice({ events: ['...'] })` | Must be an existing **event** |
-| `slice({ readModels: ['...'] })` | Must be an existing **readModel** |
-| `slice({ automations: ['...'] })` | Must be an existing **automation** |
+| Location                          | What's checked                            |
+| --------------------------------- | ----------------------------------------- |
+| `readModel({ from: ['...'] })`    | Each string must be an existing **event** |
+| `automation({ on: '...' })`       | Must be an existing **event**             |
+| `automation({ triggers: '...' })` | Must be an existing **command**           |
+| `sequence('name', '... -> ...')`  | Each step must be a defined element       |
+| `slice({ commands: ['...'] })`    | Must be an existing **command**           |
+| `slice({ events: ['...'] })`      | Must be an existing **event**             |
+| `slice({ readModels: ['...'] })`  | Must be an existing **readModel**         |
+| `slice({ automations: ['...'] })` | Must be an existing **automation**        |
 
 ### Autocompletion
 
@@ -75,16 +73,16 @@ When your cursor is inside a string literal in an evflow context, the plugin sug
 
 ```typescript
 system.readModel('CartView', {
-  from: ['|'],     // ← cursor here: suggests all events
+  from: ['|'], // ← cursor here: suggests all events
   fields: {},
 });
 
 system.automation('Auto', {
-  on: '|',         // ← cursor here: suggests all events
-  triggers: '|',   // ← cursor here: suggests all commands
+  on: '|', // ← cursor here: suggests all events
+  triggers: '|', // ← cursor here: suggests all commands
 });
 
-system.sequence('Flow', '... -> |');  // ← suggests all elements
+system.sequence('Flow', '... -> |'); // ← suggests all elements
 ```
 
 Completions are **filtered by kind** — you only see events when the context expects events, commands when it expects commands, etc.

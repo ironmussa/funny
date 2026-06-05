@@ -589,23 +589,23 @@
     --powerline-variant: chips;
 
     /* Terminal ANSI — Sunrise (warm light) */
-    --terminal-black: #3B3228;
-    --terminal-red: #C4384B;
-    --terminal-green: #2E8B57;
-    --terminal-yellow: #B8860B;
-    --terminal-blue: #3A6EA5;
-    --terminal-magenta: #A0522D;
-    --terminal-cyan: #2E8B8B;
-    --terminal-white: #5C5044;
-    --terminal-bright-black: #7B7068;
-    --terminal-bright-red: #D14D41;
-    --terminal-bright-green: #3CB371;
-    --terminal-bright-yellow: #DAA520;
-    --terminal-bright-blue: #4A86C8;
-    --terminal-bright-magenta: #B8733D;
-    --terminal-bright-cyan: #3AA5A5;
-    --terminal-bright-white: #A09888;
-    --terminal-selection: #E0D5C5;
+    --terminal-black: #3b3228;
+    --terminal-red: #c4384b;
+    --terminal-green: #2e8b57;
+    --terminal-yellow: #b8860b;
+    --terminal-blue: #3a6ea5;
+    --terminal-magenta: #a0522d;
+    --terminal-cyan: #2e8b8b;
+    --terminal-white: #5c5044;
+    --terminal-bright-black: #7b7068;
+    --terminal-bright-red: #d14d41;
+    --terminal-bright-green: #3cb371;
+    --terminal-bright-yellow: #daa520;
+    --terminal-bright-blue: #4a86c8;
+    --terminal-bright-magenta: #b8733d;
+    --terminal-bright-cyan: #3aa5a5;
+    --terminal-bright-white: #a09888;
+    --terminal-selection: #e0d5c5;
   }
 
   /* ── Catppuccin Mocha ─────────────────────────────────────── */
@@ -726,7 +726,7 @@
 
   /* Diff search highlights */
   .diff-search-hl {
-    background-color: #FFE500;
+    background-color: #ffe500;
     color: #000;
     border-radius: 2px;
     padding: 0 1px;
@@ -734,9 +734,9 @@
   }
 
   .diff-search-current {
-    background-color: #FF9632;
+    background-color: #ff9632;
     color: #000;
-    outline: 1px solid #CC6600;
+    outline: 1px solid #cc6600;
   }
 
   /* Message content wrapping */
@@ -1230,12 +1230,30 @@
    * For hero/display icons (32px+), use native Tailwind: size-8, size-10.
    * For status dots (6px), keep using h-1.5 w-1.5 rounded-full directly.
    * ─────────────────────────────────────────────────────────────── */
-  .icon-2xs  { width: 0.625rem; height: 0.625rem; }  /* 10px — pairs with text-[10px] */
-  .icon-xs   { width: 0.75rem;  height: 0.75rem;  }  /* 12px — pairs with text-xs */
-  .icon-sm   { width: 0.875rem; height: 0.875rem; }  /* 14px — pairs with text-sm */
-  .icon-base { width: 1rem;     height: 1rem;     }  /* 16px — pairs with text-base */
-  .icon-lg   { width: 1.25rem;  height: 1.25rem;  }  /* 20px — pairs with text-lg/xl */
-  .icon-xl   { width: 1.5rem;   height: 1.5rem;   }  /* 24px — pairs with text-2xl */
+  .icon-2xs {
+    width: 0.625rem;
+    height: 0.625rem;
+  } /* 10px — pairs with text-[10px] */
+  .icon-xs {
+    width: 0.75rem;
+    height: 0.75rem;
+  } /* 12px — pairs with text-xs */
+  .icon-sm {
+    width: 0.875rem;
+    height: 0.875rem;
+  } /* 14px — pairs with text-sm */
+  .icon-base {
+    width: 1rem;
+    height: 1rem;
+  } /* 16px — pairs with text-base */
+  .icon-lg {
+    width: 1.25rem;
+    height: 1.25rem;
+  } /* 20px — pairs with text-lg/xl */
+  .icon-xl {
+    width: 1.5rem;
+    height: 1.5rem;
+  } /* 24px — pairs with text-2xl */
 
   .no-scrollbar {
     -ms-overflow-style: none;
@@ -1326,8 +1344,16 @@
   border-bottom: 1px solid hsl(var(--sidebar-border));
 }
 
-.dockview-theme-funny .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-active-tab,
-.dockview-theme-funny .dv-groupview.dv-inactive-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-active-tab {
+.dockview-theme-funny
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab,
+.dockview-theme-funny
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab {
   position: relative;
   z-index: 1;
   box-sizing: border-box;
@@ -1336,8 +1362,16 @@
   box-shadow: inset 0 -2px 0 0 hsl(var(--ring));
 }
 
-.dockview-theme-funny .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-inactive-tab,
-.dockview-theme-funny .dv-groupview.dv-inactive-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-inactive-tab {
+.dockview-theme-funny
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-inactive-tab,
+.dockview-theme-funny
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-inactive-tab {
   border: none;
 }
 

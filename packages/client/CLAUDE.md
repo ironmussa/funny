@@ -26,12 +26,13 @@ Instrumentation is supposed to be a fixed fixture of the code, not something you
 
 ```js
 // In DevTools console:
-__funnyLog.setLevel('debug');               // raise global floor
+__funnyLog.setLevel('debug'); // raise global floor
 __funnyLog.setNamespaceLevel('ws', 'debug'); // raise just one namespace
-__funnyLog.clear();                          // reset to defaults
+__funnyLog.clear(); // reset to defaults
 ```
 
 Or via localStorage directly:
+
 - `funny:log-level` — global floor (`trace|debug|info|warn|error|fatal`)
 - `funny:log-ns:<namespace>` — per-namespace override (e.g. `funny:log-ns:ws=debug`)
 

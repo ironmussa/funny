@@ -6,8 +6,8 @@
 # Validate: bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate packages/runtime/src
 # Diagram:  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format context-map packages/runtime/src
 
-$schema: "./packages/domain-map/domain-schema.json"
-version: "1.0"
+$schema: './packages/domain-map/domain-schema.json'
+version: '1.0'
 
 # -- Top-Level Domain --
 
@@ -20,7 +20,6 @@ domain:
 # -- Subdomains --
 
 subdomains:
-
   # === CORE — Competitive differentiators ===
 
   Agent Execution:
@@ -221,7 +220,6 @@ shared-kernel:
 # -- Context Map --
 
 context-map:
-
   - upstream: AgentExecution
     downstream: ThreadManagement
     relationship: customer-supplier
@@ -231,8 +229,8 @@ context-map:
       AgentRunner creates/updates threads and messages.
       Thread Management evolves its API to serve Agent Execution.
     implemented-by:
-      - "AgentRunner -> ThreadManager.insertMessage"
-      - "AgentMessageHandler -> MessageRepository, ToolCallRepository"
+      - 'AgentRunner -> ThreadManager.insertMessage'
+      - 'AgentMessageHandler -> MessageRepository, ToolCallRepository'
 
   - upstream: AgentExecution
     downstream: GitOps
@@ -241,8 +239,8 @@ context-map:
       Agent completion triggers git status refresh.
       Git change detection feeds back into agent message handling.
     implemented-by:
-      - "AgentCompletedGitStatusHandler (consumes agent:completed)"
-      - "GitStatusHandler (consumes git:changed)"
+      - 'AgentCompletedGitStatusHandler (consumes agent:completed)'
+      - 'GitStatusHandler (consumes git:changed)'
 
   - upstream: GitOps
     downstream: ThreadManagement
@@ -251,7 +249,7 @@ context-map:
       Git events update thread stage history.
       Thread Management conforms to git event payloads.
     implemented-by:
-      - "GitEventPersistenceHandler -> StageHistory"
+      - 'GitEventPersistenceHandler -> StageHistory'
 
   - upstream: AgentExecution
     downstream: RealtimeComms
@@ -261,7 +259,7 @@ context-map:
       Agent events broadcast to WebSocket clients
       through the shared event bus.
     implemented-by:
-      - "ThreadEventBus -> WSBroker.emit"
+      - 'ThreadEventBus -> WSBroker.emit'
 
   - upstream: ExternalIngest
     downstream: ThreadManagement
@@ -270,7 +268,7 @@ context-map:
       IngestMapper translates external webhook payloads
       into thread/message operations.
     implemented-by:
-      - "IngestMapper (ACL)"
+      - 'IngestMapper (ACL)'
 
   - upstream: ExtensionPlatform
     downstream: AgentExecution
@@ -287,16 +285,16 @@ context-map:
     description: >
       AutomationScheduler triggers agent runs via startAgent.
     implemented-by:
-      - "AutomationScheduler -> AgentRunner.startAgent"
+      - 'AutomationScheduler -> AgentRunner.startAgent'
 
   - upstream: Auth
-    downstream: "*"
+    downstream: '*'
     relationship: open-host-service
     description: >
       Auth middleware provides standard authentication protocol
       for all route handlers.
     implemented-by:
-      - "auth middleware (Hono middleware chain)"
+      - 'auth middleware (Hono middleware chain)'
 
   - upstream: UserProfile
     downstream: GitOps
@@ -307,7 +305,7 @@ context-map:
       GitService retrieves git identity and GitHub PAT
       from ProfileService for commits and pushes.
     implemented-by:
-      - "GitService -> ProfileService.getGitIdentity"
+      - 'GitService -> ProfileService.getGitIdentity'
 
   - upstream: ThreadManagement
     downstream: AutomationEngine
@@ -316,7 +314,7 @@ context-map:
       AutomationScheduler creates threads via ThreadManager,
       conforming to the thread creation interface.
     implemented-by:
-      - "AutomationScheduler -> ThreadManager.createThread"
+      - 'AutomationScheduler -> ThreadManager.createThread'
 
   - upstream: ProcessMgmt
     downstream: ProjectMgmt
@@ -327,13 +325,12 @@ context-map:
       Project routes consume Process Management services
       for hooks, startup commands, and command execution.
     implemented-by:
-      - "projects.ts routes -> ProjectHooksService"
-      - "projects.ts routes -> StartupCommandsService, CommandRunner"
+      - 'projects.ts routes -> ProjectHooksService'
+      - 'projects.ts routes -> StartupCommandsService, CommandRunner'
 
 # -- Team Ownership --
 
 teams:
-
   Core:
     description: >
       Owns the competitive differentiators — agent orchestration

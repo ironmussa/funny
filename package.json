@@ -11,8 +11,8 @@
   },
   "bin": {
     "funny": "./bin/funny.js",
-    "funny-server": "./packages/server/bin/funny-server.js",
-    "funny-runtime": "./packages/runtime/bin/funny-server.js"
+    "funny-runtime": "./packages/runtime/bin/funny-server.js",
+    "funny-server": "./packages/server/bin/funny-server.js"
   },
   "workspaces": [
     "packages/*"
@@ -99,8 +99,8 @@
     "playwright": "^1.50.0"
   },
   "resolutions": {
-    "esbuild": ">=0.24.3",
     "dompurify": "^3.4.6",
+    "esbuild": ">=0.24.3",
     "uuid": "^11.1.1",
     "vitest": "^4.1.2"
   },

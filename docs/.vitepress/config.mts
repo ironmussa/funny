@@ -62,16 +62,12 @@ export default defineConfig({
       {
         text: 'Design',
         collapsed: true,
-        items: [
-          { text: 'Browser panel screenshot', link: '/design/browser-panel-screenshot' },
-        ],
+        items: [{ text: 'Browser panel screenshot', link: '/design/browser-panel-screenshot' }],
       },
       {
         text: 'RFCs',
         collapsed: true,
-        items: [
-          { text: 'Route-driven threads', link: '/rfc/route-driven-threads' },
-        ],
+        items: [{ text: 'Route-driven threads', link: '/rfc/route-driven-threads' }],
       },
       {
         text: 'Plans',
@@ -95,9 +91,7 @@ export default defineConfig({
       provider: 'local',
     },
 
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/ironmussa/funny' },
-    ],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/ironmussa/funny' }],
 
     editLink: {
       pattern: 'https://github.com/ironmussa/funny/edit/master/docs/:path',

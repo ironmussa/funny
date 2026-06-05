@@ -3,60 +3,79 @@
 ## Referencia de data-testid disponibles
 
 ### Sidebar
+
 `sidebar-search`, `sidebar-kanban`, `sidebar-grid`, `sidebar-analytics`, `sidebar-collapse`, `sidebar-add-project`, `sidebar-no-projects-cta`, `sidebar-logout`, `sidebar-settings`, `archive-thread-cancel`, `archive-thread-confirm`, `delete-thread-cancel`, `delete-thread-confirm`, `rename-project-input`, `rename-project-cancel`, `rename-project-confirm`, `delete-project-cancel`, `delete-project-confirm`
 
 ### Project Item
+
 `project-item-{id}`, `project-search-threads-{id}`, `project-more-actions-{id}`, `project-menu-open-directory`, `project-menu-open-terminal`, `project-menu-open-editor`, `project-menu-settings`, `project-menu-analytics`, `project-menu-github-issues`, `project-menu-rename`, `project-menu-delete`, `project-new-thread-{id}`, `project-view-all-{id}`
 
 ### Thread Item
+
 `thread-item-{id}`, `thread-item-more-{id}`
 
 ### Project Header
+
 `header-more-actions`, `header-menu-copy-text`, `header-menu-copy-all`, `header-menu-pin`, `header-menu-delete`, `header-delete-cancel`, `header-delete-confirm`, `header-startup-commands`, `header-stage-select`, `header-back-kanban`, `header-back-parent`, `header-view-board`, `header-preview`, `header-open-editor`, `header-toggle-terminal`, `header-toggle-review`
 
 ### New Thread Dialog
+
 `new-thread-branch-trigger`, `new-thread-branch-search`, `new-thread-worktree-checkbox`, `new-thread-provider-select`, `new-thread-model-select`, `new-thread-title-input`, `new-thread-prompt`, `new-thread-cancel`, `new-thread-create`
 
 ### Thread View
+
 `message-copy`, `waiting-accept`, `waiting-reject`, `waiting-response-input`, `waiting-send`, `permission-approve`, `permission-deny`, `scroll-to-bottom`
 
 ### Prompt Input
+
 `prompt-textarea`, `prompt-file-input`, `prompt-attach`, `prompt-mode-select`, `prompt-model-select`, `prompt-stop`, `prompt-send`, `prompt-worktree-switch`, `prompt-backlog-toggle`
 
 ### Review Pane
+
 `review-refresh`, `review-pull`, `review-commit-log`, `review-stash`, `review-discard-all`, `review-close`, `review-expand-diff`, `review-file-filter`, `review-file-filter-clear`, `review-select-all`, `review-commit-title`, `review-commit-body`, `review-generate-commit-msg`, `review-commit-execute`, `review-push`, `review-undo-commit`, `review-pop-stash`, `review-merge`, `review-create-pr`, `review-pr-title`, `review-pr-body`, `review-pr-cancel`, `review-pr-create`
 
 ### Git Progress Modal
+
 `git-progress-pr-link`, `git-progress-done`
 
 ### Add Project View
+
 `add-project-tab-local`, `add-project-tab-clone`, `add-project-name`, `add-project-path`, `add-project-browse`, `add-project-cancel`, `add-project-submit`, `git-init-cancel`, `git-init-confirm`
 
 ### Command Palette
+
 `command-palette-search`, `command-palette-project-{id}`, `command-palette-settings-{id}`
 
 ### All Threads View
+
 `all-threads-list-view`, `all-threads-board-view`, `all-threads-search`, `all-threads-clear-search`, `all-threads-project-filter`, `all-threads-sort`, `all-threads-sort-direction`, `all-threads-show-archived`, `all-threads-clear-filters`
 
 ### Kanban View
+
 `kanban-card-{id}`, `kanban-card-pin-{id}`, `kanban-card-delete-{id}`, `kanban-add-thread`, `kanban-load-more-{stage}`, `kanban-delete-cancel`, `kanban-delete-confirm`
 
 ### Analytics View
+
 `analytics-project-filter`, `analytics-loading`, `analytics-no-data`, `analytics-metric-cards`, `analytics-metric-{color}`, `analytics-cost-card`, `analytics-stage-chart`, `analytics-timeline-chart`, `analytics-time-range`, `analytics-time-range-{value}`, `analytics-group-by`, `analytics-group-by-{value}`
 
 ### Grid / Live Columns View
+
 `grid-view`, `grid-add-thread`, `grid-empty-state`, `grid-active-count`, `grid-container`, `grid-column-{threadId}`
 
 ### Automation Inbox
+
 `inbox-manage-automations`, `inbox-tab-{status}`, `inbox-search`, `inbox-project-filter`
 
 ### General Settings Dialog
+
 `settings-dialog-theme-{value}`, `settings-dialog-editor-select`, `settings-dialog-internal-editor`, `settings-dialog-language-select`, `settings-dialog-shell-select`, `settings-dialog-github-token`, `settings-dialog-clear-token`, `settings-dialog-cancel`, `settings-dialog-save`
 
 ### Settings Panel
+
 `settings-back`, `settings-nav-{id}`
 
 ### Settings Detail View
+
 `project-color-none`, `settings-url-pattern-add`, `settings-reset-defaults`
 
 ---

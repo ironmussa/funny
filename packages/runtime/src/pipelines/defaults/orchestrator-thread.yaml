@@ -26,7 +26,7 @@ inputs:
 nodes:
   - id: announce-start
     notify:
-      message: "Orchestrator dispatching thread {{ threadId }}"
+      message: 'Orchestrator dispatching thread {{ threadId }}'
       level: info
 
   - id: mark-running
@@ -47,7 +47,7 @@ nodes:
       model: sonnet
       provider: claude
       permission_mode: autoEdit
-      prompt: "{{ prompt }}"
+      prompt: '{{ prompt }}'
 
   - id: mark-review
     depends_on: [dispatch]
@@ -64,5 +64,5 @@ nodes:
   - id: announce-done
     depends_on: [mark-review, mark-completed]
     notify:
-      message: "Orchestrator completed thread {{ threadId }}"
+      message: 'Orchestrator completed thread {{ threadId }}'
       level: info

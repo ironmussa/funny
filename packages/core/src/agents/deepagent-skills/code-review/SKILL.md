@@ -10,24 +10,28 @@ Use this skill after implementing changes to validate your work before deliverin
 ## Review Checklist
 
 ### 1. Correctness
+
 - [ ] Changes solve the original issue/task
 - [ ] No unintended side effects on existing functionality
 - [ ] Edge cases are handled
 - [ ] Error handling is appropriate (not excessive)
 
 ### 2. Code Quality
+
 - [ ] Code matches existing style and patterns
 - [ ] No unnecessary complexity or abstraction
 - [ ] Variable and function names are clear
 - [ ] No dead code, commented-out code, or TODOs left behind
 
 ### 3. Tests
+
 - [ ] New functionality has test coverage
 - [ ] Existing tests still pass
 - [ ] Tests cover both happy path and error cases
 - [ ] Tests are not brittle (don't test implementation details)
 
 ### 4. Safety
+
 - [ ] No hardcoded secrets or credentials
 - [ ] User input is validated at boundaries
 - [ ] No SQL injection, XSS, or command injection vectors

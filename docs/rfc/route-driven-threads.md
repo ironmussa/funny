@@ -11,18 +11,18 @@ the **real** modules, names, and constraints in this codebase.
 
 ## 0. Where funny actually is today (not greenfield)
 
-funny is **mid-migration**. It already has a route-driven layer *and* the
+funny is **mid-migration**. It already has a route-driven layer _and_ the
 reconciliation machinery the generic plan wants to delete — they coexist, which
 is exactly what produces the ping-pong.
 
-| Generic concept | funny reality | Status |
-|---|---|---|
-| `parseRoute` / route boundary | [route-parser.ts](../../packages/client/src/hooks/route-parser.ts), [use-route-sync.ts](../../packages/client/src/hooks/use-route-sync.ts) | ✅ exists |
-| `entitiesById` cache | `threadsById` (unified index in [thread-mutations.ts](../../packages/client/src/stores/thread-mutations.ts)) | ✅ clean |
-| `goToEntity` single facade | **none** — 3 controllers call `selectThread` | ❌ |
-| `selectedId` (pointer) | `selectedThreadId` | ⚠️ keep, but derive |
-| `activeEntity` (pointer) | `activeThread` — **NOT a pointer, it's the hydrated payload** | ⚠️ demote to cache |
-| Invariant guard (to delete) | [use-route-sync.ts:111-175](../../packages/client/src/hooks/use-route-sync.ts#L111-L175) | ❌ the ping-pong |
+| Generic concept               | funny reality                                                                                                                              | Status              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `parseRoute` / route boundary | [route-parser.ts](../../packages/client/src/hooks/route-parser.ts), [use-route-sync.ts](../../packages/client/src/hooks/use-route-sync.ts) | ✅ exists           |
+| `entitiesById` cache          | `threadsById` (unified index in [thread-mutations.ts](../../packages/client/src/stores/thread-mutations.ts))                               | ✅ clean            |
+| `goToEntity` single facade    | **none** — 3 controllers call `selectThread`                                                                                               | ❌                  |
+| `selectedId` (pointer)        | `selectedThreadId`                                                                                                                         | ⚠️ keep, but derive |
+| `activeEntity` (pointer)      | `activeThread` — **NOT a pointer, it's the hydrated payload**                                                                              | ⚠️ demote to cache  |
+| Invariant guard (to delete)   | [use-route-sync.ts:111-175](../../packages/client/src/hooks/use-route-sync.ts#L111-L175)                                                   | ❌ the ping-pong    |
 
 ### The single most important correction to the generic plan
 
@@ -38,7 +38,7 @@ target is:
 - **Keep** the hydrated payload, but store it as a **cache keyed by threadId**
   (`threadDataById[id]` with `loadingById` / `errorById`), not as a single
   mutable `activeThread` pointer.
-- **Derive** *which* thread is active from `useParams().threadId`.
+- **Derive** _which_ thread is active from `useParams().threadId`.
 - The detail view becomes `useThreadData(useActiveThreadId())` — a cache lookup,
   not a subscription to a moving pointer.
 
@@ -86,12 +86,12 @@ Detail view
 
 ### Modules to create
 
-| Module | Responsibility |
-|---|---|
-| `navigation/thread-paths.ts` | `buildThreadPath(projectId, threadId)`, `buildScratchPath(threadId)` — wrap the existing route shapes from `route-parser.ts` |
-| `navigation/go-to-thread.ts` | **Only** thread-change API for UI. Wraps `useStableNavigate`. Handles scratch vs project via `getThreadRoute(thread)` (already in [thread-variant.ts](../../packages/client/src/lib/thread-variant.ts)) |
-| `hooks/use-active-thread-id.ts` | thin wrapper over `useParams().threadId` |
-| `hooks/use-thread-data.ts` | `threadDataById[id]` + loading/error |
+| Module                          | Responsibility                                                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `navigation/thread-paths.ts`    | `buildThreadPath(projectId, threadId)`, `buildScratchPath(threadId)` — wrap the existing route shapes from `route-parser.ts`                                                                            |
+| `navigation/go-to-thread.ts`    | **Only** thread-change API for UI. Wraps `useStableNavigate`. Handles scratch vs project via `getThreadRoute(thread)` (already in [thread-variant.ts](../../packages/client/src/lib/thread-variant.ts)) |
+| `hooks/use-active-thread-id.ts` | thin wrapper over `useParams().threadId`                                                                                                                                                                |
+| `hooks/use-thread-data.ts`      | `threadDataById[id]` + loading/error                                                                                                                                                                    |
 
 ### Modules to demote / delete (in order, Phases 3-4)
 
@@ -227,8 +227,7 @@ Reject a PR if it:
 
 ```ts
 // packages/client/src/config/features.ts
-export const ROUTE_DRIVEN_THREADS =
-  import.meta.env.VITE_ROUTE_DRIVEN_THREADS === '1';
+export const ROUTE_DRIVEN_THREADS = import.meta.env.VITE_ROUTE_DRIVEN_THREADS === '1';
 ```
 
 Phase 2-4: new boundary + cache behind the flag; legacy guard active only when
@@ -248,14 +247,14 @@ predicate rather than re-deriving scratch vs project — same rule, no new branc
 
 ## 6. Effort / risk summary
 
-| Phase | Days | Risk | Rollback |
-|---|---|---|---|
-| 0 Inventory | ½–1 | none | — |
-| 1 Nav facade | 1–2 | low | revert imports |
-| 2 Boundary hydrator | 2–4 | medium | flag off |
-| 3 Derive selection | 3–5 | medium | `selectedThreadId` shim |
-| 4 Delete guard | 1–2 | **high** | flag keeps legacy guard |
-| 6 Tests | parallel | — | — |
+| Phase               | Days     | Risk     | Rollback                |
+| ------------------- | -------- | -------- | ----------------------- |
+| 0 Inventory         | ½–1      | none     | —                       |
+| 1 Nav facade        | 1–2      | low      | revert imports          |
+| 2 Boundary hydrator | 2–4      | medium   | flag off                |
+| 3 Derive selection  | 3–5      | medium   | `selectedThreadId` shim |
+| 4 Delete guard      | 1–2      | **high** | flag keeps legacy guard |
+| 6 Tests             | parallel | —        | —                       |
 
 **Total: ~1.5–2.5 weeks**, incremental, no big bang. The high-value / high-risk
 work is concentrated in Phases 3-4; Phases 0-2 are mostly already done or low-risk.

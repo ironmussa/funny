@@ -18,7 +18,7 @@ Register a command (user intention).
 
 ```typescript
 const PlaceOrder = system.command('PlaceOrder', {
-  actor: 'Customer',                    // optional — who triggers this
+  actor: 'Customer', // optional — who triggers this
   description: 'Customer places order', // optional
   fields: {
     order_id: 'uuid',
@@ -30,12 +30,12 @@ const PlaceOrder = system.command('PlaceOrder', {
 
 **Parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | yes | Unique name (PascalCase) |
-| `options.fields` | `FieldMap` | yes | Data payload |
-| `options.actor` | `string` | no | Who triggers this command |
-| `options.description` | `string` | no | Human-readable description |
+| Param                 | Type       | Required | Description                |
+| --------------------- | ---------- | -------- | -------------------------- |
+| `name`                | `string`   | yes      | Unique name (PascalCase)   |
+| `options.fields`      | `FieldMap` | yes      | Data payload               |
+| `options.actor`       | `string`   | no       | Who triggers this command  |
+| `options.description` | `string`   | no       | Human-readable description |
 
 **Returns:** `ElementRef` — a lightweight handle you can use in `flow` templates and slices.
 
@@ -59,11 +59,11 @@ const OrderPlaced = system.event('OrderPlaced', {
 
 **Parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | yes | Unique name (PascalCase, past tense) |
-| `options.fields` | `FieldMap` | yes | Event data payload |
-| `options.description` | `string` | no | Human-readable description |
+| Param                 | Type       | Required | Description                          |
+| --------------------- | ---------- | -------- | ------------------------------------ |
+| `name`                | `string`   | yes      | Unique name (PascalCase, past tense) |
+| `options.fields`      | `FieldMap` | yes      | Event data payload                   |
+| `options.description` | `string`   | no       | Human-readable description           |
 
 ---
 
@@ -84,12 +84,12 @@ const OrderList = system.readModel('OrderList', {
 
 **Parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | yes | Unique name |
-| `options.from` | `string[]` | yes | Event names this model projects from |
-| `options.fields` | `FieldMap` | yes | Shape of the projected view |
-| `options.description` | `string` | no | Human-readable description |
+| Param                 | Type       | Required | Description                          |
+| --------------------- | ---------- | -------- | ------------------------------------ |
+| `name`                | `string`   | yes      | Unique name                          |
+| `options.from`        | `string[]` | yes      | Event names this model projects from |
+| `options.fields`      | `FieldMap` | yes      | Shape of the projected view          |
+| `options.description` | `string`   | no       | Human-readable description           |
 
 ---
 
@@ -116,12 +116,12 @@ system.automation('PostOrderProcessing', {
 
 **Parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | yes | Unique name |
-| `options.on` | `string` | yes | Event name that triggers this |
-| `options.triggers` | `string \| string[]` | yes | Command(s) to execute |
-| `options.description` | `string` | no | Human-readable description |
+| Param                 | Type                 | Required | Description                   |
+| --------------------- | -------------------- | -------- | ----------------------------- |
+| `name`                | `string`             | yes      | Unique name                   |
+| `options.on`          | `string`             | yes      | Event name that triggers this |
+| `options.triggers`    | `string \| string[]` | yes      | Command(s) to execute         |
+| `options.description` | `string`             | no       | Human-readable description    |
 
 ---
 
@@ -140,10 +140,10 @@ system.sequence('Happy Path', 'PlaceOrder -> OrderPlaced -> SendConfirmation');
 
 **Parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | yes | Descriptive name for this flow |
-| `steps` | `SequenceStep[] \| string` | yes | Flow from `flow` tag or arrow-separated string |
+| Param   | Type                       | Required | Description                                    |
+| ------- | -------------------------- | -------- | ---------------------------------------------- |
+| `name`  | `string`                   | yes      | Descriptive name for this flow                 |
+| `steps` | `SequenceStep[] \| string` | yes      | Flow from `flow` tag or arrow-separated string |
 
 ---
 
@@ -166,21 +166,21 @@ All arrays accept both `ElementRef` objects and plain strings:
 ```typescript
 system.slice('Place Order', {
   ui: 'CheckoutPage',
-  commands: ['PlaceOrder'],    // string refs work too
-  events: [OrderPlaced],       // or ElementRef objects
+  commands: ['PlaceOrder'], // string refs work too
+  events: [OrderPlaced], // or ElementRef objects
 });
 ```
 
 **Parameters:**
 
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | yes | Slice name |
-| `options.ui` | `string` | no | UI screen/page name |
-| `options.commands` | `Array<ElementRef \| string>` | no | Commands in this slice |
-| `options.events` | `Array<ElementRef \| string>` | no | Events in this slice |
-| `options.readModels` | `Array<ElementRef \| string>` | no | Read models in this slice |
-| `options.automations` | `Array<ElementRef \| string>` | no | Automations in this slice |
+| Param                 | Type                          | Required | Description               |
+| --------------------- | ----------------------------- | -------- | ------------------------- |
+| `name`                | `string`                      | yes      | Slice name                |
+| `options.ui`          | `string`                      | no       | UI screen/page name       |
+| `options.commands`    | `Array<ElementRef \| string>` | no       | Commands in this slice    |
+| `options.events`      | `Array<ElementRef \| string>` | no       | Events in this slice      |
+| `options.readModels`  | `Array<ElementRef \| string>` | no       | Read models in this slice |
+| `options.automations` | `Array<ElementRef \| string>` | no       | Automations in this slice |
 
 ---
 
@@ -262,24 +262,24 @@ if (el?.kind === 'command') {
 
 Fields are defined as string type annotations:
 
-| Type | Description |
-|------|-------------|
-| `'string'` | Text |
-| `'number'` | Numeric value |
-| `'boolean'` | True/false |
-| `'decimal'` | Precise numeric (money, etc.) |
-| `'datetime'` | Date and time |
-| `'date'` | Date only |
-| `'uuid'` | Unique identifier |
-| `'MyType[]'` | Array of custom type |
-| `'MyType'` | Custom/domain type |
+| Type         | Description                   |
+| ------------ | ----------------------------- |
+| `'string'`   | Text                          |
+| `'number'`   | Numeric value                 |
+| `'boolean'`  | True/false                    |
+| `'decimal'`  | Precise numeric (money, etc.) |
+| `'datetime'` | Date and time                 |
+| `'date'`     | Date only                     |
+| `'uuid'`     | Unique identifier             |
+| `'MyType[]'` | Array of custom type          |
+| `'MyType'`   | Custom/domain type            |
 
 ```typescript
 system.event('OrderPlaced', {
   fields: {
     order_id: 'uuid',
     total: 'decimal',
-    items: 'OrderItem[]',    // array of custom type
+    items: 'OrderItem[]', // array of custom type
     placed_at: 'datetime',
     is_gift: 'boolean',
   },
@@ -290,19 +290,19 @@ system.event('OrderPlaced', {
 
 ## Validation Rules
 
-| Code | Severity | Description |
-|------|----------|-------------|
-| `READ_MODEL_UNKNOWN_SOURCE` | error | `readModel.from` references an event that doesn't exist |
-| `READ_MODEL_INVALID_SOURCE` | error | `readModel.from` references something that isn't an event |
-| `AUTOMATION_UNKNOWN_EVENT` | error | `automation.on` references an event that doesn't exist |
-| `AUTOMATION_INVALID_EVENT` | error | `automation.on` references something that isn't an event |
-| `AUTOMATION_UNKNOWN_COMMAND` | error | `automation.triggers` references a command that doesn't exist |
-| `AUTOMATION_TRIGGERS_NON_COMMAND` | warning | `automation.triggers` references something that isn't a command |
-| `SEQUENCE_UNKNOWN_ELEMENT` | error | A sequence step references an undefined element |
-| `SLICE_UNKNOWN_ELEMENT` | error | A slice references an undefined element |
-| `ORPHAN_EVENT` | warning | Event defined but never used in any sequence |
-| `ORPHAN_COMMAND` | warning | Command defined but never used in any sequence |
-| `DUPLICATE_SEQUENCE_NAME` | warning | Two sequences share the same name |
+| Code                              | Severity | Description                                                     |
+| --------------------------------- | -------- | --------------------------------------------------------------- |
+| `READ_MODEL_UNKNOWN_SOURCE`       | error    | `readModel.from` references an event that doesn't exist         |
+| `READ_MODEL_INVALID_SOURCE`       | error    | `readModel.from` references something that isn't an event       |
+| `AUTOMATION_UNKNOWN_EVENT`        | error    | `automation.on` references an event that doesn't exist          |
+| `AUTOMATION_INVALID_EVENT`        | error    | `automation.on` references something that isn't an event        |
+| `AUTOMATION_UNKNOWN_COMMAND`      | error    | `automation.triggers` references a command that doesn't exist   |
+| `AUTOMATION_TRIGGERS_NON_COMMAND` | warning  | `automation.triggers` references something that isn't a command |
+| `SEQUENCE_UNKNOWN_ELEMENT`        | error    | A sequence step references an undefined element                 |
+| `SLICE_UNKNOWN_ELEMENT`           | error    | A slice references an undefined element                         |
+| `ORPHAN_EVENT`                    | warning  | Event defined but never used in any sequence                    |
+| `ORPHAN_COMMAND`                  | warning  | Command defined but never used in any sequence                  |
+| `DUPLICATE_SEQUENCE_NAME`         | warning  | Two sequences share the same name                               |
 
 ---
 
@@ -313,9 +313,9 @@ Every `system.command()`, `system.event()`, etc. returns an `ElementRef`:
 ```typescript
 interface ElementRef {
   readonly name: string;
-  readonly kind: ElementKind;  // 'command' | 'event' | 'readModel' | 'automation'
-  toString(): string;          // returns the name
+  readonly kind: ElementKind; // 'command' | 'event' | 'readModel' | 'automation'
+  toString(): string; // returns the name
 }
 ```
 
-`toString()` returns the name, which is what makes tagged template literal interpolation work — when you write `flow\`${PlaceOrder}\``, JavaScript calls `PlaceOrder.toString()` to get `"PlaceOrder"`.
+`toString()` returns the name, which is what makes tagged template literal interpolation work — when you write `flow\`${PlaceOrder}\``, JavaScript calls `PlaceOrder.toString()`to get`"PlaceOrder"`.

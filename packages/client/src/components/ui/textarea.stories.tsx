@@ -48,7 +48,7 @@ export const WithRows: Story = {
 
 export const AllSizes: Story = {
   render: () => (
-    <div className="flex flex-col gap-4 w-80">
+    <div className="flex w-80 flex-col gap-4">
       <Textarea data-testid="textarea-xs" size="xs" placeholder="Extra Small (xs)" />
       <Textarea data-testid="textarea-sm" size="sm" placeholder="Small (sm)" />
       <Textarea data-testid="textarea-default" size="default" placeholder="Default" />

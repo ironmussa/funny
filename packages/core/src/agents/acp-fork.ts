@@ -14,49 +14,27 @@
 import { spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
 
-type AcpProvider = 'codex' | 'gemini' | 'pi' | 'cursor' | 'opencode';
+import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
+import { getManifest, type KnownAcpProvider } from '@funny/shared/provider-manifests';
 
-/** Resolve the CLI command + args to run an ACP-compliant agent over stdio. */
+type AcpProvider = KnownAcpProvider;
+
+/** Resolve the CLI command + args for an ACP provider from its manifest. */
 function resolveAcpCommand(provider: AcpProvider): { command: string; args: string[] } {
-  switch (provider) {
-    case 'codex': {
-      const explicit =
-        process.env.CODEX_ACP_BINARY_PATH || process.env.ACP_CODEX_BIN || process.env.CODEX_BIN;
-      if (explicit) return { command: explicit, args: [] };
-      if (process.env.CODEX_ACP_USE_NPX === '1') {
-        return { command: 'npx', args: ['-y', '@zed-industries/codex-acp'] };
-      }
-      return { command: 'codex-acp', args: [] };
-    }
-    case 'gemini': {
-      const bin = process.env.GEMINI_BINARY_PATH || process.env.ACP_GEMINI_BIN || 'gemini';
-      return { command: bin, args: ['--acp'] };
-    }
-    case 'pi': {
-      const explicit = process.env.PI_ACP_BINARY_PATH || process.env.ACP_PI_BIN;
-      if (explicit) return { command: explicit, args: [] };
-      if (process.env.PI_ACP_USE_NPX === '1') {
-        return { command: 'npx', args: ['-y', 'pi-acp'] };
-      }
-      return { command: 'pi-acp', args: [] };
-    }
-    case 'cursor': {
-      const explicit = process.env.CURSOR_BINARY_PATH || process.env.ACP_CURSOR_BIN;
-      if (explicit) return { command: explicit, args: ['acp'] };
-      if (process.env.CURSOR_ACP_USE_NPX === '1') {
-        return { command: 'npx', args: ['-y', 'cursor-agent', 'acp'] };
-      }
-      return { command: 'cursor-agent', args: ['acp'] };
-    }
-    case 'opencode': {
-      const explicit = process.env.OPENCODE_BIN || process.env.ACP_OPENCODE_BIN;
-      if (explicit) return { command: explicit, args: ['acp'] };
-      if (process.env.OPENCODE_ACP_USE_NPX === '1') {
-        return { command: 'npx', args: ['-y', 'opencode-ai', 'acp'] };
-      }
-      return { command: 'opencode', args: ['acp'] };
-    }
+  const manifest = getManifest(provider);
+  // Unreachable for a KnownAcpProvider; fall back to the bare id defensively.
+  if (!manifest) return { command: provider, args: [] };
+  return resolveSpawnCommand(manifest.spawn);
+}
+
+/** Traverse a dotted capability path (e.g. `sessions.fork`) and test truthiness. */
+function hasCapabilityPath(caps: Record<string, unknown> | undefined, path: string): boolean {
+  let cur: unknown = caps;
+  for (const seg of path.split('.')) {
+    if (!cur || typeof cur !== 'object') return false;
+    cur = (cur as Record<string, unknown>)[seg];
   }
+  return Boolean(cur);
 }
 
 export interface ForkAcpSessionOptions {
@@ -152,13 +130,15 @@ export async function forkAcpSession(
       clientCapabilities: {},
     });
 
-    // The fork capability lives under `agentCapabilities.sessions.fork` for
-    // codex/gemini/pi/cursor, but opencode advertises it under
-    // `agentCapabilities.sessionCapabilities.fork` — accept either shape.
+    // Each manifest declares where its agent advertises native fork under
+    // `agentCapabilities` — `sessions.fork` for codex/gemini/pi/cursor,
+    // `sessionCapabilities.fork` for opencode.
     const caps = initResult.agentCapabilities as Record<string, unknown> | undefined;
-    const sessions = caps?.sessions as { fork?: unknown } | undefined;
-    const sessionCapabilities = caps?.sessionCapabilities as { fork?: unknown } | undefined;
-    if (!sessions?.fork && !sessionCapabilities?.fork) {
+    const paths = getManifest(opts.provider)?.forkCapabilityPaths ?? [
+      'sessions.fork',
+      'sessionCapabilities.fork',
+    ];
+    if (!paths.some((p) => hasCapabilityPath(caps, p))) {
       cleanup();
       return { ok: false, reason: 'capability_not_advertised' };
     }

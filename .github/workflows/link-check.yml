@@ -31,14 +31,16 @@ jobs:
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
-          # Retries + accepting 429 (rate limited) keep transient external
-          # failures from flaking the run; .lycheeignore handles local/example
-          # URLs. github.com links are authenticated via the token below.
+          # Retries + accepting 429 (rate limited) and 403 (sites like claude.ai
+          # and npmjs.com bot-block link checkers — the pages are fine) keep
+          # transient/false external failures from flaking the run.
+          # .lycheeignore handles local/example URLs; github.com links are
+          # authenticated via the token below.
           args: >-
             --no-progress
             --max-retries 3
             --retry-wait-time 2
-            --accept 200,206,429
+            --accept 200,206,403,429
             --exclude-path node_modules
             './**/*.md'
           fail: true

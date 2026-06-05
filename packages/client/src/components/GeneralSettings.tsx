@@ -1,5 +1,6 @@
 import type { AgentProvider, ToolPermission } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE, DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
+import { DYNAMIC_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { GitBranch, Monitor, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,9 +23,7 @@ import {
 } from '@/components/general-settings-project/setting-primitives';
 import { projectsApi } from '@/lib/api/projects';
 import { getModelOptions, PROVIDERS } from '@/lib/providers';
-import { useCursorModelsStore } from '@/stores/cursor-models-store';
-import { useOpenCodeModelsStore } from '@/stores/opencode-models-store';
-import { usePiModelsStore } from '@/stores/pi-models-store';
+import { useAcpModelsStore } from '@/stores/acp-models-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
 
@@ -84,64 +83,29 @@ export function GeneralSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on id only; using selectedProject object would loop
   }, [selectedProject?.id]);
 
-  // Pi model catalog is discovered at runtime (see pi-discover.ts) — fetch on
-  // mount so the Settings combobox lists what pi-acp actually advertises (e.g.
-  // zai/glm-5.1) instead of just the `default` sentinel from the static registry.
-  const piModels = usePiModelsStore((s) => s.models);
-  const piStatus = usePiModelsStore((s) => s.status);
-  const fetchPiModels = usePiModelsStore((s) => s.fetch);
+  // Dynamic ACP catalogs (pi / cursor / opencode) are discovered at runtime so
+  // the Settings combobox lists what each agent actually advertises (e.g.
+  // zai/glm-5.1) instead of just the `default` sentinel from the static
+  // registry. One store keyed by provider; the dynamic set comes from the
+  // manifest registry.
+  const acpByProvider = useAcpModelsStore((s) => s.byProvider);
+  const fetchAcpModels = useAcpModelsStore((s) => s.fetch);
   useEffect(() => {
-    void fetchPiModels();
-  }, [fetchPiModels]);
-
-  // Same dynamic-discovery story for cursor (see cursor-discover.ts): without
-  // this, the project's default-model combobox shows only `cursor:default`
-  // because the static registry has nothing else for cursor.
-  const cursorModels = useCursorModelsStore((s) => s.models);
-  const cursorStatus = useCursorModelsStore((s) => s.status);
-  const fetchCursorModels = useCursorModelsStore((s) => s.fetch);
-  useEffect(() => {
-    void fetchCursorModels();
-  }, [fetchCursorModels]);
-
-  // Same dynamic-discovery story for opencode (see opencode-discover.ts).
-  const opencodeModels = useOpenCodeModelsStore((s) => s.models);
-  const opencodeStatus = useOpenCodeModelsStore((s) => s.status);
-  const fetchOpenCodeModels = useOpenCodeModelsStore((s) => s.fetch);
-  useEffect(() => {
-    void fetchOpenCodeModels();
-  }, [fetchOpenCodeModels]);
+    for (const provider of DYNAMIC_ACP_PROVIDER_IDS) void fetchAcpModels(provider);
+  }, [fetchAcpModels]);
 
   const projectDefaultProvider = (selectedProject?.defaultProvider ||
     DEFAULT_PROVIDER) as AgentProvider;
   const projectModelOptions = (() => {
     const base = getModelOptions(projectDefaultProvider, t);
-    if (projectDefaultProvider === 'pi' && piStatus === 'ready') {
+    const dynamic = acpByProvider[projectDefaultProvider];
+    if (dynamic?.status === 'ready') {
       const seen = new Set(base.map((o) => o.value));
-      for (const m of piModels) {
+      for (const m of dynamic.models) {
         if (seen.has(m.modelId)) continue;
         base.push({ value: m.modelId, label: m.name || m.modelId });
         seen.add(m.modelId);
       }
-      return base;
-    }
-    if (projectDefaultProvider === 'cursor' && cursorStatus === 'ready') {
-      const seen = new Set(base.map((o) => o.value));
-      for (const m of cursorModels) {
-        if (seen.has(m.modelId)) continue;
-        base.push({ value: m.modelId, label: m.name || m.modelId });
-        seen.add(m.modelId);
-      }
-      return base;
-    }
-    if (projectDefaultProvider === 'opencode' && opencodeStatus === 'ready') {
-      const seen = new Set(base.map((o) => o.value));
-      for (const m of opencodeModels) {
-        if (seen.has(m.modelId)) continue;
-        base.push({ value: m.modelId, label: m.name || m.modelId });
-        seen.add(m.modelId);
-      }
-      return base;
     }
     return base;
   })();

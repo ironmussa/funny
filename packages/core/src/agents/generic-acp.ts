@@ -68,8 +68,6 @@ export class GenericACPProcess extends BaseAgentProcess {
   private lastAssistantText = '';
   /** Buffer for `agent_thought_chunk` text — collapsed into a single Think tool call. */
   private pendingThought: { id: string; text: string } | null = null;
-  /** First agent_message_chunk of the turn not yet seen (for banner strip). */
-  private firstMessageChunkPending = true;
   /**
    * Tool calls whose initial event lacked the field its card needs to render.
    * Buffered until an update carries the missing field, or dropped at terminal
@@ -412,7 +410,6 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.deferredToolInputs.clear();
     this.lastAssistantText = '';
     this.pendingThought = null;
-    this.firstMessageChunkPending = true;
 
     const startTime = Date.now();
 
@@ -648,22 +645,25 @@ export class GenericACPProcess extends BaseAgentProcess {
         const content = update.content;
         if (content.type === 'text' && content.text) {
           this.accumulatedText += content.text;
-          let visible = this.accumulatedText;
-          // pi prefixes its first agent message with a banner — strip it (data
-          // regex from the manifest) so the user never sees the boilerplate.
+          // pi prefixes its agent message with a banner — strip it (data regex
+          // from the manifest) so the user never sees the boilerplate. The
+          // regex is anchored at ^, so stripping every emission is idempotent.
+          // When the stripped text is empty (banner only, no real text yet),
+          // emit nothing.
           const bannerSrc = this.manifest.quirks.stripFirstMessageBanner;
-          if (bannerSrc && this.firstMessageChunkPending) {
-            visible = stripBanner(this.accumulatedText, bannerSrc);
+          const visible = bannerSrc
+            ? stripBanner(this.accumulatedText, bannerSrc)
+            : this.accumulatedText;
+          if (visible) {
+            this.emit('message', {
+              type: 'assistant',
+              message: {
+                id: this.assistantMsgId,
+                content: [{ type: 'text', text: visible }],
+              },
+            } as CLIMessage);
+            this.lastAssistantText = visible;
           }
-          this.firstMessageChunkPending = false;
-          this.emit('message', {
-            type: 'assistant',
-            message: {
-              id: this.assistantMsgId,
-              content: [{ type: 'text', text: visible }],
-            },
-          } as CLIMessage);
-          this.lastAssistantText = visible;
         }
         return;
       }
@@ -803,21 +803,25 @@ export class GenericACPProcess extends BaseAgentProcess {
             this.assistantMsgId = randomUUID();
           }
         } else {
-          // planRender 'text': render the plan as a plain assistant text bubble.
-          const input = buildTodoWriteInputFromPlanEntries(update.entries);
-          if (input.todos.length > 0) {
-            const text = input.todos
-              .map((t) => `- [${t.status === 'completed' ? 'x' : ' '}] ${t.content}`)
+          // planRender 'text': render as a numbered markdown checklist under a
+          // `**Plan:**` header (completed → [x], in_progress → [~], else [ ]).
+          // Reuses the live assistant message id; does NOT rotate it.
+          const entries = ((update as any).entries ?? []) as Array<Record<string, any>>;
+          if (entries.length > 0) {
+            const planText = entries
+              .map((e, i) => {
+                const status =
+                  e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
+                return `${status} ${i + 1}. ${e.title ?? e.description ?? e.content ?? 'Task'}`;
+              })
               .join('\n');
             this.emit('message', {
               type: 'assistant',
               message: {
-                id: randomUUID(),
-                content: [{ type: 'text', text }],
+                id: this.assistantMsgId,
+                content: [{ type: 'text', text: `**Plan:**\n${planText}` }],
               },
             } as CLIMessage);
-            this.accumulatedText = '';
-            this.assistantMsgId = randomUUID();
           }
         }
         return;

@@ -627,6 +627,17 @@ export const PromptInputUI = memo(function PromptInputUI({
     [onRuntimeChange],
   );
 
+  // Return focus to the editor after picking a model — Radix Select restores
+  // focus to its trigger on close, so defer past that to land the caret in the
+  // editor and let the user keep typing.
+  const handleUnifiedModelChange = useCallback(
+    (v: string) => {
+      onUnifiedModelChange(v);
+      requestAnimationFrame(() => editorRef.current?.focus());
+    },
+    [onUnifiedModelChange, editorRef],
+  );
+
   const handleCycleMode = useCallback(() => {
     onModeChange(
       (() => {
@@ -1239,7 +1250,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 <ModelSelect
                   value={unifiedModel}
-                  onChange={onUnifiedModelChange}
+                  onChange={handleUnifiedModelChange}
                   groups={modelGroups}
                 />
                 {effortOptions && effortOptions.length > 0 && effort && onEffortChange && (

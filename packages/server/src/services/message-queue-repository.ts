@@ -83,9 +83,9 @@ export async function dequeue(threadId: string): Promise<QueueEntry | null> {
 }
 
 export async function cancel(messageId: string, threadId: string): Promise<boolean> {
-  const row = (await dbGet(db.select().from(messageQueue).where(eq(messageQueue.id, messageId)))) as
-    | QueueEntry
-    | undefined;
+  const row = (await dbGet(
+    db.select().from(messageQueue).where(eq(messageQueue.id, messageId)),
+  )) as QueueEntry | undefined;
   if (!row || row.threadId !== threadId) return false;
   await dbRun(db.delete(messageQueue).where(eq(messageQueue.id, messageId)));
   log.info('Queued message cancelled', { namespace: 'queue', messageId });
@@ -97,9 +97,9 @@ export async function update(
   threadId: string,
   content: string,
 ): Promise<QueueEntry | null> {
-  const row = (await dbGet(db.select().from(messageQueue).where(eq(messageQueue.id, messageId)))) as
-    | QueueEntry
-    | undefined;
+  const row = (await dbGet(
+    db.select().from(messageQueue).where(eq(messageQueue.id, messageId)),
+  )) as QueueEntry | undefined;
   if (!row || row.threadId !== threadId) return null;
 
   await dbRun(db.update(messageQueue).set({ content }).where(eq(messageQueue.id, messageId)));

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
 import '@/i18n/config';
+
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 
 /* -------------------------------------------------------------------------- */

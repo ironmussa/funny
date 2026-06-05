@@ -11,6 +11,7 @@ import {
 } from '@xyflow/react';
 import { useMemo, useCallback, useEffect, useRef } from 'react';
 import '@xyflow/react/dist/style.css';
+
 import { generateReactFlowGraph, EVFLOW_COLORS } from '../../../src/generators/react-flow';
 import type { ElementKind } from '../../../src/types';
 import { applyDagreLayout } from '../lib/layout';

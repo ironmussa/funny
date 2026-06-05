@@ -93,13 +93,18 @@ const handleBeforeMount: BeforeMount = (monaco) => {
   monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
   monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
 
+  // Monaco's bundled TS worker only sees a single file in isolation (no
+  // tsconfig, no project graph), so its diagnostics are misleading: false
+  // positives on valid project code and no real cross-file resolution. We use
+  // it purely as a viewer/highlighter — the real type/syntax checking is done
+  // by the agent via `bun run build`. Disable both validation passes.
   monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
     noSemanticValidation: true,
-    noSyntaxValidation: false,
+    noSyntaxValidation: true,
   });
   monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
     noSemanticValidation: true,
-    noSyntaxValidation: false,
+    noSyntaxValidation: true,
   });
 };
 

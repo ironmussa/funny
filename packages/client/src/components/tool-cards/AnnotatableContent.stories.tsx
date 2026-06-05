@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, useCallback } from 'react';
 
 import '@/i18n/config';
+
 import { AnnotatableContent } from './AnnotatableContent';
 import type { PlanComment } from './PlanReviewDialog';
 

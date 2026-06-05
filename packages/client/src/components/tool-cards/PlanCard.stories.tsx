@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import '@/i18n/config';
+
 import { PlanCard } from './PlanCard';
 
 const meta = {

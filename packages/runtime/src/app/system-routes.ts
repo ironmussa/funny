@@ -9,6 +9,7 @@ import {
   getProviderModelsWithLabels,
   PROVIDER_LABELS,
 } from '@funny/shared/models';
+import { getManifest } from '@funny/shared/provider-manifests';
 import type { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
@@ -33,95 +34,31 @@ export function registerSystemRoutes(app: Hono): void {
     return c.json({ shells: detectShells() });
   });
 
-  let piModelsCache: { at: number; payload: unknown } | null = null;
-  const PI_MODELS_TTL_MS = 60_000;
-  app.get('/api/system/pi/models', async (c) => {
-    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
-    if (!refresh && piModelsCache && Date.now() - piModelsCache.at < PI_MODELS_TTL_MS) {
-      return c.json(piModelsCache.payload);
+  // Manifest-driven dynamic model discovery. One route serves every ACP
+  // provider whose manifest declares `models.kind: 'dynamic'` (pi / cursor /
+  // opencode); the `:provider` param keeps the existing per-provider URLs
+  // (`/api/system/pi/models`, etc.) working unchanged. Static-catalog and
+  // unknown providers get a 404.
+  const MODELS_TTL_MS = 60_000;
+  const modelsCache = new Map<string, { at: number; payload: unknown }>();
+  app.get('/api/system/:provider/models', async (c) => {
+    const provider = c.req.param('provider');
+    const manifest = getManifest(provider);
+    if (!manifest || manifest.models.kind !== 'dynamic') {
+      return c.json(
+        { ok: false, reason: 'unknown_provider', message: `No dynamic model discovery for '${provider}'` },
+        404,
+      );
     }
-    const { discoverPiModels } = await import('@funny/core/agents');
-    const result = await discoverPiModels();
-    const payload = result.ok
-      ? {
-          ok: true as const,
-          models: result.models,
-          currentModelId: result.currentModelId,
-          discoveredAt: Date.now(),
-        }
-      : {
-          ok: false as const,
-          reason: result.reason,
-          message: result.message ?? null,
-          discoveredAt: Date.now(),
-        };
-    piModelsCache = { at: Date.now(), payload };
-    if (!result.ok) {
-      log.warn('pi model discovery failed', {
-        namespace: 'pi-discover',
-        reason: result.reason,
-        message: result.message,
-      });
-    } else {
-      log.info('pi model discovery ok', {
-        namespace: 'pi-discover',
-        count: result.models.length,
-      });
-    }
-    return c.json(payload);
-  });
 
-  let cursorModelsCache: { at: number; payload: unknown } | null = null;
-  const CURSOR_MODELS_TTL_MS = 60_000;
-  app.get('/api/system/cursor/models', async (c) => {
     const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
-    if (!refresh && cursorModelsCache && Date.now() - cursorModelsCache.at < CURSOR_MODELS_TTL_MS) {
-      return c.json(cursorModelsCache.payload);
+    const cached = modelsCache.get(provider);
+    if (!refresh && cached && Date.now() - cached.at < MODELS_TTL_MS) {
+      return c.json(cached.payload);
     }
-    const { discoverCursorModels } = await import('@funny/core/agents');
-    const result = await discoverCursorModels();
-    const payload = result.ok
-      ? {
-          ok: true as const,
-          models: result.models,
-          currentModelId: result.currentModelId,
-          discoveredAt: Date.now(),
-        }
-      : {
-          ok: false as const,
-          reason: result.reason,
-          message: result.message ?? null,
-          discoveredAt: Date.now(),
-        };
-    cursorModelsCache = { at: Date.now(), payload };
-    if (!result.ok) {
-      log.warn('cursor model discovery failed', {
-        namespace: 'cursor-discover',
-        reason: result.reason,
-        message: result.message,
-      });
-    } else {
-      log.info('cursor model discovery ok', {
-        namespace: 'cursor-discover',
-        count: result.models.length,
-      });
-    }
-    return c.json(payload);
-  });
 
-  let opencodeModelsCache: { at: number; payload: unknown } | null = null;
-  const OPENCODE_MODELS_TTL_MS = 60_000;
-  app.get('/api/system/opencode/models', async (c) => {
-    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
-    if (
-      !refresh &&
-      opencodeModelsCache &&
-      Date.now() - opencodeModelsCache.at < OPENCODE_MODELS_TTL_MS
-    ) {
-      return c.json(opencodeModelsCache.payload);
-    }
-    const { discoverOpenCodeModels } = await import('@funny/core/agents');
-    const result = await discoverOpenCodeModels();
+    const { discoverAcpModels } = await import('@funny/core/agents');
+    const result = await discoverAcpModels(manifest);
     const payload = result.ok
       ? {
           ok: true as const,
@@ -135,16 +72,16 @@ export function registerSystemRoutes(app: Hono): void {
           message: result.message ?? null,
           discoveredAt: Date.now(),
         };
-    opencodeModelsCache = { at: Date.now(), payload };
+    modelsCache.set(provider, { at: Date.now(), payload });
     if (!result.ok) {
-      log.warn('opencode model discovery failed', {
-        namespace: 'opencode-discover',
+      log.warn('acp model discovery failed', {
+        namespace: `${provider}-discover`,
         reason: result.reason,
         message: result.message,
       });
     } else {
-      log.info('opencode model discovery ok', {
-        namespace: 'opencode-discover',
+      log.info('acp model discovery ok', {
+        namespace: `${provider}-discover`,
         count: result.models.length,
       });
     }

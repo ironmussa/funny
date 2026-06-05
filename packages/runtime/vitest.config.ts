@@ -11,6 +11,8 @@ export default defineConfig({
     alias: {
       '@funny/shared/errors': path.join(shared, 'errors.ts'),
       '@funny/shared/models': path.join(shared, 'models.ts'),
+      '@funny/shared/provider-manifest': path.join(shared, 'provider-manifest.ts'),
+      '@funny/shared/provider-manifests': path.join(shared, 'provider-manifests.ts'),
       '@funny/shared/thread-machine': path.join(shared, 'thread-machine.ts'),
       '@funny/shared/prompts': path.join(shared, 'prompts/index.ts'),
       '@funny/shared/db/schema-sqlite': path.join(shared, 'db/schema.sqlite.ts'),

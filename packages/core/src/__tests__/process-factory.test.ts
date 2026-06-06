@@ -116,15 +116,20 @@ describe('process-factory', () => {
     expect((process as MockProcess).opts.threadId).toBe('test-thread');
   });
 
-  test('resolves a runtime-registered external provider id with no cast (provider-manifest-loader seam)', () => {
-    // A provider id NOT in the compile-time KnownProvider union — the shape an
-    // external funny.provider manifest registers at runtime. With AgentProvider
-    // widened to accept any string, `provider: 'myagent-ext'` needs no `as any`,
-    // and the registry resolves it to the registered ctor (here a mock; in
-    // Phase B, `() => new GenericACPProcess(opts, manifest)`).
-    registerProvider('myagent-ext', MockProcess);
-    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'myagent-ext' });
-    expect(process.constructor.name).toBe('MockProcess');
+  test('resolves a runtime-registered manifest-bound provider with no cast (provider-manifest-loader seam)', () => {
+    // The Phase B pattern: an external funny.provider manifest is bound into a
+    // one-arg constructor (GenericACPProcess takes `(opts, manifest)`) and
+    // registered under an id NOT in the compile-time KnownProvider union. With
+    // AgentProvider widened to accept any string, `provider: 'opencode-ext'`
+    // needs no `as any`, and the registry resolves it to the bound class.
+    class ExternalProvider extends GenericACPProcess {
+      constructor(opts: AgentProcessOptions) {
+        super(opts, opencodeManifest);
+      }
+    }
+    registerProvider('opencode-ext', ExternalProvider);
+    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'opencode-ext' });
+    expect(process.constructor.name).toBe('ExternalProvider');
   });
 
   test('registerProvider can override an existing provider', () => {

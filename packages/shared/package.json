@@ -15,6 +15,7 @@
     "./models": "./src/models.ts",
     "./provider-manifest": "./src/provider-manifest.ts",
     "./provider-manifests": "./src/provider-manifests.ts",
+    "./provider-manifest-schema": "./src/provider-manifest-schema.ts",
     "./thread-machine": "./src/thread-machine.ts",
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",

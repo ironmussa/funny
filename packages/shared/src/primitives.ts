@@ -33,6 +33,7 @@ export type AgentProvider =
   | 'gemini'
   | 'pi'
   | 'cursor'
+  | 'opencode'
   | 'deepagent'
   | 'llm-api'
   | 'external';

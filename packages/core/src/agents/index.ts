@@ -18,7 +18,19 @@ export {
   type StartAgentOptions,
   type OrchestratorEvents,
 } from './orchestrator.js';
-export { defaultProcessFactory, registerProvider } from './process-factory.js';
+export {
+  defaultProcessFactory,
+  registerProvider,
+  type ProcessConstructor,
+} from './process-factory.js';
+export {
+  loadProviderExtensions,
+  getRunnerManifest,
+  _clearRunnerManifests,
+  type LoadedProviderExtension,
+  type LoadProviderExtensionsResult,
+} from './provider-extensions.js';
+export { GenericACPProcess } from './generic-acp.js';
 export {
   resolveSDKCli,
   resolveSDKCliPath,

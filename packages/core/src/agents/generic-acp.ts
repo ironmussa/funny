@@ -944,11 +944,22 @@ function serializeToolInputForRule(
   }
 }
 
+/**
+ * Max prefix length the banner regex is applied to. The banner always sits at
+ * the very start (the source is also length-capped at validation), so bounding
+ * the regex input to a fixed head is behavior-preserving for real banners while
+ * preventing catastrophic backtracking (ReDoS) from running against an
+ * arbitrarily long message body — the runtime half of the §1.3 guard.
+ */
+const BANNER_SCAN_LIMIT = 8192;
+
 /** Strip a provider banner (manifest regex-as-data) from the start of text. */
 function stripBanner(text: string, regexSource: string): string {
   try {
     const re = new RegExp(regexSource);
-    return text.replace(re, '').replace(/^\s+/, '');
+    if (text.length <= BANNER_SCAN_LIMIT) return text.replace(re, '').replace(/^\s+/, '');
+    const head = text.slice(0, BANNER_SCAN_LIMIT).replace(re, '').replace(/^\s+/, '');
+    return head + text.slice(BANNER_SCAN_LIMIT);
   } catch {
     return text;
   }

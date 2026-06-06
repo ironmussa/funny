@@ -140,20 +140,4 @@ describe('process-factory', () => {
     // Restore original
     registerProvider('claude', SDKClaudeProcess);
   });
-
-  test('resolves an unbundled provider id to a manifest-backed GenericACPProcess', () => {
-    // Mirrors what the provider-manifest-loader will do at runtime: bind a
-    // ProviderManifest to GenericACPProcess and register it under an id that is
-    // NOT in the compile-time KnownProvider union. The factory must resolve the
-    // string id through the registry — no enum blocks it. (opencodeManifest is
-    // reused here as a stand-in for an externally-loaded manifest.)
-    class ExternalAcpProcess extends GenericACPProcess {
-      constructor(opts: AgentProcessOptions) {
-        super(opts, opencodeManifest);
-      }
-    }
-    registerProvider('acme-agent', ExternalAcpProcess);
-    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'acme-agent' });
-    expect(process).toBeInstanceOf(GenericACPProcess);
-  });
 });

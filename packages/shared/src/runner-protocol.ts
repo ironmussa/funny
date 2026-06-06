@@ -48,6 +48,35 @@ export interface RunnerInfo {
   lastHeartbeatAt: string;
 }
 
+// ─── Provider advertisement (runner-installed providers) ────
+
+/** A model entry advertised for a static-catalog external provider. */
+export interface AdvertisedModelEntry {
+  id: string;
+  label: string;
+  contextWindow: number;
+  i18nKey: string;
+}
+
+/**
+ * The PUBLIC FACE of a runner-installed (external) provider — the subset the
+ * server/client need for the picker, validation, and settings. The spawn
+ * command and quirks stay on the runner (provider-manifest-loader, runner-owned
+ * model): the server never receives them.
+ */
+export interface AdvertisedProvider {
+  id: string;
+  label: string;
+  models: {
+    kind: 'static' | 'dynamic';
+    defaultModel: string;
+    /** Present for static-catalog providers; dynamic ones discover at runtime. */
+    entries?: AdvertisedModelEntry[];
+  };
+  attachmentLimits: { inlineMaxBytes: number; uploadMaxBytes: number; hardMaxBytes: number };
+  auth: { mode: 'runner-preauth' | 'provider-key'; providerKeyId?: string };
+}
+
 // ─── HTTP: Registration ─────────────────────────────────
 
 export interface RunnerRegisterRequest {
@@ -62,6 +91,8 @@ export interface RunnerRegisterRequest {
   /** HTTP base URL where this runner accepts proxied requests (e.g. "http://192.168.1.5:3001").
    *  Optional — if not provided, the server uses the WebSocket tunnel for all communication. */
   httpUrl?: string;
+  /** External providers installed on this runner (public face only). */
+  providers?: AdvertisedProvider[];
 }
 
 export interface RunnerRegisterResponse {
@@ -74,6 +105,10 @@ export interface RunnerRegisterResponse {
 
 export interface RunnerHeartbeatRequest {
   activeThreadIds: string[];
+  /** External providers installed on this runner (public face only). Kept on
+   *  the heartbeat so the server's per-runner provider set stays fresh as the
+   *  operator adds/removes extensions. */
+  providers?: AdvertisedProvider[];
 }
 
 export interface RunnerHeartbeatResponse {

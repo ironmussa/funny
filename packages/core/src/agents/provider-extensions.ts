@@ -21,6 +21,7 @@ import { join, resolve } from 'path';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { parseFunnyProviderFile } from '@funny/shared/provider-manifest-schema';
 import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
 
 import { createDebugLogger } from '../debug.js';
 import { isInside, readPackageJson } from '../extensions/index.js';
@@ -45,6 +46,30 @@ const runnerManifests = new Map<string, ProviderManifest>();
 /** Look up an external provider's full manifest (used by GenericACPProcess wiring). */
 export function getRunnerManifest(id: string): ProviderManifest | undefined {
   return runnerManifests.get(id);
+}
+
+/**
+ * The PUBLIC FACE of every loaded external provider — the subset the server /
+ * client need (id, label, model strategy, attachment limits, auth mode). The
+ * spawn command + quirks are deliberately excluded; they stay runner-local.
+ * The runner advertises this to the server on register + heartbeat (§3).
+ */
+export function getAdvertisedProviders(): AdvertisedProvider[] {
+  const out: AdvertisedProvider[] = [];
+  for (const m of runnerManifests.values()) {
+    const models: AdvertisedProvider['models'] =
+      m.models.kind === 'static'
+        ? { kind: 'static', defaultModel: m.models.defaultModel, entries: Object.values(m.models.entries) }
+        : { kind: 'dynamic', defaultModel: m.models.defaultModel };
+    out.push({
+      id: m.id,
+      label: m.label,
+      models,
+      attachmentLimits: m.attachmentLimits,
+      auth: { mode: m.auth.mode, providerKeyId: m.auth.providerKeyId },
+    });
+  }
+  return out;
 }
 
 export interface LoadedProviderExtension {

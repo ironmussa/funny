@@ -2,6 +2,31 @@ import type { FileDiff, GitStatusInfo } from '@funny/shared';
 
 import { request, type PullStrategy } from './_core';
 
+/** A flat commit log entry as returned by the `/log` endpoints. */
+interface GitLogEntryDTO {
+  hash: string;
+  shortHash: string;
+  author: string;
+  authorEmail: string;
+  relativeDate: string;
+  message: string;
+  body: string;
+}
+
+/** A commit log entry enriched with branch-graph topology (`/graph-log` endpoints). */
+interface GitGraphLogEntryDTO extends GitLogEntryDTO {
+  parentHashes: string[];
+  refs: string[];
+  headBranch: string | null;
+}
+
+/** Shared envelope for every (flat or graph) log endpoint. */
+interface LogResponse<E extends GitLogEntryDTO> {
+  entries: E[];
+  hasMore: boolean;
+  unpushedHashes: string[];
+}
+
 export const gitApi = {
   // Thread-scoped git
   getDiff: (threadId: string) => request<FileDiff[]>(`/git/${threadId}/diff`),
@@ -126,20 +151,13 @@ export const gitApi = {
   getGitStatus: (threadId: string, signal?: AbortSignal) =>
     request<GitStatusInfo>(`/git/${threadId}/status`, { signal }),
   getGitLog: (threadId: string, limit = 50, all = false, skip = 0, signal?: AbortSignal) =>
-    request<{
-      entries: Array<{
-        hash: string;
-        shortHash: string;
-        author: string;
-        authorEmail: string;
-        relativeDate: string;
-        message: string;
-        body: string;
-      }>;
-      hasMore: boolean;
-      unpushedHashes: string[];
-    }>(
+    request<LogResponse<GitLogEntryDTO>>(
       `/git/${threadId}/log?limit=${limit}${all ? '&all=true' : ''}${skip > 0 ? `&skip=${skip}` : ''}`,
+      { signal },
+    ),
+  getGitGraphLog: (threadId: string, limit = 50, all = true, skip = 0, signal?: AbortSignal) =>
+    request<LogResponse<GitGraphLogEntryDTO>>(
+      `/git/${threadId}/graph-log?limit=${limit}&all=${all ? 'true' : 'false'}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
   getCommitFiles: (threadId: string, hash: string) =>
@@ -376,21 +394,15 @@ export const gitApi = {
       body: JSON.stringify({ hash }),
     }),
   projectGitLog: (projectId: string, limit = 50, skip = 0, signal?: AbortSignal) =>
-    request<{
-      entries: Array<{
-        hash: string;
-        shortHash: string;
-        author: string;
-        authorEmail: string;
-        relativeDate: string;
-        message: string;
-        body: string;
-      }>;
-      hasMore: boolean;
-      unpushedHashes: string[];
-    }>(`/git/project/${projectId}/log?limit=${limit}${skip > 0 ? `&skip=${skip}` : ''}`, {
-      signal,
-    }),
+    request<LogResponse<GitLogEntryDTO>>(
+      `/git/project/${projectId}/log?limit=${limit}${skip > 0 ? `&skip=${skip}` : ''}`,
+      { signal },
+    ),
+  projectGitGraphLog: (projectId: string, limit = 50, all = true, skip = 0, signal?: AbortSignal) =>
+    request<LogResponse<GitGraphLogEntryDTO>>(
+      `/git/project/${projectId}/graph-log?limit=${limit}&all=${all ? 'true' : 'false'}${skip > 0 ? `&skip=${skip}` : ''}`,
+      { signal },
+    ),
   projectCommitFiles: (projectId: string, hash: string) =>
     request<{
       files: Array<{

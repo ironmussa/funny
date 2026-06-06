@@ -70,11 +70,13 @@ export {
 
 export {
   getLog,
+  getGraphLog,
   getCommitBody,
   getCommitFiles,
   getCommitFileDiff,
   getUnpushedHashes,
   type GitLogEntry,
+  type GitGraphLogEntry,
   type CommitFileEntry,
 } from './log.js';
 

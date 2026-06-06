@@ -11,6 +11,18 @@ import { cn } from './utils';
 
 export const remarkPlugins = [remarkGfm];
 
+/**
+ * Canonical wrapper class for EVERY markdown sink in the app.
+ *
+ * The actual styling lives in the hand-written `.prose` rules in `globals.css`
+ * (themed via CSS variables — `@tailwindcss/typography` is NOT installed, so
+ * `prose-sm` / `prose-xs` / `dark:prose-invert` / `prose-*:` modifiers are
+ * no-ops). Use this constant instead of re-typing `prose ...` strings so every
+ * markdown surface renders identically; layer genuine per-site extras (padding,
+ * border, background, overflow) on top via `cn(markdownProseClassName, '...')`.
+ */
+export const markdownProseClassName = 'prose max-w-none';
+
 const MARKDOWN_LANGS = new Set(['markdown', 'md']);
 
 /**
@@ -120,7 +132,9 @@ export const baseMarkdownComponents = {
         <Checkbox
           checked={!!checked}
           disabled={disabled ?? true}
-          className="relative top-[2px] mr-1 inline-flex align-baseline"
+          // Task-list checkboxes are always read-only; keep full contrast (no
+          // disabled dimming) so they render consistently across every theme.
+          className="relative top-[2px] mr-1 inline-flex align-baseline disabled:cursor-default disabled:opacity-100"
           {...props}
         />
       );
@@ -191,7 +205,12 @@ export const baseMarkdownComponents = {
 
     if (isMarkdown) {
       return (
-        <div className="prose prose-sm border-border bg-muted/30 my-2 max-w-none rounded border p-4">
+        <div
+          className={cn(
+            markdownProseClassName,
+            'border-border bg-muted/30 my-2 rounded border p-4',
+          )}
+        >
           <Suspense fallback={<div className="text-sm whitespace-pre-wrap">{text}</div>}>
             <LazyNestedMarkdown content={text} />
           </Suspense>

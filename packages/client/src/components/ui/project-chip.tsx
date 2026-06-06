@@ -67,7 +67,7 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 }
 
 /** Convert [h, s, l] (h in 0-360, s/l in 0-1) to a #RRGGBB hex string. */
-function hslToHex(h: number, s: number, l: number): string {
+export function hslToHex(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const hp = h / 60;
   const x = c * (1 - Math.abs((hp % 2) - 1));

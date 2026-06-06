@@ -17,10 +17,11 @@ const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
 const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 
 export type RightPaneTab = 'review' | 'activity' | 'files';
-export type ReviewSubTab = 'changes' | 'history' | 'stash' | 'prs' | 'ci' | 'issues';
+export type ReviewSubTab = 'changes' | 'history' | 'graph' | 'stash' | 'prs' | 'ci' | 'issues';
 const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = [
   'changes',
   'history',
+  'graph',
   'stash',
   'prs',
   'ci',

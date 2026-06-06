@@ -22,6 +22,31 @@ export interface GitLogEntry {
   body: string;
 }
 
+/**
+ * A commit log entry enriched with the topology data needed to render a branch
+ * graph: parent hashes (the edges) and ref decorations (branch/tag labels).
+ * Kept separate from {@link GitLogEntry} so the existing flat History view's
+ * data path stays untouched.
+ */
+export interface GitGraphLogEntry extends GitLogEntry {
+  /** Parent commit hashes. 0 = root, 1 = normal, 2+ = merge commit. */
+  parentHashes: string[];
+  /**
+   * Branch/tag ref names decorating this commit (short branch names,
+   * `origin/...`, tag names). The redundant symbolic refs `HEAD` and
+   * `origin/HEAD` are stripped — `HEAD` just points at the checked-out branch
+   * (see {@link headBranch}) and `origin/HEAD` only names the remote default.
+   * A detached HEAD keeps a literal `HEAD` entry. Empty when no ref decorates.
+   */
+  refs: string[];
+  /**
+   * The checked-out branch, set only on the commit that `HEAD` points at (null
+   * on every other commit and when HEAD is detached). Lets the UI highlight the
+   * current branch instead of rendering a separate `HEAD` chip.
+   */
+  headBranch: string | null;
+}
+
 export interface CommitFileEntry {
   path: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
@@ -102,6 +127,105 @@ export function getLog(
             relativeDate,
             message,
             body: body.trim(),
+          };
+        });
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
+ * Parse a `%D` decoration string (e.g. `HEAD -> main, origin/main, origin/HEAD,
+ * tag: v1.0`) into the display refs plus the current branch.
+ *
+ * Drops the two redundant symbolic refs: `HEAD` (replaced by `headBranch`, which
+ * the UI highlights) and remote default pointers ending in `/HEAD` such as
+ * `origin/HEAD` (pure noise in a graph). A detached HEAD — decoration is the
+ * bare token `HEAD` with no arrow — keeps its `HEAD` chip since there's no
+ * branch to point at.
+ *
+ * e.g. `HEAD -> main, origin/main, origin/HEAD, tag: v1.0`
+ *   → `{ refs: ['main', 'origin/main', 'v1.0'], headBranch: 'main' }`
+ */
+function parseRefs(decoration: string): { refs: string[]; headBranch: string | null } {
+  const trimmed = decoration.trim();
+  if (!trimmed) return { refs: [], headBranch: null };
+  const refs: string[] = [];
+  let headBranch: string | null = null;
+  for (const raw of trimmed.split(',')) {
+    const token = raw.trim();
+    if (!token) continue;
+    if (token.startsWith('HEAD -> ')) {
+      // Current branch — record it and emit only the branch chip (drop `HEAD`).
+      headBranch = token.slice('HEAD -> '.length).trim();
+      refs.push(headBranch);
+    } else if (token === 'HEAD') {
+      // Detached HEAD: no branch to highlight, keep the literal chip.
+      refs.push('HEAD');
+    } else if (token.endsWith('/HEAD')) {
+      // Remote default-branch pointer (e.g. `origin/HEAD`) — redundant, drop it.
+      continue;
+    } else if (token.startsWith('tag: ')) {
+      refs.push(token.slice('tag: '.length).trim());
+    } else {
+      refs.push(token);
+    }
+  }
+  return { refs, headBranch };
+}
+
+/**
+ * Get commit log entries enriched with parent hashes and ref decorations for
+ * rendering a branch graph. Always topologically ordered. When `all` is set,
+ * walks every ref (`--all`) so divergent / unmerged branches appear; otherwise
+ * walks HEAD only. Bypasses the native fast-path (which doesn't return parents
+ * or refs) and goes straight to `git log`.
+ */
+export function getGraphLog(
+  cwd: string,
+  opts: { limit?: number; skip?: number; all?: boolean } = {},
+): ResultAsync<GitGraphLogEntry[], DomainError> {
+  const { limit = 50, skip = 0, all = false } = opts;
+  const FIELD_SEP = '\x1f';
+  const RECORD_SEP = '\x1e';
+  // hash, shortHash, author, email, relDate, parents (space-sep), refs (%D), subject, body
+  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%ar%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
+  const args = ['log', '--topo-order', `--format=${format}`, '-n', String(limit)];
+  if (skip > 0) args.push(`--skip=${skip}`);
+  if (all) args.push('--all');
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitRead(args, { cwd, reject: false });
+      // Empty repo (no commits yet) returns exit code 128 — treat as empty log
+      if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+      return result.stdout
+        .split(RECORD_SEP)
+        .map((record) => record.trim())
+        .filter(Boolean)
+        .map((record) => {
+          const [
+            hash,
+            shortHash,
+            author,
+            authorEmail,
+            relativeDate,
+            parents = '',
+            refs = '',
+            message,
+            body = '',
+          ] = record.split(FIELD_SEP);
+          const { refs: refNames, headBranch } = parseRefs(refs);
+          return {
+            hash,
+            shortHash,
+            author,
+            authorEmail,
+            relativeDate,
+            message,
+            body: body.trim(),
+            parentHashes: parents.trim() ? parents.trim().split(' ').filter(Boolean) : [],
+            refs: refNames,
+            headBranch,
           };
         });
     })(),

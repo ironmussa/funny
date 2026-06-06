@@ -313,6 +313,7 @@
       "mergeHint": "Cria um commit de merge que junta os dois históricos."
     },
     "log": "Histórico de commits",
+    "graph": "Grafo",
     "loadingLog": "Carregando commits...",
     "noCommits": "Nenhum commit ainda",
     "logFailed": "Erro ao carregar histórico: {{message}}",
@@ -415,6 +416,16 @@
   },
   "history": {
     "viewOnGithub": "Ver no GitHub"
+  },
+  "graph": {
+    "allBranches": "Todas as ramificações",
+    "commitCount_one": "{{count}} commit",
+    "commitCount_other": "{{count}} commits",
+    "currentBranch": "{{ref}} (ramificação atual)",
+    "copySha": "Copiar SHA do commit",
+    "copyShortSha": "Copiar SHA curto",
+    "resetToHere": "Resetar ramificação para aqui",
+    "uncommittedChanges": "Alterações não commitadas"
   },
   "settings": {
     "title": "Configurações",

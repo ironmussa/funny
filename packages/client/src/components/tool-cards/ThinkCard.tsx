@@ -3,7 +3,7 @@ import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { remarkPlugins } from '@/lib/markdown-components';
+import { remarkPlugins, markdownProseClassName } from '@/lib/markdown-components';
 // Security ME-9: rehypeSanitize is mandatory on every ReactMarkdown sink
 // (see MessageContent.tsx). Lazy-loaded alongside react-markdown.
 const LazyMarkdown = lazy(() =>
@@ -56,7 +56,7 @@ export function ThinkCard({
         viewportProps={{ className: 'max-h-[50vh]' }}
       >
         <div className="px-4 py-3" data-testid="think-card-content">
-          <div className="prose prose-xs prose-invert prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-strong:text-foreground max-w-none">
+          <div className={markdownProseClassName}>
             <Suspense
               fallback={
                 <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">

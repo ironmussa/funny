@@ -21,6 +21,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { CITab } from './CITab';
+import { CommitGraphTab } from './CommitGraphTab';
 import { CommitHistoryTab } from './CommitHistoryTab';
 import { IssuesTab } from './IssuesTab';
 import { PullRequestsTab } from './PullRequestsTab';
@@ -318,6 +319,13 @@ export function ReviewPane() {
               {t('review.history', 'History')}
             </TabsTrigger>
             <TabsTrigger
+              value="graph"
+              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
+              data-testid="review-tab-graph"
+            >
+              {t('review.graph', 'Graph')}
+            </TabsTrigger>
+            <TabsTrigger
               value="stash"
               className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-stash"
@@ -493,6 +501,15 @@ export function ReviewPane() {
           forceMount
         >
           <CommitHistoryTab visible={reviewSubTab === 'history'} />
+        </TabsContent>
+
+        {/* Graph tab */}
+        <TabsContent
+          value="graph"
+          className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
+          forceMount
+        >
+          <CommitGraphTab visible={reviewSubTab === 'graph'} />
         </TabsContent>
 
         {/* Stash tab */}

@@ -32,6 +32,31 @@ export type AcpModelsResponse =
       discoveredAt: number;
     };
 
+export interface OpenCodeModelEntry {
+  modelId: string;
+  name: string;
+}
+
+export type OpenCodeModelsResponse =
+  | {
+      ok: true;
+      models: OpenCodeModelEntry[];
+      currentModelId: string | null;
+      discoveredAt: number;
+    }
+  | {
+      ok: false;
+      reason:
+        | 'spawn_failed'
+        | 'sdk_missing'
+        | 'auth_required'
+        | 'agent_error'
+        | 'no_models'
+        | 'timeout';
+      message: string | null;
+      discoveredAt: number;
+    };
+
 export const systemApi = {
   // Setup
   setupStatus: () =>
@@ -68,6 +93,10 @@ export const systemApi = {
 
   getAcpModels: (provider: string, refresh = false) =>
     request<AcpModelsResponse>(`/system/${provider}/models${refresh ? '?refresh=1' : ''}`),
+
+  // opencode dynamic model catalog (spawns opencode acp on the runner).
+  getOpenCodeModels: (refresh = false) =>
+    request<OpenCodeModelsResponse>(`/system/opencode/models${refresh ? '?refresh=1' : ''}`),
 
   // Files (internal editor)
   readFile: (path: string) =>

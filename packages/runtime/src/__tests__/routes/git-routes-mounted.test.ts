@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   executeWorkflow: vi.fn(),
   isWorkflowActive: vi.fn(),
   getLog: vi.fn(),
+  getGraphLog: vi.fn(),
   getUnpushedHashes: vi.fn(),
   stashList: vi.fn(),
   stash: vi.fn(),
@@ -79,6 +80,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
     listGitHubOrgs: mocks.listGitHubOrgs,
     deriveGitSyncState: vi.fn(() => 'synced'),
     getLog: mocks.getLog,
+    getGraphLog: mocks.getGraphLog,
     getUnpushedHashes: mocks.getUnpushedHashes,
     stashList: mocks.stashList,
     stash: mocks.stash,
@@ -177,6 +179,34 @@ describe('gitRoutes (mounted)', () => {
       okAsync([
         { hash: 'abc111', message: 'init', author: 'a', date: '2026-01-01' },
         { hash: 'def222', message: 'feat', author: 'b', date: '2026-01-02' },
+      ]),
+    );
+    mocks.getGraphLog.mockReturnValue(
+      okAsync([
+        {
+          hash: 'abc111',
+          shortHash: 'abc',
+          author: 'a',
+          authorEmail: 'a@x',
+          relativeDate: '1d',
+          message: 'init',
+          body: '',
+          parentHashes: [],
+          refs: ['main'],
+          headBranch: 'main',
+        },
+        {
+          hash: 'def222',
+          shortHash: 'def',
+          author: 'b',
+          authorEmail: 'b@x',
+          relativeDate: '2d',
+          message: 'feat',
+          body: '',
+          parentHashes: ['abc111'],
+          refs: [],
+          headBranch: null,
+        },
       ]),
     );
     mocks.getUnpushedHashes.mockReturnValue(okAsync(new Set(['def222'])));
@@ -825,6 +855,103 @@ describe('gitRoutes (mounted)', () => {
     });
     expect(mocks.getLog).toHaveBeenCalledWith('/tmp/repo', 2, undefined, 0);
     expect(mocks.getUnpushedHashes).toHaveBeenCalledWith('/tmp/repo');
+  });
+
+  test('GET /api/git/project/:projectId/log projects unpushed hashes within the window', async () => {
+    const app = makeApp();
+
+    // No limit → default 50, so both entries fit and hasMore is false. def222 is
+    // in the unpushed set, so it should surface in unpushedHashes.
+    const res = await app.request('/api/git/project/p1/log');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      entries: [
+        { hash: 'abc111', message: 'init', author: 'a', date: '2026-01-01' },
+        { hash: 'def222', message: 'feat', author: 'b', date: '2026-01-02' },
+      ],
+      hasMore: false,
+      unpushedHashes: ['def222'],
+    });
+    expect(mocks.getLog).toHaveBeenCalledWith('/tmp/repo', 51, undefined, 0);
+  });
+
+  test('GET /api/git/project/:projectId/log degrades to empty unpushedHashes when lookup fails', async () => {
+    mocks.getUnpushedHashes.mockReturnValueOnce(errAsync(badRequest('no remotes')));
+    const app = makeApp();
+
+    // The unpushed lookup failing must not fail the whole request — the log
+    // still returns 200 with an empty unpushedHashes list.
+    const res = await app.request('/api/git/project/p1/log');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.entries.length).toBe(2);
+    expect(body.hasMore).toBe(false);
+    expect(body.unpushedHashes).toEqual([]);
+  });
+
+  test('GET /api/git/project/:projectId/graph-log returns topology + defaults to all refs', async () => {
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/graph-log?limit=1');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hasMore).toBe(true);
+    expect(body.entries).toEqual([
+      {
+        hash: 'abc111',
+        shortHash: 'abc',
+        author: 'a',
+        authorEmail: 'a@x',
+        relativeDate: '1d',
+        message: 'init',
+        body: '',
+        parentHashes: [],
+        refs: ['main'],
+        headBranch: 'main',
+      },
+    ]);
+    expect(body.unpushedHashes).toEqual([]);
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', { limit: 2, skip: 0, all: true });
+  });
+
+  test('GET /api/git/project/:projectId/graph-log?all=false opts out of all refs', async () => {
+    const app = makeApp();
+
+    await app.request('/api/git/project/p1/graph-log?all=false');
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', { limit: 51, skip: 0, all: false });
+  });
+
+  test('GET /api/git/:threadId/graph-log uses thread cwd and defaults to all refs', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+      baseBranch: 'main',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t1/graph-log');
+    expect(res.status).toBe(200);
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/wt/thread', { limit: 51, skip: 0, all: true });
+  });
+
+  test('GET /api/git/:threadId/graph-log returns error when git log fails', async () => {
+    mocks.getGraphLog.mockReturnValueOnce(errAsync(badRequest('not a git repo')));
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+      baseBranch: 'main',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t1/graph-log');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('not a git repo');
   });
 
   test('GET /api/git/project/:projectId/stash/list returns stash entries', async () => {

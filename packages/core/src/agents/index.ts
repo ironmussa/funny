@@ -28,11 +28,15 @@ export {
   loadProviderExtensions,
   registerProviderExtension,
   unregisterProviderExtension,
+  installProviderExtensionFromPath,
+  installProviderExtensionFromGit,
+  removeProviderExtension,
   getRunnerManifest,
   getAdvertisedProviders,
   _clearRunnerManifests,
   type LoadedProviderExtension,
   type LoadProviderExtensionsResult,
+  type InstallProviderResult,
 } from './provider-extensions.js';
 export { GenericACPProcess } from './generic-acp.js';
 export {

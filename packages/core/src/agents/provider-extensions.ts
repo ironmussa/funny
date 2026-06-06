@@ -24,7 +24,15 @@ import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
 
 import { createDebugLogger } from '../debug.js';
-import { isInside, readPackageJson } from '../extensions/index.js';
+import {
+  installPackageFromGit,
+  installPackageFromPath,
+  isInside,
+  readPackageJson,
+  removeExtensionDir,
+  type InstallResult,
+  type KindHandler,
+} from '../extensions/index.js';
 import { GenericACPProcess } from './generic-acp.js';
 import { registerProvider, unregisterProvider, type ProcessConstructor } from './process-factory.js';
 import type { ClaudeProcessOptions } from './types.js';
@@ -211,6 +219,88 @@ export function loadProviderExtensions(dir: string): LoadProviderExtensionsResul
   }
 
   return { loaded, errors };
+}
+
+// ── Install / remove (the UI-driven path; provider-install-ui §2) ───────────
+
+/**
+ * The `provider` kind handler for the generic install pipeline: validate a
+ * SOURCE package has a `funny.provider` pointing at a present file, and read an
+ * installed dir back into a {@link LoadedProviderExtension}. Full schema
+ * validation + registration happen in `registerProviderExtension`.
+ */
+const providerKindHandler: KindHandler<LoadedProviderExtension> = {
+  validateSource(pkg, src) {
+    const ref = pkg?.funny?.provider;
+    if (typeof ref !== 'string' || !ref) {
+      return 'package.json is missing the funny.provider field';
+    }
+    try {
+      const abs = resolve(src, ref);
+      if (!isInside(src, abs) || !existsSync(abs) || !statSync(abs).isFile()) {
+        return `funny.provider entry "${ref}" was not found`;
+      }
+    } catch {
+      return `funny.provider entry "${ref}" was not found`;
+    }
+    return null;
+  },
+  read(dir, dirName) {
+    const parsed = parseProviderExtensionDir(dir, dirName);
+    return parsed && parsed.ok ? { id: parsed.manifest.id, dirName, manifest: parsed.manifest } : null;
+  },
+};
+
+export type InstallProviderResult =
+  | { ok: true; loaded: LoadedProviderExtension }
+  | { ok: false; error: string };
+
+/** Copy-installed → validate + register; on registration refusal, roll back the copy. */
+function finishInstall(
+  extDir: string,
+  res: InstallResult<LoadedProviderExtension>,
+): InstallProviderResult {
+  if (!res.ok) return { ok: false, error: res.error };
+  const reg = registerProviderExtension(extDir, res.value.dirName);
+  if (reg === null) return { ok: false, error: 'installed package is not a provider extension' };
+  if (!reg.ok) {
+    removeExtensionDir(res.value.dirName, extDir); // roll back a colliding/invalid install
+    return { ok: false, error: reg.error };
+  }
+  return { ok: true, loaded: reg.loaded };
+}
+
+/** Install a provider extension from a local pre-built package dir into `extDir`, then register it. */
+export function installProviderExtensionFromPath(
+  srcPath: string,
+  extDir: string,
+): InstallProviderResult {
+  return finishInstall(extDir, installPackageFromPath(srcPath, extDir, providerKindHandler));
+}
+
+/** Install a provider extension from a git spec into `extDir`, then register it. */
+export async function installProviderExtensionFromGit(
+  spec: string,
+  opts: { ref?: string; subdir?: string },
+  extDir: string,
+): Promise<InstallProviderResult> {
+  return finishInstall(
+    extDir,
+    await installPackageFromGit(spec, { ...opts, dir: extDir }, providerKindHandler),
+  );
+}
+
+/** Remove + de-register an installed provider extension by its on-disk dir name. */
+export function removeProviderExtension(
+  extDir: string,
+  dirName: string,
+): { ok: true; id: string | null } | { ok: false; error: string } {
+  const parsed = parseProviderExtensionDir(extDir, dirName);
+  const id = parsed && parsed.ok ? parsed.manifest.id : null;
+  if (id) unregisterProviderExtension(id);
+  const rm = removeExtensionDir(dirName, extDir);
+  if (!rm.ok) return { ok: false, error: rm.error };
+  return { ok: true, id };
 }
 
 /** Test/teardown helper: clear the runner-local manifest store. */

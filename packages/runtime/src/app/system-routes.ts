@@ -12,6 +12,7 @@ import {
 import { getManifest } from '@funny/shared/provider-manifests';
 import type { Hono } from 'hono';
 
+import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { wsBroker } from '../services/ws-broker.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
@@ -90,6 +91,75 @@ export function registerSystemRoutes(app: Hono): void {
 
   // (opencode model discovery is served by the generic `/api/system/:provider/models`
   // route above — master's separate opencode route was dropped in the merge.)
+
+  // ── Provider extensions (runner-owned; provider-install-ui §2) ─────────────
+  // Install / remove an ACP provider extension into THIS runner's extensions
+  // dir. The server proxies `/api/*` here, so a UI install lands on the runner
+  // (the runner-owned trust model). The install response discloses the binary
+  // the provider will launch.
+  const providerExtDir = () => join(DATA_DIR, 'extensions');
+
+  app.post('/api/system/providers/install', async (c) => {
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+    let body: { git?: string; path?: string; ref?: string; subdir?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid body' }, 400);
+    }
+    const agents = await import('@funny/core/agents');
+    let result;
+    if (typeof body.git === 'string' && body.git.trim()) {
+      result = await agents.installProviderExtensionFromGit(
+        body.git.trim(),
+        { ref: body.ref, subdir: body.subdir },
+        providerExtDir(),
+      );
+    } else if (typeof body.path === 'string' && body.path.trim()) {
+      result = agents.installProviderExtensionFromPath(body.path.trim(), providerExtDir());
+    } else {
+      return c.json({ ok: false, error: 'provide a `git` or `path` source' }, 400);
+    }
+    if (!result.ok) {
+      log.warn('provider extension install failed', {
+        namespace: 'provider-install',
+        error: result.error,
+      });
+      return c.json({ ok: false, error: result.error }, 400);
+    }
+    const m = result.loaded.manifest;
+    log.info('provider extension installed', { namespace: 'provider-install', id: result.loaded.id });
+    return c.json({
+      ok: true,
+      provider: {
+        id: result.loaded.id,
+        label: m.label,
+        dirName: result.loaded.dirName,
+        // Disclosure: the binary this provider will launch on the runner.
+        spawn: { command: m.spawn.command, args: m.spawn.args },
+      },
+    });
+  });
+
+  app.post('/api/system/providers/remove', async (c) => {
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+    let body: { dirName?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid body' }, 400);
+    }
+    if (typeof body.dirName !== 'string' || !body.dirName) {
+      return c.json({ ok: false, error: 'dirName required' }, 400);
+    }
+    const agents = await import('@funny/core/agents');
+    const res = agents.removeProviderExtension(providerExtDir(), body.dirName);
+    if (!res.ok) return c.json({ ok: false, error: res.error }, 400);
+    log.info('provider extension removed', { namespace: 'provider-install', id: res.id });
+    return c.json({ ok: true, id: res.id });
+  });
 
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();

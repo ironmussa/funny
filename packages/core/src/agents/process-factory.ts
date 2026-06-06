@@ -37,6 +37,11 @@ export function registerProvider(name: string, ctor: ProcessConstructor): void {
   providerRegistry.set(name, ctor);
 }
 
+/** Remove a runtime-registered provider. Returns true if it was registered. */
+export function unregisterProvider(name: string): boolean {
+  return providerRegistry.delete(name);
+}
+
 export const defaultProcessFactory: IAgentProcessFactory = {
   create(opts: AgentProcessOptions): IAgentProcess {
     const Ctor = providerRegistry.get(opts.provider ?? 'claude') ?? SDKClaudeProcess;

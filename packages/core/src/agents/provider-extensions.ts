@@ -26,7 +26,7 @@ import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
 import { createDebugLogger } from '../debug.js';
 import { isInside, readPackageJson } from '../extensions/index.js';
 import { GenericACPProcess } from './generic-acp.js';
-import { registerProvider, type ProcessConstructor } from './process-factory.js';
+import { registerProvider, unregisterProvider, type ProcessConstructor } from './process-factory.js';
 import type { ClaudeProcessOptions } from './types.js';
 
 const dlog = createDebugLogger('provider-extensions');
@@ -143,11 +143,53 @@ function makeExternalProcessClass(manifest: ProviderManifest): ProcessConstructo
 }
 
 /**
- * Scan `dir` for provider extensions, validate each, and register the valid ones
- * against the runtime provider registry. Never throws — malformed manifests are
- * collected as typed errors and skipped so one bad extension never breaks the
- * others. Ids that collide with a built-in (or an already-loaded external)
- * provider are refused.
+ * Validate + register ONE provider extension directory against the runtime
+ * provider registry. Returns the loaded record on success, a typed error if it
+ * is a malformed/colliding provider extension, or null if the directory is not
+ * a provider extension at all. Never throws.
+ *
+ * The atomic unit behind both the startup scan ({@link loadProviderExtensions})
+ * and the live UI install (provider-install-ui): registering a single newly
+ * dropped/installed extension with no full rescan or restart.
+ */
+export function registerProviderExtension(
+  dir: string,
+  dirName: string,
+): { ok: true; loaded: LoadedProviderExtension } | { ok: false; error: string } | null {
+  if (dirName.startsWith('.') || dirName.includes('/') || dirName.includes('\\')) return null;
+  const parsed = parseProviderExtensionDir(dir, dirName);
+  if (parsed === null) return null; // not a provider extension
+  if (!parsed.ok) {
+    dlog.warn('skipping malformed provider extension', { dirName, error: parsed.error });
+    return { ok: false, error: parsed.error };
+  }
+  const { id } = parsed.manifest;
+  if (BUILTIN_PROVIDER_IDS.has(id) || runnerManifests.has(id)) {
+    dlog.warn('skipping colliding provider extension', { dirName, id });
+    return { ok: false, error: `provider id '${id}' collides with an existing provider` };
+  }
+  runnerManifests.set(id, parsed.manifest);
+  registerProvider(id, makeExternalProcessClass(parsed.manifest));
+  dlog.info('registered external provider', { id, dirName });
+  return { ok: true, loaded: { id, dirName, manifest: parsed.manifest } };
+}
+
+/**
+ * Un-register a previously loaded external provider (live, no restart). Returns
+ * true if it was registered. Built-in providers are never removed here.
+ */
+export function unregisterProviderExtension(id: string): boolean {
+  if (BUILTIN_PROVIDER_IDS.has(id) || !runnerManifests.has(id)) return false;
+  runnerManifests.delete(id);
+  unregisterProvider(id);
+  dlog.info('unregistered external provider', { id });
+  return true;
+}
+
+/**
+ * Scan `dir` for provider extensions and register the valid ones. Never throws —
+ * malformed/colliding manifests are collected as typed errors and skipped so one
+ * bad extension never breaks the others.
  */
 export function loadProviderExtensions(dir: string): LoadProviderExtensionsResult {
   const loaded: LoadedProviderExtension[] = [];
@@ -162,25 +204,10 @@ export function loadProviderExtensions(dir: string): LoadProviderExtensionsResul
   }
 
   for (const dirName of names) {
-    if (dirName.startsWith('.') || dirName.includes('/') || dirName.includes('\\')) continue;
-    const parsed = parseProviderExtensionDir(dir, dirName);
-    if (parsed === null) continue; // not a provider extension
-    if (!parsed.ok) {
-      dlog.warn('skipping malformed provider extension', { dirName, error: parsed.error });
-      errors.push({ dirName, error: parsed.error });
-      continue;
-    }
-    const { id } = parsed.manifest;
-    if (BUILTIN_PROVIDER_IDS.has(id) || runnerManifests.has(id)) {
-      const error = `provider id '${id}' collides with an existing provider`;
-      dlog.warn('skipping colliding provider extension', { dirName, id });
-      errors.push({ dirName, error });
-      continue;
-    }
-    runnerManifests.set(id, parsed.manifest);
-    registerProvider(id, makeExternalProcessClass(parsed.manifest));
-    dlog.info('registered external provider', { id, dirName });
-    loaded.push({ id, dirName, manifest: parsed.manifest });
+    const res = registerProviderExtension(dir, dirName);
+    if (res === null) continue;
+    if (res.ok) loaded.push(res.loaded);
+    else errors.push({ dirName, error: res.error });
   }
 
   return { loaded, errors };

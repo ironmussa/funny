@@ -19,7 +19,7 @@ import { OpenCodeACPProcess } from './opencode-acp.js';
 import { PiACPProcess } from './pi-acp.js';
 import { SDKClaudeProcess } from './sdk-claude.js';
 
-type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
+export type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
 
 const providerRegistry = new Map<string, ProcessConstructor>([
   ['claude', SDKClaudeProcess],

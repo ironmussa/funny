@@ -4,6 +4,7 @@
  */
 
 import type {
+  AdvertisedProvider,
   RunnerInfo,
   RunnerRegisterRequest,
   RunnerRegisterResponse,
@@ -23,6 +24,39 @@ import { runners, runnerTasks, runnerProjectAssignments } from '../db/schema.js'
 import { log } from '../lib/logger.js';
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
+
+// ── Per-runner advertised providers (provider-manifest-loader §3.2) ──────────
+// External providers a runner installed, advertised on register + heartbeat.
+// In-memory: re-sent on every heartbeat, so a server restart self-heals within
+// one heartbeat cycle. Keyed by runnerId; only the public face is stored (the
+// runner keeps spawn/quirks local).
+const advertisedByRunner = new Map<string, AdvertisedProvider[]>();
+
+/** Record (or clear) the providers a runner advertised. */
+export function setAdvertisedProviders(
+  runnerId: string,
+  providers: AdvertisedProvider[] | undefined,
+): void {
+  if (providers && providers.length > 0) advertisedByRunner.set(runnerId, providers);
+  else advertisedByRunner.delete(runnerId);
+}
+
+/** Providers advertised by a specific runner. */
+export function getAdvertisedProviders(runnerId: string): AdvertisedProvider[] {
+  return advertisedByRunner.get(runnerId) ?? [];
+}
+
+/**
+ * Providers advertised by the user's online runner. Per-runner by design — two
+ * users with different runners see different provider sets (same as model
+ * discovery). Returns [] when the user has no online runner.
+ */
+export async function getAdvertisedProvidersForUser(
+  userId: string,
+): Promise<AdvertisedProvider[]> {
+  const runnerId = await findAnyRunnerForUser(userId);
+  return runnerId ? getAdvertisedProviders(runnerId) : [];
+}
 
 /** Map a raw runner DB row to a RunnerInfo object. */
 function toRunnerInfo(
@@ -97,6 +131,7 @@ export async function registerRunner(
       hostname: req.hostname,
     });
 
+    setAdvertisedProviders(runnerId, req.providers);
     return { runnerId, token };
   }
 
@@ -126,6 +161,7 @@ export async function registerRunner(
     hostname: req.hostname,
   });
 
+  setAdvertisedProviders(runnerId, req.providers);
   return { runnerId, token };
 }
 
@@ -165,6 +201,7 @@ export async function handleHeartbeat(
     })
     .where(eq(runners.id, runnerId));
 
+  setAdvertisedProviders(runnerId, req.providers);
   return true;
 }
 

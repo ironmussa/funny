@@ -280,6 +280,9 @@ app.route('/api/orchestrator', orchestratorRoutes);
 const { extensionRoutes } = await import('./routes/extensions.js');
 app.route('/api/extensions', extensionRoutes);
 
+const { providerRoutes } = await import('./routes/providers.js');
+app.route('/api/providers', providerRoutes);
+
 // Setup status — proxy to runner
 app.get('/api/setup/status', async (c) => {
   return c.json({

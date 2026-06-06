@@ -93,6 +93,29 @@ describe('runner-manager service', () => {
     test('returns false when runner no longer exists', async () => {
       expect(await rm.handleHeartbeat('missing', { activeThreadIds: [] })).toBe(false);
     });
+
+    test('caches providers advertised on heartbeat', async () => {
+      seedRunner(t.db as any, { id: 'r-adv', token: 'tok-adv', userId: 'user-1', status: 'online' });
+      const provider = {
+        id: 'myagent-ext',
+        label: 'My Agent',
+        models: { kind: 'dynamic' as const, defaultModel: 'default' },
+        attachmentLimits: { inlineMaxBytes: 1, uploadMaxBytes: 2, hardMaxBytes: 3 },
+        auth: { mode: 'runner-preauth' as const },
+      };
+
+      await rm.handleHeartbeat('r-adv', { activeThreadIds: [], providers: [provider] });
+      expect(rm.getAdvertisedProviders('r-adv').map((p) => p.id)).toEqual(['myagent-ext']);
+
+      // The user sees their runner's advertised providers.
+      expect((await rm.getAdvertisedProvidersForUser('user-1')).map((p) => p.id)).toContain(
+        'myagent-ext',
+      );
+
+      // An empty advertisement clears them.
+      await rm.handleHeartbeat('r-adv', { activeThreadIds: [], providers: [] });
+      expect(rm.getAdvertisedProviders('r-adv')).toEqual([]);
+    });
   });
 
   describe('findAnyRunnerForUser', () => {

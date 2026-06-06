@@ -21,10 +21,13 @@ export {
 export {
   defaultProcessFactory,
   registerProvider,
+  unregisterProvider,
   type ProcessConstructor,
 } from './process-factory.js';
 export {
   loadProviderExtensions,
+  registerProviderExtension,
+  unregisterProviderExtension,
   getRunnerManifest,
   getAdvertisedProviders,
   _clearRunnerManifests,

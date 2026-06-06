@@ -18,8 +18,11 @@ import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifes
 import { defaultProcessFactory } from '../agents/process-factory.js';
 import {
   _clearRunnerManifests,
+  getAdvertisedProviders,
   getRunnerManifest,
   loadProviderExtensions,
+  registerProviderExtension,
+  unregisterProviderExtension,
 } from '../agents/provider-extensions.js';
 
 let dir: string;
@@ -45,6 +48,14 @@ function writeProviderExt(
 function externalManifest(id: string): Record<string, any> {
   return { ...JSON.parse(JSON.stringify(ACP_MANIFESTS.opencode)), id, label: id };
 }
+
+const baseStartOpts = {
+  threadId: 't',
+  projectPath: '/tmp',
+  prompt: 'hi',
+  model: 'default',
+  permissionMode: 'autoEdit',
+} as const;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'funny-provider-ext-'));
@@ -123,5 +134,48 @@ describe('loadProviderExtensions', () => {
   test('returns empty for a non-existent dir', () => {
     const res = loadProviderExtensions(join(dir, 'does-not-exist'));
     expect(res).toEqual({ loaded: [], errors: [] });
+  });
+});
+
+describe('live register / unregister (provider-install-ui §1)', () => {
+  test('registerProviderExtension registers + advertises one provider with no rescan', () => {
+    writeProviderExt('live-one', externalManifest('live-one'));
+
+    const res = registerProviderExtension(dir, 'live-one');
+    expect(res && res.ok).toBe(true);
+    expect(getRunnerManifest('live-one')?.id).toBe('live-one');
+    expect(getAdvertisedProviders().map((p) => p.id)).toContain('live-one');
+
+    const proc = defaultProcessFactory.create({ provider: 'live-one', ...baseStartOpts } as any);
+    expect(proc.constructor.name).not.toBe('SDKClaudeProcess');
+  });
+
+  test('unregisterProviderExtension de-registers live (factory falls back, not advertised)', () => {
+    writeProviderExt('live-rm', externalManifest('live-rm'));
+    registerProviderExtension(dir, 'live-rm');
+
+    expect(unregisterProviderExtension('live-rm')).toBe(true);
+    expect(getRunnerManifest('live-rm')).toBeUndefined();
+    expect(getAdvertisedProviders().map((p) => p.id)).not.toContain('live-rm');
+    const proc = defaultProcessFactory.create({ provider: 'live-rm', ...baseStartOpts } as any);
+    expect(proc.constructor.name).toBe('SDKClaudeProcess');
+  });
+
+  test('registerProviderExtension returns a typed error on id collision', () => {
+    writeProviderExt('shadow', externalManifest('codex'));
+    const res = registerProviderExtension(dir, 'shadow');
+    expect(res && res.ok).toBe(false);
+    if (res && !res.ok) expect(res.error).toMatch(/collides/);
+  });
+
+  test('registerProviderExtension returns null for a non-provider dir', () => {
+    const plain = join(dir, 'plain');
+    mkdirSync(plain, { recursive: true });
+    writeFileSync(join(plain, 'package.json'), JSON.stringify({ name: 'x', funny: { client: 'a.mjs' } }));
+    expect(registerProviderExtension(dir, 'plain')).toBeNull();
+  });
+
+  test('unregisterProviderExtension refuses to remove a built-in', () => {
+    expect(unregisterProviderExtension('codex')).toBe(false);
   });
 });

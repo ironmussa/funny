@@ -14,7 +14,7 @@
 import { spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
 
-type AcpProvider = 'codex' | 'gemini' | 'pi' | 'cursor';
+type AcpProvider = 'codex' | 'gemini' | 'pi' | 'cursor' | 'opencode';
 
 /** Resolve the CLI command + args to run an ACP-compliant agent over stdio. */
 function resolveAcpCommand(provider: AcpProvider): { command: string; args: string[] } {
@@ -47,6 +47,14 @@ function resolveAcpCommand(provider: AcpProvider): { command: string; args: stri
         return { command: 'npx', args: ['-y', 'cursor-agent', 'acp'] };
       }
       return { command: 'cursor-agent', args: ['acp'] };
+    }
+    case 'opencode': {
+      const explicit = process.env.OPENCODE_BIN || process.env.ACP_OPENCODE_BIN;
+      if (explicit) return { command: explicit, args: ['acp'] };
+      if (process.env.OPENCODE_ACP_USE_NPX === '1') {
+        return { command: 'npx', args: ['-y', 'opencode-ai', 'acp'] };
+      }
+      return { command: 'opencode', args: ['acp'] };
     }
   }
 }
@@ -144,9 +152,13 @@ export async function forkAcpSession(
       clientCapabilities: {},
     });
 
-    const sessions = (initResult.agentCapabilities as Record<string, unknown> | undefined)
-      ?.sessions as { fork?: unknown } | undefined;
-    if (!sessions?.fork) {
+    // The fork capability lives under `agentCapabilities.sessions.fork` for
+    // codex/gemini/pi/cursor, but opencode advertises it under
+    // `agentCapabilities.sessionCapabilities.fork` — accept either shape.
+    const caps = initResult.agentCapabilities as Record<string, unknown> | undefined;
+    const sessions = caps?.sessions as { fork?: unknown } | undefined;
+    const sessionCapabilities = caps?.sessionCapabilities as { fork?: unknown } | undefined;
+    if (!sessions?.fork && !sessionCapabilities?.fork) {
       cleanup();
       return { ok: false, reason: 'capability_not_advertised' };
     }

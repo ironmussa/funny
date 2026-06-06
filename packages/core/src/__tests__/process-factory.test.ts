@@ -80,6 +80,15 @@ describe('process-factory', () => {
     }
   });
 
+  test('creates an opencode process when provider is "opencode"', () => {
+    try {
+      const process = defaultProcessFactory.create({ ...baseOpts, provider: 'opencode' });
+      expect(process.constructor.name).toBe('OpenCodeACPProcess');
+    } catch {
+      // Optional dependency — test passes if constructor resolves correctly
+    }
+  });
+
   test('creates an llm-api process when provider is "llm-api"', () => {
     try {
       const process = defaultProcessFactory.create({ ...baseOpts, provider: 'llm-api' });

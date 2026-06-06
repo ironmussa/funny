@@ -5,6 +5,7 @@ export { SDKClaudeProcess } from './sdk-claude.js';
 export { CodexACPProcess } from './codex-acp.js';
 export { GeminiACPProcess } from './gemini-acp.js';
 export { CursorACPProcess } from './cursor-acp.js';
+export { OpenCodeACPProcess } from './opencode-acp.js';
 export { DeepAgentProcess } from './deepagent-process.js';
 export {
   inferACPToolName,
@@ -40,6 +41,11 @@ export {
   type DiscoveredCursorModel,
   type DiscoverCursorModelsResult,
 } from './cursor-discover.js';
+export {
+  discoverOpenCodeModels,
+  type DiscoveredOpenCodeModel,
+  type DiscoverOpenCodeModelsResult,
+} from './opencode-discover.js';
 
 // ── LLM Provider Abstraction ──────────────────────────────────
 export * from './llm/index.js';

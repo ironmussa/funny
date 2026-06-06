@@ -20,8 +20,10 @@ import {
   _clearRunnerManifests,
   getAdvertisedProviders,
   getRunnerManifest,
+  installProviderExtensionFromPath,
   loadProviderExtensions,
   registerProviderExtension,
+  removeProviderExtension,
   unregisterProviderExtension,
 } from '../agents/provider-extensions.js';
 
@@ -177,5 +179,52 @@ describe('live register / unregister (provider-install-ui §1)', () => {
 
   test('unregisterProviderExtension refuses to remove a built-in', () => {
     expect(unregisterProviderExtension('codex')).toBe(false);
+  });
+});
+
+describe('install / remove from a local path (provider-install-ui §2)', () => {
+  /** Build a SOURCE package dir (outside the extensions dir) to install FROM. */
+  function makeSource(id: string): string {
+    const src = join(dir, '__src__', id);
+    mkdirSync(src, { recursive: true });
+    writeFileSync(
+      join(src, 'package.json'),
+      JSON.stringify({ name: `funny-${id}`, version: '1.0.0', funny: { provider: 'manifest.json' } }),
+    );
+    writeFileSync(
+      join(src, 'manifest.json'),
+      JSON.stringify({ schemaVersion: PROVIDER_MANIFEST_SCHEMA_VERSION, manifest: externalManifest(id) }),
+    );
+    return src;
+  }
+
+  test('installs a provider from a local path and registers it', () => {
+    const extDir = join(dir, 'extensions');
+    const res = installProviderExtensionFromPath(makeSource('inst-1'), extDir);
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error(res.error);
+    expect(res.loaded.id).toBe('inst-1');
+    expect(getRunnerManifest('inst-1')?.id).toBe('inst-1');
+    const proc = defaultProcessFactory.create({ provider: 'inst-1', ...baseStartOpts } as any);
+    expect(proc.constructor.name).not.toBe('SDKClaudeProcess');
+  });
+
+  test('rejects + rolls back an install that collides with a built-in', () => {
+    const extDir = join(dir, 'extensions');
+    const res = installProviderExtensionFromPath(makeSource('codex'), extDir);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/collides/);
+    // Rolled back: nothing left on disk for it.
+    expect(loadProviderExtensions(extDir).loaded.map((l) => l.id)).not.toContain('codex');
+  });
+
+  test('removeProviderExtension de-registers and deletes the dir', () => {
+    const extDir = join(dir, 'extensions');
+    const installed = installProviderExtensionFromPath(makeSource('inst-2'), extDir);
+    if (!installed.ok) throw new Error(installed.error);
+    const rm = removeProviderExtension(extDir, installed.loaded.dirName);
+    expect(rm.ok).toBe(true);
+    expect(getRunnerManifest('inst-2')).toBeUndefined();
+    expect(loadProviderExtensions(extDir).loaded).toEqual([]);
   });
 });

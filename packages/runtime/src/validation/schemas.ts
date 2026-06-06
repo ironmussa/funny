@@ -30,6 +30,7 @@ export const agentProviderSchema = z.enum([
   'gemini',
   'pi',
   'cursor',
+  'opencode',
   'deepagent',
 ]);
 export const claudeModelSchema = registryEnum('claude');
@@ -42,6 +43,8 @@ export const geminiModelSchema = registryEnum('gemini');
 export const piModelSchema = z.string().min(1);
 // Cursor's catalog is dynamic too (see cursor-discover.ts) — same shape as pi.
 export const cursorModelSchema = z.string().min(1);
+// opencode's catalog is dynamic too (see opencode-discover.ts) — same shape as pi.
+export const opencodeModelSchema = z.string().min(1);
 export const deepagentModelSchema = registryEnum('deepagent');
 export const agentModelSchema = z.union([
   claudeModelSchema,
@@ -49,6 +52,7 @@ export const agentModelSchema = z.union([
   geminiModelSchema,
   piModelSchema,
   cursorModelSchema,
+  opencodeModelSchema,
   deepagentModelSchema,
 ]);
 
@@ -64,7 +68,7 @@ function validateProviderModel(
   const provider = data.provider;
   const model = data.model;
   if (!provider || !model) return;
-  if (provider === 'pi' || provider === 'cursor') return; // dynamic catalogs
+  if (provider === 'pi' || provider === 'cursor' || provider === 'opencode') return; // dynamic catalogs
   if (!(provider in MODEL_REGISTRY)) return;
   const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
   if (!(model in bucket)) {

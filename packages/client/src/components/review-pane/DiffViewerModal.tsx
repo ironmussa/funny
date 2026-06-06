@@ -92,7 +92,8 @@ export function DiffViewerModal({
       }}
     >
       <DialogContent
-        className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
+        className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0 duration-0 data-[state=closed]:animate-none data-[state=open]:animate-none"
+        overlayClassName="data-[state=closed]:animate-none data-[state=open]:animate-none"
         data-testid="expanded-diff-overlay"
       >
         <DialogTitle className="sr-only">

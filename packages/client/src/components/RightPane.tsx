@@ -2,7 +2,6 @@ import { lazy, Suspense, useRef } from 'react';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
-import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
 
 const reviewPaneImport = () =>
@@ -43,7 +42,6 @@ interface RightPaneProps {
 export function RightPane({ visible }: RightPaneProps) {
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
   const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
-  const reviewPaneResizing = useUIStore((s) => s.reviewPaneResizing);
   const setReviewPaneResizing = useUIStore((s) => s.setReviewPaneResizing);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
 
@@ -81,12 +79,9 @@ export function RightPane({ visible }: RightPaneProps) {
       )}
 
       {/* Right panel — Review / Tasks / Activity. Wrapper stays mounted so
-          width can animate open/closed; inner content unmounts when hidden. */}
+          width can toggle open/closed; inner content unmounts when hidden. */}
       <div
-        className={cn(
-          'flex min-w-0 shrink-0 flex-col overflow-hidden bg-sidebar',
-          !resizing && !reviewPaneResizing && 'transition-[width] duration-200 ease-linear',
-        )}
+        className="bg-sidebar flex min-w-0 shrink-0 flex-col overflow-hidden"
         style={{ width: visible ? `${reviewPaneWidth}vw` : 0 }}
       >
         {visible && (

@@ -368,6 +368,8 @@ export function CenterDockview({
     removePanels: removeRightPanels,
     getOpenSize: getRightOpenSize,
     onAnimating: onRightAnimating,
+    // Review pane opens/closes instantly — no slide animation.
+    duration: 0,
   });
 
   useEffect(() => {

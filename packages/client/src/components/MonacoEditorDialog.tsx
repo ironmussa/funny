@@ -32,6 +32,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
+import { markdownProseClassName } from '@/lib/markdown-components';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
@@ -458,7 +459,7 @@ export function MonacoEditorDialog({
           )}
           {showPreview && isMarkdown ? (
             <ScrollArea className="h-full">
-              <div ref={previewContainerRef} className="prose prose-sm max-w-none px-8 py-6">
+              <div ref={previewContainerRef} className={cn(markdownProseClassName, 'px-8 py-6')}>
                 {renderedMarkdown}
               </div>
             </ScrollArea>

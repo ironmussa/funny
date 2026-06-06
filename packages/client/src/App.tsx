@@ -6,6 +6,7 @@ import { DockviewLayout, type RightTabSpec } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   ChangesPanel,
+  GraphPanel,
   HistoryPanel,
   IssuesPanel,
   PRsPanel,
@@ -256,6 +257,7 @@ export function App() {
     ? [
         { id: 'changes', title: 'Changes', content: <ChangesPanel /> },
         { id: 'history', title: 'History', content: <HistoryPanel /> },
+        { id: 'graph', title: 'Graph', content: <GraphPanel /> },
         { id: 'stash', title: 'Stash', content: <StashPanel /> },
         { id: 'prs', title: 'PRs', content: <PRsPanel /> },
         { id: 'issues', title: 'Issues', content: <IssuesPanel /> },

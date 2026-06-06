@@ -317,6 +317,7 @@
       "mergeHint": "Create a merge commit that joins both histories."
     },
     "log": "Commit log",
+    "graph": "Graph",
     "loadingLog": "Loading commits...",
     "noCommits": "No commits yet",
     "logFailed": "Failed to load log: {{message}}",
@@ -419,6 +420,16 @@
   },
   "history": {
     "viewOnGithub": "View on GitHub"
+  },
+  "graph": {
+    "allBranches": "All branches",
+    "commitCount_one": "{{count}} commit",
+    "commitCount_other": "{{count}} commits",
+    "currentBranch": "{{ref}} (current branch)",
+    "copySha": "Copy commit SHA",
+    "copyShortSha": "Copy short SHA",
+    "resetToHere": "Reset branch to here",
+    "uncommittedChanges": "Uncommitted changes"
   },
   "settings": {
     "title": "Settings",

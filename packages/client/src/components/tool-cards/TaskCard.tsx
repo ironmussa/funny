@@ -3,7 +3,11 @@ import { Suspense, lazy, useState, useMemo, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
+import {
+  remarkPlugins,
+  baseMarkdownComponents,
+  markdownProseClassName,
+} from '@/lib/markdown-components';
 import { groupConsecutiveToolCalls, type ToolItem } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
 
@@ -138,7 +142,12 @@ export const TaskCard = memo(function TaskCard({
               <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
                 {t('tools.output')}
               </div>
-              <div className="prose prose-sm border-border/40 bg-background/80 max-w-none rounded border px-2.5 py-1.5">
+              <div
+                className={cn(
+                  markdownProseClassName,
+                  'border-border/40 bg-background/80 rounded border px-2.5 py-1.5',
+                )}
+              >
                 <Suspense
                   fallback={
                     <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">

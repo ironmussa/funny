@@ -88,6 +88,9 @@ export function registerSystemRoutes(app: Hono): void {
     return c.json(payload);
   });
 
+  // (opencode model discovery is served by the generic `/api/system/:provider/models`
+  // route above — master's separate opencode route was dropped in the merge.)
+
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();
     resetBinaryCache();

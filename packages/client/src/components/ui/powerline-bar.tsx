@@ -34,6 +34,8 @@ export interface PowerlineSegmentData {
   textColor?: string;
   /** Custom tooltip text — defaults to the label if omitted */
   tooltip?: string;
+  /** Render the label bold to mark it as the active/current segment. */
+  emphasis?: boolean;
 }
 
 export interface PowerlineBarProps {
@@ -115,7 +117,13 @@ export function PowerlineBar({
                       data-testid={`powerline-segment-${segment.key}`}
                     >
                       {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
-                      <span className={cn(config.text, 'truncate font-medium whitespace-nowrap')}>
+                      <span
+                        className={cn(
+                          config.text,
+                          'truncate font-medium whitespace-nowrap',
+                          segment.emphasis && 'font-bold',
+                        )}
+                      >
                         {segment.label}
                       </span>
                     </div>
@@ -147,7 +155,13 @@ export function PowerlineBar({
                     data-testid={`powerline-segment-${segment.key}`}
                   >
                     {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
-                    <span className={cn(config.text, 'truncate font-medium whitespace-nowrap')}>
+                    <span
+                      className={cn(
+                        config.text,
+                        'truncate font-medium whitespace-nowrap',
+                        segment.emphasis && 'font-bold',
+                      )}
+                    >
                       {segment.label}
                     </span>
                   </div>
@@ -187,7 +201,13 @@ export function PowerlineBar({
                     }}
                   >
                     {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
-                    <span className={cn(config.text, 'truncate font-medium whitespace-nowrap')}>
+                    <span
+                      className={cn(
+                        config.text,
+                        'truncate font-medium whitespace-nowrap',
+                        segment.emphasis && 'font-bold',
+                      )}
+                    >
                       {segment.label}
                     </span>
                   </div>

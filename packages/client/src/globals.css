@@ -989,9 +989,13 @@ mark.md-search-match[data-active='true'] {
     color: inherit;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar — auto-hide: thumb transparent until the container is hovered */
   * {
     scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  *:hover {
     scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
   }
 
@@ -1005,8 +1009,13 @@ mark.md-search-match[data-active='true'] {
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.25);
+    background-color: transparent;
     border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.25);
   }
 
   *::-webkit-scrollbar-thumb:hover {

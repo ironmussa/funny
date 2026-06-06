@@ -172,11 +172,21 @@ function runAnimation({
   onAnimating,
   onComplete,
 }: RunAnimationParams) {
-  const start = performance.now();
   if (!animatingRef.current) {
     animatingRef.current = true;
     onAnimating?.(true, api);
   }
+  // Instant path: no animation requested — snap straight to the target,
+  // skipping the RAF loop entirely (avoids a one-frame slide flicker).
+  if (duration <= 0) {
+    setSize(api, to);
+    rafRef.current = null;
+    onComplete?.();
+    animatingRef.current = false;
+    onAnimating?.(false, api);
+    return;
+  }
+  const start = performance.now();
   const tick = (now: number) => {
     const t = Math.min(1, (now - start) / duration);
     const eased = easeOutCubic(t);

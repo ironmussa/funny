@@ -1,4 +1,8 @@
+import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
+
 import { request } from './_core';
+
+export type { AdvertisedProvider };
 
 /** A model advertised by a dynamic-catalog ACP provider (pi / cursor / opencode). */
 export interface AcpModelEntry {
@@ -58,6 +62,10 @@ export const systemApi = {
   // Dynamic ACP model catalog — one endpoint serves every provider whose
   // manifest declares `models.kind: 'dynamic'` (pi / cursor / opencode). The
   // runner spawns the provider's ACP CLI to read what it advertises.
+  // Runner-installed (external) providers advertised by the user's runner
+  // (provider-manifest-loader §3). The client merges these into the model picker.
+  getProviders: () => request<{ providers: AdvertisedProvider[] }>('/providers'),
+
   getAcpModels: (provider: string, refresh = false) =>
     request<AcpModelsResponse>(`/system/${provider}/models${refresh ? '?refresh=1' : ''}`),
 

@@ -27,7 +27,8 @@ export type WaitingReason = 'question' | 'plan' | 'permission';
 export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
 
 // ─── Agent ──────────────────────────────────────────────
-export type AgentProvider =
+/** The bundled providers funny ships with — literal union for autocomplete + exhaustiveness. */
+export type KnownProvider =
   | 'claude'
   | 'codex'
   | 'gemini'
@@ -37,6 +38,18 @@ export type AgentProvider =
   | 'deepagent'
   | 'llm-api'
   | 'external';
+
+/**
+ * An agent provider id. Open at the boundary: the bundled {@link KnownProvider}
+ * ids keep autocomplete, but any string is accepted so a runtime-registered /
+ * runner-advertised provider (see the provider-manifest-loader change) is not
+ * blocked by a compile-time union. Resolution falls through the runtime
+ * `providerRegistry`; per-provider data (labels/models/limits) already resolves
+ * via the manifest registry with a sane default.
+ *
+ * Use `KnownProvider` for exhaustive maps/switches over the bundled set.
+ */
+export type AgentProvider = KnownProvider | (string & {});
 
 /**
  * funny's permission modes (provider-agnostic surface).

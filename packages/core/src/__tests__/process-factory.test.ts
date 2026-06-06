@@ -5,6 +5,9 @@
  */
 import { describe, test, expect } from 'bun:test';
 
+import { opencodeManifest } from '@funny/shared/provider-manifests';
+
+import { GenericACPProcess } from '../agents/generic-acp.js';
 import type { IAgentProcess, AgentProcessOptions } from '../agents/interfaces.js';
 import { defaultProcessFactory, registerProvider } from '../agents/process-factory.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
@@ -113,6 +116,17 @@ describe('process-factory', () => {
     expect((process as MockProcess).opts.threadId).toBe('test-thread');
   });
 
+  test('resolves a runtime-registered external provider id with no cast (provider-manifest-loader seam)', () => {
+    // A provider id NOT in the compile-time KnownProvider union — the shape an
+    // external funny.provider manifest registers at runtime. With AgentProvider
+    // widened to accept any string, `provider: 'myagent-ext'` needs no `as any`,
+    // and the registry resolves it to the registered ctor (here a mock; in
+    // Phase B, `() => new GenericACPProcess(opts, manifest)`).
+    registerProvider('myagent-ext', MockProcess);
+    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'myagent-ext' });
+    expect(process.constructor.name).toBe('MockProcess');
+  });
+
   test('registerProvider can override an existing provider', () => {
     registerProvider('claude', MockProcess);
     const process = defaultProcessFactory.create({ ...baseOpts, provider: 'claude' });
@@ -120,5 +134,21 @@ describe('process-factory', () => {
 
     // Restore original
     registerProvider('claude', SDKClaudeProcess);
+  });
+
+  test('resolves an unbundled provider id to a manifest-backed GenericACPProcess', () => {
+    // Mirrors what the provider-manifest-loader will do at runtime: bind a
+    // ProviderManifest to GenericACPProcess and register it under an id that is
+    // NOT in the compile-time KnownProvider union. The factory must resolve the
+    // string id through the registry — no enum blocks it. (opencodeManifest is
+    // reused here as a stand-in for an externally-loaded manifest.)
+    class ExternalAcpProcess extends GenericACPProcess {
+      constructor(opts: AgentProcessOptions) {
+        super(opts, opencodeManifest);
+      }
+    }
+    registerProvider('acme-agent', ExternalAcpProcess);
+    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'acme-agent' });
+    expect(process).toBeInstanceOf(GenericACPProcess);
   });
 });

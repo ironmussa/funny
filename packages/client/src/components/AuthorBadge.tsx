@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { authorAvatarUrl } from '@/lib/author-avatar';
+import { useCachedAvatar } from '@/lib/avatar-cache';
 import { cn } from '@/lib/utils';
 
 const emailUrlCache = new Map<string, string>();
@@ -49,11 +50,14 @@ export function AuthorBadge({
   }, [email, avatarUrl]);
 
   const url = avatarUrl ?? emailUrl;
+  // Serve from the short-TTL blob cache so re-rendering many badges (e.g. the
+  // virtualized History list) doesn't re-hit GitHub for the same image.
+  const cachedUrl = useCachedAvatar(url);
 
   return (
     <span className={cn('flex min-w-0 items-center gap-1 truncate', className)}>
       <Avatar className={avatarSize}>
-        {url && <AvatarImage src={url} alt={name} />}
+        {cachedUrl && <AvatarImage src={cachedUrl} alt={name} />}
         <AvatarFallback name={name} className={fallbackText}>
           {name.charAt(0).toUpperCase()}
         </AvatarFallback>

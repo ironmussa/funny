@@ -26,6 +26,7 @@ export {
 export {
   loadProviderExtensions,
   getRunnerManifest,
+  getAdvertisedProviders,
   _clearRunnerManifests,
   type LoadedProviderExtension,
   type LoadProviderExtensionsResult,

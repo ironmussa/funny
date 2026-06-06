@@ -21,8 +21,12 @@
  */
 
 import { hostname } from 'os';
+import { join } from 'path';
 
+import { getAdvertisedProviders, loadProviderExtensions } from '@funny/core/agents';
 import type { Project, WSEvent } from '@funny/shared';
+
+import { DATA_DIR } from '../lib/data-dir.js';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
   type DataInsertMessage,
@@ -121,6 +125,7 @@ async function register(): Promise<boolean> {
         hostname: hostname(),
         os: process.platform,
         httpUrl: httpUrl || undefined,
+        providers: getAdvertisedProviders(),
       }),
     });
 
@@ -145,7 +150,7 @@ async function register(): Promise<boolean> {
     try {
       const hbRes = await centralFetch('/api/runners/heartbeat', {
         method: 'POST',
-        body: JSON.stringify({ activeThreadIds: [] }),
+        body: JSON.stringify({ activeThreadIds: [], providers: getAdvertisedProviders() }),
       });
       if (hbRes.status === 404) {
         log.warn('Registration returned stale runner — server may be using wrong DB', {
@@ -203,6 +208,7 @@ async function sendHeartbeat(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({
         activeThreadIds: [], // TODO: populate from agent-runner
+        providers: getAdvertisedProviders(),
       }),
     });
 
@@ -256,6 +262,7 @@ async function sendHeartbeatWS(): Promise<void> {
   try {
     const response = await sendDataMessage('runner:heartbeat', {
       activeThreadIds: [],
+      providers: getAdvertisedProviders(),
     });
 
     _wsHeartbeatFailures = 0;
@@ -1357,6 +1364,24 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   state.serverUrl = serverUrl.replace(/\/$/, '');
 
   log.info(`Connecting to server at ${state.serverUrl}`, { namespace: 'runner' });
+
+  // Load runner-installed provider extensions before registering so this runner
+  // advertises them to the server (provider-manifest-loader §3). Errors are
+  // collected per-extension; one bad manifest never blocks the others.
+  try {
+    const { loaded, errors } = loadProviderExtensions(join(DATA_DIR, 'extensions'));
+    if (loaded.length) {
+      log.info(`Loaded ${loaded.length} provider extension(s)`, {
+        namespace: 'runner',
+        providers: loaded.map((l) => l.id),
+      });
+    }
+    for (const e of errors) {
+      log.warn('Skipped invalid provider extension', { namespace: 'runner', ...e });
+    }
+  } catch (err) {
+    log.error('Provider extension load failed', { namespace: 'runner', error: String(err) });
+  }
 
   // Subscribe to local wsBroker events early
   state.unsubscribeBroker = wsBroker.onEvent(forwardEventToCentral);

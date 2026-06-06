@@ -4,7 +4,6 @@
  * @domain layer: domain
  */
 
-import type { AgentProvider } from '@funny/shared';
 import { validationErr, type DomainError } from '@funny/shared/errors';
 import {
   DEFAULT_MODEL,
@@ -12,7 +11,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   MODEL_REGISTRY,
 } from '@funny/shared/models';
-import { getManifest, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { getManifest } from '@funny/shared/provider-manifests';
 import { ok, err, type Result } from 'neverthrow';
 import { z } from 'zod';
 
@@ -26,14 +25,14 @@ function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
 
 export const threadModeSchema = z.enum(['local', 'worktree']);
 export const threadRuntimeSchema = z.enum(['local', 'remote']);
-// The ACP providers derive from the manifest registry; the non-ACP bespoke
-// providers (Claude SDK, DeepAgent) are listed explicitly. Adding an ACP
-// manifest auto-extends the accepted provider set.
-export const agentProviderSchema = z.enum([
-  'claude',
-  'deepagent',
-  ...KNOWN_ACP_PROVIDER_IDS,
-] as [AgentProvider, ...AgentProvider[]]);
+// Open at the boundary: any non-empty provider id is accepted so a
+// runtime-registered / runner-advertised provider (provider-manifest-loader)
+// is not blocked by a compile-time enum. Resolution falls through the runtime
+// `providerRegistry`. The stricter "must be a built-in OR a provider the user's
+// runner advertises" membership check is layered on the server once the
+// advertised set exists (provider-manifest-loader §3). Output is `string`,
+// which is assignable to the widened `AgentProvider`.
+export const agentProviderSchema = z.string().min(1);
 export const claudeModelSchema = registryEnum('claude');
 export const codexModelSchema = registryEnum('codex');
 export const geminiModelSchema = registryEnum('gemini');

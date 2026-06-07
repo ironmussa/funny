@@ -11,6 +11,9 @@ import { GenericACPProcess } from '../agents/generic-acp.js';
 import type { IAgentProcess, AgentProcessOptions } from '../agents/interfaces.js';
 import {
   defaultProcessFactory,
+  disableBuiltinProvider,
+  enableBuiltinProvider,
+  getActiveBuiltinProviders,
   registerProvider,
   resolveActiveAcpProviders,
 } from '../agents/process-factory.js';
@@ -165,5 +168,25 @@ describe('resolveActiveAcpProviders (lean-core)', () => {
     // filter keeps KNOWN order regardless of input order
     const out = resolveActiveAcpProviders('opencode,codex');
     expect(out).toEqual(KNOWN_ACP_PROVIDER_IDS.filter((id) => out.includes(id)));
+  });
+});
+
+describe('enable / disable built-in providers (lean-core live toggle)', () => {
+  test('disable removes a built-in from the active set + factory; enable restores it', () => {
+    expect(getActiveBuiltinProviders()).toContain('gemini');
+
+    expect(disableBuiltinProvider('gemini')).toBe(true);
+    expect(getActiveBuiltinProviders()).not.toContain('gemini');
+    expect(
+      defaultProcessFactory.create({ ...baseOpts, provider: 'gemini' }).constructor.name,
+    ).toBe('SDKClaudeProcess'); // gated → falls back
+
+    expect(enableBuiltinProvider('gemini')).toBe(true);
+    expect(getActiveBuiltinProviders()).toContain('gemini');
+  });
+
+  test('enable/disable ignore non-ACP-built-in ids', () => {
+    expect(enableBuiltinProvider('claude')).toBe(false);
+    expect(disableBuiltinProvider('not-a-provider')).toBe(false);
   });
 });

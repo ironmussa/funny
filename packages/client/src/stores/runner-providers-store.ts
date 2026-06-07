@@ -10,6 +10,9 @@ const STALE_MS = 60_000;
 interface RunnerProvidersState {
   /** External providers advertised by the user's runner (provider-manifest-loader §3). */
   providers: AdvertisedProvider[];
+  /** Active built-in ACP providers on the runner (lean-core). null = unknown
+   *  (don't filter the picker — no regression). */
+  activeBuiltins: string[] | null;
   loadedAt: number;
   loading: boolean;
   fetch: (force?: boolean) => Promise<void>;
@@ -22,6 +25,7 @@ interface RunnerProvidersState {
  */
 export const useRunnerProvidersStore = create<RunnerProvidersState>((set, get) => ({
   providers: [],
+  activeBuiltins: null,
   loadedAt: 0,
   loading: false,
 
@@ -37,6 +41,11 @@ export const useRunnerProvidersStore = create<RunnerProvidersState>((set, get) =
       set({ loading: false, loadedAt: Date.now() });
       return;
     }
-    set({ providers: res.value.providers, loading: false, loadedAt: Date.now() });
+    set({
+      providers: res.value.providers,
+      activeBuiltins: res.value.activeBuiltins,
+      loading: false,
+      loadedAt: Date.now(),
+    });
   },
 }));

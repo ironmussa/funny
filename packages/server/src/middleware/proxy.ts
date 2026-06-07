@@ -33,9 +33,41 @@ import type { Context } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { resolveAnyRunner, resolveRunner } from '../services/runner-resolver.js';
-import { isRunnerConnected } from '../services/ws-relay.js';
-import { isTunnelTimeoutError, tunnelFetch } from '../services/ws-tunnel.js';
+import * as runnerResolver from '../services/runner-resolver.js';
+import * as wsRelay from '../services/ws-relay.js';
+import * as wsTunnel from '../services/ws-tunnel.js';
+
+/**
+ * Transport dependencies the proxy uses to reach a runner. Injectable so tests
+ * can supply deterministic fakes directly, without Bun's process-global
+ * `mock.module` (which leaks across test files and makes the tunnel-timeout
+ * assertions flaky). Production uses `defaultTransport`, whose members delegate
+ * to the real service singletons at call time.
+ */
+/** Minimal HTTP-client shape (avoids `typeof fetch`, which carries Bun-only
+ *  statics like `preconnect` that a test fake can't satisfy). */
+type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+export interface ProxyTransport {
+  resolveRunner: typeof runnerResolver.resolveRunner;
+  resolveAnyRunner: typeof runnerResolver.resolveAnyRunner;
+  isRunnerConnected: typeof wsRelay.isRunnerConnected;
+  tunnelFetch: typeof wsTunnel.tunnelFetch;
+  isTunnelTimeoutError: (err: unknown) => boolean;
+  /** HTTP client for the direct-to-runner path. Injectable so tests don't have
+   *  to override the process-global `fetch` (which other concurrent test files
+   *  share). */
+  directFetch: FetchLike;
+}
+
+const defaultTransport: ProxyTransport = {
+  resolveRunner: (...args) => runnerResolver.resolveRunner(...args),
+  resolveAnyRunner: (...args) => runnerResolver.resolveAnyRunner(...args),
+  isRunnerConnected: (...args) => wsRelay.isRunnerConnected(...args),
+  tunnelFetch: (...args) => wsTunnel.tunnelFetch(...args),
+  isTunnelTimeoutError: (err) => wsTunnel.isTunnelTimeoutError(err),
+  directFetch: (input, init) => fetch(input, init),
+};
 
 function getRunnerAuthSecret(): string {
   const secret = process.env.RUNNER_AUTH_SECRET;
@@ -46,10 +78,21 @@ function getRunnerAuthSecret(): string {
 }
 
 /**
+ * Build a Hono proxy handler bound to the given transport. Pass fake deps in
+ * tests for deterministic behaviour; production calls it with no args.
+ */
+export function createProxyToRunner(deps: ProxyTransport = defaultTransport) {
+  return (c: Context<ServerEnv>): Promise<Response> => proxyToRunnerImpl(c, deps);
+}
+
+/** Default production handler, wired to the real transport. */
+export const proxyToRunner = createProxyToRunner();
+
+/**
  * Hono handler that proxies the request to the appropriate runner.
  * Picks the best transport based on runner connectivity state.
  */
-export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
+async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): Promise<Response> {
   const userId = c.get('userId') as string | undefined;
 
   const url = new URL(c.req.url);
@@ -69,8 +112,8 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   // All other requests are scoped to the requesting user.
   const query = Object.fromEntries(url.searchParams.entries());
   const resolved = isOAuthCallback
-    ? await resolveAnyRunner()
-    : await resolveRunner(path, query, userId);
+    ? await deps.resolveAnyRunner()
+    : await deps.resolveRunner(path, query, userId);
 
   if (!resolved) {
     log.warn('No reachable runner for proxy request', {
@@ -149,12 +192,12 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   }
 
   const tunnelPath = `${path}${url.search}`;
-  const tunnelActive = isRunnerConnected(runnerId);
+  const tunnelActive = deps.isRunnerConnected(runnerId);
 
   // If the runner is connected via Socket.IO, use the tunnel as primary
   if (tunnelActive) {
     try {
-      const tunnelResp = await tunnelFetch(runnerId, {
+      const tunnelResp = await deps.tunnelFetch(runnerId, {
         method: c.req.method,
         path: tunnelPath,
         headers: forwardedHeaders,
@@ -171,7 +214,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
       // a second time and duplicate side effects (e.g., persisting a user
       // message twice and enqueuing two prompts on agents that await the
       // full turn in sendPrompt — Gemini/Codex/Pi). Surface 504 instead.
-      if (isTunnelTimeoutError(tunnelErr)) {
+      if (deps.isTunnelTimeoutError(tunnelErr)) {
         log.warn('Tunnel request timed out — not falling back', {
           namespace: 'proxy',
           runnerId,
@@ -195,7 +238,15 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   // Runner not connected via Socket.IO — try direct HTTP if available
   if (httpUrl) {
     try {
-      return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
+      return await directHttpFetch(
+        c,
+        httpUrl,
+        path,
+        url.search,
+        forwardedHeaders,
+        body,
+        deps.directFetch,
+      );
     } catch (httpErr) {
       log.warn('Direct HTTP to runner failed', {
         namespace: 'proxy',
@@ -219,6 +270,7 @@ async function directHttpFetch(
   search: string,
   forwardedHeaders: Record<string, string>,
   body: string | null,
+  fetchImpl: FetchLike,
 ): Promise<Response> {
   const targetUrl = `${httpUrl}${path}${search}`;
 
@@ -227,7 +279,7 @@ async function directHttpFetch(
     headers.set(key, value);
   }
 
-  const runnerResponse = await fetch(targetUrl, {
+  const runnerResponse = await fetchImpl(targetUrl, {
     method: c.req.method,
     headers,
     body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? body : undefined,

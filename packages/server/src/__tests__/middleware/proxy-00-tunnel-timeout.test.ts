@@ -3,83 +3,79 @@
  * directHttpFetch. The runner already received the request and may still be
  * processing it; a fallback would deliver it twice and duplicate side effects.
  *
- * Re-applies ws-tunnel/ws-relay mocks in each test so route suites that stub
- * isTunnelTimeoutError to false cannot leak into these assertions.
+ * Determinism: this suite injects ALL transport deps (including the HTTP client)
+ * via `createProxyToRunner` — it uses neither `mock.module` nor a global `fetch`
+ * override. Bun runs test files with shared process globals, so anything global
+ * (mock.module registry, `globalThis.fetch`) can be mutated by another file mid-
+ * test; that historically made these assertions flaky. Pure injection means the
+ * handler under test only ever touches the fakes created here.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
-import {
-  MockTunnelTimeoutError,
-  createRunnerResolverMock,
-  createWsRelayMock,
-} from '../helpers/proxy-test-mocks.js';
+import { createProxyToRunner, type ProxyTransport } from '../../middleware/proxy.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-function buildApp(proxyToRunner: (c: any) => Promise<Response>): Hono<ServerEnv> {
+class TunnelTimeoutError extends Error {
+  constructor(
+    readonly runnerId: string,
+    readonly timeoutMs: number,
+  ) {
+    super(`Tunnel to runner ${runnerId} timed out after ${timeoutMs}ms`);
+    this.name = 'TunnelTimeoutError';
+  }
+}
+
+const RESOLVED_RUNNER = { runnerId: 'runner-1', httpUrl: 'http://runner.local' };
+
+function makeDeps(overrides: Partial<ProxyTransport>): ProxyTransport {
+  return {
+    resolveRunner: async () => RESOLVED_RUNNER,
+    resolveAnyRunner: async () => RESOLVED_RUNNER,
+    isRunnerConnected: () => true,
+    tunnelFetch: (async () => {
+      throw new Error('tunnelFetch not configured for this test');
+    }) as ProxyTransport['tunnelFetch'],
+    isTunnelTimeoutError: (err: unknown) => err instanceof TunnelTimeoutError,
+    directFetch: (async () =>
+      new Response('{}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as ProxyTransport['directFetch'],
+    ...overrides,
+  };
+}
+
+function buildApp(deps: ProxyTransport): Hono<ServerEnv> {
   const app = new Hono<ServerEnv>();
   app.use('*', async (c, next) => {
     c.set('userId', 'test-user');
     c.set('userRole', 'user');
     return next();
   });
-  app.all('/api/*', proxyToRunner);
+  app.all('/api/*', createProxyToRunner(deps));
   return app;
 }
 
-function installTunnelProxyMocks(tunnelShouldTimeout: boolean, onTunnelCall: () => void) {
-  mock.module('../../services/ws-relay.js', () => createWsRelayMock(() => true));
-  mock.module('../../services/ws-tunnel.js', () => ({
-    setIO: () => {},
-    TunnelTimeoutError: MockTunnelTimeoutError,
-    isTunnelTimeoutError: (err: unknown) =>
-      err instanceof MockTunnelTimeoutError ||
-      (typeof err === 'object' &&
-        err !== null &&
-        (err as Error).name === 'TunnelTimeoutError' &&
-        'runnerId' in err &&
-        'timeoutMs' in err),
-    tunnelFetch: async (runnerId: string) => {
-      onTunnelCall();
-      if (tunnelShouldTimeout) {
-        throw new MockTunnelTimeoutError(runnerId, 30_000);
-      }
-      throw new Error('socket not found');
-    },
-  }));
-  mock.module('../../services/runner-resolver.js', () => createRunnerResolverMock());
-}
-
 describe('proxyToRunner — tunnel timeout fallback', () => {
-  let originalFetch: typeof globalThis.fetch;
-  let directFetchCalls: number;
-  let tunnelCalls: number;
-
-  beforeEach(() => {
-    tunnelCalls = 0;
-    directFetchCalls = 0;
-    originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => {
-      directFetchCalls++;
-      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
-    }) as unknown as typeof fetch;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    mock.restore();
-  });
-
   test('returns 504 and does NOT fall back to direct HTTP on tunnel timeout', async () => {
-    installTunnelProxyMocks(true, () => {
-      tunnelCalls++;
+    let tunnelCalls = 0;
+    let directFetchCalls = 0;
+    const deps = makeDeps({
+      tunnelFetch: (async (runnerId: string) => {
+        tunnelCalls++;
+        throw new TunnelTimeoutError(runnerId, 30_000);
+      }) as ProxyTransport['tunnelFetch'],
+      directFetch: (async () => {
+        directFetchCalls++;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as ProxyTransport['directFetch'],
     });
-    const { proxyToRunner } = await import('../../middleware/proxy.js');
-    const app = buildApp(proxyToRunner);
+    const app = buildApp(deps);
 
     const res = await app.request('/api/threads/abc/messages', {
       method: 'POST',
@@ -96,11 +92,19 @@ describe('proxyToRunner — tunnel timeout fallback', () => {
   });
 
   test('still falls back to direct HTTP on non-timeout tunnel errors', async () => {
-    installTunnelProxyMocks(false, () => {
-      tunnelCalls++;
+    let tunnelCalls = 0;
+    let directFetchCalls = 0;
+    const deps = makeDeps({
+      tunnelFetch: (async () => {
+        tunnelCalls++;
+        throw new Error('socket not found');
+      }) as ProxyTransport['tunnelFetch'],
+      directFetch: (async () => {
+        directFetchCalls++;
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as ProxyTransport['directFetch'],
     });
-    const { proxyToRunner } = await import('../../middleware/proxy.js');
-    const app = buildApp(proxyToRunner);
+    const app = buildApp(deps);
 
     const res = await app.request('/api/threads/abc/messages', {
       method: 'POST',

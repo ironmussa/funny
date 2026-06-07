@@ -12,6 +12,7 @@ import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilit
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
+import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { SystemSettings } from '@/components/settings/SystemSettings';
@@ -666,6 +667,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'runners' && <RunnersSettings />}
         {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
         {activePreferencesPage === 'extensions' && <ExtensionsSettings />}
+        {activePreferencesPage === 'providers' && <ProvidersSettings />}
         {activePreferencesPage === 'system' && <SystemSettings />}
 
         {activePreferencesPage === 'email' && (

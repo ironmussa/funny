@@ -145,20 +145,20 @@ export function registerSystemRoutes(app: Hono): void {
   app.post('/api/system/providers/remove', async (c) => {
     const userId = c.get('userId') as string | undefined;
     if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-    let body: { dirName?: string };
+    let body: { id?: string };
     try {
       body = await c.req.json();
     } catch {
       return c.json({ ok: false, error: 'invalid body' }, 400);
     }
-    if (typeof body.dirName !== 'string' || !body.dirName) {
-      return c.json({ ok: false, error: 'dirName required' }, 400);
+    if (typeof body.id !== 'string' || !body.id) {
+      return c.json({ ok: false, error: 'id required' }, 400);
     }
     const agents = await import('@funny/core/agents');
-    const res = agents.removeProviderExtension(providerExtDir(), body.dirName);
+    const res = agents.removeProviderExtensionById(providerExtDir(), body.id);
     if (!res.ok) return c.json({ ok: false, error: res.error }, 400);
-    log.info('provider extension removed', { namespace: 'provider-install', id: res.id });
-    return c.json({ ok: true, id: res.id });
+    log.info('provider extension removed', { namespace: 'provider-install', id: body.id });
+    return c.json({ ok: true, id: body.id });
   });
 
   app.get('/api/setup/status', async (c) => {

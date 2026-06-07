@@ -77,6 +77,8 @@ export {
   getUnpushedHashes,
   type GitLogEntry,
   type GitGraphLogEntry,
+  type GraphRef,
+  type GraphRefKind,
   type CommitFileEntry,
 } from './log.js';
 

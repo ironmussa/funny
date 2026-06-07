@@ -9,9 +9,13 @@ import { resolve } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getGraphLog } from '../git/index.js';
+import type { GraphRef } from '../git/log.js';
 import { executeSync } from '../git/process.js';
 
 const TMP = resolve(tmpdir(), 'core-graph-log-' + Date.now());
+
+/** Project the classified refs back to their display names for name-only asserts. */
+const refNames = (refs: GraphRef[]) => refs.map((r) => r.name);
 
 function git(repo: string, args: string[]) {
   executeSync('git', args, { cwd: repo });
@@ -70,13 +74,13 @@ describe('getGraphLog', () => {
 
     // --all surfaces the feature branch tip, decorated with its ref name.
     const featureTip = entries.find((e) => e.message === 'feature commit');
-    expect(featureTip!.refs).toContain('feature');
+    expect(refNames(featureTip!.refs)).toContain('feature');
 
     // The merge commit is the current branch tip: `main` chip present, the
     // redundant `HEAD` chip dropped, and the checked-out branch surfaced as
     // `headBranch` for the UI to highlight.
-    expect(merge!.refs).toContain('main');
-    expect(merge!.refs).not.toContain('HEAD');
+    expect(refNames(merge!.refs)).toContain('main');
+    expect(refNames(merge!.refs)).not.toContain('HEAD');
     expect(merge!.headBranch).toBe('main');
   });
 
@@ -92,10 +96,14 @@ describe('getGraphLog', () => {
 
     const result = await getGraphLog(repo, { all: true });
     const merge = result._unsafeUnwrap().find((e) => e.message === 'merge feature into main');
-    expect(merge!.refs).toContain('origin/main'); // real remote branch stays
-    expect(merge!.refs).not.toContain('origin/HEAD'); // symbolic pointer dropped
-    expect(merge!.refs).not.toContain('HEAD'); // local HEAD dropped too
+    expect(refNames(merge!.refs)).toContain('origin/main'); // real remote branch stays
+    expect(refNames(merge!.refs)).not.toContain('origin/HEAD'); // symbolic pointer dropped
+    expect(refNames(merge!.refs)).not.toContain('HEAD'); // local HEAD dropped too
     expect(merge!.headBranch).toBe('main');
+    // The local `main` and remote-tracking `origin/main` are classified distinctly
+    // so the UI can collapse the pair / flag the lone remote (GitKraken-style).
+    expect(merge!.refs).toContainEqual({ name: 'main', kind: 'local' });
+    expect(merge!.refs).toContainEqual({ name: 'origin/main', kind: 'remote' });
   });
 
   it('without all=true walks only HEAD (feature branch tip absent)', async () => {
@@ -115,9 +123,10 @@ describe('getGraphLog', () => {
 
     const result = await getGraphLog(repo, { all: true });
     const merge = result._unsafeUnwrap().find((e) => e.message === 'merge feature into main');
-    // `%D` reports this as `tag: v1.0`; the parser must strip the prefix.
-    expect(merge!.refs).toContain('v1.0');
-    expect(merge!.refs).not.toContain('tag: v1.0');
+    // `%D` reports this as `tag: refs/tags/v1.0`; the parser must strip the prefix
+    // and classify it as a tag.
+    expect(merge!.refs).toContainEqual({ name: 'v1.0', kind: 'tag' });
+    expect(refNames(merge!.refs)).not.toContain('tag: v1.0');
   });
 
   it('keeps the literal HEAD chip when detached, with no headBranch', async () => {
@@ -133,7 +142,7 @@ describe('getGraphLog', () => {
     const result = await getGraphLog(repo, { all: true });
     const entries = result._unsafeUnwrap();
     const root = entries.find((e) => e.message === 'root commit');
-    expect(root!.refs).toContain('HEAD');
+    expect(refNames(root!.refs)).toContain('HEAD');
     expect(entries.every((e) => e.headBranch === null)).toBe(true);
   });
 });

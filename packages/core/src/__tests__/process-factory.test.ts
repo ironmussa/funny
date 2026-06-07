@@ -5,11 +5,15 @@
  */
 import { describe, test, expect } from 'bun:test';
 
-import { opencodeManifest } from '@funny/shared/provider-manifests';
+import { KNOWN_ACP_PROVIDER_IDS, opencodeManifest } from '@funny/shared/provider-manifests';
 
 import { GenericACPProcess } from '../agents/generic-acp.js';
 import type { IAgentProcess, AgentProcessOptions } from '../agents/interfaces.js';
-import { defaultProcessFactory, registerProvider } from '../agents/process-factory.js';
+import {
+  defaultProcessFactory,
+  registerProvider,
+  resolveActiveAcpProviders,
+} from '../agents/process-factory.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
 
 // Minimal mock process class for testing
@@ -139,5 +143,27 @@ describe('process-factory', () => {
 
     // Restore original
     registerProvider('claude', SDKClaudeProcess);
+  });
+});
+
+describe('resolveActiveAcpProviders (lean-core)', () => {
+  test('unset / empty → all bundled ACP providers (no regression)', () => {
+    expect(resolveActiveAcpProviders(undefined).sort()).toEqual([...KNOWN_ACP_PROVIDER_IDS].sort());
+    expect(resolveActiveAcpProviders('').sort()).toEqual([...KNOWN_ACP_PROVIDER_IDS].sort());
+    expect(resolveActiveAcpProviders('   ').sort()).toEqual([...KNOWN_ACP_PROVIDER_IDS].sort());
+  });
+
+  test('a lean list limits to the named ACP providers', () => {
+    expect(resolveActiveAcpProviders('codex,gemini').sort()).toEqual(['codex', 'gemini']);
+  });
+
+  test('trims whitespace and ignores unknown / non-ACP entries (claude is always-on elsewhere)', () => {
+    expect(resolveActiveAcpProviders(' codex , bogus , claude ')).toEqual(['codex']);
+  });
+
+  test('preserves the registry order of KNOWN_ACP_PROVIDER_IDS', () => {
+    // filter keeps KNOWN order regardless of input order
+    const out = resolveActiveAcpProviders('opencode,codex');
+    expect(out).toEqual(KNOWN_ACP_PROVIDER_IDS.filter((id) => out.includes(id)));
   });
 });

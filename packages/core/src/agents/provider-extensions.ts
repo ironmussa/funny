@@ -303,6 +303,34 @@ export function removeProviderExtension(
   return { ok: true, id };
 }
 
+/**
+ * Remove + de-register an installed provider extension by its provider id (the
+ * handle the client has from the advertised list). Resolves the on-disk dir by
+ * matching the parsed manifest id.
+ */
+export function removeProviderExtensionById(
+  extDir: string,
+  id: string,
+): { ok: true } | { ok: false; error: string } {
+  let names: string[];
+  try {
+    names = readdirSync(extDir);
+  } catch {
+    names = [];
+  }
+  for (const dirName of names) {
+    const parsed = parseProviderExtensionDir(extDir, dirName);
+    if (parsed && parsed.ok && parsed.manifest.id === id) {
+      const res = removeProviderExtension(extDir, dirName);
+      return res.ok ? { ok: true } : { ok: false, error: res.error };
+    }
+  }
+  // Not found on disk — de-register if it is still registered, else report.
+  return unregisterProviderExtension(id)
+    ? { ok: true }
+    : { ok: false, error: `provider '${id}' not found` };
+}
+
 /** Test/teardown helper: clear the runner-local manifest store. */
 export function _clearRunnerManifests(): void {
   runnerManifests.clear();

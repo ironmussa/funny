@@ -31,6 +31,7 @@ export {
   installProviderExtensionFromPath,
   installProviderExtensionFromGit,
   removeProviderExtension,
+  removeProviderExtensionById,
   getRunnerManifest,
   getAdvertisedProviders,
   _clearRunnerManifests,

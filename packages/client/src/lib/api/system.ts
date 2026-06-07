@@ -91,6 +91,21 @@ export const systemApi = {
   // (provider-manifest-loader §3). The client merges these into the model picker.
   getProviders: () => request<{ providers: AdvertisedProvider[] }>('/providers'),
 
+  // Install / remove a provider extension ON THE USER'S RUNNER (provider-install-ui).
+  // Proxied by the server's /api/* tunnel to the runner. The install response
+  // discloses the binary the provider will launch.
+  installProvider: (body: { git?: string; path?: string; ref?: string; subdir?: string }) =>
+    request<{
+      ok: boolean;
+      provider: { id: string; label: string; dirName: string; spawn: { command: string; args: string[] } };
+    }>('/system/providers/install', { method: 'POST', body: JSON.stringify(body) }),
+
+  removeProvider: (id: string) =>
+    request<{ ok: boolean; id: string }>('/system/providers/remove', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    }),
+
   getAcpModels: (provider: string, refresh = false) =>
     request<AcpModelsResponse>(`/system/${provider}/models${refresh ? '?refresh=1' : ''}`),
 

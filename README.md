@@ -13,6 +13,7 @@ funny is a web UI for orchestrating multiple [Claude Code](https://claude.ai/cod
 - **Kanban board** — Drag-and-drop task management with columns (backlog, in progress, review, done, archived)
 - **Search** — Find threads by title, branch name, status, or message content with real-time filtering
 - **Analytics dashboard** — Track task creation, completion rates, stage distribution, and cost metrics over time
+- **Agent providers** — Drive Codex, Gemini, Cursor, opencode and other ACP agents alongside Claude; trim or extend the set from Settings → Providers
 - **MCP support** — Model Context Protocol integration
 - **Automation scheduling** — Cron-based recurring tasks
 - **Mobile support** — Responsive mobile view with touch-friendly navigation for on-the-go monitoring
@@ -357,6 +358,25 @@ Or manage them from **Settings → Extensions** in the UI. Plugins live on the s
 > **Full trust, no sandbox** — a plugin runs inside your authenticated session, like installing an npm package. Install only what you trust. Installing/removing is admin-only.
 
 Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference extensions live in their own repo: [`ironmussa/funny-extensions`](https://github.com/ironmussa/funny-extensions) — e.g. [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml) (DBML → interactive ER diagram, React Flow — fully decoupled, bundles its own deps).
+
+## Agent Providers
+
+Besides Claude, funny can drive other coding agents over **ACP** (Agent Client Protocol) — Codex, Gemini, Cursor, opencode, and more. These are **agent providers**: each is a small declarative manifest pointing at an agent CLI already installed on your **runner**. You can trim which built-in providers appear, and install third-party ones — without touching the core. Claude is always available.
+
+Manage everything from **Settings → Providers** (gear icon at the bottom of the sidebar → **Providers**, or open `/preferences/providers` directly):
+
+- **Built-in providers** — toggle each bundled ACP provider (Codex / Gemini / pi / Cursor / opencode) on or off with **Enable / Disable**. The change is live (no restart) and updates the model picker immediately. It's **session-scoped** — see `FUNNY_PROVIDERS` below to make a lean set the default.
+- **Installed providers** — install a third-party provider from a git repo or a local path on the runner, or remove one. On install, funny discloses the exact binary the provider will launch.
+
+```bash
+# On the RUNNER, choose which built-in ACP providers are active by default.
+# Comma-separated ids; Claude is always on. Unset = all built-ins (no change).
+FUNNY_PROVIDERS=claude,codex   # only Codex appears in the picker (besides Claude)
+```
+
+Where it shows: the **model picker** (in the New Thread dialog and the prompt input) lists only the active providers. Disable a provider — or leave it out of `FUNNY_PROVIDERS` — and it disappears from the picker. Re-enable it from Settings → Providers and it comes back, no restart.
+
+> **Runner-owned & full trust** — providers live on your runner and let funny spawn the binary they declare. Install only providers you trust. Built-in toggles are session-scoped; set `FUNNY_PROVIDERS` on the runner to persist a lean default across restarts.
 
 ## Development
 

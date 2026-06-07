@@ -277,6 +277,12 @@ HOST=0.0.0.0             # Expose UI to browsers on the network (optional)
 # Auto-detected if omitted:
 # CLAUDE_BINARY_PATH=/usr/local/bin/claude
 
+# ── Agent providers (optional) ───────────────────────────
+# Which built-in ACP providers are active by default, comma-separated.
+# Claude is always on. Unset = all built-ins (no change). This is the
+# persisted default; the Settings → Providers toggles are session-scoped.
+# FUNNY_PROVIDERS=claude,codex
+
 # ── Direct HTTP fallback (optional) ──────────────────────
 # If the runner is reachable directly by the central server (not behind NAT),
 # set this so the server can also call it over HTTP instead of the WS tunnel.

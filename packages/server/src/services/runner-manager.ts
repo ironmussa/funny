@@ -58,6 +58,25 @@ export async function getAdvertisedProvidersForUser(
   return runnerId ? getAdvertisedProviders(runnerId) : [];
 }
 
+// ── Active built-in ACP providers (lean-core §3) ────────────────────────────
+// The built-in ACP providers a runner currently has active (may be trimmed via
+// FUNNY_PROVIDERS). The client hides inactive built-ins from the picker.
+// `null` = the runner didn't advertise a set (don't filter — no regression).
+const activeBuiltinsByRunner = new Map<string, string[]>();
+
+/** Record (or clear) the active built-in set a runner advertised. */
+export function setActiveBuiltins(runnerId: string, ids: string[] | undefined): void {
+  if (ids) activeBuiltinsByRunner.set(runnerId, ids);
+  else activeBuiltinsByRunner.delete(runnerId);
+}
+
+/** The active built-in set for the user's online runner, or null if unknown. */
+export async function getActiveBuiltinsForUser(userId: string): Promise<string[] | null> {
+  const runnerId = await findAnyRunnerForUser(userId);
+  if (!runnerId) return null;
+  return activeBuiltinsByRunner.get(runnerId) ?? null;
+}
+
 /** Map a raw runner DB row to a RunnerInfo object. */
 function toRunnerInfo(
   r: typeof runners.$inferSelect,
@@ -132,6 +151,7 @@ export async function registerRunner(
     });
 
     setAdvertisedProviders(runnerId, req.providers);
+    setActiveBuiltins(runnerId, req.activeBuiltins);
     return { runnerId, token };
   }
 
@@ -162,6 +182,7 @@ export async function registerRunner(
   });
 
   setAdvertisedProviders(runnerId, req.providers);
+  setActiveBuiltins(runnerId, req.activeBuiltins);
   return { runnerId, token };
 }
 
@@ -202,6 +223,7 @@ export async function handleHeartbeat(
     .where(eq(runners.id, runnerId));
 
   setAdvertisedProviders(runnerId, req.providers);
+  setActiveBuiltins(runnerId, req.activeBuiltins);
   return true;
 }
 

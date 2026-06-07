@@ -93,6 +93,10 @@ export interface RunnerRegisterRequest {
   httpUrl?: string;
   /** External providers installed on this runner (public face only). */
   providers?: AdvertisedProvider[];
+  /** Built-in ACP providers currently ACTIVE on this runner (lean-core: the set
+   *  may be trimmed via FUNNY_PROVIDERS). The client hides inactive built-ins
+   *  from the picker. Absent = unknown (don't filter — no regression). */
+  activeBuiltins?: string[];
 }
 
 export interface RunnerRegisterResponse {
@@ -109,6 +113,8 @@ export interface RunnerHeartbeatRequest {
    *  the heartbeat so the server's per-runner provider set stays fresh as the
    *  operator adds/removes extensions. */
   providers?: AdvertisedProvider[];
+  /** Built-in ACP providers currently active on this runner (lean-core). */
+  activeBuiltins?: string[];
 }
 
 export interface RunnerHeartbeatResponse {

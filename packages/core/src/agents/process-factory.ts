@@ -78,6 +78,27 @@ export function unregisterProvider(name: string): boolean {
   return providerRegistry.delete(name);
 }
 
+/** The ACP built-in providers currently active (registered). Drives the
+ *  advertisement so the client picker can hide gated-off built-ins (lean-core). */
+export function getActiveBuiltinProviders(): KnownAcpProvider[] {
+  return KNOWN_ACP_PROVIDER_IDS.filter((id) => providerRegistry.has(id));
+}
+
+/** Enable a gated-off built-in ACP provider live (no restart). False if `id`
+ *  is not a known ACP built-in. */
+export function enableBuiltinProvider(id: string): boolean {
+  if (!(id in ACP_BUILTIN_PROCESSES)) return false;
+  registerProvider(id, ACP_BUILTIN_PROCESSES[id as KnownAcpProvider]);
+  return true;
+}
+
+/** Disable a built-in ACP provider live (no restart). False if not a known
+ *  ACP built-in. */
+export function disableBuiltinProvider(id: string): boolean {
+  if (!(id in ACP_BUILTIN_PROCESSES)) return false;
+  return unregisterProvider(id);
+}
+
 export const defaultProcessFactory: IAgentProcessFactory = {
   create(opts: AgentProcessOptions): IAgentProcess {
     const Ctor = providerRegistry.get(opts.provider ?? 'claude') ?? SDKClaudeProcess;

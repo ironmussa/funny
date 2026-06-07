@@ -23,7 +23,11 @@
 import { hostname } from 'os';
 import { join } from 'path';
 
-import { getAdvertisedProviders, loadProviderExtensions } from '@funny/core/agents';
+import {
+  getActiveBuiltinProviders,
+  getAdvertisedProviders,
+  loadProviderExtensions,
+} from '@funny/core/agents';
 import type { Project, WSEvent } from '@funny/shared';
 
 import { DATA_DIR } from '../lib/data-dir.js';
@@ -126,6 +130,7 @@ async function register(): Promise<boolean> {
         os: process.platform,
         httpUrl: httpUrl || undefined,
         providers: getAdvertisedProviders(),
+        activeBuiltins: getActiveBuiltinProviders(),
       }),
     });
 
@@ -150,7 +155,7 @@ async function register(): Promise<boolean> {
     try {
       const hbRes = await centralFetch('/api/runners/heartbeat', {
         method: 'POST',
-        body: JSON.stringify({ activeThreadIds: [], providers: getAdvertisedProviders() }),
+        body: JSON.stringify({ activeThreadIds: [], providers: getAdvertisedProviders(), activeBuiltins: getActiveBuiltinProviders() }),
       });
       if (hbRes.status === 404) {
         log.warn('Registration returned stale runner — server may be using wrong DB', {
@@ -209,6 +214,7 @@ async function sendHeartbeat(): Promise<void> {
       body: JSON.stringify({
         activeThreadIds: [], // TODO: populate from agent-runner
         providers: getAdvertisedProviders(),
+        activeBuiltins: getActiveBuiltinProviders(),
       }),
     });
 
@@ -263,6 +269,7 @@ async function sendHeartbeatWS(): Promise<void> {
     const response = await sendDataMessage('runner:heartbeat', {
       activeThreadIds: [],
       providers: getAdvertisedProviders(),
+      activeBuiltins: getActiveBuiltinProviders(),
     });
 
     _wsHeartbeatFailures = 0;

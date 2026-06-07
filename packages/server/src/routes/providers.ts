@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
-import { getAdvertisedProvidersForUser } from '../services/runner-manager.js';
+import {
+  getActiveBuiltinsForUser,
+  getAdvertisedProvidersForUser,
+} from '../services/runner-manager.js';
 
 /**
  * `/api/providers` — the runner-installed (external) agent providers available
@@ -16,6 +19,10 @@ export const providerRoutes = new Hono<ServerEnv>();
 providerRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
   c.header('Cache-Control', 'no-store');
-  if (!userId) return c.json({ providers: [] });
-  return c.json({ providers: await getAdvertisedProvidersForUser(userId) });
+  if (!userId) return c.json({ providers: [], activeBuiltins: null });
+  const [providers, activeBuiltins] = await Promise.all([
+    getAdvertisedProvidersForUser(userId),
+    getActiveBuiltinsForUser(userId),
+  ]);
+  return c.json({ providers, activeBuiltins });
 });

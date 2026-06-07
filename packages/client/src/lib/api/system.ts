@@ -89,7 +89,8 @@ export const systemApi = {
   // runner spawns the provider's ACP CLI to read what it advertises.
   // Runner-installed (external) providers advertised by the user's runner
   // (provider-manifest-loader §3). The client merges these into the model picker.
-  getProviders: () => request<{ providers: AdvertisedProvider[] }>('/providers'),
+  getProviders: () =>
+    request<{ providers: AdvertisedProvider[]; activeBuiltins: string[] | null }>('/providers'),
 
   // Install / remove a provider extension ON THE USER'S RUNNER (provider-install-ui).
   // Proxied by the server's /api/* tunnel to the runner. The install response

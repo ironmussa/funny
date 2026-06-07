@@ -116,6 +116,20 @@ describe('runner-manager service', () => {
       await rm.handleHeartbeat('r-adv', { activeThreadIds: [], providers: [] });
       expect(rm.getAdvertisedProviders('r-adv')).toEqual([]);
     });
+
+    test('caches the active built-in set advertised on heartbeat (lean-core)', async () => {
+      seedRunner(t.db as any, { id: 'r-lc', token: 'tok-lc', userId: 'user-lc', status: 'online' });
+
+      // Unknown until advertised → null (client must not filter the picker).
+      expect(await rm.getActiveBuiltinsForUser('user-lc')).toBeNull();
+
+      await rm.handleHeartbeat('r-lc', { activeThreadIds: [], activeBuiltins: ['codex', 'gemini'] });
+      expect(await rm.getActiveBuiltinsForUser('user-lc')).toEqual(['codex', 'gemini']);
+
+      // An explicit empty set is distinct from "unknown" → filter to none.
+      await rm.handleHeartbeat('r-lc', { activeThreadIds: [], activeBuiltins: [] });
+      expect(await rm.getActiveBuiltinsForUser('user-lc')).toEqual([]);
+    });
   });
 
   describe('findAnyRunnerForUser', () => {

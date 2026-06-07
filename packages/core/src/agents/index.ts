@@ -22,6 +22,10 @@ export {
   defaultProcessFactory,
   registerProvider,
   unregisterProvider,
+  resolveActiveAcpProviders,
+  getActiveBuiltinProviders,
+  enableBuiltinProvider,
+  disableBuiltinProvider,
   type ProcessConstructor,
 } from './process-factory.js';
 export {

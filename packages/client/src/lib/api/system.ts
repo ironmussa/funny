@@ -90,7 +90,12 @@ export const systemApi = {
   // Runner-installed (external) providers advertised by the user's runner
   // (provider-manifest-loader §3). The client merges these into the model picker.
   getProviders: () =>
-    request<{ providers: AdvertisedProvider[]; activeBuiltins: string[] | null }>('/providers'),
+    request<{
+      providers: AdvertisedProvider[];
+      activeBuiltins: string[] | null;
+      availableProviders: string[] | null;
+      hasRunner: boolean;
+    }>('/providers'),
 
   // Install / remove a provider extension ON THE USER'S RUNNER (provider-install-ui).
   // Proxied by the server's /api/* tunnel to the runner. The install response

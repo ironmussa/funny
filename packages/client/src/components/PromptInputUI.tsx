@@ -86,6 +86,8 @@ export type ModelSelectGroup = {
   provider: string;
   providerLabel: string;
   models: { value: string; label: string; disabled?: boolean }[];
+  disabled?: boolean;
+  disabledReason?: 'not-installed' | 'no-runner';
 };
 
 export const ModelSelect = memo(function ModelSelect({
@@ -111,7 +113,18 @@ export const ModelSelect = memo(function ModelSelect({
         {groups.map((group, idx) => (
           <SelectGroup key={group.provider}>
             {idx > 0 && <SelectSeparator />}
-            <SelectLabel>{group.providerLabel}</SelectLabel>
+            <SelectLabel
+              className={group.disabled ? 'text-muted-foreground/60' : undefined}
+              data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
+            >
+              {group.providerLabel}
+              {group.disabledReason === 'no-runner' && (
+                <span className="ml-1 font-normal italic">— connect a runner</span>
+              )}
+              {group.disabledReason === 'not-installed' && (
+                <span className="ml-1 font-normal italic">— not installed on runner</span>
+              )}
+            </SelectLabel>
             {group.models.map((m) => (
               <SelectItem key={m.value} value={m.value} size="xs" disabled={m.disabled}>
                 {m.label}

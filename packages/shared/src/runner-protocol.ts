@@ -97,6 +97,10 @@ export interface RunnerRegisterRequest {
    *  may be trimmed via FUNNY_PROVIDERS). The client hides inactive built-ins
    *  from the picker. Absent = unknown (don't filter — no regression). */
   activeBuiltins?: string[];
+  /** Active providers that can actually RUN on this runner (CLI resolvable),
+   *  including claude. The client greys out active-but-unavailable providers in
+   *  the picker. Absent = unknown (don't gate — no regression). */
+  availableProviders?: string[];
 }
 
 export interface RunnerRegisterResponse {
@@ -115,6 +119,8 @@ export interface RunnerHeartbeatRequest {
   providers?: AdvertisedProvider[];
   /** Built-in ACP providers currently active on this runner (lean-core). */
   activeBuiltins?: string[];
+  /** Active providers that can actually run on this runner (model-picker-availability). */
+  availableProviders?: string[];
 }
 
 export interface RunnerHeartbeatResponse {

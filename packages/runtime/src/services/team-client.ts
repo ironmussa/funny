@@ -25,6 +25,7 @@ import { join } from 'path';
 
 import {
   getActiveBuiltinProviders,
+  getActiveProviderSpawnRefs,
   getAdvertisedProviders,
   loadProviderExtensions,
 } from '@funny/core/agents';
@@ -42,7 +43,26 @@ import { nanoid } from 'nanoid';
 import { io, type Socket } from 'socket.io-client';
 
 import { log } from '../lib/logger.js';
+import { resolveProviderAvailability } from '../utils/provider-detection.js';
 import { getServices } from './service-registry.js';
+
+/**
+ * The provider state advertised to the server on register + heartbeat: external
+ * providers, the active built-in set (lean-core), and which active providers can
+ * actually run (model-picker-availability). Kept together so all three stay in
+ * sync on every advertisement.
+ */
+async function advertisedProviderState(): Promise<{
+  providers: ReturnType<typeof getAdvertisedProviders>;
+  activeBuiltins: string[];
+  availableProviders: string[];
+}> {
+  return {
+    providers: getAdvertisedProviders(),
+    activeBuiltins: getActiveBuiltinProviders(),
+    availableProviders: await resolveProviderAvailability(getActiveProviderSpawnRefs()),
+  };
+}
 import { wsBroker } from './ws-broker.js';
 
 /** When true, ALL runner↔server communication uses WebSocket (no HTTP except initial registration) */
@@ -129,8 +149,7 @@ async function register(): Promise<boolean> {
         hostname: hostname(),
         os: process.platform,
         httpUrl: httpUrl || undefined,
-        providers: getAdvertisedProviders(),
-        activeBuiltins: getActiveBuiltinProviders(),
+        ...(await advertisedProviderState()),
       }),
     });
 
@@ -155,7 +174,7 @@ async function register(): Promise<boolean> {
     try {
       const hbRes = await centralFetch('/api/runners/heartbeat', {
         method: 'POST',
-        body: JSON.stringify({ activeThreadIds: [], providers: getAdvertisedProviders(), activeBuiltins: getActiveBuiltinProviders() }),
+        body: JSON.stringify({ activeThreadIds: [], ...(await advertisedProviderState()) }),
       });
       if (hbRes.status === 404) {
         log.warn('Registration returned stale runner — server may be using wrong DB', {
@@ -213,8 +232,7 @@ async function sendHeartbeat(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({
         activeThreadIds: [], // TODO: populate from agent-runner
-        providers: getAdvertisedProviders(),
-        activeBuiltins: getActiveBuiltinProviders(),
+        ...(await advertisedProviderState()),
       }),
     });
 
@@ -268,8 +286,7 @@ async function sendHeartbeatWS(): Promise<void> {
   try {
     const response = await sendDataMessage('runner:heartbeat', {
       activeThreadIds: [],
-      providers: getAdvertisedProviders(),
-      activeBuiltins: getActiveBuiltinProviders(),
+      ...(await advertisedProviderState()),
     });
 
     _wsHeartbeatFailures = 0;

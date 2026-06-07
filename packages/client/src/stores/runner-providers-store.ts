@@ -13,6 +13,12 @@ interface RunnerProvidersState {
   /** Active built-in ACP providers on the runner (lean-core). null = unknown
    *  (don't filter the picker — no regression). */
   activeBuiltins: string[] | null;
+  /** Active providers that can actually run (model-picker-availability). null =
+   *  not advertised (old runner → unknown, don't gate). */
+  availableProviders: string[] | null;
+  /** Whether the user has any connected runner. false → no-runner state (grey
+   *  everything); distinguishes "no runner" from "online but didn't advertise". */
+  hasRunner: boolean;
   loadedAt: number;
   loading: boolean;
   fetch: (force?: boolean) => Promise<void>;
@@ -29,6 +35,8 @@ interface RunnerProvidersState {
 export const useRunnerProvidersStore = create<RunnerProvidersState>((set, get) => ({
   providers: [],
   activeBuiltins: null,
+  availableProviders: null,
+  hasRunner: false,
   loadedAt: 0,
   loading: false,
 
@@ -47,6 +55,8 @@ export const useRunnerProvidersStore = create<RunnerProvidersState>((set, get) =
     set({
       providers: res.value.providers,
       activeBuiltins: res.value.activeBuiltins,
+      availableProviders: res.value.availableProviders,
+      hasRunner: res.value.hasRunner,
       loading: false,
       loadedAt: Date.now(),
     });

@@ -167,10 +167,16 @@ export function parseUnifiedModel(combined: string): { provider: string; model: 
   return { provider: combined.slice(0, idx), model: combined.slice(idx + 1) };
 }
 
+/** Why a provider group is unavailable in the picker (model-picker-availability). */
+export type ProviderUnavailableReason = 'not-installed' | 'no-runner';
+
 export interface ModelSelectGroup {
   provider: string;
   providerLabel: string;
-  models: { value: string; label: string }[];
+  models: { value: string; label: string; disabled?: boolean }[];
+  /** Set when the provider is active but cannot run — its models render greyed. */
+  disabled?: boolean;
+  disabledReason?: ProviderUnavailableReason;
 }
 
 /** Status placeholders (loading, configure hints) are not user-toggleable. */

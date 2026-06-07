@@ -77,6 +77,26 @@ export async function getActiveBuiltinsForUser(userId: string): Promise<string[]
   return activeBuiltinsByRunner.get(runnerId) ?? null;
 }
 
+// ── Per-provider availability (model-picker-availability §2) ─────────────────
+// Which active providers can actually run on a runner (CLI resolvable). The
+// client greys out active-but-unavailable providers. `null` = no runner / not
+// advertised → the client treats availability as unknown and does not gate.
+const availableByRunner = new Map<string, string[]>();
+
+/** Record (or clear) the available-provider set a runner advertised. */
+export function setAvailableProviders(runnerId: string, ids: string[] | undefined): void {
+  if (ids) availableByRunner.set(runnerId, ids);
+  else availableByRunner.delete(runnerId);
+}
+
+/** The available-provider set for the user's online runner, or null if unknown
+ *  (no runner → the picker renders the no-runner state). */
+export async function getAvailableProvidersForUser(userId: string): Promise<string[] | null> {
+  const runnerId = await findAnyRunnerForUser(userId);
+  if (!runnerId) return null;
+  return availableByRunner.get(runnerId) ?? null;
+}
+
 /** Map a raw runner DB row to a RunnerInfo object. */
 function toRunnerInfo(
   r: typeof runners.$inferSelect,
@@ -152,6 +172,7 @@ export async function registerRunner(
 
     setAdvertisedProviders(runnerId, req.providers);
     setActiveBuiltins(runnerId, req.activeBuiltins);
+    setAvailableProviders(runnerId, req.availableProviders);
     return { runnerId, token };
   }
 
@@ -183,6 +204,7 @@ export async function registerRunner(
 
   setAdvertisedProviders(runnerId, req.providers);
   setActiveBuiltins(runnerId, req.activeBuiltins);
+  setAvailableProviders(runnerId, req.availableProviders);
   return { runnerId, token };
 }
 
@@ -224,6 +246,7 @@ export async function handleHeartbeat(
 
   setAdvertisedProviders(runnerId, req.providers);
   setActiveBuiltins(runnerId, req.activeBuiltins);
+  setAvailableProviders(runnerId, req.availableProviders);
   return true;
 }
 

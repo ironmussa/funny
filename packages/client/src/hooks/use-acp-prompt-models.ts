@@ -10,7 +10,10 @@ const log = createClientLogger('PromptInputAcpModels');
 export interface ModelGroup {
   provider: string;
   providerLabel: string;
-  models: { value: string; label: string }[];
+  models: { value: string; label: string; disabled?: boolean }[];
+  /** Availability tagging (model-picker-availability) — set by useRunnerProviderGroups. */
+  disabled?: boolean;
+  disabledReason?: 'not-installed' | 'no-runner';
   [key: string]: unknown;
 }
 

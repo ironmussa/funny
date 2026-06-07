@@ -10,7 +10,11 @@
  * Checks for CLI binaries and SDKs for each provider.
  */
 
+import { accessSync, constants as fsConstants, existsSync } from 'fs';
+import { delimiter as pathDelimiter, join as pathJoin } from 'path';
+
 import type { AgentProvider } from '@funny/shared';
+import { resolveSpawnCommand, type SpawnConfig } from '@funny/shared/provider-manifest';
 
 import { log } from '../lib/logger.js';
 import { checkClaudeBinaryAvailability, validateClaudeBinary } from './claude-binary.js';
@@ -109,6 +113,89 @@ export async function getAvailableProviders(): Promise<Map<AgentProvider, Provid
 /** Reset the cached provider detection results. */
 export function resetProviderCache(): void {
   cachedProviders = null;
+  pathResolveCache.clear();
+}
+
+// ── Manifest-driven availability (model-picker-availability §1) ──────────────
+// Whether each ACTIVE provider can actually run on this runner, derived
+// generically from its manifest's resolved spawn command (env override → npx →
+// binary, via resolveSpawnCommand) being resolvable on PATH. This is the single
+// availability signal the client picker gates on; claude is special-cased (it
+// has no ACP manifest), and the non-ACP bundled backends are available in v1.
+
+const pathResolveCache = new Map<string, boolean>();
+
+/** Does `command` resolve to an executable on PATH (or as a direct path)?
+ *  Shell-free (no subprocess) to avoid any injection from manifest-supplied
+ *  commands. Cached per command; cleared by resetProviderCache. */
+function commandOnPath(command: string): boolean {
+  const cached = pathResolveCache.get(command);
+  if (cached !== undefined) return cached;
+  const win = process.platform === 'win32';
+  const exts = win ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';') : [''];
+  const hasSep = command.includes('/') || (win && command.includes('\\'));
+  const bases = hasSep
+    ? [command]
+    : (process.env.PATH ?? '')
+        .split(pathDelimiter)
+        .filter(Boolean)
+        .map((dir) => pathJoin(dir, command));
+  const executable = (p: string): boolean => {
+    try {
+      if (win) return existsSync(p);
+      accessSync(p, fsConstants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const ok = bases.some((base) => exts.some((ext) => executable(base + ext)));
+  pathResolveCache.set(command, ok);
+  return ok;
+}
+
+/** An active ACP provider (built-in or external) with the spawn config needed
+ *  to decide availability. The caller (which has manifest access via
+ *  `@funny/core/agents`) supplies these — keeps this module free of the heavy
+ *  agents barrel. */
+export interface ProviderSpawnRef {
+  id: string;
+  spawn: SpawnConfig;
+}
+
+/**
+ * The active providers that can actually run on this runner. Manifest-driven:
+ * - claude → existing SDK/CLI detection (no ACP manifest);
+ * - each supplied ACP provider → its RESOLVED spawn command (env/npx precedence
+ *   via resolveSpawnCommand) on PATH;
+ * - deepagent / llm-api → available in v1 (key/config-based, not gated here).
+ *
+ * `deps` is injectable for tests (no real PATH probing / env).
+ */
+export async function resolveProviderAvailability(
+  acpProviders: ProviderSpawnRef[],
+  deps: {
+    commandExists?: (cmd: string) => boolean;
+    env?: Record<string, string | undefined>;
+  } = {},
+): Promise<string[]> {
+  const commandExists = deps.commandExists ?? commandOnPath;
+  const env = deps.env ?? process.env;
+  const available: string[] = [];
+
+  // claude — always-on, special-cased
+  const detected = await getAvailableProviders();
+  if (detected.get('claude')?.available) available.push('claude');
+
+  // non-ACP bundled backends — available in v1 (not gated by a CLI on PATH)
+  available.push('deepagent', 'llm-api');
+
+  // active ACP providers (built-in + external) — resolved spawn command on PATH
+  for (const p of acpProviders) {
+    if (commandExists(resolveSpawnCommand(p.spawn, env).command)) available.push(p.id);
+  }
+
+  return available;
 }
 
 /** Log detected providers to console. */

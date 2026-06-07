@@ -107,6 +107,14 @@ export const systemApi = {
       body: JSON.stringify({ id }),
     }),
 
+  // Enable / disable a built-in ACP provider live on the runner (lean-core §4).
+  // Session-scoped — FUNNY_PROVIDERS is the persisted source of truth.
+  setBuiltinEnabled: (id: string, enabled: boolean) =>
+    request<{ ok: boolean; id: string; active: string[] }>(
+      `/system/providers/${enabled ? 'enable' : 'disable'}-builtin`,
+      { method: 'POST', body: JSON.stringify({ id }) },
+    ),
+
   getAcpModels: (provider: string, refresh = false) =>
     request<AcpModelsResponse>(`/system/${provider}/models${refresh ? '?refresh=1' : ''}`),
 

@@ -16,6 +16,9 @@ interface RunnerProvidersState {
   loadedAt: number;
   loading: boolean;
   fetch: (force?: boolean) => Promise<void>;
+  /** Optimistically set the active built-in set (e.g. after a live toggle, so
+   *  the picker updates before the server's heartbeat-driven cache catches up). */
+  setActiveBuiltins: (ids: string[]) => void;
 }
 
 /**
@@ -48,4 +51,6 @@ export const useRunnerProvidersStore = create<RunnerProvidersState>((set, get) =
       loadedAt: Date.now(),
     });
   },
+
+  setActiveBuiltins: (ids: string[]) => set({ activeBuiltins: ids }),
 }));

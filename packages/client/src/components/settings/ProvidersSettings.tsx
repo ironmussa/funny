@@ -5,7 +5,8 @@
  * de-registers it. The spawn command is disclosed on install. Per-user-runner —
  * each user manages their own runner's providers.
  */
-import { AlertTriangle, Cpu, Package, RefreshCw, Trash2 } from 'lucide-react';
+import { ACP_MANIFESTS, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { AlertTriangle, Cpu, Package, Power, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,6 +19,9 @@ import { useRunnerProvidersStore } from '@/stores/runner-providers-store';
 
 const log = createClientLogger('providers-settings');
 
+/** The gateable built-in ACP providers, with their display labels. */
+const BUILTIN_ACP = KNOWN_ACP_PROVIDER_IDS.map((id) => ({ id, label: ACP_MANIFESTS[id].label }));
+
 /** Heuristic: a git URL vs a local path on the runner. */
 function isGitSource(s: string): boolean {
   return /:\/\//.test(s) || /^git@/.test(s) || /^(github|gh):/i.test(s);
@@ -29,7 +33,10 @@ export function ProvidersSettings() {
   const [source, setSource] = useState('');
   const [installing, setInstalling] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [togglingBuiltin, setTogglingBuiltin] = useState<string | null>(null);
   const refetchPicker = useRunnerProvidersStore((s) => s.fetch);
+  const activeBuiltins = useRunnerProvidersStore((s) => s.activeBuiltins);
+  const setActiveBuiltins = useRunnerProvidersStore((s) => s.setActiveBuiltins);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -45,7 +52,8 @@ export function ProvidersSettings() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void refetchPicker(); // populate the store's activeBuiltins for the toggles
+  }, [refresh, refetchPicker]);
 
   const handleInstall = useCallback(async () => {
     const src = source.trim();
@@ -66,6 +74,34 @@ export function ProvidersSettings() {
     }
     setInstalling(false);
   }, [source, refresh, refetchPicker]);
+
+  // A built-in is active when the runner advertises no set (null = unknown, all
+  // active — no regression) or when it's in the advertised active set.
+  const isBuiltinActive = useCallback(
+    (id: string) => activeBuiltins === null || activeBuiltins.includes(id),
+    [activeBuiltins],
+  );
+
+  const handleToggleBuiltin = useCallback(
+    async (id: string, enable: boolean) => {
+      setTogglingBuiltin(id);
+      const result = await systemApi.setBuiltinEnabled(id, enable);
+      if (result.isOk()) {
+        // Optimistic: reflect in the picker now; the server cache catches up on
+        // the next runner heartbeat.
+        setActiveBuiltins(result.value.active);
+        toast.success(`${enable ? 'Enabled' : 'Disabled'} ${id}`, {
+          description: 'Session only — set FUNNY_PROVIDERS on the runner to persist.',
+        });
+      } else {
+        toast.error(`${enable ? 'Enable' : 'Disable'} failed`, {
+          description: result.error.message,
+        });
+      }
+      setTogglingBuiltin(null);
+    },
+    [setActiveBuiltins],
+  );
 
   const handleRemove = useCallback(
     async (id: string) => {
@@ -140,6 +176,56 @@ export function ProvidersSettings() {
         </p>
       </div>
 
+      <div className="mb-1 mt-2 flex items-baseline justify-between px-1">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Built-in providers
+        </h4>
+        <span className="text-muted-foreground text-[11px]">session toggle</span>
+      </div>
+      <p className="text-muted-foreground px-1 pb-2 text-[11px]">
+        Enable or disable bundled ACP providers in the model picker. Resets on runner restart — set{' '}
+        <code>FUNNY_PROVIDERS</code> on the runner to make a lean set the default.
+      </p>
+      <div className="mb-4 flex flex-col gap-2">
+        {BUILTIN_ACP.map(({ id, label }) => {
+          const active = isBuiltinActive(id);
+          return (
+            <div
+              key={id}
+              className="settings-card flex items-center gap-3 px-3 py-2.5"
+              data-testid={`builtin-provider-${id}`}
+            >
+              <Power
+                className={`icon-base shrink-0 ${active ? 'text-emerald-500' : 'text-muted-foreground/40'}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="truncate text-sm font-medium">{label}</span>
+                  <span className="text-muted-foreground text-xs">{id}</span>
+                </div>
+                <p className="text-muted-foreground truncate text-xs">
+                  {active ? 'Active in the model picker' : 'Hidden from the model picker'}
+                </p>
+              </div>
+              <Button
+                variant={active ? 'ghost' : 'default'}
+                size="sm"
+                onClick={() => void handleToggleBuiltin(id, !active)}
+                disabled={togglingBuiltin === id}
+                data-testid={`builtin-toggle-${id}`}
+              >
+                {togglingBuiltin === id ? '…' : active ? 'Disable' : 'Enable'}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mb-1 mt-2 px-1">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Installed providers
+        </h4>
+      </div>
       {providers.length === 0 ? (
         <div className="settings-card flex flex-col items-center gap-2 px-4 py-8 text-center">
           <Cpu className="text-muted-foreground/50 size-6" />

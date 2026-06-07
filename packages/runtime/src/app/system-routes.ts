@@ -161,6 +161,38 @@ export function registerSystemRoutes(app: Hono): void {
     return c.json({ ok: true, id: body.id });
   });
 
+  // ── Built-in provider toggle (lean-core §4) ────────────────────────────────
+  // Enable/disable a gated-off BUILT-IN ACP provider live (no restart). Session-
+  // scoped: the persisted source of truth is FUNNY_PROVIDERS, so a toggle is
+  // reset on runner restart (persistence is deferred — lean-core §6.2). The
+  // change is advertised to the server on the next heartbeat.
+  const toggleBuiltin = async (c: any, enable: boolean) => {
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+    let body: { id?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: 'invalid body' }, 400);
+    }
+    if (typeof body.id !== 'string' || !body.id) {
+      return c.json({ ok: false, error: 'id required' }, 400);
+    }
+    const agents = await import('@funny/core/agents');
+    const ok = enable
+      ? agents.enableBuiltinProvider(body.id)
+      : agents.disableBuiltinProvider(body.id);
+    if (!ok) return c.json({ ok: false, error: `${body.id} is not a built-in ACP provider` }, 400);
+    log.info(`built-in provider ${enable ? 'enabled' : 'disabled'}`, {
+      namespace: 'provider-install',
+      id: body.id,
+    });
+    return c.json({ ok: true, id: body.id, active: agents.getActiveBuiltinProviders() });
+  };
+
+  app.post('/api/system/providers/enable-builtin', (c) => toggleBuiltin(c, true));
+  app.post('/api/system/providers/disable-builtin', (c) => toggleBuiltin(c, false));
+
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();
     resetBinaryCache();

@@ -13,10 +13,19 @@ interface GitLogEntryDTO {
   body: string;
 }
 
+/** How a graph ref relates to the repo (mirrors core's `GraphRefKind`). */
+export type GraphRefKind = 'local' | 'remote' | 'tag';
+
+/** A branch/tag decoration on a commit, classified local/remote/tag server-side. */
+export interface GraphRefDTO {
+  name: string;
+  kind: GraphRefKind;
+}
+
 /** A commit log entry enriched with branch-graph topology (`/graph-log` endpoints). */
 interface GitGraphLogEntryDTO extends GitLogEntryDTO {
   parentHashes: string[];
-  refs: string[];
+  refs: GraphRefDTO[];
   headBranch: string | null;
 }
 

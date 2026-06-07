@@ -1,5 +1,14 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUpCircle, GitBranch, GitCommit, Pencil, RefreshCw, Tag } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  Cloud,
+  CloudCheck,
+  GitBranch,
+  GitCommit,
+  Pencil,
+  RefreshCw,
+  Tag,
+} from 'lucide-react';
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -16,6 +25,7 @@ import { darkenHex } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
+import type { GraphRefDTO } from '@/lib/api/git';
 import { authorAvatarUrl } from '@/lib/author-avatar';
 import { useCachedAvatar } from '@/lib/avatar-cache';
 import { createClientLogger } from '@/lib/client-logger';
@@ -25,6 +35,7 @@ import {
   githubCommitUrl,
 } from '@/lib/github-url';
 import { graphLanePastel } from '@/lib/graph-colors';
+import { foldGraphRefs } from '@/lib/graph-refs';
 import { metric } from '@/lib/telemetry';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -48,7 +59,7 @@ interface GraphEntry {
   message: string;
   body: string;
   parentHashes: string[];
-  refs: string[];
+  refs: GraphRefDTO[];
   /** Checked-out branch, set only on the commit HEAD points at (else null). */
   headBranch: string | null;
 }
@@ -582,29 +593,57 @@ function GraphCommitRow({
   // different lanes get different hues. Multiple refs on one commit darken
   // progressively (same degraded-color approach as the sidebar project
   // powerline): first chip = the pastel, each next a shade darker.
+  //
+  // GitKraken-style ref folding: when a local branch and its remote-tracking
+  // branch (`feat/x` + `origin/feat/x`) decorate the SAME commit, they're in
+  // sync, so we collapse the pair into ONE chip. Each chip carries a SINGLE
+  // icon that encodes its state (no redundant branch+cloud pairing): a synced
+  // branch shows `CloudCheck` (tracked & up to date), a local-only branch shows
+  // `GitBranch`, a lone remote-tracking branch shows `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
   const refSegments = useMemo<PowerlineSegmentData[]>(
     () =>
-      entry.refs.map((refName, i) => {
-        const isHead = refName === 'HEAD';
-        const isTag = !refName.includes('/') && !isHead && /^v?\d/.test(refName);
-        // The checked-out branch is highlighted: full-brightness pastel + bold
-        // label (emphasis), while the other refs darken progressively so it
-        // visually stands out. `HEAD` and `origin/HEAD` are already stripped
-        // server-side, so the current branch is surfaced via `headBranch`.
-        const isCurrent = !!entry.headBranch && refName === entry.headBranch;
+      foldGraphRefs(entry.refs, entry.headBranch).map((r, i) => {
+        const color = r.isCurrent
+          ? lanePastel
+          : darkenHex(lanePastel, Math.min(0.18 + i * 0.14, 0.5));
+        if (r.kind === 'tag') {
+          return { key: `tag:${r.name}`, icon: Tag, label: r.name, color, tooltip: r.name };
+        }
+        if (r.kind === 'remote') {
+          return {
+            key: `remote:${r.name}`,
+            icon: Cloud,
+            label: r.name,
+            color,
+            tooltip: t('graph.remoteBranch', {
+              ref: r.name,
+              defaultValue: `${r.name} (remote branch)`,
+            }),
+          };
+        }
+        // Local branch. Folded-in remote → CloudCheck (synced); else a plain
+        // branch icon. One icon only, so the chip never shows two glyphs.
         return {
-          key: refName,
-          icon: isTag ? Tag : GitBranch,
-          label: refName,
-          color: isCurrent ? lanePastel : darkenHex(lanePastel, Math.min(0.18 + i * 0.14, 0.5)),
-          emphasis: isCurrent,
-          tooltip: isCurrent
-            ? t('graph.currentBranch', {
-                ref: refName,
-                defaultValue: `${refName} (current branch)`,
+          key: `local:${r.name}`,
+          icon: r.syncedRemote ? CloudCheck : GitBranch,
+          label: r.name,
+          color,
+          emphasis: r.isCurrent,
+          tooltip: r.syncedRemote
+            ? t('graph.branchSynced', {
+                ref: r.name,
+                remote: r.syncedRemote,
+                defaultValue: r.isCurrent
+                  ? `${r.name} (current branch · in sync with ${r.syncedRemote})`
+                  : `${r.name} (in sync with ${r.syncedRemote})`,
               })
-            : refName,
+            : r.isCurrent
+              ? t('graph.currentBranch', {
+                  ref: r.name,
+                  defaultValue: `${r.name} (current branch)`,
+                })
+              : r.name,
         };
       }),
     [entry.refs, entry.headBranch, lanePastel, t],

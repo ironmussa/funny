@@ -28,17 +28,36 @@ export interface GitLogEntry {
  * Kept separate from {@link GitLogEntry} so the existing flat History view's
  * data path stays untouched.
  */
+/**
+ * How a {@link GraphRef} relates to the repo: a local branch (`refs/heads/*`),
+ * a remote-tracking branch (`refs/remotes/*`), or a tag (`refs/tags/*`).
+ * Classified server-side from `git log --decorate=full` so the UI never has to
+ * guess local-vs-remote from the `origin/` naming convention (branch names can
+ * themselves contain `/`, making prefix-guessing ambiguous).
+ */
+export type GraphRefKind = 'local' | 'remote' | 'tag';
+
+/** A single branch/tag decoration on a commit, with its origin classified. */
+export interface GraphRef {
+  /**
+   * Display name: bare branch (`main`, `feat/x`), remote-qualified (`origin/main`),
+   * tag name (`v1.0`), or the literal `HEAD` for a detached head.
+   */
+  name: string;
+  kind: GraphRefKind;
+}
+
 export interface GitGraphLogEntry extends GitLogEntry {
   /** Parent commit hashes. 0 = root, 1 = normal, 2+ = merge commit. */
   parentHashes: string[];
   /**
-   * Branch/tag ref names decorating this commit (short branch names,
-   * `origin/...`, tag names). The redundant symbolic refs `HEAD` and
-   * `origin/HEAD` are stripped — `HEAD` just points at the checked-out branch
-   * (see {@link headBranch}) and `origin/HEAD` only names the remote default.
-   * A detached HEAD keeps a literal `HEAD` entry. Empty when no ref decorates.
+   * Branch/tag refs decorating this commit, each tagged with its {@link GraphRefKind}.
+   * The redundant symbolic refs `HEAD` and `origin/HEAD` are stripped — `HEAD`
+   * just points at the checked-out branch (see {@link headBranch}) and
+   * `origin/HEAD` only names the remote default. A detached HEAD keeps a literal
+   * `HEAD` entry (kind `local`). Empty when no ref decorates.
    */
-  refs: string[];
+  refs: GraphRef[];
   /**
    * The checked-out branch, set only on the commit that `HEAD` points at (null
    * on every other commit and when HEAD is detached). Lets the UI highlight the
@@ -135,40 +154,49 @@ export function getLog(
 }
 
 /**
- * Parse a `%D` decoration string (e.g. `HEAD -> main, origin/main, origin/HEAD,
- * tag: v1.0`) into the display refs plus the current branch.
+ * Parse a `git log --decorate=full %D` decoration string into classified refs
+ * plus the current branch. `--decorate=full` keeps the full ref paths
+ * (`refs/heads/*`, `refs/remotes/*`, `refs/tags/*`) so each ref's
+ * {@link GraphRefKind} is unambiguous — unlike the short form, where a local
+ * branch named `feat/x` is indistinguishable from a remote `origin/x`.
  *
  * Drops the two redundant symbolic refs: `HEAD` (replaced by `headBranch`, which
  * the UI highlights) and remote default pointers ending in `/HEAD` such as
- * `origin/HEAD` (pure noise in a graph). A detached HEAD — decoration is the
- * bare token `HEAD` with no arrow — keeps its `HEAD` chip since there's no
- * branch to point at.
+ * `refs/remotes/origin/HEAD` (pure noise in a graph). A detached HEAD — the bare
+ * token `HEAD` with no arrow — keeps its `HEAD` chip since there's no branch to
+ * point at.
  *
- * e.g. `HEAD -> main, origin/main, origin/HEAD, tag: v1.0`
- *   → `{ refs: ['main', 'origin/main', 'v1.0'], headBranch: 'main' }`
+ * e.g. `HEAD -> refs/heads/main, refs/remotes/origin/main, refs/remotes/origin/HEAD, tag: refs/tags/v1.0`
+ *   → `{ refs: [{name:'main',kind:'local'}, {name:'origin/main',kind:'remote'}, {name:'v1.0',kind:'tag'}], headBranch: 'main' }`
  */
-function parseRefs(decoration: string): { refs: string[]; headBranch: string | null } {
+function parseRefs(decoration: string): { refs: GraphRef[]; headBranch: string | null } {
   const trimmed = decoration.trim();
   if (!trimmed) return { refs: [], headBranch: null };
-  const refs: string[] = [];
+  const refs: GraphRef[] = [];
   let headBranch: string | null = null;
+  const stripHeads = (full: string) => full.replace(/^refs\/heads\//, '');
   for (const raw of trimmed.split(',')) {
     const token = raw.trim();
     if (!token) continue;
     if (token.startsWith('HEAD -> ')) {
       // Current branch — record it and emit only the branch chip (drop `HEAD`).
-      headBranch = token.slice('HEAD -> '.length).trim();
-      refs.push(headBranch);
+      headBranch = stripHeads(token.slice('HEAD -> '.length).trim());
+      refs.push({ name: headBranch, kind: 'local' });
     } else if (token === 'HEAD') {
       // Detached HEAD: no branch to highlight, keep the literal chip.
-      refs.push('HEAD');
-    } else if (token.endsWith('/HEAD')) {
-      // Remote default-branch pointer (e.g. `origin/HEAD`) — redundant, drop it.
-      continue;
+      refs.push({ name: 'HEAD', kind: 'local' });
     } else if (token.startsWith('tag: ')) {
-      refs.push(token.slice('tag: '.length).trim());
+      refs.push({ name: token.slice('tag: refs/tags/'.length).trim(), kind: 'tag' });
+    } else if (token.startsWith('refs/remotes/')) {
+      const name = token.slice('refs/remotes/'.length).trim();
+      // Remote default-branch pointer (e.g. `origin/HEAD`) — redundant, drop it.
+      if (name.endsWith('/HEAD')) continue;
+      refs.push({ name, kind: 'remote' });
+    } else if (token.startsWith('refs/heads/')) {
+      refs.push({ name: stripHeads(token), kind: 'local' });
     } else {
-      refs.push(token);
+      // Fallback for any decoration we didn't anticipate — treat as a local chip.
+      refs.push({ name: token, kind: 'local' });
     }
   }
   return { refs, headBranch };
@@ -190,7 +218,16 @@ export function getGraphLog(
   const RECORD_SEP = '\x1e';
   // hash, shortHash, author, email, relDate, parents (space-sep), refs (%D), subject, body
   const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%ar%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
-  const args = ['log', '--topo-order', `--format=${format}`, '-n', String(limit)];
+  // `--decorate=full` keeps full ref paths in `%D` so parseRefs can classify
+  // each ref as local/remote/tag without guessing from the `origin/` convention.
+  const args = [
+    'log',
+    '--topo-order',
+    '--decorate=full',
+    `--format=${format}`,
+    '-n',
+    String(limit),
+  ];
   if (skip > 0) args.push(`--skip=${skip}`);
   if (all) args.push('--all');
   return ResultAsync.fromPromise(

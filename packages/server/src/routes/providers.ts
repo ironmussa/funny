@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
 import {
+  findAnyRunnerForUser,
   getActiveBuiltinsForUser,
   getAdvertisedProvidersForUser,
+  getAvailableProvidersForUser,
 } from '../services/runner-manager.js';
 
 /**
@@ -19,10 +21,15 @@ export const providerRoutes = new Hono<ServerEnv>();
 providerRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
   c.header('Cache-Control', 'no-store');
-  if (!userId) return c.json({ providers: [], activeBuiltins: null });
-  const [providers, activeBuiltins] = await Promise.all([
+  if (!userId)
+    return c.json({ providers: [], activeBuiltins: null, availableProviders: null, hasRunner: false });
+  const [providers, activeBuiltins, availableProviders, runnerId] = await Promise.all([
     getAdvertisedProvidersForUser(userId),
     getActiveBuiltinsForUser(userId),
+    getAvailableProvidersForUser(userId),
+    findAnyRunnerForUser(userId),
   ]);
-  return c.json({ providers, activeBuiltins });
+  // hasRunner distinguishes "no runner → no-runner state" from "runner online but
+  // didn't advertise availability (old runner) → unknown, don't gate".
+  return c.json({ providers, activeBuiltins, availableProviders, hasRunner: runnerId !== null });
 });

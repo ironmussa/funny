@@ -130,6 +130,27 @@ describe('runner-manager service', () => {
       await rm.handleHeartbeat('r-lc', { activeThreadIds: [], activeBuiltins: [] });
       expect(await rm.getActiveBuiltinsForUser('user-lc')).toEqual([]);
     });
+
+    test('caches the available-provider set advertised on heartbeat (model-picker-availability)', async () => {
+      seedRunner(t.db as any, { id: 'r-av', token: 'tok-av', userId: 'user-av', status: 'online' });
+
+      // No runner advertisement yet → null (client must not gate / shows no-runner).
+      expect(await rm.getAvailableProvidersForUser('user-av')).toBeNull();
+
+      await rm.handleHeartbeat('r-av', {
+        activeThreadIds: [],
+        availableProviders: ['claude', 'codex'],
+      });
+      expect(await rm.getAvailableProvidersForUser('user-av')).toEqual(['claude', 'codex']);
+
+      // Runner online but nothing available is distinct from "unknown".
+      await rm.handleHeartbeat('r-av', { activeThreadIds: [], availableProviders: [] });
+      expect(await rm.getAvailableProvidersForUser('user-av')).toEqual([]);
+    });
+
+    test('no runner for the user → availability is null (no-runner state)', async () => {
+      expect(await rm.getAvailableProvidersForUser('nobody-home')).toBeNull();
+    });
   });
 
   describe('findAnyRunnerForUser', () => {

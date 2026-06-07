@@ -18,9 +18,9 @@
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 
-import type { ProviderManifest } from '@funny/shared/provider-manifest';
+import type { ProviderManifest, SpawnConfig } from '@funny/shared/provider-manifest';
 import { parseFunnyProviderFile } from '@funny/shared/provider-manifest-schema';
-import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { ACP_MANIFESTS, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
 
 import { createDebugLogger } from '../debug.js';
@@ -34,7 +34,12 @@ import {
   type KindHandler,
 } from '../extensions/index.js';
 import { GenericACPProcess } from './generic-acp.js';
-import { registerProvider, unregisterProvider, type ProcessConstructor } from './process-factory.js';
+import {
+  getActiveBuiltinProviders,
+  registerProvider,
+  unregisterProvider,
+  type ProcessConstructor,
+} from './process-factory.js';
 import type { ClaudeProcessOptions } from './types.js';
 
 const dlog = createDebugLogger('provider-extensions');
@@ -54,6 +59,31 @@ const runnerManifests = new Map<string, ProviderManifest>();
 /** Look up an external provider's full manifest (used by GenericACPProcess wiring). */
 export function getRunnerManifest(id: string): ProviderManifest | undefined {
   return runnerManifests.get(id);
+}
+
+/** An active ACP provider's id + spawn config, for availability resolution. */
+export interface ProviderSpawnRef {
+  id: string;
+  spawn: SpawnConfig;
+}
+
+/**
+ * The spawn refs of every ACTIVE ACP provider — active built-ins (from
+ * `ACP_MANIFESTS`) + installed externals (full runner-local manifests). The
+ * runtime feeds these to `resolveProviderAvailability` to decide which providers
+ * can actually run (model-picker-availability §1). Claude and the non-ACP
+ * bundled backends are handled separately and are not included here.
+ */
+export function getActiveProviderSpawnRefs(): ProviderSpawnRef[] {
+  const refs: ProviderSpawnRef[] = [];
+  for (const id of getActiveBuiltinProviders()) {
+    const m = ACP_MANIFESTS[id as keyof typeof ACP_MANIFESTS];
+    if (m) refs.push({ id, spawn: m.spawn });
+  }
+  for (const m of runnerManifests.values()) {
+    refs.push({ id: m.id, spawn: m.spawn });
+  }
+  return refs;
 }
 
 /**

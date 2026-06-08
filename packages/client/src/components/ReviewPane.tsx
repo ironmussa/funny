@@ -3,10 +3,12 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useReviewState } from '@/hooks/use-review-state';
+import { useThreadById } from '@/lib/thread-selectors';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { usePRDetail } from '@/stores/pr-detail-store';
@@ -22,7 +24,6 @@ import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { CITab } from './CITab';
 import { CommitGraphTab } from './CommitGraphTab';
-import { CommitHistoryTab } from './CommitHistoryTab';
 import { IssuesTab } from './IssuesTab';
 import { PullRequestsTab } from './PullRequestsTab';
 import { DiffViewerModal } from './review-pane/DiffViewerModal';
@@ -61,12 +62,26 @@ export function ReviewPane() {
   const worktreePath = useThreadWorktreePath();
   const threadProjectId = useThreadProjectId();
   const projectsForPath = useProjectStore((s) => s.projects);
-  const basePath = useMemo(() => {
-    if (worktreePath) return worktreePath;
-    const pid = threadProjectId ?? selectedProjectId;
-    if (!pid) return '';
-    return projectsForPath.find((p) => p.id === pid)?.path ?? '';
-  }, [worktreePath, threadProjectId, selectedProjectId, projectsForPath]);
+  // `useThreadWorktreePath` / `useThreadProjectId` read the heavy `threadDataById`
+  // map, which loads ~1-2s AFTER `selectedThreadId` flips on click. During that
+  // window — or when a thread is opened without a project selected in the sidebar
+  // (Activity / All-threads / direct URL) — both are undefined and basePath would
+  // collapse to '', so file-open actions sent a repo-relative path that 404s
+  // against `/files/read` (which needs an absolute path). The lightweight
+  // `threadsById` index (sidebar) always carries projectId + worktreePath for the
+  // selected thread, so use it as an immediate fallback.
+  const lightThread = useThreadById(selectedThreadId ?? undefined);
+  const basePath = useMemo(
+    () =>
+      resolveBasePath({
+        worktreePath,
+        lightThread,
+        threadProjectId,
+        selectedProjectId,
+        projects: projectsForPath,
+      }),
+    [worktreePath, lightThread, threadProjectId, selectedProjectId, projectsForPath],
+  );
 
   const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
   const baseBranch = useThreadSelector((t) => t?.baseBranch);
@@ -312,18 +327,11 @@ export function ReviewPane() {
               {t('review.changes', 'Changes')}
             </TabsTrigger>
             <TabsTrigger
-              value="history"
-              className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
-              data-testid="review-tab-history"
-            >
-              {t('review.history', 'History')}
-            </TabsTrigger>
-            <TabsTrigger
               value="graph"
               className="data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs"
               data-testid="review-tab-graph"
             >
-              {t('review.graph', 'Graph')}
+              {t('review.history', 'History')}
             </TabsTrigger>
             <TabsTrigger
               value="stash"
@@ -494,16 +502,7 @@ export function ReviewPane() {
           }}
         />
 
-        {/* History tab */}
-        <TabsContent
-          value="history"
-          className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
-          forceMount
-        >
-          <CommitHistoryTab visible={reviewSubTab === 'history'} />
-        </TabsContent>
-
-        {/* Graph tab */}
+        {/* History tab (commit graph) */}
         <TabsContent
           value="graph"
           className="flex min-h-0 flex-1 data-[state=inactive]:hidden"

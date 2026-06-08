@@ -56,6 +56,13 @@ export function computeGraphRows(commits: GraphCommit[]): GraphLayout {
   const rows: GraphRow[] = [];
   let laneCount = 0;
 
+  // Every hash that appears as a node in this window. A parent in this set will
+  // be reached later as its own row, so sibling branches that share it should
+  // each keep a distinct lane and only converge AT that row (GitKraken-style
+  // fan-out). A parent NOT in the set is off-window and never converges, so
+  // siblings must reuse a single lane for it to avoid endless parallel rails.
+  const inWindow = new Set(commits.map((commit) => commit.hash));
+
   const firstFree = (): number => {
     const idx = lanes.indexOf(null);
     return idx === -1 ? lanes.length : idx;
@@ -81,7 +88,11 @@ export function computeGraphRows(commits: GraphCommit[]): GraphLayout {
     //    is already tracked by some lane reuses it (a merge closing a branch).
     const assignParent = (parentHash: string, preferred: number | null): number => {
       const existing = lanes.indexOf(parentHash);
-      if (existing !== -1) return existing;
+      // Reuse an existing lane ONLY for an off-window parent. For an in-window
+      // parent we deliberately open a fresh lane (preferring the node's own lane
+      // for the first parent) so each branch keeps its own rail down to the
+      // shared commit and they fan in there, instead of collapsing one row early.
+      if (existing !== -1 && !inWindow.has(parentHash)) return existing;
       if (preferred !== null && (lanes[preferred] === null || lanes[preferred] === undefined)) {
         while (lanes.length <= preferred) lanes.push(null);
         lanes[preferred] = parentHash;
@@ -116,10 +127,12 @@ export function computeGraphRows(commits: GraphCommit[]): GraphLayout {
       if (h === commit.hash) {
         // Converges into the node.
         push({ fromLane: i, fromY: Y_TOP, toLane: commitLane, toY: Y_NODE, color: i });
-      } else {
-        // Continues downward; find where it lives now (usually the same lane).
-        const out = lanes.indexOf(h);
-        if (out !== -1) push({ fromLane: i, fromY: Y_TOP, toLane: out, toY: Y_BOTTOM, color: i });
+      } else if (lanes[i] === h) {
+        // Still flowing on its own lane — keep it straight. We must NOT use
+        // `lanes.indexOf(h)` here: when sibling branches fan out, several lanes
+        // hold the same (yet-to-be-reached) parent hash, and indexOf would snap
+        // every one of them onto the first such lane, collapsing the fan.
+        push({ fromLane: i, fromY: Y_TOP, toLane: i, toY: Y_BOTTOM, color: i });
       }
     }
 

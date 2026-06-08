@@ -258,6 +258,7 @@
     "askAgentResolve": "Ask Agent to Resolve",
     "openInEditor": "Open in {{editor}}",
     "openInInternalEditor": "Open in internal editor",
+    "openFileNoBasePath": "Can't open file: project path not ready yet. Try again in a moment.",
     "agentResolvePrompt": "The rebase onto {{target}} failed due to conflicts. Please run `git rebase {{target}}`, resolve all conflicts, and then run `git rebase --continue`. Make sure all conflicts are fully resolved before continuing.",
     "agentResolveSent": "Asked the agent to resolve rebase conflicts",
     "agentResolveThreadTitle": "Resolve rebase conflicts onto {{target}}",
@@ -429,7 +430,11 @@
     "copySha": "Copy commit SHA",
     "copyShortSha": "Copy short SHA",
     "resetToHere": "Reset branch to here",
-    "uncommittedChanges": "Uncommitted changes"
+    "uncommittedChanges": "Uncommitted changes",
+    "searchPlaceholder": "Search branches & commits",
+    "matchCount_one": "{{count}} match",
+    "matchCount_other": "{{count}} matches",
+    "noMatches": "No commits match your search"
   },
   "settings": {
     "title": "Settings",

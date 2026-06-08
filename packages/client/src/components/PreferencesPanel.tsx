@@ -49,6 +49,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   icon: typeof SlidersHorizontal;
 }> = [
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
+  { id: 'providers', label: 'Providers', icon: Plug },
   { id: 'models', label: 'settings.models', icon: Sparkles },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: SiGithub },
@@ -59,7 +60,6 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'runners', label: 'settings.runners', icon: Server },
   { id: 'agent-templates', label: 'settings.agentTemplates', icon: Bot },
   { id: 'extensions', label: 'Extensions', icon: Puzzle },
-  { id: 'providers', label: 'Providers', icon: Plug },
   { id: 'system', label: 'settings.system', icon: Cpu },
 ];
 

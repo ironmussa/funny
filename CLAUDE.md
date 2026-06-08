@@ -331,8 +331,9 @@ import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 
 All UI text — including code in diffs, terminals, Monaco editors, and chat messages — **MUST** scale with the user's font size setting from Settings > Appearance. Never hardcode pixel font sizes (e.g., `fontSize: 13`, `text-[11px]`). Instead:
 
-- **Diff panels** (denser code view): use `CODE_FONT_SIZE_PX[fontSize]` and `CODE_LINE_HEIGHT_PX[fontSize]` from `@/stores/settings-store`.
-- **Terminals and Monaco editors**: use `EDITOR_FONT_SIZE_PX[fontSize]` from `@/stores/settings-store` (larger baseline than diffs).
+- **Diff panels**: use `DIFF_FONT_SIZE_PX[fontSize]` and `DIFF_ROW_HEIGHT_PX[fontSize]` from `@/stores/settings-store`. These are **aligned with the Monaco editor** (`DIFF_FONT_SIZE_PX === EDITOR_FONT_SIZE_PX`, row height ≈ `round(1.5 × fontSize)`) so the diff and the code editor share one baseline — do NOT point the diff back at `CODE_*`.
+- **Terminals and Monaco editors**: use `EDITOR_FONT_SIZE_PX[fontSize]` from `@/stores/settings-store`.
+- **Inline code blocks in chat** (denser scale — `WaitingCards`, prose code, the `--code-font-size` var): use `CODE_FONT_SIZE_PX[fontSize]` and `CODE_LINE_HEIGHT_PX[fontSize]`. The diff no longer uses this.
 - **Diff panel rendering**: use the CSS variables `--diff-font-size` and `--diff-row-height` (e.g., `text-[length:var(--diff-font-size)]`).
 - **Prose / chat messages**: use `PROSE_FONT_SIZE_PX[fontSize]` and `PROSE_LINE_HEIGHT_PX[fontSize]` with the `makeProseFont()` / `makeMonoFont()` helpers from `@/hooks/use-pretext` for pretext layout measurements.
 - **Terminals (xterm.js)**: read font size from the store at creation and add a reactive `useEffect` to sync `terminal.options.fontSize` + `fitAddon.fit()` when the setting changes.

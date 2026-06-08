@@ -54,7 +54,7 @@
   "dependencies": {
     "@abbacchio/transport": "^0.2.0",
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",
-    "@anthropic-ai/sdk": "^0.100.1",
+    "@anthropic-ai/sdk": "^0.102.0",
     "@vscode/ripgrep": "^1.18.0",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",

@@ -343,7 +343,7 @@ function seedStores(
     hasChanges?: boolean;
     hasPR?: boolean;
     isRunning?: boolean;
-    tab?: 'changes' | 'history' | 'stash' | 'prs';
+    tab?: 'changes' | 'graph' | 'stash' | 'prs';
   } = {},
 ) {
   const {
@@ -606,13 +606,13 @@ export const TruncatedFiles: Story = {
   },
 };
 
-// ── History tab stories ────────────────────────────────────
+// ── History tab stories (commit graph) ─────────────────────
 
 /** Commit history with recent commits and unpushed indicator. */
 export const HistoryTab: Story = {
   name: 'History Tab',
   render: () => {
-    seedStores({ hasThread: true, isWorktree: true, hasChanges: false, tab: 'history' });
+    seedStores({ hasThread: true, isWorktree: true, hasChanges: false, tab: 'graph' });
     return <ReviewPaneWrapper mockFetchOpts={{ logEntries: mockLogEntries }} />;
   },
 };
@@ -621,7 +621,7 @@ export const HistoryTab: Story = {
 export const HistoryTabEmpty: Story = {
   name: 'History Tab (Empty)',
   render: () => {
-    seedStores({ hasThread: true, isWorktree: true, hasChanges: false, tab: 'history' });
+    seedStores({ hasThread: true, isWorktree: true, hasChanges: false, tab: 'graph' });
     return <ReviewPaneWrapper mockFetchOpts={{ logEntries: [] }} />;
   },
 };

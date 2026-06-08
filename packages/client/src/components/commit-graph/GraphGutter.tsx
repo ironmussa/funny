@@ -19,6 +19,11 @@ interface Props {
   avatarUrl?: string;
   /** Author name — used to render initials in the node when no avatar is available. */
   authorName?: string;
+  /**
+   * Draw a dashed stub from the node up to the top edge — used on the HEAD row to
+   * connect it to the "Uncommitted changes" (WIP) node sitting above the list.
+   */
+  connectUp?: boolean;
 }
 
 const laneX = (lane: number) => lane * LANE_WIDTH + LANE_WIDTH / 2;
@@ -43,6 +48,7 @@ export const GraphGutter = memo(function GraphGutter({
   height,
   avatarUrl,
   authorName,
+  connectUp,
 }: Props) {
   const width = laneCount * LANE_WIDTH;
   const y = (frac: number) => frac * height;
@@ -97,6 +103,18 @@ export const GraphGutter = memo(function GraphGutter({
           />
         );
       })}
+      {/* Dashed stub up to the WIP node above (HEAD row only). */}
+      {connectUp && (
+        <line
+          x1={nodeX}
+          y1={0}
+          x2={nodeX}
+          y2={nodeY}
+          stroke={nodeColor}
+          strokeWidth={STROKE_WIDTH}
+          strokeDasharray="2 2"
+        />
+      )}
       {avatarUrl ? (
         <g>
           <defs>

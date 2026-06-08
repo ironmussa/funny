@@ -46,14 +46,47 @@ describe('computeGraphRows', () => {
     expect(layout.rows[3].commitLane).toBe(0);
   });
 
-  test('two tips off a shared base occupy distinct lanes', () => {
+  test('two tips off a shared base keep their own lanes and fan in at the base', () => {
     // X and Y both branch from base B, with no child link between them.
     const layout = computeGraphRows([c('X', 'B'), c('Y', 'B'), c('B')]);
     expect(layout.laneCount).toBe(2);
     expect(layout.rows.map((r) => r.commitLane)).toEqual([0, 1, 0]);
-    // Y emits an edge that lands on lane 0 (the shared base).
+    // GitKraken-style: Y keeps its OWN lane (1) down to the base rather than
+    // collapsing into X's lane one row early — the convergence is drawn at B.
     const yParentEdge = layout.rows[1].segments.find((s) => s.fromY === 0.5 && s.toY === 1);
-    expect(yParentEdge?.toLane).toBe(0);
+    expect(yParentEdge?.toLane).toBe(1);
+    // The base row receives a converging edge from BOTH lanes 0 and 1.
+    const baseConverges = layout.rows[2].segments.filter((s) => s.fromY === 0 && s.toY === 0.5);
+    expect(baseConverges.map((s) => s.fromLane).sort()).toEqual([0, 1]);
+  });
+
+  test('many sibling branches off one base fan out (dependabot-style)', () => {
+    // A trunk commit T and five independent branch tips D1..D5 all share base B.
+    // This mirrors a set of dependabot branches off the same commit: GitKraken
+    // draws them as parallel rails that all converge at B, NOT stacked in one
+    // reused lane with short merge stubs (the pre-fix behavior).
+    const layout = computeGraphRows([
+      c('T', 'B'),
+      c('D1', 'B'),
+      c('D2', 'B'),
+      c('D3', 'B'),
+      c('D4', 'B'),
+      c('D5', 'B'),
+      c('B'),
+    ]);
+    // Trunk + 5 tips = 6 distinct lanes held open down to the base.
+    expect(layout.laneCount).toBe(6);
+    expect(layout.rows.slice(0, 6).map((r) => r.commitLane)).toEqual([0, 1, 2, 3, 4, 5]);
+    // Each tip emits its parent edge straight down its OWN lane (no collapse).
+    for (let i = 0; i < 6; i++) {
+      const edge = layout.rows[i].segments.find((s) => s.fromY === 0.5 && s.toY === 1);
+      expect(edge?.toLane).toBe(i);
+    }
+    // The base sits back in lane 0 and every lane converges into it.
+    const baseRow = layout.rows[6];
+    expect(baseRow.commitLane).toBe(0);
+    const converges = baseRow.segments.filter((s) => s.fromY === 0 && s.toY === 0.5);
+    expect(converges.map((s) => s.fromLane).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
   test('root commit (no parents) emits no parent edge', () => {

@@ -1,15 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import {
-  ArrowUpCircle,
-  Cloud,
-  CloudCheck,
-  GitBranch,
-  GitCommit,
-  Pencil,
-  RefreshCw,
-  Tag,
-} from 'lucide-react';
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Cloud, CloudCheck, GitBranch, GitCommit, RefreshCw, Search, Tag } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -22,6 +13,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { darkenHex } from '@/components/ui/project-chip';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
@@ -30,6 +22,7 @@ import { authorAvatarUrl } from '@/lib/author-avatar';
 import { useCachedAvatar } from '@/lib/avatar-cache';
 import { createClientLogger } from '@/lib/client-logger';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
+import { commitMatchesQuery } from '@/lib/git-history-search';
 import {
   githubBrowseBaseUrl as resolveGithubBrowseBaseUrl,
   githubCommitUrl,
@@ -73,6 +66,9 @@ const PAGE_SIZE = 80;
 const TITLE_PX = 10.5;
 const META_PX = 10;
 const MAX_GUTTER_LANES = 12;
+// Upper bound on how many commits the active-filter background pager will pull
+// in, so filtering a huge repo can't page the entire history into memory.
+const FILTER_MAX_SCAN = 2000;
 
 interface CommitGraphTabProps {
   visible?: boolean;
@@ -92,10 +88,11 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // across every Review-pane tab (see TITLE_PX / META_PX above).
   const titlePx = TITLE_PX;
   const metaPx = META_PX;
-  // Variable row heights: rows without branch/tag chips are 2 lines (tight); rows
-  // with chips get a 3rd line. Computed from the font sizes — no magic numbers —
-  // so ref-less rows (the majority) stay compact instead of padding to a fixed max.
-  const baseRowH = Math.round(titlePx * 1.3) + Math.round(metaPx * 1.45) + 8;
+  // Variable row heights: the title + time share one line, so ref-less rows are a
+  // single tight line; rows with branch/tag chips get an extra line above. Computed
+  // from the font sizes — no magic numbers — so ref-less rows (the majority) stay
+  // compact instead of padding to a fixed max.
+  const baseRowH = Math.round(titlePx * 1.5) + 6;
   // Rows with ref chips get an extra line for the powerline plus a little more
   // breathing room so the chips don't crowd the commit title below them.
   const refsRowH = baseRowH + (metaPx + 5) + 6;
@@ -119,15 +116,26 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const avatarByEmail = useEmailAvatars(entries);
   const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
 
+  // Search bar (always visible): a list FILTER over the loaded commits, matching
+  // the commit's subject, body, or any branch/tag ref it carries (see
+  // commitMatchesQuery).
+  const [searchQuery, setSearchQuery] = useState('');
+
   const loadingRef = useRef(false);
   const loadedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Synchronous mirror of the loaded entries so the background pager can append
+  // without a stale closure over React state.
+  const entriesRef = useRef<GraphEntry[]>([]);
 
   const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${allBranches}`;
 
   const loadLog = useCallback(
-    async (skip = 0, append = false) => {
-      if (!hasGitContext || loadingRef.current) return;
+    async (
+      skip = 0,
+      append = false,
+    ): Promise<{ entries: GraphEntry[]; hasMore: boolean } | null> => {
+      if (!hasGitContext || loadingRef.current) return null;
       loadingRef.current = true;
       setLogLoading(true);
       const started = performance.now();
@@ -137,21 +145,27 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         : await api.projectGitGraphLog(projectModeId!, PAGE_SIZE, allBranches, skip, signal);
       if (signal?.aborted) {
         loadingRef.current = false;
-        return;
+        return null;
       }
+      let out: { entries: GraphEntry[]; hasMore: boolean } | null = null;
       if (result.isOk()) {
         const { entries: next, hasMore: more, unpushedHashes } = result.value;
-        setEntries((prev) => (append ? [...prev, ...next] : next));
+        const merged = append ? [...entriesRef.current, ...next] : next;
+        // Keep the synchronous mirror current so the next append builds on the
+        // freshly-loaded page without waiting for a React re-render.
+        entriesRef.current = merged;
+        setEntries(merged);
         setHasMore(more);
         setUnpushed((prev) => {
           if (!append) return new Set(unpushedHashes);
-          const merged = new Set(prev);
-          for (const h of unpushedHashes) merged.add(h);
-          return merged;
+          const updated = new Set(prev);
+          for (const h of unpushedHashes) updated.add(h);
+          return updated;
         });
         metric('git.graph_log.loaded', performance.now() - started, {
           attributes: { count: String(next.length), append: String(append) },
         });
+        out = { entries: merged, hasMore: more };
       } else if (result.error.message !== 'Request aborted') {
         log.warn('graph-log load failed', { error: result.error.message });
         toast.error(
@@ -163,6 +177,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       }
       setLogLoading(false);
       loadingRef.current = false;
+      return out;
     },
     [hasGitContext, effectiveThreadId, projectModeId, allBranches, t],
   );
@@ -183,9 +198,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     abortRef.current = new AbortController();
     loadingRef.current = false;
     loadedRef.current = false;
+    entriesRef.current = [];
     setEntries([]);
     setHasMore(false);
     setUnpushed(new Set());
+    // Drop the filter query — it belongs to the old context.
+    setSearchQuery('');
     if (visible && hasGitContext) {
       loadedRef.current = true;
       loadLog(0, false);
@@ -251,21 +269,52 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     };
   }, [ghProjectId, entries, githubAvatarBySha]);
 
-  const layout = useMemo(
-    () => computeGraphRows(entries.map((e) => ({ hash: e.hash, parentHashes: e.parentHashes }))),
-    [entries],
+  const isFiltering = searchQuery.trim().length > 0;
+  const displayEntries = useMemo(
+    () => (isFiltering ? entries.filter((e) => commitMatchesQuery(e, searchQuery)) : entries),
+    [entries, searchQuery, isFiltering],
   );
+
+  const layout = useMemo(() => {
+    // While filtering, the surviving commits are no longer contiguous in topo
+    // order, so the lane graph would render as a meaningless staircase. Show a
+    // flat list instead: one standalone node per row, no connecting rails.
+    if (isFiltering) {
+      return {
+        rows: displayEntries.map(() => ({ commitLane: 0, nodeColor: 0, segments: [] })),
+        laneCount: 1,
+      };
+    }
+    return computeGraphRows(
+      displayEntries.map((e) => ({ hash: e.hash, parentHashes: e.parentHashes })),
+    );
+  }, [displayEntries, isFiltering]);
   const laneCount = Math.min(layout.laneCount, MAX_GUTTER_LANES);
   const gutterWidth = laneCount * LANE_WIDTH;
 
+  // Working-tree status drives the WIP "Uncommitted changes" node above the list
+  // and the dashed stub that ties the HEAD row up to it. Lifted here (rather than
+  // inside GraphWipRow) so the HEAD commit row can also know whether to draw the
+  // connector — `wipStatus` is non-null only when there are changes worth showing.
+  const { status: wipRawStatus, dirty: wipDirty } = useWorkingTreeStatus(
+    effectiveThreadId,
+    projectModeId,
+    !!visible && hasGitContext && entries.length > 0,
+  );
+  const wipStatus = !isFiltering && wipDirty ? wipRawStatus : undefined;
+
   const scrollRef = useRef<HTMLDivElement>(null);
-  const showSentinel = hasMore;
-  const rowCount = entries.length + (showSentinel ? 1 : 0);
+  // The infinite-scroll sentinel only applies to the full (unfiltered) list;
+  // while filtering we page eagerly in the background instead (see below).
+  const showSentinel = !isFiltering && hasMore;
+  const rowCount = displayEntries.length + (showSentinel ? 1 : 0);
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (index >= entries.length ? baseRowH : rowHeightFor(entries[index])),
-    getItemKey: (index) => (index >= entries.length ? '__sentinel__' : entries[index].hash),
+    estimateSize: (index) =>
+      index >= displayEntries.length ? baseRowH : rowHeightFor(displayEntries[index]),
+    getItemKey: (index) =>
+      index >= displayEntries.length ? '__sentinel__' : displayEntries[index].hash,
     overscan: 12,
   });
 
@@ -280,6 +329,20 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     if (!showSentinel || lastIndex === undefined) return;
     if (lastIndex >= entries.length - 5) loadMore();
   }, [lastIndex, entries.length, showSentinel, loadMore]);
+
+  // ── Search filter ────────────────────────────────────────────────────────
+  // The filter can only match commits that are loaded, but the log is paginated.
+  // While a query is active, eagerly page through history (bounded) so matches
+  // deeper than the first page still surface without the user scrolling.
+  useEffect(() => {
+    if (!isFiltering || !hasMore || loadingRef.current) return;
+    if (entries.length >= FILTER_MAX_SCAN) return;
+    void loadLog(entries.length, true);
+  }, [isFiltering, hasMore, entries.length, loadLog]);
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery('');
+  }, []);
 
   const selectedCommit = entries.find((e) => e.hash === selectedHash);
 
@@ -300,25 +363,53 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         onToggleAllBranches={() => setAllBranches((v) => !v)}
       />
 
-      <GraphWipRow
-        effectiveThreadId={effectiveThreadId}
-        projectModeId={projectModeId}
-        enabled={!!visible && hasGitContext && entries.length > 0}
-        firstRow={layout.rows[0]}
-        laneCount={laneCount}
-        gutterWidth={gutterWidth}
-        rowHeight={baseRowH}
-      />
+      <div className="border-sidebar-border bg-background border-b px-2 py-1">
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          totalMatches={displayEntries.length}
+          loading={isFiltering && logLoading}
+          onClose={isFiltering ? clearSearch : undefined}
+          autoFocus={false}
+          placeholder={t('graph.searchPlaceholder', 'Search branches & commits')}
+          testIdPrefix="graph-search"
+          resultLabel={
+            isFiltering
+              ? t('graph.matchCount', {
+                  count: displayEntries.length,
+                  defaultValue: `${displayEntries.length} matches`,
+                })
+              : ''
+          }
+        />
+      </div>
+
+      {!isFiltering && wipStatus && (
+        <GraphWipRow
+          status={wipStatus}
+          firstRow={layout.rows[0]}
+          laneCount={laneCount}
+          gutterWidth={gutterWidth}
+          rowHeight={baseRowH}
+        />
+      )}
 
       <div className="flex flex-1 flex-col overflow-y-auto" ref={scrollRef}>
         {logLoading && entries.length === 0 ? (
           <LoadingState testId="graph-loading" label={t('review.loadingLog', 'Loading commits…')} />
-        ) : entries.length === 0 ? (
-          <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
+        ) : displayEntries.length === 0 ? (
+          isFiltering ? (
+            <EmptyState
+              icon={Search}
+              title={t('graph.noMatches', 'No commits match your search')}
+            />
+          ) : (
+            <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
+          )
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
             {virtualItems.map((virtualRow) => {
-              if (virtualRow.index >= entries.length) {
+              if (virtualRow.index >= displayEntries.length) {
                 return (
                   <div
                     key="__sentinel__"
@@ -342,7 +433,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   </div>
                 );
               }
-              const entry = entries[virtualRow.index];
+              const entry = displayEntries[virtualRow.index];
               return (
                 <GraphCommitRow
                   key={entry.hash}
@@ -359,6 +450,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   projectModeId={projectModeId}
                   onAfterAction={refreshLog}
                   unpushed={unpushed.has(entry.hash)}
+                  connectToWip={!!wipStatus && virtualRow.index === 0}
                   transform={virtualRow.start}
                   rowHeight={rowHeightFor(entry)}
                   onSelect={() => setSelectedHash(selectedHash === entry.hash ? null : entry.hash)}
@@ -469,17 +561,13 @@ function GraphToolbar({
  * node in HEAD's lane with a dashed connector heading down toward the tip.
  */
 function GraphWipRow({
-  effectiveThreadId,
-  projectModeId,
-  enabled,
+  status,
   firstRow,
   laneCount,
   gutterWidth,
   rowHeight,
 }: {
-  effectiveThreadId: string | undefined;
-  projectModeId: string | null;
-  enabled: boolean;
+  status: NonNullable<ReturnType<typeof useWorkingTreeStatus>['status']>;
   firstRow: GraphRow | undefined;
   laneCount: number;
   gutterWidth: number;
@@ -487,8 +575,6 @@ function GraphWipRow({
 }) {
   const { t } = useTranslation();
   const setReviewSubTab = useUIStore((s) => s.setReviewSubTab);
-  const { status, dirty } = useWorkingTreeStatus(effectiveThreadId, projectModeId, enabled);
-  if (!enabled || !dirty || !status) return null;
   const lane = Math.min(firstRow?.commitLane ?? 0, Math.max(0, laneCount - 1));
   const cx = lane * LANE_WIDTH + LANE_WIDTH / 2;
   const cy = rowHeight / 2;
@@ -532,7 +618,6 @@ function GraphWipRow({
         </svg>
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
-        <Pencil className="icon-xs text-muted-foreground shrink-0" />
         <span className="text-foreground truncate text-xs leading-tight font-medium">
           {t('graph.uncommittedChanges', 'Uncommitted changes')}
         </span>
@@ -560,6 +645,7 @@ function GraphCommitRow({
   projectModeId,
   onAfterAction,
   unpushed,
+  connectToWip,
   transform,
   rowHeight,
   onSelect,
@@ -575,6 +661,8 @@ function GraphCommitRow({
   projectModeId: string | null;
   onAfterAction: () => void;
   unpushed: boolean;
+  /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
+  connectToWip: boolean;
   transform: number;
   rowHeight: number;
   onSelect: () => void;
@@ -649,23 +737,6 @@ function GraphCommitRow({
     [entry.refs, entry.headBranch, lanePastel, t],
   );
 
-  const copyHash = useCallback(
-    (e: SyntheticEvent) => {
-      e.stopPropagation();
-      void navigator.clipboard.writeText(entry.hash).then(
-        () =>
-          toast.success(
-            t('history.hashCopied', {
-              hash: entry.shortHash,
-              defaultValue: `Copied ${entry.shortHash}`,
-            }),
-          ),
-        () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
-      );
-    },
-    [entry.hash, entry.shortHash, t],
-  );
-
   const githubUrl = githubBrowseBaseUrl ? githubCommitUrl(githubBrowseBaseUrl, entry.hash) : null;
 
   return (
@@ -696,23 +767,52 @@ function GraphCommitRow({
         data-testid={`graph-commit-${entry.shortHash}`}
       >
         {/* Layout: graph | commit info, with branch/tag chips above the title. */}
-        {graphRow && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div style={{ width: gutterWidth }} className="shrink-0 self-stretch">
+        {graphRow &&
+          (() => {
+            // Anchor the author tooltip to the avatar node itself, not the whole
+            // gutter — otherwise the tooltip centers over the (possibly wide)
+            // multi-lane gutter and reads as detached from the avatar. The node
+            // sits at `commitLane`'s center; its diameter mirrors GraphGutter's
+            // avatar sizing so the trigger overlays the node precisely.
+            const nodeCenterX = graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
+            const avatarDiameter =
+              2 * Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
+            return (
+              <div style={{ width: gutterWidth }} className="relative shrink-0 self-stretch">
                 <GraphGutter
                   row={graphRow}
                   laneCount={laneCount}
                   height={rowHeight}
                   avatarUrl={cachedAvatarUrl}
                   authorName={entry.author}
+                  connectUp={connectToWip}
                 />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      aria-hidden
+                      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+                      style={{
+                        left: nodeCenterX,
+                        width: avatarDiameter,
+                        height: avatarDiameter,
+                      }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {entry.author}
+                    {unpushed && (
+                      <span className="text-muted-foreground">
+                        {' · '}
+                        {t('history.unpushed', 'Not pushed')}
+                      </span>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
               </div>
-            </TooltipTrigger>
-            <TooltipContent side="top">{entry.author}</TooltipContent>
-          </Tooltip>
-        )}
-        {/* Commit info: message on the left, time · push status · id beside it. */}
+            );
+          })()}
+        {/* Commit info: title + time on one line, optional chips above. */}
         <div className="flex min-w-0 flex-1 flex-col justify-center pl-1">
           {/* Branch/tag chips on their own line above the commit title. */}
           {refSegments.length > 0 && (
@@ -722,43 +822,12 @@ function GraphCommitRow({
           )}
           {/* Same Tailwind classes as the History list (`CommitListPanel`) so the
               title/meta sizes are rem-based and identical across every tab. */}
-          <span className="text-foreground truncate text-xs leading-tight font-medium">
-            {entry.message}
-          </span>
-          <div className="text-muted-foreground mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px]">
-            <span className="shrink-0">{shortRelativeDate(entry.relativeDate)}</span>
-            {unpushed && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ArrowUpCircle
-                    className="icon-xs text-muted-foreground shrink-0"
-                    data-testid={`graph-unpushed-${entry.shortHash}`}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top">{t('history.unpushed', 'Not pushed')}</TooltipContent>
-              </Tooltip>
-            )}
-            <span className="flex shrink-0 items-center gap-1">
-              <GitCommit className="icon-xs shrink-0" />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={copyHash}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') copyHash(e);
-                    }}
-                    className="text-primary shrink-0 cursor-pointer font-mono hover:underline"
-                    data-testid={`graph-commit-hash-${entry.shortHash}`}
-                  >
-                    {entry.shortHash}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {t('history.copyHash', 'Click to copy hash')}
-                </TooltipContent>
-              </Tooltip>
+          <div className="flex w-full min-w-0 items-center gap-1.5">
+            <span className="text-foreground min-w-0 flex-1 truncate text-xs leading-tight font-medium">
+              {entry.message}
+            </span>
+            <span className="text-muted-foreground shrink-0 text-[10px]">
+              {shortRelativeDate(entry.relativeDate)}
             </span>
           </div>
         </div>

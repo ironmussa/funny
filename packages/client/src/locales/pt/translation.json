@@ -254,6 +254,7 @@
     "askAgentResolve": "Pedir ao Agente para Resolver",
     "openInEditor": "Abrir no {{editor}}",
     "openInInternalEditor": "Abrir no editor interno",
+    "openFileNoBasePath": "Não é possível abrir o arquivo: o caminho do projeto ainda não está pronto. Tente novamente em instantes.",
     "agentResolvePrompt": "O rebase sobre {{target}} falhou devido a conflitos. Por favor execute `git rebase {{target}}`, resolva todos os conflitos, e então execute `git rebase --continue`. Certifique-se de que todos os conflitos estejam completamente resolvidos antes de continuar.",
     "agentResolveSent": "Pediu ao agente para resolver os conflitos de rebase",
     "agentResolveThreadTitle": "Resolver conflitos de rebase sobre {{target}}",
@@ -425,7 +426,11 @@
     "copySha": "Copiar SHA do commit",
     "copyShortSha": "Copiar SHA curto",
     "resetToHere": "Resetar ramificação para aqui",
-    "uncommittedChanges": "Alterações não commitadas"
+    "uncommittedChanges": "Alterações não commitadas",
+    "searchPlaceholder": "Buscar ramificações e commits",
+    "matchCount_one": "{{count}} resultado",
+    "matchCount_other": "{{count}} resultados",
+    "noMatches": "Nenhum commit corresponde à sua busca"
   },
   "settings": {
     "title": "Configurações",

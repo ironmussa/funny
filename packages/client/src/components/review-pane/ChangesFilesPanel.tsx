@@ -25,6 +25,7 @@ import {
 import type { Dispatch, SetStateAction } from 'react';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { TreeRow } from '@/components/FileTree';
 import { Button } from '@/components/ui/button';
@@ -704,8 +705,11 @@ export function ChangesFilesPanel({
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
-                            const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
-                            openFileInExternalEditor(fullPath);
+                            if (!basePath) {
+                              toast.error(t('review.openFileNoBasePath'));
+                              return;
+                            }
+                            openFileInExternalEditor(`${basePath}/${f.path}`);
                           }}
                         >
                           <ExternalLink />
@@ -714,8 +718,11 @@ export function ChangesFilesPanel({
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
-                            const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
-                            openFileInInternalEditor(fullPath);
+                            if (!basePath) {
+                              toast.error(t('review.openFileNoBasePath'));
+                              return;
+                            }
+                            openFileInInternalEditor(`${basePath}/${f.path}`);
                           }}
                           data-testid={`review-open-internal-editor-${f.path}`}
                         >

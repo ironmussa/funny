@@ -255,6 +255,7 @@
     "askAgentResolve": "Pedir al Agente que Resuelva",
     "openInEditor": "Abrir en {{editor}}",
     "openInInternalEditor": "Abrir en editor interno",
+    "openFileNoBasePath": "No se puede abrir el archivo: la ruta del proyecto aún no está lista. Probá de nuevo en un momento.",
     "agentResolvePrompt": "El rebase sobre {{target}} falló debido a conflictos. Por favor ejecuta `git rebase {{target}}`, resuelve todos los conflictos, y luego ejecuta `git rebase --continue`. Asegúrate de que todos los conflictos estén completamente resueltos antes de continuar.",
     "agentResolveSent": "Se pidió al agente que resuelva los conflictos de rebase",
     "agentResolveThreadTitle": "Resolver conflictos de rebase sobre {{target}}",
@@ -426,7 +427,11 @@
     "copySha": "Copiar SHA del commit",
     "copyShortSha": "Copiar SHA corto",
     "resetToHere": "Resetear rama a aquí",
-    "uncommittedChanges": "Cambios sin commitear"
+    "uncommittedChanges": "Cambios sin commitear",
+    "searchPlaceholder": "Buscar ramas y commits",
+    "matchCount_one": "{{count}} resultado",
+    "matchCount_other": "{{count}} resultados",
+    "noMatches": "Ningún commit coincide con tu búsqueda"
   },
   "settings": {
     "title": "Configuración",

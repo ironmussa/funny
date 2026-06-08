@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { cn, ICON_SIZE } from '@/lib/utils';
 
+import { HighlightText } from './highlight-text';
 import { contrastText, darkenHex } from './project-chip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
 
@@ -47,6 +48,9 @@ export interface PowerlineBarProps {
    *  "plain" (monochrome text with separator, no colors).
    *  When omitted, falls back to the theme's --powerline-variant CSS variable (default: arrow). */
   variant?: PowerlineVariant;
+  /** Active search query — when set, the matching substring of each segment
+   *  label is highlighted with the shared {@link HighlightText} mark. */
+  query?: string;
   /** Additional class names for the outer container */
   className?: string;
   'data-testid'?: string;
@@ -82,6 +86,7 @@ export function PowerlineBar({
   size = 'md',
   variant: variantProp,
   className,
+  query,
   ...props
 }: PowerlineBarProps) {
   const themeVariant = useThemeVariant();
@@ -89,6 +94,11 @@ export function PowerlineBar({
 
   if (segments.length === 0) return null;
   const config = sizeConfig[size];
+
+  // When a search query is active, mark the matching substring of the label;
+  // otherwise render the bare string (HighlightText would no-op anyway).
+  const renderLabel = (label: string) =>
+    query?.trim() ? <HighlightText text={label} query={query} /> : label;
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -124,7 +134,7 @@ export function PowerlineBar({
                           segment.emphasis && 'font-bold',
                         )}
                       >
-                        {segment.label}
+                        {renderLabel(segment.label)}
                       </span>
                     </div>
                   </TooltipTrigger>
@@ -162,7 +172,7 @@ export function PowerlineBar({
                         segment.emphasis && 'font-bold',
                       )}
                     >
-                      {segment.label}
+                      {renderLabel(segment.label)}
                     </span>
                   </div>
                 </TooltipTrigger>
@@ -208,7 +218,7 @@ export function PowerlineBar({
                         segment.emphasis && 'font-bold',
                       )}
                     >
-                      {segment.label}
+                      {renderLabel(segment.label)}
                     </span>
                   </div>
                 </div>

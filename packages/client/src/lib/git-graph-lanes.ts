@@ -1,11 +1,12 @@
 /**
  * Lane-assignment for the commit graph gutter.
  *
- * Given commits in topological order (children before parents — the order
- * `git log --topo-order` produces, which the graph log uses so each branch's
- * commits stay contiguous like GitKraken), assign each commit a horizontal
- * "lane" and compute the line segments to draw within each row's vertical band
- * so the branch/merge topology reads like GitKraken / VS Code's Git Graph.
+ * Given commits in any child-before-parent order (both `git log --topo-order`
+ * and `--date-order` guarantee this; the graph log uses `--date-order` so
+ * divergent branches interleave by date like GitKraken), assign each commit a
+ * horizontal "lane" and compute the line segments to draw within each row's
+ * vertical band so the branch/merge topology reads like GitKraken / VS Code's
+ * Git Graph.
  *
  * This module is intentionally pure (no React, no DOM) so it can be unit
  * tested directly. The SVG renderer in `GraphGutter` just maps lanes → x
@@ -47,9 +48,9 @@ const Y_NODE = 0.5;
 const Y_BOTTOM = 1;
 
 /**
- * Compute the lane layout for a list of commits already in topological order.
- * Robust to a windowed log (parents outside the window simply terminate their
- * lane with no further node).
+ * Compute the lane layout for a list of commits already in child-before-parent
+ * order (topo- or date-order). Robust to a windowed log (parents outside the
+ * window simply terminate their lane with no further node).
  */
 export function computeGraphRows(commits: GraphCommit[]): GraphLayout {
   // lanes[i] = hash of the commit we next expect to reach on lane i, or null.

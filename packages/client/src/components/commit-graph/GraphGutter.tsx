@@ -91,15 +91,29 @@ export const GraphGutter = memo(function GraphGutter({
             />
           );
         }
-        // Smooth S-curve between lanes for diagonal segments.
-        const midY = (y1 + y2) / 2;
+        // Orthogonal routing (GitKraken-style): every cross-lane segment has one
+        // endpoint at the node center (y = 0.5·h) and the other on a row edge
+        // (y = 0 top, or y = h bottom). Draw it as a vertical run inside the edge
+        // lane, a rounded quarter-turn at the node's Y, then a horizontal run into
+        // the node — so rails stay strictly vertical/horizontal with rounded joints
+        // instead of diagonal S-curves.
+        const nodeIsFrom = s.fromY === 0.5;
+        const xn = nodeIsFrom ? x1 : x2; // node-side x (the lane center we curve into)
+        const yn = nodeIsFrom ? y1 : y2; // node-side y (= 0.5·h)
+        const xe = nodeIsFrom ? x2 : x1; // edge-side x (vertical run lives here)
+        const ye = nodeIsFrom ? y2 : y1; // edge-side y (row top or bottom)
+        const r = Math.min(LANE_WIDTH / 2, Math.abs(yn - ye), Math.abs(xn - xe));
+        const dx = Math.sign(xn - xe);
+        const dy = Math.sign(yn - ye);
         return (
           <path
             key={i}
-            d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
+            d={`M ${xe} ${ye} L ${xe} ${yn - dy * r} Q ${xe} ${yn} ${xe + dx * r} ${yn} L ${xn} ${yn}`}
             fill="none"
             stroke={color}
             strokeWidth={STROKE_WIDTH}
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         );
       })}

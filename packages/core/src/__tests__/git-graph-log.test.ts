@@ -27,6 +27,22 @@ function writeCommit(repo: string, file: string, content: string, message: strin
   git(repo, ['commit', '-m', message]);
 }
 
+/** Commit with an explicit author+committer date so row ordering is deterministic. */
+function writeCommitDated(
+  repo: string,
+  file: string,
+  content: string,
+  message: string,
+  iso: string,
+) {
+  writeFileSync(resolve(repo, file), content);
+  executeSync('git', ['add', '.'], { cwd: repo });
+  executeSync('git', ['commit', '-m', message], {
+    cwd: repo,
+    env: { GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso },
+  });
+}
+
 /** Build a repo with a branch + merge so the graph has real topology. */
 function initMergeRepo(): string {
   const repo = resolve(TMP, 'repo');
@@ -144,5 +160,34 @@ describe('getGraphLog', () => {
     const root = entries.find((e) => e.message === 'root commit');
     expect(refNames(root!.refs)).toContain('HEAD');
     expect(entries.every((e) => e.headBranch === null)).toBe(true);
+  });
+
+  it('orders rows by commit date (--date-order), interleaving a side branch with the trunk', async () => {
+    // Reproduces the GitKraken layout the graph mirrors: a side branch with two
+    // commits whose timestamps straddle a trunk commit. With `--date-order` the
+    // trunk commit must land BETWEEN the two side-branch commits (so they read as
+    // a parallel lane); `--topo-order` would instead group the side branch into a
+    // contiguous block, which is the regression this guards against.
+    const repo = resolve(TMP, 'dated');
+    mkdirSync(repo, { recursive: true });
+    git(repo, ['init']);
+    git(repo, ['config', 'user.email', 'test@test.com']);
+    git(repo, ['config', 'user.name', 'Test']);
+    git(repo, ['branch', '-M', 'main']);
+
+    // Shared base, then a side branch (S1 → S2) and one trunk commit (T1) whose
+    // date falls between S1 and S2.
+    writeCommitDated(repo, 'base.txt', 'base', 'base', '2026-01-01T00:00:00');
+    git(repo, ['checkout', '-b', 'side']);
+    writeCommitDated(repo, 'side.txt', 's1', 'side 1', '2026-01-01T01:00:00');
+    git(repo, ['checkout', 'main']);
+    writeCommitDated(repo, 'trunk.txt', 't1', 'trunk 1', '2026-01-01T02:00:00');
+    git(repo, ['checkout', 'side']);
+    writeCommitDated(repo, 'side.txt', 's2', 'side 2', '2026-01-01T03:00:00');
+
+    const result = await getGraphLog(repo, { all: true });
+    const order = result._unsafeUnwrap().map((e) => e.message);
+    // Newest first, side branch interleaved around the trunk commit.
+    expect(order).toEqual(['side 2', 'trunk 1', 'side 1', 'base']);
   });
 });

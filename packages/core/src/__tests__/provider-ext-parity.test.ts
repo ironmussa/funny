@@ -14,10 +14,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-
 import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifest-schema';
 import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
 import { defaultProcessFactory } from '../agents/process-factory.js';
@@ -118,6 +117,10 @@ describe('cursor-as-external provider parity (§5)', () => {
     if (!extUse || extUse.type !== 'assistant') throw new Error('unreachable');
     const block = extUse.message.content[0] as any;
     expect(block).toMatchObject({ type: 'tool_use', name: 'Edit' });
-    expect(block.input).toMatchObject({ file_path: '/repo/src/sample.ts', old_string: 'a', new_string: 'b' });
+    expect(block.input).toMatchObject({
+      file_path: '/repo/src/sample.ts',
+      old_string: 'a',
+      new_string: 'b',
+    });
   });
 });

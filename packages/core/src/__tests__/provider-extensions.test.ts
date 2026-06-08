@@ -10,10 +10,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-
-import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
 import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifest-schema';
+import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { defaultProcessFactory } from '../agents/process-factory.js';
 import {
@@ -126,7 +125,10 @@ describe('loadProviderExtensions', () => {
   test('skips a dir that is not a provider extension (no funny.provider)', () => {
     const plain = join(dir, 'not-a-provider');
     mkdirSync(plain, { recursive: true });
-    writeFileSync(join(plain, 'package.json'), JSON.stringify({ name: 'x', funny: { client: 'a.mjs' } }));
+    writeFileSync(
+      join(plain, 'package.json'),
+      JSON.stringify({ name: 'x', funny: { client: 'a.mjs' } }),
+    );
 
     const res = loadProviderExtensions(dir);
     expect(res.loaded).toEqual([]);
@@ -173,7 +175,10 @@ describe('live register / unregister (provider-install-ui §1)', () => {
   test('registerProviderExtension returns null for a non-provider dir', () => {
     const plain = join(dir, 'plain');
     mkdirSync(plain, { recursive: true });
-    writeFileSync(join(plain, 'package.json'), JSON.stringify({ name: 'x', funny: { client: 'a.mjs' } }));
+    writeFileSync(
+      join(plain, 'package.json'),
+      JSON.stringify({ name: 'x', funny: { client: 'a.mjs' } }),
+    );
     expect(registerProviderExtension(dir, 'plain')).toBeNull();
   });
 
@@ -189,11 +194,18 @@ describe('install / remove from a local path (provider-install-ui §2)', () => {
     mkdirSync(src, { recursive: true });
     writeFileSync(
       join(src, 'package.json'),
-      JSON.stringify({ name: `funny-${id}`, version: '1.0.0', funny: { provider: 'manifest.json' } }),
+      JSON.stringify({
+        name: `funny-${id}`,
+        version: '1.0.0',
+        funny: { provider: 'manifest.json' },
+      }),
     );
     writeFileSync(
       join(src, 'manifest.json'),
-      JSON.stringify({ schemaVersion: PROVIDER_MANIFEST_SCHEMA_VERSION, manifest: externalManifest(id) }),
+      JSON.stringify({
+        schemaVersion: PROVIDER_MANIFEST_SCHEMA_VERSION,
+        manifest: externalManifest(id),
+      }),
     );
     return src;
   }

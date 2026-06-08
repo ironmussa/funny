@@ -22,7 +22,12 @@ providerRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
   c.header('Cache-Control', 'no-store');
   if (!userId)
-    return c.json({ providers: [], activeBuiltins: null, availableProviders: null, hasRunner: false });
+    return c.json({
+      providers: [],
+      activeBuiltins: null,
+      availableProviders: null,
+      hasRunner: false,
+    });
   const [providers, activeBuiltins, availableProviders, runnerId] = await Promise.all([
     getAdvertisedProvidersForUser(userId),
     getActiveBuiltinsForUser(userId),

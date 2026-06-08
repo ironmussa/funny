@@ -9,10 +9,7 @@
  *   2. Call `registerProvider('name', MyProcess)` before creating agents
  */
 
-import {
-  KNOWN_ACP_PROVIDER_IDS,
-  type KnownAcpProvider,
-} from '@funny/shared/provider-manifests';
+import { KNOWN_ACP_PROVIDER_IDS, type KnownAcpProvider } from '@funny/shared/provider-manifests';
 
 import { CodexACPProcess } from './codex-acp.js';
 import { CursorACPProcess } from './cursor-acp.js';
@@ -53,7 +50,12 @@ export function resolveActiveAcpProviders(
   raw: string | undefined = process.env.FUNNY_PROVIDERS,
 ): KnownAcpProvider[] {
   if (!raw || !raw.trim()) return [...KNOWN_ACP_PROVIDER_IDS];
-  const requested = new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
+  const requested = new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   return KNOWN_ACP_PROVIDER_IDS.filter((id) => requested.has(id));
 }
 

@@ -37,7 +37,10 @@ describe('applyRunnerProviderGroups (model-picker-availability §4)', () => {
   });
 
   test('runner online, availability unknown (null) → no gating (no regression)', () => {
-    const out = applyRunnerProviderGroups(BASE, state({ hasRunner: true, availableProviders: null }));
+    const out = applyRunnerProviderGroups(
+      BASE,
+      state({ hasRunner: true, availableProviders: null }),
+    );
     expect(out.every((g) => !g.disabled)).toBe(true);
   });
 

@@ -349,7 +349,10 @@ export class GenericACPProcess extends BaseAgentProcess {
       args.push('--model', this.options.model);
     }
     // gemini applies funny's autoEdit (full bypass) via the `--yolo` launch flag.
-    if (this.manifest.modeVia === 'cli-flag' && this.options.originalPermissionMode === 'autoEdit') {
+    if (
+      this.manifest.modeVia === 'cli-flag' &&
+      this.options.originalPermissionMode === 'autoEdit'
+    ) {
       args.push('--yolo');
     }
     return { command, args };
@@ -579,7 +582,10 @@ export class GenericACPProcess extends BaseAgentProcess {
       },
     } as CLIMessage);
 
-    this.dlog.info('requestPermission PAUSING for user approval', { toolName, toolCallId: toolUseId });
+    this.dlog.info('requestPermission PAUSING for user approval', {
+      toolName,
+      toolCallId: toolUseId,
+    });
 
     return await new Promise<ACPRequestPermissionResponse>((resolve) => {
       const onAbort = () => {
@@ -730,7 +736,10 @@ export class GenericACPProcess extends BaseAgentProcess {
         // Defer when the card isn't renderable yet (deferUnrenderableToolInput
         // providers). A non-terminal call waits for a later tool_call_update; a
         // terminal call that still lacks the field is dropped, not emitted empty.
-        if (this.manifest.quirks.deferUnrenderableToolInput && !isRenderableToolInput(toolName, input)) {
+        if (
+          this.manifest.quirks.deferUnrenderableToolInput &&
+          !isRenderableToolInput(toolName, input)
+        ) {
           if (!isTerminal) {
             this.deferredToolInputs.set(toolCallId, { name: toolName, input });
           } else {
@@ -762,7 +771,11 @@ export class GenericACPProcess extends BaseAgentProcess {
         if (!this.toolCallsSeen.has(toolCallId)) {
           if (!this.manifest.quirks.synthToolUseFromOrphanUpdate) {
             if (isTerminal) {
-              const output = extractACPToolOutput(update.rawOutput, updateContent, update.title || '');
+              const output = extractACPToolOutput(
+                update.rawOutput,
+                updateContent,
+                update.title || '',
+              );
               this.emitToolResult(toolCallId, output);
             }
             return;
@@ -791,7 +804,10 @@ export class GenericACPProcess extends BaseAgentProcess {
             if (clean) input = { todos: clean.todos };
           }
 
-          if (this.manifest.quirks.deferUnrenderableToolInput && !isRenderableToolInput(toolName, input)) {
+          if (
+            this.manifest.quirks.deferUnrenderableToolInput &&
+            !isRenderableToolInput(toolName, input)
+          ) {
             if (!isTerminal) {
               this.deferredToolInputs.set(toolCallId, { name: toolName, input });
             } else {
@@ -829,7 +845,9 @@ export class GenericACPProcess extends BaseAgentProcess {
             this.emit('message', {
               type: 'user',
               message: {
-                content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
+                content: [
+                  { type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' },
+                ],
               },
             } as CLIMessage);
             this.accumulatedText = '';

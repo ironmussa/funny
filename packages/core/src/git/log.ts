@@ -204,14 +204,15 @@ function parseRefs(decoration: string): { refs: GraphRef[]; headBranch: string |
 
 /**
  * Get commit log entries enriched with parent hashes and ref decorations for
- * rendering a branch graph. Ordered by commit date (`--date-order`) so commits
- * from divergent branches interleave by timestamp — matching GitKraken's
- * default, which makes each unmerged branch read as a long parallel lane rather
- * than a compact stub. `--date-order` still never shows a parent before all of
- * its children, the one invariant the lane layout (`computeGraphRows`) needs.
- * When `all` is set, walks every ref (`--all`) so divergent / unmerged branches
- * appear; otherwise walks HEAD only. Bypasses the native fast-path (which
- * doesn't return parents or refs) and goes straight to `git log`.
+ * rendering a branch graph. Topologically ordered (`--topo-order`): each
+ * branch's commits stay contiguous and the first-parent line flows before the
+ * walk dips into a side branch — matching how GitKraken orders the graph, where
+ * a diverged branch shows as one compact block above its merge-base instead of
+ * being split apart by interleaved master commits (which is what `--date-order`
+ * would do). When `all` is set, walks every ref (`--all`) so divergent /
+ * unmerged branches appear; otherwise walks HEAD only. Bypasses the native
+ * fast-path (which doesn't return parents or refs) and goes straight to
+ * `git log`.
  */
 export function getGraphLog(
   cwd: string,
@@ -226,7 +227,7 @@ export function getGraphLog(
   // each ref as local/remote/tag without guessing from the `origin/` convention.
   const args = [
     'log',
-    '--date-order',
+    '--topo-order',
     '--decorate=full',
     `--format=${format}`,
     '-n',

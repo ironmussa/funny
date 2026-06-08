@@ -8,65 +8,59 @@ import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { useUIStore } from '@/stores/ui-store';
 
-const commandPaletteImport = () =>
-  import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette }));
-const CommandPalette = lazy(commandPaletteImport);
-const fileSearchImport = () =>
-  import('@/components/FileSearchDialog').then((m) => ({ default: m.FileSearchDialog }));
-const FileSearchDialog = lazy(fileSearchImport);
-const textSearchImport = () =>
-  import('@/components/TextSearchDialog').then((m) => ({ default: m.TextSearchDialog }));
-const TextSearchDialog = lazy(textSearchImport);
+// Eagerly start the CommandPalette / FileSearch / TextSearch chunk downloads at
+// module-eval time so Ctrl+K and the search dialogs open instantly.
+// requestIdleCallback was firing too late on busy main threads and the user saw
+// a load delay before the dialog appeared.
+const commandPaletteImport = import('@/components/CommandPalette').then((m) => ({
+  default: m.CommandPalette,
+}));
+const CommandPalette = lazy(() => commandPaletteImport);
+const fileSearchImport = import('@/components/FileSearchDialog').then((m) => ({
+  default: m.FileSearchDialog,
+}));
+const FileSearchDialog = lazy(() => fileSearchImport);
+const textSearchImport = import('@/components/TextSearchDialog').then((m) => ({
+  default: m.TextSearchDialog,
+}));
+const TextSearchDialog = lazy(() => textSearchImport);
 const CircuitBreakerDialog = lazy(() =>
   import('@/components/CircuitBreakerDialog').then((m) => ({ default: m.CircuitBreakerDialog })),
 );
-const MonacoEditorDialog = lazy(() =>
-  import('@/components/MonacoEditorDialog').then((m) => ({ default: m.MonacoEditorDialog })),
-);
+// The heavy chunk is `monaco-editor` itself, pulled in statically by
+// MonacoCodeView — which MonacoEditorDialog only loads via a nested lazy()
+// boundary. So prefetching the dialog alone wouldn't warm Monaco; we prefetch
+// BOTH so the first file-open paints already-themed and highlighted (no
+// download gap → no white flash / late syntax colors).
+const monacoEditorImport = () => {
+  void import('@/components/MonacoCodeView');
+  return import('@/components/MonacoEditorDialog').then((m) => ({ default: m.MonacoEditorDialog }));
+};
+const MonacoEditorDialog = lazy(monacoEditorImport);
 const MediaPreviewDialog = lazy(() =>
   import('@/components/MediaPreviewDialog').then((m) => ({ default: m.MediaPreviewDialog })),
 );
 
-// Prefetch the CommandPalette and FileSearchDialog chunks on idle so they
-// open instantly when triggered.
+// Prefetch Monaco (editor dialog + code view) on idle so the first file-open is
+// instant. Keeps the code-split (Monaco stays out of the main bundle) while
+// removing the on-open download latency.
 if (typeof requestIdleCallback === 'function') {
   requestIdleCallback(() => {
-    commandPaletteImport();
-  });
-  requestIdleCallback(() => {
-    fileSearchImport();
-  });
-  requestIdleCallback(() => {
-    textSearchImport();
+    monacoEditorImport();
   });
 } else {
   setTimeout(() => {
-    commandPaletteImport();
-  }, 2000);
-  setTimeout(() => {
-    fileSearchImport();
-  }, 2500);
-  setTimeout(() => {
-    textSearchImport();
+    monacoEditorImport();
   }, 3000);
 }
 
-interface OverlayDialogsProps {
-  branchSyncDialog: React.ReactNode;
-}
-
 /**
- * Stack of global, lazy-loaded overlays rendered at the root of App.tsx:
- * Toaster, branch-sync dialog, workflow error modal, pipeline approval,
- * circuit breaker, command palette, file search, and the internal Monaco
- * editor. All of these mount once at the app root regardless of route.
- *
- * Extracted from App.tsx as part of the god-file split: removes Toaster,
- * WorkflowErrorModal, PipelineApprovalDialog, CircuitBreakerDialog,
- * CommandPalette, FileSearchDialog, MonacoEditorDialog imports +
- * useInternalEditorStore + TOAST_DURATION from App's fan-out.
+ * Stack of global, lazy-loaded overlays rendered once at the root of App.tsx
+ * (inside ThreadProvider, so dialogs that read thread context still work):
+ * Toaster, workflow error modal, pipeline approval, circuit breaker, command
+ * palette, file/text search, the internal Monaco editor, and media preview.
  */
-export function OverlayDialogs({ branchSyncDialog }: OverlayDialogsProps) {
+export function OverlayDialogs() {
   const commandPaletteOpen = useUIStore((s) => s.commandPaletteOpen);
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const fileSearchOpen = useUIStore((s) => s.fileSearchOpen);
@@ -82,7 +76,6 @@ export function OverlayDialogs({ branchSyncDialog }: OverlayDialogsProps) {
   return (
     <>
       <Toaster position="bottom-right" duration={TOAST_DURATION} />
-      {branchSyncDialog}
       <WorkflowErrorModal />
       <Suspense>
         <PipelineApprovalDialog />

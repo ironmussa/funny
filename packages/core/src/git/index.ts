@@ -60,6 +60,9 @@ export type { PullStrategy } from './remote.js';
 
 export { getDiff, getDiffSummary, getSingleFileDiff, getFullContextFileDiff } from './diff.js';
 
+export { getBlame } from './blame.js';
+export type { BlameHunk, BlameResult } from './blame.js';
+
 export {
   getStatusSummary,
   getCommittedBranchSummary,

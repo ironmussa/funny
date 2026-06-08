@@ -10,6 +10,12 @@ interface MonacoCodeViewProps {
   onMount: OnMount;
   showMinimap: boolean;
   codeFontSizePx: number;
+  /**
+   * Word wrap mode. Forced to `'off'` while the blame gutter is shown — Monaco
+   * does not paint injected text (the per-line blame annotations) when word
+   * wrap is on, and aligned lines read better against blame anyway.
+   */
+  wordWrap?: 'on' | 'off';
 }
 
 let dotenvRegistered = false;
@@ -116,6 +122,7 @@ export function MonacoCodeView({
   onMount,
   showMinimap,
   codeFontSizePx,
+  wordWrap = 'on',
 }: MonacoCodeViewProps) {
   return (
     <Editor
@@ -133,7 +140,7 @@ export function MonacoCodeView({
         lineNumbers: 'on',
         automaticLayout: true,
         scrollBeyondLastLine: false,
-        wordWrap: 'on',
+        wordWrap,
         fixedOverflowWidgets: true,
       }}
     />

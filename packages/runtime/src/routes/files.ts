@@ -9,7 +9,7 @@ import { mkdir, readFile, writeFile, stat, realpath } from 'fs/promises';
 import { homedir } from 'os';
 import { basename, dirname, join, normalize, resolve, sep } from 'path';
 
-import { WORKTREE_DIR_NAME } from '@funny/core/git';
+import { WORKTREE_DIR_NAME, getBlame } from '@funny/core/git';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { ResultAsync, err } from 'neverthrow';
@@ -199,6 +199,37 @@ app.get('/read', async (c) => {
   );
   if (contentResult.isErr()) return resultToResponse(c, contentResult);
   return c.json({ content: contentResult.value });
+});
+
+/**
+ * Git blame for a file (per-line commit attribution against HEAD).
+ * GET /api/files/blame?path=/absolute/path/to/file.ts
+ *
+ * Same project-scope/symlink-escape protections as /read. Backed by the native
+ * gitoxide module; returns an error when the file is untracked, the repo can't
+ * be discovered, or the native module is unavailable — the client treats any
+ * failure as "no blame to show".
+ */
+app.get('/blame', async (c) => {
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return c.json({ error: 'path is required' }, 400);
+  }
+
+  const userId = c.get('userId') as string;
+  const scope = await resolveProjectScope(filePath, userId);
+  if (!scope) return deny();
+
+  const canon = await canonicalize(filePath, false);
+  if (!canon.ok) {
+    return resultToResponse(
+      c,
+      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
+    );
+  }
+  if (!isInScope(canon.canonical, scope)) return deny();
+
+  return resultToResponse(c, await getBlame(canon.canonical));
 });
 
 /**

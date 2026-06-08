@@ -13,6 +13,7 @@ import { resolve } from 'path';
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import {
+  getBlame,
   getCommitBody,
   getCommitFileDiff,
   getCommitFiles,
@@ -758,5 +759,54 @@ describe.skipIf(!nativeAvailable)('native vs CLI parity', () => {
     expect(native).toContain('.env');
     expect(native).toContain('src/app.ts');
     expect(native.some((f) => f.startsWith('node_modules/'))).toBe(false);
+  });
+
+  // ─── getBlame ────────────────────────────────────────────────
+
+  test('getBlame: attributes each line to the commit that introduced it', async () => {
+    const repo = initRepo();
+    const file = resolve(repo, 'app.ts');
+
+    writeFileSync(file, 'line one\nline two\n');
+    commitAll(repo, 'first');
+    const firstHash = executeSync('git', ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
+
+    writeFileSync(file, 'line one\nline two\nline three\n');
+    commitAll(repo, 'second');
+    const secondHash = executeSync('git', ['rev-parse', 'HEAD'], { cwd: repo }).stdout.trim();
+
+    const result = await getBlame(file);
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+    const blame = result.value;
+
+    expect(blame.blamedLineCount).toBe(3);
+
+    // Flatten hunks into a per-line commit map.
+    const lineCommit = new Map<number, string>();
+    for (const h of blame.hunks) {
+      for (let l = h.startLine; l < h.startLine + h.lineCount; l++) lineCommit.set(l, h.commitHash);
+    }
+    expect(lineCommit.get(1)).toBe(firstHash);
+    expect(lineCommit.get(2)).toBe(firstHash);
+    expect(lineCommit.get(3)).toBe(secondHash);
+
+    // Commit metadata surfaced for the gutter/hover.
+    const third = blame.hunks.find((h) => h.startLine === 3);
+    expect(third?.author).toBe('Test');
+    expect(third?.summary).toBe('second');
+    expect(third?.shortHash).toBe(secondHash.slice(0, 7));
+  });
+
+  test('getBlame: untracked file returns an error (no blame to show)', async () => {
+    const repo = initRepo();
+    writeFileSync(resolve(repo, 'tracked.ts'), 'export {};\n');
+    commitAll(repo, 'init');
+
+    const untracked = resolve(repo, 'untracked.ts');
+    writeFileSync(untracked, 'fresh\n');
+
+    const result = await getBlame(untracked);
+    expect(result.isErr()).toBe(true);
   });
 });

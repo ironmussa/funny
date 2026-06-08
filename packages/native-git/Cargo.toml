@@ -14,6 +14,7 @@ gix = { version = "0.84", default-features = false, features = [
   "revision",
   "dirwalk",
   "blob-diff",
+  "blame",
   "index",
   "attributes",
   "sha1",

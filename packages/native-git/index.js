@@ -763,6 +763,7 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding;
+module.exports.blameFile = nativeBinding.blameFile;
 module.exports.checkIgnore = nativeBinding.checkIgnore;
 module.exports.getBranchSummary = nativeBinding.getBranchSummary;
 module.exports.getCommitBody = nativeBinding.getCommitBody;

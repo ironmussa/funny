@@ -177,6 +177,13 @@ mark.md-search-match[data-active='true'] {
   border-radius: 2px;
 }
 
+@utility monaco-blame-inline {
+  /* GitLens-style current-line blame: muted gray annotation at end of line. */
+  color: hsl(var(--muted-foreground));
+  opacity: 0.6;
+  font-style: italic;
+}
+
 @utility settings-section-header {
   /* Settings section header */
   @apply text-muted-foreground px-1 pb-2 text-xs font-semibold tracking-wider uppercase;

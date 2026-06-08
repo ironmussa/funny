@@ -4,6 +4,24 @@ import { request } from './_core';
 
 export type { AdvertisedProvider };
 
+/** One contiguous run of same-commit lines from `GET /files/blame`. */
+export interface BlameHunk {
+  /** First line of the hunk, 1-based. */
+  startLine: number;
+  lineCount: number;
+  commitHash: string;
+  shortHash: string;
+  author: string;
+  relativeDate: string;
+  summary: string;
+}
+
+export interface BlameResponse {
+  hunks: BlameHunk[];
+  /** Line count of the HEAD version; working-tree lines past it are uncommitted. */
+  blamedLineCount: number;
+}
+
 /** A model advertised by a dynamic-catalog ACP provider (pi / cursor / opencode). */
 export interface AcpModelEntry {
   modelId: string;
@@ -103,7 +121,12 @@ export const systemApi = {
   installProvider: (body: { git?: string; path?: string; ref?: string; subdir?: string }) =>
     request<{
       ok: boolean;
-      provider: { id: string; label: string; dirName: string; spawn: { command: string; args: string[] } };
+      provider: {
+        id: string;
+        label: string;
+        dirName: string;
+        spawn: { command: string; args: string[] };
+      };
     }>('/system/providers/install', { method: 'POST', body: JSON.stringify(body) }),
 
   removeProvider: (id: string) =>
@@ -130,6 +153,8 @@ export const systemApi = {
   // Files (internal editor)
   readFile: (path: string) =>
     request<{ content: string }>(`/files/read?path=${encodeURIComponent(path)}`),
+  getFileBlame: (path: string) =>
+    request<BlameResponse>(`/files/blame?path=${encodeURIComponent(path)}`),
   writeFile: (path: string, content: string) =>
     request<{ ok: boolean }>('/files/write', {
       method: 'POST',

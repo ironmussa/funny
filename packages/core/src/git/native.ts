@@ -71,6 +71,21 @@ export interface NativeStashFileEntry {
   deletions: number;
 }
 
+export interface NativeBlameHunk {
+  startLine: number;
+  lineCount: number;
+  commitHash: string;
+  shortHash: string;
+  author: string;
+  relativeDate: string;
+  summary: string;
+}
+
+export interface NativeBlameResult {
+  hunks: NativeBlameHunk[];
+  blamedLineCount: number;
+}
+
 export interface NativeBranchSummaryResult {
   linesAdded: number;
   linesDeleted: number;
@@ -116,6 +131,7 @@ export interface NativeGitModule {
     baseBranch: string,
     branch: string,
   ): Promise<NativeBranchSummaryResult>;
+  blameFile(filePath: string): Promise<NativeBlameResult>;
 }
 
 // Heavy I/O ops (status scan, diff scan) — limit concurrent disk reads
@@ -164,6 +180,7 @@ export interface PooledNativeGitModule {
     baseBranch: string,
     branch: string,
   ): Promise<NativeBranchSummaryResult>;
+  blameFile(filePath: string): Promise<NativeBlameResult>;
 }
 
 function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
@@ -191,6 +208,7 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     checkIgnore: (...args) => lightPool(() => mod.checkIgnore(...args)),
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
     getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
+    blameFile: (...args) => lightPool(() => mod.blameFile(...args)),
   };
 }
 

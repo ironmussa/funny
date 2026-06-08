@@ -9,6 +9,7 @@ import {
   Code,
   Copy,
   FileCode,
+  GitBranch,
 } from 'lucide-react';
 import type { editor as monacoEditor } from 'monaco-editor';
 import { useTheme } from 'next-themes';
@@ -32,6 +33,8 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
+import type { BlameHunk, BlameResponse } from '@/lib/api/system';
+import { createClientLogger } from '@/lib/client-logger';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
 import { cn } from '@/lib/utils';
@@ -46,6 +49,8 @@ interface MonacoEditorDialogProps {
 }
 
 const MONACO_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/? \t\n';
+
+const blameLog = createClientLogger('blame');
 
 const MonacoCodeView = lazy(() =>
   import('@/components/MonacoCodeView').then((m) => ({ default: m.MonacoCodeView })),
@@ -90,6 +95,22 @@ export function MonacoEditorDialog({
   const monacoMatchesRef = useRef<monacoEditor.FindMatch[]>([]);
   const monacoDecorationsRef = useRef<monacoEditor.IEditorDecorationsCollection | null>(null);
 
+  // ── Git blame (gutter + hover) ──────────────────────────────────────────────
+  // Per-line commit attribution from `GET /files/blame`, rendered as injected
+  // text in the left gutter. A single declarative effect (below) reconciles the
+  // decorations from `blame` / `showBlame` / `inCodeView`; `editorNonce` bumps on
+  // every editor (re)mount so that effect re-runs against the fresh instance.
+  const [blame, setBlame] = useState<BlameResponse | null>(null);
+  // Shown by default once blame loads; the toolbar toggle hides it per file.
+  const [showBlame, setShowBlame] = useState(true);
+  const [editorNonce, setEditorNonce] = useState(0);
+  // GitLens-style current-line blame: a single end-of-line `after` annotation on
+  // the line the cursor is on. `currentLine` tracks the cursor; the collection is
+  // owned by the editor (ownerId = editor id), which the view's injected-text
+  // recompute requires. `editorNonce` rebuilds it on every editor (re)mount.
+  const [currentLine, setCurrentLine] = useState(1);
+  const blameDecorationsRef = useRef<monacoEditor.IEditorDecorationsCollection | null>(null);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -112,12 +133,24 @@ export function MonacoEditorDialog({
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
   const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
 
-  // Set initial content when dialog opens
-  useEffect(() => {
-    if (!open || !initialContent) return;
+  // Initialize the editor buffer synchronously, DURING render — not in an
+  // effect. This guarantees Monaco's <Editor> mounts with the real content
+  // already in place, so tokenization runs as part of the initial `create`
+  // pass. If we set it from an effect, the editor first mounts empty ('') and
+  // receives the content a frame later via setValue, which re-tokenizes AFTER
+  // the text is already painted — that's the "plain text → highlight pops in"
+  // flash. Setting state during render is React's supported "adjust state when
+  // a prop changes" pattern: the guards below go false once applied (filePath
+  // matches loadedFor), so it cannot loop. `initialContent` is delivered
+  // atomically with `open` by the store, so it is non-null when open flips.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  if (open && initialContent != null && filePath !== loadedFor) {
     setContent(initialContent);
     setOriginalContent(initialContent);
-  }, [open, initialContent]);
+    setLoadedFor(filePath);
+  } else if (!open && loadedFor !== null) {
+    setLoadedFor(null);
+  }
 
   // Auto-save with debounce (1s after last keystroke)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -144,15 +177,101 @@ export function MonacoEditorDialog({
 
   const handleEditorMount: OnMount = useCallback((editor) => {
     editorRef.current = editor;
-    // The decorations collection is bound to the previous editor instance — drop it
-    // so the next search effect creates a fresh one on this model.
+    // The decorations collections are bound to the previous editor instance —
+    // drop them so the next effect creates fresh ones on this model.
     monacoDecorationsRef.current = null;
+    blameDecorationsRef.current = null;
+    // Track the cursor line so the blame annotation follows it (GitLens-style).
+    setCurrentLine(editor.getPosition()?.lineNumber ?? 1);
+    editor.onDidChangeCursorPosition((e) => setCurrentLine(e.position.lineNumber));
+    // Bump the nonce so the declarative blame effect re-runs against this
+    // fresh editor instance (and repaints if blame is already loaded).
+    setEditorNonce((n) => n + 1);
+
+    // Synchronously tokenize the initial viewport before the browser paints.
+    // Monaco 0.55 tokenizes lazily in the background, so the first painted frame
+    // would otherwise show uncolored (single-foreground) text and "pop in" the
+    // syntax colors a frame later. `onMount` runs in the same task as
+    // `editor.create`, before the browser's first paint, so forcing tokenization
+    // here means that first frame is already highlighted. `forceTokenization` is
+    // the same internal model API that `monaco.editor.colorize` relies on — it's
+    // stable but absent from the public d.ts, hence the narrow cast. Capped so
+    // huge files don't block on whole-document tokenization; the rest streams in
+    // lazily as the user scrolls.
+    const model = editor.getModel() as
+      | (monacoEditor.ITextModel & {
+          tokenization?: { forceTokenization?: (lineNumber: number) => void };
+        })
+      | null;
+    if (model) {
+      const lastVisible = editor.getVisibleRanges().at(-1)?.endLineNumber ?? 0;
+      const target = Math.min(model.getLineCount(), Math.max(lastVisible, 100));
+      model.tokenization?.forceTokenization?.(target);
+    }
   }, []);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
     setSearchQuery('');
   }, []);
+
+  // Fetch blame whenever the open file changes. Failures (untracked file, no
+  // repo, native module unavailable) are non-fatal: we just clear blame so the
+  // gutter renders nothing.
+  useEffect(() => {
+    // LATCH: never null blame here. The dialog's `open`/`filePath` flip to
+    // falsy transiently (Radix fires onOpenChange(false) during the active
+    // thread's re-renders, then it reopens), and nulling on every such flip
+    // wiped the gutter. We keep the last blame and only replace it once a new
+    // fetch resolves; closing for real unmounts the editor so it doesn't matter.
+    if (!open || !filePath) {
+      blameLog.info('blame fetch effect: skip (latched)', { open, filePath });
+      return;
+    }
+    blameLog.info('blame fetch effect', { open, filePath });
+    let cancelled = false;
+    api.getFileBlame(filePath).then((res) => {
+      if (cancelled) return;
+      if (res.isOk()) {
+        blameLog.info('blame loaded', {
+          filePath,
+          hunks: res.value.hunks.length,
+          blamedLineCount: res.value.blamedLineCount,
+        });
+        setBlame(res.value);
+      } else {
+        blameLog.warn('blame fetch failed', { filePath, error: res.error.message });
+        setBlame(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, filePath]);
+
+  // GitLens-style current-line blame: reconcile a single end-of-line annotation
+  // on the cursor's line. Re-runs on cursor move (`currentLine`), data/visibility
+  // changes, and editor (re)mount (`editorNonce`). The collection is owned by the
+  // editor (ownerId = editor id), which the view's injected-text recompute needs.
+  useEffect(() => {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (!editor || !model) return;
+    if (!inCodeView || !showBlame || !blame) {
+      blameDecorationsRef.current?.clear();
+      return;
+    }
+    const lineCount = model.getLineCount();
+    const line = Math.min(Math.max(currentLine, 1), lineCount);
+    const endColumn = model.getLineMaxColumn(line);
+    const decorations = buildCurrentLineBlameDecoration(line, endColumn, blame);
+    if (blameDecorationsRef.current) {
+      blameDecorationsRef.current.set(decorations);
+    } else {
+      blameDecorationsRef.current = editor.createDecorationsCollection(decorations);
+    }
+    blameLog.info('blame render', { line: currentLine, count: decorations.length });
+  }, [blame, showBlame, inCodeView, currentLine, content, editorNonce]);
 
   // Ctrl+F → open the unified search bar (both code and markdown views).
   // Capture phase + preventDefault prevents Monaco's built-in find widget from opening.
@@ -390,6 +509,29 @@ export function MonacoEditorDialog({
               </TooltipContent>
             </Tooltip>
           )}
+          {inCodeView && blame && blame.hunks.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setShowBlame((prev) => !prev)}
+                  className={cn(
+                    'shrink-0',
+                    showBlame ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                  data-testid="editor-toggle-blame"
+                >
+                  <GitBranch className="icon-base" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {showBlame
+                  ? t('editor.hideBlame', 'Hide blame')
+                  : t('editor.showBlame', 'Show blame')}
+              </TooltipContent>
+            </Tooltip>
+          )}
           {inCodeView && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -475,6 +617,7 @@ export function MonacoEditorDialog({
                 onMount={handleEditorMount}
                 showMinimap={showMinimap}
                 codeFontSizePx={codeFontSizePx}
+                wordWrap={showBlame && blame ? 'off' : 'on'}
               />
             </Suspense>
           )}
@@ -513,6 +656,60 @@ const markdownPreviewComponents: Components = {
     return <pre className="bg-muted/50 overflow-auto rounded-md p-3 text-sm">{children}</pre>;
   },
 };
+
+/** Neutralize the few markdown chars that would break a hover tooltip. */
+function escapeMarkdown(value: string): string {
+  return value.replace(/[\\`*_[\]]/g, '\\$&');
+}
+
+/** Find the hunk (commit) that introduced a given 1-based line, if any. */
+function hunkForLine(blame: BlameResponse, line: number): BlameHunk | undefined {
+  for (const hunk of blame.hunks) {
+    if (line >= hunk.startLine && line < hunk.startLine + hunk.lineCount) return hunk;
+  }
+  return undefined;
+}
+
+/**
+ * Build the single GitLens-style blame annotation for the cursor's line: an
+ * end-of-line `after` injection (gray, padded off the code) attributing the line
+ * to the commit that introduced it. Lines past the blamed (HEAD) range — added
+ * in the working copy — show "Uncommitted".
+ *
+ * Note: blame is computed against HEAD, so on a heavily-modified file the
+ * line→commit mapping can drift (gix blames committed history, not the worktree).
+ */
+function buildCurrentLineBlameDecoration(
+  line: number,
+  endColumn: number,
+  blame: BlameResponse,
+): monacoEditor.IModelDeltaDecoration[] {
+  const hunk = hunkForLine(blame, line);
+  const label = hunk
+    ? `${hunk.author}, ${hunk.relativeDate} • ${hunk.summary}`
+    : 'You • Uncommitted changes';
+  const hoverMessage = hunk
+    ? {
+        value: `**${escapeMarkdown(hunk.summary)}**\n\n${escapeMarkdown(hunk.author)} • ${hunk.relativeDate}\n\n\`${hunk.shortHash}\``,
+      }
+    : { value: '_Not committed yet_' };
+  return [
+    {
+      // Collapsed range at end-of-line; `after` injects the annotation there.
+      // `showIfCollapsed` is REQUIRED — Monaco filters injected text on empty
+      // ranges otherwise (getAllInjectedText drops `range.isEmpty()` decorations).
+      range: { startLineNumber: line, startColumn: endColumn, endLineNumber: line, endColumn },
+      options: {
+        after: {
+          content: `        ${label}`,
+          inlineClassName: 'monaco-blame-inline',
+        },
+        hoverMessage,
+        showIfCollapsed: true,
+      },
+    },
+  ];
+}
 
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() || filePath;

@@ -74,14 +74,18 @@ const FONT_SIZE_VALUES: Record<FontSize, string> = {
   large: '16px',
 };
 
-/** Monospace code font size (px) — used for diffs (denser view). */
+/**
+ * Monospace code font size (px) — denser scale for inline code blocks in chat
+ * (`WaitingCards`, prose code) and the `--code-font-size` var. NOT used by the
+ * diff anymore — the diff aligns with the editor via `DIFF_FONT_SIZE_PX`.
+ */
 export const CODE_FONT_SIZE_PX: Record<FontSize, number> = {
   small: 11,
   default: 11,
   large: 13,
 };
 
-/** Monospace code row/line height (px) — for diffs. */
+/** Monospace code row/line height (px) — for the dense CODE scale (chat code). */
 export const CODE_LINE_HEIGHT_PX: Record<FontSize, number> = {
   small: 20,
   default: 20,
@@ -109,9 +113,24 @@ export const PROSE_LINE_HEIGHT_PX: Record<FontSize, number> = {
   large: 26,
 };
 
-// Backwards-compatible aliases
-export const DIFF_FONT_SIZE_PX = CODE_FONT_SIZE_PX;
-export const DIFF_ROW_HEIGHT_PX = CODE_LINE_HEIGHT_PX;
+/**
+ * Diff font size (px) — aligned with the Monaco editor (`EDITOR_FONT_SIZE_PX`)
+ * so the diff and the code editor share one baseline. Previously the diff used
+ * the denser `CODE_FONT_SIZE_PX`; it now matches the editor on purpose.
+ */
+export const DIFF_FONT_SIZE_PX = EDITOR_FONT_SIZE_PX;
+
+/**
+ * Diff row/line height (px) — Monaco-style leading. Monaco derives its line
+ * height as `round(GOLDEN_LINE_HEIGHT_RATIO × fontSize)`, where the ratio is 1.5
+ * on Linux (the funny runner platform). These values mirror that for the editor
+ * font sizes (12→18, 13→20, 15→23) so diff rows read the same as editor lines.
+ */
+export const DIFF_ROW_HEIGHT_PX: Record<FontSize, number> = {
+  small: 18,
+  default: 20,
+  large: 23,
+};
 
 function getStoredFontSize(): FontSize {
   try {
@@ -203,10 +222,13 @@ function persistHiddenPromptModels(hiddenPromptModels: string[]) {
 
 function applyFontSize(size: FontSize) {
   document.documentElement.style.fontSize = FONT_SIZE_VALUES[size];
+  // Diff vars track the editor-aligned scale; --code-font-size stays on the
+  // denser CODE scale used by inline code blocks in chat (WaitingCards, prose).
+  const diffPx = DIFF_FONT_SIZE_PX[size];
+  const diffRowPx = DIFF_ROW_HEIGHT_PX[size];
   const codePx = CODE_FONT_SIZE_PX[size];
-  const codeRowPx = CODE_LINE_HEIGHT_PX[size];
-  document.documentElement.style.setProperty('--diff-font-size', `${codePx}px`);
-  document.documentElement.style.setProperty('--diff-row-height', `${codeRowPx}px`);
+  document.documentElement.style.setProperty('--diff-font-size', `${diffPx}px`);
+  document.documentElement.style.setProperty('--diff-row-height', `${diffRowPx}px`);
   document.documentElement.style.setProperty('--code-font-size', `${codePx}px`);
 }
 

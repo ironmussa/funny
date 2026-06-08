@@ -176,8 +176,8 @@ export function ProvidersSettings() {
         </p>
       </div>
 
-      <div className="mb-1 mt-2 flex items-baseline justify-between px-1">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mt-2 mb-1 flex items-baseline justify-between px-1">
+        <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Built-in providers
         </h4>
         <span className="text-muted-foreground text-[11px]">session toggle</span>
@@ -221,8 +221,8 @@ export function ProvidersSettings() {
         })}
       </div>
 
-      <div className="mb-1 mt-2 px-1">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mt-2 mb-1 px-1">
+        <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Installed providers
         </h4>
       </div>

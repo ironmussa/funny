@@ -51,9 +51,7 @@ export function getAdvertisedProviders(runnerId: string): AdvertisedProvider[] {
  * users with different runners see different provider sets (same as model
  * discovery). Returns [] when the user has no online runner.
  */
-export async function getAdvertisedProvidersForUser(
-  userId: string,
-): Promise<AdvertisedProvider[]> {
+export async function getAdvertisedProvidersForUser(userId: string): Promise<AdvertisedProvider[]> {
   const runnerId = await findAnyRunnerForUser(userId);
   return runnerId ? getAdvertisedProviders(runnerId) : [];
 }

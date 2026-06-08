@@ -6,12 +6,12 @@
 
 import { describe, expect, test } from 'bun:test';
 
-import { ACP_MANIFESTS } from '../provider-manifests.js';
 import {
   PROVIDER_MANIFEST_SCHEMA_VERSION,
   parseFunnyProviderFile,
   providerManifestSchema,
 } from '../provider-manifest-schema.js';
+import { ACP_MANIFESTS } from '../provider-manifests.js';
 
 /** Wrap a manifest in the on-disk envelope. */
 function asFile(manifest: unknown) {

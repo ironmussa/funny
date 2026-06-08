@@ -30,8 +30,6 @@ import {
   loadProviderExtensions,
 } from '@funny/core/agents';
 import type { Project, WSEvent } from '@funny/shared';
-
-import { DATA_DIR } from '../lib/data-dir.js';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
   type DataInsertMessage,
@@ -42,6 +40,7 @@ import {
 import { nanoid } from 'nanoid';
 import { io, type Socket } from 'socket.io-client';
 
+import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { resolveProviderAvailability } from '../utils/provider-detection.js';
 import { getServices } from './service-registry.js';

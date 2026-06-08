@@ -47,7 +47,11 @@ export function registerSystemRoutes(app: Hono): void {
     const manifest = getManifest(provider);
     if (!manifest || manifest.models.kind !== 'dynamic') {
       return c.json(
-        { ok: false, reason: 'unknown_provider', message: `No dynamic model discovery for '${provider}'` },
+        {
+          ok: false,
+          reason: 'unknown_provider',
+          message: `No dynamic model discovery for '${provider}'`,
+        },
         404,
       );
     }
@@ -129,7 +133,10 @@ export function registerSystemRoutes(app: Hono): void {
       return c.json({ ok: false, error: result.error }, 400);
     }
     const m = result.loaded.manifest;
-    log.info('provider extension installed', { namespace: 'provider-install', id: result.loaded.id });
+    log.info('provider extension installed', {
+      namespace: 'provider-install',
+      id: result.loaded.id,
+    });
     return c.json({
       ok: true,
       provider: {

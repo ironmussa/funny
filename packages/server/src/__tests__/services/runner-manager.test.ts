@@ -95,7 +95,12 @@ describe('runner-manager service', () => {
     });
 
     test('caches providers advertised on heartbeat', async () => {
-      seedRunner(t.db as any, { id: 'r-adv', token: 'tok-adv', userId: 'user-1', status: 'online' });
+      seedRunner(t.db as any, {
+        id: 'r-adv',
+        token: 'tok-adv',
+        userId: 'user-1',
+        status: 'online',
+      });
       const provider = {
         id: 'myagent-ext',
         label: 'My Agent',
@@ -123,7 +128,10 @@ describe('runner-manager service', () => {
       // Unknown until advertised → null (client must not filter the picker).
       expect(await rm.getActiveBuiltinsForUser('user-lc')).toBeNull();
 
-      await rm.handleHeartbeat('r-lc', { activeThreadIds: [], activeBuiltins: ['codex', 'gemini'] });
+      await rm.handleHeartbeat('r-lc', {
+        activeThreadIds: [],
+        activeBuiltins: ['codex', 'gemini'],
+      });
       expect(await rm.getActiveBuiltinsForUser('user-lc')).toEqual(['codex', 'gemini']);
 
       // An explicit empty set is distinct from "unknown" → filter to none.

@@ -177,9 +177,9 @@ describe('enable / disable built-in providers (lean-core live toggle)', () => {
 
     expect(disableBuiltinProvider('gemini')).toBe(true);
     expect(getActiveBuiltinProviders()).not.toContain('gemini');
-    expect(
-      defaultProcessFactory.create({ ...baseOpts, provider: 'gemini' }).constructor.name,
-    ).toBe('SDKClaudeProcess'); // gated → falls back
+    expect(defaultProcessFactory.create({ ...baseOpts, provider: 'gemini' }).constructor.name).toBe(
+      'SDKClaudeProcess',
+    ); // gated → falls back
 
     expect(enableBuiltinProvider('gemini')).toBe(true);
     expect(getActiveBuiltinProviders()).toContain('gemini');

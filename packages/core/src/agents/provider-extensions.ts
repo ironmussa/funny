@@ -97,7 +97,11 @@ export function getAdvertisedProviders(): AdvertisedProvider[] {
   for (const m of runnerManifests.values()) {
     const models: AdvertisedProvider['models'] =
       m.models.kind === 'static'
-        ? { kind: 'static', defaultModel: m.models.defaultModel, entries: Object.values(m.models.entries) }
+        ? {
+            kind: 'static',
+            defaultModel: m.models.defaultModel,
+            entries: Object.values(m.models.entries),
+          }
         : { kind: 'dynamic', defaultModel: m.models.defaultModel };
     out.push({
       id: m.id,
@@ -277,7 +281,9 @@ const providerKindHandler: KindHandler<LoadedProviderExtension> = {
   },
   read(dir, dirName) {
     const parsed = parseProviderExtensionDir(dir, dirName);
-    return parsed && parsed.ok ? { id: parsed.manifest.id, dirName, manifest: parsed.manifest } : null;
+    return parsed && parsed.ok
+      ? { id: parsed.manifest.id, dirName, manifest: parsed.manifest }
+      : null;
   },
 };
 

@@ -29,7 +29,13 @@ export type DiscoverAcpModelsResult =
   | { ok: true; models: DiscoveredAcpModel[]; currentModelId: string | null }
   | {
       ok: false;
-      reason: 'spawn_failed' | 'sdk_missing' | 'auth_required' | 'agent_error' | 'no_models' | 'timeout';
+      reason:
+        | 'spawn_failed'
+        | 'sdk_missing'
+        | 'auth_required'
+        | 'agent_error'
+        | 'no_models'
+        | 'timeout';
       message?: string;
     };
 
@@ -54,7 +60,11 @@ export async function discoverAcpModels(
   try {
     SDK = await import('@agentclientprotocol/sdk');
   } catch {
-    return { ok: false, reason: 'sdk_missing', message: '@agentclientprotocol/sdk is not installed' };
+    return {
+      ok: false,
+      reason: 'sdk_missing',
+      message: '@agentclientprotocol/sdk is not installed',
+    };
   }
 
   const { ClientSideConnection, ndJsonStream } = SDK;
@@ -86,7 +96,11 @@ export async function discoverAcpModels(
   const timeoutPromise = new Promise<DiscoverAcpModelsResult>((resolve) => {
     timer = setTimeout(() => {
       cleanup();
-      resolve({ ok: false, reason: 'timeout', message: `${label} did not respond within ${timeoutMs}ms` });
+      resolve({
+        ok: false,
+        reason: 'timeout',
+        message: `${label} did not respond within ${timeoutMs}ms`,
+      });
     }, timeoutMs);
   });
 

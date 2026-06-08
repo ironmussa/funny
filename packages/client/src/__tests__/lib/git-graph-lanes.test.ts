@@ -89,6 +89,37 @@ describe('computeGraphRows', () => {
     expect(converges.map((s) => s.fromLane).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
+  test('date-order interleaving keeps two adjacent side-branch tips in distinct lanes', () => {
+    // Reproduces the reported dependabot layout once the log is ordered by date:
+    //   M  master child of P            (lane 0)
+    //   A  dev-deps tip, child of P     (56m)
+    //   F  fix-client tip, child of T   (57m) — interleaved between A and P
+    //   P  production (child of I)      (63m)
+    //   T  typescript (child of I)      (72m)
+    //   I  i18next (window root)
+    // A and F are adjacent rows on DIFFERENT branches, so they must land in
+    // different lanes — otherwise their nodes overlap in one column.
+    const layout = computeGraphRows([
+      c('M', 'P'),
+      c('A', 'P'),
+      c('F', 'T'),
+      c('P', 'I'),
+      c('T', 'I'),
+      c('I'),
+    ]);
+    const [rM, rA, rF, rP] = layout.rows;
+    expect(rM.commitLane).toBe(0);
+    // The two interleaved tips (A above F) occupy separate lanes — no overlap.
+    expect(rA.commitLane).not.toBe(rF.commitLane);
+    // Each tip emits its parent edge down its OWN node lane.
+    expect(rA.segments.find((s) => s.fromY === 0.5 && s.toY === 1)?.toLane).toBe(rA.commitLane);
+    expect(rF.segments.find((s) => s.fromY === 0.5 && s.toY === 1)?.toLane).toBe(rF.commitLane);
+    // F's row neighbour below (P, on the trunk) is a different branch, so it
+    // sits in a different lane too. (T, reached later, is F's own parent and
+    // legitimately shares F's lane — that's the F→T chain, not an overlap.)
+    expect(rF.commitLane).not.toBe(rP.commitLane);
+  });
+
   test('root commit (no parents) emits no parent edge', () => {
     const layout = computeGraphRows([c('only')]);
     expect(layout.rows[0].commitLane).toBe(0);

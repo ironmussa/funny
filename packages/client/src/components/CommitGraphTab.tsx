@@ -10,6 +10,7 @@ import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDial
 import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { HighlightText } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { darkenHex } from '@/components/ui/project-chip';
@@ -77,7 +78,7 @@ interface CommitGraphTabProps {
 /**
  * Branch-graph view of git history. Separate from {@link CommitHistoryTab}
  * (the flat list) — this one renders a GitKraken-style lane graph on the left
- * of each commit using `git log --all --topo-order` data (parents + refs).
+ * of each commit using `git log --all --date-order` data (parents + refs).
  * Per-commit affordances mirror the History list: GitHub avatar, copy-hash, an
  * external link to the commit, and an unpushed marker. Click a commit to open
  * the shared {@link CommitDetailDialog}.
@@ -451,6 +452,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   onAfterAction={refreshLog}
                   unpushed={unpushed.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
+                  searchQuery={searchQuery}
                   transform={virtualRow.start}
                   rowHeight={rowHeightFor(entry)}
                   onSelect={() => setSelectedHash(selectedHash === entry.hash ? null : entry.hash)}
@@ -646,6 +648,7 @@ function GraphCommitRow({
   onAfterAction,
   unpushed,
   connectToWip,
+  searchQuery,
   transform,
   rowHeight,
   onSelect,
@@ -663,6 +666,8 @@ function GraphCommitRow({
   unpushed: boolean;
   /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
   connectToWip: boolean;
+  /** Active filter query — highlights matching substrings in the title & refs. */
+  searchQuery: string;
   transform: number;
   rowHeight: number;
   onSelect: () => void;
@@ -817,15 +822,22 @@ function GraphCommitRow({
           {/* Branch/tag chips on their own line above the commit title. */}
           {refSegments.length > 0 && (
             <div className="mb-1.5 flex min-w-0 items-center overflow-hidden">
-              <PowerlineBar segments={refSegments} size="sm" className="min-w-0 shrink" />
+              <PowerlineBar
+                segments={refSegments}
+                size="sm"
+                className="min-w-0 shrink"
+                query={searchQuery}
+              />
             </div>
           )}
           {/* Same Tailwind classes as the History list (`CommitListPanel`) so the
               title/meta sizes are rem-based and identical across every tab. */}
           <div className="flex w-full min-w-0 items-center gap-1.5">
-            <span className="text-foreground min-w-0 flex-1 truncate text-xs leading-tight font-medium">
-              {entry.message}
-            </span>
+            <HighlightText
+              text={entry.message}
+              query={searchQuery}
+              className="text-foreground min-w-0 flex-1 truncate text-xs leading-tight font-medium"
+            />
             <span className="text-muted-foreground shrink-0 text-[10px]">
               {shortRelativeDate(entry.relativeDate)}
             </span>

@@ -204,15 +204,16 @@ function parseRefs(decoration: string): { refs: GraphRef[]; headBranch: string |
 
 /**
  * Get commit log entries enriched with parent hashes and ref decorations for
- * rendering a branch graph. Topologically ordered (`--topo-order`): each
- * branch's commits stay contiguous and the first-parent line flows before the
- * walk dips into a side branch — matching how GitKraken orders the graph, where
- * a diverged branch shows as one compact block above its merge-base instead of
- * being split apart by interleaved master commits (which is what `--date-order`
- * would do). When `all` is set, walks every ref (`--all`) so divergent /
- * unmerged branches appear; otherwise walks HEAD only. Bypasses the native
- * fast-path (which doesn't return parents or refs) and goes straight to
- * `git log`.
+ * rendering a branch graph. Ordered by commit date (`--date-order`) so commits
+ * from divergent branches interleave by timestamp — matching GitKraken's
+ * default. This is what makes an unmerged side branch read as a long parallel
+ * lane (its commits visually alternate with trunk commits row by row) rather
+ * than as a compact block stacked above its merge-base, which is what
+ * `--topo-order` produces. `--date-order` still never shows a parent before all
+ * of its children, the one invariant the lane layout (`computeGraphRows`)
+ * needs. When `all` is set, walks every ref (`--all`) so divergent / unmerged
+ * branches appear; otherwise walks HEAD only. Bypasses the native fast-path
+ * (which doesn't return parents or refs) and goes straight to `git log`.
  */
 export function getGraphLog(
   cwd: string,
@@ -221,13 +222,18 @@ export function getGraphLog(
   const { limit = 50, skip = 0, all = false } = opts;
   const FIELD_SEP = '\x1f';
   const RECORD_SEP = '\x1e';
-  // hash, shortHash, author, email, relDate, parents (space-sep), refs (%D), subject, body
-  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%ar%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
+  // hash, shortHash, author, email, relDate, parents (space-sep), refs (%D), subject, body.
+  // relDate uses the COMMITTER date (%cr), not the author date (%ar): the rows
+  // are sorted by `--date-order` (committer timestamp), so showing the committer
+  // date keeps each row's displayed "Nm ago" monotonic with its position. With
+  // %ar, a rebased/cherry-picked commit (author ≠ committer date) would read as
+  // out of order relative to its neighbours.
+  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%cr%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
   // `--decorate=full` keeps full ref paths in `%D` so parseRefs can classify
   // each ref as local/remote/tag without guessing from the `origin/` convention.
   const args = [
     'log',
-    '--topo-order',
+    '--date-order',
     '--decorate=full',
     `--format=${format}`,
     '-n',

@@ -20,6 +20,7 @@ import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import {
   pushChanges as gitServicePush,
+  pushBranchToOrigin as gitServicePushBranch,
   pullChanges as gitServicePull,
   resolveIdentity,
 } from '../../services/git-service.js';
@@ -30,6 +31,7 @@ import {
   validate,
   publishRepoSchema,
   pullSchema,
+  pushBranchSchema,
   setRemoteSchema,
 } from '../../validation/schemas.js';
 import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
@@ -45,6 +47,26 @@ remoteRoutes.post('/project/:projectId/push', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveIdentity(userId);
   const result = await push(cwdResult.value, identity);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/push-branch — push a specific local branch.
+remoteRoutes.post('/project/:projectId/push-branch', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const parsed = validate(pushBranchSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const result = await gitServicePushBranch(
+    projectId,
+    userId,
+    cwdResult.value,
+    parsed.value.branch,
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -179,6 +201,21 @@ remoteRoutes.post('/:threadId/push', async (c) => {
   }
   await invalidateGitStatusCache(threadId);
   span.end('ok');
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/push-branch — push a specific local branch.
+remoteRoutes.post('/:threadId/push-branch', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const parsed = validate(pushBranchSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const result = await gitServicePushBranch(threadId, userId, cwdResult.value, parsed.value.branch);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 

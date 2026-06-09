@@ -6,8 +6,9 @@ import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { useGitStatusStore } from '@/stores/git-status-store';
 
-/** Destructive commit operations offered from the graph context menu + detail dialog. */
-export type CommitActionKind = 'checkout' | 'revert' | 'reset';
+/** Commit operations offered from the graph context menu + detail dialog that
+ * run behind a confirmation dialog (they mutate the working branch / history). */
+export type CommitActionKind = 'checkout' | 'revert' | 'reset' | 'cherry-pick';
 
 export interface PendingCommitAction {
   kind: CommitActionKind;
@@ -80,6 +81,10 @@ export function useCommitActions({
           return effectiveThreadId
             ? api.resetHard(effectiveThreadId, hash)
             : api.projectResetHard(projectModeId!, hash);
+        case 'cherry-pick':
+          return effectiveThreadId
+            ? api.cherryPick(effectiveThreadId, hash)
+            : api.projectCherryPick(projectModeId!, hash);
       }
     };
     const result = await run();
@@ -88,6 +93,7 @@ export function useCommitActions({
         checkout: t('history.checkoutSuccess', 'Switched to commit (detached HEAD)'),
         revert: t('history.revertSuccess', 'Commit reverted successfully'),
         reset: t('history.resetSuccess', 'Branch reset to this commit'),
+        'cherry-pick': t('history.cherryPickSuccess', 'Commit cherry-picked onto current branch'),
       };
       toast.success(successMsg[kind]);
       onSuccess?.(kind);
@@ -108,5 +114,66 @@ export function useCommitActions({
     t,
   ]);
 
-  return { pending, inProgress, hasGitContext, request, cancel, confirm };
+  /**
+   * Push a specific local branch to origin. Runs immediately (no confirm) —
+   * pushing matches the confirm-free push affordances elsewhere in the app, and
+   * the branch name is the local-only ref decorating the selected commit.
+   */
+  const pushBranch = useCallback(
+    async (branch: string) => {
+      if (!hasGitContext || inProgress) return;
+      setInProgress(true);
+      const result = await (effectiveThreadId
+        ? api.pushBranch(effectiveThreadId, branch)
+        : api.projectPushBranch(projectModeId!, branch));
+      if (result.isOk()) {
+        toast.success(
+          t('history.pushBranchSuccess', {
+            branch,
+            defaultValue: `Pushed ${branch} to origin`,
+          }),
+        );
+      } else {
+        toastError(result.error);
+      }
+      setInProgress(false);
+      refreshAfterAction();
+    },
+    [hasGitContext, inProgress, effectiveThreadId, projectModeId, refreshAfterAction, t],
+  );
+
+  /** Create a new branch at `startPoint` and switch to it. Runs immediately. */
+  const createBranch = useCallback(
+    async (name: string, startPoint: string) => {
+      if (!hasGitContext || inProgress) return;
+      setInProgress(true);
+      const result = await (effectiveThreadId
+        ? api.createBranch(effectiveThreadId, name, startPoint)
+        : api.projectCreateBranch(projectModeId!, name, startPoint));
+      if (result.isOk()) {
+        toast.success(
+          t('history.createBranchSuccess', {
+            branch: name,
+            defaultValue: `Created and switched to ${name}`,
+          }),
+        );
+      } else {
+        toastError(result.error);
+      }
+      setInProgress(false);
+      refreshAfterAction();
+    },
+    [hasGitContext, inProgress, effectiveThreadId, projectModeId, refreshAfterAction, t],
+  );
+
+  return {
+    pending,
+    inProgress,
+    hasGitContext,
+    request,
+    cancel,
+    confirm,
+    pushBranch,
+    createBranch,
+  };
 }

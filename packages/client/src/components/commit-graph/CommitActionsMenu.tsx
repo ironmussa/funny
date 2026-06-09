@@ -1,7 +1,10 @@
 import {
+  Cherry,
+  CloudUpload,
   Copy,
   ExternalLink,
   GitBranch,
+  GitBranchPlus,
   Hash,
   History,
   MoreVertical,
@@ -11,6 +14,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { CreateBranchDialog } from '@/components/commit-graph/CreateBranchDialog';
 import { CommitActionConfirm } from '@/components/CommitActionConfirm';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,9 +34,19 @@ interface Props {
   githubUrl: string | null;
   effectiveThreadId?: string;
   projectModeId: string | null;
+  /**
+   * Local-only branches whose tip is THIS commit (folded `local` refs with no
+   * synced remote) — each gets a "Push … to origin" entry. Empty when the commit
+   * is not the tip of an unpushed local branch, in which case no push item shows.
+   */
+  localBranches?: string[];
   /** Reload the graph log after a mutating action. */
   onAfterAction: () => void;
 }
+
+/** Stable empty default for {@link Props.localBranches} — a literal `[]` default
+ * would be a fresh reference each render and churn referential equality. */
+const NO_BRANCHES: string[] = [];
 
 /**
  * Three-dots (kebab) menu for a commit row in the graph — the app-standard
@@ -50,15 +64,18 @@ export function CommitActionsMenu({
   githubUrl,
   effectiveThreadId,
   projectModeId,
+  localBranches = NO_BRANCHES,
   onAfterAction,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const { pending, request, cancel, confirm, hasGitContext } = useCommitActions({
-    effectiveThreadId,
-    projectModeId,
-    onAfterAction,
-  });
+  const [createBranchOpen, setCreateBranchOpen] = useState(false);
+  const { pending, request, cancel, confirm, hasGitContext, pushBranch, createBranch } =
+    useCommitActions({
+      effectiveThreadId,
+      projectModeId,
+      onAfterAction,
+    });
 
   const copy = (value: string) =>
     void navigator.clipboard.writeText(value).then(
@@ -118,6 +135,39 @@ export function CommitActionsMenu({
           )}
           {hasGitContext && (
             <>
+              {localBranches.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  {localBranches.map((branch) => (
+                    <DropdownMenuItem
+                      key={branch}
+                      onClick={() => void pushBranch(branch)}
+                      data-testid={`graph-commit-menu-push-${branch}`}
+                    >
+                      <CloudUpload className="icon-sm" />
+                      {t('graph.pushBranchToOrigin', {
+                        branch,
+                        defaultValue: `Push ${branch} to origin`,
+                      })}
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setCreateBranchOpen(true)}
+                data-testid={`graph-commit-menu-create-branch-${shortHash}`}
+              >
+                <GitBranchPlus className="icon-sm" />
+                {t('graph.createBranchHere', 'Create branch from here')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => request('cherry-pick', hash)}
+                data-testid={`graph-commit-menu-cherry-pick-${shortHash}`}
+              >
+                <Cherry className="icon-sm" />
+                {t('graph.cherryPick', 'Cherry-pick onto current branch')}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => request('checkout', hash)}
@@ -146,6 +196,12 @@ export function CommitActionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <CommitActionConfirm pending={pending} onConfirm={confirm} onCancel={cancel} />
+      <CreateBranchDialog
+        open={createBranchOpen}
+        onOpenChange={setCreateBranchOpen}
+        shortHash={shortHash}
+        onCreate={(name) => void createBranch(name, hash)}
+      />
     </>
   );
 }

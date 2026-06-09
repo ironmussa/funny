@@ -22,6 +22,21 @@ export function push(cwd: string, identity?: GitIdentityOptions): ResultAsync<st
 }
 
 /**
+ * Push a SPECIFIC local branch to origin (sets upstream with `-u`), regardless
+ * of which branch is currently checked out. Used by the commit-graph "Push
+ * branch to origin" action, where the branch is the local-only ref decorating
+ * the selected commit — which may not be HEAD. Caller is responsible for passing
+ * a branch name that exists locally; git surfaces a clear error otherwise.
+ */
+export function pushBranch(
+  cwd: string,
+  branch: string,
+  identity?: GitIdentityOptions,
+): ResultAsync<string, DomainError> {
+  return gitRemote(['push', '-u', 'origin', branch], cwd, identity);
+}
+
+/**
  * Add or update the `origin` remote so a local repository can push/pull
  * against an existing empty remote (GitHub, GitLab, Bitbucket, self-hosted…).
  *

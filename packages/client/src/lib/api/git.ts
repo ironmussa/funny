@@ -232,6 +232,21 @@ export const gitApi = {
       method: 'POST',
       body: JSON.stringify({ hash }),
     }),
+  cherryPick: (threadId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/cherry-pick`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
+  createBranch: (threadId: string, name: string, startPoint: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/create-branch`, {
+      method: 'POST',
+      body: JSON.stringify({ name, startPoint }),
+    }),
+  pushBranch: (threadId: string, branch: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/push-branch`, {
+      method: 'POST',
+      body: JSON.stringify({ branch }),
+    }),
 
   // Project-scoped git (no thread — operates on the project's main directory)
   projectGitStatus: (projectId: string, signal?: AbortSignal) =>
@@ -401,6 +416,21 @@ export const gitApi = {
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/reset-hard`, {
       method: 'POST',
       body: JSON.stringify({ hash }),
+    }),
+  projectCherryPick: (projectId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/cherry-pick`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
+  projectCreateBranch: (projectId: string, name: string, startPoint: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/create-branch`, {
+      method: 'POST',
+      body: JSON.stringify({ name, startPoint }),
+    }),
+  projectPushBranch: (projectId: string, branch: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/push-branch`, {
+      method: 'POST',
+      body: JSON.stringify({ branch }),
     }),
   projectGitLog: (projectId: string, limit = 50, skip = 0, signal?: AbortSignal) =>
     request<LogResponse<GitLogEntryDTO>>(

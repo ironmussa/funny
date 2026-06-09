@@ -989,7 +989,10 @@
     "deleteQueuedMessage": "Delete",
     "saveQueuedMessage": "Save",
     "cancelQueuedEdit": "Cancel",
-    "checkoutBlocked": "Cannot switch to branch \"{{branch}}\" — you have uncommitted changes that would be overwritten. Current branch: {{currentBranch}}. Commit or stash your changes, or use worktree mode."
+    "checkoutBlocked": "Cannot switch to branch \"{{branch}}\" — you have uncommitted changes that would be overwritten. Current branch: {{currentBranch}}. Commit or stash your changes, or use worktree mode.",
+    "compactConfirmTitle": "Compact conversation?",
+    "compactConfirmBody": "This summarizes the current conversation to free up context. Earlier messages are condensed and the full detail is no longer available to the agent.",
+    "compactConfirmAction": "Compact"
   },
   "switchBranch": {
     "title": "Switch branch",

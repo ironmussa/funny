@@ -981,7 +981,10 @@
     "deleteQueuedMessage": "Eliminar",
     "saveQueuedMessage": "Guardar",
     "cancelQueuedEdit": "Cancelar",
-    "checkoutBlocked": "No se puede cambiar a la rama \"{{branch}}\" — tienes cambios sin confirmar que se perderían. Rama actual: {{currentBranch}}. Confirma o guarda tus cambios, o usa el modo worktree."
+    "checkoutBlocked": "No se puede cambiar a la rama \"{{branch}}\" — tienes cambios sin confirmar que se perderían. Rama actual: {{currentBranch}}. Confirma o guarda tus cambios, o usa el modo worktree.",
+    "compactConfirmTitle": "¿Compactar la conversación?",
+    "compactConfirmBody": "Esto resume la conversación actual para liberar contexto. Los mensajes anteriores se condensan y el detalle completo deja de estar disponible para el agente.",
+    "compactConfirmAction": "Compactar"
   },
   "switchBranch": {
     "title": "Cambiar rama",

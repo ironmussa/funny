@@ -86,6 +86,22 @@ function DropdownMenuItem({
     />
   );
 }
+function DropdownMenuLabel({
+  className,
+  inset,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
+  inset?: boolean;
+} & { ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Label>> }) {
+  return (
+    <DropdownMenuPrimitive.Label
+      ref={ref}
+      className={cn('px-2 py-1.5 text-xs font-semibold', inset && 'pl-8', className)}
+      {...props}
+    />
+  );
+}
 function DropdownMenuSeparator({
   className,
   ref,
@@ -169,6 +185,7 @@ export {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuGroup,
   DropdownMenuPortal,

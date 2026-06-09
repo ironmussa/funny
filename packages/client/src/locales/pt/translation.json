@@ -976,7 +976,10 @@
     "deleteQueuedMessage": "Excluir",
     "saveQueuedMessage": "Salvar",
     "cancelQueuedEdit": "Cancelar",
-    "checkoutBlocked": "Não é possível mudar para a branch \"{{branch}}\" — você tem alterações não commitadas que seriam sobrescritas. Branch atual: {{currentBranch}}. Faça commit ou stash das suas alterações, ou use o modo worktree."
+    "checkoutBlocked": "Não é possível mudar para a branch \"{{branch}}\" — você tem alterações não commitadas que seriam sobrescritas. Branch atual: {{currentBranch}}. Faça commit ou stash das suas alterações, ou use o modo worktree.",
+    "compactConfirmTitle": "Compactar a conversa?",
+    "compactConfirmBody": "Isto resume a conversa atual para liberar contexto. As mensagens anteriores são condensadas e o detalhe completo deixa de estar disponível para o agente.",
+    "compactConfirmAction": "Compactar"
   },
   "switchBranch": {
     "title": "Mudar branch",

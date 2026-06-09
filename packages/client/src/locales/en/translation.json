@@ -343,7 +343,7 @@
       "closed": "Closed",
       "all": "All",
       "draft": "Draft",
-      "loading": "Loading pull requests\u2026",
+      "loading": "Loading pull requests…",
       "fetchError": "Failed to load pull requests",
       "noProject": "Select a project to view pull requests",
       "noOpenPRs": "No open pull requests",
@@ -714,10 +714,10 @@
     "title": "Project Files",
     "description": "Browse and open project files",
     "filterPlaceholder": "Filter files...",
-    "noProject": "Select a project first",
     "loading": "Loading files...",
-    "noMatches": "No files match your filter",
     "empty": "No files in this project",
+    "noMatches": "No files match your filter",
+    "noProject": "Select a project first",
     "truncated": "Showing first {{limit}} files"
   },
   "startup": {
@@ -1209,16 +1209,6 @@
     "create": "Create user",
     "creating": "Creating...",
     "createFailed": "Failed to create user"
-  },
-  "projectFiles": {
-    "title": "Project Files",
-    "description": "Browse and open project files",
-    "filterPlaceholder": "Filter files...",
-    "loading": "Loading files...",
-    "empty": "No files in this project",
-    "noMatches": "No files match your filter",
-    "noProject": "Select a project first",
-    "truncated": "Showing first {{limit}} files"
   },
   "testRunner": {
     "title": "Test Runner",

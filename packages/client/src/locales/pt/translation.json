@@ -339,7 +339,7 @@
       "closed": "Fechados",
       "all": "Todos",
       "draft": "Rascunho",
-      "loading": "Carregando pull requests\u2026",
+      "loading": "Carregando pull requests…",
       "fetchError": "Erro ao carregar pull requests",
       "noProject": "Selecione um projeto para ver pull requests",
       "noOpenPRs": "Nenhum pull request aberto",
@@ -707,13 +707,13 @@
     "create": "Criar"
   },
   "projectFiles": {
-    "title": "Arquivos do projeto",
+    "title": "Arquivos do Projeto",
     "description": "Navegar e abrir arquivos do projeto",
     "filterPlaceholder": "Filtrar arquivos...",
-    "noProject": "Selecione um projeto primeiro",
     "loading": "Carregando arquivos...",
+    "empty": "Sem arquivos neste projeto",
     "noMatches": "Nenhum arquivo corresponde ao filtro",
-    "empty": "Nenhum arquivo neste projeto",
+    "noProject": "Selecione um projeto primeiro",
     "truncated": "Mostrando os primeiros {{limit}} arquivos"
   },
   "startup": {
@@ -1196,16 +1196,6 @@
     "create": "Criar usuário",
     "creating": "Criando...",
     "createFailed": "Erro ao criar usuário"
-  },
-  "projectFiles": {
-    "title": "Arquivos do Projeto",
-    "description": "Navegar e abrir arquivos do projeto",
-    "filterPlaceholder": "Filtrar arquivos...",
-    "loading": "Carregando arquivos...",
-    "empty": "Sem arquivos neste projeto",
-    "noMatches": "Nenhum arquivo corresponde ao filtro",
-    "noProject": "Selecione um projeto primeiro",
-    "truncated": "Mostrando os primeiros {{limit}} arquivos"
   },
   "testRunner": {
     "title": "Executor de Testes",

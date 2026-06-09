@@ -1,5 +1,14 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Cloud, CloudCheck, GitBranch, GitCommit, RefreshCw, Search, Tag } from 'lucide-react';
+import {
+  Cloud,
+  CloudCheck,
+  GitBranch,
+  GitCommit,
+  Monitor,
+  RefreshCw,
+  Search,
+  Tag,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -692,7 +701,8 @@ function GraphCommitRow({
   // sync, so we collapse the pair into ONE chip. Each chip carries a SINGLE
   // icon that encodes its state (no redundant branch+cloud pairing): a synced
   // branch shows `CloudCheck` (tracked & up to date), a local-only branch shows
-  // `GitBranch`, a lone remote-tracking branch shows `Cloud`, a tag shows `Tag`.
+  // `Monitor` (lives only on this machine), a lone remote-tracking branch shows
+  // `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
   const refSegments = useMemo<PowerlineSegmentData[]>(
     () =>
@@ -715,11 +725,12 @@ function GraphCommitRow({
             }),
           };
         }
-        // Local branch. Folded-in remote → CloudCheck (synced); else a plain
-        // branch icon. One icon only, so the chip never shows two glyphs.
+        // Local branch. Folded-in remote → CloudCheck (synced); else a computer
+        // icon (local-only, lives on this machine). One icon only, so the chip
+        // never shows two glyphs.
         return {
           key: `local:${r.name}`,
-          icon: r.syncedRemote ? CloudCheck : GitBranch,
+          icon: r.syncedRemote ? CloudCheck : Monitor,
           label: r.name,
           color,
           emphasis: r.isCurrent,
@@ -740,6 +751,19 @@ function GraphCommitRow({
         };
       }),
     [entry.refs, entry.headBranch, lanePastel, t],
+  );
+
+  // Local-only branch tips on this commit — `local` folded refs with no synced
+  // remote (i.e. the ones rendered with the `Monitor` glyph). These are exactly
+  // the branches that have something unpushed, so they drive the menu's "Push …
+  // to origin" entries (Option B: push only surfaces on an unpushed branch tip).
+  // The detached-HEAD pseudo-ref isn't a branch, so it's excluded.
+  const pushableBranches = useMemo(
+    () =>
+      foldGraphRefs(entry.refs, entry.headBranch)
+        .filter((r) => r.kind === 'local' && !r.syncedRemote && r.name !== 'HEAD')
+        .map((r) => r.name),
+    [entry.refs, entry.headBranch],
   );
 
   const githubUrl = githubBrowseBaseUrl ? githubCommitUrl(githubBrowseBaseUrl, entry.hash) : null;
@@ -905,6 +929,7 @@ function GraphCommitRow({
           githubUrl={githubUrl}
           effectiveThreadId={effectiveThreadId}
           projectModeId={projectModeId}
+          localBranches={pushableBranches}
           onAfterAction={onAfterAction}
         />
       </div>

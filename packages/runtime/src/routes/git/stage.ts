@@ -24,6 +24,8 @@ import {
   checkoutHash as gitServiceCheckoutHash,
   revertCommit as gitServiceRevertCommit,
   resetHard as gitServiceResetHard,
+  cherryPickCommit as gitServiceCherryPick,
+  createBranchAt as gitServiceCreateBranch,
   validateFilePaths,
 } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -37,6 +39,8 @@ import {
   checkoutHashSchema,
   revertCommitSchema,
   resetHardSchema,
+  cherryPickSchema,
+  createBranchSchema,
 } from '../../validation/schemas.js';
 import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
@@ -196,6 +200,46 @@ stageRoutes.post('/project/:projectId/reset-hard', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const result = await gitServiceResetHard(projectId, userId, cwdResult.value, parsed.value.hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/cherry-pick
+stageRoutes.post('/project/:projectId/cherry-pick', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const parsed = validate(cherryPickSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const result = await gitServiceCherryPick(projectId, userId, cwdResult.value, parsed.value.hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/create-branch
+stageRoutes.post('/project/:projectId/create-branch', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const parsed = validate(createBranchSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const result = await gitServiceCreateBranch(
+    projectId,
+    userId,
+    cwdResult.value,
+    parsed.value.name,
+    parsed.value.startPoint,
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -439,6 +483,46 @@ stageRoutes.post('/:threadId/reset-hard', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const result = await gitServiceResetHard(threadId, userId, cwdResult.value, parsed.value.hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/cherry-pick
+stageRoutes.post('/:threadId/cherry-pick', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const parsed = validate(cherryPickSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const result = await gitServiceCherryPick(threadId, userId, cwdResult.value, parsed.value.hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/create-branch
+stageRoutes.post('/:threadId/create-branch', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const parsed = validate(createBranchSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const result = await gitServiceCreateBranch(
+    threadId,
+    userId,
+    cwdResult.value,
+    parsed.value.name,
+    parsed.value.startPoint,
+  );
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });

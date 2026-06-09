@@ -13,6 +13,7 @@ import {
   revertFiles as gitRevert,
   commit as gitCommit,
   push as gitPush,
+  pushBranch as gitPushBranch,
   pull as gitPull,
   mergeBranch as gitMerge,
   stash as gitStash,
@@ -356,6 +357,73 @@ export function resetHard(
     invalidateStatusCache(cwd);
     return output;
   });
+}
+
+/**
+ * Cherry-pick a commit onto the currently checked-out branch (`git cherry-pick`).
+ * Mirrors {@link revertCommit}: the per-user identity env is forwarded so the
+ * new commit is authored correctly, and `--no-edit` keeps it non-interactive.
+ * A conflicting pick leaves the tree mid-cherry-pick and surfaces git's error to
+ * the caller — no event is emitted on failure since the cache invalidation +
+ * caller-side reload already refresh the UI.
+ */
+export function cherryPickCommit(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  hash: string,
+): ResultAsync<string, DomainError> {
+  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) => {
+    const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+    return git(['cherry-pick', '--no-edit', hash], cwd, env).map((output) => {
+      invalidateStatusCache(cwd);
+      return output;
+    });
+  });
+}
+
+/**
+ * Create a new branch `name` at `startPoint` and switch to it (`git switch -c`).
+ * "Create branch from here" in the commit graph — the start point is the
+ * selected commit. `git switch -c` carries over any uncommitted changes and
+ * fails cleanly if the branch name already exists.
+ */
+export function createBranchAt(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  name: string,
+  startPoint: string,
+): ResultAsync<string, DomainError> {
+  return git(['switch', '-c', name, startPoint], cwd).map((output) => {
+    invalidateStatusCache(cwd);
+    return output;
+  });
+}
+
+/**
+ * Push a specific local branch to origin (the commit-graph "Push branch to
+ * origin" action). Reuses the per-user identity for token auth and emits the
+ * same `git:pushed` event as {@link pushChanges} so existing listeners react.
+ */
+export function pushBranchToOrigin(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  branch: string,
+): ResultAsync<string, DomainError> {
+  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+    gitPushBranch(cwd, branch, identity).map(async (output) => {
+      threadEventBus.emit('git:pushed', {
+        threadId,
+        userId,
+        projectId: await getProjectId(threadId),
+        cwd,
+      });
+      invalidateStatusCache(cwd);
+      return output;
+    }),
+  );
 }
 
 // ── Merge ───────────────────────────────────────────────────────

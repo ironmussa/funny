@@ -309,6 +309,11 @@ export const gitRefSchema = z
 export const checkoutHashSchema = z.object({ hash: gitRefSchema });
 export const revertCommitSchema = z.object({ hash: gitRefSchema });
 export const resetHardSchema = z.object({ hash: gitRefSchema });
+export const cherryPickSchema = z.object({ hash: gitRefSchema });
+/** Push a specific local branch to origin. `branch` shares the git-ref grammar. */
+export const pushBranchSchema = z.object({ branch: gitRefSchema });
+/** Create a branch `name` at `startPoint` (a commit hash / ref) and switch to it. */
+export const createBranchSchema = z.object({ name: gitRefSchema, startPoint: gitRefSchema });
 
 export const stageFilesSchema = z.object({
   paths: z.array(z.string()).min(1, 'paths must not be empty'),

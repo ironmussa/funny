@@ -12,6 +12,12 @@ const { api, toastSuccess, toastErrorFn, fetchForThread, fetchProjectStatus } = 
     projectRevertCommit: vi.fn(),
     resetHard: vi.fn(),
     projectResetHard: vi.fn(),
+    cherryPick: vi.fn(),
+    projectCherryPick: vi.fn(),
+    pushBranch: vi.fn(),
+    projectPushBranch: vi.fn(),
+    createBranch: vi.fn(),
+    projectCreateBranch: vi.fn(),
   },
   toastSuccess: vi.fn(),
   toastErrorFn: vi.fn(),
@@ -109,5 +115,73 @@ describe('useCommitActions', () => {
     act(() => result.current.request('checkout', 'x'));
     expect(result.current.pending).toBeNull();
     expect(result.current.hasGitContext).toBe(false);
+  });
+
+  test('cherry-pick goes through the confirm flow and calls the thread cherry-pick API', async () => {
+    const onAfterAction = vi.fn();
+    const { result } = renderHook(() =>
+      useCommitActions({ effectiveThreadId: 't1', projectModeId: null, onAfterAction }),
+    );
+    act(() => result.current.request('cherry-pick', 'feedface'));
+    expect(result.current.pending).toEqual({ kind: 'cherry-pick', hash: 'feedface' });
+    await act(async () => {
+      await result.current.confirm();
+    });
+    expect(api.cherryPick).toHaveBeenCalledWith('t1', 'feedface');
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(fetchForThread).toHaveBeenCalledWith('t1', true);
+    expect(result.current.pending).toBeNull();
+  });
+
+  test('pushBranch runs immediately (no confirm) and calls the project push-branch API', async () => {
+    const onAfterAction = vi.fn();
+    const { result } = renderHook(() => useCommitActions({ projectModeId: 'p9', onAfterAction }));
+    await act(async () => {
+      await result.current.pushBranch('feat/x');
+    });
+    expect(api.projectPushBranch).toHaveBeenCalledWith('p9', 'feat/x');
+    expect(result.current.pending).toBeNull();
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(fetchProjectStatus).toHaveBeenCalledWith('p9', true);
+    expect(onAfterAction).toHaveBeenCalledTimes(1);
+  });
+
+  test('pushBranch surfaces toastError on failure', async () => {
+    api.pushBranch.mockResolvedValue(err({ message: 'rejected' }));
+    const { result } = renderHook(() =>
+      useCommitActions({ effectiveThreadId: 't1', projectModeId: null, onAfterAction: vi.fn() }),
+    );
+    await act(async () => {
+      await result.current.pushBranch('feat/x');
+    });
+    expect(api.pushBranch).toHaveBeenCalledWith('t1', 'feat/x');
+    expect(toastErrorFn).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  test('createBranch runs immediately and calls the thread create-branch API with start point', async () => {
+    const { result } = renderHook(() =>
+      useCommitActions({ effectiveThreadId: 't1', projectModeId: null, onAfterAction: vi.fn() }),
+    );
+    await act(async () => {
+      await result.current.createBranch('feat/new', 'deadbeef');
+    });
+    expect(api.createBranch).toHaveBeenCalledWith('t1', 'feat/new', 'deadbeef');
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(fetchForThread).toHaveBeenCalledWith('t1', true);
+  });
+
+  test('pushBranch / createBranch are no-ops without git context', async () => {
+    const { result } = renderHook(() =>
+      useCommitActions({ projectModeId: null, onAfterAction: vi.fn() }),
+    );
+    await act(async () => {
+      await result.current.pushBranch('feat/x');
+      await result.current.createBranch('feat/y', 'abc');
+    });
+    expect(api.pushBranch).not.toHaveBeenCalled();
+    expect(api.projectPushBranch).not.toHaveBeenCalled();
+    expect(api.createBranch).not.toHaveBeenCalled();
+    expect(api.projectCreateBranch).not.toHaveBeenCalled();
   });
 });

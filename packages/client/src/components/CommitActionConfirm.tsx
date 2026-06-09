@@ -48,6 +48,15 @@ export function CommitActionConfirm({ pending, onConfirm, onCancel }: Props) {
           confirmLabel: t('history.confirmResetButton', 'Reset Branch'),
           variant: 'destructive' as const,
         },
+        'cherry-pick': {
+          title: t('history.confirmCherryPickTitle', 'Cherry-pick Commit'),
+          description: t(
+            'history.confirmCherryPickDesc',
+            "This will apply this commit's changes onto the current branch as a new commit. If it conflicts, the working tree is left mid-cherry-pick for you to resolve. Continue?",
+          ),
+          confirmLabel: t('history.confirmCherryPickButton', 'Cherry-pick'),
+          variant: 'default' as const,
+        },
       }[pending.kind]
     : null;
 

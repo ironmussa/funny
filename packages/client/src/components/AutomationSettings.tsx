@@ -1,7 +1,7 @@
 import type { Automation, AgentModel, PermissionMode, AutomationSchedule } from '@funny/shared';
 import { Plus, Pencil, Trash2, Play, Pause, History } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -69,6 +69,7 @@ const defaultForm: FormState = {
 
 export function AutomationSettings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 
   const automationsByProject = useAutomationStore((s) => s.automationsByProject);
@@ -91,6 +92,18 @@ export function AutomationSettings() {
       loadAutomations(selectedProjectId);
     }
   }, [selectedProjectId, loadAutomations]);
+
+  // Auto-open the create dialog when navigated here from the project menu's
+  // "Create automation" entry. Clear the history state so a refresh/back won't
+  // re-trigger it.
+  useEffect(() => {
+    if ((location.state as { openCreateAutomation?: boolean } | null)?.openCreateAutomation) {
+      setEditingId(null);
+      setForm(defaultForm);
+      setDialogOpen(true);
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+  }, [location, navigate]);
 
   const openCreateDialog = () => {
     setEditingId(null);
@@ -170,13 +183,15 @@ export function AutomationSettings() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
-          <Plus className="icon-sm" />
-          Create
-        </Button>
-      </div>
+      {/* Header — hidden when empty state is shown */}
+      {automations.length > 0 && (
+        <div className="flex items-center justify-end">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+            <Plus className="icon-sm" />
+            Create
+          </Button>
+        </div>
+      )}
 
       {/* Automation list */}
       {automations.length === 0 ? (

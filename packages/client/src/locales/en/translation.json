@@ -47,6 +47,7 @@
     "analytics": "Analytics",
     "githubIssues": "GitHub Issues",
     "viewDesigns": "View designs",
+    "createAutomation": "Create automation",
     "browser_panel": "Browser annotator"
   },
   "createDesign": {

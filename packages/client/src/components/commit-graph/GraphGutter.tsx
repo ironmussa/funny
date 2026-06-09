@@ -24,6 +24,13 @@ interface Props {
    * connect it to the "Uncommitted changes" (WIP) node sitting above the list.
    */
   connectUp?: boolean;
+  /**
+   * Vertical position of the node within the row band, as a fraction (0 = top,
+   * 0.5 = center, 1 = bottom). Defaults to 0.5. Rows carrying a branch/tag
+   * powerline raise the node to the chip's level so its leader line is a straight
+   * horizontal. Rail joints that meet the node (segments with `y = 0.5`) follow.
+   */
+  nodeYFrac?: number;
 }
 
 const laneX = (lane: number) => lane * LANE_WIDTH + LANE_WIDTH / 2;
@@ -49,12 +56,16 @@ export const GraphGutter = memo(function GraphGutter({
   avatarUrl,
   authorName,
   connectUp,
+  nodeYFrac = 0.5,
 }: Props) {
   const width = laneCount * LANE_WIDTH;
   const y = (frac: number) => frac * height;
+  // Rail joints meeting the node carry fractional Y of exactly 0.5; remap those
+  // onto the (possibly raised) node center so segments still land on the node.
+  const segY = (frac: number) => (frac === 0.5 ? y(nodeYFrac) : y(frac));
   const clipId = useId();
   const nodeX = laneX(row.commitLane);
-  const nodeY = y(0.5);
+  const nodeY = y(nodeYFrac);
   const nodeColor = graphLanePastel(row.nodeColor);
   const initials = avatarUrl ? '' : initialsOf(authorName ?? '');
   // Node scales with the row height (capped to the lane width so it never spills
@@ -74,9 +85,9 @@ export const GraphGutter = memo(function GraphGutter({
     >
       {row.segments.map((s, i) => {
         const x1 = laneX(s.fromLane);
-        const y1 = y(s.fromY);
+        const y1 = segY(s.fromY);
         const x2 = laneX(s.toLane);
-        const y2 = y(s.toY);
+        const y2 = segY(s.toY);
         const color = graphLanePastel(s.color);
         if (x1 === x2) {
           return (

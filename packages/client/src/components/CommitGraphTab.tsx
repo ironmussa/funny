@@ -744,6 +744,22 @@ function GraphCommitRow({
 
   const githubUrl = githubBrowseBaseUrl ? githubCommitUrl(githubBrowseBaseUrl, entry.hash) : null;
 
+  // When the row carries a branch/tag powerline, raise the node to the chip's
+  // vertical center so the leader line is a straight horizontal that exits the
+  // side of the avatar (instead of an L from the row-centered node). The chip
+  // sits in a (META_PX + 5) line above a 6px gap and the title; since the info
+  // column is centered, derive its center from the same constants the row-height
+  // math uses, so it scales with the font-size setting.
+  // The chip line and title line get EXPLICIT heights below so this arithmetic
+  // matches the rendered DOM exactly — otherwise line-height/padding rounding
+  // leaves the leader line a couple px off the chip's true center.
+  const hasRefs = refSegments.length > 0;
+  const chipLineH = META_PX + 5;
+  const titleLineH = Math.round(TITLE_PX * 1.5);
+  const refsContentH = chipLineH + 6 + titleLineH;
+  const chipCenterY = (rowHeight - refsContentH) / 2 + chipLineH / 2;
+  const nodeYFrac = hasRefs ? chipCenterY / rowHeight : 0.5;
+
   return (
     <div
       style={{
@@ -766,11 +782,42 @@ function GraphCommitRow({
           }
         }}
         className={cn(
-          'group flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden pl-3 pr-2 text-left transition-colors',
+          'group relative flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden pl-3 pr-2 text-left transition-colors',
           selected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-accent/50',
         )}
         data-testid={`graph-commit-${entry.shortHash}`}
       >
+        {/* Leader line tying the branch/tag chip to its commit node, so it's
+            unambiguous which node the powerline belongs to. The node is raised to
+            the chip's level (see nodeYFrac), so this is a straight horizontal line
+            exiting the side of the avatar, in the node's lane color. Drawn first so
+            it sits behind the node disc and the chip. */}
+        {hasRefs &&
+          graphRow &&
+          (() => {
+            // px geometry from the row's padding-box origin (absolute inset-0).
+            // Horizontal: pl-3 (12) + gutter + gap-2 (8) + info pl-1 (4).
+            const avatarR = Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
+            const nodeX = 12 + graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
+            const chipLeftX = 12 + gutterWidth + 8 + 4;
+            return (
+              <svg
+                className="pointer-events-none absolute inset-0"
+                style={{ overflow: 'visible' }}
+                aria-hidden="true"
+              >
+                <line
+                  x1={nodeX + avatarR}
+                  y1={chipCenterY}
+                  x2={chipLeftX}
+                  y2={chipCenterY}
+                  stroke={lanePastel}
+                  strokeWidth={1.6}
+                  strokeLinecap="round"
+                />
+              </svg>
+            );
+          })()}
         {/* Layout: graph | commit info, with branch/tag chips above the title. */}
         {graphRow &&
           (() => {
@@ -791,14 +838,16 @@ function GraphCommitRow({
                   avatarUrl={cachedAvatarUrl}
                   authorName={entry.author}
                   connectUp={connectToWip}
+                  nodeYFrac={nodeYFrac}
                 />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
                       aria-hidden
-                      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+                      className="absolute -translate-x-1/2 -translate-y-1/2"
                       style={{
                         left: nodeCenterX,
+                        top: nodeYFrac * rowHeight,
                         width: avatarDiameter,
                         height: avatarDiameter,
                       }}
@@ -821,7 +870,10 @@ function GraphCommitRow({
         <div className="flex min-w-0 flex-1 flex-col justify-center pl-1">
           {/* Branch/tag chips on their own line above the commit title. */}
           {refSegments.length > 0 && (
-            <div className="mb-1.5 flex min-w-0 items-center overflow-hidden">
+            <div
+              className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
+              style={{ height: chipLineH }}
+            >
               <PowerlineBar
                 segments={refSegments}
                 size="sm"
@@ -832,7 +884,10 @@ function GraphCommitRow({
           )}
           {/* Same Tailwind classes as the History list (`CommitListPanel`) so the
               title/meta sizes are rem-based and identical across every tab. */}
-          <div className="flex w-full min-w-0 items-center gap-1.5">
+          <div
+            className="flex w-full min-w-0 shrink-0 items-center gap-1.5"
+            style={{ height: titleLineH }}
+          >
             <HighlightText
               text={entry.message}
               query={searchQuery}

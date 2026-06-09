@@ -20,6 +20,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
+import { AvailableMcpServers } from '../AvailableMcpServers';
 import { PromptInput } from '../PromptInput';
 import { formatRemoteUrl, remoteUrlToBrowseUrl } from '../PromptInputUI';
 import { BranchPicker } from '../SearchablePicker';
@@ -414,6 +415,10 @@ export function NewThreadInput({
           }
           onContentChange={handleContentChange}
           onWorktreeModeChange={setIsWorktreeMode}
+        />
+        <AvailableMcpServers
+          projectPath={projectPath || undefined}
+          projectId={effectiveProjectId || undefined}
         />
       </div>
 

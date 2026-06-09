@@ -2,8 +2,10 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
 import { api } from '@/lib/api';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -24,6 +26,10 @@ export function ThreadIdleStarter({ activeThread }: Props) {
   const { t } = useTranslation();
   const stableMessages = useThreadMessages();
   const [sending, setSending] = useState(false);
+  const projectPath = useProjectStore((s) => {
+    if (!activeThread.projectId) return undefined;
+    return s.projects.find((p) => p.id === activeThread.projectId)?.path;
+  });
 
   const initialImages = (() => {
     const draftMsg = stableMessages?.find((m) => m.role === 'user');
@@ -113,6 +119,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
             initialPrompt={activeThread.initialPrompt}
             initialImages={initialImages}
           />
+          <AvailableMcpServers projectPath={projectPath} projectId={activeThread.projectId} />
         </div>
       </div>
     </div>

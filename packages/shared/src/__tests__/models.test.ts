@@ -29,6 +29,10 @@ describe('resolveModelId', () => {
       expect(resolveModelId('claude', 'opus-4.8')).toBe('claude-opus-4-8[1m]');
     });
 
+    test('resolves fable-5 to its full model ID (with 1M context alias)', () => {
+      expect(resolveModelId('claude', 'fable-5')).toBe('claude-fable-5[1m]');
+    });
+
     test('resolves haiku to its full model ID', () => {
       expect(resolveModelId('claude', 'haiku')).toBe('claude-haiku-4-5-20251001');
     });
@@ -201,8 +205,9 @@ describe('getProviderModels', () => {
     expect(models).toContain('opus');
     expect(models).toContain('opus-4.7');
     expect(models).toContain('opus-4.8');
+    expect(models).toContain('fable-5');
     expect(models).toContain('haiku');
-    expect(models).toHaveLength(6);
+    expect(models).toHaveLength(7);
   });
 
   test('returns all codex models', () => {

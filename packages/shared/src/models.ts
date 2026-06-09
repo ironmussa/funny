@@ -102,6 +102,12 @@ const claudeModels = {
     contextWindow: 1_000_000,
     i18nKey: 'opus48',
   },
+  'fable-5': {
+    id: 'claude-fable-5[1m]',
+    label: 'Fable 5',
+    contextWindow: 1_000_000,
+    i18nKey: 'fable5',
+  },
 } as const satisfies Record<string, ModelDefinition>;
 
 // codex + gemini static catalogs are owned by their manifests (imported above).

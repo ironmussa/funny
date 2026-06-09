@@ -17,6 +17,7 @@ import {
   Sparkles,
   EyeOff,
   RotateCcw,
+  Zap,
 } from 'lucide-react';
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -464,6 +465,19 @@ export const ProjectItem = memo(function ProjectItem({
                 >
                   <Sparkles className="icon-sm" />
                   {t('sidebar.viewDesigns')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid="project-menu-create-automation"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenDropdown(false);
+                    navigate(buildPath(`/projects/${project.id}/settings/automations`), {
+                      state: { openCreateAutomation: true },
+                    });
+                  }}
+                >
+                  <Zap className="icon-sm" />
+                  {t('sidebar.createAutomation')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

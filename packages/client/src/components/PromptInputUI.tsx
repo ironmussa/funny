@@ -18,13 +18,27 @@ import {
   Trash2,
   Check,
   Bot,
+  ChevronDown,
 } from 'lucide-react';
 import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { AttachmentChip } from '@/components/ui/chip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -40,6 +54,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { threadsApi } from '@/lib/api/threads';
 import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
+import { getEffortLevels, parseUnifiedModel } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
@@ -90,30 +105,54 @@ export type ModelSelectGroup = {
   disabledReason?: 'not-installed' | 'no-runner';
 };
 
+/**
+ * Combined model + thinking-effort picker. Selecting a model that supports
+ * reasoning effort opens a submenu of thinking modes; picking a mode sets the
+ * model AND the effort in one action, and both are reflected in the trigger
+ * copy (e.g. "Opus 4.8 · High"). Models without effort support are plain items.
+ */
 export const ModelSelect = memo(function ModelSelect({
   value,
+  effort,
   onChange,
+  onEffortChange,
   groups,
 }: {
   value: string;
+  effort?: string;
   onChange: (v: string) => void;
+  onEffortChange?: (v: string) => void;
   groups: ModelSelectGroup[];
 }) {
+  const selected = groups.flatMap((g) => g.models).find((m) => m.value === value);
+  const { provider: selProvider, model: selModel } = parseUnifiedModel(value);
+  const selEffortLabel = getEffortLevels(selModel, selProvider).find(
+    (e) => e.value === effort,
+  )?.label;
+
+  // Leading slot keeps labels aligned whether or not a row shows a checkmark.
+  const lead = (active: boolean) => (
+    <span className="flex w-3 shrink-0 items-center justify-center">
+      {active && <Check className="icon-2xs" />}
+    </span>
+  );
+
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger
+    <DropdownMenu>
+      <DropdownMenuTrigger
         data-testid="prompt-model-select"
         tabIndex={-1}
-        size="xs"
-        className="w-auto border-none bg-transparent shadow-none"
+        className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
       >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent side="top" align="end">
+        <span className="truncate">{selected?.label ?? selModel}</span>
+        {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
+        <ChevronDown className="icon-xs opacity-50" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" size="xs" className="min-w-44">
         {groups.map((group, idx) => (
-          <SelectGroup key={group.provider}>
-            {idx > 0 && <SelectSeparator />}
-            <SelectLabel
+          <DropdownMenuGroup key={group.provider}>
+            {idx > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuLabel
               className={group.disabled ? 'text-muted-foreground/60' : undefined}
               data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
             >
@@ -124,16 +163,59 @@ export const ModelSelect = memo(function ModelSelect({
               {group.disabledReason === 'not-installed' && (
                 <span className="ml-1 font-normal italic">— not installed on runner</span>
               )}
-            </SelectLabel>
-            {group.models.map((m) => (
-              <SelectItem key={m.value} value={m.value} size="xs" disabled={m.disabled}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
+            </DropdownMenuLabel>
+            {group.models.map((m) => {
+              const isSelected = m.value === value;
+              const { model: mModel } = parseUnifiedModel(m.value);
+              const efforts = m.disabled ? [] : getEffortLevels(mModel, group.provider);
+
+              if (efforts.length > 0 && onEffortChange) {
+                return (
+                  <DropdownMenuSub key={m.value}>
+                    <DropdownMenuSubTrigger
+                      size="xs"
+                      data-testid={`prompt-model-option-${m.value}`}
+                    >
+                      {lead(isSelected)}
+                      <span className="truncate">{m.label}</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent size="xs">
+                      {efforts.map((e) => (
+                        <DropdownMenuItem
+                          key={e.value}
+                          size="xs"
+                          data-testid={`prompt-effort-option-${m.value}-${e.value}`}
+                          onSelect={() => {
+                            onChange(m.value);
+                            onEffortChange(e.value);
+                          }}
+                        >
+                          {lead(isSelected && effort === e.value)}
+                          <span title={e.description}>{e.label}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              }
+
+              return (
+                <DropdownMenuItem
+                  key={m.value}
+                  size="xs"
+                  disabled={m.disabled}
+                  data-testid={`prompt-model-option-${m.value}`}
+                  onSelect={() => onChange(m.value)}
+                >
+                  {lead(isSelected)}
+                  <span className="truncate">{m.label}</span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuGroup>
         ))}
-      </SelectContent>
-    </Select>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 });
 
@@ -215,36 +297,6 @@ export const TemplateSelect = memo(function TemplateSelect({
             {builtinTemplates.map(renderItem)}
           </SelectGroup>
         )}
-      </SelectContent>
-    </Select>
-  );
-});
-
-export const EffortSelect = memo(function EffortSelect({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string; description: string }[];
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger
-        data-testid="prompt-effort-select"
-        tabIndex={-1}
-        size="xs"
-        className="w-auto border-none bg-transparent shadow-none"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent side="top" align="start">
-        {options.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value} size="xs">
-            <span title={opt.description}>{opt.label}</span>
-          </SelectItem>
-        ))}
       </SelectContent>
     </Select>
   );
@@ -359,7 +411,6 @@ export interface PromptInputUIProps {
   // ── Effort (Claude-specific) ──
   effort?: string;
   onEffortChange?: (v: string) => void;
-  effortOptions?: { value: string; label: string; description: string }[];
 
   // ── Default template (from project settings) ──
   defaultTemplateId?: string;
@@ -432,7 +483,6 @@ export const PromptInputUI = memo(function PromptInputUI({
   onCheckoutPreflight,
   effort,
   onEffortChange,
-  effortOptions,
   defaultTemplateId,
   contextPct,
   contextUsedTokens,
@@ -451,6 +501,8 @@ export const PromptInputUI = memo(function PromptInputUI({
 
   // ── Local UI state ──
   const [images, setImages] = useState<ImageAttachment[]>(initialImages ?? []);
+  // Compaction is irreversible (older messages get summarized), so confirm first.
+  const [compactConfirmOpen, setCompactConfirmOpen] = useState(false);
   /**
    * Attached files: small files are inlined (`mode: 'inline'`, content is
    * embedded in the prompt on submit); larger files are uploaded to the
@@ -649,6 +701,14 @@ export const PromptInputUI = memo(function PromptInputUI({
       requestAnimationFrame(() => editorRef.current?.focus());
     },
     [onUnifiedModelChange, editorRef],
+  );
+
+  const handleEffortChange = useCallback(
+    (v: string) => {
+      onEffortChange?.(v);
+      requestAnimationFrame(() => editorRef.current?.focus());
+    },
+    [onEffortChange, editorRef],
   );
 
   const handleCycleMode = useCallback(() => {
@@ -1239,18 +1299,13 @@ export const PromptInputUI = memo(function PromptInputUI({
           {/* Bottom toolbar — single row */}
           <div className="px-2 py-2.5">
             <div className="no-scrollbar flex h-9 items-center gap-1 overflow-x-auto">
-              <Button
-                data-testid="prompt-attach"
-                onClick={() => fileInputRef.current?.click()}
-                variant="ghost"
-                size="icon-sm"
-                tabIndex={-1}
-                aria-label={t('prompt.attach')}
-                disabled={loading}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Paperclip className="icon-base" />
-              </Button>
+              <ModelSelect
+                value={unifiedModel}
+                effort={effort}
+                onChange={handleUnifiedModelChange}
+                onEffortChange={handleEffortChange}
+                groups={modelGroups}
+              />
               {isNewThread && isDeepAgent && templates.length > 0 && (
                 <TemplateSelect
                   value={selectedTemplateId}
@@ -1259,16 +1314,20 @@ export const PromptInputUI = memo(function PromptInputUI({
                 />
               )}
               <ModeSelect value={mode} onChange={onModeChange} modes={modes} />
-              {/* Model + effort + send — always visible, pushed right */}
+              {/* Attachment + dictation + send — always visible, pushed right */}
               <div className="ml-auto flex shrink-0 items-center gap-1">
-                <ModelSelect
-                  value={unifiedModel}
-                  onChange={handleUnifiedModelChange}
-                  groups={modelGroups}
-                />
-                {effortOptions && effortOptions.length > 0 && effort && onEffortChange && (
-                  <EffortSelect value={effort} onChange={onEffortChange} options={effortOptions} />
-                )}
+                <Button
+                  data-testid="prompt-attach"
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="ghost"
+                  size="icon-sm"
+                  tabIndex={-1}
+                  aria-label={t('prompt.attach')}
+                  disabled={loading}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Paperclip className="icon-base" />
+                </Button>
                 {hasDictation && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1388,27 +1447,25 @@ export const PromptInputUI = memo(function PromptInputUI({
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col">
+                <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
                   {effectiveCwd && (
-                    <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                      <span className="group/cwd text-muted-foreground flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs">
-                        <FolderOpen className="icon-xs shrink-0" />
-                        <span className="truncate font-mono">{effectiveCwd}</span>
-                        <button
-                          type="button"
-                          className="hover:text-foreground shrink-0 opacity-0 transition-colors group-hover/cwd:opacity-100"
-                          onClick={() => {
-                            navigator.clipboard.writeText(effectiveCwd);
-                            toast.success('Path copied');
-                          }}
-                        >
-                          <Copy className="icon-xs" />
-                        </button>
-                      </span>
-                    </div>
+                    <span className="group/cwd text-muted-foreground flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs">
+                      <FolderOpen className="icon-xs shrink-0" />
+                      <span className="truncate font-mono">{effectiveCwd}</span>
+                      <button
+                        type="button"
+                        className="hover:text-foreground shrink-0 opacity-0 transition-colors group-hover/cwd:opacity-100"
+                        onClick={() => {
+                          navigator.clipboard.writeText(effectiveCwd);
+                          toast.success('Path copied');
+                        }}
+                      >
+                        <Copy className="icon-xs" />
+                      </button>
+                    </span>
                   )}
                   {(followUpBranches.length > 0 || activeThreadBranch) && (
-                    <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+                    <div className="flex shrink-0 items-center gap-1">
                       {followUpBranches.length > 0 && (
                         <BranchPicker
                           branches={followUpBranches}
@@ -1448,7 +1505,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                   pct={contextPct}
                   usedTokens={contextUsedTokens}
                   maxTokens={contextMaxTokens}
-                  onCompact={onCompact}
+                  onCompact={onCompact ? () => setCompactConfirmOpen(true) : undefined}
                   disabled={!onCompact}
                 />
               </div>
@@ -1456,6 +1513,23 @@ export const PromptInputUI = memo(function PromptInputUI({
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={compactConfirmOpen}
+        onOpenChange={setCompactConfirmOpen}
+        title={t('prompt.compactConfirmTitle', 'Compact conversation?')}
+        description={t(
+          'prompt.compactConfirmBody',
+          'This summarizes the current conversation to free up context. Earlier messages are condensed and the full detail is no longer available to the agent.',
+        )}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        confirmLabel={t('prompt.compactConfirmAction', 'Compact')}
+        variant="default"
+        onCancel={() => setCompactConfirmOpen(false)}
+        onConfirm={() => {
+          setCompactConfirmOpen(false);
+          onCompact?.();
+        }}
+      />
     </div>
   );
 });

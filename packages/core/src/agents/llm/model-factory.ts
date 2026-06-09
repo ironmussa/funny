@@ -40,6 +40,7 @@ const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
   opus: 'claude-opus-4-6',
   'opus-4.7': 'claude-opus-4-7',
   'opus-4.8': 'claude-opus-4-8',
+  'fable-5': 'claude-fable-5',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -52,6 +53,7 @@ const OPENAI_MODEL_ALIASES: Record<string, string> = {
   opus: 'claude-opus-4-6',
   'opus-4.7': 'claude-opus-4-7',
   'opus-4.8': 'claude-opus-4-8',
+  'fable-5': 'claude-fable-5',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -60,6 +62,7 @@ const FUNNY_API_ACP_ALIASES: Record<string, string> = {
   opus: 'claude-opus-4-6',
   'opus-4.7': 'claude-opus-4-7',
   'opus-4.8': 'claude-opus-4-8',
+  'fable-5': 'claude-fable-5',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };

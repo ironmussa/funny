@@ -394,6 +394,9 @@
   },
   "newThread": {
     "title": "Nuevo Hilo",
+    "availableMcp": "MCP disponibles",
+    "configureMcp": "Configurar servidores MCP",
+    "noMcpServers": "Sin servidores MCP",
     "prompt": "Instrucción",
     "promptPlaceholder": "¿Qué debe hacer el agente?",
     "mode": "Modo",

@@ -393,6 +393,9 @@
   },
   "newThread": {
     "title": "Nova Thread",
+    "availableMcp": "MCP disponíveis",
+    "configureMcp": "Configurar servidores MCP",
+    "noMcpServers": "Sem servidores MCP",
     "prompt": "Instrução",
     "promptPlaceholder": "O que o agente deve fazer?",
     "mode": "Modo",

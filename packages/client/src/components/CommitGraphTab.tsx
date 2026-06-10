@@ -20,6 +20,7 @@ import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
+import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { LoadingState } from '@/components/ui/loading-state';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { darkenHex } from '@/components/ui/project-chip';
@@ -98,7 +99,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // across every Review-pane tab (see TITLE_PX / META_PX above).
   const titlePx = TITLE_PX;
   const metaPx = META_PX;
-  // Variable row heights: the title + time share one line, so ref-less rows are a
+  // Variable row heights: the title sits on one line, so ref-less rows are a
   // single tight line; rows with branch/tag chips get an extra line above. Computed
   // from the font sizes — no magic numbers — so ref-less rows (the majority) stay
   // compact instead of padding to a fixed max.
@@ -263,7 +264,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     anchoredShasRef.current.add(firstMissing.hash);
     let cancelled = false;
     api
-      .githubCommitAuthors(ghProjectId, { sha: firstMissing.hash, per_page: 100 })
+      .githubCommitAuthors(ghProjectId, {
+        sha: firstMissing.hash,
+        per_page: 100,
+      })
       .then((result) => {
         if (cancelled || result.isErr()) return;
         const authors = result.value.authors;
@@ -291,12 +295,19 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     // flat list instead: one standalone node per row, no connecting rails.
     if (isFiltering) {
       return {
-        rows: displayEntries.map(() => ({ commitLane: 0, nodeColor: 0, segments: [] })),
+        rows: displayEntries.map(() => ({
+          commitLane: 0,
+          nodeColor: 0,
+          segments: [],
+        })),
         laneCount: 1,
       };
     }
     return computeGraphRows(
-      displayEntries.map((e) => ({ hash: e.hash, parentHashes: e.parentHashes })),
+      displayEntries.map((e) => ({
+        hash: e.hash,
+        parentHashes: e.parentHashes,
+      })),
     );
   }, [displayEntries, isFiltering]);
   const laneCount = Math.min(layout.laneCount, MAX_GUTTER_LANES);
@@ -417,7 +428,13 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
             <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
           )
         ) : (
-          <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              width: '100%',
+              position: 'relative',
+            }}
+          >
             {virtualItems.map((virtualRow) => {
               if (virtualRow.index >= displayEntries.length) {
                 return (
@@ -559,7 +576,10 @@ function GraphToolbar({
         {t('graph.allBranches', 'All branches')}
       </Button>
       <span className="text-muted-foreground ml-auto text-[10px]">
-        {t('graph.commitCount', { count: commitCount, defaultValue: `${commitCount} commits` })}
+        {t('graph.commitCount', {
+          count: commitCount,
+          defaultValue: `${commitCount} commits`,
+        })}
       </span>
     </div>
   );
@@ -682,6 +702,8 @@ function GraphCommitRow({
   onSelect: () => void;
 }) {
   const { t } = useTranslation();
+  // Keep the kebab pinned (and the time hidden) while its dropdown is open.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Serve the node avatar from the short-TTL blob cache so scrolling the
   // virtualized list doesn't re-hit GitHub for the same image (avoids 429s).
@@ -711,7 +733,13 @@ function GraphCommitRow({
           ? lanePastel
           : darkenHex(lanePastel, Math.min(0.18 + i * 0.14, 0.5));
         if (r.kind === 'tag') {
-          return { key: `tag:${r.name}`, icon: Tag, label: r.name, color, tooltip: r.name };
+          return {
+            key: `tag:${r.name}`,
+            icon: Tag,
+            label: r.name,
+            color,
+            tooltip: r.name,
+          };
         }
         if (r.kind === 'remote') {
           return {
@@ -890,7 +918,7 @@ function GraphCommitRow({
               </div>
             );
           })()}
-        {/* Commit info: title + time on one line, optional chips above. */}
+        {/* Commit info: title line, optional branch/tag chips above it. */}
         <div className="flex min-w-0 flex-1 flex-col justify-center pl-1">
           {/* Branch/tag chips on their own line above the commit title. */}
           {refSegments.length > 0 && (
@@ -917,21 +945,29 @@ function GraphCommitRow({
               query={searchQuery}
               className="text-foreground min-w-0 flex-1 truncate text-xs leading-tight font-medium"
             />
-            <span className="text-muted-foreground shrink-0 text-[10px]">
-              {shortRelativeDate(entry.relativeDate)}
-            </span>
           </div>
         </div>
-        {/* App-standard kebab for per-commit actions, centered on the row. */}
-        <CommitActionsMenu
-          hash={entry.hash}
-          shortHash={entry.shortHash}
-          githubUrl={githubUrl}
-          effectiveThreadId={effectiveThreadId}
-          projectModeId={projectModeId}
-          localBranches={pushableBranches}
-          onAfterAction={onAfterAction}
-        />
+        {/* Time ↔ kebab swap (same component as the sidebar thread rows): the
+            relative date rests here and the per-commit actions menu reveals on
+            hover, so the two share one cell instead of each reserving width. */}
+        <HoverTimeMenu
+          time={shortRelativeDate(entry.relativeDate)}
+          timeClassName="text-muted-foreground text-[10px]"
+          open={menuOpen}
+          className="min-w-9 self-center"
+        >
+          <CommitActionsMenu
+            hash={entry.hash}
+            shortHash={entry.shortHash}
+            githubUrl={githubUrl}
+            effectiveThreadId={effectiveThreadId}
+            projectModeId={projectModeId}
+            localBranches={pushableBranches}
+            onAfterAction={onAfterAction}
+            onOpenChange={setMenuOpen}
+            triggerClassName="text-muted-foreground hover:text-foreground"
+          />
+        </HoverTimeMenu>
       </div>
     </div>
   );

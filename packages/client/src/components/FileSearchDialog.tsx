@@ -235,7 +235,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
         <DialogOverlay />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[20%] left-[50%] z-50 w-full max-w-lg translate-x-[-50%] overflow-hidden rounded-lg border p-0 shadow-xl"
+          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[20%] left-[50%] z-50 w-full max-w-3xl translate-x-[-50%] overflow-hidden rounded-lg border p-0 shadow-xl"
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             inputRef.current?.focus();

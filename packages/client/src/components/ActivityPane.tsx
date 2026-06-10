@@ -383,7 +383,7 @@ function AgentCard({
         </span>
         {childToolCallCount !== undefined && childToolCallCount > 0 && (
           <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]">
-            {childToolCallCount} {t('activity.tools', 'tools')}
+            {childToolCallCount} {t('activity.toolCalls', 'tool calls')}
           </span>
         )}
       </div>

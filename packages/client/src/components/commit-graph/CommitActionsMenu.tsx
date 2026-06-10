@@ -42,6 +42,17 @@ interface Props {
   localBranches?: string[];
   /** Reload the graph log after a mutating action. */
   onAfterAction: () => void;
+  /**
+   * Notified when the dropdown opens/closes — lets a parent swap cell (e.g.
+   * {@link HoverTimeMenu}) keep the trigger pinned while the menu is open.
+   */
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Overrides the trigger button classes. Defaults to the standalone
+   * hover-reveal styling; pass neutral classes when the parent (a swap cell)
+   * already owns the show-on-hover behavior.
+   */
+  triggerClassName?: string;
 }
 
 /** Stable empty default for {@link Props.localBranches} — a literal `[]` default
@@ -66,9 +77,15 @@ export function CommitActionsMenu({
   projectModeId,
   localBranches = NO_BRANCHES,
   onAfterAction,
+  onOpenChange,
+  triggerClassName,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
   const { pending, request, cancel, confirm, hasGitContext, pushBranch, createBranch } =
     useCommitActions({
@@ -81,14 +98,17 @@ export function CommitActionsMenu({
     void navigator.clipboard.writeText(value).then(
       () =>
         toast.success(
-          t('history.hashCopied', { hash: shortHash, defaultValue: `Copied ${shortHash}` }),
+          t('history.hashCopied', {
+            hash: shortHash,
+            defaultValue: `Copied ${shortHash}`,
+          }),
         ),
       () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
     );
 
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={open} onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -96,8 +116,12 @@ export function CommitActionsMenu({
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'text-muted-foreground hover:text-foreground ml-auto shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100',
-              open && 'opacity-100',
+              'text-muted-foreground hover:text-foreground shrink-0',
+              triggerClassName ??
+                cn(
+                  'ml-auto opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100',
+                  open && 'opacity-100',
+                ),
             )}
             data-testid={`graph-commit-more-${shortHash}`}
           >

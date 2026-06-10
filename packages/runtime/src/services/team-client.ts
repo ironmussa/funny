@@ -1269,6 +1269,81 @@ export async function remoteDeleteThread(threadId: string): Promise<void> {
   await sendDataMessage('data:delete_thread', { threadId });
 }
 
+// ── Agent watchers (deferred-wake "snooze") ─────────────────────
+// The watcher-manager runs on the runner; all persistence proxies to the
+// server. `list_due` / `list_pending` are scoped to the runner's user
+// server-side (runner-isolation boundary).
+
+export async function remoteInsertWatcher(row: Record<string, any>): Promise<void> {
+  await sendDataMessage('data:watcher_insert', { payload: { threadId: row.threadId, row } });
+}
+
+export async function remoteGetWatcher(id: string): Promise<any> {
+  const r = await sendDataMessage('data:watcher_get', { payload: { id } });
+  return r?.watcher ?? undefined;
+}
+
+export async function remoteGetLiveWatcherByThreadKey(threadId: string, key: string): Promise<any> {
+  const r = await sendDataMessage('data:watcher_get_live_by_thread_key', {
+    payload: { threadId, key },
+  });
+  return r?.watcher ?? undefined;
+}
+
+export async function remoteListPendingWatchers(): Promise<any[]> {
+  const r = await sendDataMessage('data:watcher_list_pending', { payload: {} });
+  return r?.watchers ?? [];
+}
+
+export async function remoteListDueWatchers(now: number): Promise<any[]> {
+  const r = await sendDataMessage('data:watcher_list_due', { payload: { now } });
+  return r?.watchers ?? [];
+}
+
+export async function remoteListWatchersByUser(userId: string): Promise<any[]> {
+  const r = await sendDataMessage('data:watcher_list_by_user', { payload: { userId } });
+  return r?.watchers ?? [];
+}
+
+export async function remoteUpdateWatcher(id: string, patch: Record<string, any>): Promise<void> {
+  await sendDataMessage('data:watcher_update', { payload: { id, patch } });
+}
+
+export async function remoteDeleteWatchersByThread(threadId: string): Promise<void> {
+  await sendDataMessage('data:watcher_delete_by_thread', { payload: { threadId } });
+}
+
+// ── Agent jobs (detached background processes) ──────────────────
+// Same proxy pattern as watchers; list_running scoped to the runner's user
+// server-side.
+
+export async function remoteInsertJob(row: Record<string, any>): Promise<void> {
+  await sendDataMessage('data:job_insert', { payload: { threadId: row.threadId, row } });
+}
+
+export async function remoteGetJob(id: string): Promise<any> {
+  const r = await sendDataMessage('data:job_get', { payload: { id } });
+  return r?.job ?? undefined;
+}
+
+export async function remoteListRunningJobs(): Promise<any[]> {
+  const r = await sendDataMessage('data:job_list_running', { payload: {} });
+  return r?.jobs ?? [];
+}
+
+export async function remoteListJobsByUser(userId: string): Promise<any[]> {
+  const r = await sendDataMessage('data:job_list_by_user', { payload: { userId } });
+  return r?.jobs ?? [];
+}
+
+export async function remoteUpdateJob(id: string, patch: Record<string, any>): Promise<void> {
+  await sendDataMessage('data:job_update', { payload: { id, patch } });
+}
+
+export async function remoteDeleteJobsByThread(threadId: string): Promise<void> {
+  await sendDataMessage('data:job_delete_by_thread', { payload: { threadId } });
+}
+
 // ── Project creation ────────────────────────────────────
 
 /** Create a project record on the server (used after cloning on the runner) */

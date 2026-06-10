@@ -602,6 +602,31 @@ export interface WSWatcherData {
   watcher: Watcher;
 }
 
+// ─── Agent jobs (funny-owned detached background processes) ───────────────────
+
+export type JobStatus = 'running' | 'exited' | 'failed' | 'killed' | 'cancelled';
+
+export interface Job {
+  id: string;
+  threadId: string;
+  userId: string;
+  command: string;
+  cwd: string | null;
+  label: string | null;
+  /** OS pid of the detached session leader; null until known. */
+  pid: number | null;
+  logPath: string;
+  exitPath: string;
+  status: JobStatus;
+  exitCode: number | null;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface WSJobData {
+  job: Job;
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -623,6 +648,10 @@ export type WSEvent =
   | { type: 'watcher:rescheduled'; threadId: string; data: WSWatcherData }
   | { type: 'watcher:completed'; threadId: string; data: WSWatcherData }
   | { type: 'watcher:cancelled'; threadId: string; data: WSWatcherData }
+  | { type: 'job:created'; threadId: string; data: WSJobData }
+  | { type: 'job:exited'; threadId: string; data: WSJobData }
+  | { type: 'job:killed'; threadId: string; data: WSJobData }
+  | { type: 'job:cancelled'; threadId: string; data: WSJobData }
   | { type: 'git:status'; threadId: string; data: WSGitStatusData }
   | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }

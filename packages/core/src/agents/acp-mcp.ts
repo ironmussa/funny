@@ -49,6 +49,13 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
     const cfg = raw as Record<string, unknown>;
     const type = (cfg.type as string | undefined)?.toLowerCase();
 
+    // In-process SDK MCP servers (createSdkMcpServer, e.g. funny_watch) run
+    // inside this process and have no stdio/http transport, so they cannot be
+    // handed to a separate ACP provider. Skip them rather than emitting a
+    // broken `command: ''` stdio entry. (External-MCP funny_watch for ACP
+    // providers is a follow-up.)
+    if (type === 'sdk') continue;
+
     if (type === 'http' || type === 'sse') {
       out.push({
         type,

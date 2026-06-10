@@ -24,6 +24,8 @@ import type {
   IMessageQueueService,
   IMcpOauthService,
   IStageHistoryRepository,
+  IWatcherRepository,
+  IJobRepository,
   IWSBroker,
 } from './server-interfaces.js';
 
@@ -52,6 +54,10 @@ export interface RuntimeServiceProvider {
   mcpOauth: IMcpOauthService;
   /** Git stage change tracking */
   stageHistory: IStageHistoryRepository;
+  /** Agent watchers (deferred-wake "snooze") persistence */
+  watchers: IWatcherRepository;
+  /** Agent jobs (detached background processes) persistence */
+  jobs: IJobRepository;
   /** WebSocket event broadcasting */
   wsBroker: IWSBroker;
 }

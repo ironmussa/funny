@@ -251,6 +251,8 @@ function createMockServiceProvider(
     messageQueue: {} as any,
     mcpOauth: {} as any,
     stageHistory: {} as any,
+    watchers: {} as any,
+    jobs: {} as any,
   };
 }
 

@@ -1,5 +1,6 @@
 import { cva } from 'class-variance-authority';
 import type { LucideIcon } from 'lucide-react';
+import { forwardRef } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn, ICON_SIZE } from '@/lib/utils';
@@ -26,27 +27,22 @@ const iconSizes = {
   md: ICON_SIZE.base,
 } as const;
 
-interface NavItemProps {
+interface NavItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon: LucideIcon;
   label: string;
   count?: number;
   size?: 'sm' | 'md';
   isActive?: boolean;
-  onClick?: () => void;
-  'data-testid'?: string;
 }
 
-export function NavItem({
-  icon: Icon,
-  label,
-  count,
-  size = 'md',
-  isActive = false,
-  onClick,
-  'data-testid': testId,
-}: NavItemProps) {
+// forwardRef + prop spread so NavItem can be a Radix `asChild` trigger
+// (Popover/Dropdown) — those clone the child with a ref and a11y/state props.
+export const NavItem = forwardRef<HTMLButtonElement, NavItemProps>(function NavItem(
+  { icon: Icon, label, count, size = 'md', isActive = false, className, ...rest },
+  ref,
+) {
   return (
-    <button onClick={onClick} data-testid={testId} className={navItemVariants({ size, isActive })}>
+    <button ref={ref} className={cn(navItemVariants({ size, isActive }), className)} {...rest}>
       <Icon className={cn(iconSizes[size], 'shrink-0')} />
       <span className="truncate">{label}</span>
       {count !== undefined && count > 0 && (
@@ -56,4 +52,4 @@ export function NavItem({
       )}
     </button>
   );
-}
+});

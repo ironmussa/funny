@@ -164,6 +164,42 @@ export function createTestDb() {
     )
   `);
 
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS watchers (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      next_wake_at INTEGER NOT NULL,
+      last_delay_ms INTEGER NOT NULL DEFAULT 0,
+      wake_count INTEGER NOT NULL DEFAULT 0,
+      max_wakes INTEGER NOT NULL DEFAULT 20,
+      deadline INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS jobs (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      command TEXT NOT NULL,
+      cwd TEXT,
+      label TEXT,
+      pid INTEGER,
+      log_path TEXT NOT NULL,
+      exit_path TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      exit_code INTEGER,
+      started_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   return { db: testDb as any, sqlite, schema, dbAll, dbGet, dbRun };
 }
 

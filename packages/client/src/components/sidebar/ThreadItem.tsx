@@ -35,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -355,146 +356,139 @@ export const ThreadItem = memo(function ThreadItem({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5 py-1 pr-1.5 pl-2">
-        <div className="grid min-w-10 place-items-center justify-items-center">
-          <span
-            className={cn(
-              'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
-              openDropdown && 'opacity-0 pointer-events-none',
-            )}
-          >
-            {displayTime}
-          </span>
-          <div
-            className={cn(
-              'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
-              openDropdown && 'opacity-100!',
-            )}
-          >
-            <DropdownMenu onOpenChange={handleDropdownChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  tabIndex={-1}
-                  data-testid={`thread-item-more-${thread.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <MoreVertical className="icon-sm" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="bottom">
+        <HoverTimeMenu
+          time={displayTime}
+          timeClassName="text-muted-foreground h-4 text-xs leading-4"
+          open={openDropdown}
+          group="thread"
+          className="min-w-10"
+        >
+          <DropdownMenu onOpenChange={handleDropdownChange}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                tabIndex={-1}
+                data-testid={`thread-item-more-${thread.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <MoreVertical className="icon-sm" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="bottom">
+              <DropdownMenuItem
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const result = await api.openDirectory({
+                    threadId: thread.id,
+                  });
+                  if (result.isErr()) {
+                    toastError(result.error);
+                  }
+                }}
+              >
+                <FolderOpenDot className="icon-sm" />
+                {t('sidebar.openDirectory')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openThreadTerminal({ thread });
+                }}
+              >
+                <Terminal className="icon-sm" />
+                {t('sidebar.openTerminal')}
+              </DropdownMenuItem>
+              {canConvertToWorktree(thread) && !isBusy && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    data-testid={`thread-convert-worktree-${thread.id}`}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const result = await api.convertToWorktree(thread.id);
+                      if (result.isErr()) {
+                        toastError(result.error);
+                      }
+                    }}
+                  >
+                    <GitFork className="icon-sm" />
+                    {t('dialog.convertToWorktreeTitle')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    data-testid={`thread-create-branch-${thread.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsCreateBranchOpen(true);
+                    }}
+                  >
+                    <GitBranch className="icon-sm" />
+                    {t('dialog.createBranchTitle')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {onRename && (
                 <DropdownMenuItem
-                  onClick={async (e) => {
+                  data-testid={`thread-rename-${thread.id}`}
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const result = await api.openDirectory({ threadId: thread.id });
-                    if (result.isErr()) {
-                      toastError(result.error);
-                    }
+                    openRenameDialog();
                   }}
                 >
-                  <FolderOpenDot className="icon-sm" />
-                  {t('sidebar.openDirectory')}
+                  <Pencil className="icon-sm" />
+                  {t('sidebar.rename')}
                 </DropdownMenuItem>
+              )}
+              {isRunning && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const result = await api.stopThread(thread.id);
+                      if (result.isErr()) {
+                        console.error('Failed to stop thread:', result.error);
+                      }
+                    }}
+                    className="text-status-error focus:text-status-error"
+                  >
+                    <Square className="icon-sm" />
+                    {t('common.stop')}
+                  </DropdownMenuItem>
+                </>
+              )}
+              {onArchive && !isBusy && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    openThreadTerminal({ thread });
+                    onArchive();
                   }}
                 >
-                  <Terminal className="icon-sm" />
-                  {t('sidebar.openTerminal')}
+                  <Archive className="icon-sm" />
+                  {t('sidebar.archive')}
                 </DropdownMenuItem>
-                {canConvertToWorktree(thread) && !isBusy && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      data-testid={`thread-convert-worktree-${thread.id}`}
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const result = await api.convertToWorktree(thread.id);
-                        if (result.isErr()) {
-                          toastError(result.error);
-                        }
-                      }}
-                    >
-                      <GitFork className="icon-sm" />
-                      {t('dialog.convertToWorktreeTitle')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      data-testid={`thread-create-branch-${thread.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsCreateBranchOpen(true);
-                      }}
-                    >
-                      <GitBranch className="icon-sm" />
-                      {t('dialog.createBranchTitle')}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                {onRename && (
+              )}
+              {onDelete && (
+                <>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    data-testid={`thread-rename-${thread.id}`}
+                    data-testid={`thread-delete-${thread.id}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      openRenameDialog();
+                      onDelete();
                     }}
+                    className="text-status-error focus:text-status-error"
                   >
-                    <Pencil className="icon-sm" />
-                    {t('sidebar.rename')}
+                    <Trash2 className="icon-sm" />
+                    {t('common.delete')}
                   </DropdownMenuItem>
-                )}
-                {isRunning && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const result = await api.stopThread(thread.id);
-                        if (result.isErr()) {
-                          console.error('Failed to stop thread:', result.error);
-                        }
-                      }}
-                      className="text-status-error focus:text-status-error"
-                    >
-                      <Square className="icon-sm" />
-                      {t('common.stop')}
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {onArchive && !isBusy && (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onArchive();
-                    }}
-                  >
-                    <Archive className="icon-sm" />
-                    {t('sidebar.archive')}
-                  </DropdownMenuItem>
-                )}
-                {onDelete && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      data-testid={`thread-delete-${thread.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete();
-                      }}
-                      className="text-status-error focus:text-status-error"
-                    >
-                      <Trash2 className="icon-sm" />
-                      {t('common.delete')}
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </HoverTimeMenu>
       </div>
 
       {/* Rename dialog */}

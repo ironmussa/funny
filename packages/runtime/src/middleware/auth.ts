@@ -10,10 +10,13 @@
  * 1. **X-Runner-Auth + signed identity** — shared secret from server proxy
  *    plus an HMAC over `userId|role|orgId|orgName|timestamp|nonce` in the
  *    `X-Forwarded-Signature` / `X-Forwarded-Timestamp` / `X-Forwarded-Nonce`
- *    headers. The signature prevents a client that happens to know the shared
- *    secret from forging `X-Forwarded-User`; the per-request nonce makes every
- *    signature unique so parallel requests in the same millisecond don't
- *    false-trip the replay cache.
+ *    headers. The signature prevents a caller that does NOT hold the shared
+ *    secret (e.g. a browser hitting this runner's HTTP port directly) from
+ *    forging `X-Forwarded-User`. It does NOT defend against a holder of the
+ *    secret — see the trust-boundary note in
+ *    `@funny/shared/auth/forwarded-identity`. The per-request nonce makes
+ *    every signature unique so parallel requests in the same millisecond
+ *    don't false-trip the replay cache.
  * 2. **Server session** — browser cookie validated against TEAM_SERVER_URL
  * 3. **Better Auth** — local session fallback
  */

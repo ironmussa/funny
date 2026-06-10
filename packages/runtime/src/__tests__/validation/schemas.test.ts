@@ -11,6 +11,7 @@ import {
   commitSchema,
   createPRSchema,
   mergeSchema,
+  workflowSchema,
   threadStageSchema,
   validate,
   gitRefSchema,
@@ -477,6 +478,34 @@ describe('mergeSchema', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.cleanup).toBe(true);
+    }
+  });
+
+  // Regression (Security): targetBranch is passed positionally to `git rebase`/
+  // `git checkout`/`git push origin <ref>`, so a leading-dash value would be a
+  // flag-injection → RCE vector (e.g. `git rebase --exec=<cmd>`). It must use
+  // the git-ref grammar, not a bare string.
+  test('rejects flag-injection targetBranch', () => {
+    for (const candidate of ['--exec=touch /tmp/pwned', '-rf', '--upload-pack=evil']) {
+      expect(mergeSchema.safeParse({ targetBranch: candidate }).success).toBe(false);
+    }
+  });
+});
+
+// ── workflowSchema ───────────────────────────────────────────
+
+describe('workflowSchema', () => {
+  test('accepts a valid targetBranch', () => {
+    const result = workflowSchema.safeParse({ action: 'merge', targetBranch: 'main' });
+    expect(result.success).toBe(true);
+  });
+
+  // Same flag-injection concern as mergeSchema.targetBranch.
+  test('rejects flag-injection targetBranch', () => {
+    for (const candidate of ['--exec=touch /tmp/pwned', '-rf']) {
+      expect(workflowSchema.safeParse({ action: 'merge', targetBranch: candidate }).success).toBe(
+        false,
+      );
     }
   });
 });

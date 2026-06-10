@@ -53,7 +53,15 @@ if (!process.env.TEAM_SERVER_URL) {
 }
 
 const port = Number(process.env.RUNNER_PORT) || 3003;
-const host = process.env.RUNNER_HOST || '0.0.0.0';
+// Security: in WS-tunnel-only mode every request arrives via the Socket.IO
+// tunnel, so the direct HTTP port does not need to be network-reachable.
+// Default it to loopback to avoid exposing the runtime API on all interfaces
+// — that port trusts forwarded-identity headers signed with the shared
+// RUNNER_AUTH_SECRET, which every runner holds, so a reachable port lets any
+// secret-holder impersonate users (see forwarded-identity trust-boundary
+// note). An explicit RUNNER_HOST still wins for operators who need otherwise.
+const wsTunnelOnly = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
+const host = process.env.RUNNER_HOST || (wsTunnelOnly ? '127.0.0.1' : '0.0.0.0');
 const clientPort = Number(process.env.CLIENT_PORT) || 5173;
 const corsOrigin = process.env.CORS_ORIGIN;
 

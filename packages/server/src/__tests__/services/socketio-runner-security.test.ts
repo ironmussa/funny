@@ -42,4 +42,15 @@ describe('socketio runner namespace security', () => {
       /RUNNER_AGENT_EVENT[\s\S]*?isRateLimited\(ctx\.socket\.id,\s*500,\s*10_000\)/,
     );
   });
+
+  test('gates threadId side effects on thread ownership before status/event writes', () => {
+    // The relay check validates msg.userId, not the nested event.threadId.
+    // updateThreadStatus / terminal+orchestrator publishes must be gated on
+    // threadBelongsToUser(threadId, runnerUserId) so a runner cannot mutate
+    // another tenant's thread.
+    expect(source).toMatch(/threadBelongsToUser\(\s*threadId\s*,\s*ctx\.runnerUserId\s*\)/);
+    expect(source).toMatch(
+      /threadBelongsToUser[\s\S]*?if\s*\(\s*!owned\s*\)[\s\S]*?authz\.cross_tenant_refused/,
+    );
+  });
 });

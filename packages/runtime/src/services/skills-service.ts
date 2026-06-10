@@ -323,6 +323,16 @@ export function addSkill(identifier: string): ResultAsync<void, DomainError> {
  * and updating the lock file.
  */
 export function removeSkill(name: string): void {
+  // Security: `name` comes straight from the DELETE /:name URL param and is
+  // join()'d against SKILLS_DIR / CLAUDE_SKILLS_DIR before a recursive rmSync.
+  // A traversal segment (e.g. `..%2f..%2f.funny%2fencryption.key`) would
+  // otherwise let an authenticated request delete arbitrary runner-writable
+  // files. Restrict to the same whitelist used elsewhere for ids.
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+    log.warn('Rejected removeSkill with invalid name', { namespace: 'skills-service', name });
+    return;
+  }
+
   log.info('Removing skill', { namespace: 'skills-service', name });
 
   // Remove skill directory

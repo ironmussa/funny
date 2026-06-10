@@ -104,6 +104,16 @@ export async function initRuntime(app: Hono): Promise<void> {
     });
   });
 
+  // Start the agent-watcher scanner (deferred-wake "snooze"). Pending rows in
+  // the server DB are picked up on the next heartbeat — no in-memory rehydrate.
+  const { startAgentWatchers } = await import('../services/agent-watcher-manager.js');
+  startAgentWatchers();
+
+  // Start the agent-job scanner (detached background processes). Running jobs
+  // are re-derived from their exitfile/pid on the next scan — restart-robust.
+  const { startAgentJobs } = await import('../services/agent-job-manager.js');
+  startAgentJobs();
+
   autoResumeStaleThreads().catch((err) => {
     log.error('Failed to auto-resume stale threads', {
       namespace: 'server',

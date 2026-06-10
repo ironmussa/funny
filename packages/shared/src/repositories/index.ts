@@ -25,3 +25,10 @@ export {
   type WatcherRow,
   type WatcherPatch,
 } from './watcher-repository.js';
+export {
+  createJobRepository,
+  type JobRepositoryDeps,
+  type JobRepository,
+  type JobRow,
+  type JobPatch,
+} from './job-repository.js';

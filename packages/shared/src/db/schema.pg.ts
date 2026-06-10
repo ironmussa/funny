@@ -214,6 +214,24 @@ export const watchers = pgTable('watchers', {
   updatedAt: text('updated_at').notNull(),
 });
 
+export const jobs = pgTable('jobs', {
+  id: text('id').primaryKey(),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  command: text('command').notNull(),
+  cwd: text('cwd'),
+  label: text('label'),
+  pid: integer('pid'),
+  logPath: text('log_path').notNull(),
+  exitPath: text('exit_path').notNull(),
+  status: text('status').notNull().default('running'),
+  exitCode: integer('exit_code'),
+  startedAt: text('started_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const userProfiles = pgTable('user_profiles', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().unique(),

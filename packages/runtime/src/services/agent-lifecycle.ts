@@ -342,6 +342,18 @@ export class AgentLifecycleManager {
       }
     }
 
+    // Inject the always-present funny_watch tool (deferred-wake "snooze") on
+    // EVERY spawn. In-process MCP so the handler runs here with the spawn's
+    // threadId/userId. Server name `funny` → tool `mcp__funny__funny_watch`,
+    // auto-allowed by the `mcp__funny__*` wildcard in sdk-claude.
+    if (thread?.userId) {
+      const { buildWatchMcpServer } = await import('./agent-watch-tool.js');
+      mcpServers = {
+        ...(mcpServers ?? {}),
+        funny: buildWatchMcpServer(threadId, thread.userId),
+      };
+    }
+
     const systemPrefix =
       [
         // For Deep Agent templates with 'prepend' mode, add template prompt before project prompt

@@ -1258,6 +1258,34 @@ const migrations: Migration[] = [
       await ctx().addColumn('user_profiles', 'active_builtin_providers', 'TEXT');
     },
   },
+  {
+    // Agent jobs: funny-owned detached background processes (funny_spawn).
+    // The process is reparented to init; status is re-derived from the
+    // exitfile + pid liveness, so nothing here depends on a process handle.
+    name: '059_jobs',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS jobs (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          command TEXT NOT NULL,
+          cwd TEXT,
+          label TEXT,
+          pid INTEGER,
+          log_path TEXT NOT NULL,
+          exit_path TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'running',
+          exit_code INTEGER,
+          started_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status)`);
+      await ctx().exec(sql`CREATE INDEX IF NOT EXISTS idx_jobs_thread ON jobs (thread_id)`);
+      await ctx().exec(sql`CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id)`);
+    },
+  },
 ];
 
 export async function autoMigrate() {

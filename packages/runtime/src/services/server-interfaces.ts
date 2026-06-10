@@ -13,7 +13,14 @@
  * Interfaces are split by responsibility (ISP).
  */
 
-import type { WSEvent, Project, UserProfile, UpdateProfileRequest } from '@funny/shared';
+import type {
+  WSEvent,
+  Project,
+  UserProfile,
+  UpdateProfileRequest,
+  Watcher,
+  Job,
+} from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import type { Result, ResultAsync } from 'neverthrow';
 
@@ -409,4 +416,31 @@ export interface IMcpOauthService {
 
 export interface IStageHistoryRepository {
   recordStageChange(data: { threadId: string; fromStage: string; toStage: string }): Promise<void>;
+}
+
+// ── Agent watchers (deferred-wake "snooze") ─────────────────────
+
+export interface IWatcherRepository {
+  insertWatcher(row: Watcher): Promise<void>;
+  getWatcher(id: string): Promise<Watcher | undefined>;
+  getLiveWatcherByThreadKey(threadId: string, key: string): Promise<Watcher | undefined>;
+  /** Pending watchers for this runner's user — used to re-arm the scanner on boot. */
+  listPendingWatchers(): Promise<Watcher[]>;
+  /** Pending watchers for this runner's user whose `nextWakeAt <= now`. */
+  listDueWatchers(now: number): Promise<Watcher[]>;
+  listWatchersByUser(userId: string): Promise<Watcher[]>;
+  updateWatcher(id: string, patch: Record<string, any>): Promise<void>;
+  deleteWatchersByThread(threadId: string): Promise<void>;
+}
+
+// ── Agent jobs (funny-owned detached background processes) ───────
+
+export interface IJobRepository {
+  insertJob(row: Job): Promise<void>;
+  getJob(id: string): Promise<Job | undefined>;
+  /** Running jobs for this runner's user — polled by the scanner for completion. */
+  listRunningJobs(): Promise<Job[]>;
+  listJobsByUser(userId: string): Promise<Job[]>;
+  updateJob(id: string, patch: Record<string, any>): Promise<void>;
+  deleteJobsByThread(threadId: string): Promise<void>;
 }

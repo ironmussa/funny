@@ -292,6 +292,23 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         useAutomationStore.getState().loadInbox();
       });
       break;
+    case 'watcher:created':
+    case 'watcher:fired':
+    case 'watcher:rescheduled':
+    case 'watcher:completed':
+    case 'watcher:cancelled':
+      import('@/stores/watcher-store').then(({ useWatcherStore }) => {
+        if (data?.watcher) useWatcherStore.getState().upsert(data.watcher);
+      });
+      break;
+    case 'job:created':
+    case 'job:exited':
+    case 'job:killed':
+    case 'job:cancelled':
+      import('@/stores/job-store').then(({ useJobStore }) => {
+        if (data?.job) useJobStore.getState().upsert(data.job);
+      });
+      break;
     case 'pipeline:run_started':
     case 'pipeline:stage_update':
     case 'pipeline:run_completed': {
@@ -625,6 +642,15 @@ const ALL_EVENT_TYPES = [
   'automation:run_started',
   'automation:run_completed',
   'automation:run_updated',
+  'watcher:created',
+  'watcher:fired',
+  'watcher:rescheduled',
+  'watcher:completed',
+  'watcher:cancelled',
+  'job:created',
+  'job:exited',
+  'job:killed',
+  'job:cancelled',
   'pipeline:run_started',
   'pipeline:stage_update',
   'pipeline:run_completed',

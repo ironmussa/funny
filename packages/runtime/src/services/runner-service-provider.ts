@@ -356,6 +356,70 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async recordStageChange() {},
     },
 
+    // ── Agent watchers — proxy to server via team-client ──────
+    watchers: {
+      async insertWatcher(row) {
+        const { remoteInsertWatcher } = await import('./team-client.js');
+        return remoteInsertWatcher(row);
+      },
+      async getWatcher(id) {
+        const { remoteGetWatcher } = await import('./team-client.js');
+        return remoteGetWatcher(id);
+      },
+      async getLiveWatcherByThreadKey(threadId, key) {
+        const { remoteGetLiveWatcherByThreadKey } = await import('./team-client.js');
+        return remoteGetLiveWatcherByThreadKey(threadId, key);
+      },
+      async listPendingWatchers() {
+        const { remoteListPendingWatchers } = await import('./team-client.js');
+        return remoteListPendingWatchers();
+      },
+      async listDueWatchers(now) {
+        const { remoteListDueWatchers } = await import('./team-client.js');
+        return remoteListDueWatchers(now);
+      },
+      async listWatchersByUser(userId) {
+        const { remoteListWatchersByUser } = await import('./team-client.js');
+        return remoteListWatchersByUser(userId);
+      },
+      async updateWatcher(id, patch) {
+        const { remoteUpdateWatcher } = await import('./team-client.js');
+        return remoteUpdateWatcher(id, patch);
+      },
+      async deleteWatchersByThread(threadId) {
+        const { remoteDeleteWatchersByThread } = await import('./team-client.js');
+        return remoteDeleteWatchersByThread(threadId);
+      },
+    },
+
+    // ── Agent jobs — proxy to server via team-client ──────────
+    jobs: {
+      async insertJob(row) {
+        const { remoteInsertJob } = await import('./team-client.js');
+        return remoteInsertJob(row);
+      },
+      async getJob(id) {
+        const { remoteGetJob } = await import('./team-client.js');
+        return remoteGetJob(id);
+      },
+      async listRunningJobs() {
+        const { remoteListRunningJobs } = await import('./team-client.js');
+        return remoteListRunningJobs();
+      },
+      async listJobsByUser(userId) {
+        const { remoteListJobsByUser } = await import('./team-client.js');
+        return remoteListJobsByUser(userId);
+      },
+      async updateJob(id, patch) {
+        const { remoteUpdateJob } = await import('./team-client.js');
+        return remoteUpdateJob(id, patch);
+      },
+      async deleteJobsByThread(threadId) {
+        const { remoteDeleteJobsByThread } = await import('./team-client.js');
+        return remoteDeleteJobsByThread(threadId);
+      },
+    },
+
     wsBroker,
   };
 }

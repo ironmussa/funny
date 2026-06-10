@@ -24,6 +24,7 @@ export {
   orchestratorRuns,
   threadDependencies,
   watchers,
+  jobs,
   teamProjects,
   threadEvents,
   instanceSettings,

@@ -16,6 +16,8 @@ import {
   createThreadRepository,
   createCommentRepository,
   createStageHistoryRepository,
+  createWatcherRepository,
+  createJobRepository,
 } from '@funny/shared/repositories';
 import { and, eq } from 'drizzle-orm';
 
@@ -30,6 +32,34 @@ import * as projectRepo from './project-repository.js';
 let _messageRepo: ReturnType<typeof createMessageRepository> | null = null;
 let _toolCallRepo: ReturnType<typeof createToolCallRepository> | null = null;
 let _threadRepo: ReturnType<typeof createThreadRepository> | null = null;
+let _watcherRepo: ReturnType<typeof createWatcherRepository> | null = null;
+let _jobRepo: ReturnType<typeof createJobRepository> | null = null;
+
+function getWatcherRepo() {
+  if (!_watcherRepo) {
+    _watcherRepo = createWatcherRepository({
+      db,
+      schema: schema as any,
+      dbAll,
+      dbGet,
+      dbRun,
+    });
+  }
+  return _watcherRepo;
+}
+
+function getJobRepo() {
+  if (!_jobRepo) {
+    _jobRepo = createJobRepository({
+      db,
+      schema: schema as any,
+      dbAll,
+      dbGet,
+      dbRun,
+    });
+  }
+  return _jobRepo;
+}
 
 function getMessageRepo() {
   if (!_messageRepo) {
@@ -262,6 +292,48 @@ async function assertDataOwnership(
     )) as { userId: string } | undefined;
     if (!t || t.userId !== runnerUserId) {
       return { ok: false, reason: `queued message ${data.messageId} cross-tenant` };
+    }
+  }
+
+  // ── Watcher ownership (watcher.user_id) ────────────────────────
+  // Mutations / reads that reference a watcher by id must belong to the
+  // runner's user. Create (watcher_insert) and get_live_by_thread_key carry
+  // a payload.threadId and are covered by the thread-ownership check above;
+  // list_due / list_pending / list_by_user carry no entity and are scoped to
+  // runnerUserId in the handler.
+  if (
+    (data?.type === 'data:watcher_update' || data?.type === 'data:watcher_get') &&
+    typeof payload?.id === 'string'
+  ) {
+    const w = (await dbGet(
+      db
+        .select({ userId: schema.watchers.userId })
+        .from(schema.watchers)
+        .where(eq(schema.watchers.id, payload.id)),
+    )) as { userId: string } | undefined;
+    if (!w) return { ok: false, reason: `watcher ${payload.id} not found` };
+    if (w.userId !== runnerUserId) {
+      return { ok: false, reason: `watcher ${payload.id} cross-tenant` };
+    }
+  }
+
+  // ── Job ownership (job.user_id) ────────────────────────────────
+  // Same as watchers: job_update/job_get reference a job by id; job_insert
+  // carries payload.threadId (thread-ownership check above); list ops carry no
+  // entity and are scoped to runnerUserId in the handler.
+  if (
+    (data?.type === 'data:job_update' || data?.type === 'data:job_get') &&
+    typeof payload?.id === 'string'
+  ) {
+    const j = (await dbGet(
+      db
+        .select({ userId: schema.jobs.userId })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.id, payload.id)),
+    )) as { userId: string } | undefined;
+    if (!j) return { ok: false, reason: `job ${payload.id} not found` };
+    if (j.userId !== runnerUserId) {
+      return { ok: false, reason: `job ${payload.id} cross-tenant` };
     }
   }
 
@@ -563,6 +635,74 @@ export async function handleDataMessageWithAck(
         const staleThreads = await threadRepo.markAndListStaleThreads(runnerId);
         return { type: 'data:mark_and_list_stale_threads_response', threads: staleThreads };
       }
+
+      // ── Agent watchers (deferred-wake "snooze") ──────────────────
+      case 'data:watcher_insert': {
+        await getWatcherRepo().insert(data.payload.row);
+        return { type: 'data:watcher_insert_response', ok: true };
+      }
+      case 'data:watcher_get': {
+        const watcher = await getWatcherRepo().getById(data.payload.id);
+        return { type: 'data:watcher_get_response', watcher: watcher ?? null };
+      }
+      case 'data:watcher_get_live_by_thread_key': {
+        const watcher = await getWatcherRepo().getLiveByThreadKey(
+          data.payload.threadId,
+          data.payload.key,
+        );
+        return { type: 'data:watcher_get_live_by_thread_key_response', watcher: watcher ?? null };
+      }
+      case 'data:watcher_list_pending': {
+        // Scoped to the runner's user — never another tenant's watchers.
+        const watchers = await getWatcherRepo().listPending(runnerUserId ?? undefined);
+        return { type: 'data:watcher_list_pending_response', watchers };
+      }
+      case 'data:watcher_list_due': {
+        const watchers = await getWatcherRepo().listDue(
+          data.payload.now,
+          runnerUserId ?? undefined,
+        );
+        return { type: 'data:watcher_list_due_response', watchers };
+      }
+      case 'data:watcher_list_by_user': {
+        const watchers = await getWatcherRepo().listByUser(runnerUserId ?? data.payload.userId);
+        return { type: 'data:watcher_list_by_user_response', watchers };
+      }
+      case 'data:watcher_update': {
+        await getWatcherRepo().update(data.payload.id, data.payload.patch);
+        return { type: 'data:watcher_update_response', ok: true };
+      }
+      case 'data:watcher_delete_by_thread': {
+        await getWatcherRepo().deleteByThread(data.payload.threadId);
+        return { type: 'data:watcher_delete_by_thread_response', ok: true };
+      }
+
+      // ── Agent jobs ───────────────────────────────────────────────
+      case 'data:job_insert': {
+        await getJobRepo().insert(data.payload.row);
+        return { type: 'data:job_insert_response', ok: true };
+      }
+      case 'data:job_get': {
+        const job = await getJobRepo().getById(data.payload.id);
+        return { type: 'data:job_get_response', job: job ?? null };
+      }
+      case 'data:job_list_running': {
+        const jobs = await getJobRepo().listRunning(runnerUserId ?? undefined);
+        return { type: 'data:job_list_running_response', jobs };
+      }
+      case 'data:job_list_by_user': {
+        const jobs = await getJobRepo().listByUser(runnerUserId ?? data.payload.userId);
+        return { type: 'data:job_list_by_user_response', jobs };
+      }
+      case 'data:job_update': {
+        await getJobRepo().update(data.payload.id, data.payload.patch);
+        return { type: 'data:job_update_response', ok: true };
+      }
+      case 'data:job_delete_by_thread': {
+        await getJobRepo().deleteByThread(data.payload.threadId);
+        return { type: 'data:job_delete_by_thread_response', ok: true };
+      }
+
       default:
         log.warn('Unknown data message type from runner', {
           namespace: 'data-handler',

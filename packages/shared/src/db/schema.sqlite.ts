@@ -212,6 +212,26 @@ export const watchers = sqliteTable('watchers', {
   updatedAt: text('updated_at').notNull(),
 });
 
+export const jobs = sqliteTable('jobs', {
+  id: text('id').primaryKey(),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  command: text('command').notNull(),
+  cwd: text('cwd'),
+  label: text('label'),
+  // OS pid of the detached session leader; null until known. Liveness is
+  // probed with `kill -0`; the exitfile is authoritative for completion.
+  pid: integer('pid'),
+  logPath: text('log_path').notNull(),
+  exitPath: text('exit_path').notNull(),
+  status: text('status').notNull().default('running'),
+  exitCode: integer('exit_code'),
+  startedAt: text('started_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const userProfiles = sqliteTable('user_profiles', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().unique(),

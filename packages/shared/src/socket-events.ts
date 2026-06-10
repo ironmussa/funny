@@ -112,6 +112,20 @@ export const RUNNER_DATA_EVENTS = [
   'data:list_permission_rules',
   'data:get_builtin_providers',
   'data:set_builtin_providers',
+  'data:watcher_insert',
+  'data:watcher_get',
+  'data:watcher_get_live_by_thread_key',
+  'data:watcher_list_pending',
+  'data:watcher_list_due',
+  'data:watcher_list_by_user',
+  'data:watcher_update',
+  'data:watcher_delete_by_thread',
+  'data:job_insert',
+  'data:job_get',
+  'data:job_list_running',
+  'data:job_list_by_user',
+  'data:job_update',
+  'data:job_delete_by_thread',
 ] as const;
 
 export type RunnerDataEvent = (typeof RUNNER_DATA_EVENTS)[number];

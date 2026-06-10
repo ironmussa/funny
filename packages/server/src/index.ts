@@ -270,6 +270,8 @@ const { designRoutes, designProjectRoutes } = await import('./routes/designs.js'
 const { agentTemplateRoutes } = await import('./routes/agent-templates.js');
 const { orchestratorRoutes } = await import('./routes/orchestrator.js');
 const { orchestratorSystemRoutes } = await import('./routes/orchestrator-system.js');
+const { watcherRoutes } = await import('./routes/watchers.js');
+const { jobRoutes } = await import('./routes/jobs.js');
 
 app.route('/api/auth', authRoutes);
 app.route('/api/projects', projectRoutes);
@@ -286,6 +288,8 @@ app.route('/api/invite-links', inviteLinkRoutes);
 app.route('/api/designs', designRoutes);
 app.route('/api/projects', designProjectRoutes);
 app.route('/api/agent-templates', agentTemplateRoutes);
+app.route('/api/watchers', watcherRoutes);
+app.route('/api/jobs', jobRoutes);
 // System routes mounted FIRST so /api/orchestrator/system/* matches them
 // before the user-scoped /api/orchestrator/* tree.
 app.route('/api/orchestrator/system', orchestratorSystemRoutes);

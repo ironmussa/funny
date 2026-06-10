@@ -92,19 +92,25 @@ export function createWatcherRepository(deps: WatcherRepositoryDeps) {
     );
   }
 
-  /** All watchers awaiting a future fire — loaded on boot to re-arm the scanner. */
-  async function listPending(): Promise<WatcherRow[]> {
-    return dbAll<WatcherRow>(db.select().from(table).where(eq(table.status, 'pending')));
+  /**
+   * All watchers awaiting a future fire — loaded on boot to re-arm the scanner.
+   * `userId` scopes the result to one runner's user (runner-isolation boundary).
+   */
+  async function listPending(userId?: string): Promise<WatcherRow[]> {
+    const cond = userId
+      ? and(eq(table.status, 'pending'), eq(table.userId, userId))
+      : eq(table.status, 'pending');
+    return dbAll<WatcherRow>(db.select().from(table).where(cond));
   }
 
-  /** Pending watchers whose `nextWakeAt` deadline has passed (`<= now`). */
-  async function listDue(now: number): Promise<WatcherRow[]> {
-    return dbAll<WatcherRow>(
-      db
-        .select()
-        .from(table)
-        .where(and(eq(table.status, 'pending'), lte(table.nextWakeAt, now))),
-    );
+  /**
+   * Pending watchers whose `nextWakeAt` deadline has passed (`<= now`).
+   * `userId` scopes the result to one runner's user (runner-isolation boundary).
+   */
+  async function listDue(now: number, userId?: string): Promise<WatcherRow[]> {
+    const base = and(eq(table.status, 'pending'), lte(table.nextWakeAt, now));
+    const cond = userId ? and(base, eq(table.userId, userId)) : base;
+    return dbAll<WatcherRow>(db.select().from(table).where(cond));
   }
 
   async function listByUser(userId: string): Promise<WatcherRow[]> {

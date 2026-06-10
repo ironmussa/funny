@@ -1,4 +1,4 @@
-import type { Thread } from '@funny/shared';
+import type { Job, Thread } from '@funny/shared';
 
 import { isTauri } from '@/components/terminal/xterm-utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -24,6 +24,10 @@ function buildTab(args: {
   cwd: string;
   shell: TerminalShell;
   scratchThreadId?: string;
+  /** Command auto-run once the PTY shell is ready (e.g. `tail -f <log>`). */
+  initialCommand?: string;
+  /** Override the auto-generated "<shell> N" label. */
+  label?: string;
 }): TerminalTab {
   const { tabs } = useTerminalStore.getState();
   const { availableShells } = useSettingsStore.getState();
@@ -34,7 +38,7 @@ function buildTab(args: {
   ).length;
   return {
     id: crypto.randomUUID(),
-    label: `${shellName} ${sameShellCount + 1}`,
+    label: args.label ?? `${shellName} ${sameShellCount + 1}`,
     cwd: args.cwd,
     alive: true,
     projectId: args.projectId,
@@ -42,7 +46,40 @@ function buildTab(args: {
     shell: args.shell,
     createdAt: Date.now(),
     scratchThreadId: args.scratchThreadId,
+    initialCommand: args.initialCommand,
   };
+}
+
+/** Shell-quote a path for safe interpolation into a single-quoted argument. */
+function singleQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Open the existing bottom terminal panel on a tab that shows a background
+ * job's output: live-follow (`tail -f`) while running, the captured log
+ * (`cat`) once finished. Opened in the CURRENT terminal scope so it surfaces
+ * immediately regardless of which project the job belongs to.
+ */
+export function openJobLogTerminal(args: {
+  job: Pick<Job, 'id' | 'logPath' | 'status' | 'label' | 'cwd'>;
+  /** Current terminal scope (so the tab shows in the visible panel). */
+  projectId: string;
+  shell?: TerminalShell;
+}): void {
+  const { addTab } = useTerminalStore.getState();
+  const log = singleQuote(args.job.logPath);
+  // -F (vs -f) retries if the logfile isn't created yet / rotates.
+  const initialCommand = args.job.status === 'running' ? `tail -n +1 -F ${log}` : `cat ${log}`;
+  addTab(
+    buildTab({
+      projectId: args.projectId,
+      cwd: args.job.cwd ?? '~',
+      shell: args.shell ?? 'default',
+      initialCommand,
+      label: `job: ${args.job.label || args.job.id.slice(0, 8)}`,
+    }),
+  );
 }
 
 interface OpenProjectTerminalArgs {

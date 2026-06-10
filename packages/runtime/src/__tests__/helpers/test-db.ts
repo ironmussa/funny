@@ -174,6 +174,7 @@ export function createTestDb() {
       terminal_shell TEXT,
       tool_permissions TEXT,
       theme TEXT,
+      active_builtin_providers TEXT,
       runner_invite_token TEXT,
       runner_invite_token_expires_at TEXT,
       runner_invite_token_used_at TEXT,

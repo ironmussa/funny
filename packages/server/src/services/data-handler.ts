@@ -537,6 +537,27 @@ export async function handleDataMessageWithAck(
         const updatedProfile = await upsertProfile(data.userId, data.payload);
         return { type: 'data:update_profile_response', profile: updatedProfile };
       }
+      case 'data:get_builtin_providers': {
+        // Owner-scoped: the runner asks for its owning user's stored selection.
+        // Ownership guard above already required a non-null runnerUserId.
+        if (!runnerUserId) {
+          return { type: 'data:get_builtin_providers_response', active: null };
+        }
+        const { getBuiltinProviderSettings } = await import('./profile-service.js');
+        const active = await getBuiltinProviderSettings(runnerUserId);
+        return { type: 'data:get_builtin_providers_response', active };
+      }
+      case 'data:set_builtin_providers': {
+        if (!runnerUserId) {
+          return { type: 'data:ack', success: false, error: 'runner has no owning user' };
+        }
+        const { setBuiltinProviderSettings } = await import('./profile-service.js');
+        const active = Array.isArray(data.active)
+          ? data.active.filter((x: unknown): x is string => typeof x === 'string')
+          : null;
+        await setBuiltinProviderSettings(runnerUserId, active);
+        return { type: 'data:ack', success: true };
+      }
       case 'data:mark_and_list_stale_threads': {
         const threadRepo = getThreadRepo();
         const staleThreads = await threadRepo.markAndListStaleThreads(runnerId);

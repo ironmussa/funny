@@ -192,6 +192,26 @@ export const automationRuns = sqliteTable('automation_runs', {
   completedAt: text('completed_at'),
 });
 
+export const watchers = sqliteTable('watchers', {
+  id: text('id').primaryKey(),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  key: text('key').notNull(),
+  label: text('label').notNull(),
+  // Epoch-ms when the watcher next fires; compared in the due-time scanner.
+  nextWakeAt: integer('next_wake_at').notNull(),
+  lastDelayMs: integer('last_delay_ms').notNull().default(0),
+  wakeCount: integer('wake_count').notNull().default(0),
+  maxWakes: integer('max_wakes').notNull().default(20),
+  // Epoch-ms hard lifetime ceiling; null = no deadline.
+  deadline: integer('deadline'),
+  status: text('status').notNull().default('pending'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const userProfiles = sqliteTable('user_profiles', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().unique(),
@@ -204,6 +224,10 @@ export const userProfiles = sqliteTable('user_profiles', {
   terminalShell: text('terminal_shell'),
   toolPermissions: text('tool_permissions'),
   theme: text('theme'),
+  /** JSON string[] of enabled built-in ACP provider ids; null = no override
+   *  (all built-ins active — the FUNNY_PROVIDERS default). Persists the
+   *  Settings > Providers toggle across runner restarts. */
+  activeBuiltinProviders: text('active_builtin_providers'),
   runnerInviteToken: text('runner_invite_token'),
   /** ISO timestamp when the invite token expires; null = no expiry (legacy) */
   runnerInviteTokenExpiresAt: text('runner_invite_token_expires_at'),

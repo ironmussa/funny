@@ -94,11 +94,16 @@ export function enableBuiltinProvider(id: string): boolean {
   return true;
 }
 
-/** Disable a built-in ACP provider live (no restart). False if not a known
- *  ACP built-in. */
+/** Disable a built-in ACP provider live (no restart). Idempotent: returns
+ *  false ONLY when `id` is not a known ACP built-in — disabling one that is
+ *  already gated off still returns true (the caller's intent is satisfied).
+ *  Returning `unregisterProvider`'s "was it present" result here would surface
+ *  a spurious 400 in the toggle route when the registry is already in the
+ *  requested state (e.g. after a restart restored a lean set). */
 export function disableBuiltinProvider(id: string): boolean {
   if (!(id in ACP_BUILTIN_PROCESSES)) return false;
-  return unregisterProvider(id);
+  unregisterProvider(id);
+  return true;
 }
 
 export const defaultProcessFactory: IAgentProcessFactory = {

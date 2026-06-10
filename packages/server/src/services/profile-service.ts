@@ -225,6 +225,64 @@ export async function isSetupCompleted(userId: string): Promise<boolean> {
   return !!rows[0]?.setupCompleted;
 }
 
+// ── Built-in provider selection ──────────────────────────────
+// Persists which built-in ACP providers a user has enabled in the model picker
+// (Settings > Providers). The runner registry is process-global and resets to
+// the FUNNY_PROVIDERS default on restart; storing the selection here lets the
+// runner restore it on startup so toggles survive a restart.
+
+/**
+ * Get the user's persisted built-in ACP provider selection.
+ * Returns the enabled id list, or null when no override has been stored
+ * (meaning "all built-ins active" — no regression vs. the default).
+ */
+export async function getBuiltinProviderSettings(userId: string): Promise<string[] | null> {
+  const rows = await db
+    .select({ value: userProfiles.activeBuiltinProviders })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, userId));
+  const raw = rows[0]?.value;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set (or clear) the user's built-in ACP provider selection. Pass `null` to
+ * remove the override and fall back to the FUNNY_PROVIDERS default.
+ */
+export async function setBuiltinProviderSettings(
+  userId: string,
+  active: string[] | null,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const value = active === null ? null : JSON.stringify(active);
+  const rows = await db
+    .select({ id: userProfiles.id })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, userId));
+
+  if (rows.length > 0) {
+    await db
+      .update(userProfiles)
+      .set({ activeBuiltinProviders: value, updatedAt: now })
+      .where(eq(userProfiles.userId, userId));
+  } else {
+    await db.insert(userProfiles).values({
+      id: nanoid(),
+      userId,
+      activeBuiltinProviders: value,
+      setupCompleted: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
 // ── Runner Invite Token ─────────────────────────────────
 
 /**

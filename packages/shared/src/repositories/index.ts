@@ -18,3 +18,10 @@ export {
   type OrchestratorRunRow,
   type ClaimArgs,
 } from './orchestrator-run-repository.js';
+export {
+  createWatcherRepository,
+  type WatcherRepositoryDeps,
+  type WatcherRepository,
+  type WatcherRow,
+  type WatcherPatch,
+} from './watcher-repository.js';

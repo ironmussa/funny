@@ -24,12 +24,15 @@ import { hostname } from 'os';
 import { join } from 'path';
 
 import {
+  disableBuiltinProvider,
+  enableBuiltinProvider,
   getActiveBuiltinProviders,
   getActiveProviderSpawnRefs,
   getAdvertisedProviders,
   loadProviderExtensions,
 } from '@funny/core/agents';
 import type { Project, WSEvent } from '@funny/shared';
+import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
   type DataInsertMessage,
@@ -1377,7 +1380,60 @@ export async function remoteListPermissionRules(query: {
   return response?.rules ?? [];
 }
 
+// ── Built-in provider selection (lean-core persistence) ──
+
+/**
+ * Fetch this runner-owner's persisted built-in ACP provider selection.
+ * Returns the enabled id list, or null when no override is stored (all
+ * built-ins active). The server resolves the owning user from the runner token,
+ * so no userId is sent.
+ */
+export async function remoteGetActiveBuiltinProviders(): Promise<string[] | null> {
+  const res = await sendDataMessage('data:get_builtin_providers', {});
+  return Array.isArray(res?.active) ? (res.active as string[]) : null;
+}
+
+/** Persist the runner-owner's active built-in ACP provider selection. */
+export async function remoteSetActiveBuiltinProviders(active: string[]): Promise<void> {
+  await sendDataMessage('data:set_builtin_providers', { active });
+}
+
 // ── Lifecycle ────────────────────────────────────────────
+
+/**
+ * Restore the persisted built-in ACP provider selection on startup
+ * (provider-toggle persistence). The provider registry is process-global and
+ * resets to the FUNNY_PROVIDERS default on restart; without this, a user's
+ * toggles are lost and every built-in reappears as active. We reconcile the
+ * in-memory registry to the stored set, then re-advertise so the client picker
+ * reflects it without waiting for the next heartbeat.
+ *
+ * Best-effort: a missing override, an offline server, or a runner with no
+ * owning user all leave the FUNNY_PROVIDERS default untouched.
+ */
+async function applyPersistedBuiltinProviders(): Promise<void> {
+  try {
+    const active = await remoteGetActiveBuiltinProviders();
+    if (!active) return; // no stored override — keep the FUNNY_PROVIDERS default
+    const want = new Set(active);
+    for (const id of KNOWN_ACP_PROVIDER_IDS) {
+      if (want.has(id)) enableBuiltinProvider(id);
+      else disableBuiltinProvider(id);
+    }
+    log.info('Restored persisted built-in provider selection', {
+      namespace: 'runner',
+      active,
+    });
+    // Re-advertise the corrected set immediately so the picker updates without
+    // waiting for the next 15s heartbeat.
+    await sendHeartbeat();
+  } catch (err) {
+    log.warn('Failed to restore persisted built-in providers', {
+      namespace: 'runner',
+      error: (err as Error).message,
+    });
+  }
+}
 
 /**
  * Initialize runner mode — connect to the central server.
@@ -1434,6 +1490,10 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   if (!WS_ONLY) {
     await assignLocalProjects();
   }
+
+  // Restore the user's persisted built-in provider selection (best-effort,
+  // non-blocking — waits for the socket internally via sendDataMessage).
+  void applyPersistedBuiltinProviders();
 
   log.info('Runner mode initialized', {
     namespace: 'runner',

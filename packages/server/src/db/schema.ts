@@ -23,6 +23,7 @@ export {
   pipelineRuns,
   orchestratorRuns,
   threadDependencies,
+  watchers,
   teamProjects,
   threadEvents,
   instanceSettings,

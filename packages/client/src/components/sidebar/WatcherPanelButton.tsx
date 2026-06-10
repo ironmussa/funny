@@ -7,9 +7,12 @@ import { Button } from '@/components/ui/button';
 import { NavItem } from '@/components/ui/nav-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useTerminalScope } from '@/hooks/use-terminal-scope';
+import { openJobLogTerminal } from '@/lib/open-terminal-tab';
 import { cn } from '@/lib/utils';
 import { ACTIVE_WATCHER_STATUSES as ACTIVE_STATUSES, formatCountdown } from '@/lib/watcher-utils';
 import { useJobStore } from '@/stores/job-store';
+import { findThreadById } from '@/stores/store-bridge';
 import { useWatcherStore } from '@/stores/watcher-store';
 
 function statusLabel(w: Watcher): string {
@@ -110,11 +113,40 @@ function jobStatusVariant(status: JobStatus): 'default' | 'secondary' | 'destruc
   }
 }
 
-function JobRow({ job }: { job: Job }) {
+function JobRow({
+  job,
+  scopeId,
+  onOpened,
+}: {
+  job: Job;
+  scopeId: string | null;
+  onOpened: () => void;
+}) {
   const cancelJob = useJobStore((s) => s.cancelJob);
+
+  // Open the job's output in the existing bottom terminal panel: tail -f while
+  // running, the captured log once finished. Opened in the current scope so it
+  // surfaces immediately; fall back to the job's thread project if no scope.
+  const openLog = () => {
+    const projectId = scopeId ?? findThreadById(job.threadId)?.projectId ?? null;
+    if (!projectId) return;
+    openJobLogTerminal({ job, projectId });
+    onOpened();
+  };
+
   return (
     <div
-      className="hover:bg-accent flex items-start justify-between gap-2 rounded-md px-2 py-1.5"
+      role="button"
+      tabIndex={0}
+      onClick={openLog}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openLog();
+        }
+      }}
+      title="Open output in the terminal panel"
+      className="hover:bg-accent flex cursor-pointer items-start justify-between gap-2 rounded-md px-2 py-1.5"
       data-testid={`job-row-${job.id}`}
     >
       <div className="min-w-0 flex-1">
@@ -132,7 +164,10 @@ function JobRow({ job }: { job: Job }) {
           size="icon-xs"
           className="text-muted-foreground size-6 shrink-0"
           data-testid={`job-cancel-${job.id}`}
-          onClick={() => void cancelJob(job.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            void cancelJob(job.id);
+          }}
           aria-label="Cancel job"
         >
           <X className="icon-sm" />
@@ -150,6 +185,7 @@ function JobRow({ job }: { job: Job }) {
 export function WatcherPanelButton() {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const { scopeId } = useTerminalScope();
   const watchersById = useWatcherStore((s) => s.watchersById);
   const loadWatchers = useWatcherStore((s) => s.loadWatchers);
   const jobsById = useJobStore((s) => s.jobsById);
@@ -221,7 +257,7 @@ export function WatcherPanelButton() {
                 </div>
                 <div className="flex flex-col gap-0.5">
                   {jobs.map((j) => (
-                    <JobRow key={j.id} job={j} />
+                    <JobRow key={j.id} job={j} scopeId={scopeId} onOpened={() => setOpen(false)} />
                   ))}
                 </div>
               </>

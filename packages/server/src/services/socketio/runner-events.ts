@@ -53,6 +53,34 @@ export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
 
     const threadRegistry = await import('../thread-registry.js');
     const event = msg.event as Record<string, any> | null;
+
+    // The relay check above validates `msg.userId` (the relay target) but NOT
+    // the nested `event.threadId`. These DB writes / event-bus publishes are
+    // keyed on that threadId, so a compromised runner could otherwise corrupt
+    // another tenant's thread status or inject spurious terminal/orchestrator
+    // events. Gate every threadId side effect on ownership by the runner's
+    // owner.
+    const threadId = event?.threadId as string | undefined;
+    if (threadId && ctx.runnerUserId) {
+      const owned = await threadRegistry.threadBelongsToUser(threadId, ctx.runnerUserId);
+      if (!owned) {
+        log.warn('Runner reported event for thread it does not own', {
+          namespace: 'socketio',
+          event: RUNNER_AGENT_EVENT,
+          runnerId: ctx.runnerId,
+          runnerUserId: ctx.runnerUserId,
+          threadId,
+        });
+        audit({
+          action: 'authz.cross_tenant_refused',
+          actorId: ctx.runnerUserId,
+          detail: 'runner agent_event for unowned thread refused',
+          meta: { source: 'socketio:runner_agent_event', runnerId: ctx.runnerId, threadId },
+        });
+        return;
+      }
+    }
+
     if (event?.type === 'agent:status' && event?.threadId) {
       threadRegistry
         .updateThreadStatus(event.threadId, event.data?.status || 'running')

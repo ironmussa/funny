@@ -5,7 +5,11 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { findDuplicateSecretPairs } from '../../lib/secret-check.js';
+import {
+  findDuplicateSecretPairs,
+  findWeakSecrets,
+  MIN_SECRET_LENGTH,
+} from '../../lib/secret-check.js';
 
 describe('findDuplicateSecretPairs (security CR-1)', () => {
   test('returns no pairs when all three are distinct', () => {
@@ -64,5 +68,33 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
   test('only one secret set → no duplicates possible', () => {
     const out = findDuplicateSecretPairs({ RUNNER_AUTH_SECRET: 'only-one' });
     expect(out).toEqual([]);
+  });
+});
+
+describe('findWeakSecrets (security — forgeable forwarded-identity HMAC key)', () => {
+  const strong = 'a'.repeat(MIN_SECRET_LENGTH);
+
+  test('flags a too-short RUNNER_AUTH_SECRET', () => {
+    const out = findWeakSecrets({ RUNNER_AUTH_SECRET: 'secret' });
+    expect(out).toEqual(['RUNNER_AUTH_SECRET']);
+  });
+
+  test('accepts a secret exactly at the minimum length', () => {
+    expect(findWeakSecrets({ RUNNER_AUTH_SECRET: strong })).toEqual([]);
+  });
+
+  test('flags every present secret below the threshold', () => {
+    const out = findWeakSecrets({
+      RUNNER_AUTH_SECRET: 'short',
+      INGEST_WEBHOOK_SECRET: strong,
+      ORCHESTRATOR_AUTH_SECRET: 'weak',
+    });
+    expect(out).toEqual(['RUNNER_AUTH_SECRET', 'ORCHESTRATOR_AUTH_SECRET']);
+  });
+
+  test('ignores undefined / empty (presence is enforced elsewhere)', () => {
+    expect(findWeakSecrets({ RUNNER_AUTH_SECRET: undefined, INGEST_WEBHOOK_SECRET: '' })).toEqual(
+      [],
+    );
   });
 });

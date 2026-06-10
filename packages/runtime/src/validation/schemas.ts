@@ -409,7 +409,11 @@ export const addMcpServerSchema = z.object({
 });
 
 export const mergeSchema = z.object({
-  targetBranch: z.string().optional(),
+  // gitRefSchema (not a bare string): targetBranch is passed positionally to
+  // `git rebase`/`git checkout`/`git push origin <ref>`, so a value like
+  // `--exec=<cmd>` would be a flag-injection → RCE vector. The leading-`-`
+  // refusal + character whitelist close it (Security ME-3).
+  targetBranch: gitRefSchema.optional(),
   push: z.boolean().optional().default(false),
   cleanup: z.boolean().optional().default(false),
 });
@@ -434,7 +438,8 @@ export const workflowSchema = z.object({
   noVerify: z.boolean().optional().default(false),
   prTitle: z.string().max(500).optional(),
   prBody: z.string().max(100_000).optional(),
-  targetBranch: z.string().optional(),
+  // gitRefSchema: same flag-injection concern as mergeSchema.targetBranch.
+  targetBranch: gitRefSchema.optional(),
   cleanup: z.boolean().optional().default(true),
 });
 

@@ -49,12 +49,14 @@ if (!process.env.RUNNER_AUTH_SECRET) {
 // value across them means compromise of any single path leaks all three.
 // Refuse to boot when any two are set to the same value.
 {
-  const { findDuplicateSecretPairs } = await import('./lib/secret-check.js');
-  const duplicates = findDuplicateSecretPairs({
+  const { findDuplicateSecretPairs, findWeakSecrets, MIN_SECRET_LENGTH } =
+    await import('./lib/secret-check.js');
+  const presentSecrets = {
     RUNNER_AUTH_SECRET: process.env.RUNNER_AUTH_SECRET,
     INGEST_WEBHOOK_SECRET: process.env.INGEST_WEBHOOK_SECRET,
     ORCHESTRATOR_AUTH_SECRET: process.env.ORCHESTRATOR_AUTH_SECRET,
-  });
+  };
+  const duplicates = findDuplicateSecretPairs(presentSecrets);
   if (duplicates.length > 0) {
     log.error(
       'Shared secrets must be distinct. Generate a fresh value for each with `openssl rand -hex 32`.',
@@ -62,6 +64,18 @@ if (!process.env.RUNNER_AUTH_SECRET) {
         namespace: 'server',
         duplicates: duplicates.map(([a, b]) => `${a} === ${b}`),
       },
+    );
+    process.exit(1);
+  }
+
+  // Security: RUNNER_AUTH_SECRET is the HMAC key for forwarded-identity
+  // signing — a weak value lets a caller forge any user's identity against a
+  // runner. Refuse to boot on a too-short shared secret.
+  const weak = findWeakSecrets(presentSecrets);
+  if (weak.length > 0) {
+    log.error(
+      `Shared secrets must be at least ${MIN_SECRET_LENGTH} characters. Generate one with \`openssl rand -hex 32\`.`,
+      { namespace: 'server', weak },
     );
     process.exit(1);
   }

@@ -19,8 +19,11 @@
  * - X-Forwarded-Org: organizationId (if present)
  * - X-Runner-Auth: shared secret so the runner trusts the server
  * - X-Forwarded-Signature / X-Forwarded-Timestamp: HMAC-SHA256 over the
- *   forwarded identity, proving the headers came from the server (not from
- *   a client that happens to know the shared secret).
+ *   forwarded identity, proving the sender HOLDS the shared secret (so a
+ *   caller WITHOUT it — e.g. a browser hitting a runner directly — cannot
+ *   forge the headers). It does not distinguish the server from a runner that
+ *   holds the same secret; see the trust-boundary note in
+ *   `@funny/shared/auth/forwarded-identity`.
  */
 
 import {
@@ -204,9 +207,14 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
         body,
       });
 
+      // Security M5: filter runner response headers on the tunnel path too —
+      // not just direct HTTP. The tunnel is the primary transport whenever the
+      // runner is connected, so leaving it unfiltered let a malicious runner
+      // set `Set-Cookie` / `Access-Control-*` / security-policy headers on the
+      // central server's origin for the requesting user's browser.
       return new Response(tunnelResp.body, {
         status: tunnelResp.status,
-        headers: new Headers(tunnelResp.headers),
+        headers: filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
       });
     } catch (tunnelErr) {
       // On timeout, the runner already received the request and may still be

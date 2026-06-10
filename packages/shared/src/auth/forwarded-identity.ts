@@ -13,6 +13,23 @@
  * makes every signed request unique (so legitimate parallel requests in the
  * same millisecond don't collide), and the replay cache keyed on the nonce
  * rejects exact replays inside the skew window.
+ *
+ * Trust boundary — IMPORTANT. The HMAC key IS the shared secret
+ * (`RUNNER_AUTH_SECRET`). So the signature only proves the sender HOLDS the
+ * secret; it does NOT distinguish the server from a runner. Anyone holding
+ * the secret (the server, OR any runner provisioned with it) can mint a valid
+ * signature for an arbitrary `userId`. The signature therefore protects only
+ * against callers WITHOUT the secret (e.g. a browser hitting a runner's HTTP
+ * port directly). In a multi-runner deployment where every runner shares one
+ * `RUNNER_AUTH_SECRET`, a malicious/compromised runner can impersonate any
+ * user against another runner's directly-reachable HTTP port. Mitigations:
+ * keep runners on the WS tunnel (their HTTP port defaults to loopback under
+ * WS_TUNNEL_ONLY) and isolate runners from each other at the network layer.
+ *
+ * This is an ACCEPTED limitation of the shared-secret model, not a pending fix
+ * — see the "Cross-runner trust boundary" note in INSTALL.md. A hard
+ * cryptographic boundary would require per-runner signing keys (e.g. the
+ * per-runner bearer token) or asymmetric signing; funny does not implement it.
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';

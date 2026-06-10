@@ -113,6 +113,20 @@ export async function getRunnerForThread(
 }
 
 /**
+ * Whether `threadId` is owned by `userId`. Used to gate runner-reported side
+ * effects (status updates, terminal/orchestrator events) so a runner can only
+ * act on threads belonging to its own owner — the relay target check alone
+ * (`allowRunnerEvent`) does not validate the nested `event.threadId`.
+ */
+export async function threadBelongsToUser(threadId: string, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: threads.id })
+    .from(threads)
+    .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
+  return rows.length > 0;
+}
+
+/**
  * Update thread status (called when runner reports agent status changes).
  */
 export async function updateThreadStatus(

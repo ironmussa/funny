@@ -11,6 +11,7 @@ import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { requirePickerPath } from '../../utils/path-scope.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { validate, cloneRepoSchema } from '../../validation/schemas.js';
 import { githubApiFetch, resolveGithubToken } from './helpers.js';
@@ -115,6 +116,12 @@ repoRoutes.post('/clone', async (c) => {
     );
   }
 
+  // Security: constrain the clone destination to the same $HOME-minus-
+  // credential-dirs picker scope every other path-taking endpoint enforces,
+  // instead of allowing a write into any runner-writable directory.
+  const denied = await requirePickerPath(parentDir);
+  if (denied) return denied;
+
   // Derive repo name from URL if not provided
   const repoName =
     name ||
@@ -207,6 +214,25 @@ repoRoutes.post('/clone', async (c) => {
         c,
         err(processError(`Clone failed: ${errorMsg}`, proc.exitCode ?? 1, errorMsg)),
       );
+    }
+
+    // Security: when a token was injected into the clone URL, git persists the
+    // full `https://x-access-token:<token>@github.com/...` URL in
+    // <repo>/.git/config under [remote "origin"]. Reset the remote to the
+    // clean URL so the PAT is not left on disk for every later process/agent
+    // that reads the repo's git config.
+    if (authenticatedUrl !== cloneUrl) {
+      const reset = Bun.spawn(['git', '-C', clonePath, 'remote', 'set-url', 'origin', cloneUrl], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      await reset.exited;
+      if (reset.exitCode !== 0) {
+        log.warn('Failed to strip credential from cloned repo remote', {
+          namespace: 'github',
+          clonePath,
+        });
+      }
     }
 
     emitProgress({ phase: 'Clone complete', percent: 100 });

@@ -39,3 +39,34 @@ export function findDuplicateSecretPairs(
   }
   return duplicates;
 }
+
+/**
+ * Minimum acceptable length for a shared secret. `RUNNER_AUTH_SECRET` is the
+ * HMAC key for forwarded-identity signing — a weak/guessable value lets a
+ * caller forge `X-Forwarded-User` for any user (including admin) against a
+ * runner's HTTP port. `openssl rand -hex 32` yields 64 chars; we accept down
+ * to 32 to allow base64/other encodings while still rejecting obviously weak
+ * values like `secret` or `changeme`.
+ */
+export const MIN_SECRET_LENGTH = 32;
+
+/**
+ * Returns the names of any provided secrets that are set but shorter than
+ * `MIN_SECRET_LENGTH`. Empty array means all present secrets meet the bar.
+ */
+export function findWeakSecrets(
+  secrets: Partial<Record<SecretName, string | undefined>>,
+): SecretName[] {
+  return (
+    [
+      ['RUNNER_AUTH_SECRET', secrets.RUNNER_AUTH_SECRET],
+      ['INGEST_WEBHOOK_SECRET', secrets.INGEST_WEBHOOK_SECRET],
+      ['ORCHESTRATOR_AUTH_SECRET', secrets.ORCHESTRATOR_AUTH_SECRET],
+    ] as const
+  )
+    .filter(
+      (entry): entry is [SecretName, string] =>
+        typeof entry[1] === 'string' && entry[1].length > 0 && entry[1].length < MIN_SECRET_LENGTH,
+    )
+    .map((entry) => entry[0]);
+}

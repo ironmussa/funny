@@ -1208,6 +1208,56 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    // Agent watchers (deferred-wake "snooze"): a durable scheduled wake an
+    // agent registers via the funny_watch tool. `next_wake_at`/`deadline` are
+    // epoch-ms so the due-time scanner can compare with `<=`. The
+    // (status, next_wake_at) index serves listDue(); (thread_id, key) serves
+    // the idempotent createOrReschedule lookup.
+    name: '057_watchers',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS watchers (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          label TEXT NOT NULL,
+          next_wake_at INTEGER NOT NULL,
+          last_delay_ms INTEGER NOT NULL DEFAULT 0,
+          wake_count INTEGER NOT NULL DEFAULT 0,
+          max_wakes INTEGER NOT NULL DEFAULT 20,
+          deadline INTEGER,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_watchers_due
+        ON watchers (status, next_wake_at)
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_watchers_thread_key
+        ON watchers (thread_id, key)
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_watchers_user
+        ON watchers (user_id)
+      `);
+    },
+  },
+  {
+    // Per-user persisted selection of which built-in ACP providers are active in
+    // the model picker (provider-toggle persistence). JSON array of enabled ids;
+    // NULL = no override (all built-ins active — the FUNNY_PROVIDERS default).
+    // The runner reads this on startup and reconciles its in-memory registry so
+    // a user's toggles survive a runner restart.
+    name: '058_user_profiles_active_builtin_providers',
+    async up() {
+      await ctx().addColumn('user_profiles', 'active_builtin_providers', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

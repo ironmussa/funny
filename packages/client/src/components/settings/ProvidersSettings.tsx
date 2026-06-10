@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { systemApi, type AdvertisedProvider } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
@@ -91,7 +92,7 @@ export function ProvidersSettings() {
         // the next runner heartbeat.
         setActiveBuiltins(result.value.active);
         toast.success(`${enable ? 'Enabled' : 'Disabled'} ${id}`, {
-          description: 'Session only — set FUNNY_PROVIDERS on the runner to persist.',
+          description: 'Saved — your selection is restored when the runner restarts.',
         });
       } else {
         toast.error(`${enable ? 'Enable' : 'Disable'} failed`, {
@@ -180,11 +181,12 @@ export function ProvidersSettings() {
         <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Built-in providers
         </h4>
-        <span className="text-muted-foreground text-[11px]">session toggle</span>
+        <span className="text-muted-foreground text-[11px]">saved selection</span>
       </div>
       <p className="text-muted-foreground px-1 pb-2 text-[11px]">
-        Enable or disable bundled ACP providers in the model picker. Resets on runner restart — set{' '}
-        <code>FUNNY_PROVIDERS</code> on the runner to make a lean set the default.
+        Enable or disable bundled ACP providers in the model picker. Your selection is saved and
+        restored when the runner restarts. Set <code>FUNNY_PROVIDERS</code> on the runner to change
+        the built-in default.
       </p>
       <div className="mb-4 flex flex-col gap-2">
         {BUILTIN_ACP.map(({ id, label }) => {
@@ -207,15 +209,13 @@ export function ProvidersSettings() {
                   {active ? 'Active in the model picker' : 'Hidden from the model picker'}
                 </p>
               </div>
-              <Button
-                variant={active ? 'ghost' : 'default'}
-                size="sm"
-                onClick={() => void handleToggleBuiltin(id, !active)}
+              <Switch
+                checked={active}
+                onCheckedChange={(next) => void handleToggleBuiltin(id, next)}
                 disabled={togglingBuiltin === id}
+                aria-label={`${active ? 'Disable' : 'Enable'} ${label}`}
                 data-testid={`builtin-toggle-${id}`}
-              >
-                {togglingBuiltin === id ? '…' : active ? 'Disable' : 'Enable'}
-              </Button>
+              />
             </div>
           );
         })}

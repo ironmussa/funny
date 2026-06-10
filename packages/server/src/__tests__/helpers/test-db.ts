@@ -179,6 +179,7 @@ export function createTestDb() {
       git_name TEXT,
       git_email TEXT,
       provider_keys TEXT,
+      active_builtin_providers TEXT,
       runner_invite_token TEXT,
       runner_invite_token_expires_at TEXT,
       runner_invite_token_used_at TEXT,

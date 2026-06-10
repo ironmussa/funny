@@ -574,6 +574,34 @@ export interface WSWorktreeSetupData {
   error?: string;
 }
 
+// ─── Agent watchers (deferred-wake "snooze") ─────────────────────────────────
+
+export type WatcherStatus = 'pending' | 'fired' | 'done' | 'cancelled' | 'expired';
+
+export interface Watcher {
+  id: string;
+  threadId: string;
+  userId: string;
+  /** Stable dedupe key per logical thing the agent is watching. */
+  key: string;
+  label: string;
+  /** Epoch-ms when the watcher next fires. */
+  nextWakeAt: number;
+  /** The most recent delay the agent requested, in ms (for display). */
+  lastDelayMs: number;
+  wakeCount: number;
+  maxWakes: number;
+  /** Epoch-ms hard lifetime ceiling; null = no deadline. */
+  deadline: number | null;
+  status: WatcherStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WSWatcherData {
+  watcher: Watcher;
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -590,6 +618,11 @@ export type WSEvent =
   | { type: 'automation:run_started'; threadId: string; data: WSAutomationRunStartedData }
   | { type: 'automation:run_completed'; threadId: string; data: WSAutomationRunCompletedData }
   | { type: 'automation:run_updated'; threadId: string; data: WSAutomationRunUpdatedData }
+  | { type: 'watcher:created'; threadId: string; data: WSWatcherData }
+  | { type: 'watcher:fired'; threadId: string; data: WSWatcherData }
+  | { type: 'watcher:rescheduled'; threadId: string; data: WSWatcherData }
+  | { type: 'watcher:completed'; threadId: string; data: WSWatcherData }
+  | { type: 'watcher:cancelled'; threadId: string; data: WSWatcherData }
   | { type: 'git:status'; threadId: string; data: WSGitStatusData }
   | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }

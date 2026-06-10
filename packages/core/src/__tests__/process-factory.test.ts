@@ -189,4 +189,16 @@ describe('enable / disable built-in providers (lean-core live toggle)', () => {
     expect(enableBuiltinProvider('claude')).toBe(false);
     expect(disableBuiltinProvider('not-a-provider')).toBe(false);
   });
+
+  test('disable is idempotent for a known built-in already gated off (no spurious 400)', () => {
+    // First disable removes it; a second disable on the same known id must still
+    // succeed (true) instead of reporting "not a built-in". The toggle route
+    // maps a false here to a 400, so this guards that regression.
+    expect(disableBuiltinProvider('cursor')).toBe(true);
+    expect(getActiveBuiltinProviders()).not.toContain('cursor');
+    expect(disableBuiltinProvider('cursor')).toBe(true);
+
+    // Restore for any later tests sharing the module-global registry.
+    enableBuiltinProvider('cursor');
+  });
 });

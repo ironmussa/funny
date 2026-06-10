@@ -190,11 +190,25 @@ export function registerSystemRoutes(app: Hono): void {
       ? agents.enableBuiltinProvider(body.id)
       : agents.disableBuiltinProvider(body.id);
     if (!ok) return c.json({ ok: false, error: `${body.id} is not a built-in ACP provider` }, 400);
+    const active = agents.getActiveBuiltinProviders();
+    // Persist the selection per-user so it survives a runner restart
+    // (provider-toggle persistence). Best-effort: a standalone runner with no
+    // server connection keeps the previous session-only behavior.
+    try {
+      const { remoteSetActiveBuiltinProviders } = await import('../services/team-client.js');
+      await remoteSetActiveBuiltinProviders(active);
+    } catch (err) {
+      log.warn('Failed to persist built-in provider selection', {
+        namespace: 'provider-install',
+        id: body.id,
+        error: (err as Error).message,
+      });
+    }
     log.info(`built-in provider ${enable ? 'enabled' : 'disabled'}`, {
       namespace: 'provider-install',
       id: body.id,
     });
-    return c.json({ ok: true, id: body.id, active: agents.getActiveBuiltinProviders() });
+    return c.json({ ok: true, id: body.id, active });
   };
 
   app.post('/api/system/providers/enable-builtin', (c) => toggleBuiltin(c, true));

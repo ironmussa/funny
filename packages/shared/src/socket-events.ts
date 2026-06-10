@@ -110,6 +110,8 @@ export const RUNNER_DATA_EVENTS = [
   'data:create_permission_rule',
   'data:find_permission_rule',
   'data:list_permission_rules',
+  'data:get_builtin_providers',
+  'data:set_builtin_providers',
 ] as const;
 
 export type RunnerDataEvent = (typeof RUNNER_DATA_EVENTS)[number];

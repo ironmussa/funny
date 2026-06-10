@@ -553,6 +553,40 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
   });
 
+  test('builtin providers default to null (no override)', async () => {
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_builtin_providers',
+    });
+
+    expect(res.type).toBe('data:get_builtin_providers_response');
+    expect(res.active).toBeNull();
+  });
+
+  test('set_builtin_providers persists selection and survives reload', async () => {
+    const setRes = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:set_builtin_providers',
+      active: ['codex', 'gemini'],
+    });
+    expect(setRes).toEqual({ type: 'data:ack', success: true });
+
+    // A second handler call simulates the runner fetching on startup after a
+    // restart — the selection must come back instead of defaulting to all-on.
+    const getRes = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_builtin_providers',
+    });
+    expect(getRes.type).toBe('data:get_builtin_providers_response');
+    expect(getRes.active).toEqual(['codex', 'gemini']);
+  });
+
+  test('rejects set_builtin_providers for runner with no owning user', async () => {
+    const res = await handleDataMessageWithAck('runner-1', null, {
+      type: 'data:set_builtin_providers',
+      active: ['codex'],
+    });
+
+    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+  });
+
   test('get_provider_key returns provider secret', async () => {
     await upsertProfile('user-1', { providerKey: { id: 'minimax', value: 'mm-key' } });
 

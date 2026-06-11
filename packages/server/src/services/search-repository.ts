@@ -3,13 +3,16 @@
  * Supports FTS5 (SQLite), tsvector (PostgreSQL), and LIKE fallback.
  */
 
-import { eq, and, like } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 
 import { db, dbAll, dbDialect, schema } from '../db/index.js';
 
 function escapeLike(value: string): string {
-  return value.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  // Escape the LIKE wildcards (`%`, `_`) and the escape char itself. Must be
+  // paired with an `ESCAPE '\'` clause on the LIKE, otherwise the backslash is
+  // taken literally and `apply_patch` would never match.
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
 function escapeFts5Query(value: string): string {
@@ -149,7 +152,7 @@ async function searchViaLike(
 
   // SQL `LIKE` semantics differ across drivers (SQLite ASCII-insensitive, PG case-sensitive).
   // We use it as a coarse filter and apply the exact case-sensitivity rule in JS below.
-  const filters: ReturnType<typeof eq>[] = [like(schema.messages.content, `%${safeQuery}%`)];
+  const filters: SQL[] = [sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`];
 
   filters.push(eq(schema.threads.userId, userId));
   if (projectId) {

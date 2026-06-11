@@ -9,6 +9,7 @@ import {
   fetchRemote,
   getPRForBranch,
   git,
+  invalidateStatusCache,
   type BranchPRInfo,
   type GitIdentityOptions,
 } from '@funny/core/git';
@@ -135,8 +136,11 @@ export function invalidateGitStatusCacheByProject(projectId: string) {
 /**
  * Throttled background `git fetch`. Returns immediately; the network fetch runs
  * detached so /api/git/status responses aren't blocked by remote round-trips.
- * On completion, the per-project bulk cache is invalidated so the next status
- * call recomputes `unpulledCommitCount` against the freshly updated refs.
+ * On completion, BOTH the per-project bulk cache and the core cwd-keyed summary
+ * cache are invalidated so the next status call recomputes `unpulledCommitCount`
+ * against the freshly updated refs, then `onFetched` fires so the caller can
+ * broadcast the recomputed status over WS — otherwise the incoming-commit badge
+ * only appears on a later manual refresh (the fetch landed after the response).
  *
  * Returns true when a fetch was scheduled, false when the throttle window
  * suppressed it. Callers don't need to await — the caller has already moved on.
@@ -146,6 +150,7 @@ export function scheduleBackgroundFetch(
   projectPath: string,
   identity: GitIdentityOptions | undefined,
   attrs?: Record<string, string | number | boolean>,
+  onFetched?: () => void | Promise<void>,
 ): boolean {
   const lastFetch = _lastFetchTs.get(projectId) ?? 0;
   if (Date.now() - lastFetch <= FETCH_THROTTLE_MS) return false;
@@ -158,6 +163,16 @@ export function scheduleBackgroundFetch(
     () => {
       span.end('ok');
       _gitStatusCache.delete(projectId);
+      // The fetch advanced origin refs; drop the cwd-keyed summary too so the
+      // broadcast recompute below sees the new `unpulledCommitCount`.
+      invalidateStatusCache(projectPath);
+      void Promise.resolve(onFetched?.()).catch((err) => {
+        log.warn('Background fetch onFetched callback failed', {
+          namespace: 'git-service',
+          projectId,
+          error: String(err),
+        });
+      });
     },
     (error) => {
       span.end('error', error.message);

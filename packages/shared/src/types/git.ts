@@ -76,6 +76,17 @@ export interface WSGitStatusData {
   statuses: GitStatusInfo[];
 }
 
+/**
+ * Emitted when a background `git fetch` lands and the remote-tracking refs may
+ * have advanced (so `unpulledCommitCount` could have changed). Carries no
+ * computed status — it's a hint for the client to re-fetch git status through
+ * the normal (now cache-fresh) path, picking up any incoming commits without a
+ * second manual refresh.
+ */
+export interface WSGitRefsUpdatedData {
+  projectId: string;
+}
+
 // ─── Merge Agent ─────────────────────────────────────────
 
 export interface MergeProgress {

@@ -24,6 +24,7 @@ import { startSpan } from '../../lib/telemetry.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { resolveIdentity } from '../../services/git-service.js';
 import * as tm from '../../services/thread-manager.js';
+import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { computeBranchKey } from '../../utils/git-status-helpers.js';
 import { resultToResponse } from '../../utils/result-response.js';
@@ -83,7 +84,17 @@ statusRoutes.get('/status', async (c) => {
   // accurate on the *next* request. Detached so the response isn't blocked
   // by ~1s remote round-trips per project. Throttled per-project; on success
   // the bulk-status cache is invalidated so the next call sees fresh refs.
-  scheduleBackgroundFetch(projectId, project.path, identity ?? undefined);
+  // On completion, hint the client to re-fetch the bulk status through its
+  // normal (now cache-fresh) path so newly-pushed origin commits surface
+  // without a second manual refresh. The bulk recompute is heavy (all threads +
+  // PR lookups), so we send a lightweight hint rather than recompute here.
+  scheduleBackgroundFetch(projectId, project.path, identity ?? undefined, undefined, () => {
+    wsBroker.emitToUser(userId, {
+      type: 'git:refs-updated',
+      threadId: '',
+      data: { projectId },
+    });
+  });
 
   // Collect unique branches for batch PR lookup (deduplicate across all thread types)
   const uniqueBranches = new Set<string>();
@@ -380,9 +391,18 @@ statusRoutes.get('/project/:projectId/status', async (c) => {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
 
-  // Background fetch so unpulledCommitCount is fresh on next request.
+  // Background fetch so unpulledCommitCount is fresh on next request. On
+  // completion, hint the client to re-fetch the project status (the project-mode
+  // slice uses `fetchProjectStatus`, not the WS `git:status` path) so incoming
+  // commits surface without a second manual refresh.
   const identity = await resolveIdentity(userId);
-  scheduleBackgroundFetch(projectId, cwd, identity ?? undefined);
+  scheduleBackgroundFetch(projectId, cwd, identity ?? undefined, undefined, () => {
+    wsBroker.emitToUser(userId, {
+      type: 'git:refs-updated',
+      threadId: '',
+      data: { projectId },
+    });
+  });
 
   const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
   const summaryResult = await getStatusSummary(cwd);
@@ -464,9 +484,6 @@ statusRoutes.get('/:threadId/status', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  // Background fetch so unpulledCommitCount is fresh on next request.
-  scheduleBackgroundFetch(thread.projectId, project.path, identity ?? undefined, { threadId });
-
   const cwd = thread.worktreePath || project.path;
   const summarySpan = requestSpan(c, 'git.status_summary', { threadId });
   const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path);
@@ -487,6 +504,27 @@ statusRoutes.get('/:threadId/status', async (c) => {
     state: deriveGitSyncState(summary),
     ...summary,
   };
+
+  // Background fetch so unpulledCommitCount reflects newly-pushed origin commits.
+  // The fetch lands AFTER this response; on completion, hint the client to
+  // re-fetch through its normal (now cache-fresh) path so the incoming-commit
+  // badge surfaces without a second manual refresh. Consistent with the bulk and
+  // project routes — the client's `git:refs-updated` handler refetches the active
+  // thread, project, and bulk slices, and the store's staleness guard prevents a
+  // late stale response from clobbering the fresh one.
+  scheduleBackgroundFetch(
+    thread.projectId,
+    project.path,
+    identity ?? undefined,
+    { threadId },
+    () => {
+      wsBroker.emitToUser(userId, {
+        type: 'git:refs-updated',
+        threadId,
+        data: { projectId: thread.projectId },
+      });
+    },
+  );
 
   if (prInfo === undefined && branchForPR) {
     schedulePRLookup({

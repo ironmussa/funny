@@ -167,6 +167,7 @@ export type {
   GitSyncState,
   GitStatusInfo,
   WSGitStatusData,
+  WSGitRefsUpdatedData,
   MergeProgress,
   GitWorkflowAction,
   GitWorkflowRequest,
@@ -653,6 +654,7 @@ export type WSEvent =
   | { type: 'job:killed'; threadId: string; data: WSJobData }
   | { type: 'job:cancelled'; threadId: string; data: WSJobData }
   | { type: 'git:status'; threadId: string; data: WSGitStatusData }
+  | { type: 'git:refs-updated'; threadId: string; data: WSGitRefsUpdatedData }
   | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }
   | { type: 'pty:error'; threadId: string; data: WSPtyErrorData }
@@ -836,7 +838,11 @@ import type {
   WSBrowserSessionErrorData,
   WSBrowserSessionClosedData,
 } from './types/browser-session.js';
-import type { WSGitStatusData, WSGitWorkflowProgressData } from './types/git.js';
+import type {
+  WSGitStatusData,
+  WSGitRefsUpdatedData,
+  WSGitWorkflowProgressData,
+} from './types/git.js';
 import type {
   WSPipelineRunStartedData,
   WSPipelineStageUpdateData,

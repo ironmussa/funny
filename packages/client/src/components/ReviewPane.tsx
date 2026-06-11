@@ -243,6 +243,23 @@ export function ReviewPane() {
     handleOpenDirectory,
   } = review;
 
+  // The toolbar's ⟳ button: `refresh` (from the review hook) only reloads the
+  // file diffs — it does NOT re-fetch the unpushed/unpulled counts. So the sync
+  // badges stay a stale snapshot (e.g. unpushed shows 5 but unpulled stays 0
+  // even after origin advanced). Compose a refresh that ALSO force-fetches git
+  // status so clicking refresh updates the badges, mirroring what pull/fetch do.
+  const refreshAll = useCallback(async () => {
+    const gitStore = useGitStatusStore.getState();
+    if (effectiveThreadId) {
+      void gitStore.fetchForThread(effectiveThreadId, true);
+      if (threadProjectId) void gitStore.fetchForProject(threadProjectId, true);
+    } else if (projectModeId) {
+      void gitStore.fetchProjectStatus(projectModeId, true);
+      void gitStore.fetchForProject(projectModeId, true);
+    }
+    await refresh();
+  }, [effectiveThreadId, projectModeId, threadProjectId, refresh]);
+
   // ── Sync active sub-tab with URL query param ──
   const setReviewSubTab = useCallback(
     (tab: ReviewSubTab) => {
@@ -405,7 +422,7 @@ export function ReviewPane() {
             testIdPrefix: 'review-file-filter',
           }}
           toolbar={{
-            refresh,
+            refresh: refreshAll,
             loading,
             handlePull,
             handleFetchOrigin,

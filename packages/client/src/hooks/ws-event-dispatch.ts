@@ -400,6 +400,27 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       });
       break;
     }
+    case 'git:refs-updated': {
+      // A background `git fetch` advanced the remote-tracking refs (origin may
+      // have new commits). Re-fetch status through the normal — now cache-fresh
+      // — path so the incoming-commit count surfaces without a second manual
+      // refresh. The store's staleness guard keeps a late stale response from
+      // overwriting this fresh one.
+      //
+      // We refetch all three slices because only ONE status route wins the
+      // per-project fetch throttle, and we can't know which: the thread route
+      // pushes the active thread via `git:status` directly, but if the project
+      // or bulk route won instead, the active thread badge would never update.
+      // So force-refetch the active thread here too (cheap, ≤once/30s/project).
+      const gitStore = useGitStatusStore.getState();
+      // Clear cooldowns so the bulk sidebar refetch isn't swallowed by its window.
+      invalidateCooldownsForKeys([data.projectId]);
+      const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
+      if (activeThreadId) void gitStore.fetchForThread(activeThreadId, true); // thread-mode pane
+      void gitStore.fetchProjectStatus(data.projectId, true); // project-mode pane slice
+      void gitStore.fetchForProject(data.projectId); // sidebar bulk badges
+      break;
+    }
     case 'git:workflow_progress': {
       handleGitWorkflowProgress(threadId, data);
       break;
@@ -664,6 +685,7 @@ const ALL_EVENT_TYPES = [
   'thread:comment_deleted',
   'thread:updated',
   'git:status',
+  'git:refs-updated',
   'git:workflow_progress',
   'thread:event',
   'pty:data',

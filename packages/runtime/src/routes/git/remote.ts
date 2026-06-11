@@ -10,6 +10,7 @@ import {
   pull,
   fetchRemote,
   getRemoteUrl,
+  invalidateStatusCache,
   listGitHubOrgs,
   publishRepo,
   setOrigin,
@@ -48,6 +49,10 @@ remoteRoutes.post('/project/:projectId/push', async (c) => {
   const identity = await resolveIdentity(userId);
   const result = await push(cwdResult.value, identity);
   if (result.isErr()) return resultToResponse(c, result);
+  // Invalidate BOTH caches: the bulk per-project HTTP cache AND the core
+  // cwd-keyed summary cache (1s TTL) — otherwise an immediate post-push
+  // status recompute can return a stale unpushed count.
+  invalidateStatusCache(cwdResult.value);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
@@ -68,6 +73,7 @@ remoteRoutes.post('/project/:projectId/push-branch', async (c) => {
     parsed.value.branch,
   );
   if (result.isErr()) return resultToResponse(c, result);
+  invalidateStatusCache(cwdResult.value);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
@@ -167,6 +173,9 @@ remoteRoutes.post('/project/:projectId/pull', async (c) => {
   const identity = await resolveIdentity(userId);
   const result = await pull(cwdResult.value, parsed.value.strategy, identity);
   if (result.isErr()) return resultToResponse(c, result);
+  // Pull advanced HEAD and the origin ref — drop the stale cwd-keyed summary so
+  // the unpulled badge clears on the very next status read instead of lingering.
+  invalidateStatusCache(cwdResult.value);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
 });
@@ -181,6 +190,9 @@ remoteRoutes.post('/project/:projectId/fetch', async (c) => {
   const identity = await resolveIdentity(userId);
   const result = await fetchRemote(cwdResult.value, identity);
   if (result.isErr()) return resultToResponse(c, result);
+  // Fetch refreshed the origin tracking ref — drop the stale cwd-keyed summary
+  // so unpulledCommitCount is recomputed against the new ref immediately.
+  invalidateStatusCache(cwdResult.value);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
@@ -199,6 +211,7 @@ remoteRoutes.post('/:threadId/push', async (c) => {
     span.end('error', result.error.message);
     return resultToResponse(c, result);
   }
+  invalidateStatusCache(cwdResult.value);
   await invalidateGitStatusCache(threadId);
   span.end('ok');
   return c.json({ ok: true, output: result.value });
@@ -215,6 +228,7 @@ remoteRoutes.post('/:threadId/push-branch', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const result = await gitServicePushBranch(threadId, userId, cwdResult.value, parsed.value.branch);
   if (result.isErr()) return resultToResponse(c, result);
+  invalidateStatusCache(cwdResult.value);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
@@ -232,6 +246,7 @@ remoteRoutes.post('/:threadId/pull', async (c) => {
 
   const result = await gitServicePull(threadId, userId, cwdResult.value, parsed.value.strategy);
   if (result.isErr()) return resultToResponse(c, result);
+  invalidateStatusCache(cwdResult.value);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
@@ -246,6 +261,7 @@ remoteRoutes.post('/:threadId/fetch', async (c) => {
   const identity = await resolveIdentity(userId);
   const result = await fetchRemote(cwdResult.value, identity);
   if (result.isErr()) return resultToResponse(c, result);
+  invalidateStatusCache(cwdResult.value);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
 });

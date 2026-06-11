@@ -557,22 +557,22 @@ function GraphToolbar({
     <div className="border-sidebar-border bg-background flex items-center gap-1 border-b px-2 py-1">
       <Button
         variant="ghost"
-        size="icon"
-        className="size-6"
+        size="icon-sm"
+        className="text-muted-foreground"
         onClick={onRefresh}
         disabled={logLoading}
         data-testid="graph-refresh"
       >
-        <RefreshCw className={cn('icon-xs', logLoading && 'animate-spin')} />
+        <RefreshCw className={cn('icon-base', logLoading && 'animate-spin')} />
       </Button>
       <Button
         variant={allBranches ? 'secondary' : 'ghost'}
         size="sm"
-        className="h-6 gap-1 px-2 text-xs"
+        className="h-8 gap-1 px-2 text-xs"
         onClick={onToggleAllBranches}
         data-testid="graph-toggle-all-branches"
       >
-        <GitBranch className="icon-xs" />
+        <GitBranch className="icon-base" />
         {t('graph.allBranches', 'All branches')}
       </Button>
       <span className="text-muted-foreground ml-auto text-[10px]">

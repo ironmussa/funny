@@ -1,5 +1,5 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
-import type { PRReactionSummary } from '@funny/shared';
+import type { GitHubIssue, PRReactionSummary } from '@funny/shared';
 
 import { getServices } from '../../services/service-registry.js';
 
@@ -58,6 +58,47 @@ export async function githubGraphQL<T = any>(
   const body = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
   if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join('; '));
   return body.data as T;
+}
+
+/**
+ * Fetch repository issues via the GitHub Search API.
+ *
+ * The plain `/repos/{owner}/{repo}/issues` endpoint mixes issues and pull
+ * requests in one stream. Filtering PRs out client-side breaks pagination: on
+ * a repo with many recent PRs, an entire 30-item page can be all PRs, leaving
+ * zero issues even though closed/open issues exist further down. The Search
+ * API lets us request `type:issue` so PRs never enter the result set.
+ *
+ * Returns `null` if the GitHub request fails.
+ */
+export async function fetchRepoIssues(
+  owner: string,
+  repo: string,
+  opts: { state: string; page: number; perPage: number; token: string | null },
+): Promise<{ issues: GitHubIssue[]; hasMore: boolean } | null> {
+  const { state, page, perPage, token } = opts;
+  // `state` accepts open|closed|all — only constrain the query when it is a
+  // concrete state, mirroring the GitHub Search qualifier syntax.
+  const stateQualifier = state === 'open' || state === 'closed' ? ` state:${state}` : '';
+  const q = encodeURIComponent(`repo:${owner}/${repo} type:issue${stateQualifier}`);
+  const apiPath = `/search/issues?q=${q}&sort=created&order=desc&page=${page}&per_page=${perPage}`;
+
+  const res = token
+    ? await githubApiFetch(apiPath, token)
+    : await fetch(`${GITHUB_API}${apiPath}`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+  if (!res.ok) return null;
+
+  const body = (await res.json()) as { total_count: number; items: GitHubIssue[] };
+  const items = Array.isArray(body.items) ? body.items : [];
+  // Defensive: type:issue should already exclude PRs, but keep the guard.
+  const issues = items.filter((i) => !i.pull_request);
+  const hasMore = page * perPage < (body.total_count ?? 0);
+  return { issues, hasMore };
 }
 
 export function emptyReactions(): PRReactionSummary {

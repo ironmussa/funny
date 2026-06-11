@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
+import { fetchRepoIssues } from '../../routes/github/helpers.js';
 import { validate, cloneRepoSchema, githubPollSchema } from '../../validation/schemas.js';
 
 /**
@@ -54,6 +55,115 @@ describe('GitHub Routes', () => {
     test('handles repos with hyphens', () => {
       const result = parseGithubOwnerRepo('https://github.com/my-org/my-repo-name.git');
       expect(result).toEqual({ owner: 'my-org', repo: 'my-repo-name' });
+    });
+  });
+
+  describe('fetchRepoIssues', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function stubFetch(impl: (url: string) => { ok: boolean; body: unknown }) {
+      const calls: string[] = [];
+      vi.stubGlobal('fetch', async (url: string) => {
+        calls.push(url);
+        const { ok, body } = impl(url);
+        return {
+          ok,
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      });
+      return calls;
+    }
+
+    test('queries the Search API with type:issue so PRs cannot crowd out issues', async () => {
+      // Regression: the old `/repos/:owner/:repo/issues` endpoint mixed PRs and
+      // issues. On a repo with many recent PRs, a full page could be all PRs and
+      // the client-side filter left zero issues even though closed issues exist.
+      const calls = stubFetch(() => ({
+        ok: true,
+        body: {
+          total_count: 352,
+          items: [
+            { number: 1080, title: 'Bug A', state: 'closed', pull_request: undefined },
+            { number: 1079, title: 'Bug B', state: 'closed' },
+          ],
+        },
+      }));
+
+      const result = await fetchRepoIssues('goliiive', 'backend-v2', {
+        state: 'closed',
+        page: 1,
+        perPage: 30,
+        token: 'fake-token',
+      });
+
+      expect(calls).toHaveLength(1);
+      const url = calls[0];
+      expect(url).toContain('/search/issues');
+      // `repo:goliiive/backend-v2 type:issue state:closed` (URL-encoded)
+      expect(decodeURIComponent(url)).toContain('repo:goliiive/backend-v2 type:issue state:closed');
+      expect(result?.issues.map((i) => i.number)).toEqual([1080, 1079]);
+    });
+
+    test('computes hasMore from total_count', async () => {
+      stubFetch(() => ({
+        ok: true,
+        body: {
+          total_count: 352,
+          items: [{ number: 1, title: 'x', state: 'closed' }],
+        },
+      }));
+
+      const page1 = await fetchRepoIssues('o', 'r', {
+        state: 'closed',
+        page: 1,
+        perPage: 30,
+        token: 't',
+      });
+      expect(page1?.hasMore).toBe(true); // 1 * 30 < 352
+
+      const lastPage = await fetchRepoIssues('o', 'r', {
+        state: 'closed',
+        page: 12,
+        perPage: 30,
+        token: 't',
+      });
+      expect(lastPage?.hasMore).toBe(false); // 12 * 30 = 360 >= 352
+    });
+
+    test('defensively filters any PR that slips into the result set', async () => {
+      stubFetch(() => ({
+        ok: true,
+        body: {
+          total_count: 2,
+          items: [
+            { number: 5, title: 'real issue', state: 'open' },
+            { number: 6, title: 'sneaky pr', state: 'open', pull_request: { url: 'x' } },
+          ],
+        },
+      }));
+
+      const result = await fetchRepoIssues('o', 'r', {
+        state: 'open',
+        page: 1,
+        perPage: 30,
+        token: 't',
+      });
+      expect(result?.issues.map((i) => i.number)).toEqual([5]);
+    });
+
+    test('returns null when the GitHub request fails', async () => {
+      stubFetch(() => ({ ok: false, body: {} }));
+      const result = await fetchRepoIssues('o', 'r', {
+        state: 'open',
+        page: 1,
+        perPage: 30,
+        token: 't',
+      });
+      expect(result).toBeNull();
     });
   });
 

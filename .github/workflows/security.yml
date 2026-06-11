@@ -48,24 +48,24 @@ jobs:
         with:
           args: --severity-threshold=high --all-projects --json-file-output=snyk-report.json
 
-      # Alternative: npm audit (works even without package-lock.json)
-      - name: NPM Security Audit
-        run: |
-          # Run audit in each workspace
-          cd packages/runtime && npm audit --audit-level=moderate || true
-          cd ../client && npm audit --audit-level=moderate || true
-          cd ../..
-        continue-on-error: true
-
-      # Audit CI - stricter enforcement
-      - name: Audit dependencies with strict thresholds
-        run: npx audit-ci --moderate --package-manager auto
+      # Dependency vulnerability scan against the REAL dependency tree.
+      # This is a bun-first monorepo: bun.lock is the source of truth and
+      # `npm audit` / `audit-ci` cannot read it (they build a phantom tree from
+      # a non-existent package-lock.json and report false positives). `bun audit`
+      # audits exactly what bun installs, so it is the correct gate here.
+      #
+      # --ignore GHSA-4w7w-66w2-5vf9: vite <=6.4.1 dev-server path traversal,
+      # only reachable transitively via vitepress (docs build) which pins
+      # vite ^5 — no patched 5.x release exists. Dev/docs-build only; never
+      # shipped in the app runtime. Revisit when vitepress moves off vite 5.
+      - name: Audit dependencies (bun audit)
+        run: bun audit --audit-level=moderate --ignore GHSA-4w7w-66w2-5vf9
         continue-on-error: false # Fail the build on moderate+ vulnerabilities
 
       # Non-gating JSON report for the uploaded artifact (never fails the build).
-      - name: Generate audit-ci JSON report
+      - name: Generate bun audit JSON report
         if: always()
-        run: npx audit-ci --moderate --package-manager auto --output-format json > audit-ci-report.json || true
+        run: bun audit --json > bun-audit-report.json || true
 
       # Generate security report
       - name: Generate security summary
@@ -87,7 +87,7 @@ jobs:
           name: security-scan-results
           path: |
             snyk-report.json
-            audit-ci-report.json
+            bun-audit-report.json
           retention-days: 30
           # Snyk only writes its report when SNYK_TOKEN is set, so the files may
           # be absent — don't warn/fail the upload in that case.

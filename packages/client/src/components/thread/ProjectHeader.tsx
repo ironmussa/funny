@@ -21,7 +21,6 @@ import {
   Check,
   EllipsisVertical,
   Trash2,
-  FolderOpen,
   FolderTree,
   FlaskConical,
   Activity,
@@ -41,12 +40,10 @@ import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { DiffStats } from '@/components/DiffStats';
 import {
   Breadcrumb,
   BreadcrumbList,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -81,7 +78,7 @@ import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
-import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
@@ -754,7 +751,6 @@ export const ProjectHeader = memo(function ProjectHeader({
 
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
-  const selectProject = useProjectStore((s) => s.selectProject);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
@@ -770,10 +766,6 @@ export const ProjectHeader = memo(function ProjectHeader({
   const terminalPanelVisible = selectedProjectId
     ? (panelVisibleByProject[selectedProjectId] ?? false)
     : false;
-  const gitStatus = useGitStatusForThread(activeThreadId ?? undefined);
-  const projectGitStatus = useGitStatusStore((s) =>
-    !activeThreadId && selectedProjectId ? s.statusByProject[selectedProjectId] : undefined,
-  );
   const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
   const fetchProjectStatus = useGitStatusStore((s) => s.fetchProjectStatus);
 
@@ -783,12 +775,6 @@ export const ProjectHeader = memo(function ProjectHeader({
   const runningWithPort = tabs.filter(
     (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port,
   );
-  const effectiveGitStatus = gitStatus ?? projectGitStatus;
-  const showGitStats =
-    effectiveGitStatus &&
-    (effectiveGitStatus.linesAdded > 0 ||
-      effectiveGitStatus.linesDeleted > 0 ||
-      effectiveGitStatus.dirtyFileCount > 0);
   // Fetch git status when activeThread changes
   useEffect(() => {
     if (activeThreadId) {
@@ -897,23 +883,6 @@ export const ProjectHeader = memo(function ProjectHeader({
           )}
           <Breadcrumb className="min-w-0">
             <BreadcrumbList>
-              {project && activeThreadId && (
-                <BreadcrumbItem className="shrink-0">
-                  <BreadcrumbLink asChild>
-                    <button
-                      type="button"
-                      data-testid="header-breadcrumb-project"
-                      onClick={() => selectProject(project.id, { revealIntent: 'nearest' })}
-                      title={project.name}
-                      className="flex cursor-pointer items-center gap-1.5 text-sm"
-                    >
-                      <FolderOpen className="icon-sm text-muted-foreground shrink-0" />
-                      <span className="whitespace-nowrap">{project.name}</span>
-                    </button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-              )}
-              {project && activeThreadId && <BreadcrumbSeparator />}
               {activeThreadId && (
                 <BreadcrumbItem className="max-w-[240px] min-w-0 sm:max-w-[360px] md:max-w-[520px]">
                   {isEditingTitle ? (
@@ -956,7 +925,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                               startEditingTitle();
                             }
                           }}
-                          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text truncate text-sm font-medium"
+                          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text truncate text-sm font-medium first-letter:uppercase"
                         >
                           {activeThreadTitle}
                         </span>
@@ -1065,7 +1034,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size={showGitStats ? undefined : 'icon-sm'}
+                    size="icon-sm"
                     onClick={() =>
                       startTransition(() => {
                         if (reviewPaneOpen && rightPaneTab === 'review') {
@@ -1078,20 +1047,13 @@ export const ProjectHeader = memo(function ProjectHeader({
                       })
                     }
                     data-testid="header-toggle-review"
-                    className={`${showGitStats ? 'h-8 px-2' : ''} ${reviewPaneOpen && rightPaneTab === 'review' ? 'text-foreground' : 'text-muted-foreground'}`}
+                    className={
+                      reviewPaneOpen && rightPaneTab === 'review'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                    }
                   >
-                    {showGitStats ? (
-                      <DiffStats
-                        linesAdded={effectiveGitStatus.linesAdded}
-                        linesDeleted={effectiveGitStatus.linesDeleted}
-                        dirtyFileCount={effectiveGitStatus.dirtyFileCount}
-                        size="sm"
-                        tooltips={false}
-                        className="font-semibold"
-                      />
-                    ) : (
-                      <GitCompare className="icon-base" />
-                    )}
+                    <GitCompare className="icon-base" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('review.title')}</TooltipContent>

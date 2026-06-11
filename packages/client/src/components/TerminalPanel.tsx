@@ -626,7 +626,7 @@ export function WebTerminalTabContent({
 
   return (
     <div className={cn('absolute inset-0', active ? 'z-10' : 'z-0 invisible pointer-events-none')}>
-      <div ref={containerRef} className="bg-background size-full pl-2" />
+      <div ref={containerRef} className="bg-background size-full pt-1.5 pl-2" />
       <TerminalPhaseOverlay phase={phase} error={tabError} onRestart={handleRestart} />
     </div>
   );

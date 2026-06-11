@@ -203,13 +203,18 @@ function UserMessageContent({
           !expanded && isOverflowing && 'overflow-hidden',
           expanded && 'max-h-[40vh] overflow-y-auto',
         )}
-        style={!expanded && isOverflowing ? { maxHeight: COLLAPSED_MAX_H } : undefined}
+        style={
+          !expanded && isOverflowing
+            ? {
+                maxHeight: COLLAPSED_MAX_H,
+                WebkitMaskImage: 'linear-gradient(to bottom, black 55%, transparent)',
+                maskImage: 'linear-gradient(to bottom, black 55%, transparent)',
+              }
+            : undefined
+        }
       >
         {inlineNodes}
       </pre>
-      {isOverflowing && !expanded && (
-        <div className="from-foreground pointer-events-none absolute right-0 bottom-6 left-0 h-10 bg-linear-to-t to-transparent" />
-      )}
       {expanded && !isScrolledToBottom && (
         <div className="from-foreground pointer-events-none absolute right-0 bottom-6 left-0 h-10 bg-linear-to-t to-transparent" />
       )}

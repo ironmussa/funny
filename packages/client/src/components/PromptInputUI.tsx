@@ -1,18 +1,21 @@
-import type { AgentTemplate, ImageAttachment, QueuedMessage, Skill } from '@funny/shared';
+import type {
+  AgentTemplate,
+  GitStatusInfo,
+  ImageAttachment,
+  QueuedMessage,
+  Skill,
+  Thread,
+} from '@funny/shared';
 import { getAttachmentLimits } from '@funny/shared/models';
 import {
   ArrowUp,
-  ArrowLeft,
   Square,
   Loader2,
   Paperclip,
   Mic,
   MicOff,
   X,
-  GitBranch,
   Inbox,
-  FolderOpen,
-  Copy,
   ListOrdered,
   Pencil,
   Trash2,
@@ -62,8 +65,8 @@ import { ImageLightbox } from './ImageLightbox';
 import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
 import { PromptEditor } from './prompt-editor/PromptEditor';
 import { serializeEditorContent } from './prompt-editor/serialize';
-import { BranchPicker } from './SearchablePicker';
 import { ContextUsageRing } from './thread/ContextUsageRing';
+import { ThreadPowerline } from './ThreadPowerline';
 
 // ── Selectors ────────────────────────────────────────────────────
 
@@ -375,7 +378,12 @@ export interface PromptInputUIProps {
   activeThreadBranch?: string | null;
 
   // ── Git context display ──
-  effectiveCwd?: string;
+  /** Active thread for the powerline bar shown in the prompt footer (follow-up only). */
+  powerlineThread?: Thread;
+  powerlineProjectName?: string;
+  powerlineProjectColor?: string;
+  powerlineProjectPath?: string;
+  powerlineGitStatus?: GitStatusInfo;
 
   // ── Backlog ──
   showBacklog?: boolean;
@@ -455,13 +463,12 @@ export const PromptInputUI = memo(function PromptInputUI({
   onRuntimeChange,
   hasLauncher = false,
   selectedBranch = '',
-  followUpBranches = [],
-  followUpRemoteBranches = [],
-  followUpDefaultBranch = null,
   followUpSelectedBranch = '',
-  onFollowUpSelectedBranchChange,
-  activeThreadBranch,
-  effectiveCwd,
+  powerlineThread,
+  powerlineProjectName,
+  powerlineProjectColor,
+  powerlineProjectPath,
+  powerlineGitStatus,
   showBacklog = false,
   sendToBacklog = false,
   onSendToBacklogChange,
@@ -729,7 +736,10 @@ export const PromptInputUI = memo(function PromptInputUI({
         const mediaType = file.type as ImageAttachment['source']['media_type'];
         setImages((prev) => [
           ...prev,
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: base64 },
+          },
         ]);
         resolve();
       };
@@ -846,7 +856,12 @@ export const PromptInputUI = memo(function PromptInputUI({
         setAttachedTextFiles((prev) =>
           prev.map((f) =>
             f.mode === 'uploading' && f.name === tempKey
-              ? { mode: 'upload', name: file.name, path: uploaded.path, size: uploaded.size }
+              ? {
+                  mode: 'upload',
+                  name: file.name,
+                  path: uploaded.path,
+                  size: uploaded.size,
+                }
               : f,
           ),
         );
@@ -1275,7 +1290,10 @@ export const PromptInputUI = memo(function PromptInputUI({
                     <Input
                       value={templateVarValues[v.name] ?? v.defaultValue ?? ''}
                       onChange={(e) =>
-                        setTemplateVarValues((prev) => ({ ...prev, [v.name]: e.target.value }))
+                        setTemplateVarValues((prev) => ({
+                          ...prev,
+                          [v.name]: e.target.value,
+                        }))
                       }
                       placeholder={v.description || v.name}
                       className="h-6 w-40 text-xs"
@@ -1400,117 +1418,82 @@ export const PromptInputUI = memo(function PromptInputUI({
               </div>
             </div>
           </div>
-          {/* Separator + Bottom bar */}
-          <div className="border-border flex items-center gap-2 border-t px-2 py-1.5">
-            <div className="min-w-0 flex-1">
-              {isNewThread ? (
-                <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                  {!isScratch && (
-                    <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs">
-                      <Switch
-                        data-testid="prompt-worktree-switch"
-                        checked={createWorktree}
-                        onCheckedChange={onCreateWorktreeChange ?? (() => {})}
-                        tabIndex={-1}
-                      />
-                      <span>{t('thread.mode.worktree')}</span>
-                    </label>
-                  )}
-                  {hasLauncher && (
-                    <ModeSelect
-                      value={runtime}
-                      onChange={handleRuntimeChange}
-                      modes={RUNTIME_MODES}
+        </div>
+        {/* Bottom bar — powerline / new-thread controls + context usage. Sits
+            visually OUTSIDE the bordered prompt box. */}
+        <div className="mt-1.5 flex items-center gap-2 px-2">
+          <div className="min-w-0 flex-1">
+            {isNewThread ? (
+              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+                {!isScratch && (
+                  <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs">
+                    <Switch
+                      data-testid="prompt-worktree-switch"
+                      checked={createWorktree}
+                      onCheckedChange={onCreateWorktreeChange ?? (() => {})}
+                      tabIndex={-1}
                     />
-                  )}
-                  {showBacklog && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          data-testid="prompt-backlog-toggle"
-                          onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
-                          tabIndex={-1}
-                          className={cn(
-                            'flex items-center gap-1 pl-2 py-1 text-xs rounded transition-colors shrink-0 ml-auto',
-                            sendToBacklog
-                              ? 'bg-primary/10 text-primary'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                          )}
-                          aria-label={t('prompt.sendToBacklog')}
-                        >
-                          <Inbox className="icon-xs" />
-                          {t('prompt.backlog')}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t('prompt.sendToBacklog')}</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              ) : (
-                <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
-                  {effectiveCwd && (
-                    <span className="group/cwd text-muted-foreground flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs">
-                      <FolderOpen className="icon-xs shrink-0" />
-                      <span className="truncate font-mono">{effectiveCwd}</span>
+                    <span>{t('thread.mode.worktree')}</span>
+                  </label>
+                )}
+                {hasLauncher && (
+                  <ModeSelect
+                    value={runtime}
+                    onChange={handleRuntimeChange}
+                    modes={RUNTIME_MODES}
+                  />
+                )}
+                {showBacklog && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <button
-                        type="button"
-                        className="hover:text-foreground shrink-0 opacity-0 transition-colors group-hover/cwd:opacity-100"
-                        onClick={() => {
-                          navigator.clipboard.writeText(effectiveCwd);
-                          toast.success('Path copied');
-                        }}
+                        data-testid="prompt-backlog-toggle"
+                        onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
+                        tabIndex={-1}
+                        className={cn(
+                          'flex items-center gap-1 pl-2 py-1 text-xs rounded transition-colors shrink-0 ml-auto',
+                          sendToBacklog
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                        )}
+                        aria-label={t('prompt.sendToBacklog')}
                       >
-                        <Copy className="icon-xs" />
+                        <Inbox className="icon-xs" />
+                        {t('prompt.backlog')}
                       </button>
-                    </span>
-                  )}
-                  {(followUpBranches.length > 0 || activeThreadBranch) && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      {followUpBranches.length > 0 && (
-                        <BranchPicker
-                          branches={followUpBranches}
-                          remoteBranches={followUpRemoteBranches}
-                          defaultBranch={followUpDefaultBranch}
-                          selected={followUpSelectedBranch}
-                          onChange={onFollowUpSelectedBranchChange ?? (() => {})}
-                        />
-                      )}
-                      {activeThreadBranch && followUpBranches.length > 0 && (
-                        <ArrowLeft className="icon-xs text-muted-foreground shrink-0" />
-                      )}
-                      {activeThreadBranch && (
-                        <button
-                          type="button"
-                          data-testid="prompt-branch-readonly"
-                          className="text-muted-foreground hover:bg-muted flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
-                          onClick={() => {
-                            navigator.clipboard.writeText(activeThreadBranch);
-                            toast.success(t('prompt.branchCopied', 'Branch copied'));
-                          }}
-                        >
-                          <GitBranch className="icon-xs shrink-0" />
-                          <span className="text-foreground font-mono font-medium">
-                            {activeThreadBranch}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            {typeof contextPct === 'number' && (
-              <div className="shrink-0">
-                <ContextUsageRing
-                  pct={contextPct}
-                  usedTokens={contextUsedTokens}
-                  maxTokens={contextMaxTokens}
-                  onCompact={onCompact ? () => setCompactConfirmOpen(true) : undefined}
-                  disabled={!onCompact}
-                />
+                    </TooltipTrigger>
+                    <TooltipContent>{t('prompt.sendToBacklog')}</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            ) : (
+              <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
+                {powerlineThread && (
+                  <ThreadPowerline
+                    thread={powerlineThread}
+                    projectName={powerlineProjectName}
+                    projectColor={powerlineProjectColor}
+                    projectTooltip={powerlineProjectPath}
+                    gitStatus={powerlineGitStatus}
+                    diffStatsSize="xs"
+                    copyable
+                    data-testid="prompt-powerline"
+                  />
+                )}
               </div>
             )}
           </div>
+          {typeof contextPct === 'number' && (
+            <div className="shrink-0">
+              <ContextUsageRing
+                pct={contextPct}
+                usedTokens={contextUsedTokens}
+                maxTokens={contextMaxTokens}
+                onCompact={onCompact ? () => setCompactConfirmOpen(true) : undefined}
+                disabled={!onCompact}
+              />
+            </div>
+          )}
         </div>
       </div>
       <ConfirmDialog

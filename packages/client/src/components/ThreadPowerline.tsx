@@ -26,6 +26,13 @@ export interface ThreadPowerlineProps {
   diffStatsSize?: 'sm' | 'xs' | 'xxs';
   /** Powerline visual style — forwarded to PowerlineBar */
   variant?: PowerlineBarProps['variant'];
+  /**
+   * When true, each segment is click-to-copy: hovering swaps its icon for a copy
+   * glyph and clicking copies the segment's value (project → full path, branch →
+   * branch name, worktree → worktree path). Off by default so segments stay
+   * passive inside clickable rows (sidebar, kanban).
+   */
+  copyable?: boolean;
   /** Additional className for the outer wrapper */
   className?: string;
   'data-testid'?: string;
@@ -45,6 +52,7 @@ export function ThreadPowerline({
   gitStatus,
   diffStatsSize = 'xs',
   variant,
+  copyable = false,
   className,
   ...props
 }: ThreadPowerlineProps) {
@@ -73,6 +81,8 @@ export function ThreadPowerline({
         label: projectName,
         color: baseColor,
         tooltip: projectTooltip || projectName,
+        // Copy the full local project path when available, else the name.
+        copyValue: copyable ? projectTooltip || projectName : undefined,
       });
     }
     if (branchName) {
@@ -85,6 +95,7 @@ export function ThreadPowerline({
         label: branchName,
         color: projectName ? branchColor : baseColor,
         tooltip: branchTooltip,
+        copyValue: copyable ? branchName : undefined,
       });
     }
     if (isWorktree && worktreeBranchLabel) {
@@ -97,6 +108,8 @@ export function ThreadPowerline({
         label: worktreeBranchLabel,
         color: projectName ? worktreeColor : branchColor,
         tooltip: worktreeTooltip,
+        // Copy the full worktree path when available, else the branch label.
+        copyValue: copyable ? worktreePath || worktreeBranchLabel : undefined,
       });
     }
     return segs;
@@ -109,7 +122,9 @@ export function ThreadPowerline({
     isWorktree,
     worktreeBranchLabel,
     worktreeColor,
+    worktreePath,
     worktreePathShort,
+    copyable,
     t,
   ]);
 

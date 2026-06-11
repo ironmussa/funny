@@ -695,16 +695,14 @@ describe('GitStatusStore', () => {
       const bulkPromise = useGitStatusStore.getState().fetchForProject('p1');
 
       // WS delivers fresh behind=0 while the bulk is still in flight.
-      useGitStatusStore
-        .getState()
-        .updateFromWS([
-          makeStatus({
-            threadId: 't1',
-            branchKey: 'p1:main',
-            unpulledCommitCount: 0,
-            state: 'pushed',
-          }),
-        ]);
+      useGitStatusStore.getState().updateFromWS([
+        makeStatus({
+          threadId: 't1',
+          branchKey: 'p1:main',
+          unpulledCommitCount: 0,
+          state: 'pushed',
+        }),
+      ]);
       expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
 
       // Stale bulk (older token) lands with behind=5 — dropped by the guard.

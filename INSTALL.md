@@ -251,7 +251,7 @@ funny --team http://<central-server-ip>:3002
 
 > ⚠️ **Cross-runner trust boundary (accepted limitation).**
 >
-> All runners attached to one central server share a single `RUNNER_AUTH_SECRET`. That secret is also the HMAC key used to sign the forwarded-identity headers (`X-Forwarded-User` + `X-Forwarded-Signature`) that a runner trusts on its HTTP port. Because the signing key **is** the shared secret, the signature only proves the caller *holds the secret* — it does **not** distinguish the central server from another runner. Therefore any party holding `RUNNER_AUTH_SECRET` (the server, or any other runner, or anyone who can read a runner's `.env`) that also has **network reach to a runner's HTTP port** can forge a valid identity for any user — including admin — and drive that runner's API as them.
+> All runners attached to one central server share a single `RUNNER_AUTH_SECRET`. That secret is also the HMAC key used to sign the forwarded-identity headers (`X-Forwarded-User` + `X-Forwarded-Signature`) that a runner trusts on its HTTP port. Because the signing key **is** the shared secret, the signature only proves the caller _holds the secret_ — it does **not** distinguish the central server from another runner. Therefore any party holding `RUNNER_AUTH_SECRET` (the server, or any other runner, or anyone who can read a runner's `.env`) that also has **network reach to a runner's HTTP port** can forge a valid identity for any user — including admin — and drive that runner's API as them.
 >
 > This is an **accepted limitation** of the shared-secret model, mitigated rather than eliminated:
 >
@@ -259,7 +259,7 @@ funny --team http://<central-server-ip>:3002
 > - **Use a strong secret.** The server refuses to boot with a `RUNNER_AUTH_SECRET` shorter than 32 chars; generate it with `openssl rand -hex 32`.
 > - **Isolate runners from each other** at the network layer (per-runner VLAN/firewall) if you run multiple tenants' runners on one server, so one runner cannot reach another's port even if the secret leaks.
 >
-> If you need a hard cryptographic boundary between tenants' runners (so a compromised runner *cannot* impersonate users on another runner even with port reachability), the shared-secret model is insufficient — that requires per-runner or asymmetric signing keys, which funny does not currently implement.
+> If you need a hard cryptographic boundary between tenants' runners (so a compromised runner _cannot_ impersonate users on another runner even with port reachability), the shared-secret model is insufficient — that requires per-runner or asymmetric signing keys, which funny does not currently implement.
 
 The runner machine needs:
 

@@ -22,6 +22,7 @@ import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
+import { useGitStatusForThread } from '@/stores/git-status-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -192,6 +193,9 @@ export function usePromptInputState({
   const activeThreadModel = useThreadSelector((t) => t?.model);
   const activeThreadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
   const activeThreadBaseBranch = useThreadSelector((t) => t?.baseBranch);
+  // Full active thread + its working-tree status, for the prompt powerline bar.
+  const activeThread = useThreadSelector((t) => t);
+  const activeThreadGitStatus = useGitStatusForThread(effectiveThreadId);
   const activeThreadContextTokens = useThreadSelector(
     (t) => t?.contextUsage?.cumulativeInputTokens ?? 0,
   );
@@ -759,6 +763,8 @@ export function usePromptInputState({
 
     // Misc
     threadCwd,
+    activeThread,
+    activeThreadGitStatus,
     effectiveProject,
     effectiveThreadId,
     contextPct,

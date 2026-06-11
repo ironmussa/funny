@@ -82,15 +82,21 @@ export const Default: Story = {
   },
 };
 
-/** Follow-up prompt on an existing thread. */
+/** Follow-up prompt on an existing thread — shows the powerline bar in the footer. */
 export const FollowUp: Story = {
   args: {
     isNewThread: false,
-    effectiveCwd: '/home/user/projects/my-app',
-    activeThreadBranch: 'feature/dark-mode',
-    followUpBranches: ['main', 'develop', 'feature/dark-mode'],
     followUpSelectedBranch: 'main',
     onFollowUpSelectedBranchChange: fn(),
+    powerlineThread: {
+      id: 'thread-1',
+      mode: 'worktree',
+      branch: 'feature/dark-mode',
+      baseBranch: 'main',
+      worktreePath: '/home/user/projects/my-app-worktrees/feature-dark-mode',
+    } as ComponentProps<typeof PromptInputUI>['powerlineThread'],
+    powerlineProjectName: 'my-app',
+    powerlineProjectPath: '/home/user/projects/my-app',
   },
 };
 

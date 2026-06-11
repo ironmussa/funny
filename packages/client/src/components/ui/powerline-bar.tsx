@@ -1,4 +1,6 @@
+import { Copy } from 'lucide-react';
 import * as React from 'react';
+import { toast } from 'sonner';
 
 import { cn, ICON_SIZE } from '@/lib/utils';
 
@@ -37,6 +39,11 @@ export interface PowerlineSegmentData {
   tooltip?: string;
   /** Render the label bold to mark it as the active/current segment. */
   emphasis?: boolean;
+  /**
+   * When set, the segment becomes interactive: hovering swaps its icon for a
+   * copy glyph and clicking copies this string to the clipboard.
+   */
+  copyValue?: string;
 }
 
 export interface PowerlineBarProps {
@@ -81,6 +88,62 @@ function arrowEdgeShadow(color: string): string {
   return `drop-shadow(1px 0 0 ${darker})`;
 }
 
+function copyToClipboard(value: string) {
+  void navigator.clipboard.writeText(value);
+  toast.success('Copied to clipboard');
+}
+
+/**
+ * Renders a segment's icon. When the segment is copyable, the original icon is
+ * swapped for a {@link Copy} glyph on hover (scoped to the segment via the
+ * `group/seg` hover group).
+ */
+function SegmentIcon({
+  Icon,
+  copyable,
+  className,
+}: {
+  Icon?: React.ComponentType<{ className?: string }>;
+  copyable: boolean;
+  className: string;
+}) {
+  if (copyable) {
+    return (
+      <>
+        {Icon && (
+          <Icon className={cn(className, 'shrink-0 group-hover/seg:hidden')} aria-hidden="true" />
+        )}
+        <Copy
+          className={cn(className, 'hidden shrink-0 group-hover/seg:block', !Icon && 'block')}
+          aria-hidden="true"
+        />
+      </>
+    );
+  }
+  return Icon ? <Icon className={cn(className, 'shrink-0')} aria-hidden="true" /> : null;
+}
+
+/** Build the interaction props (click/keyboard to copy) for a copyable segment. */
+function copyInteractionProps(value: string | undefined) {
+  if (!value) return {};
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      copyToClipboard(value);
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        copyToClipboard(value);
+      }
+    },
+  };
+}
+
 export function PowerlineBar({
   segments,
   size = 'md',
@@ -116,6 +179,8 @@ export function PowerlineBar({
           const isLast = i === segments.length - 1;
           const textColor = segment.textColor || contrastText(segment.color);
           const Icon = segment.icon;
+          const copyable = !!segment.copyValue;
+          const interaction = copyInteractionProps(segment.copyValue);
 
           if (variant === 'plain') {
             return (
@@ -123,10 +188,14 @@ export function PowerlineBar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
-                      className={cn('inline-flex items-center gap-1 min-w-0 text-muted-foreground')}
+                      className={cn(
+                        'group/seg inline-flex items-center gap-1 min-w-0 text-muted-foreground',
+                        copyable && 'cursor-pointer hover:text-foreground',
+                      )}
                       data-testid={`powerline-segment-${segment.key}`}
+                      {...interaction}
                     >
-                      {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
+                      <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
                       <span
                         className={cn(
                           config.text,
@@ -158,13 +227,15 @@ export function PowerlineBar({
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      'inline-flex items-center gap-0.5 min-w-0 rounded-full',
+                      'group/seg inline-flex items-center gap-0.5 min-w-0 rounded-full',
                       config.padding,
+                      copyable && 'cursor-pointer',
                     )}
                     style={{ backgroundColor: segment.color, color: textColor }}
                     data-testid={`powerline-segment-${segment.key}`}
+                    {...interaction}
                   >
-                    {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
+                    <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
                     <span
                       className={cn(
                         config.text,
@@ -188,13 +259,17 @@ export function PowerlineBar({
                     arrow shape of the inner div, creating a visible edge
                     between segments even when they share the same color. */}
                 <div
-                  className="relative inline-flex min-w-0 shrink"
+                  className={cn(
+                    'group/seg relative inline-flex min-w-0 shrink',
+                    copyable && 'cursor-pointer',
+                  )}
                   style={{
                     zIndex: segments.length - i,
                     marginLeft: !isFirst ? `-${config.arrow}px` : undefined,
                     filter: !isLast ? arrowEdgeShadow(segment.color) : undefined,
                   }}
                   data-testid={`powerline-segment-${segment.key}`}
+                  {...interaction}
                 >
                   <div
                     className={cn(
@@ -210,7 +285,7 @@ export function PowerlineBar({
                       clipPath: `polygon(0 0, calc(100% - ${config.arrow}px) 0, 100% 50%, calc(100% - ${config.arrow}px) 100%, 0 100%)`,
                     }}
                   >
-                    {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
+                    <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
                     <span
                       className={cn(
                         config.text,

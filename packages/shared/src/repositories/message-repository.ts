@@ -9,7 +9,7 @@
  * DB-agnostic message repository. Accepts db + schema via dependency injection.
  */
 
-import { eq, and, gt, lt, asc, desc, inArray, like } from 'drizzle-orm';
+import { eq, and, gt, lt, asc, desc, inArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import type {
@@ -246,7 +246,11 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     { messageId: string; role: string; content: string; timestamp: string; snippet: string }[]
   > {
     const { threadId, query, limit = 100, caseSensitive = false } = opts;
-    const safeQuery = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    // Escape the LIKE wildcards (`%`, `_`) AND the escape char itself so a query
+    // like `apply_patch` matches a literal underscore instead of "any char".
+    // The matching `ESCAPE '\'` clause is REQUIRED — without it the backslash is
+    // treated as a literal, so `apply\_patch` would never match `apply_patch`.
+    const safeQuery = query.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
     // SQL `LIKE` semantics differ across drivers (SQLite ASCII-insensitive, PG case-sensitive).
     // We use it as a coarse filter and apply the exact case-sensitivity rule in JS below.
@@ -262,7 +266,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         .where(
           and(
             eq(schema.messages.threadId, threadId),
-            like(schema.messages.content, `%${safeQuery}%`),
+            sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`,
           ),
         )
         .orderBy(asc(schema.messages.timestamp))

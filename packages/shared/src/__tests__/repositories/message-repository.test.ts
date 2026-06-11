@@ -315,6 +315,54 @@ describe('deleteMessagesAfter', () => {
   });
 });
 
+describe('searchMessages', () => {
+  test('finds content containing a literal underscore', async () => {
+    // Regression: `_` is a LIKE wildcard. Escaping it to `\_` without an
+    // `ESCAPE '\'` clause made the DB search for a literal `apply\_patch`,
+    // which never matched, so underscore queries returned nothing.
+    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'use apply_patch here' });
+
+    const results = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    expect(results.map((r) => r.messageId)).toEqual(['m1']);
+  });
+
+  test('underscore matches only a literal underscore, not any char', async () => {
+    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'apply_patch', timestamp: ts(0) });
+    seedMessage(deps.db, { id: 'm2', role: 'assistant', content: 'applyXpatch', timestamp: ts(1) });
+
+    const results = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    expect(results.map((r) => r.messageId)).toEqual(['m1']);
+  });
+
+  test('finds content containing a literal percent sign', async () => {
+    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'load is at 50% now' });
+
+    const results = await repo.searchMessages({ threadId: 't1', query: '50%' });
+    expect(results.map((r) => r.messageId)).toEqual(['m1']);
+  });
+
+  test('case-insensitive by default', async () => {
+    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'Apply_Patch' });
+
+    const results = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    expect(results.map((r) => r.messageId)).toEqual(['m1']);
+  });
+
+  test('case-sensitive search respects exact case', async () => {
+    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'Apply_Patch' });
+
+    const insensitive = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    expect(insensitive).toHaveLength(1);
+
+    const sensitive = await repo.searchMessages({
+      threadId: 't1',
+      query: 'apply_patch',
+      caseSensitive: true,
+    });
+    expect(sensitive).toHaveLength(0);
+  });
+});
+
 describe('getThreadMessages (pagination)', () => {
   test('returns messages with hasMore flag', async () => {
     for (let i = 0; i < 5; i++) {

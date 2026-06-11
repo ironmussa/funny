@@ -19,6 +19,7 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   attachWebglRenderer,
   createResizeScheduler,
+  flushPausedRender,
   getCssVar,
   getTerminalTheme,
   getXtermModules,
@@ -143,6 +144,10 @@ export function TauriTerminalTabContent({
 
       const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {
         terminal.write(event.payload.data);
+        // Same WebGL paused-render guard as the Web PTY path: when visible but
+        // stuck paused (stale IntersectionObserver after a tab switch), force
+        // the flush so live output paints immediately.
+        if (containerRef.current?.offsetParent != null) flushPausedRender(terminal);
         useTerminalStore.getState().markAlive(id);
       });
 
@@ -357,6 +362,34 @@ export function WebTerminalTabContent({
 
     let cancelled = false;
     let cleanup: (() => void) | null = null;
+    // Coalesced repaint kick. The WebGL renderer can leave the canvas frozen
+    // on the live hot path — writes land in the buffer but the framebuffer
+    // isn't flushed until an unrelated resize/refresh (e.g. a tab switch),
+    // which is why typed input only appears after switching threads. Forcing a
+    // single refresh on the next animation frame after a write batch reflushes
+    // the canvas without per-chunk thrash.
+    //
+    // Two distinct failure modes are covered here, in order:
+    //   1. xterm's RenderService is *paused*. When the terminal sits in an
+    //      inactive dockview tab (display:none) its IntersectionObserver pauses
+    //      all rendering; after a tab/thread switch it can be left stuck paused
+    //      on a terminal that is actually visible. While paused `refresh()` is a
+    //      no-op (it only flags a pending flush), so we first drive xterm's own
+    //      un-pause path via flushPausedRender — but only when on screen, never
+    //      waking a genuinely hidden terminal.
+    //   2. Renderer is live but the canvas didn't composite the latest write
+    //      (stale framebuffer). A plain refresh reflushes it.
+    let repaintScheduled = false;
+    const scheduleRepaint = (terminal: import('@xterm/xterm').Terminal) => {
+      if (repaintScheduled) return;
+      repaintScheduled = true;
+      requestAnimationFrame(() => {
+        repaintScheduled = false;
+        if (cancelled) return;
+        if (containerRef.current?.offsetParent != null) flushPausedRender(terminal);
+        terminal.refresh(0, terminal.rows - 1);
+      });
+    };
 
     (async () => {
       const { Terminal, FitAddon, WebLinksAddon, SearchAddon, WebglAddon } =
@@ -442,6 +475,10 @@ export function WebTerminalTabContent({
         // terminal.write accepts both string and Uint8Array natively.
         // Binary chunks from the runtime hot path arrive as Uint8Array.
         terminal.write(data);
+        // Reflush the WebGL canvas after the write batch settles (see
+        // scheduleRepaint) so live output/echo paints without needing a tab
+        // switch to wake the renderer.
+        scheduleRepaint(terminal);
         // Auto-execute initial command once the shell is ready (first output = prompt)
         if (!initialCommandSentRef.current && initialCommand) {
           initialCommandSentRef.current = true;

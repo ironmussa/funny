@@ -1,10 +1,15 @@
 import { getRemoteUrl, listBranches } from '@funny/core/git';
-import type { GitHubIssue, GitHubPR, EnrichedGitHubIssue } from '@funny/shared';
+import type { GitHubPR, EnrichedGitHubIssue } from '@funny/shared';
 import { Hono } from 'hono';
 
 import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
-import { GITHUB_API, githubApiFetch, parseGithubOwnerRepo, resolveGithubToken } from './helpers.js';
+import {
+  fetchRepoIssues,
+  githubApiFetch,
+  parseGithubOwnerRepo,
+  resolveGithubToken,
+} from './helpers.js';
 
 export const issueRoutes = new Hono<HonoEnv>();
 
@@ -38,36 +43,25 @@ issueRoutes.get('/issues', async (c) => {
   const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
 
   try {
-    const apiPath = `/repos/${parsed.owner}/${parsed.repo}/issues?state=${state}&page=${page}&per_page=${perPage}&sort=created&direction=desc`;
     const resolved = await resolveGithubToken(userId);
     const token = resolved?.token ?? null;
 
-    let res: Response;
-    if (token) {
-      res = await githubApiFetch(apiPath, token);
-    } else {
-      // Public access (works for public repos, rate-limited to ~60 req/hr)
-      res = await fetch(`${GITHUB_API}${apiPath}`, {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      });
+    const result = await fetchRepoIssues(parsed.owner, parsed.repo, {
+      state,
+      page,
+      perPage,
+      token,
+    });
+    if (!result) {
+      return c.json({ error: 'GitHub API error' }, 502);
     }
 
-    if (!res.ok) {
-      const _body = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status}` }, 502);
-    }
-
-    const rawIssues = (await res.json()) as GitHubIssue[];
-    // Filter out pull requests (GitHub API returns PRs as issues too)
-    const issues = rawIssues.filter((i) => !i.pull_request);
-
-    const linkHeader = res.headers.get('Link') || '';
-    const hasMore = linkHeader.includes('rel="next"');
-
-    return c.json({ issues, hasMore, owner: parsed.owner, repo: parsed.repo });
+    return c.json({
+      issues: result.issues,
+      hasMore: result.hasMore,
+      owner: parsed.owner,
+      repo: parsed.repo,
+    });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }
@@ -118,24 +112,8 @@ issueRoutes.get('/issues-enriched', async (c) => {
 
     // Fetch issues, local branches, and open PRs in parallel
     const [issuesData, branchesResult, prsData] = await Promise.all([
-      // Issues
-      (async () => {
-        const apiPath = `/repos/${parsed.owner}/${parsed.repo}/issues?state=${state}&page=${page}&per_page=${perPage}&sort=created&direction=desc`;
-        const res = token
-          ? await githubApiFetch(apiPath, token)
-          : await fetch(`${GITHUB_API}${apiPath}`, {
-              headers: {
-                Accept: 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            });
-        if (!res.ok) return null;
-        const raw = (await res.json()) as GitHubIssue[];
-        return {
-          issues: raw.filter((i) => !i.pull_request),
-          hasMore: (res.headers.get('Link') || '').includes('rel="next"'),
-        };
-      })(),
+      // Issues (via Search API so PRs never crowd out issues)
+      fetchRepoIssues(parsed.owner, parsed.repo, { state, page, perPage, token }),
       // Local branches
       listBranches(project.path),
       // Open PRs (for linking)

@@ -787,12 +787,30 @@ export const MemoizedMessageList = memo(
               effort={msg.effort}
               timestamp={msg.timestamp}
               onClick={() => {
-                const section = scrollRef.current?.querySelector(
-                  `[data-section-msg-id="${msg.id}"]`,
-                );
-                if (section) {
-                  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                const viewport = scrollRef.current;
+                const section = viewport?.querySelector(`[data-section-msg-id="${msg.id}"]`);
+                if (!viewport || !section) return;
+
+                const viewportRect = viewport.getBoundingClientRect();
+                const sectionRect = section.getBoundingClientRect();
+                // Bring the section's top to the top of the viewport…
+                const desiredTop = viewport.scrollTop + (sectionRect.top - viewportRect.top);
+
+                // …but never scroll past the point where the real message
+                // content (everything except the sticky bottom prompt dock)
+                // still reaches the viewport bottom. Otherwise a short final
+                // section gets yanked all the way up, exposing the empty area
+                // above the pinned prompt input.
+                const content = itemContainerRef.current?.parentElement;
+                const maxUsefulTop = content
+                  ? viewport.scrollTop +
+                    (content.getBoundingClientRect().bottom - viewportRect.bottom)
+                  : desiredTop;
+
+                viewport.scrollTo({
+                  top: Math.max(0, Math.min(desiredTop, maxUsefulTop)),
+                  behavior: 'smooth',
+                });
               }}
               onImageClick={onOpenLightbox}
               onFork={onFork ? () => onFork(msg.id) : undefined}

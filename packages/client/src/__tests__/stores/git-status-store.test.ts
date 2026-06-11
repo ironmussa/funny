@@ -1,6 +1,6 @@
 import type { GitStatusInfo } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
-import { okAsync, errAsync } from 'neverthrow';
+import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/api/git', () => ({
@@ -384,6 +384,76 @@ describe('GitStatusStore', () => {
     });
   });
 
+  // ── 4b. Staleness guard (last-writer-wins race) ──────────
+  describe('staleness guard', () => {
+    test('a slow stale bulk fetch does not overwrite a fresher forced fetch', async () => {
+      // Reproduces the "pull badge stuck" bug: a bulk fetchForProject dispatched
+      // BEFORE a pull reports `unpulledCommitCount: 5`, but resolves AFTER a
+      // forced fetchForThread (dispatched post-pull) that reports 0. Without the
+      // per-key write token, the late bulk response clobbers the fresh 0 and the
+      // pull badge re-appears and sticks.
+      const staleBulk = makeStatus({
+        threadId: 't1',
+        branchKey: 'p1:main',
+        state: 'dirty',
+        unpulledCommitCount: 5,
+      });
+      const freshForced = makeStatus({
+        threadId: 't1',
+        branchKey: 'p1:main',
+        state: 'clean',
+        unpulledCommitCount: 0,
+      });
+
+      let releaseBulk!: () => void;
+      const bulkGate = new Promise<void>((r) => {
+        releaseBulk = r;
+      });
+      mockApi.getGitStatuses.mockImplementation(
+        () =>
+          ({
+            then: (onFulfilled: any, onRejected?: any) =>
+              bulkGate.then(() => okAsync({ statuses: [staleBulk] })).then(onFulfilled, onRejected),
+          }) as any,
+      );
+      mockApi.getGitStatus.mockReturnValueOnce(okAsync(freshForced) as any);
+
+      // Dispatch bulk first (token N), then the forced single (token N+1).
+      const bulkP = useGitStatusStore.getState().fetchForProject('p1');
+      const forcedP = useGitStatusStore.getState().fetchForThread('t1', true);
+
+      // Forced fetch resolves first and writes the fresh behind=0.
+      await forcedP;
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
+
+      // The stale bulk now lands — its older token must be rejected per-key.
+      releaseBulk();
+      await bulkP;
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
+    });
+
+    test('a newer fetch still overwrites an older applied value', async () => {
+      // Guard must not freeze the slice: a later-dispatched fetch wins.
+      mockApi.getGitStatus
+        .mockReturnValueOnce(
+          okAsync(
+            makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 0 }),
+          ) as any,
+        )
+        .mockReturnValueOnce(
+          okAsync(
+            makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 4 }),
+          ) as any,
+        );
+
+      await useGitStatusStore.getState().fetchForThread('t1', true);
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
+
+      await useGitStatusStore.getState().fetchForThread('t1', true);
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(4);
+    });
+  });
+
   // ── 5. clearForBranch ─────────────────────────────────────
   describe('clearForBranch', () => {
     test('removes the branch entry', () => {
@@ -558,6 +628,92 @@ describe('GitStatusStore', () => {
       invalidateCooldownsForKeys(['p1:main']);
       await useGitStatusStore.getState().fetchForProject('p1');
       expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── 10. Staleness guard (last-writer-wins race) ───────────
+  describe('staleness guard', () => {
+    /** A controllable ResultAsync that resolves only when `trigger` is called. */
+    function deferredOk<T>(): { trigger: (v: T) => void; result: ResultAsync<T, never> } {
+      let resolveFn!: (v: T) => void;
+      const p = new Promise<T>((res) => {
+        resolveFn = res;
+      });
+      return { trigger: (v) => resolveFn(v), result: ResultAsync.fromSafePromise(p) };
+    }
+
+    test('a slow bulk fetch that lands after a forced fetch cannot overwrite the fresh status', async () => {
+      // Regression for the "pull badge appeared then stuck" race: a bulk
+      // fetchForProject dispatched BEFORE a pull (carrying stale behind=2)
+      // resolves AFTER the forced fetchForThread dispatched after the pull
+      // (carrying fresh behind=0). They write the same statusByBranch['p1:main']
+      // under different abort keys, so without the seq guard the stale bulk wins.
+
+      // Bulk dispatched first, resolves last.
+      const bulk = deferredOk<{ statuses: GitStatusInfo[] }>();
+      mockApi.getGitStatuses.mockReturnValueOnce(bulk.result as any);
+
+      // Forced single fetch dispatched second, resolves immediately, behind=0.
+      const fresh = makeStatus({
+        threadId: 't1',
+        branchKey: 'p1:main',
+        state: 'pushed',
+        dirtyFileCount: 0,
+        unpushedCommitCount: 0,
+        unpulledCommitCount: 0,
+      });
+      mockApi.getGitStatus.mockReturnValueOnce(okAsync(fresh) as any);
+
+      // Dispatch order: bulk (seq 1) then forced (seq 2).
+      const bulkPromise = useGitStatusStore.getState().fetchForProject('p1');
+      await useGitStatusStore.getState().fetchForThread('t1', true);
+
+      // Forced result applied — badge cleared.
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
+
+      // Now the stale bulk lands with behind=2.
+      const stale = makeStatus({
+        threadId: 't1',
+        branchKey: 'p1:main',
+        state: 'dirty',
+        unpulledCommitCount: 2,
+      });
+      bulk.trigger({ statuses: [stale] });
+      await bulkPromise;
+
+      // Guard drops the stale write — still behind=0 (badge does NOT reappear).
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].state).toBe('pushed');
+    });
+
+    test('a fresh WS update still overrides an older in-flight bulk fetch', async () => {
+      // WS events carry the newest token, so they win over an older in-flight
+      // HTTP response that resolves afterwards.
+      const bulk = deferredOk<{ statuses: GitStatusInfo[] }>();
+      mockApi.getGitStatuses.mockReturnValueOnce(bulk.result as any);
+
+      const bulkPromise = useGitStatusStore.getState().fetchForProject('p1');
+
+      // WS delivers fresh behind=0 while the bulk is still in flight.
+      useGitStatusStore
+        .getState()
+        .updateFromWS([
+          makeStatus({
+            threadId: 't1',
+            branchKey: 'p1:main',
+            unpulledCommitCount: 0,
+            state: 'pushed',
+          }),
+        ]);
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
+
+      // Stale bulk (older token) lands with behind=5 — dropped by the guard.
+      bulk.trigger({
+        statuses: [makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 5 })],
+      });
+      await bulkPromise;
+
+      expect(useGitStatusStore.getState().statusByBranch['p1:main'].unpulledCommitCount).toBe(0);
     });
   });
 });

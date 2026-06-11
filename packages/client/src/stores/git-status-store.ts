@@ -46,7 +46,7 @@ interface GitStatusState {
   _loadingBranchKeys: Set<string>;
   _loadingProjectStatus: Set<string>;
 
-  fetchForProject: (projectId: string) => Promise<void>;
+  fetchForProject: (projectId: string, force?: boolean) => Promise<void>;
   fetchForThread: (threadId: string, force?: boolean) => Promise<void>;
   fetchProjectStatus: (projectId: string, force?: boolean) => Promise<void>;
   /** Batch-ensure git status for a list of threads, deduplicating by branchKey. */
@@ -79,6 +79,40 @@ const _abortByProject = new Map<string, AbortController>();
 const _abortByBranch = new Map<string, AbortController>();
 const _abortByProjectStatus = new Map<string, AbortController>();
 
+// ── Staleness guard ──────────────────────────────────────────
+// Abort controllers only dedupe requests sharing the SAME key, but the three
+// status paths write the same `statusByBranch[bk]` slice under DIFFERENT abort
+// keys: `fetchForThread` (branch key), `fetchForProject` (project key), and
+// `updateFromWS` (no abort). So a slow bulk fetch dispatched BEFORE a pull can
+// land AFTER a forced fetch dispatched after the pull and overwrite the fresh
+// `behind=0` with a stale `behind=N` — pinning the pull badge even though the
+// user already pulled. To prevent this last-writer-wins race, every dispatch
+// grabs a monotonically increasing token; a per-key write is dropped if a newer
+// token already wrote that key. Keyed independently for the branch + project
+// slices (they never contend with each other).
+let _statusSeq = 0;
+const _appliedSeqByBranch = new Map<string, number>();
+const _appliedSeqByProject = new Map<string, number>();
+
+/** Reserve the next write token for a freshly-dispatched status request. */
+function nextStatusSeq(): number {
+  return ++_statusSeq;
+}
+
+/** Claim a write to `statusByBranch[bk]` for `seq`; false if a newer write already landed. */
+function claimBranchWrite(bk: string, seq: number): boolean {
+  if (seq < (_appliedSeqByBranch.get(bk) ?? 0)) return false;
+  _appliedSeqByBranch.set(bk, seq);
+  return true;
+}
+
+/** Claim a write to `statusByProject[pid]` for `seq`; false if a newer write already landed. */
+function claimProjectWrite(pid: string, seq: number): boolean {
+  if (seq < (_appliedSeqByProject.get(pid) ?? 0)) return false;
+  _appliedSeqByProject.set(pid, seq);
+  return true;
+}
+
 /** @internal Clear cooldown map — only for tests */
 export function _resetCooldowns() {
   _lastFetchByProject.clear();
@@ -90,6 +124,9 @@ export function _resetCooldowns() {
   _abortByBranch.clear();
   for (const ac of _abortByProjectStatus.values()) ac.abort();
   _abortByProjectStatus.clear();
+  _statusSeq = 0;
+  _appliedSeqByBranch.clear();
+  _appliedSeqByProject.clear();
 }
 
 /**
@@ -179,11 +216,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   _loadingBranchKeys: new Set(),
   _loadingProjectStatus: new Set(),
 
-  fetchForProject: async (projectId) => {
-    // Skip if fetched recently (prevents duplicate calls during cascading state updates)
+  fetchForProject: async (projectId, force) => {
+    // Skip if fetched recently (prevents duplicate calls during cascading state
+    // updates) — unless `force`, e.g. a manual refresh that must bypass the window.
     const now = Date.now();
     const lastFetch = _lastFetchByProject.get(projectId) ?? 0;
-    if (now - lastFetch < FETCH_COOLDOWN_MS) {
+    if (!force && now - lastFetch < FETCH_COOLDOWN_MS) {
       return;
     }
     _lastFetchByProject.set(projectId, now);
@@ -200,6 +238,9 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       return { loadingProjects: next };
     });
 
+    // Token captured at dispatch — a stale response landing after a newer
+    // forced fetch is dropped per-key in `claimBranchWrite` below.
+    const seq = nextStatusSeq();
     try {
       const result = await api.getGitStatuses(projectId, ac.signal);
       if (result.isOk()) {
@@ -207,7 +248,9 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
         const updates: Record<string, GitStatusInfo> = {};
         const keyMap: Record<string, string> = {};
         for (const s of statuses) {
-          updates[s.branchKey] = s;
+          // Drop this branch's status if a newer write already landed; keep the
+          // threadId→branchKey mapping (stable, independent of staleness).
+          if (claimBranchWrite(s.branchKey, seq)) updates[s.branchKey] = s;
           keyMap[s.threadId] = s.branchKey;
         }
         set((state) => {
@@ -285,6 +328,9 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
         return { _loadingBranchKeys: next };
       });
     }
+    // Token captured at dispatch — a stale response landing after a newer
+    // write for this branch is dropped via `claimBranchWrite` below.
+    const seq = nextStatusSeq();
     try {
       const result = await api.getGitStatus(threadId, ac.signal);
       if (result.isOk()) {
@@ -294,6 +340,9 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
         // callers using either key are correctly deduped
         _lastFetchByBranch.set(key, now);
         _lastFetchByBranch.set(pendingKey, now);
+        // Drop this status if a newer write already landed for this branch
+        // (e.g. a forced post-pull fetch beat this slower one).
+        if (!claimBranchWrite(key, seq)) return;
         set((state) => {
           const statusPatch = mergeStatuses(state, { [key]: status });
           const keyChanged = state.threadToBranchKey[threadId] !== key;
@@ -339,9 +388,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       next.add(projectId);
       return { _loadingProjectStatus: next };
     });
+    // Token captured at dispatch — drop a stale response that lands after a
+    // newer forced fetch for the same project.
+    const seq = nextStatusSeq();
     try {
       const result = await api.projectGitStatus(projectId, ac.signal);
-      if (result.isOk()) {
+      if (result.isOk() && claimProjectWrite(projectId, seq)) {
         set((s) => ({ statusByProject: { ...s.statusByProject, [projectId]: result.value } }));
       }
     } finally {
@@ -370,10 +422,15 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   },
 
   updateFromWS: (statuses) => {
+    // WS events carry freshly-computed server state, so they take a new (and
+    // therefore highest-so-far) token — they win over any older in-flight HTTP
+    // response, while a later forced fetch (even higher token) can still
+    // override them.
+    const seq = nextStatusSeq();
     const updates: Record<string, GitStatusInfo> = {};
     const keyMap: Record<string, string> = {};
     for (const s of statuses) {
-      updates[s.branchKey] = s;
+      if (claimBranchWrite(s.branchKey, seq)) updates[s.branchKey] = s;
       keyMap[s.threadId] = s.branchKey;
     }
     set((state) => {

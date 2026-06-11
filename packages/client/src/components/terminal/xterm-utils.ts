@@ -75,6 +75,52 @@ export function attachWebglRenderer(
   }
 }
 
+/**
+ * Force a repaint of a terminal that is visible but whose renderer is stuck in
+ * xterm's paused state.
+ *
+ * xterm pauses ALL rendering — buffering every `write()` — whenever its internal
+ * IntersectionObserver reports the terminal's screen element as not intersecting
+ * the viewport. That is the correct state for an inactive dockview tab, which is
+ * hidden with `display:none`. Normally the observer fires again when the tab is
+ * shown and the buffered rows flush, which is why switching tabs/threads makes
+ * pending output suddenly appear.
+ *
+ * The problem (introduced with the WebGL renderer, commit c33eaada): after a
+ * tab/thread switch the observer can be left holding a stale "not intersecting"
+ * reading on a terminal that is actually on screen. While paused, `refreshRows`
+ * (and therefore `terminal.refresh()`) is a no-op that only sets a pending-flush
+ * flag — so live output and keystroke echo don't paint until the next layout
+ * change forces the observer to re-fire.
+ *
+ * Driving the RenderService's own intersection handler with `isIntersecting:true`
+ * clears `_isPaused` and flushes any buffered full refresh — the exact path xterm
+ * takes when a hidden terminal becomes visible again. Reaching into internals is
+ * a deliberate workaround for a third-party bug; every hop is optional-chained so
+ * a future xterm rename degrades to a silent no-op instead of throwing.
+ *
+ * Caller MUST ensure the terminal is genuinely on screen (`offsetParent !== null`)
+ * before calling — forcing a paint on a hidden terminal wastes work and is wrong.
+ */
+export function flushPausedRender(terminal: import('@xterm/xterm').Terminal): void {
+  const renderService = (
+    terminal as unknown as {
+      _core?: {
+        _renderService?: {
+          _isPaused?: boolean;
+          _handleIntersectionChange?: (e: {
+            isIntersecting: boolean;
+            intersectionRatio: number;
+          }) => void;
+        };
+      };
+    }
+  )._core?._renderService;
+  if (renderService?._isPaused && renderService._handleIntersectionChange) {
+    renderService._handleIntersectionChange({ isIntersecting: true, intersectionRatio: 1 });
+  }
+}
+
 export const searchAddonRegistry = new Map<string, import('@xterm/addon-search').SearchAddon>();
 export const terminalRegistry = new Map<string, import('@xterm/xterm').Terminal>();
 

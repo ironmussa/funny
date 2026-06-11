@@ -551,6 +551,27 @@ export const MemoizedMessageList = memo(
       return () => cancelAnimationFrame(rafId);
     }, [windowStart, scrollRef]);
 
+    // When the window finishes expanding (windowStart hits 0) the user may be
+    // parked at scrollTop≈0 — wheel-up at the top fires no scroll events and
+    // the rAF expansion cascade above adjusts scrollTop via drift that is often
+    // 0 (or clamped at 0), so the pagination check in MessageStream's scroll
+    // handler never re-runs. Re-dispatch a scroll event so "load older
+    // messages" triggers without requiring the user to scroll down and back up.
+    const prevWindowRef = useRef({ threadId, windowStart });
+    useEffect(() => {
+      const prev = prevWindowRef.current;
+      prevWindowRef.current = { threadId, windowStart };
+      if (prev.threadId !== threadId) return;
+      if (prev.windowStart <= 0 || windowStart !== 0) return;
+
+      const scrollEl = scrollRef.current;
+      if (!scrollEl) return;
+      const rafId = requestAnimationFrame(() => {
+        scrollEl.dispatchEvent(new Event('scroll'));
+      });
+      return () => cancelAnimationFrame(rafId);
+    }, [threadId, windowStart, scrollRef]);
+
     const renderToolItem = useCallback(
       (ti: ToolItem) => {
         if (ti.type === 'toolcall') {

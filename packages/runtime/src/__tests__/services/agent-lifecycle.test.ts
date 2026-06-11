@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
   getProviderKey: vi.fn(async () => undefined),
   getGitIdentity: vi.fn(async (): Promise<{ name: string; email: string } | null> => null),
   threadEventBusEmit: vi.fn(),
+  threadEventBusOn: vi.fn(),
   remoteGetAgentTemplate: vi.fn(),
   findPermissionRule: vi.fn(),
   runSensitivePathBypass: vi.fn(),
@@ -98,7 +99,10 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 vi.mock('../../services/thread-event-bus.js', () => ({
-  threadEventBus: { emit: (...args: unknown[]) => mocks.threadEventBusEmit(...args) },
+  threadEventBus: {
+    emit: (...args: unknown[]) => mocks.threadEventBusEmit(...args),
+    on: (...args: unknown[]) => mocks.threadEventBusOn(...args),
+  },
 }));
 
 vi.mock('../../services/team-client.js', () => ({

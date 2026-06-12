@@ -25,7 +25,7 @@ funny is a web UI for orchestrating multiple [Claude Code](https://claude.ai/cod
 No installation needed! Run directly with:
 
 ```bash
-bunx @ironmussa/funny@lastest
+bunx @ironmussa/funny@latest
 ```
 
 The app will start and open at `http://localhost:3001`

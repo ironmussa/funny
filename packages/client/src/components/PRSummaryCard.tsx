@@ -11,7 +11,6 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   Loader2,
-  RefreshCw,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -19,10 +18,8 @@ import { useEffect, useRef, useState } from 'react';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 
 const POLL_INTERVAL = 30_000;
@@ -118,20 +115,20 @@ export function ReviewDecisionBadge({ decision }: { decision: string | null }) {
   switch (decision) {
     case 'APPROVED':
       return (
-        <span className="flex items-center gap-1 text-[10px] text-green-400">
-          <CheckCircle2 className="size-3" /> Approved
+        <span className="flex items-center gap-1 text-[11px] text-green-400">
+          <CheckCircle2 className="size-3.5" /> Approved
         </span>
       );
     case 'CHANGES_REQUESTED':
       return (
-        <span className="flex items-center gap-1 text-[10px] text-red-400">
-          <AlertCircle className="size-3" /> Changes requested
+        <span className="flex items-center gap-1 text-[11px] text-red-400">
+          <AlertCircle className="size-3.5" /> Changes requested
         </span>
       );
     case 'REVIEW_REQUIRED':
       return (
-        <span className="flex items-center gap-1 text-[10px] text-yellow-400">
-          <Clock className="size-3" /> Review required
+        <span className="flex items-center gap-1 text-[11px] text-yellow-400">
+          <Clock className="size-3.5" /> Review required
         </span>
       );
     default:
@@ -144,14 +141,14 @@ export function MergeStatus({ mergeable, merged }: { mergeable: string; merged: 
   switch (mergeable) {
     case 'mergeable':
       return (
-        <span className="flex items-center gap-1 text-[10px] text-green-400">
-          <GitMerge className="size-3" /> Ready to merge
+        <span className="flex items-center gap-1 text-[11px] text-green-400">
+          <GitMerge className="size-3.5" /> Ready to merge
         </span>
       );
     case 'conflicting':
       return (
-        <span className="flex items-center gap-1 text-[10px] text-red-400">
-          <AlertCircle className="size-3" /> Merge conflicts
+        <span className="flex items-center gap-1 text-[11px] text-red-400">
+          <AlertCircle className="size-3.5" /> Merge conflicts
         </span>
       );
     default:
@@ -191,11 +188,6 @@ export function PRSummaryCard({
     };
   }, [visible, projectId, prNumber]);
 
-  const handleRefresh = () => {
-    usePRDetailStore.getState().fetchPRDetail(projectId, prNumber, true);
-    usePRDetailStore.getState().fetchPRThreads(projectId, prNumber, true);
-  };
-
   // Sort checks: failures first, then pending, then success
   const sortedChecks = detail?.checks
     ? detail.checks.toSorted((a, b) => {
@@ -223,13 +215,58 @@ export function PRSummaryCard({
   const hasMoreChecks = sortedChecks.length > MAX_VISIBLE_CHECKS;
   const totalChecks = sortedChecks.length;
 
+  // Whether <MergeStatus> renders anything (only for open, mergeable/conflicting PRs)
+  const mergeStatusVisible =
+    !!detail &&
+    !detail.merged &&
+    (detail.mergeable_state === 'mergeable' || detail.mergeable_state === 'conflicting');
+
   return (
     <div
       className="border-sidebar-border bg-muted/30 border-b px-3 py-2 text-xs"
       data-testid="pr-summary-card"
     >
-      {/* Header row: DiffStats → PRBadge → StateBadge (consistent with sidebar order) */}
-      <div className="flex items-center gap-2">
+      {/* Line 1: PR title → number → actions */}
+      <div className="flex items-start gap-2">
+        {/* Full title shown (no truncation); number flows inline after the last word */}
+        <div className="min-w-0 flex-1 text-[11px] break-words">
+          {detail ? (
+            <span className="text-foreground font-medium" data-testid="pr-summary-title">
+              {detail.title}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">PR #{prNumber}</span>
+          )}{' '}
+          <PRBadge
+            prNumber={prNumber}
+            prState={detail?.merged ? 'MERGED' : detail?.state === 'closed' ? 'CLOSED' : prState}
+            prUrl={detail?.html_url ?? prUrl}
+            size="xxs"
+            className="inline-flex align-middle"
+            data-testid="pr-summary-number"
+          />
+        </div>
+        {rateLimited && (
+          <Tooltip>
+            <TooltipTrigger>
+              <span className="shrink-0 text-[11px] text-yellow-500">Rate limited</span>
+            </TooltipTrigger>
+            <TooltipContent>GitHub API rate limit reached. Polling paused.</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+
+      {/* Line 2: state badge → diff stats → review decision */}
+      <div className="mt-1.5 flex items-center gap-2">
+        {detail ? (
+          <PRStateBadge state={detail.state} draft={detail.draft} merged={detail.merged} />
+        ) : (
+          <PRStateBadge
+            state={prState === 'CLOSED' ? 'closed' : 'open'}
+            draft={false}
+            merged={prState === 'MERGED'}
+          />
+        )}
         {detail && (
           <DiffStats
             linesAdded={detail.additions}
@@ -240,139 +277,97 @@ export function PRSummaryCard({
             tooltips
           />
         )}
-        <PRBadge
-          prNumber={prNumber}
-          prState={detail?.merged ? 'MERGED' : detail?.state === 'closed' ? 'CLOSED' : prState}
-          prUrl={detail?.html_url ?? prUrl}
-          size="xxs"
-          data-testid="pr-summary-number"
-        />
-        {detail ? (
-          <PRStateBadge state={detail.state} draft={detail.draft} merged={detail.merged} />
-        ) : (
-          <PRStateBadge
-            state={prState === 'CLOSED' ? 'closed' : 'open'}
-            draft={false}
-            merged={prState === 'MERGED'}
-          />
-        )}
-        <div className="flex-1" />
-        {rateLimited && (
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="text-[10px] text-yellow-500">Rate limited</span>
-            </TooltipTrigger>
-            <TooltipContent>GitHub API rate limit reached. Polling paused.</TooltipContent>
-          </Tooltip>
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleRefresh}
-              disabled={loadingDetail}
-              data-testid="pr-summary-refresh"
-            >
-              <RefreshCw className={cn('size-3', loadingDetail && 'animate-spin')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Refresh PR data</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <a
-              href={detail?.html_url ?? prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground"
-              data-testid="pr-summary-external-link"
-            >
-              <ExternalLink className="size-3" />
-            </a>
-          </TooltipTrigger>
-          <TooltipContent>Open on GitHub</TooltipContent>
-        </Tooltip>
+        {detail && <ReviewDecisionBadge decision={detail.review_decision} />}
       </div>
 
-      {/* PR title */}
-      {detail && (
+      {/* Merge summary: "<author> wants to merge N commits into <base> from <head>" */}
+      {detail && detail.base.ref && detail.head.ref && (
         <p
-          className="text-muted-foreground mt-1 truncate text-[11px]"
-          title={detail.title}
-          data-testid="pr-summary-title"
+          className="text-muted-foreground mt-1.5 text-[11px] break-words"
+          data-testid="pr-summary-merge-info"
         >
-          {detail.title}
+          {detail.user?.login && (
+            <span className="text-foreground font-medium">{detail.user.login}</span>
+          )}{' '}
+          wants to merge{' '}
+          <span className="text-foreground font-medium">
+            {detail.commits} {detail.commits === 1 ? 'commit' : 'commits'}
+          </span>{' '}
+          into <span className="text-foreground font-mono">{detail.base.ref}</span> from{' '}
+          <span className="text-foreground font-mono">{detail.head.ref}</span>
         </p>
       )}
 
-      {/* Status row: review decision + merge status */}
-      {detail && (
-        <div className="mt-1.5 flex items-center gap-3">
-          <ReviewDecisionBadge decision={detail.review_decision} />
-          <MergeStatus mergeable={detail.mergeable_state} merged={detail.merged} />
-        </div>
-      )}
-
-      {/* CI Checks */}
-      {detail && totalChecks > 0 && (
+      {/* Line 3: CI checks → ready to merge */}
+      {detail && (totalChecks > 0 || mergeStatusVisible) && (
         <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
-          <CollapsibleTrigger
-            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px]"
-            data-testid="pr-summary-checks-toggle"
-          >
-            {checksOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-            <span>
-              CI Checks ({detail.checks_passed}/{totalChecks} passed)
-              {detail.checks_failed > 0 && (
-                <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
-              )}
-              {detail.checks_pending > 0 && (
-                <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
-              )}
-            </span>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="mt-1 space-y-0.5 pl-4" data-testid="pr-summary-checks-list">
-              {visibleChecks.map((check) => (
-                <div key={check.id} className="flex items-center gap-1.5 text-[10px]">
-                  <CheckIcon check={check} />
-                  <span className="truncate">{check.name}</span>
-                  {check.app_name && (
-                    <span className="text-muted-foreground shrink-0">({check.app_name})</span>
+          <div className="flex items-center gap-3">
+            {totalChecks > 0 && (
+              <CollapsibleTrigger
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
+                data-testid="pr-summary-checks-toggle"
+              >
+                {checksOpen ? (
+                  <ChevronDown className="size-3.5" />
+                ) : (
+                  <ChevronRight className="size-3.5" />
+                )}
+                <span>
+                  CI Checks ({detail.checks_passed}/{totalChecks} passed)
+                  {detail.checks_failed > 0 && (
+                    <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
                   )}
-                  {check.html_url && (
-                    <a
-                      href={check.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
-                      data-testid={`pr-check-link-${check.id}`}
-                    >
-                      <ExternalLink className="size-2.5" />
-                    </a>
+                  {detail.checks_pending > 0 && (
+                    <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
                   )}
-                </div>
-              ))}
-              {hasMoreChecks && !checksOpen && (
-                <button
-                  className="text-primary text-[10px] hover:underline"
-                  onClick={() => setChecksOpen(true)}
-                  data-testid="pr-summary-show-more-checks"
-                >
-                  +{sortedChecks.length - MAX_VISIBLE_CHECKS} more
-                </button>
-              )}
-            </div>
-          </CollapsibleContent>
+                </span>
+              </CollapsibleTrigger>
+            )}
+            <MergeStatus mergeable={detail.mergeable_state} merged={detail.merged} />
+          </div>
+          {totalChecks > 0 && (
+            <CollapsibleContent>
+              <div className="mt-1 space-y-0.5 pl-4" data-testid="pr-summary-checks-list">
+                {visibleChecks.map((check) => (
+                  <div key={check.id} className="flex items-center gap-1.5 text-[11px]">
+                    <CheckIcon check={check} />
+                    <span className="truncate">{check.name}</span>
+                    {check.app_name && (
+                      <span className="text-muted-foreground shrink-0">({check.app_name})</span>
+                    )}
+                    {check.html_url && (
+                      <a
+                        href={check.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
+                        data-testid={`pr-check-link-${check.id}`}
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {hasMoreChecks && !checksOpen && (
+                  <button
+                    className="text-primary text-[11px] hover:underline"
+                    onClick={() => setChecksOpen(true)}
+                    data-testid="pr-summary-show-more-checks"
+                  >
+                    +{sortedChecks.length - MAX_VISIBLE_CHECKS} more
+                  </button>
+                )}
+              </div>
+            </CollapsibleContent>
+          )}
         </Collapsible>
       )}
 
       {/* Loading skeleton when no detail yet */}
       {!detail && loadingDetail && (
         <div className="text-muted-foreground mt-1 flex items-center gap-2">
-          <Loader2 className="size-3 animate-spin" />
-          <span className="text-[10px]">Loading PR details…</span>
+          <Loader2 className="size-3.5 animate-spin" />
+          <span className="text-[11px]">Loading PR details…</span>
         </div>
       )}
     </div>

@@ -57,9 +57,9 @@ export function ReviewChangesTabContent({
           </div>
         )}
 
-        {prSummary && <PRSummaryCard {...prSummary} />}
-
         <ChangesToolbar {...toolbar} />
+
+        {prSummary && <PRSummaryCard {...prSummary} />}
 
         <div className="border-sidebar-border bg-background border-b px-2 py-1">
           <SearchBar {...search} />

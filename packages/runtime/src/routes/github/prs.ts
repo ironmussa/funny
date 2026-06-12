@@ -194,6 +194,7 @@ prRoutes.get('/pr-detail', async (c) => {
       additions: prData.additions ?? 0,
       deletions: prData.deletions ?? 0,
       changed_files: prData.changed_files ?? 0,
+      commits: prData.commits ?? 0,
       head: { ref: prData.head?.ref ?? '', sha: prData.head?.sha ?? '' },
       base: { ref: prData.base?.ref ?? '' },
       user: prData.user ? { login: prData.user.login, avatar_url: prData.user.avatar_url } : null,

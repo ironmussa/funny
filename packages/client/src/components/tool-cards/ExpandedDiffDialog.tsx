@@ -48,8 +48,16 @@ import { getFileName } from './format-utils';
 /**
  * Compute a minimal unified diff from old/new strings.
  * Used when we only have tool call old_string/new_string (no raw git diff).
+ *
+ * `snippetBaseLine` is the 1-indexed line in the actual file where the
+ * snippet begins, so the hunk header reflects the real file location
+ * instead of snippet-relative numbering. Defaults to 1.
  */
-function computeUnifiedDiff(oldValue: string, newValue: string): string {
+function computeUnifiedDiff(
+  oldValue: string,
+  newValue: string,
+  snippetBaseLine: number = 1,
+): string {
   const oldLines = oldValue.split('\n');
   const newLines = newValue.split('\n');
   const lines: string[] = [];
@@ -86,8 +94,8 @@ function computeUnifiedDiff(oldValue: string, newValue: string): string {
   const ctxBefore = Math.min(prefixLen, 3);
   const ctxAfter = Math.min(suffixLen, 3);
 
-  const hunkOldStart = prefixLen - ctxBefore + 1;
-  const hunkNewStart = prefixLen - ctxBefore + 1;
+  const hunkOldStart = snippetBaseLine + prefixLen - ctxBefore;
+  const hunkNewStart = snippetBaseLine + prefixLen - ctxBefore;
   const hunkOldLen = ctxBefore + oldChanged.length + ctxAfter;
   const hunkNewLen = ctxBefore + newChanged.length + ctxAfter;
 
@@ -119,6 +127,8 @@ interface ExpandedDiffDialogProps {
   filePath: string;
   oldValue: string;
   newValue: string;
+  /** 1-indexed line in the real file where old/new snippets begin */
+  baseLine?: number;
   icon?: ComponentType<{ className?: string }>;
   loading?: boolean;
   description?: string;
@@ -180,6 +190,7 @@ function DiffContent({
   rawDiff,
   oldValue,
   newValue,
+  baseLine,
   showFullFile,
   wordWrap,
   searchQuery,
@@ -201,6 +212,8 @@ function DiffContent({
   rawDiff?: string;
   oldValue: string;
   newValue: string;
+  /** 1-indexed line in the real file where old/new snippets begin */
+  baseLine?: number;
   /** When true, disable code folding so the entire file is visible */
   showFullFile?: boolean;
   wordWrap?: boolean;
@@ -221,8 +234,8 @@ function DiffContent({
   const unifiedDiff = useMemo(() => {
     if (rawDiff) return rawDiff;
     if (!oldValue && !newValue) return '';
-    return computeUnifiedDiff(oldValue, newValue);
-  }, [rawDiff, oldValue, newValue]);
+    return computeUnifiedDiff(oldValue, newValue, baseLine);
+  }, [rawDiff, oldValue, newValue, baseLine]);
 
   if (loading) {
     return (
@@ -270,6 +283,7 @@ export function ExpandedDiffDialog({
   filePath,
   oldValue,
   newValue,
+  baseLine,
   icon: Icon = FileCode,
   loading = false,
   description,
@@ -614,6 +628,7 @@ export function ExpandedDiffDialog({
                 rawDiff={effectiveRawDiff}
                 oldValue={effectiveOldValue}
                 newValue={effectiveNewValue}
+                baseLine={showFullFile ? 1 : baseLine}
                 showFullFile={showFullFile}
                 wordWrap={wordWrap}
                 searchQuery={showSearch ? searchQuery : undefined}

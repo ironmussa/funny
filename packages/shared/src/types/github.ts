@@ -105,6 +105,7 @@ export interface PRDetail {
   additions: number;
   deletions: number;
   changed_files: number;
+  commits: number;
   head: { ref: string; sha: string };
   base: { ref: string };
   user: { login: string; avatar_url: string } | null;

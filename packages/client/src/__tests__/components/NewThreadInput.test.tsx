@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { NewThreadInput } from '@/components/thread/NewThreadInput';
@@ -58,8 +59,12 @@ vi.mock('@/components/PromptInput', () => ({
     onWorktreeModeChange?: (value: boolean) => void;
     onContentChange?: (hasContent: boolean, text: string) => void;
     initialPrompt?: string;
+    newThreadContextBar?: ReactNode;
   }) => (
     <div data-testid="mock-prompt-input">
+      {props.newThreadContextBar ? (
+        <div data-testid="new-thread-context-bar">{props.newThreadContextBar}</div>
+      ) : null}
       {props.initialPrompt ? <span data-testid="initial-prompt">{props.initialPrompt}</span> : null}
       <button type="button" data-testid="mock-prompt-submit" onClick={() => props.onSubmit?.()}>
         Submit

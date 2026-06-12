@@ -290,84 +290,85 @@ export function NewThreadInput({
     );
   }
 
+  // Context bar content (project / repo / branch) — rendered by the prompt input
+  // at the top, next to the worktree switch. Compact styling to match the input.
+  const contextBar = (
+    <>
+      {project && (
+        <span
+          className="flex max-w-[140px] min-w-0 items-center gap-1 md:max-w-[200px]"
+          title={project.name}
+        >
+          <FolderOpen className="size-4 shrink-0" />
+          <span className="flex min-w-0 items-center font-medium">
+            <span className="truncate">{project.name.slice(0, -8)}</span>
+            <span className="shrink-0">{project.name.slice(-8)}</span>
+          </span>
+        </span>
+      )}
+      {project && remoteUrl && (
+        <>
+          <span className="text-muted-foreground/40 shrink-0">/</span>
+          {(() => {
+            const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
+            const Icon = remoteUrl.includes('github.com') ? SiGithub : Globe;
+            const formatted = formatRemoteUrl(remoteUrl);
+            const content = (
+              <>
+                <Icon className="size-4 shrink-0" />
+                <span className="flex min-w-0 items-center font-medium">
+                  <span className="truncate">{formatted.slice(0, -8)}</span>
+                  <span className="shrink-0">{formatted.slice(-8)}</span>
+                </span>
+              </>
+            );
+            return browseUrl ? (
+              <a
+                href={browseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:bg-muted hover:text-foreground flex max-w-[180px] min-w-0 items-center gap-1 rounded px-1 py-0.5 transition-colors md:max-w-[280px]"
+                data-testid="new-thread-repo-link"
+                title={browseUrl}
+              >
+                {content}
+              </a>
+            ) : (
+              <span className="flex max-w-[180px] min-w-0 items-center gap-1 md:max-w-[280px]">
+                {content}
+              </span>
+            );
+          })()}
+        </>
+      )}
+      {(branchPickerBranches.length > 0 || branchPickerLoading) && (
+        <>
+          <span className="text-muted-foreground/40">/</span>
+          {branchPickerLoading ? (
+            <span className="flex items-center gap-1">
+              <GitBranch className="size-4 shrink-0" />
+              <Loader2 className="size-4 animate-spin" />
+            </span>
+          ) : (
+            <BranchPicker
+              branches={branchPickerBranches}
+              remoteBranches={branchPickerRemoteBranches}
+              defaultBranch={branchPickerDefaultBranch}
+              selected={branchPickerSelected}
+              onChange={handleBranchChange}
+              showCreateNew
+              testId="new-thread-branch-picker"
+              triggerClassName="flex max-w-[300px] items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden [&_svg]:h-4 [&_svg]:w-4"
+            />
+          )}
+        </>
+      )}
+    </>
+  );
+
   return (
     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
       <div className="w-full max-w-3xl">
-        {/* Context bar: Project / Repo / Branch */}
-        <div
-          className="text-muted-foreground mb-3 flex h-9 items-center gap-2 text-base"
-          data-testid="new-thread-context-bar"
-        >
-          {project && (
-            <span
-              className="flex h-9 max-w-[140px] min-w-0 items-center gap-1.5 px-2 py-1 md:max-w-[200px]"
-              title={project.name}
-            >
-              <FolderOpen className="size-5 shrink-0" />
-              <span className="flex min-w-0 items-center font-medium">
-                <span className="truncate">{project.name.slice(0, -8)}</span>
-                <span className="shrink-0">{project.name.slice(-8)}</span>
-              </span>
-            </span>
-          )}
-          {project && remoteUrl && (
-            <>
-              <span className="text-muted-foreground/40 shrink-0">/</span>
-              {(() => {
-                const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
-                const Icon = remoteUrl.includes('github.com') ? SiGithub : Globe;
-                const formatted = formatRemoteUrl(remoteUrl);
-                const content = (
-                  <>
-                    <Icon className="size-5 shrink-0" />
-                    <span className="flex min-w-0 items-center font-medium">
-                      <span className="truncate">{formatted.slice(0, -8)}</span>
-                      <span className="shrink-0">{formatted.slice(-8)}</span>
-                    </span>
-                  </>
-                );
-                return browseUrl ? (
-                  <a
-                    href={browseUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:bg-muted hover:text-foreground flex h-9 max-w-[180px] min-w-0 items-center gap-1.5 rounded px-2 py-1 transition-colors md:max-w-[280px]"
-                    data-testid="new-thread-repo-link"
-                    title={browseUrl}
-                  >
-                    {content}
-                  </a>
-                ) : (
-                  <span className="flex h-9 max-w-[180px] min-w-0 items-center gap-1.5 px-2 py-1 md:max-w-[280px]">
-                    {content}
-                  </span>
-                );
-              })()}
-            </>
-          )}
-          {(branchPickerBranches.length > 0 || branchPickerLoading) && (
-            <>
-              <span className="text-muted-foreground/40">/</span>
-              {branchPickerLoading ? (
-                <span className="flex h-9 items-center gap-1.5 px-2 py-1">
-                  <GitBranch className="size-5 shrink-0" />
-                  <Loader2 className="size-5 animate-spin" />
-                </span>
-              ) : (
-                <BranchPicker
-                  branches={branchPickerBranches}
-                  remoteBranches={branchPickerRemoteBranches}
-                  defaultBranch={branchPickerDefaultBranch}
-                  selected={branchPickerSelected}
-                  onChange={handleBranchChange}
-                  showCreateNew
-                  testId="new-thread-branch-picker"
-                  triggerClassName="flex h-9 max-w-[300px] items-center gap-1.5 truncate rounded px-2 py-1 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden [&_svg]:h-5 [&_svg]:w-5"
-                />
-              )}
-            </>
-          )}
-        </div>
         {issueContext && (
           <div
             className="mb-1.5 flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-xs"
@@ -409,6 +410,7 @@ export function NewThreadInput({
           loading={creating}
           isNewThread
           showBacklog
+          newThreadContextBar={contextBar}
           projectId={effectiveProjectId || undefined}
           initialPrompt={
             issueContext?.prompt ?? initialPrefillRef.current ?? restoredPrompt ?? undefined

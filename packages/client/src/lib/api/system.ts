@@ -76,6 +76,11 @@ export type OpenCodeModelsResponse =
     };
 
 export const systemApi = {
+  // Deployment mode — 'team' when served by the central server (no co-located
+  // Claude CLI; runner-only onboarding steps are skipped), 'standalone' when
+  // served directly by an all-in-one runtime.
+  bootstrap: () => request<{ mode: 'team' | 'standalone' }>('/bootstrap'),
+
   // Setup
   setupStatus: () =>
     request<{

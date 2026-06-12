@@ -360,6 +360,12 @@ export interface PromptInputUIProps {
   isNewThread?: boolean;
   /** Scratch threads can't use worktrees — hides the worktree toggle. */
   isScratch?: boolean;
+  /**
+   * New-thread context bar content (project / repo / branch picker), rendered at
+   * the top of the prompt input — next to the worktree switch. Built by the
+   * caller so the prompt input stays agnostic of repo/branch data sources.
+   */
+  newThreadContextBar?: React.ReactNode;
   /** Thread ID (set for follow-up messages). Required to upload files larger than the inline tier. */
   threadId?: string;
   createWorktree?: boolean;
@@ -456,6 +462,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   modes,
   isNewThread = false,
   isScratch = false,
+  newThreadContextBar,
   threadId,
   createWorktree = false,
   onCreateWorktreeChange,
@@ -1020,7 +1027,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   // ── Render ──
   return (
     <div className={cn(!isNewThread && 'px-3 sm:px-4')}>
-      <div className="mx-auto w-full max-w-3xl min-w-0 pb-4">
+      <div className={cn('mx-auto w-full max-w-3xl min-w-0', isNewThread ? 'pb-0' : 'pb-4')}>
         {/* Image lightbox */}
         <ImageLightbox
           images={images.map((img, idx) => ({
@@ -1188,6 +1195,29 @@ export const PromptInputUI = memo(function PromptInputUI({
           </div>
         )}
 
+        {/* Top context bar — project / repo / branch + worktree switch. Sits
+            visually OUTSIDE the bordered prompt box (new threads only). */}
+        {isNewThread && !isScratch && (
+          <div
+            className="text-muted-foreground mb-3 flex items-center gap-2 px-1 text-sm"
+            data-testid="new-thread-context-bar"
+          >
+            <div className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto">
+              {newThreadContextBar}
+            </div>
+            <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
+              <Switch
+                data-testid="prompt-worktree-switch"
+                checked={createWorktree}
+                onCheckedChange={onCreateWorktreeChange ?? (() => {})}
+                tabIndex={-1}
+                className="scale-90"
+              />
+              <span>{t('thread.mode.worktree')}</span>
+            </label>
+          </div>
+        )}
+
         {/* Editor + bottom toolbar */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div
@@ -1332,6 +1362,28 @@ export const PromptInputUI = memo(function PromptInputUI({
                 />
               )}
               <ModeSelect value={mode} onChange={onModeChange} modes={modes} />
+              {isNewThread && showBacklog && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      data-testid="prompt-backlog-toggle"
+                      onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
+                      tabIndex={-1}
+                      className={cn(
+                        'flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+                        sendToBacklog
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                      )}
+                      aria-label={t('prompt.sendToBacklog')}
+                    >
+                      <Inbox className="icon-xs" />
+                      {t('prompt.backlog')}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('prompt.sendToBacklog')}</TooltipContent>
+                </Tooltip>
+              )}
               {/* Attachment + dictation + send — always visible, pushed right */}
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 <Button
@@ -1420,81 +1472,52 @@ export const PromptInputUI = memo(function PromptInputUI({
           </div>
         </div>
         {/* Bottom bar — powerline / new-thread controls + context usage. Sits
-            visually OUTSIDE the bordered prompt box. */}
-        <div className="mt-1.5 flex items-center gap-2 px-2">
-          <div className="min-w-0 flex-1">
-            {isNewThread ? (
-              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                {!isScratch && (
-                  <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs">
-                    <Switch
-                      data-testid="prompt-worktree-switch"
-                      checked={createWorktree}
-                      onCheckedChange={onCreateWorktreeChange ?? (() => {})}
-                      tabIndex={-1}
+            visually OUTSIDE the bordered prompt box. Skipped entirely when it
+            would be empty (e.g. a new thread with no launcher / context ring),
+            so the box stays tight against whatever follows (MCP list). */}
+        {(typeof contextPct === 'number' || (isNewThread ? hasLauncher : !!powerlineThread)) && (
+          <div className="mt-1.5 flex items-center gap-2 px-2">
+            <div className="min-w-0 flex-1">
+              {isNewThread ? (
+                <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+                  {hasLauncher && (
+                    <ModeSelect
+                      value={runtime}
+                      onChange={handleRuntimeChange}
+                      modes={RUNTIME_MODES}
                     />
-                    <span>{t('thread.mode.worktree')}</span>
-                  </label>
-                )}
-                {hasLauncher && (
-                  <ModeSelect
-                    value={runtime}
-                    onChange={handleRuntimeChange}
-                    modes={RUNTIME_MODES}
-                  />
-                )}
-                {showBacklog && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        data-testid="prompt-backlog-toggle"
-                        onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
-                        tabIndex={-1}
-                        className={cn(
-                          'flex items-center gap-1 pl-2 py-1 text-xs rounded transition-colors shrink-0 ml-auto',
-                          sendToBacklog
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                        )}
-                        aria-label={t('prompt.sendToBacklog')}
-                      >
-                        <Inbox className="icon-xs" />
-                        {t('prompt.backlog')}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('prompt.sendToBacklog')}</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-            ) : (
-              <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
-                {powerlineThread && (
-                  <ThreadPowerline
-                    thread={powerlineThread}
-                    projectName={powerlineProjectName}
-                    projectColor={powerlineProjectColor}
-                    projectTooltip={powerlineProjectPath}
-                    gitStatus={powerlineGitStatus}
-                    diffStatsSize="xs"
-                    copyable
-                    data-testid="prompt-powerline"
-                  />
-                )}
+                  )}
+                </div>
+              ) : (
+                <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
+                  {powerlineThread && (
+                    <ThreadPowerline
+                      thread={powerlineThread}
+                      projectName={powerlineProjectName}
+                      projectColor={powerlineProjectColor}
+                      projectTooltip={powerlineProjectPath}
+                      gitStatus={powerlineGitStatus}
+                      diffStatsSize="xs"
+                      copyable
+                      data-testid="prompt-powerline"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            {typeof contextPct === 'number' && (
+              <div className="shrink-0">
+                <ContextUsageRing
+                  pct={contextPct}
+                  usedTokens={contextUsedTokens}
+                  maxTokens={contextMaxTokens}
+                  onCompact={onCompact ? () => setCompactConfirmOpen(true) : undefined}
+                  disabled={!onCompact}
+                />
               </div>
             )}
           </div>
-          {typeof contextPct === 'number' && (
-            <div className="shrink-0">
-              <ContextUsageRing
-                pct={contextPct}
-                usedTokens={contextUsedTokens}
-                maxTokens={contextMaxTokens}
-                onCompact={onCompact ? () => setCompactConfirmOpen(true) : undefined}
-                disabled={!onCompact}
-              />
-            </div>
-          )}
-        </div>
+        )}
       </div>
       <ConfirmDialog
         open={compactConfirmOpen}

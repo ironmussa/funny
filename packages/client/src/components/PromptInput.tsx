@@ -20,6 +20,8 @@ interface PromptInputProps {
   placeholder?: string;
   isNewThread?: boolean;
   isScratch?: boolean;
+  /** New-thread context bar content (project / repo / branch), rendered at the top of the input. */
+  newThreadContextBar?: React.ReactNode;
   showBacklog?: boolean;
   projectId?: string;
   initialPrompt?: string;
@@ -44,6 +46,7 @@ export const PromptInput = memo(function PromptInput({
   placeholder,
   isNewThread = false,
   isScratch = false,
+  newThreadContextBar,
   showBacklog = false,
   projectId: propProjectId,
   initialPrompt: initialPromptProp,
@@ -87,6 +90,7 @@ export const PromptInput = memo(function PromptInput({
         modes={state.modes}
         isNewThread={isNewThread}
         isScratch={isScratch}
+        newThreadContextBar={newThreadContextBar}
         threadId={state.effectiveThreadId}
         createWorktree={state.createWorktree}
         onCreateWorktreeChange={state.setCreateWorktree}

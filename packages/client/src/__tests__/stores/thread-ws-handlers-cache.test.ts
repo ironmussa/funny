@@ -407,6 +407,51 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(userMsgs).toHaveLength(1);
   });
 
+  test('handleWSToolCall injects the dequeued user card when the turn starts with a tool call', () => {
+    // Regression: in queue mode the dequeued user message is parked in the
+    // buffer and was injected ONLY on the next assistant message. When a queued
+    // follow-up kicked off its turn with a tool call (very common), the user
+    // card stayed invisible for the whole tool phase — and on surfaces that
+    // never refresh, until the first assistant text finally landed.
+    const userContent = 'Re-verify the report';
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+
+    // Dequeue buffers the user message.
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    // Agent starts the turn with a tool call — NO assistant message yet.
+    handleWSToolCall(get, set, THREAD_ID, {
+      toolCallId: 'tc-1',
+      messageId: 'm-asst',
+      name: 'Bash',
+      input: { command: 'grep ...' },
+    });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userIdx = msgs.findIndex((m: any) => m.role === 'user' && m.content === userContent);
+    const toolIdx = msgs.findIndex((m: any) => m.toolCalls?.some((tc: any) => tc.id === 'tc-1'));
+
+    // The user card is present and ordered before the tool call's message.
+    expect(userIdx).toBeGreaterThanOrEqual(0);
+    expect(toolIdx).toBeGreaterThan(userIdx);
+
+    // A later assistant message must NOT inject a second copy (buffer cleared).
+    handleWSMessage(get, set, THREAD_ID, {
+      messageId: 'm-asst',
+      role: 'assistant',
+      content: 'Voy a anexar al documento…',
+    });
+    const userMsgs = state.threadDataById[THREAD_ID].messages.filter(
+      (m: any) => m.role === 'user' && m.content === userContent,
+    );
+    expect(userMsgs).toHaveLength(1);
+  });
+
   test('handleWSResult updates a scratch thread via threadsById', () => {
     const scratchThread = {
       id: 'scratch-2',

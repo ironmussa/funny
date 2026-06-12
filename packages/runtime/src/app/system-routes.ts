@@ -350,6 +350,10 @@ export function registerSystemRoutes(app: Hono): void {
   app.get('/api/bootstrap', (c) => {
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
     c.header('Pragma', 'no-cache');
-    return c.json({ mode: 'local' });
+    // When the runtime serves the client directly (standalone all-in-one),
+    // the Claude CLI is co-located on this machine, so onboarding's Claude
+    // check is meaningful and runs against this runtime's real detection.
+    // The central server reports `mode: 'team'` instead (see packages/server).
+    return c.json({ mode: 'standalone' });
   });
 }

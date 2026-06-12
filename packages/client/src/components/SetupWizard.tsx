@@ -198,6 +198,22 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
 
 export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
+  // null = still resolving deployment mode. In team mode (central server) the
+  // Claude CLI lives on each user's own runner, not on the server, and the
+  // onboarding user may be a sysadmin who never runs one — so the Claude check
+  // is skipped. Standalone (all-in-one runtime) keeps the real check.
+  const [mode, setMode] = useState<'team' | 'standalone' | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.bootstrap().then((res) => {
+      if (cancelled) return;
+      setMode(res.isOk() && res.value.mode === 'standalone' ? 'standalone' : 'team');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleFinish = async () => {
     const res = await api.completeSetup();
@@ -209,14 +225,33 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
     onComplete();
   };
 
+  if (mode === null) {
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="border-border bg-card w-full max-w-md rounded-lg border p-8 shadow-lg">
+          <LoadingState testId="setup-wizard-loading" label="Loading…" />
+        </div>
+      </div>
+    );
+  }
+
+  const slides =
+    mode === 'team'
+      ? [
+          <WelcomeSlide key="welcome" onNext={() => setStep(1)} />,
+          <DoneSlide key="done" onFinish={handleFinish} />,
+        ]
+      : [
+          <WelcomeSlide key="welcome" onNext={() => setStep(1)} />,
+          <ClaudeCheckSlide key="claude" onNext={() => setStep(2)} />,
+          <DoneSlide key="done" onFinish={handleFinish} />,
+        ];
+
   return (
     <div className="bg-background flex min-h-screen items-center justify-center">
       <div className="border-border bg-card w-full max-w-md space-y-6 rounded-lg border p-8 shadow-lg">
-        <StepIndicator current={step} total={3} />
-
-        {step === 0 && <WelcomeSlide onNext={() => setStep(1)} />}
-        {step === 1 && <ClaudeCheckSlide onNext={() => setStep(2)} />}
-        {step === 2 && <DoneSlide onFinish={handleFinish} />}
+        <StepIndicator current={step} total={slides.length} />
+        {slides[step]}
       </div>
     </div>
   );

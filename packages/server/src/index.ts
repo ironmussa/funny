@@ -214,7 +214,12 @@ app.get('/api/health', (c) => {
 app.get('/api/bootstrap', (c) => {
   c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
   c.header('Pragma', 'no-cache');
-  return c.json({ mode: 'local' });
+  // packages/server is always the central/team server: it proxies to remote
+  // per-user runners and never holds a Claude CLI itself. The client uses this
+  // to skip runner-only onboarding steps (e.g. the Claude CLI check), which
+  // make no sense during a server install — the onboarding user may be a
+  // sysadmin who never runs a runner.
+  return c.json({ mode: 'team' });
 });
 
 // ── Rate limiting on auth endpoints ───────────────────────
@@ -302,13 +307,12 @@ const { providerRoutes } = await import('./routes/providers.js');
 app.route('/api/providers', providerRoutes);
 
 // Setup status — proxy to runner
-app.get('/api/setup/status', async (c) => {
-  return c.json({
-    providers: {},
-    claudeCli: { available: true, path: null, error: null, version: null },
-    agentSdk: { available: true },
-  });
-});
+// NOTE: `/api/setup/status` is intentionally NOT handled here. Claude CLI
+// availability is a per-user-runner property, so this request falls through to
+// the proxy catch-all below and is answered by the requesting user's runner
+// (real detection in packages/runtime). A previous stub returned
+// `claudeCli.available: true` unconditionally, which was misleading — the
+// server never has a Claude CLI of its own.
 
 // ── Proxy catch-all: forward remaining API requests to runner ──
 const { proxyToRunner } = await import('./middleware/proxy.js');

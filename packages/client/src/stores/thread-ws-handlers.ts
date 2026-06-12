@@ -155,6 +155,48 @@ function tailHasUserMessage(
   return false;
 }
 
+/**
+ * Pull the buffered dequeued user message (if any) for `threadId` and turn it
+ * into the synthetic user-card row to splice in BEFORE the agent's first output
+ * of the turn. Always clears the buffer when called — even when injection is
+ * skipped — so a stale entry can't leak into a later turn.
+ *
+ * Called from BOTH handleWSMessage (assistant text) and handleWSToolCall;
+ * whichever lands first wins. A queued follow-up frequently starts its turn
+ * with a tool call rather than assistant text, so gating injection only on
+ * assistant messages left the user card invisible for the entire tool phase of
+ * the turn — and missing on refresh-less surfaces until the first text landed.
+ *
+ * Returns [] when nothing is buffered or the tail already shows the same
+ * content (server-loaded duplicate, e.g. after a thread refresh).
+ */
+function takeDequeuedUserMessages(
+  threadId: string,
+  messages: Array<{ role: string; content: string }>,
+): Array<{
+  id: string;
+  threadId: string;
+  role: MessageRole;
+  content: string;
+  images?: ImageAttachment[];
+  timestamp: string;
+}> {
+  const dequeuedMsg = pendingDequeuedMessages.get(threadId);
+  if (!dequeuedMsg) return [];
+  pendingDequeuedMessages.delete(threadId);
+  if (tailHasUserMessage(messages, dequeuedMsg.content)) return [];
+  return [
+    {
+      id: crypto.randomUUID(),
+      threadId,
+      role: 'user' as MessageRole,
+      content: dequeuedMsg.content,
+      images: dequeuedMsg.images,
+      timestamp: new Date().toISOString(),
+    },
+  ];
+}
+
 // ── Init ────────────────────────────────────────────────────────
 
 export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentInitInfo): void {
@@ -225,23 +267,11 @@ export function handleWSMessage(
       //   - the tail of the payload already shows a user message with the
       //     same content (server-loaded duplicate, e.g. after a thread
       //     refresh; bug 4 — visual duplicate of the dequeued message)
-      const dequeuedMsg = pendingDequeuedMessages.get(threadId);
-      const extraMessages: typeof t.messages = [];
-      if (dequeuedMsg && data.role === 'assistant') {
-        // Always clear the buffer once an assistant message arrives — even if
-        // we skip injection — so a stale entry can't leak into a future turn.
-        pendingDequeuedMessages.delete(threadId);
-        if (!tailHasUserMessage(t.messages, dequeuedMsg.content)) {
-          extraMessages.push({
-            id: crypto.randomUUID(),
-            threadId,
-            role: 'user' as MessageRole,
-            content: dequeuedMsg.content,
-            images: dequeuedMsg.images,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
+      // Inject the buffered dequeued user card before the agent's first output
+      // of the turn. handleWSToolCall does the same — whichever lands first
+      // wins (queued turns often start with a tool call, not assistant text).
+      const extraMessages =
+        data.role === 'assistant' ? takeDequeuedUserMessages(threadId, t.messages) : [];
 
       const newMsg = {
         id: messageId || crypto.randomUUID(),
@@ -319,6 +349,13 @@ export function handleWSToolCall(
         return t;
       }
 
+      // A queued follow-up often starts its turn with a tool call. Inject the
+      // buffered dequeued user card now — before this tool call's message — so
+      // it doesn't stay invisible until the first assistant text lands. Placed
+      // after the de-dup guard so a retried tool call can't consume the buffer.
+      const extra = takeDequeuedUserMessages(threadId, t.messages);
+      const userPatch = extra.length ? { lastUserMessage: extra[extra.length - 1] } : null;
+
       if (data.messageId) {
         const msgIdx = t.messages.findIndex((m) => m.id === data.messageId);
         if (msgIdx >= 0) {
@@ -328,20 +365,26 @@ export function handleWSToolCall(
             ...msg,
             toolCalls: (msg.toolCalls ?? []).concat(tcEntry),
           };
-          return { ...t, messages };
+          if (extra.length) messages.splice(msgIdx, 0, ...extra);
+          return { ...t, ...userPatch, messages };
         }
       }
 
       return {
         ...t,
-        messages: t.messages.concat({
-          id: data.messageId || crypto.randomUUID(),
-          threadId,
-          role: 'assistant' as MessageRole,
-          content: '',
-          timestamp: new Date().toISOString(),
-          toolCalls: [tcEntry],
-        }),
+        ...userPatch,
+        messages: [
+          ...t.messages,
+          ...extra,
+          {
+            id: data.messageId || crypto.randomUUID(),
+            threadId,
+            role: 'assistant' as MessageRole,
+            content: '',
+            timestamp: new Date().toISOString(),
+            toolCalls: [tcEntry],
+          },
+        ],
       };
     }),
   );

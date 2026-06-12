@@ -192,6 +192,34 @@ export function EditFileCard({
           )}
           {filePath &&
             (() => {
+              // When a diff is available, clicking the path opens the diff
+              // popup. Otherwise fall back to opening the file in the editor.
+              if (hasDiff) {
+                return (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowExpandedDiff(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            setShowExpandedDiff(true);
+                          }
+                        }}
+                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
+                      >
+                        {displayPath}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('review.expand', 'Expand')}</TooltipContent>
+                  </Tooltip>
+                );
+              }
               const editorUri = toEditorUri(filePath, defaultEditor);
               const editorTitle = t('tools.openInEditor', {
                 editor: getEditorLabel(defaultEditor),
@@ -276,6 +304,7 @@ export function EditFileCard({
         filePath={filePath || ''}
         oldValue={oldString || ''}
         newValue={newString || ''}
+        baseLine={snippetBaseLine}
         onRequestFullDiff={requestFullDiff}
       />
     </div>

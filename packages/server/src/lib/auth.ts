@@ -261,7 +261,9 @@ export async function initBetterAuth(): Promise<void> {
     const created = await ctx.internalAdapter.createUser({
       email,
       name: 'Admin',
-      emailVerified: 1,
+      // Postgres stores email_verified as boolean; SQLite as a 0/1 integer
+      // column, so the raw value must stay numeric there.
+      emailVerified: dbDialect === 'pg' ? true : (1 as unknown as boolean),
       role: 'admin',
       username,
     });

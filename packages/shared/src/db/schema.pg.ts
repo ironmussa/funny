@@ -7,7 +7,7 @@
  * so the application layer works unchanged regardless of dialect.
  */
 
-import { pgTable, text, real, integer, primaryKey, customType } from 'drizzle-orm/pg-core';
+import { pgTable, text, real, integer, boolean, primaryKey, customType } from 'drizzle-orm/pg-core';
 
 import {
   DEFAULT_FOLLOW_UP_MODE,
@@ -522,13 +522,17 @@ export const user = pgTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  emailVerified: integer('email_verified').notNull().default(0),
+  // Better Auth treats emailVerified/banned as booleans. Postgres is strictly
+  // typed, so these MUST be boolean columns — SQLite (schema.sqlite.ts) keeps
+  // them as integers since it stores booleans as 0/1 transparently.
+  emailVerified: boolean('email_verified').notNull().default(false),
   image: text('image'),
   createdAt: dateText('created_at').notNull(),
   updatedAt: dateText('updated_at').notNull(),
   username: text('username').unique(),
+  displayUsername: text('display_username'),
   role: text('role'),
-  banned: integer('banned'),
+  banned: boolean('banned'),
   banReason: text('ban_reason'),
   banExpires: dateText('ban_expires'),
 });

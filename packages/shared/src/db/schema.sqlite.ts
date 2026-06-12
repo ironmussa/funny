@@ -541,6 +541,7 @@ export const user = sqliteTable('user', {
   createdAt: dateText('created_at').notNull(),
   updatedAt: dateText('updated_at').notNull(),
   username: text('username').unique(),
+  displayUsername: text('display_username'),
   role: text('role'),
   banned: integer('banned'),
   banReason: text('ban_reason'),

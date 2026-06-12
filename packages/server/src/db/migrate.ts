@@ -1286,6 +1286,42 @@ const migrations: Migration[] = [
       await ctx().exec(sql`CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id)`);
     },
   },
+
+  {
+    // Better Auth's username() plugin writes a `displayUsername` field on the
+    // user model (the original-case username; `username` itself is normalized
+    // to lowercase). Migration 027 created the "user" table without this
+    // column, so seeding the default admin failed on a fresh database with
+    // `The field "displayUsername" does not exist in the "user" Drizzle schema`.
+    name: '060_user_display_username',
+    async up() {
+      // "user" is a reserved word in Postgres — must stay quoted.
+      await ctx().addColumn('"user"', 'display_username', 'TEXT');
+    },
+  },
+
+  {
+    // Better Auth treats `emailVerified` and `banned` as booleans. Migration
+    // 027 created them as INTEGER (SQLite-friendly), but Postgres is strictly
+    // typed and rejects the boolean values Better Auth inserts ("column banned
+    // is of type integer but expression is of type boolean"), which broke the
+    // default-admin seed on a fresh Postgres database. Convert the columns to
+    // boolean on Postgres only; SQLite stores booleans as 0/1 transparently.
+    name: '061_user_boolean_flags_pg',
+    async up() {
+      if (ctx().dialect !== 'pg') return;
+      await ctx().exec(sql.raw('ALTER TABLE "user" ALTER COLUMN email_verified DROP DEFAULT'));
+      await ctx().exec(
+        sql.raw(
+          'ALTER TABLE "user" ALTER COLUMN email_verified TYPE boolean USING (email_verified <> 0)',
+        ),
+      );
+      await ctx().exec(sql.raw('ALTER TABLE "user" ALTER COLUMN email_verified SET DEFAULT false'));
+      await ctx().exec(
+        sql.raw('ALTER TABLE "user" ALTER COLUMN banned TYPE boolean USING (banned <> 0)'),
+      );
+    },
+  },
 ];
 
 export async function autoMigrate() {

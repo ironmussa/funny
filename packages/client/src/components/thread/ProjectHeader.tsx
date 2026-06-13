@@ -674,7 +674,14 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
   );
 }
 
-const VISIBLE_STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done'];
+const VISIBLE_STAGES: ThreadStage[] = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+];
 
 interface ProjectHeaderProps {
   hideFiles?: boolean;

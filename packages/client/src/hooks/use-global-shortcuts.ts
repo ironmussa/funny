@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { terminalRegistry } from '@/components/terminal/xterm-utils';
 import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
@@ -212,7 +213,35 @@ export function useGlobalShortcuts(
             scratchThreadId: scratchThreadId ?? undefined,
           });
         } else {
+          const willOpen = !isVisible;
           store.togglePanel(scopeId);
+          // When opening (not hiding), place the caret in the active terminal so
+          // the user can type immediately. Hiding the panel unmounts the dockview
+          // terminal (xterm is destroyed + removed from terminalRegistry), so on
+          // reopen the xterm is recreated asynchronously (getXtermModules()). A
+          // single timed focus would race that creation, so retry until the
+          // terminal is registered (capped), bailing if the panel is hidden again
+          // or a modal dialog opens.
+          if (willOpen) {
+            const activeId =
+              store.activeTabId && scopeTabs.some((t) => t.id === store.activeTabId)
+                ? store.activeTabId
+                : scopeTabs[scopeTabs.length - 1]?.id;
+            if (activeId) {
+              let tries = 0;
+              const tryFocus = () => {
+                if (!(useTerminalStore.getState().panelVisibleByProject[scopeId] ?? false)) return;
+                if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+                const term = terminalRegistry.get(activeId);
+                if (term) {
+                  term.focus();
+                  return;
+                }
+                if (tries++ < 30) setTimeout(tryFocus, 60);
+              };
+              setTimeout(tryFocus, 60);
+            }
+          }
         }
       }
     };

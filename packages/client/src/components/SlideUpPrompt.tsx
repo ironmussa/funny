@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 
 import { PromptInput } from './PromptInput';
+import { NewThreadContextBar } from './thread/NewThreadContextBar';
 
 type SlideUpSubmitOpts = {
   provider?: string;
@@ -84,6 +85,7 @@ export function SlideUpPrompt({
             loading={loading}
             isNewThread
             projectId={projectId}
+            newThreadContextBar={<NewThreadContextBar projectId={projectId} />}
           />
         </div>
       </DialogContent>

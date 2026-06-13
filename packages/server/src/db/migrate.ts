@@ -1322,6 +1322,29 @@ const migrations: Migration[] = [
       );
     },
   },
+
+  {
+    // Epoch-ms columns were created as INTEGER (int4, max ~2.1e9) but store
+    // millisecond timestamps (~1.7e12), so every insert/compare on Postgres
+    // failed with `value "…" is out of range for type integer` — breaking the
+    // watcher scanner and the orchestrator run state. Widen them to bigint on
+    // Postgres only; SQLite's INTEGER is already 8 bytes.
+    name: '062_epoch_ms_bigint_pg',
+    async up() {
+      if (ctx().dialect !== 'pg') return;
+      const widen: Array<[string, string]> = [
+        ['watchers', 'next_wake_at'],
+        ['watchers', 'deadline'],
+        ['orchestrator_runs', 'next_retry_at_ms'],
+        ['orchestrator_runs', 'last_event_at_ms'],
+        ['orchestrator_runs', 'claimed_at_ms'],
+        ['orchestrator_runs', 'updated_at_ms'],
+      ];
+      for (const [table, column] of widen) {
+        await ctx().exec(sql.raw(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE bigint`));
+      }
+    },
+  },
 ];
 
 export async function autoMigrate() {

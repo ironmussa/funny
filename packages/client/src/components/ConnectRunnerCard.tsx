@@ -11,12 +11,23 @@
  * runner yet.
  */
 
-import { Check, Copy, Server } from 'lucide-react';
+import { Check, Copy, ExternalLink, Server } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+/**
+ * Published Railway template code for the funny runner (the "funny-runner"
+ * template, whose service config lives in railway.runner.json). Empty until the
+ * maintainer publishes it in Railway's template composer and pastes the code
+ * here. When set, a "Deploy on Railway" button appears that prefills
+ * TEAM_SERVER_URL with this server's origin — a true one-click runner with no
+ * env vars to fill in (device-link handles auth). Gated so we never render a
+ * dead link.
+ */
+const RAILWAY_RUNNER_TEMPLATE_CODE = '';
 
 interface Props {
   /** Render the numbered "how to" steps above the command. Default: true. */
@@ -34,6 +45,9 @@ export function ConnectRunnerCard({ showSteps = true, className }: Props) {
 
   const serverUrl = window.location.origin;
   const installCommand = `bunx funny --team ${serverUrl}`;
+  const railwayDeployUrl = RAILWAY_RUNNER_TEMPLATE_CODE
+    ? `https://railway.com/new/template/${RAILWAY_RUNNER_TEMPLATE_CODE}?TEAM_SERVER_URL=${encodeURIComponent(serverUrl)}`
+    : null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(installCommand);
@@ -86,6 +100,18 @@ export function ConnectRunnerCard({ showSteps = true, className }: Props) {
           {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
         </Button>
       </div>
+
+      {railwayDeployUrl && (
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs">Or deploy a cloud runner:</span>
+          <Button size="sm" variant="outline" asChild data-testid="connect-runner-railway">
+            <a href={railwayDeployUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="icon-sm mr-1" />
+              Deploy on Railway
+            </a>
+          </Button>
+        </div>
+      )}
 
       <p className="text-muted-foreground text-xs">
         <Server className="icon-xs mr-1 inline" />

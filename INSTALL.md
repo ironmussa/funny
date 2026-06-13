@@ -247,6 +247,19 @@ In the funny UI you're already logged into, open **Settings ▸ Runners**, click
 
 **Classic flow (advanced).** You may instead supply the shared secret and a single-use invite token yourself — see the `--secret` / `--token` options below. `RUNNER_AUTH_SECRET` must match the central server's value, or every proxied request fails.
 
+**Deploy a runner on Railway (one-click).** Because device-link needs no secrets, a runner can be deployed to Railway/Fly/Render with **`TEAM_SERVER_URL` as the only variable**. The runner's service config lives in [`railway.runner.json`](./railway.runner.json) (start command `bun run start`, healthcheck `/api/health`). To offer the in-app **"Deploy on Railway"** button (Settings ▸ Runners), publish that config once as a Railway template:
+
+1. In Railway's template composer, add a service sourced from this GitHub repo and set the start command to `bun run start`.
+2. **Attach a persistent volume** to the service mounted at `/data`, and set these variables:
+   - `TEAM_SERVER_URL` = the central server URL (the only auth-related variable — device-link delivers the bearer + forwarded-identity secret on approval, so **no** `RUNNER_AUTH_SECRET` or invite token).
+   - `FUNNY_DATA_DIR` = `/data` (so credentials, worktrees, and scratch state live on the volume).
+3. Publish the template and copy its code.
+4. Paste the code into `RAILWAY_RUNNER_TEMPLATE_CODE` in `packages/client/src/components/ConnectRunnerCard.tsx`. The button then appears and prefills `TEAM_SERVER_URL` with the server's origin.
+
+> **The volume is required, not optional.** The runner persists its device-link credentials at `$FUNNY_DATA_DIR/runner-credentials.json`. Without a volume at `/data`, every redeploy wipes them and the runner must be re-approved in Settings ▸ Runners each time.
+
+After the box boots it prints its device-link code (visible in Railway's deploy logs); approve it in Settings ▸ Runners as above. On the **first** deploy you approve once; subsequent redeploys resume silently from the volume.
+
 > ⚠️ **Trust boundary — read before exposing a runner to a remote server.**
 >
 > A funny runner is **not sandboxed**. By design it spawns the Claude CLI, runs `git`, executes pre-commit hooks, and opens PTY shells on the host. A runner that points at a remote `TEAM_SERVER_URL` effectively grants that server:

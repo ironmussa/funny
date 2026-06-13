@@ -72,6 +72,11 @@ export function ThreadPowerline({
   const branchColor = darkenHex(rawColor, 0.2);
   const worktreeColor = darkenHex(rawColor, 0.3);
 
+  // For a worktree thread the base-branch segment is redundant when it holds the
+  // same value as the worktree branch (e.g. ingested threads default baseBranch to
+  // branch). Drop it so we don't render two identical segments.
+  const showBaseBranch = !isWorktree || branchName !== worktreeBranchLabel;
+
   const segments = useMemo<PowerlineSegmentData[]>(() => {
     const segs: PowerlineSegmentData[] = [];
     if (projectName) {
@@ -85,7 +90,7 @@ export function ThreadPowerline({
         copyValue: copyable ? projectTooltip || projectName : undefined,
       });
     }
-    if (branchName) {
+    if (branchName && showBaseBranch) {
       const branchTooltip = isWorktree
         ? t('powerline.tooltipBaseBranch', { branch: branchName })
         : t('powerline.tooltipLocalBranch', { branch: branchName });
@@ -120,6 +125,7 @@ export function ThreadPowerline({
     branchName,
     branchColor,
     isWorktree,
+    showBaseBranch,
     worktreeBranchLabel,
     worktreeColor,
     worktreePath,

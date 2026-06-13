@@ -1,12 +1,17 @@
-import type { GitHubPR } from '@funny/shared';
+import type { GitHubPR, PRFilterOptions } from '@funny/shared';
 import { ExternalLink, GitBranch, GitPullRequest, List, Loader2, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
+import {
+  PRFilterBar,
+  EMPTY_PR_FILTERS,
+  hasActivePRFilters,
+  type PRFilterState,
+} from '@/components/pull-requests/PRFilterBar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { contrastText, pastelize } from '@/components/ui/project-chip';
@@ -99,8 +104,18 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   // toggle lets the user escape to the full listing without switching branches.
   const [viewAll, setViewAll] = useState(false);
 
+  // Sort + label/author/assignee/reviewer filters. Any active filter switches
+  // the fetch to the server-side Search API (search mode); sort alone stays on
+  // the plain list endpoint.
+  const [filters, setFilters] = useState<PRFilterState>(EMPTY_PR_FILTERS);
+  const [filterOptions, setFilterOptions] = useState<PRFilterOptions | null>(null);
+  const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
+  const searchMode = hasActivePRFilters(filters);
+
   // Branch-focused mode: feature branch + user hasn't opted into the full list.
-  const branchFocusMode = !isOnDefaultBranch && !viewAll;
+  // Search mode forces a flat, repo-wide list (search results carry no branch
+  // refs, so there's nothing to pin).
+  const branchFocusMode = !isOnDefaultBranch && !viewAll && !searchMode;
   // In branch-focus mode we force state='all' so a closed/merged PR for the
   // current branch still shows up — the user cares about *this* branch's PR,
   // whatever its state.
@@ -119,17 +134,57 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
     };
   }, []);
 
+  // Load filter options (labels + assignable users) once per project.
+  useEffect(() => {
+    if (!visible || !projectId) return;
+    let cancelled = false;
+    setFilterOptionsLoading(true);
+    void api.githubPRFilterOptions(projectId).then((res) => {
+      if (cancelled) return;
+      if (res.isOk()) {
+        setFilterOptions(res.value);
+      } else {
+        log.error('failed to load PR filter options', {
+          projectId,
+          error: res.error.message,
+        });
+      }
+      setFilterOptionsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, projectId]);
+
+  // Reset filters when switching projects so stale selections don't leak across.
+  useEffect(() => {
+    setFilters(EMPTY_PR_FILTERS);
+    setFilterOptions(null);
+  }, [projectId]);
+
   const fetchPRs = useCallback(
     async (pageNum: number, append: boolean) => {
       if (!projectId) return;
       setLoading(true);
       setError(null);
 
-      const result = await api.githubPRs(projectId, {
-        state: effectiveState,
-        page: pageNum,
-        per_page: 30,
-      });
+      const result = searchMode
+        ? await api.githubPRsSearch(projectId, {
+            state: effectiveState,
+            page: pageNum,
+            per_page: 30,
+            sort: filters.sort,
+            labels: filters.labels,
+            authors: filters.authors,
+            assignees: filters.assignees,
+            reviewers: filters.reviewers,
+          })
+        : await api.githubPRs(projectId, {
+            state: effectiveState,
+            page: pageNum,
+            per_page: 30,
+            sort: filters.sort,
+          });
 
       if (result.isOk()) {
         const data = result.value;
@@ -149,10 +204,10 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       }
       setLoading(false);
     },
-    [projectId, effectiveState, t],
+    [projectId, effectiveState, searchMode, filters, t],
   );
 
-  // Reset and fetch on visibility / project / state change
+  // Reset and fetch on visibility / project / state / filter / sort change
   useEffect(() => {
     if (!visible || !projectId) return;
     // Avoid double-fetching on mount in StrictMode
@@ -204,10 +259,10 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       <button
         key={pr.number}
         onClick={() => setSelectedPR(pr)}
-        className="hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2 text-left text-xs transition-colors"
+        className="hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs transition-colors"
         data-testid={`pr-item-${pr.number}`}
       >
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-baseline gap-1.5">
             <a
               href={pr.html_url}
@@ -221,6 +276,22 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             </a>
             <span className="leading-tight font-medium">{pr.title}</span>
           </div>
+          {pr.labels.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {pr.labels.map((label) => {
+                const bg = pastelize(`#${label.color}`);
+                return (
+                  <span
+                    key={label.name}
+                    className="rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium"
+                    style={{ backgroundColor: bg, color: contrastText(bg) }}
+                  >
+                    {label.name}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
             {pr.user && (
               <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
@@ -236,45 +307,6 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               </>
             )}
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="text-muted-foreground flex min-w-0 items-center gap-1 text-[10px]">
-                <GitBranch className="size-3 shrink-0" />
-                <span
-                  className="block max-w-[45%] overflow-hidden text-ellipsis whitespace-nowrap"
-                  dir="rtl"
-                >
-                  <bdi>{pr.head.ref}</bdi>
-                </span>
-                <span className="shrink-0">&rarr;</span>
-                <span
-                  className="block max-w-[35%] overflow-hidden text-ellipsis whitespace-nowrap"
-                  dir="rtl"
-                >
-                  <bdi>{pr.base.ref}</bdi>
-                </span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              {pr.head.ref} &rarr; {pr.base.ref}
-            </TooltipContent>
-          </Tooltip>
-          {pr.labels.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-0.5">
-              {pr.labels.map((label) => {
-                const bg = pastelize(`#${label.color}`);
-                return (
-                  <span
-                    key={label.name}
-                    className="rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium"
-                    style={{ backgroundColor: bg, color: contrastText(bg) }}
-                  >
-                    {label.name}
-                  </span>
-                );
-              })}
-            </div>
-          )}
         </div>
       </button>
     );
@@ -309,27 +341,6 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           </TooltipTrigger>
           <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
         </Tooltip>
-
-        {/* State filter — only shown when browsing the full list */}
-        {!branchFocusMode && (
-          <ButtonGroup>
-            {(['open', 'closed', 'all'] as PRState[]).map((s) => (
-              <Button
-                key={s}
-                variant={state === s ? 'default' : 'outline'}
-                size="xs"
-                onClick={() => setState(s)}
-                data-testid={`prs-filter-${s}`}
-              >
-                {s === 'open'
-                  ? t('review.pullRequests.open', 'Open')
-                  : s === 'closed'
-                    ? t('review.pullRequests.closed', 'Closed')
-                    : t('review.pullRequests.all', 'All')}
-              </Button>
-            ))}
-          </ButtonGroup>
-        )}
 
         {/* Branch-focus indicator + escape hatch */}
         {branchFocusMode && currentBranch && (
@@ -394,6 +405,17 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
         )}
       </div>
 
+      {/* Filter + sort bar */}
+      <PRFilterBar
+        value={filters}
+        onChange={setFilters}
+        options={filterOptions}
+        optionsLoading={filterOptionsLoading}
+        state={state}
+        onStateChange={setState}
+        showState={!branchFocusMode}
+      />
+
       {/* Content */}
       {loading && prs.length === 0 ? (
         <LoadingState
@@ -445,11 +467,13 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
         <EmptyState
           icon={GitPullRequest}
           title={
-            state === 'open'
-              ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
-              : state === 'closed'
-                ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
-                : t('review.pullRequests.noPRs', 'No pull requests')
+            searchMode
+              ? t('review.pullRequests.noMatchingPRs', 'No pull requests match these filters')
+              : state === 'open'
+                ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
+                : state === 'closed'
+                  ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
+                  : t('review.pullRequests.noPRs', 'No pull requests')
           }
         />
       ) : (

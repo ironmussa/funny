@@ -82,7 +82,14 @@ function validateProviderModel(
   }
 }
 export const permissionModeSchema = z.enum(['plan', 'auto', 'autoEdit', 'confirmEdit', 'ask']);
-export const threadStageSchema = z.enum(['backlog', 'planning', 'in_progress', 'review', 'done']);
+export const threadStageSchema = z.enum([
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+]);
 export const threadSourceSchema = z.enum([
   'web',
   'chrome_extension',

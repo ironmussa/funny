@@ -82,6 +82,10 @@ describe('threadStageSchema', () => {
     expect(threadStageSchema.safeParse('done').success).toBe(true);
   });
 
+  test('accepts "archived"', () => {
+    expect(threadStageSchema.safeParse('archived').success).toBe(true);
+  });
+
   test('rejects "cancelled"', () => {
     expect(threadStageSchema.safeParse('cancelled').success).toBe(false);
   });

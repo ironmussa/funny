@@ -982,6 +982,21 @@ mark.md-search-match[data-active='true'] {
     @apply bg-background text-foreground;
   }
 
+  /* Tailwind v4 dropped the v3 Preflight default of `cursor: pointer` on
+     buttons, so clickable controls reverted to the arrow cursor. Restore it
+     for the interactive elements that should show the hand on hover. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: default;
+  }
+
   /* Unified text selection color across plain text and inline backgrounds
      (e.g. inline <code> chips) so selection looks continuous. The chip
      variant uses higher opacity to compensate for the chip's own gray bg. */

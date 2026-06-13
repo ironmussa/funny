@@ -7,7 +7,16 @@
  * so the application layer works unchanged regardless of dialect.
  */
 
-import { pgTable, text, real, integer, boolean, primaryKey, customType } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  real,
+  integer,
+  bigint,
+  boolean,
+  primaryKey,
+  customType,
+} from 'drizzle-orm/pg-core';
 
 import {
   DEFAULT_FOLLOW_UP_MODE,
@@ -203,12 +212,14 @@ export const watchers = pgTable('watchers', {
   key: text('key').notNull(),
   label: text('label').notNull(),
   // Epoch-ms when the watcher next fires; compared in the due-time scanner.
-  nextWakeAt: integer('next_wake_at').notNull(),
+  // Postgres `integer` is int4 (max ~2.1e9) — epoch-ms (~1.7e12) overflows it,
+  // so epoch-ms columns MUST be bigint. SQLite's INTEGER is 8 bytes already.
+  nextWakeAt: bigint('next_wake_at', { mode: 'number' }).notNull(),
   lastDelayMs: integer('last_delay_ms').notNull().default(0),
   wakeCount: integer('wake_count').notNull().default(0),
   maxWakes: integer('max_wakes').notNull().default(20),
   // Epoch-ms hard lifetime ceiling; null = no deadline.
-  deadline: integer('deadline'),
+  deadline: bigint('deadline', { mode: 'number' }),
   status: text('status').notNull().default('pending'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
@@ -374,13 +385,14 @@ export const orchestratorRuns = pgTable('orchestrator_runs', {
     .references(() => threads.id, { onDelete: 'cascade' }),
   pipelineRunId: text('pipeline_run_id'),
   attempt: integer('attempt').notNull().default(0),
-  nextRetryAtMs: integer('next_retry_at_ms'),
-  lastEventAtMs: integer('last_event_at_ms').notNull(),
+  // Epoch-ms columns must be bigint on Postgres (int4 overflows ~2.1e9).
+  nextRetryAtMs: bigint('next_retry_at_ms', { mode: 'number' }),
+  lastEventAtMs: bigint('last_event_at_ms', { mode: 'number' }).notNull(),
   lastError: text('last_error'),
-  claimedAtMs: integer('claimed_at_ms').notNull(),
+  claimedAtMs: bigint('claimed_at_ms', { mode: 'number' }).notNull(),
   userId: text('user_id').notNull(),
   tokensTotal: integer('tokens_total').notNull().default(0),
-  updatedAtMs: integer('updated_at_ms').notNull(),
+  updatedAtMs: bigint('updated_at_ms', { mode: 'number' }).notNull(),
 });
 
 /**

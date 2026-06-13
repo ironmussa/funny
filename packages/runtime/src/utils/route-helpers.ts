@@ -74,7 +74,19 @@ export async function requireThreadWithMessages(
   return ok(result);
 }
 
-/** Get a project by ID or return Err(NOT_FOUND). Verifies ownership. */
+/**
+ * Get a project by ID or return Err(NOT_FOUND). Verifies access and resolves
+ * the caller's working directory.
+ *
+ * Access is granted to: the owner, a **collaborator** (a `project_members` row —
+ * the "Collaborators" feature), or a member of an org the project is shared
+ * with. For a collaborator the returned project's `path` is overridden with
+ * THEIR own configured local directory: each collaborator works through their
+ * own runner, so every downstream git op must run against the collaborator's
+ * checkout — not the owner's path, which doesn't exist on the collaborator's
+ * machine. `resolveProjectPath` performs both the membership authorization and
+ * the per-user path lookup (proxied to the server on a runner).
+ */
 export async function requireProject(
   id: string,
   userId?: string,
@@ -84,17 +96,21 @@ export async function requireProject(
 > {
   const project = await getServices().projects.getProject(id);
   if (!project) return err(notFound('Project not found'));
-  if (userId) {
-    const ownerCheck = checkOwnership(project, userId);
-    if (ownerCheck.isErr()) {
-      if (organizationId) {
-        const isTeam = await getServices().projects.isProjectInOrg(project.id, organizationId);
-        if (isTeam) return ok(project);
-      }
-      return err(ownerCheck.error);
-    }
+  if (!userId) return ok(project);
+
+  // Owner → authorized; use the project's own path.
+  if (project.userId === userId) return ok(project);
+
+  // Collaborator → authorized with their own working directory.
+  const resolved = await getServices().projects.resolveProjectPath(id, userId);
+  if (resolved.isOk()) return ok({ ...project, path: resolved.value });
+
+  // Org-shared fallback (single-machine team sharing keeps the owner's path).
+  if (organizationId) {
+    const isTeam = await getServices().projects.isProjectInOrg(project.id, organizationId);
+    if (isTeam) return ok(project);
   }
-  return ok(project);
+  return err(forbidden('Access denied'));
 }
 
 /**
@@ -111,6 +127,13 @@ export async function requireThreadCwd(
   if (threadResult.isErr()) return err(threadResult.error);
   const thread = threadResult.value;
   if (thread.worktreePath) return ok(thread.worktreePath);
+  // Local mode: resolve the project path for THIS user. A collaborator runs the
+  // agent on their own runner against their own configured directory, so prefer
+  // the per-user resolution and fall back to the project's own path.
+  if (userId) {
+    const resolved = await getServices().projects.resolveProjectPath(thread.projectId, userId);
+    if (resolved.isOk()) return ok(resolved.value);
+  }
   const project = await getServices().projects.getProject(thread.projectId);
   if (!project) return err(notFound('Project not found'));
   return ok(project.path);

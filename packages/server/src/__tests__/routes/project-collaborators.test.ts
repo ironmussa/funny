@@ -178,6 +178,34 @@ describe('project collaborators', () => {
     });
   });
 
+  describe('GET /api/projects/:id/members — enriched with user display fields', () => {
+    test('members carry their user name/username for the Collaborators UI', async () => {
+      const now = new Date().toISOString();
+      (t.db as any)
+        .insert(user)
+        .values([
+          {
+            id: 'u-carol',
+            name: 'Carol Danvers',
+            email: 'carol@local.host',
+            username: 'carol',
+            emailVerified: 0,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ])
+        .run();
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-carol', role: 'member' });
+
+      const res = await t.requestAs('owner').get('/api/projects/p1/members');
+      expect(res.status).toBe(200);
+      const { members } = (await res.json()) as { members: any[] };
+      const carol = members.find((m) => m.userId === 'u-carol');
+      expect(carol?.user?.username).toBe('carol');
+      expect(carol?.user?.name).toBe('Carol Danvers');
+    });
+  });
+
   describe('GET /api/users/search', () => {
     test('finds users by username, name, or email', async () => {
       const now = new Date().toISOString();

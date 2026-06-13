@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Users, UsersRound } from 'lucide-react';
+import { ArrowLeft, Settings, UserPlus, Users, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -54,15 +54,24 @@ export function SettingsPanelBody() {
   let items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
     ? [...settingsItems].filter((item) => item.id !== 'archived-threads')
     : [...settingsItems];
-  if (selectedProjectId && !isProjectAdmin) {
-    // Collaborators may freely configure their OWN runner/checkout — worktrees,
-    // hooks, MCP servers, skills and `.funny.json` all proxy to their personal
-    // runner, so those stay editable. Only the shared, server-owned config
-    // (project defaults + startup commands, stored once in the DB) is gated to
-    // project admins.
-    items = items.filter((item) => !PROJECT_ADMIN_ONLY_TABS.has(item.id));
-  }
-  if (authUser?.role === 'admin') {
+
+  if (selectedProjectId) {
+    // ── Project context ──
+    if (!isProjectAdmin) {
+      // Collaborators may freely configure their OWN runner/checkout — worktrees,
+      // hooks, MCP servers, skills and `.funny.json` all proxy to their personal
+      // runner, so those stay editable. Only the shared, server-owned config
+      // (project defaults + startup commands, stored once in the DB) is gated to
+      // project admins.
+      items = items.filter((item) => !PROJECT_ADMIN_ONLY_TABS.has(item.id));
+    } else {
+      // Managing who has access to THIS project is a project-admin action and
+      // lives here (not the global Users/Team-Members pages, which are account-
+      // and org-level and only appear in global preferences).
+      items.push({ id: 'collaborators', label: 'Collaborators', icon: UserPlus });
+    }
+  } else if (authUser?.role === 'admin') {
+    // ── Global context, server admins only ──
     items.push({ id: 'users', label: 'Users', icon: Users });
     items.push({ id: 'team-members', label: 'Team Members', icon: UsersRound });
   }

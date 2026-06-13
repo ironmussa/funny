@@ -105,6 +105,16 @@ export const githubApi = {
       `/github/pr-threads?projectId=${projectId}&prNumber=${prNumber}`,
     ),
 
+  githubPRMerge: (
+    projectId: string,
+    prNumber: number,
+    method: 'squash' | 'merge' | 'rebase' = 'squash',
+  ) =>
+    request<{ merged: boolean; sha: string; message: string }>(`/github/pr-merge`, {
+      method: 'POST',
+      body: JSON.stringify({ projectId, prNumber, method }),
+    }),
+
   githubPRConversation: (projectId: string, prNumber: number) =>
     request<import('@funny/shared').PRConversation>(
       `/github/pr-conversation?projectId=${projectId}&prNumber=${prNumber}`,

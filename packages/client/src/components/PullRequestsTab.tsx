@@ -462,6 +462,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                   pr={pr}
                   projectId={projectId}
                   currentUserLogin={currentUserLogin}
+                  onMerged={refresh}
                 />
               ))}
             </div>
@@ -491,6 +492,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                         pr={pr}
                         projectId={projectId}
                         currentUserLogin={currentUserLogin}
+                        onMerged={refresh}
                       />
                     ))}
                   </div>

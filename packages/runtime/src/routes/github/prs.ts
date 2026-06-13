@@ -4,7 +4,13 @@ import { Hono } from 'hono';
 
 import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
-import { GITHUB_API, githubApiFetch, parseGithubOwnerRepo, resolveGithubToken } from './helpers.js';
+import {
+  GITHUB_API,
+  githubApiFetch,
+  parseGithubOwnerRepo,
+  resolveGithubProjectContext,
+  resolveGithubToken,
+} from './helpers.js';
 
 export const prRoutes = new Hono<HonoEnv>();
 
@@ -208,6 +214,52 @@ prRoutes.get('/pr-detail', async (c) => {
     };
 
     return c.json(detail);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 502);
+  }
+});
+
+// ── POST /pr-merge — merge a pull request ──────
+
+const MERGE_METHODS = new Set(['squash', 'merge', 'rebase']);
+
+prRoutes.post('/pr-merge', async (c) => {
+  const userId = c.get('userId') as string;
+  const raw = (await c.req.json().catch(() => null)) as {
+    projectId?: string;
+    prNumber?: number;
+    method?: 'squash' | 'merge' | 'rebase';
+  } | null;
+
+  if (!raw?.projectId || !raw?.prNumber) {
+    return c.json({ error: 'projectId and prNumber are required' }, 400);
+  }
+
+  const method = raw.method ?? 'squash';
+  if (!MERGE_METHODS.has(method)) {
+    return c.json({ error: 'Invalid merge method' }, 400);
+  }
+
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const { owner, repo, token } = ctx;
+
+  try {
+    const res = await githubApiFetch(`/repos/${owner}/${repo}/pulls/${raw.prNumber}/merge`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ merge_method: method }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { message?: string };
+      const message = body.message || `GitHub API error: ${res.status}`;
+      // 405 = not mergeable, 409 = head changed/merge conflict — surface as 409
+      const status = res.status === 405 || res.status === 409 ? 409 : 502;
+      return c.json({ error: message }, status);
+    }
+
+    const data = (await res.json()) as { sha: string; merged: boolean; message: string };
+    return c.json({ merged: data.merged, sha: data.sha, message: data.message });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }

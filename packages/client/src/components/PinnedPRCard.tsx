@@ -11,8 +11,10 @@ import type {
 } from '@funny/shared';
 import {
   CheckCircle2,
+  ChevronDown,
   CircleDot,
   ExternalLink,
+  GitMerge,
   Loader2,
   MessageSquare,
   Pencil,
@@ -29,6 +31,14 @@ import { useTranslation } from 'react-i18next';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -115,7 +125,11 @@ interface PinnedPRCardProps {
   pr: GitHubPR;
   projectId: string;
   currentUserLogin?: string;
+  /** Called after a successful merge so the parent can refresh the PR list. */
+  onMerged?: (prNumber: number) => void;
 }
+
+type MergeMethod = 'squash' | 'merge' | 'rebase';
 
 // ── Reaction bar ──
 
@@ -249,12 +263,15 @@ function EditForm({
 
 // ── Main component ──
 
-export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardProps) {
+export function PinnedPRCard({ pr, projectId, currentUserLogin, onMerged }: PinnedPRCardProps) {
   const { t } = useTranslation();
   const [threads, setThreads] = useState<PRReviewThread[]>([]);
   const [conversation, setConversation] = useState<PRConversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [merging, setMerging] = useState(false);
+  const [merged, setMerged] = useState(false);
 
   const [replyForThread, setReplyForThread] = useState<number | null>(null);
   const [replyBody, setReplyBody] = useState('');
@@ -294,6 +311,23 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
   }, [loadAll]);
 
   // ── Actions ──
+
+  const handleMerge = async (method: MergeMethod) => {
+    setMerging(true);
+    setError(null);
+    const res = await api.githubPRMerge(projectId, pr.number, method);
+    if (res.isOk() && res.value.merged) {
+      setMerged(true);
+      onMerged?.(pr.number);
+    } else {
+      const message = res.isErr()
+        ? res.error.message
+        : t('review.pullRequests.mergeFailed', 'Failed to merge pull request');
+      log.error('pr_merge_failed', { error: message, prNumber: pr.number, method });
+      setError(message);
+    }
+    setMerging(false);
+  };
 
   const handleNewComment = async () => {
     const body = newComment.trim();
@@ -635,6 +669,27 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
 
   const unresolvedCount = threads.filter((t) => !t.is_resolved).length;
 
+  const isMerged = merged || !!pr.merged_at;
+  const canMerge = pr.state === 'open' && !pr.draft && !isMerged;
+
+  const mergeMethods: Array<{ method: MergeMethod; label: string; hint: string }> = [
+    {
+      method: 'squash',
+      label: t('review.pullRequests.squashAndMerge', 'Squash and merge'),
+      hint: t('review.pullRequests.squashHint', 'Combine all commits into one'),
+    },
+    {
+      method: 'merge',
+      label: t('review.pullRequests.createMergeCommit', 'Create a merge commit'),
+      hint: t('review.pullRequests.mergeHint', 'Keep all commits'),
+    },
+    {
+      method: 'rebase',
+      label: t('review.pullRequests.rebaseAndMerge', 'Rebase and merge'),
+      hint: t('review.pullRequests.rebaseHint', 'Rebase commits onto the base'),
+    },
+  ];
+
   return (
     <div
       className="border-sidebar-border bg-sidebar-accent/10 flex flex-col gap-3 border-b p-3"
@@ -657,6 +712,53 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
               <span className="text-sm font-semibold">{pr.title}</span>
             </div>
           </div>
+          {isMerged && (
+            <Badge
+              variant="outline"
+              className="shrink-0 gap-1 border-purple-500/30 bg-purple-500/15 text-[10px] text-purple-400"
+              data-testid={`pinned-pr-merged-badge-${pr.number}`}
+            >
+              <GitMerge className="size-2.5" />
+              {t('review.pullRequests.merged', 'Merged')}
+            </Badge>
+          )}
+          {canMerge && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="xs"
+                  className="shrink-0 gap-1"
+                  disabled={merging}
+                  data-testid={`pinned-pr-merge-${pr.number}`}
+                >
+                  {merging ? (
+                    <Loader2 className="icon-xs animate-spin" />
+                  ) : (
+                    <GitMerge className="icon-xs" />
+                  )}
+                  {t('review.pullRequests.merge', 'Merge')}
+                  <ChevronDown className="icon-xs" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  {t('review.pullRequests.mergeMethod', 'Merge method')}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {mergeMethods.map(({ method, label, hint }) => (
+                  <DropdownMenuItem
+                    key={method}
+                    onSelect={() => handleMerge(method)}
+                    className="flex flex-col items-start gap-0.5"
+                    data-testid={`pinned-pr-merge-${method}-${pr.number}`}
+                  >
+                    <span className="text-xs font-medium">{label}</span>
+                    <span className="text-muted-foreground text-[10px]">{hint}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

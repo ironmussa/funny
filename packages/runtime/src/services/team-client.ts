@@ -46,6 +46,11 @@ import { io, type Socket } from 'socket.io-client';
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { resolveProviderAvailability } from '../utils/provider-detection.js';
+import {
+  clearRunnerCredentials,
+  loadRunnerCredentials,
+  saveRunnerCredentials,
+} from './runner-credentials.js';
 import { getServices } from './service-registry.js';
 
 /**
@@ -191,6 +196,14 @@ async function register(): Promise<boolean> {
       // Non-fatal — heartbeat verification is best-effort
     }
 
+    // Persist the bearer token so restarts resume this session instead of
+    // demanding a fresh (single-use) invite token from the UI.
+    saveRunnerCredentials({
+      serverUrl: state.serverUrl,
+      runnerId: data.runnerId,
+      token: data.token,
+    });
+
     log.info('Registered with central server', {
       namespace: 'runner',
       runnerId: data.runnerId,
@@ -208,11 +221,68 @@ async function register(): Promise<boolean> {
 }
 
 /**
+ * Try to resume a previous session using the persisted bearer token.
+ *
+ * Verifies the stored token with a heartbeat. On success the runner is
+ * authenticated without consuming an invite token. When the server rejects
+ * the token (401 invalid, 404 runner purged), the stored credentials are
+ * cleared so the caller falls back to a fresh registration.
+ */
+async function resumeSession(): Promise<boolean> {
+  const creds = loadRunnerCredentials(state.serverUrl);
+  if (!creds) return false;
+
+  state.runnerId = creds.runnerId;
+  state.runnerToken = creds.token;
+
+  try {
+    const res = await centralFetch('/api/runners/heartbeat', {
+      method: 'POST',
+      body: JSON.stringify({ activeThreadIds: [], ...(await advertisedProviderState()) }),
+    });
+    if (res.ok) {
+      log.info('Resumed runner session from stored credentials', {
+        namespace: 'runner',
+        runnerId: creds.runnerId,
+      });
+      return true;
+    }
+    if (res.status === 401 || res.status === 404) {
+      log.warn('Stored runner credentials rejected by server — falling back to registration', {
+        namespace: 'runner',
+        status: res.status,
+      });
+      clearRunnerCredentials();
+    } else {
+      log.warn('Session resume got unexpected status — falling back to registration', {
+        namespace: 'runner',
+        status: res.status,
+      });
+    }
+  } catch (err) {
+    // Network error: the server may just be down. Keep the stored
+    // credentials (they may still be valid) but let registration retry
+    // handle the wait — register() itself retries indefinitely.
+    log.warn('Session resume failed (network) — falling back to registration', {
+      namespace: 'runner',
+      error: String(err),
+    });
+  }
+
+  state.runnerId = null;
+  state.runnerToken = null;
+  return false;
+}
+
+/**
  * Retry registration with exponential backoff.
  * Retries indefinitely — the server may not be ready when the runner starts.
+ * Each attempt first tries to resume the persisted session (cheap heartbeat)
+ * so a transient network failure at startup never burns an invite token.
  */
 async function registerWithRetry(): Promise<boolean> {
   for (let attempt = 1; ; attempt++) {
+    if (await resumeSession()) return true;
     const ok = await register();
     if (ok) return true;
 
@@ -243,6 +313,7 @@ async function sendHeartbeat(): Promise<void> {
       log.warn('Runner not found on server — re-registering', { namespace: 'runner' });
       state.runnerId = null;
       state.runnerToken = null;
+      clearRunnerCredentials();
       const ok = await register();
       if (ok) {
         // Reconnect Socket.IO with new token
@@ -298,6 +369,7 @@ async function sendHeartbeatWS(): Promise<void> {
       log.warn('Runner not found on server — re-registering', { namespace: 'runner' });
       state.runnerId = null;
       state.runnerToken = null;
+      clearRunnerCredentials();
       const ok = await register();
       if (ok) {
         if (state.socket) {
@@ -546,6 +618,7 @@ function connectSocket(): void {
         socket.disconnect();
         state.runnerId = null;
         state.runnerToken = null;
+        clearRunnerCredentials();
         const ok = await register();
         if (ok) {
           _reregisterAttempts = 0; // Reset on success

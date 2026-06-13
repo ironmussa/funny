@@ -582,6 +582,49 @@ describe('useUIStore', () => {
       useUIStore.getState().setKanbanContext({ projectId: 'p1', viewMode: 'board' });
       expect(useUIStore.getState().kanbanContext).toEqual({ projectId: 'p1', viewMode: 'board' });
     });
+
+    test('setKanbanContext with threadId + search seeds pendingThreadSearch', () => {
+      useUIStore.getState().setKanbanContext({
+        projectId: 'p1',
+        search: '  foo  ',
+        caseSensitive: true,
+        threadId: 't1',
+        viewMode: 'list',
+      });
+      expect(useUIStore.getState().pendingThreadSearch).toEqual({
+        threadId: 't1',
+        query: 'foo',
+        caseSensitive: true,
+      });
+    });
+
+    test('setKanbanContext with threadId but no search clears stale pendingThreadSearch', () => {
+      useUIStore.setState({
+        pendingThreadSearch: { threadId: 'old', query: 'stale', caseSensitive: false },
+      });
+      useUIStore.getState().setKanbanContext({ projectId: 'p1', threadId: 't2', search: '' });
+      expect(useUIStore.getState().pendingThreadSearch).toBeNull();
+    });
+
+    test('setKanbanContext(null) leaves pendingThreadSearch untouched', () => {
+      const pending = { threadId: 't1', query: 'foo', caseSensitive: false };
+      useUIStore.setState({ pendingThreadSearch: pending });
+      useUIStore.getState().setKanbanContext(null);
+      expect(useUIStore.getState().pendingThreadSearch).toEqual(pending);
+    });
+
+    test('setPendingThreadSearch sets and clears', () => {
+      useUIStore
+        .getState()
+        .setPendingThreadSearch({ threadId: 't1', query: 'q', caseSensitive: false });
+      expect(useUIStore.getState().pendingThreadSearch).toEqual({
+        threadId: 't1',
+        query: 'q',
+        caseSensitive: false,
+      });
+      useUIStore.getState().setPendingThreadSearch(null);
+      expect(useUIStore.getState().pendingThreadSearch).toBeNull();
+    });
   });
 
   describe('issue + compose helpers', () => {

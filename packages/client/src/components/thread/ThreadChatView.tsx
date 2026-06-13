@@ -91,7 +91,17 @@ export function ThreadChatView({ activeThread }: Props) {
   }, [snapshots]);
 
   const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose } =
-    useThreadSearchState(streamRef);
+    useThreadSearchState(streamRef, activeThread.id);
+
+  // Search handoff from the list/board views: arriving at a thread via a
+  // search-result click opens the in-thread search pre-filled with that
+  // query. ThreadSearchBar consumes (and clears) the pending entry itself.
+  const pendingThreadSearch = useUIStore((s) => s.pendingThreadSearch);
+  useEffect(() => {
+    if (pendingThreadSearch && pendingThreadSearch.threadId === activeThread.id) {
+      setSearchOpen(true);
+    }
+  }, [pendingThreadSearch, activeThread.id, setSearchOpen]);
 
   // Global Ctrl+F opens the per-thread search in the main chat view. Scoped
   // to the active thread; the grid view has its own per-column handler.

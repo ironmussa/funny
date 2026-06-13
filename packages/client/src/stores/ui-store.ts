@@ -64,9 +64,16 @@ interface UIState {
   kanbanContext: {
     projectId?: string;
     search?: string;
+    caseSensitive?: boolean;
     threadId?: string;
     viewMode?: 'board' | 'list';
   } | null;
+  /**
+   * Search handoff from a list/board view into the thread view: when the user
+   * clicks a search result, the thread view opens its in-thread search bar
+   * pre-filled with this query. Consumed (cleared) by ThreadSearchBar.
+   */
+  pendingThreadSearch: { threadId: string; query: string; caseSensitive: boolean } | null;
   /** Pre-fill context for creating a thread from a GitHub issue */
   newThreadIssueContext: { prompt: string; branchName: string; title: string } | null;
   /** Pre-fill prompt for compose mode coming from external sources (e.g. Tauri annotator). */
@@ -131,9 +138,13 @@ interface UIState {
     context: {
       projectId?: string;
       search?: string;
+      caseSensitive?: boolean;
       threadId?: string;
       viewMode?: 'board' | 'list';
     } | null,
+  ) => void;
+  setPendingThreadSearch: (
+    pending: { threadId: string; query: string; caseSensitive: boolean } | null,
   ) => void;
   startNewThreadFromIssue: (
     projectId: string,
@@ -211,6 +222,7 @@ export const useUIStore = create<UIState>((set) => ({
     return 'changes' as ReviewSubTab;
   })(),
   kanbanContext: null,
+  pendingThreadSearch: null,
   newThreadIssueContext: null,
   composePrefillPrompt: null,
   commandPaletteOpen: false,
@@ -652,7 +664,29 @@ export const useUIStore = create<UIState>((set) => ({
     } catch {}
     set({ timelineVisible: visible });
   },
-  setKanbanContext: (context) => set({ kanbanContext: context }),
+  setKanbanContext: (context) =>
+    set(() => {
+      // Card-click handoff: every list/board result click routes through here
+      // with the active search + target thread. Derive the in-thread search
+      // seed so the thread view can reopen the query with highlights. A
+      // thread click without a search clears any stale seed.
+      if (context?.threadId) {
+        const query = context.search?.trim();
+        return {
+          kanbanContext: context,
+          pendingThreadSearch: query
+            ? {
+                threadId: context.threadId,
+                query,
+                caseSensitive: context.caseSensitive ?? false,
+              }
+            : null,
+        };
+      }
+      return { kanbanContext: context };
+    }),
+
+  setPendingThreadSearch: (pending) => set({ pendingThreadSearch: pending }),
 
   startNewThreadFromIssue: (projectId, issueContext) => {
     // Reuse startNewThread logic but also set the issue context

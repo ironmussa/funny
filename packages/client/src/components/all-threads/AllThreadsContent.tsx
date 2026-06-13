@@ -16,6 +16,7 @@ interface Props {
   viewMode: 'list' | 'board';
   threads: Thread[];
   search: string;
+  caseSensitive: boolean;
   contentMatches: Map<string, string>;
   highlightThreadId?: string;
   projectFilter: string | null;
@@ -37,6 +38,7 @@ export function AllThreadsContent({
   viewMode,
   threads,
   search,
+  caseSensitive,
   contentMatches,
   highlightThreadId,
   projectFilter,
@@ -57,6 +59,7 @@ export function AllThreadsContent({
           threads={threads}
           projectId={projectFilter || undefined}
           search={search}
+          caseSensitive={caseSensitive}
           contentSnippets={contentMatches}
           highlightThreadId={highlightThreadId}
         />
@@ -85,6 +88,7 @@ export function AllThreadsContent({
           useUIStore.getState().setKanbanContext({
             projectId: projectFilter || undefined,
             search,
+            caseSensitive,
             threadId: thread.id,
             viewMode: 'list',
           });

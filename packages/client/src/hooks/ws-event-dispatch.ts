@@ -370,6 +370,14 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       }
       break;
     }
+    case 'thread:stage-changed': {
+      useThreadStore.getState().handleWSStageChanged(threadId, {
+        fromStage: data.fromStage ?? null,
+        toStage: data.toStage,
+        projectId: data.projectId,
+      });
+      break;
+    }
     case 'thread:updated': {
       const store2 = useThreadStore.getState();
       if (data.status) {
@@ -683,6 +691,7 @@ const ALL_EVENT_TYPES = [
   'thread:released',
   'thread:created',
   'thread:comment_deleted',
+  'thread:stage-changed',
   'thread:updated',
   'git:status',
   'git:refs-updated',

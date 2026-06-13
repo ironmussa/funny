@@ -87,6 +87,13 @@ export interface ThreadState {
   ) => void;
   rollbackOptimisticMessage: (threadId: string) => void;
   loadOlderMessages: () => Promise<void>;
+  /**
+   * Load older message pages for a thread until the given message id is
+   * present in the loaded window (or there is nothing left to load).
+   * Returns true when the message ended up loaded. Used by in-thread search
+   * to navigate to matches that live in not-yet-paginated history.
+   */
+  loadMessagesUntil: (threadId: string, messageId: string) => Promise<boolean>;
   refreshActiveThread: () => Promise<void>;
   refreshAllLoadedThreads: () => Promise<void>;
   clearProjectThreads: (projectId: string) => void;
@@ -129,6 +136,10 @@ export interface ThreadState {
   ) => void;
   handleWSToolOutput: (threadId: string, data: { toolCallId: string; output: string }) => void;
   handleWSStatus: (threadId: string, data: { status: string }) => void;
+  handleWSStageChanged: (
+    threadId: string,
+    data: { fromStage: ThreadStage | null; toStage: ThreadStage; projectId: string },
+  ) => void;
   handleWSError: (threadId: string, data: { error?: string }) => void;
   handleWSResult: (threadId: string, data: any) => void;
   handleWSQueueUpdate: (

@@ -1,5 +1,5 @@
 import type { Thread } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
+import { afterEach, describe, test, expect } from 'vitest';
 
 import {
   replaceProjectThreads,
@@ -14,10 +14,16 @@ import {
   clearThreadData,
   findProjectForThread,
 } from '@/stores/thread-mutations';
+import {
+  guardOptimisticBoardWrite,
+  _resetOptimisticBoardWrites,
+} from '@/stores/thread-optimistic-guard';
 import type { ThreadState } from '@/stores/thread-state';
 import type { ThreadWithMessages } from '@/stores/thread-types';
 
 import { seedThreads } from '../helpers/seed-thread-state';
+
+afterEach(() => _resetOptimisticBoardWrites());
 
 function makeThread(id: string, overrides: Partial<Thread> = {}): Thread {
   return {
@@ -73,6 +79,49 @@ describe('thread-mutations — project buckets', () => {
     expect(patch.threadsById!.t3).toBeDefined();
     // Old row remains in map until explicitly removed — replace only swaps order.
     expect(patch.threadsById!.old).toBeDefined();
+  });
+
+  test('replaceProjectThreads keeps resident archived threads omitted by the page', () => {
+    const state = emptyState({
+      ...seedThreads({
+        p1: [makeThread('active'), makeThread('arch', { archived: true })],
+      }),
+      threadTotalByProject: { p1: 2 },
+    });
+    // A non-archived reload returns only the active thread.
+    const patch = replaceProjectThreads(state, 'p1', [makeThread('active')], 1);
+
+    // The archived card survives the refresh and is kept at the tail.
+    expect(patch.threadIdsByProject!.p1).toEqual(['active', 'arch']);
+    expect(patch.threadsById!.arch.archived).toBe(true);
+  });
+
+  test('replaceProjectThreads does not duplicate an archived thread present in the page', () => {
+    const state = emptyState({
+      ...seedThreads({ p1: [makeThread('arch', { archived: true })] }),
+      threadTotalByProject: { p1: 1 },
+    });
+    // An includeArchived reload returns the archived thread in the page itself.
+    const patch = replaceProjectThreads(state, 'p1', [makeThread('arch', { archived: true })], 1);
+
+    expect(patch.threadIdsByProject!.p1).toEqual(['arch']);
+  });
+
+  test('replaceProjectThreads does not revert an optimistically archived card from a stale page', () => {
+    const state = emptyState({
+      ...seedThreads({ p1: [makeThread('t1', { archived: true, stage: 'in_progress' })] }),
+      threadTotalByProject: { p1: 1 },
+    });
+    // The user just archived t1 (optimistic) — guard the write.
+    guardOptimisticBoardWrite('t1', { archived: true });
+    // A list GET that started before the archive committed returns t1 as live.
+    const stalePage = [makeThread('t1', { archived: false, stage: 'in_progress' })];
+
+    const patch = replaceProjectThreads(state, 'p1', stalePage, 1);
+
+    // The card stays archived instead of bouncing back to its old column.
+    expect(patch.threadsById!.t1.archived).toBe(true);
+    expect(patch.threadIdsByProject!.p1).toEqual(['t1']);
   });
 
   test('appendProjectThreads skips duplicate ids and updates total only when empty', () => {

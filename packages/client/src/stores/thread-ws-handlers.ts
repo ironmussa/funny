@@ -14,7 +14,13 @@
  * replayed once `selectThread` lands the snapshot.
  */
 
-import type { Thread, MessageRole, ThreadStatus, ImageAttachment } from '@funny/shared';
+import type {
+  Thread,
+  MessageRole,
+  ThreadStatus,
+  ImageAttachment,
+  ThreadStage,
+} from '@funny/shared';
 import { toast } from 'sonner';
 
 import i18n from '@/i18n/config';
@@ -540,6 +546,47 @@ export function handleWSStatus(
       // (e.g. Chrome extension ingest). Debounce refresh to avoid API storm.
       scheduleProjectRefresh(get);
     }
+  }
+}
+
+// ── Stage changed ───────────────────────────────────────────────
+//
+// The server emits `thread:stage-changed` for EVERY stage transition —
+// both user-driven (a Kanban drag, echoed back to all of the user's
+// tabs) and server-driven (e.g. an agent finishing auto-transitions the
+// thread from `in_progress` to `review`). Without a client handler the
+// board only reflected the optimistic local drag and silently dropped
+// every server-driven move, so a completed card stayed stranded in the
+// "In Progress" column until a manual reload. This patches the same
+// single source of truth as the other handlers so the board (and the
+// right pane) stay live.
+export function handleWSStageChanged(
+  get: Get,
+  set: Set,
+  threadId: string,
+  data: { fromStage: ThreadStage | null; toStage: ThreadStage; projectId: string },
+): void {
+  const toStage = data.toStage;
+  // The Kanban derives a card's column from `archived ? 'archived' : stage`.
+  // Keep both fields consistent: archiving flips the flag; any other target
+  // both clears `archived` (un-archive) and sets the new stage.
+  const apply = <T extends Thread>(t: T): T => {
+    if (toStage === 'archived') {
+      return t.archived ? t : { ...t, archived: true };
+    }
+    if (t.archived || t.stage !== toStage) {
+      return { ...t, archived: false, stage: toStage };
+    }
+    return t;
+  };
+
+  const { found, patch: sidebarPatch } = patchSidebarThread(get, threadId, apply);
+  const payloadPatch = mutations.applyThreadDataPatch(get(), threadId, apply);
+  const combined = { ...sidebarPatch, ...payloadPatch };
+  if (Object.keys(combined).length > 0) set(combined as any);
+
+  if (!found) {
+    scheduleProjectRefresh(get, data.projectId || undefined);
   }
 }
 

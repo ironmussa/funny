@@ -152,6 +152,7 @@ function BackButtons({
     const params = new URLSearchParams();
     if (targetProjectId !== '__all__') params.set('project', targetProjectId);
     if (kanbanContext.search) params.set('search', kanbanContext.search);
+    if (kanbanContext.caseSensitive) params.set('cs', '1');
     if (kanbanContext.threadId) params.set('highlight', kanbanContext.threadId);
     const qs = params.toString();
     navigate(buildPath(qs ? `${basePath}?${qs}` : basePath));

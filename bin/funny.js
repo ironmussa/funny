@@ -117,6 +117,10 @@ const { values, positionals } = parseArgs({
       type: 'string',
       description: 'Runner invite token for team server registration',
     },
+    secret: {
+      type: 'string',
+      description: 'Shared RUNNER_AUTH_SECRET (must match the central server) for team mode',
+    },
     help: {
       type: 'boolean',
     },
@@ -136,15 +140,21 @@ Options:
   -h, --host <host>          Server host (default: 127.0.0.1)
   --team <url>               Connect to a central team server (e.g. http://192.168.1.10:3002)
   --token <token>            Runner invite token for team server registration
+  --secret <secret>          Shared RUNNER_AUTH_SECRET — must match the central server (team mode)
   --help                     Show this help message
 
 Team Mode:
   Connect this instance as a runner to a central server:
 
-    funny --team http://192.168.1.10:3002 --token utkn_xxx
+    funny --team http://192.168.1.10:3002 --secret <secret> --token utkn_xxx
 
-  The --team and --token values are saved to ~/.funny/.env so subsequent
-  runs only need:
+  RUNNER_AUTH_SECRET is a shared secret: the runner MUST use the same value
+  as the central server (ask your admin for it). In team mode funny will NOT
+  invent one — it refuses to start without it, since a mismatched secret
+  breaks every proxied request (browse, agents, git).
+
+  The --team, --secret and --token values are saved to ~/.funny/.env so
+  subsequent runs only need:
 
     funny
 
@@ -153,8 +163,8 @@ Team Mode:
 Examples:
   funny                          # Start standalone on http://127.0.0.1:3001
   funny --port 8080              # Start on custom port
-  funny --team http://central:3002 --token utkn_xxx  # Connect to team server (saves config)
-  funny --team http://central:3002  # Re-connect with saved token
+  funny --team http://central:3002 --secret abc123 --token utkn_xxx  # Connect to team server (saves config)
+  funny --team http://central:3002  # Re-connect with saved secret + token
 
 Authentication:
   Always uses Better Auth with login page. Default admin account (admin/admin)
@@ -165,6 +175,7 @@ Environment Variables:
   HOST                       Server host
   TEAM_SERVER_URL            Central team server URL (same as --team)
   RUNNER_INVITE_TOKEN        Runner invite token (same as --token)
+  RUNNER_AUTH_SECRET         Shared secret matching the central server (same as --secret)
   CORS_ORIGIN                Custom CORS origins (comma-separated)
   DB_MODE                    Database mode: sqlite (default) or postgres
   DATABASE_URL               PostgreSQL connection URL (when DB_MODE=postgres)
@@ -190,12 +201,16 @@ if (values.team) {
 if (values.token) {
   process.env.RUNNER_INVITE_TOKEN = values.token;
 }
+if (values.secret) {
+  process.env.RUNNER_AUTH_SECRET = values.secret;
+}
 
 // ── Save team config when provided via CLI ────────────────
 
 const toSave = {};
 if (values.team) toSave.TEAM_SERVER_URL = values.team;
 if (values.token) toSave.RUNNER_INVITE_TOKEN = values.token;
+if (values.secret) toSave.RUNNER_AUTH_SECRET = values.secret;
 
 if (Object.keys(toSave).length > 0) {
   try {
@@ -215,9 +230,29 @@ if (process.env.TEAM_SERVER_URL) {
   );
 }
 
-// ── Generate RUNNER_AUTH_SECRET if not set ─────────────────
+// ── Resolve RUNNER_AUTH_SECRET ─────────────────────────────
+// RUNNER_AUTH_SECRET is a SHARED secret: in team mode the runner and the
+// central server must hold the SAME value (it's the HMAC key for the
+// forwarded-identity signature). Minting a random one here would silently
+// break every proxied request — browse, agents, git — with a 500 from the
+// server's auth middleware, because the signature would never validate.
+// So in team mode require it explicitly and fail with a clear message.
+// Only standalone all-in-one mode (no remote server) may generate its own,
+// since there the secret is purely process-internal.
 
 if (!process.env.RUNNER_AUTH_SECRET) {
+  if (process.env.TEAM_SERVER_URL) {
+    console.error(
+      '\n[funny] ERROR: RUNNER_AUTH_SECRET is required in team mode.\n\n' +
+        'This runner connects to a central server and must use the SAME\n' +
+        'RUNNER_AUTH_SECRET as that server. Ask your admin for it, then pass\n' +
+        'it via flag or env (it is saved to ~/.funny/.env for next time):\n\n' +
+        `  funny --team ${process.env.TEAM_SERVER_URL} --secret <secret-from-admin> --token <invite-token>\n\n` +
+        'or:\n\n' +
+        `  RUNNER_AUTH_SECRET=<secret-from-admin> funny --team ${process.env.TEAM_SERVER_URL}\n`,
+    );
+    process.exit(1);
+  }
   const crypto = await import('crypto');
   process.env.RUNNER_AUTH_SECRET = crypto.randomUUID();
 }

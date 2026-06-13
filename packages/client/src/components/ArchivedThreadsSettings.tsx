@@ -1,60 +1,74 @@
-import type { Thread } from '@funny/shared';
+import type { GitStatusInfo, Thread } from '@funny/shared';
 import { ArchiveRestore, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { ThreadListView } from '@/components/ThreadListView';
+import { ThreadPowerline } from '@/components/ThreadPowerline';
+import { LoadingState } from '@/components/ui/loading-state';
+import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
+import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
 
-const PAGE_SIZE_OPTIONS = [100, 250, 500, 1000] as const;
-const DEFAULT_PAGE_SIZE = 100;
+const PAGE_SIZE = 100;
 
 export function ArchivedThreadsSettings() {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const projectMap = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
-  const fetchArchived = useCallback(async (p: number, l: number, s: string) => {
-    setLoading(true);
-    const result = await api.listArchivedThreads({ page: p, limit: l, search: s || undefined });
+  // Fetch one page. page 1 replaces the list (initial load / new search);
+  // later pages append for infinite scroll.
+  const fetchArchived = useCallback(async (p: number, s: string) => {
+    if (p === 1) setLoading(true);
+    else setLoadingMore(true);
+    const result = await api.listArchivedThreads({
+      page: p,
+      limit: PAGE_SIZE,
+      search: s || undefined,
+    });
     if (result.isOk()) {
-      setThreads(result.value.threads);
       setTotal(result.value.total);
+      setThreads((prev) => (p === 1 ? result.value.threads : [...prev, ...result.value.threads]));
     }
     // silently ignore errors
     setLoading(false);
+    setLoadingMore(false);
   }, []);
 
+  // Reset to page 1 and refetch whenever the debounced query changes.
   useEffect(() => {
-    fetchArchived(page, limit, debouncedSearch);
-  }, [fetchArchived, page, limit, debouncedSearch]);
+    setPage(1);
+    fetchArchived(1, debouncedSearch);
+  }, [fetchArchived, debouncedSearch]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setDebouncedSearch(value);
-      setPage(1);
-    }, 300);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(value), 300);
   };
 
-  const handlePageSizeChange = (newLimit: number) => {
-    setLimit(newLimit);
-    setPage(1);
-  };
+  const handleLoadMore = useCallback(() => {
+    if (loading || loadingMore || threads.length >= total) return;
+    const next = page + 1;
+    setPage(next);
+    fetchArchived(next, debouncedSearch);
+  }, [loading, loadingMore, threads.length, total, page, fetchArchived, debouncedSearch]);
 
   const handleUnarchive = async (thread: Thread) => {
     const result = await api.archiveThread(thread.id, false);
@@ -79,59 +93,86 @@ export function ArchivedThreadsSettings() {
     // silently ignore errors
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-muted-foreground text-xs">
-        {total} {t('archived.archivedCount')}
-        {debouncedSearch && ` ${t('allThreads.found')}`}
-      </p>
+  const hasMore = threads.length < total;
 
-      <ThreadListView
-        threads={threads}
-        totalCount={total}
-        loading={loading}
-        search={search}
-        onSearchChange={handleSearchChange}
-        searchPlaceholder={t('archived.searchPlaceholder')}
-        page={page}
-        onPageChange={setPage}
-        pageSize={limit}
-        pageSizeOptions={PAGE_SIZE_OPTIONS}
-        onPageSizeChange={handlePageSizeChange}
-        emptyMessage={t('archived.noArchived')}
-        searchEmptyMessage={t('allThreads.noMatch')}
-        renderExtraBadges={(thread) => (
-          <span className="bg-secondary text-muted-foreground max-w-[150px] truncate rounded px-1.5 py-0.5 text-xs">
-            {projectMap[thread.projectId]?.name ?? '—'}
-          </span>
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      {/* Toolbar — mirrors the /list search bar */}
+      <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
+        <SearchBar
+          inputRef={searchInputRef}
+          query={search}
+          onQueryChange={handleSearchChange}
+          totalMatches={threads.length}
+          resultLabel={search.trim() ? `${threads.length}/${total}` : ''}
+          onClose={search ? () => handleSearchChange('') : undefined}
+          autoFocus
+          placeholder={t('archived.searchPlaceholder')}
+          testIdPrefix="archived-search"
+          className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
+        />
+        <div className="bg-border h-4 w-px" />
+        <span className="text-muted-foreground text-xs">
+          {total} {t('archived.archivedCount')}
+        </span>
+      </div>
+
+      {/* List — full-width rows + infinite scroll, same as /list */}
+      <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
+        {loading ? (
+          <LoadingState
+            fill={false}
+            layout="inline"
+            size="compact"
+            className="h-32 shrink-0"
+            testId="archived-loading"
+            label={t('common.loading')}
+          />
+        ) : (
+          <VirtualThreadList
+            threads={threads}
+            search={debouncedSearch}
+            emptyMessage={t('archived.noArchived')}
+            searchEmptyMessage={t('allThreads.noMatch')}
+            hideBranch
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onEndReached={handleLoadMore}
+            renderExtraBadges={(thread) => {
+              const gs: GitStatusInfo | undefined = statusByBranch[computeBranchKey(thread)];
+              const project = projectMap[thread.projectId];
+              return (
+                <ThreadPowerline
+                  thread={thread}
+                  projectName={project?.name}
+                  projectColor={project?.color}
+                  gitStatus={gs}
+                  diffStatsSize="xxs"
+                  data-testid={`archived-thread-powerline-${thread.id}`}
+                />
+              );
+            }}
+            renderActions={(thread) => (
+              <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100">
+                <TooltipIconButton
+                  onClick={() => handleUnarchive(thread)}
+                  className="text-muted-foreground hover:text-foreground"
+                  tooltip={t('archived.restore')}
+                >
+                  <ArchiveRestore className="icon-sm" />
+                </TooltipIconButton>
+                <TooltipIconButton
+                  onClick={() => handleDelete(thread)}
+                  className="text-muted-foreground hover:text-destructive"
+                  tooltip={t('common.delete')}
+                >
+                  <Trash2 className="icon-sm" />
+                </TooltipIconButton>
+              </div>
+            )}
+          />
         )}
-        renderActions={(thread) => (
-          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <TooltipIconButton
-              onClick={() => handleUnarchive(thread)}
-              className="text-muted-foreground hover:text-foreground"
-              tooltip={t('archived.restore')}
-            >
-              <ArchiveRestore className="icon-sm" />
-            </TooltipIconButton>
-            <TooltipIconButton
-              onClick={() => handleDelete(thread)}
-              className="text-muted-foreground hover:text-destructive"
-              tooltip={t('common.delete')}
-            >
-              <Trash2 className="icon-sm" />
-            </TooltipIconButton>
-          </div>
-        )}
-        paginationLabel={({ from, to, total: totalCount }) =>
-          t('archived.showingRange', {
-            from,
-            to,
-            total: totalCount,
-            defaultValue: '{{from}}-{{to}} of {{total}}',
-          })
-        }
-      />
+      </div>
     </div>
   );
 }

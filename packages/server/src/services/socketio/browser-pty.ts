@@ -77,7 +77,10 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
             }
             return;
           }
-          const result = await rm.findRunnerForProject(projectId);
+          // Scope to the caller's own runner (runner isolation) — never pick
+          // another user's runner assigned to the same project. The ownership
+          // guard below stays as defense-in-depth.
+          const result = await rm.findRunnerForProject(projectId, userId);
           const runnerId = result?.runner.runnerId ?? null;
           if (runnerId) {
             const runnerUserId = await rm.getRunnerUserId(runnerId);

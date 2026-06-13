@@ -91,7 +91,13 @@ async function resolveRunnerForProject(
   projectId: string,
   userId?: string,
 ): Promise<ResolvedRunner | null> {
-  const runnerResult = await findRunnerForProject(projectId);
+  // CRITICAL (runner isolation): scope the project→runner lookup to the
+  // requesting user. Without userId, findRunnerForProject returns ANY runner
+  // assigned to the project — including another user's runner — which then gets
+  // cached as the thread's runner and routes every request cross-tenant (the
+  // server's data-handler correctly refuses, breaking the thread). A
+  // collaborator must run on THEIR OWN runner.
+  const runnerResult = await findRunnerForProject(projectId, userId);
   if (runnerResult) {
     return {
       runnerId: runnerResult.runner.runnerId,

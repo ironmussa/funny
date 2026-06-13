@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { buildPath } from '@/lib/url';
+import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 
 export type GeneralPage =
@@ -63,6 +64,20 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'system', label: 'settings.system', icon: Cpu },
 ];
 
+/**
+ * Instance-wide preference pages — only meaningful to the server admin. Hidden
+ * from non-admins (some are already enforced server-side via requireAdmin;
+ * hiding keeps the menu honest and avoids dead-ends). Organizations is here
+ * because, under the project-collaborator model, orgs are an optional admin
+ * grouping rather than a per-user concern.
+ */
+export const ADMIN_ONLY_PREFERENCES: ReadonlySet<GeneralPage> = new Set([
+  'email',
+  'organizations',
+  'extensions',
+  'system',
+]);
+
 export function preferencesPageLabel(page: GeneralPage, t: (key: string) => string): string {
   const item = PREFERENCES_NAV_ITEMS.find((i) => i.id === page);
   if (!item) return page;
@@ -76,6 +91,11 @@ export function PreferencesPanelBody() {
   const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
   const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
   const setGeneralSettingsOpen = useUIStore((s) => s.setGeneralSettingsOpen);
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+
+  const navItems = isAdmin
+    ? PREFERENCES_NAV_ITEMS
+    : PREFERENCES_NAV_ITEMS.filter((item) => !ADMIN_ONLY_PREFERENCES.has(item.id));
 
   return (
     <>
@@ -100,7 +120,7 @@ export function PreferencesPanelBody() {
 
       <SidebarContent className="px-2 pb-2">
         <SidebarMenu>
-          {PREFERENCES_NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             return (
               <SidebarMenuItem key={item.id}>

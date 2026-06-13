@@ -13,6 +13,7 @@ import {
   StashPanel,
 } from '@/components/review-pane/panels/ChangesPanel';
 import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';
+import { RunnerOnboardingBanner } from '@/components/RunnerOnboardingBanner';
 import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -301,6 +302,9 @@ export function App() {
           <ProjectHeader />
         </ErrorBoundary>
       )}
+      <ErrorBoundary area="runner-onboarding">
+        <RunnerOnboardingBanner />
+      </ErrorBoundary>
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <CenterDockview
           thread={<div className="relative flex h-full w-full">{threadContent}</div>}

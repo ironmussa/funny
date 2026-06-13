@@ -93,8 +93,10 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { automationRoutes } = await import('../../routes/automations.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
   const { orchestratorSystemRoutes } = await import('../../routes/orchestrator-system.js');
+  const { userRoutes } = await import('../../routes/users.js');
 
   app.route('/api/projects', projectRoutes);
+  app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/settings', settingsRoutes);

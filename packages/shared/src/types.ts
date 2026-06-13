@@ -244,6 +244,13 @@ export interface Project {
   localPath?: string;
   /** True when the user needs to configure their local directory for a shared project */
   needsSetup?: boolean;
+  /**
+   * The requesting user's role on this project (collaborator model). `'owner'`
+   * for projects they own, otherwise their `project_members` role. Drives
+   * client-side gating of project settings — owner/admin may edit project
+   * config, plain members are read-only.
+   */
+  role?: 'owner' | 'admin' | 'member';
 }
 
 // ─── Designs ─────────────────────────────────────────────

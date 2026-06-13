@@ -140,6 +140,35 @@ export async function listProjectsByOrg(orgId: string): Promise<Project[]> {
   ).map(toProject);
 }
 
+/**
+ * List projects the user can access as a direct collaborator (project_members),
+ * each annotated with the member's configured local working path. Includes
+ * projects the user owns when they have a member row (owners are seeded as
+ * `admin` members on creation) — callers that only want *shared* projects
+ * should filter out rows where `project.userId === userId`.
+ */
+export async function listMemberProjects(
+  userId: string,
+): Promise<Array<Project & { localPath: string | null; memberRole: string }>> {
+  const rows = await dbAll(
+    db
+      .select({
+        project: schema.projects,
+        localPath: schema.projectMembers.localPath,
+        role: schema.projectMembers.role,
+      })
+      .from(schema.projectMembers)
+      .innerJoin(schema.projects, eq(schema.projects.id, schema.projectMembers.projectId))
+      .where(eq(schema.projectMembers.userId, userId))
+      .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
+  );
+  return rows.map((r: any) => ({
+    ...toProject(r.project),
+    localPath: r.localPath ?? null,
+    memberRole: (r.role as string) ?? 'member',
+  }));
+}
+
 export async function isProjectInOrg(projectId: string, orgId: string): Promise<boolean> {
   const row = await dbGet(
     db
@@ -297,6 +326,19 @@ export async function createProject(
   };
 
   await dbRun(db.insert(schema.projects).values(projectRow));
+
+  // Seed the owner as an `admin` project member so the collaborator model has a
+  // single source of truth for membership (owner can manage members, appears in
+  // the member list, and `listMemberProjects` stays consistent). The owner's
+  // localPath stays null — they use the project's canonical `path` directly.
+  await dbRun(
+    db.insert(schema.projectMembers).values({
+      projectId: project.id,
+      userId,
+      role: 'admin',
+      joinedAt: project.createdAt,
+    }),
+  );
 
   void ensureWeaveConfigured(project.path);
 

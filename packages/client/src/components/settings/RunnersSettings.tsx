@@ -7,11 +7,9 @@
 
 import type { RunnerInfo, RunnerProjectAssignment } from '@funny/shared/runner-protocol';
 import {
-  Check,
   ChevronDown,
   ChevronRight,
   Circle,
-  Copy,
   FolderPlus,
   RefreshCw,
   Server,
@@ -22,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ConnectRunnerCard } from '@/components/ConnectRunnerCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -327,23 +326,8 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
 }
 
 export function RunnersSettings() {
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [rotating, setRotating] = useState(false);
   const [runners, setRunners] = useState<RunnerInfo[]>([]);
-  const [loadingToken, setLoadingToken] = useState(true);
   const [loadingRunners, setLoadingRunners] = useState(true);
-
-  const serverUrl = window.location.origin;
-
-  const installCommand = inviteToken ? `bunx funny --team ${serverUrl} --token ${inviteToken}` : '';
-
-  const loadToken = async () => {
-    setLoadingToken(true);
-    const result = await api.getRunnerInviteToken();
-    setLoadingToken(false);
-    if (result.isOk()) setInviteToken(result.value.token);
-  };
 
   const loadRunners = async () => {
     setLoadingRunners(true);
@@ -353,7 +337,6 @@ export function RunnersSettings() {
   };
 
   useEffect(() => {
-    loadToken();
     loadRunners();
 
     // Refresh runner statuses every 30s
@@ -361,37 +344,11 @@ export function RunnersSettings() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleCopy = () => {
-    if (!installCommand) return;
-    navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success('Command copied');
-  };
-
-  const handleRotate = async () => {
-    if (
-      !confirm(
-        'Rotate the invite token? Existing connected runners are unaffected, but the old token cannot be used to register new runners.',
-      )
-    )
-      return;
-    setRotating(true);
-    const result = await api.rotateRunnerInviteToken();
-    setRotating(false);
-    if (result.isOk()) {
-      setInviteToken(result.value.token);
-      toast.success('Token rotated');
-    } else {
-      toast.error('Failed to rotate token');
-    }
-  };
-
   return (
     <div className="space-y-6">
       <h3 className="settings-section-header">Runners</h3>
 
-      {/* Install command */}
+      {/* Install command (shared with the onboarding banner) */}
       <div className="settings-card space-y-3 p-4">
         <div>
           <p className="text-sm font-medium">Connect a new runner</p>
@@ -400,44 +357,7 @@ export function RunnersSettings() {
             server under your account.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <code
-            className="bg-muted text-foreground flex-1 truncate rounded px-3 py-2 font-mono text-xs"
-            data-testid="runners-install-command"
-          >
-            {loadingToken ? 'Loading...' : installCommand}
-          </code>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopy}
-            disabled={loadingToken || !inviteToken}
-            className="h-8 shrink-0"
-            data-testid="runners-copy-command"
-          >
-            {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <p className="text-muted-foreground text-xs">
-            <Server className="icon-xs mr-1 inline" />
-            The token is specific to your account. Anyone with this token can register a runner
-            under your name.
-          </p>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleRotate}
-            disabled={rotating || loadingToken}
-            className="text-muted-foreground hover:text-foreground h-6 text-xs"
-            data-testid="runners-rotate-token"
-          >
-            <RefreshCw className={cn('mr-1 icon-xs', rotating && 'animate-spin')} />
-            Rotate token
-          </Button>
-        </div>
+        <ConnectRunnerCard />
       </div>
 
       {/* My runners list */}

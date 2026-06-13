@@ -277,9 +277,11 @@ const { orchestratorRoutes } = await import('./routes/orchestrator.js');
 const { orchestratorSystemRoutes } = await import('./routes/orchestrator-system.js');
 const { watcherRoutes } = await import('./routes/watchers.js');
 const { jobRoutes } = await import('./routes/jobs.js');
+const { userRoutes } = await import('./routes/users.js');
 
 app.route('/api/auth', authRoutes);
 app.route('/api/projects', projectRoutes);
+app.route('/api/users', userRoutes);
 app.route('/api/runners', runnerRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/threads', threadRoutes);

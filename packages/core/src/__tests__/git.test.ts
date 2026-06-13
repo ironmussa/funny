@@ -514,6 +514,30 @@ describe('git operations', () => {
       // git stash push -m exits 0 with "No local changes to save" message
       expect(result.isOk()).toBe(true);
     });
+
+    test('leaves untracked files in the working tree by default', async () => {
+      // Untracked (new) files are NOT captured without -u — they survive the
+      // stash. This is the gotcha the branch-switch path must avoid.
+      writeFileSync(resolve(repoPath, 'untracked.txt'), 'new file');
+
+      const result = await stash(repoPath);
+      expect(result.isOk()).toBe(true);
+
+      const status = executeSync('git', ['status', '--porcelain'], { cwd: repoPath });
+      expect(status.stdout).toContain('untracked.txt');
+    });
+
+    test('includeUntracked captures untracked files for a clean tree', async () => {
+      // Regression: "leave my changes" when switching branches must not let new
+      // files follow the checkout onto the target branch.
+      writeFileSync(resolve(repoPath, 'untracked.txt'), 'new file');
+
+      const result = await stash(repoPath, true);
+      expect(result.isOk()).toBe(true);
+
+      const status = executeSync('git', ['status', '--porcelain'], { cwd: repoPath });
+      expect(status.stdout.trim()).toBe('');
+    });
   });
 
   describe('stashPop', () => {

@@ -107,3 +107,43 @@ export const HiddenLabel: Story = {
     hideLabel: true,
   },
 };
+
+/** Auto-expand the card so the INPUT / OUTPUT sections are visible (it starts collapsed). */
+const expand: Story['play'] = async ({ canvasElement, userEvent }) => {
+  const { within } = await import('storybook/test');
+  await userEvent.click(within(canvasElement).getByRole('button'));
+};
+
+// The exact multi-line "Run Command" call from the screenshot — a team-mode
+// smoke check still running, so OUTPUT shows the "Waiting for output…" placeholder.
+const TEAM_MODE_COMMAND = `cd /home/argenisleon/Git-projects/funny
+TMPH=$(mktemp -d)
+echo "═══ team mode SIN secret, HOME limpio ⇒ debe exit 1 sin arrancar server ═══"
+env -u RUNNER_AUTH_SECRET HOME="$TMPH" TEAM_SERVER_URL=https://example.com timeout 15 bun bin/funny.js 2>&1 | head -15
+ec=\${PIPESTATUS[1]}
+echo "exit code: $ec"
+rm -rf "$TMPH"`;
+
+/** Reproduces the screenshot: multi-line command, expanded, awaiting output. */
+export const TeamModeWaiting: Story = {
+  name: 'Team-mode Command (waiting, expanded)',
+  args: {
+    parsed: { command: TEAM_MODE_COMMAND },
+    displayTime: '4m',
+  },
+  play: expand,
+};
+
+/** Same command after it finishes — OUTPUT renders the captured stdout/stderr. */
+export const TeamModeWithOutput: Story = {
+  name: 'Team-mode Command (with output, expanded)',
+  args: {
+    parsed: { command: TEAM_MODE_COMMAND },
+    output:
+      '═══ team mode SIN secret, HOME limpio ⇒ debe exit 1 sin arrancar server ═══\n' +
+      'error: RUNNER_AUTH_SECRET is required in team mode\n' +
+      'exit code: 1',
+    displayTime: '4m',
+  },
+  play: expand,
+};

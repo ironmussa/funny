@@ -1,5 +1,5 @@
 import { mkdirSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { resolve, join } from 'path';
 
 import {
@@ -7,6 +7,9 @@ import {
   validatePathSync,
   pathExists,
   sanitizePath,
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
 } from '../git/path-validation.js';
 
 const TMP = resolve(tmpdir(), 'core-path-validation-test');
@@ -107,5 +110,80 @@ describe('sanitizePath', () => {
   test('rejects absolute paths that escape base', () => {
     const result = sanitizePath(BASE_DIR, '../outside');
     expect(result.isErr()).toBe(true);
+  });
+});
+
+// ── Project-root validation (security HI-3, shared by server + runner) ──
+describe('validateProjectPathLexical', () => {
+  test('rejects empty / non-string', () => {
+    expect(validateProjectPathLexical('').isErr()).toBe(true);
+    // @ts-expect-error — exercising the runtime guard for non-string input
+    expect(validateProjectPathLexical(undefined).isErr()).toBe(true);
+  });
+
+  test('rejects relative paths', () => {
+    const r = validateProjectPathLexical('relative/proj');
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toContain('absolute');
+  });
+
+  test('rejects leading-dash (flag injection)', () => {
+    expect(validateProjectPathLexical('-rf').isErr()).toBe(true);
+  });
+
+  test('rejects null byte', () => {
+    expect(validateProjectPathLexical('/home/u/p\0oj').isErr()).toBe(true);
+  });
+
+  test('rejects ".." segments', () => {
+    const r = validateProjectPathLexical('/home/u/../etc');
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toContain('..');
+  });
+
+  test('rejects restricted system directories', () => {
+    for (const p of ['/etc', '/etc/passwd', '/var/lib/x', '/usr/bin']) {
+      const r = validateProjectPathLexical(p);
+      expect(r.isErr()).toBe(true);
+      if (r.isErr()) expect(r.error.message).toMatch(/restricted system directory/i);
+    }
+  });
+
+  test('accepts a normal absolute path lexically', () => {
+    expect(validateProjectPathLexical('/home/someone/code/proj').isOk()).toBe(true);
+  });
+});
+
+describe('validateProjectRootContainment / validateProjectRootPath', () => {
+  const prevRoot = process.env.FUNNY_PROJECT_ROOT;
+  beforeEach(() => {
+    delete process.env.FUNNY_PROJECT_ROOT;
+  });
+  afterEach(() => {
+    if (prevRoot !== undefined) process.env.FUNNY_PROJECT_ROOT = prevRoot;
+    else delete process.env.FUNNY_PROJECT_ROOT;
+  });
+
+  test('accepts a path under the current $HOME', () => {
+    const p = join(homedir(), 'funny-core-test-proj');
+    expect(validateProjectRootContainment(p).isOk()).toBe(true);
+    expect(validateProjectRootPath(p).isOk()).toBe(true);
+  });
+
+  test('rejects a path outside $HOME without FUNNY_PROJECT_ROOT', () => {
+    const r = validateProjectRootContainment('/opt/some-project');
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toMatch(/must live under \$HOME/i);
+  });
+
+  test('accepts an out-of-$HOME path when opted in via FUNNY_PROJECT_ROOT', () => {
+    process.env.FUNNY_PROJECT_ROOT = '/opt';
+    expect(validateProjectRootContainment('/opt/some-project').isOk()).toBe(true);
+  });
+
+  test('validateProjectRootPath chains lexical + containment', () => {
+    // lexical failure short-circuits before the containment check
+    expect(validateProjectRootPath('/etc').isErr()).toBe(true);
+    expect(validateProjectRootPath('../rel').isErr()).toBe(true);
   });
 });

@@ -134,9 +134,9 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async projectNameExists() {
         return false;
       },
-      async createProject(name, path, userId) {
+      async createProject(name, path, userId, orgId) {
         const { remoteCreateProject } = await import('./team-client.js');
-        const response = await remoteCreateProject(name, path, userId);
+        const response = await remoteCreateProject(name, path, userId, orgId);
         if (response?.error) {
           return err({
             type: (response.errorType as 'BAD_REQUEST' | 'CONFLICT' | 'INTERNAL') || 'INTERNAL',

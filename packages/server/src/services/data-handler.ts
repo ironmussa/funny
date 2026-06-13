@@ -507,15 +507,21 @@ export async function handleDataMessageWithAck(
         }
       }
       case 'data:create_project': {
-        // Skip filesystem checks — the runner already validated the path (clone succeeded)
+        // Skip filesystem checks — the runner already validated the path
+        // (clone succeeded, or the runner ran HI-3 containment against its own
+        // $HOME before proxying creation here).
+        const orgId = (data.orgId as string | null | undefined) ?? null;
         const cpResult = await projectRepo.createProject(
           data.name,
           data.path,
           data.userId,
-          undefined,
+          orgId,
           true,
         );
         if (cpResult.isOk()) {
+          if (orgId) {
+            await projectRepo.addProjectToOrg(cpResult.value.id, orgId);
+          }
           return { type: 'data:create_project_response', project: cpResult.value };
         } else {
           return {

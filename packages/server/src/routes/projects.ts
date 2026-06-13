@@ -15,8 +15,10 @@ import { isAbsolute, resolve } from 'path';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
+import { proxyToRunner } from '../middleware/proxy.js';
 import * as pm from '../services/project-manager.js';
 import * as projectRepo from '../services/project-repository.js';
+import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import * as cmdRepo from '../services/startup-commands-repository.js';
 
 export const projectRoutes = new Hono<ServerEnv>();
@@ -86,6 +88,19 @@ projectRoutes.get('/resolve', async (c) => {
 projectRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
+
+  // Team/remote-runner mode: the project path lives on the runner's host, not
+  // the server's. The server cannot validate it (its $HOME and filesystem are
+  // unrelated — the git-repo and $HOME-containment checks would always fail).
+  // Delegate creation to the user's runner, which validates the path against
+  // its own filesystem and persists back via the data channel (skipFsCheck).
+  // Falls through to local creation when no runner is connected (single-node
+  // deployments without a separate runner process, and tests).
+  const runnerId = await findAnyRunnerForUser(userId);
+  if (runnerId) {
+    return proxyToRunner(c);
+  }
+
   const raw = await c.req.json();
   const { name, path } = raw as { name?: string; path?: string };
 

@@ -10,6 +10,7 @@
     "./agents": "./src/agents/index.ts",
     "./extensions": "./src/extensions/index.ts",
     "./git": "./src/git/index.ts",
+    "./git/path-validation": "./src/git/path-validation.ts",
     "./chrome": "./src/chrome/index.ts",
     "./containers": "./src/containers/index.ts",
     "./orchestrator": "./src/orchestrator/index.ts",

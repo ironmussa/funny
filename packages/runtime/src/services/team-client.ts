@@ -1424,11 +1424,13 @@ export async function remoteCreateProject(
   name: string,
   path: string,
   userId: string,
+  orgId?: string | null,
 ): Promise<any> {
   const response = await sendDataMessage('data:create_project', {
     name,
     path,
     userId,
+    orgId: orgId ?? null,
   });
   return response;
 }

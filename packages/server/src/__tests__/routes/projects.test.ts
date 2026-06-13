@@ -7,11 +7,24 @@
 
 import { mock } from 'bun:test';
 
+// Keep the REAL path-validation (HI-3 route tests below rely on it) while
+// stubbing only the git-repo filesystem checks. Both live in the same
+// `@funny/core/git` barrel, so re-export the real validation from the concrete
+// source module so the mock does not clobber it.
+import {
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
+} from '@funny/core/git/path-validation';
+
 // Mock git operations before any service imports
 mock.module('@funny/core/git', () => ({
   isGitRepoSync: () => true,
   isGitRepoRootSync: () => true,
   ensureWeaveConfigured: () => Promise.resolve(),
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
 }));
 
 // Security HI-3: createProject now requires the path to live under $HOME
@@ -21,8 +34,9 @@ mock.module('@funny/core/git', () => ({
 // pass validation without changing every test fixture.
 process.env.FUNNY_PROJECT_ROOT = '/tmp';
 
-import { describe, test, expect, beforeAll, beforeEach, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll, beforeEach, afterAll, spyOn } from 'bun:test';
 
+import * as runnerManager from '../../services/runner-manager.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedTeamProject, seedProjectMember } from '../helpers/test-db.js';
 
@@ -138,6 +152,33 @@ describe('Project Routes (Integration)', () => {
         path: '/tmp/repo',
       });
       expect(res.status).toBe(201);
+    });
+
+    // Team mode regression: when the user has a connected runner, the project
+    // path lives on the runner's host, not the server's. The route must
+    // delegate to the runner (proxy) instead of validating the path against the
+    // server's own $HOME/filesystem — which would always reject a runner path.
+    // Without the fix this returns a 400 containment error; with it the request
+    // is proxied (no reachable runner in the test → 502).
+    test('delegates to the runner instead of validating the path locally (team mode)', async () => {
+      const spy = spyOn(runnerManager, 'findAnyRunnerForUser').mockResolvedValue('runner-1');
+      try {
+        const res = await t.requestAs('user-1').post('/api/projects', {
+          name: 'Remote Project',
+          // Outside FUNNY_PROJECT_ROOT (/tmp): would FAIL server-side
+          // containment if the route validated locally.
+          path: '/home/someone-else/remote-repo',
+        });
+
+        // Proxied to the (unreachable, in-test) runner → 502, NOT a local 400.
+        expect(res.status).toBe(502);
+
+        // And nothing was persisted on the server.
+        const list = await t.requestAs('user-1').get('/api/projects');
+        expect(await list.json()).toEqual([]);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 

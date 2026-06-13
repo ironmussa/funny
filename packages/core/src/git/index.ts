@@ -12,7 +12,15 @@ export {
   type ProcessOptions,
 } from './process.js';
 
-export { validatePath, validatePathSync, pathExists, sanitizePath } from './path-validation.js';
+export {
+  validatePath,
+  validatePathSync,
+  pathExists,
+  sanitizePath,
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
+} from './path-validation.js';
 
 export { getNativeGit } from './native.js';
 

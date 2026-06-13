@@ -13,10 +13,23 @@ import { mock } from 'bun:test';
 // always succeeds. The containment check (HI-3) is what we want to assert,
 // independent of whether the path is actually a git repo on the test
 // runner's filesystem.
+// Keep the REAL path-validation (that's what this suite exercises) while
+// stubbing only the git-repo filesystem checks. The validation lives in the
+// same `@funny/core/git` barrel, so re-export the real implementations from
+// the concrete source module to avoid clobbering them with the mock.
+import {
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
+} from '@funny/core/git/path-validation';
+
 mock.module('@funny/core/git', () => ({
   isGitRepoSync: () => true,
   isGitRepoRootSync: () => true,
   ensureWeaveConfigured: () => Promise.resolve(),
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
 }));
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';

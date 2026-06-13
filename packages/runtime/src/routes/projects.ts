@@ -6,10 +6,14 @@
  * @domain depends: ProjectHooksService, StartupCommandsService, CommandRunner
  *
  * Runner-only project routes — filesystem, git, and process operations.
- * Project CRUD (list, create, update, delete, reorder, resolve) is handled
- * by the server package directly.
+ * Project CRUD (list, update, delete, reorder, resolve) is handled by the
+ * server package directly. CREATE is the exception in team mode: the path
+ * lives on the runner, so the server proxies `POST /api/projects` here for
+ * filesystem validation, then we persist via the data channel (see
+ * create-route.ts).
  *
  * The route logic is split by concern under projects/:
+ *   - create-route: POST / (validate path on this host + persist)
  *   - git-routes: branches + checkout-preflight + checkout
  *   - commands-routes: startup commands CRUD + run + sync-{processes,config}
  *   - config-routes: .funny.json read/write
@@ -22,12 +26,14 @@ import { Hono } from 'hono';
 import type { HonoEnv } from '../types/hono-env.js';
 import { projectCommandsRoutes } from './projects/commands-routes.js';
 import { projectConfigRoutes } from './projects/config-routes.js';
+import { projectCreateRoutes } from './projects/create-route.js';
 import { projectGitRoutes } from './projects/git-routes.js';
 import { projectHooksRoutes } from './projects/hooks-routes.js';
 import { projectWeaveRoutes } from './projects/weave-routes.js';
 
 export const projectRoutes = new Hono<HonoEnv>();
 
+projectRoutes.route('/', projectCreateRoutes);
 projectRoutes.route('/', projectGitRoutes);
 projectRoutes.route('/', projectCommandsRoutes);
 projectRoutes.route('/', projectConfigRoutes);

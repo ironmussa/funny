@@ -29,6 +29,7 @@ interface Props {
 export function ConnectRunnerCard({ showSteps = true, showRotate = true, className }: Props) {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [loadingToken, setLoadingToken] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [rotating, setRotating] = useState(false);
 
@@ -37,10 +38,19 @@ export function ConnectRunnerCard({ showSteps = true, showRotate = true, classNa
 
   const loadToken = async () => {
     setLoadingToken(true);
+    setLoadError(false);
     const result = await api.getRunnerInviteToken();
     setLoadingToken(false);
-    if (result.isOk()) setInviteToken(result.value.token);
-    else log.warn('Failed to load runner invite token');
+    if (result.isOk() && result.value.token) {
+      setInviteToken(result.value.token);
+    } else {
+      // Don't leave a blank command bar — surface the failure with a retry.
+      setInviteToken(null);
+      setLoadError(true);
+      log.warn('Failed to load runner invite token', {
+        error: result.isErr() ? String(result.error) : 'empty token',
+      });
+    }
   };
 
   useEffect(() => {
@@ -97,24 +107,43 @@ export function ConnectRunnerCard({ showSteps = true, showRotate = true, classNa
         </ol>
       )}
 
-      <div className="flex items-center gap-2">
-        <code
-          className="bg-muted text-foreground flex-1 truncate rounded px-3 py-2 font-mono text-xs"
-          data-testid="connect-runner-command"
+      {loadError ? (
+        <div
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-center justify-between gap-2 rounded border px-3 py-2 text-xs"
+          data-testid="connect-runner-error"
         >
-          {loadingToken ? 'Loading…' : installCommand}
-        </code>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleCopy}
-          disabled={loadingToken || !inviteToken}
-          className="h-8 shrink-0"
-          data-testid="connect-runner-copy"
-        >
-          {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
-        </Button>
-      </div>
+          <span>Couldn’t load your runner command. Check your connection and try again.</span>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={loadToken}
+            className="shrink-0"
+            data-testid="connect-runner-retry"
+          >
+            <RefreshCw className="icon-xs mr-1" />
+            Retry
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <code
+            className="bg-muted text-foreground flex-1 truncate rounded px-3 py-2 font-mono text-xs"
+            data-testid="connect-runner-command"
+          >
+            {loadingToken ? 'Loading…' : installCommand}
+          </code>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleCopy}
+            disabled={loadingToken || !inviteToken}
+            className="shrink-0"
+            data-testid="connect-runner-copy"
+          >
+            {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
+          </Button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground text-xs">

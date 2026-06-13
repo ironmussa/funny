@@ -9,7 +9,14 @@ import { stageConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useThreadStore } from '@/stores/thread-store';
 
-const VISIBLE_STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done'];
+const VISIBLE_STAGES: ThreadStage[] = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+];
 
 interface Props {
   threadId: string;
@@ -43,8 +50,9 @@ export const StageSelectorBadge = memo(function StageSelectorBadge({
       <Tooltip {...tooltipProps}>
         <TooltipTrigger asChild>
           <SelectTrigger
+            size="xs"
             data-testid="header-stage-select"
-            className="border-border/60 hover:bg-accent h-7 w-auto shrink-0 gap-0.5 border bg-transparent px-1.5 py-0 shadow-none [&>svg:last-child]:ml-0"
+            className="border-border/60 hover:bg-accent w-auto shrink-0 gap-0.5 border bg-transparent px-1.5 py-0 shadow-none [&>svg:last-child]:ml-0"
           >
             <StageIcon className={cn('icon-base', stageConfig[stage].className)} />
           </SelectTrigger>

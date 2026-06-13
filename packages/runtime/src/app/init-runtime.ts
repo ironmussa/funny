@@ -77,12 +77,11 @@ export async function initRuntime(app: Hono): Promise<void> {
   await ptyManager.reattachSessions();
   getNativeGit();
 
-  if (!process.env.RUNNER_AUTH_SECRET) {
-    log.error('RUNNER_AUTH_SECRET is required when TEAM_SERVER_URL is set.', {
-      namespace: 'server',
-    });
-    process.exit(1);
-  }
+  // No RUNNER_AUTH_SECRET is NOT a fatal error: a runner with no credentials
+  // (no secret, no invite token, no persisted creds) enrolls via the device-link
+  // flow inside initTeamMode → maybeEnroll, which obtains the secret on approval.
+  // resumeSession also restores a persisted secret. So we proceed unconditionally
+  // and let team-client decide how to authenticate.
   const { initTeamMode, setBrowserWSHandler, setLocalApp } =
     await import('../services/team-client.js');
   setLocalApp(app);

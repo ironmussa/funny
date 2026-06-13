@@ -134,7 +134,17 @@ async function centralFetch(path: string, options: RequestInit = {}): Promise<Re
 
 // ── Registration ─────────────────────────────────────────
 
-async function register(): Promise<boolean> {
+/**
+ * Registration result. `authFailed` is true when the server rejected our
+ * credentials (401/403) — a signal to fall back to device-link enrollment
+ * rather than retrying the same rejected secret/token forever.
+ */
+interface RegisterResult {
+  ok: boolean;
+  authFailed: boolean;
+}
+
+async function register(): Promise<RegisterResult> {
   try {
     // Register with httpUrl so the server can use direct HTTP as fallback
     // when the WebSocket tunnel is unavailable. For remote runners behind NAT,
@@ -171,7 +181,8 @@ async function register(): Promise<boolean> {
         status: res.status,
         body,
       });
-      return false;
+      // 401/403 = our credentials were rejected → caller falls back to enrollment.
+      return { ok: false, authFailed: res.status === 401 || res.status === 403 };
     }
 
     const data = (await res.json()) as RunnerRegisterResponse;
@@ -191,7 +202,7 @@ async function register(): Promise<boolean> {
         });
         state.runnerId = null;
         state.runnerToken = null;
-        return false;
+        return { ok: false, authFailed: false };
       }
     } catch {
       // Non-fatal — heartbeat verification is best-effort
@@ -211,13 +222,13 @@ async function register(): Promise<boolean> {
       transport: httpUrl ? 'http+socketio' : 'socketio-only',
     });
 
-    return true;
+    return { ok: true, authFailed: false };
   } catch (err) {
     log.error('Failed to connect to central server', {
       namespace: 'runner',
       error: err as any,
     });
-    return false;
+    return { ok: false, authFailed: false };
   }
 }
 
@@ -293,17 +304,16 @@ async function resumeSession(): Promise<boolean> {
  * environment. After this, the normal resume/register path connects with no
  * hand-carried secret. No-op when any credential is already available.
  */
-async function maybeEnroll(): Promise<void> {
-  if (process.env.RUNNER_INVITE_TOKEN || process.env.RUNNER_AUTH_SECRET) return;
-  if (loadRunnerCredentials(state.serverUrl)) return;
-
-  log.info('No runner credentials found — starting device-link enrollment', {
-    namespace: 'runner',
-  });
+/**
+ * Run device-link enrollment to completion and persist the result.
+ *
+ * Blocks until the operator approves the runner's code in the funny UI, then
+ * loads the delivered forwarded-identity secret into the environment (so
+ * centralFetch can sign/verify proxied requests) and persists everything so
+ * restarts resume without re-enrolling.
+ */
+async function enrollAndPersist(): Promise<void> {
   const creds = await enrollRunner(state.serverUrl);
-
-  // Load the forwarded-identity secret so centralFetch can sign/verify proxied
-  // requests, and persist everything so restarts resume without re-enrolling.
   if (creds.forwardedSecret) process.env.RUNNER_AUTH_SECRET = creds.forwardedSecret;
   saveRunnerCredentials({
     serverUrl: state.serverUrl,
@@ -316,16 +326,53 @@ async function maybeEnroll(): Promise<void> {
 }
 
 /**
+ * Device-link enrollment fast-path.
+ *
+ * When the runner has no way to authenticate — no persisted credentials for
+ * this server, and neither an invite token nor a shared secret in the
+ * environment — enroll up front so we never even attempt a doomed classic
+ * registration. No-op when some credential is present; if those turn out to be
+ * stale/wrong, the 401 fallback in registerWithRetry still recovers.
+ */
+async function maybeEnroll(): Promise<void> {
+  if (process.env.RUNNER_INVITE_TOKEN || process.env.RUNNER_AUTH_SECRET) return;
+  if (loadRunnerCredentials(state.serverUrl)) return;
+
+  log.info('No runner credentials found — starting device-link enrollment', {
+    namespace: 'runner',
+  });
+  await enrollAndPersist();
+}
+
+/**
  * Retry registration with exponential backoff.
  * Retries indefinitely — the server may not be ready when the runner starts.
  * Each attempt first tries to resume the persisted session (cheap heartbeat)
  * so a transient network failure at startup never burns an invite token.
+ *
+ * If the server REJECTS our credentials (401/403) — e.g. a stale
+ * RUNNER_AUTH_SECRET left in the environment or an invite token meant for a
+ * different server — we fall back to device-link enrollment instead of
+ * hammering the same rejected credentials forever. This is what lets a bare
+ * `TEAM_SERVER_URL=… funny` connect with no env-var juggling.
  */
 async function registerWithRetry(): Promise<boolean> {
   for (let attempt = 1; ; attempt++) {
     if (await resumeSession()) return true;
-    const ok = await register();
+    const { ok, authFailed } = await register();
     if (ok) return true;
+
+    if (authFailed) {
+      log.warn(
+        'Server rejected runner credentials (401/403) — falling back to device-link enrollment',
+        { namespace: 'runner' },
+      );
+      // Drop the rejected stored creds (if any) so resumeSession won't reuse
+      // them, enroll, then let the next loop iteration resume cleanly.
+      clearRunnerCredentials();
+      await enrollAndPersist();
+      continue;
+    }
 
     const delay = Math.min(2000 * attempt, 15_000);
     log.warn(`Registration failed, retrying in ${delay / 1000}s (attempt ${attempt})`, {
@@ -355,7 +402,7 @@ async function sendHeartbeat(): Promise<void> {
       state.runnerId = null;
       state.runnerToken = null;
       clearRunnerCredentials();
-      const ok = await register();
+      const { ok } = await register();
       if (ok) {
         // Reconnect Socket.IO with new token
         if (state.socket) {
@@ -411,7 +458,7 @@ async function sendHeartbeatWS(): Promise<void> {
       state.runnerId = null;
       state.runnerToken = null;
       clearRunnerCredentials();
-      const ok = await register();
+      const { ok } = await register();
       if (ok) {
         if (state.socket) {
           state.socket.disconnect();

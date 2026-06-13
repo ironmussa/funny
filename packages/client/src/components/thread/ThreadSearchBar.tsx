@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { SearchBar } from '@/components/ui/search-bar';
 import { api } from '@/lib/api';
+import { useUIStore } from '@/stores/ui-store';
 
 interface SearchResult {
   messageId: string;
@@ -26,7 +27,7 @@ interface ThreadSearchBarProps {
     query: string,
     withinIdx: number,
     reportMarkCount?: (messageId: string, count: number) => void,
-  ) => void;
+  ) => void | Promise<void>;
   /** data-testid prefix for the underlying SearchBar. Default: "thread-search". */
   testIdPrefix?: string;
   /** Override container className (positioning). Default: chat-view absolute style. */
@@ -69,6 +70,7 @@ export function ThreadSearchBar({
   const [markCounts, setMarkCounts] = useState<Map<string, number>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const navSeqRef = useRef(0);
 
   const reportMarkCount = useCallback((messageId: string, count: number) => {
     setMarkCounts((prev) => {
@@ -88,6 +90,23 @@ export function ThreadSearchBar({
       return prev;
     });
   }, []);
+
+  // Navigation may need to page in older history before it can scroll
+  // (search runs server-side over the full thread). Surface that wait as
+  // the loading spinner so Enter doesn't look like a no-op.
+  const runNavigate = useCallback(
+    (messageId: string, q: string, withinIdx: number) => {
+      const maybePromise = onNavigateToMessage(messageId, q, withinIdx, reportMarkCount);
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        const seq = ++navSeqRef.current;
+        setLoading(true);
+        maybePromise.finally(() => {
+          if (navSeqRef.current === seq) setLoading(false);
+        });
+      }
+    },
+    [onNavigateToMessage, reportMarkCount],
+  );
 
   // Flatten results into per-occurrence entries. Prefer the real DOM mark
   // count (once known) and fall back to a raw-content estimate for messages
@@ -152,7 +171,7 @@ export function ThreadSearchBar({
           setMarkCounts(new Map());
           if (items.length > 0) {
             setCurrent({ messageId: items[0].messageId, withinIdx: 0 });
-            onNavigateToMessage(items[0].messageId, q.trim(), 0, reportMarkCount);
+            runNavigate(items[0].messageId, q.trim(), 0);
           } else {
             setCurrent(null);
           }
@@ -169,8 +188,23 @@ export function ThreadSearchBar({
         if (!controller.signal.aborted) setLoading(false);
       }
     },
-    [threadId, onNavigateToMessage, reportMarkCount],
+    [threadId, runNavigate],
   );
+
+  // Consume a search handoff from the list/board views: when the bar opens
+  // for the thread the user reached by clicking a search result, seed the
+  // query and run it immediately (no debounce) so highlights + scroll-to-
+  // match happen without retyping.
+  useEffect(() => {
+    if (!open) return;
+    const ui = useUIStore.getState();
+    const pending = ui.pendingThreadSearch;
+    if (!pending || pending.threadId !== threadId) return;
+    ui.setPendingThreadSearch(null);
+    setQuery(pending.query);
+    setCaseSensitive(pending.caseSensitive);
+    doSearch(pending.query, pending.caseSensitive);
+  }, [open, threadId, doSearch]);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
@@ -190,8 +224,8 @@ export function ThreadSearchBar({
     const newIdx = baseIdx <= 0 ? occurrences.length - 1 : baseIdx - 1;
     const occ = occurrences[newIdx];
     setCurrent(occ);
-    onNavigateToMessage(occ.messageId, query.trim(), occ.withinIdx, reportMarkCount);
-  }, [occurrences, currentIndex, query, onNavigateToMessage, reportMarkCount]);
+    runNavigate(occ.messageId, query.trim(), occ.withinIdx);
+  }, [occurrences, currentIndex, query, runNavigate]);
 
   const navigateNext = useCallback(() => {
     if (occurrences.length === 0) return;
@@ -199,8 +233,8 @@ export function ThreadSearchBar({
     const newIdx = baseIdx >= occurrences.length - 1 ? 0 : baseIdx + 1;
     const occ = occurrences[newIdx];
     setCurrent(occ);
-    onNavigateToMessage(occ.messageId, query.trim(), occ.withinIdx, reportMarkCount);
-  }, [occurrences, currentIndex, query, onNavigateToMessage, reportMarkCount]);
+    runNavigate(occ.messageId, query.trim(), occ.withinIdx);
+  }, [occurrences, currentIndex, query, runNavigate]);
 
   if (!open) return null;
 

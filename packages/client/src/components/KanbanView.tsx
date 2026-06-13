@@ -56,6 +56,7 @@ interface KanbanViewProps {
   threads: Thread[];
   projectId?: string;
   search?: string;
+  caseSensitive?: boolean;
   contentSnippets?: Map<string, string>;
   highlightThreadId?: string;
 }
@@ -68,6 +69,7 @@ export const KanbanCard = memo(function KanbanCard({
   onDelete,
   onArchive,
   search,
+  caseSensitive,
   ghost,
   contentSnippet,
   projectId,
@@ -80,6 +82,7 @@ export const KanbanCard = memo(function KanbanCard({
   onDelete: (thread: Thread) => void;
   onArchive?: (thread: Thread) => void;
   search?: string;
+  caseSensitive?: boolean;
   ghost?: boolean;
   contentSnippet?: string;
   projectId?: string;
@@ -137,7 +140,7 @@ export const KanbanCard = memo(function KanbanCard({
       onClick={() => {
         if (!isDragging) {
           startTransition(() => {
-            setKanbanContext({ projectId, search, threadId: thread.id });
+            setKanbanContext({ projectId, search, caseSensitive, threadId: thread.id });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
           });
         }
@@ -402,6 +405,7 @@ const KanbanColumn = memo(function KanbanColumn({
   projects,
   onAddThread,
   search,
+  caseSensitive,
   contentSnippets,
   highlightThreadId,
   statusByThread,
@@ -415,6 +419,7 @@ const KanbanColumn = memo(function KanbanColumn({
   projects: Project[];
   onAddThread: (projectId: string, stage: ThreadStage) => void;
   search?: string;
+  caseSensitive?: boolean;
   contentSnippets?: Map<string, string>;
   highlightThreadId?: string;
   statusByThread: Record<string, GitStatusInfo>;
@@ -497,6 +502,7 @@ const KanbanColumn = memo(function KanbanColumn({
                 onDelete={onDelete}
                 onArchive={stage !== 'archived' ? onArchive : undefined}
                 search={search}
+                caseSensitive={caseSensitive}
                 ghost={stage === 'archived'}
                 contentSnippet={contentSnippets?.get(thread.id)}
                 projectId={projectId}
@@ -525,6 +531,7 @@ export function KanbanView({
   threads,
   projectId,
   search,
+  caseSensitive,
   contentSnippets,
   highlightThreadId: initialHighlightId,
 }: KanbanViewProps) {
@@ -766,6 +773,7 @@ export function KanbanView({
             projects={projects}
             onAddThread={handleAddThread}
             search={search}
+            caseSensitive={caseSensitive}
             contentSnippets={contentSnippets}
             highlightThreadId={highlightThreadId}
             statusByThread={statusByThread}

@@ -47,10 +47,20 @@ export function AllThreadsView() {
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
 
   // Build search params from current filter state (preserves status/sort params if present)
-  const buildSearchParams = (overrides?: { project?: string | null }) => {
+  const buildSearchParams = (overrides?: {
+    project?: string | null;
+    search?: string;
+    cs?: boolean;
+  }) => {
     const params: Record<string, string> = {};
     const proj = overrides?.project !== undefined ? overrides.project : projectFilter;
     if (proj) params.project = proj;
+    // Text search lives in the URL so back-navigation from a thread (and
+    // browser back/forward) restores the query.
+    const q = overrides?.search !== undefined ? overrides.search : search;
+    if (q.trim()) params.search = q;
+    const cs = overrides?.cs !== undefined ? overrides.cs : caseSensitive;
+    if (cs) params.cs = '1';
     const statusParam = searchParams.get('status');
     if (statusParam) params.status = statusParam;
     const sortParam = searchParams.get('sort');
@@ -69,6 +79,17 @@ export function AllThreadsView() {
 
     if (paramProject !== projectFilter) {
       setProjectFilter(paramProject);
+    }
+
+    // Restore the text search from the URL (back button from a thread,
+    // browser back/forward, deep links).
+    const paramSearch = searchParams.get('search') ?? '';
+    if (paramSearch !== search) {
+      setSearch(paramSearch);
+    }
+    const paramCs = searchParams.get('cs') === '1';
+    if (paramCs !== caseSensitive) {
+      setCaseSensitive(paramCs);
     }
 
     // When ?status= param is present, force list view and pre-set status filter
@@ -123,8 +144,8 @@ export function AllThreadsView() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
-  const [search, setSearch] = useState('');
-  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
+  const [caseSensitive, setCaseSensitive] = useState(() => searchParams.get('cs') === '1');
   const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
     const paramStatus = searchParams.get('status');
     if (paramStatus) return new Set(paramStatus.split(',').filter(Boolean));
@@ -181,15 +202,18 @@ export function AllThreadsView() {
     return () => window.removeEventListener('keydown', handler);
   }, [search, navigate, projectFilter]);
 
-  // When archived toggle flips on, refetch threads including archived.
-  // (Initial loads happen elsewhere with includeArchived=false.)
+  // Fetch threads including archived when either the archived toggle is on OR
+  // we're in board view (the Kanban "Archived" column needs them loaded to be
+  // populated). Initial loads elsewhere use includeArchived=false; this tops
+  // the buckets up, and replaceProjectThreads keeps archived resident across
+  // later non-archived refreshes.
   useEffect(() => {
-    if (!showArchived) return;
+    if (!showArchived && viewMode !== 'board') return;
     const targets = projectFilter ? [projectFilter] : projects.map((p) => p.id);
     for (const pid of targets) {
       useThreadStore.getState().loadThreadsForProject(pid, true);
     }
-  }, [showArchived, projectFilter, projects]);
+  }, [showArchived, viewMode, projectFilter, projects]);
 
   // Content search: debounced server call to find threads matching by message content
   // Stores threadId → snippet so we can display matching text on cards
@@ -382,13 +406,21 @@ export function AllThreadsView() {
     if (projectFilter) {
       setProjectFilter(null);
     }
-    const next = buildSearchParams({ project: null });
+    const next = buildSearchParams({ project: null, search: '', cs: false });
     delete next.scratch;
     setSearchParams(next, { replace: true });
   };
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
+    // Mirror the query into the URL (replace — no history churn per keystroke)
+    // so leaving the view and coming back restores the search.
+    setSearchParams(buildSearchParams({ search: value }), { replace: true });
+  };
+
+  const handleCaseSensitiveChange = (value: boolean) => {
+    setCaseSensitive(value);
+    setSearchParams(buildSearchParams({ cs: value }), { replace: true });
   };
 
   const hasActiveFilters =
@@ -485,7 +517,7 @@ export function AllThreadsView() {
         search={search}
         onSearchChange={handleSearchChange}
         caseSensitive={caseSensitive}
-        onCaseSensitiveChange={setCaseSensitive}
+        onCaseSensitiveChange={handleCaseSensitiveChange}
         searchKeyDown={(e) => searchKeyDownRef.current?.(e)}
         filteredCount={filtered.length}
         totalCount={allThreads.length}
@@ -528,6 +560,7 @@ export function AllThreadsView() {
           viewMode={viewMode}
           threads={filtered}
           search={search}
+          caseSensitive={caseSensitive}
           contentMatches={contentMatches}
           highlightThreadId={searchParams.get('highlight') || undefined}
           projectFilter={projectFilter}

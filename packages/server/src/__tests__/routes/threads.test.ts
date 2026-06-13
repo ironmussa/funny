@@ -844,4 +844,130 @@ describe('Thread Routes (Integration)', () => {
       expect(rows.some((r) => r.fromStage === 'backlog' && r.toStage === 'in_progress')).toBe(true);
     });
   });
+
+  // The Kanban board sends stage moves and archive/unarchive through the
+  // generic PATCH /:id route. It must record the movement trail and broadcast
+  // thread:stage-changed so every tab updates live (regression: drags used to
+  // be silent — no history, no cross-tab sync — and the card "bounced" back).
+  describe('PATCH /api/threads/:id — stage movement trail + events', () => {
+    function stageEvents() {
+      return relayCalls.filter((c) => c.event.type === 'thread:stage-changed');
+    }
+
+    test('records history and emits thread:stage-changed on a drag stage move', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-move',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'backlog',
+      });
+
+      const res = await t
+        .requestAs('user-1')
+        .patch('/api/threads/t-move', { stage: 'in_progress' });
+      expect(res.status).toBe(200);
+
+      const rows = await t.db
+        .select()
+        .from(t.schema.stageHistory)
+        .where(eq(t.schema.stageHistory.threadId, 't-move'));
+      expect(rows.some((r) => r.fromStage === 'backlog' && r.toStage === 'in_progress')).toBe(true);
+
+      const events = stageEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        userId: 'user-1',
+        event: {
+          type: 'thread:stage-changed',
+          threadId: 't-move',
+          data: { fromStage: 'backlog', toStage: 'in_progress', projectId: 'p1' },
+        },
+      });
+    });
+
+    test('archiving emits a transition to "archived" and records it', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-arch',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'review',
+        archived: 0,
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t-arch', { archived: true });
+      expect(res.status).toBe(200);
+
+      const rows = await t.db
+        .select()
+        .from(t.schema.stageHistory)
+        .where(eq(t.schema.stageHistory.threadId, 't-arch'));
+      expect(rows.some((r) => r.fromStage === 'review' && r.toStage === 'archived')).toBe(true);
+
+      const events = stageEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]!.event.data).toMatchObject({
+        fromStage: 'review',
+        toStage: 'archived',
+        projectId: 'p1',
+      });
+    });
+
+    test('unarchiving emits a transition back from "archived"', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-unarch',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'review',
+        archived: 1,
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t-unarch', { archived: false });
+      expect(res.status).toBe(200);
+
+      const events = stageEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]!.event.data).toMatchObject({
+        fromStage: 'archived',
+        toStage: 'review',
+        projectId: 'p1',
+      });
+    });
+
+    test('a no-op stage PATCH (same stage) records nothing and emits nothing', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-same',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'backlog',
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t-same', { stage: 'backlog' });
+      expect(res.status).toBe(200);
+
+      const rows = await t.db
+        .select()
+        .from(t.schema.stageHistory)
+        .where(eq(t.schema.stageHistory.threadId, 't-same'));
+      expect(rows).toHaveLength(0);
+      expect(stageEvents()).toHaveLength(0);
+    });
+
+    test('a non-stage PATCH (title only) emits no stage event', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-title',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'backlog',
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t-title', { title: 'Renamed' });
+      expect(res.status).toBe(200);
+      expect(stageEvents()).toHaveLength(0);
+    });
+  });
 });

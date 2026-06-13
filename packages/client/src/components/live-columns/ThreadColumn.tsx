@@ -181,7 +181,7 @@ export const ThreadColumn = memo(function ThreadColumn({
   // claims the shortcut. stopImmediatePropagation prevents siblings from
   // also opening, and the browser's default find is preempted.
   const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose } =
-    useThreadSearchState(streamRef);
+    useThreadSearchState(streamRef, threadId);
   const isHoveredRef = useRef(false);
 
   useEffect(() => {

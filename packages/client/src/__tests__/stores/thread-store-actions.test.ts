@@ -90,6 +90,7 @@ vi.mock('@/stores/thread-ws-handlers', () => ({
   handleWSToolCall: vi.fn(),
   handleWSToolOutput: vi.fn(),
   handleWSStatus: vi.fn(),
+  handleWSStageChanged: vi.fn(),
   handleWSError: vi.fn(),
   handleWSResult: vi.fn(),
   handleWSQueueUpdate: vi.fn(),
@@ -1055,6 +1056,95 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().loadOlderMessages();
 
+      expect(useThreadStore.getState().threadDataById.t1.loadingMore).toBe(false);
+    });
+  });
+
+  describe('loadMessagesUntil', () => {
+    const msg = (id: string, timestamp: string) => ({
+      id,
+      threadId: 't1',
+      role: 'assistant' as const,
+      content: id,
+      timestamp,
+    });
+
+    test('returns true immediately when the message is already loaded', async () => {
+      const thread = {
+        ...baseThread,
+        hasMore: true,
+        messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
+      };
+      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+
+      const found = await useThreadStore.getState().loadMessagesUntil('t1', 'm5');
+
+      expect(found).toBe(true);
+      expect(mockGetThreadMessages).not.toHaveBeenCalled();
+    });
+
+    test('pages older history until the target message lands in the store', async () => {
+      const thread = {
+        ...baseThread,
+        hasMore: true,
+        loadingMore: false,
+        messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
+      };
+      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      mockGetThreadMessages
+        .mockReturnValueOnce(
+          okAsync({ messages: [msg('m4', '2026-01-04T00:00:00.000Z')], hasMore: true }),
+        )
+        .mockReturnValueOnce(
+          okAsync({
+            messages: [
+              msg('m2', '2026-01-02T00:00:00.000Z'),
+              msg('m3', '2026-01-03T00:00:00.000Z'),
+            ],
+            hasMore: true,
+          }),
+        );
+
+      const found = await useThreadStore.getState().loadMessagesUntil('t1', 'm2');
+
+      expect(found).toBe(true);
+      expect(mockGetThreadMessages).toHaveBeenCalledTimes(2);
+      const state = useThreadStore.getState().threadDataById.t1;
+      expect(state.messages.map((m: { id: string }) => m.id)).toEqual(['m2', 'm3', 'm4', 'm5']);
+      expect(state.loadingMore).toBe(false);
+    });
+
+    test('returns false when history is exhausted without finding the message', async () => {
+      const thread = {
+        ...baseThread,
+        hasMore: true,
+        loadingMore: false,
+        messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
+      };
+      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      mockGetThreadMessages.mockReturnValue(
+        okAsync({ messages: [msg('m4', '2026-01-04T00:00:00.000Z')], hasMore: false }),
+      );
+
+      const found = await useThreadStore.getState().loadMessagesUntil('t1', 'missing');
+
+      expect(found).toBe(false);
+      expect(useThreadStore.getState().threadDataById.t1.loadingMore).toBe(false);
+    });
+
+    test('returns false and resets loadingMore when a page fetch fails', async () => {
+      const thread = {
+        ...baseThread,
+        hasMore: true,
+        loadingMore: false,
+        messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
+      };
+      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      mockGetThreadMessages.mockReturnValue(errAsync(new Error('network')));
+
+      const found = await useThreadStore.getState().loadMessagesUntil('t1', 'm1');
+
+      expect(found).toBe(false);
       expect(useThreadStore.getState().threadDataById.t1.loadingMore).toBe(false);
     });
   });

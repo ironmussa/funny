@@ -47,8 +47,13 @@ vi.mock('sonner', () => ({
   },
 }));
 
-const { handleWSStatus, handleWSError, handleWSContextUsage, handleWSResult } =
-  await import('@/stores/thread-ws-handlers');
+const {
+  handleWSStatus,
+  handleWSError,
+  handleWSContextUsage,
+  handleWSResult,
+  handleWSStageChanged,
+} = await import('@/stores/thread-ws-handlers');
 import { toast } from 'sonner';
 
 const THREAD_ID = 'thread-edge';
@@ -303,5 +308,87 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
       expect.stringContaining('Budget limit exceeded'),
       expect.objectContaining({ id: `result-${THREAD_ID}` }),
     );
+  });
+
+  describe('handleWSStageChanged', () => {
+    test('applies a server-driven stage move to the board (in_progress → review)', () => {
+      const thread = { ...makeState().activeThread, stage: 'in_progress' };
+      const state = makeState({
+        threadsById: { [THREAD_ID]: thread },
+        threadDataById: { [THREAD_ID]: thread },
+        activeThread: thread,
+      });
+      const { get, set } = makeGetSet(state);
+
+      handleWSStageChanged(get, set, THREAD_ID, {
+        fromStage: 'in_progress',
+        toStage: 'review',
+        projectId: 'p1',
+      });
+
+      expect(state.threadsById[THREAD_ID].stage).toBe('review');
+      expect(state.threadDataById[THREAD_ID].stage).toBe('review');
+    });
+
+    test('toStage archived sets the archived flag without touching stage', () => {
+      const thread = { ...makeState().activeThread, stage: 'review', archived: false };
+      const state = makeState({
+        threadsById: { [THREAD_ID]: thread },
+        threadDataById: { [THREAD_ID]: thread },
+        activeThread: thread,
+      });
+      const { get, set } = makeGetSet(state);
+
+      handleWSStageChanged(get, set, THREAD_ID, {
+        fromStage: 'review',
+        toStage: 'archived',
+        projectId: 'p1',
+      });
+
+      expect(state.threadsById[THREAD_ID].archived).toBe(true);
+      expect(state.threadsById[THREAD_ID].stage).toBe('review');
+    });
+
+    test('a non-archived target on an archived thread un-archives and sets the stage', () => {
+      const thread = { ...makeState().activeThread, stage: 'backlog', archived: true };
+      const state = makeState({
+        threadsById: { [THREAD_ID]: thread },
+        threadDataById: { [THREAD_ID]: thread },
+        activeThread: thread,
+      });
+      const { get, set } = makeGetSet(state);
+
+      handleWSStageChanged(get, set, THREAD_ID, {
+        fromStage: 'archived',
+        toStage: 'planning',
+        projectId: 'p1',
+      });
+
+      expect(state.threadsById[THREAD_ID].archived).toBe(false);
+      expect(state.threadsById[THREAD_ID].stage).toBe('planning');
+    });
+
+    test('schedules a project refresh when the thread is not loaded', async () => {
+      vi.useFakeTimers();
+      const loadThreads = vi.fn();
+      const state = makeState({
+        threadsById: {},
+        threadIdsByProject: { p9: ['other'] },
+        threadDataById: {},
+        selectedThreadId: null,
+        activeThread: null,
+        loadThreadsForProject: loadThreads,
+      });
+      const { get, set } = makeGetSet(state);
+
+      handleWSStageChanged(get, set, 'unknown-1', {
+        fromStage: 'backlog',
+        toStage: 'in_progress',
+        projectId: 'p9',
+      });
+
+      vi.advanceTimersByTime(2000);
+      expect(loadThreads).toHaveBeenCalledWith('p9');
+    });
   });
 });

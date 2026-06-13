@@ -435,6 +435,41 @@ threadRoutes.patch('/:id', async (c) => {
     await threadRepo.updateThread(id, updates);
   }
 
+  // Kanban drag moves and archive/unarchive both flow through this route.
+  // Record the stage transition (movement trail / analytics) and broadcast a
+  // thread:stage-changed event so every tab's board updates live — the same
+  // contract the dedicated /:id/stage route (used by pipelines) already honors.
+  const fromStage = thread.stage ?? null;
+  const stageMoved = 'stage' in updates && updates.stage !== fromStage;
+  const archivedNow = 'archived' in updates && updates.archived === 1 && !thread.archived;
+  const unarchivedNow = 'archived' in updates && updates.archived === 0 && !!thread.archived;
+
+  let transitionFrom: string | null = fromStage;
+  let transitionTo: string | null = null;
+  if (archivedNow) {
+    transitionTo = 'archived';
+  } else if (unarchivedNow) {
+    transitionFrom = 'archived';
+    transitionTo = (updates.stage as string | undefined) ?? thread.stage ?? 'backlog';
+  } else if (stageMoved) {
+    transitionTo = updates.stage as string;
+  }
+
+  if (transitionTo !== null && transitionTo !== transitionFrom) {
+    await stageHistoryRepo.recordStageChange(id, transitionFrom, transitionTo);
+    relayToUser(userId, {
+      type: 'thread:stage-changed',
+      threadId: id,
+      data: { fromStage: transitionFrom, toStage: transitionTo, projectId: thread.projectId },
+    });
+    log.info('Thread stage transition recorded via PATCH', {
+      namespace: 'threads',
+      threadId: id,
+      fromStage: transitionFrom,
+      toStage: transitionTo,
+    });
+  }
+
   const updated = await threadRepo.getThread(id);
   return c.json(updated);
 });

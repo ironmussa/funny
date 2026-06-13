@@ -1,5 +1,6 @@
 import type { Thread } from '@funny/shared';
 
+import { reconcileBoardWrite } from './thread-optimistic-guard';
 import type { ThreadState } from './thread-state';
 import type { ThreadWithMessages } from './thread-types';
 
@@ -23,9 +24,12 @@ function withThreadUpserted(
   threadsById: Record<string, Thread>,
   thread: Thread,
 ): Record<string, Thread> {
-  const prev = threadsById[thread.id];
-  if (prev === thread) return threadsById;
-  return { ...threadsById, [thread.id]: thread };
+  // Re-apply any pending optimistic board write so a stale server snapshot
+  // can't revert a just-archived / just-moved card (see thread-optimistic-guard).
+  const reconciled = reconcileBoardWrite(thread);
+  const prev = threadsById[reconciled.id];
+  if (prev === reconciled) return threadsById;
+  return { ...threadsById, [reconciled.id]: reconciled };
 }
 
 function withThreadsUpserted(
@@ -36,8 +40,10 @@ function withThreadsUpserted(
   const next = { ...threadsById };
   let changed = false;
   for (const t of threads) {
-    if (next[t.id] !== t) {
-      next[t.id] = t;
+    // Re-apply any pending optimistic board write before merging the server row.
+    const reconciled = reconcileBoardWrite(t);
+    if (next[reconciled.id] !== reconciled) {
+      next[reconciled.id] = reconciled;
       changed = true;
     }
   }
@@ -66,9 +72,22 @@ export function replaceProjectThreads(
   total: number,
 ): Partial<ThreadState> {
   const newIds = threads.map((t) => t.id);
+  const incoming = new Set(newIds);
+  // Preserve archived threads already resident in this bucket that the
+  // incoming page omits (a non-archived reload, or a refresh right after a
+  // card was archived so the server no longer returns it). Every consumer that
+  // must hide archived threads — the sidebar and the list view — filters them
+  // out defensively, so keeping them resident is safe; it stops the Kanban
+  // "Archived" column from losing cards on every refresh.
+  const preservedArchivedIds = (state.threadIdsByProject[projectId] ?? []).filter(
+    (id) => !incoming.has(id) && state.threadsById[id]?.archived,
+  );
   return {
     threadsById: withThreadsUpserted(state.threadsById, threads),
-    threadIdsByProject: { ...state.threadIdsByProject, [projectId]: newIds },
+    threadIdsByProject: {
+      ...state.threadIdsByProject,
+      [projectId]: preservedArchivedIds.length ? [...newIds, ...preservedArchivedIds] : newIds,
+    },
     threadTotalByProject: { ...state.threadTotalByProject, [projectId]: total },
   };
 }

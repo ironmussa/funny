@@ -185,6 +185,24 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(refreshAll).toHaveBeenCalled();
   });
 
+  test('thread:stage-changed routes to handleWSStageChanged with mapped data', async () => {
+    const stageCalls: Array<{ tid: string; data: unknown }> = [];
+    useThreadStore.setState({
+      handleWSStageChanged: ((tid: string, data: unknown) => {
+        stageCalls.push({ tid, data });
+      }) as any,
+    });
+
+    captureHandlers()['thread:stage-changed']({
+      threadId: 't1',
+      data: { fromStage: 'in_progress', toStage: 'review', projectId: 'p1' },
+    });
+
+    expect(stageCalls).toEqual([
+      { tid: 't1', data: { fromStage: 'in_progress', toStage: 'review', projectId: 'p1' } },
+    ]);
+  });
+
   test('git:status updates git store and marks review pane dirty', async () => {
     const status = {
       threadId: 't1',

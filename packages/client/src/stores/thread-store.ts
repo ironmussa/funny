@@ -62,6 +62,7 @@ import {
   isThreadDataLoaded,
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
+import { guardOptimisticBoardWrite } from './thread-optimistic-guard';
 import { useThreadReadStore } from './thread-read-store';
 import {
   computeNextActiveThread,
@@ -563,10 +564,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   archiveThread: async (threadId) => {
+    guardOptimisticBoardWrite(threadId, { archived: true });
     set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, archived: true })));
 
     const result = await api.archiveThread(threadId, true);
     if (result.isErr()) {
+      guardOptimisticBoardWrite(threadId, { archived: false });
       set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, archived: false })));
       return;
     }
@@ -576,12 +579,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   unarchiveThread: async (threadId, _projectId, stage) => {
     const oldStage = get().threadsById[threadId]?.stage ?? 'backlog';
 
+    guardOptimisticBoardWrite(threadId, { archived: false, stage });
     set((state) =>
       mutations.patchThread(state, threadId, (t) => ({ ...t, archived: false, stage })),
     );
 
     const archiveResult = await api.archiveThread(threadId, false);
     if (archiveResult.isErr()) {
+      guardOptimisticBoardWrite(threadId, { archived: true, stage: oldStage });
       set((state) =>
         mutations.patchThread(state, threadId, (t) => ({
           ...t,
@@ -594,6 +599,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const stageResult = await api.updateThreadStage(threadId, stage);
     if (stageResult.isErr()) {
+      guardOptimisticBoardWrite(threadId, { stage: oldStage });
       set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage: oldStage })));
     }
   },
@@ -623,10 +629,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   updateThreadStage: async (threadId, _projectId, stage) => {
     const oldStage = get().threadsById[threadId]?.stage ?? 'backlog';
 
+    guardOptimisticBoardWrite(threadId, { stage });
     set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage })));
 
     const result = await api.updateThreadStage(threadId, stage);
     if (result.isErr()) {
+      guardOptimisticBoardWrite(threadId, { stage: oldStage });
       set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage: oldStage })));
     }
   },
@@ -803,6 +811,64 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         };
       }),
     );
+  },
+
+  loadMessagesUntil: async (threadId, messageId) => {
+    // Safety valve: bounded pages per navigation. Already-loaded pages stay
+    // in the store, so a retry continues from where this attempt stopped.
+    const MAX_PAGES = 40;
+    const PAGE_SIZE = 100;
+    let sawEntry = false;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const entry = get().threadDataById[threadId];
+      if (!entry) {
+        // Evicted mid-loop → abort. Not hydrated yet (navigation just landed
+        // on the thread) → wait for the initial load instead of giving up.
+        if (sawEntry) return false;
+        await new Promise((r) => setTimeout(r, 150));
+        continue;
+      }
+      sawEntry = true;
+      if (entry.messages.some((m) => m.id === messageId)) return true;
+      if (!entry.hasMore || entry.messages.length === 0) return false;
+      if (entry.loadingMore) {
+        // A scroll-triggered page load is in flight — wait and re-check.
+        await new Promise((r) => setTimeout(r, 100));
+        continue;
+      }
+
+      const oldestMessage = entry.messages[0];
+      set((state) =>
+        mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: true })),
+      );
+
+      const result = await api.getThreadMessages(threadId, oldestMessage.timestamp, PAGE_SIZE);
+
+      // Bail if the thread was evicted while we were fetching.
+      if (!get().threadDataById[threadId]) return false;
+
+      if (result.isErr()) {
+        set((state) =>
+          mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: false })),
+        );
+        return false;
+      }
+
+      const { messages: olderMessages, hasMore } = result.value;
+      set((state) =>
+        mutations.applyThreadDataPatch(state, threadId, (t) => {
+          const existingIds = new Set(t.messages.map((m) => m.id));
+          const newMessages = olderMessages.filter((m) => !existingIds.has(m.id));
+          return {
+            ...t,
+            messages: [...newMessages, ...t.messages],
+            hasMore,
+            loadingMore: false,
+          };
+        }),
+      );
+    }
+    return get().threadDataById[threadId]?.messages.some((m) => m.id === messageId) ?? false;
   },
 
   refreshActiveThread: async () => {
@@ -1014,6 +1080,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   handleWSStatus: (threadId, data) => {
     wsHandlers.handleWSStatus(get, set, threadId, data);
+  },
+
+  handleWSStageChanged: (threadId, data) => {
+    wsHandlers.handleWSStageChanged(get, set, threadId, data);
   },
 
   handleWSError: (threadId, data) => {

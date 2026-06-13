@@ -220,14 +220,23 @@ export async function requireProjectPath(path: string, userId: string): Promise<
   const realTarget = realpathOrAnchor(path);
   const projects = await getServices().projects.listProjects(userId);
   for (const project of projects) {
-    const projectPath = normalize(resolve(project.path));
-    const realProjectPath = realpathOrAnchor(projectPath);
-    if (isUnder(lexicalTarget, projectPath) && isUnder(realTarget, realProjectPath)) return null;
-    const worktreeBase = normalize(
-      resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath)),
+    // For owned projects this is the project's path; for shared (collaborator)
+    // projects the caller works out of their OWN `localPath`, so authorize both.
+    const bases = [project.path, (project as { localPath?: string }).localPath].filter(
+      (b): b is string => !!b,
     );
-    const realWorktreeBase = realpathOrAnchor(worktreeBase);
-    if (isUnder(lexicalTarget, worktreeBase) && isUnder(realTarget, realWorktreeBase)) return null;
+    for (const base of bases) {
+      const projectPath = normalize(resolve(base));
+      const realProjectPath = realpathOrAnchor(projectPath);
+      if (isUnder(lexicalTarget, projectPath) && isUnder(realTarget, realProjectPath)) return null;
+      const worktreeBase = normalize(
+        resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath)),
+      );
+      const realWorktreeBase = realpathOrAnchor(worktreeBase);
+      if (isUnder(lexicalTarget, worktreeBase) && isUnder(realTarget, realWorktreeBase)) {
+        return null;
+      }
+    }
   }
 
   log.warn('Rejected path outside user projects', {

@@ -9,7 +9,6 @@
  * which forwards them to the runner.
  */
 
-import { existsSync } from 'fs';
 import { isAbsolute, resolve } from 'path';
 
 import { Hono } from 'hono';
@@ -299,11 +298,10 @@ projectRoutes.post('/:id/local-path', async (c) => {
 
   const resolvedPath = resolve(body.localPath);
 
-  // Validate: must be a git repository (check for .git directory)
-  if (!existsSync(resolve(resolvedPath, '.git'))) {
-    return c.json({ error: 'Path is not a git repository' }, 400);
-  }
-
+  // NOTE: the path lives on the member's RUNNER, not on this server (server and
+  // runner are always separate processes), so we can't `existsSync` it here —
+  // that check always failed in team mode. Lexical validation only; the runner
+  // surfaces a clear error if the path isn't a real git repo when it's used.
   await pm.setMemberLocalPath(projectId, userId, resolvedPath);
   return c.json({ ok: true });
 });

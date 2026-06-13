@@ -475,8 +475,16 @@ export async function handleDataMessageWithAck(
         return { type: 'data:get_agent_template_response', template: row ?? null };
       }
       case 'data:list_projects': {
-        const projects = await projectRepo.listProjects(data.userId);
-        return { type: 'data:list_projects_response', projects };
+        // Collaborator model: the runner needs the user's owned projects AND
+        // the projects they were added to directly — the latter carry the
+        // member's own `localPath`, which path-scope uses to authorize file/git
+        // access on the member's machine.
+        const owned = await projectRepo.listProjects(data.userId);
+        const ownedIds = new Set(owned.map((p) => p.id));
+        const shared = (await projectRepo.listMemberProjects(data.userId)).filter(
+          (p) => p.userId !== data.userId && !ownedIds.has(p.id),
+        );
+        return { type: 'data:list_projects_response', projects: [...owned, ...shared] };
       }
       case 'data:list_project_threads': {
         const threads = await dbAll(

@@ -156,6 +156,29 @@ describe('project collaborators', () => {
     });
   });
 
+  describe('2b — member sets their local path (team mode, no server fs check)', () => {
+    test('a member can save a local path that does not exist on the server → 200', async () => {
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
+
+      // The path lives on the member's runner, not this server — the route must
+      // not fs-check it (that always failed in team mode).
+      const res = await t
+        .requestAs('alice')
+        .post('/api/projects/p1/local-path', { localPath: '/home/alice/work/backend-v2' });
+      expect(res.status).toBe(200);
+
+      const pm = await import('../../services/project-manager.js');
+      expect(await pm.getMemberLocalPath('p1', 'alice')).toBe('/home/alice/work/backend-v2');
+    });
+
+    test('rejects a non-absolute path → 400', async () => {
+      const res = await t
+        .requestAs('alice')
+        .post('/api/projects/p1/local-path', { localPath: 'relative/path' });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('owner seeding on project creation', () => {
     test('createProject seeds the owner as an admin member', async () => {
       const projectRepo = await import('../../services/project-repository.js');

@@ -1,3 +1,4 @@
+import { ok, err } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -5,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getThreadWithMessages: vi.fn(),
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
+  resolveProjectPath: vi.fn(),
 }));
 
 vi.mock('../../services/thread-manager.js', () => ({
@@ -17,6 +19,7 @@ vi.mock('../../services/service-registry.js', () => ({
     projects: {
       getProject: mocks.getProject,
       isProjectInOrg: mocks.isProjectInOrg,
+      resolveProjectPath: mocks.resolveProjectPath,
     },
   }),
 }));
@@ -31,6 +34,9 @@ import {
 describe('route-helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: caller is not a collaborator (no member local path). Tests that
+    // exercise the collaborator path override this.
+    mocks.resolveProjectPath.mockResolvedValue(err({ type: 'BAD_REQUEST', message: 'no path' }));
   });
 
   test('requireThread returns not found when thread is missing', async () => {
@@ -160,6 +166,42 @@ describe('route-helpers', () => {
     if (result.isOk()) {
       expect(result.value).toEqual(project);
     }
+  });
+
+  test('requireProject authorizes a collaborator and overrides path with their own', async () => {
+    // Project owned by someone else, not shared via org — but the caller is a
+    // collaborator (project_members), so resolveProjectPath returns THEIR path.
+    mocks.getProject.mockResolvedValue({ id: 'p-1', userId: 'owner', path: '/owner/repo' });
+    mocks.isProjectInOrg.mockResolvedValue(false);
+    mocks.resolveProjectPath.mockResolvedValue(ok('/home/collab/repo'));
+
+    const result = await requireProject('p-1', 'collab-user');
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      // Authorized AND the path is the collaborator's, not the owner's.
+      expect(result.value.path).toBe('/home/collab/repo');
+    }
+    expect(mocks.resolveProjectPath).toHaveBeenCalledWith('p-1', 'collab-user');
+  });
+
+  test('requireThreadCwd uses the collaborator resolved path for local-mode threads', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't-1',
+      userId: 'collab-user',
+      projectId: 'p-1',
+      worktreePath: null,
+    });
+    mocks.resolveProjectPath.mockResolvedValue(ok('/home/collab/repo'));
+
+    const result = await requireThreadCwd('t-1', 'collab-user');
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe('/home/collab/repo');
+    }
+    // Per-user resolution wins — we never fall back to the owner project path.
+    expect(mocks.getProject).not.toHaveBeenCalled();
   });
 
   test('requireThreadCwd returns not found when project is missing', async () => {

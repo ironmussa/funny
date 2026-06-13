@@ -27,10 +27,10 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
-  if (!open) {
-    return null;
-  }
-
+  // Always render so Radix owns the mount/unmount and can play its open/close
+  // (zoom + fade) animation. An `if (!open) return null` guard here would
+  // unmount the <Dialog> synchronously and kill the exit animation. The heavy
+  // project DOM nodes are still only mounted by Radix while the dialog is open.
   return <CommandPaletteContent open={open} onOpenChange={onOpenChange} />;
 }
 
@@ -156,6 +156,11 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
   // focus back after our initial focus call. We schedule multiple
   // attempts so the last one wins after all Radix teardown is complete.
   const handleCloseAutoFocus = useCallback((e: Event) => {
+    // The dialog stays mounted between opens now, so clear the query here
+    // (fires after the close animation, so no unfiltered flash) to start
+    // each open fresh.
+    setSearch('');
+
     if (navigatedRef.current) {
       e.preventDefault();
       navigatedRef.current = false;

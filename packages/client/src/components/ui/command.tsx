@@ -1,9 +1,8 @@
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
 import * as React from 'react';
 
-import { Dialog, DialogTitle, DialogPortal, DialogOverlay } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 function Command({
@@ -45,26 +44,22 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogPortal>
-        <DialogOverlay className="duration-75" />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          onCloseAutoFocus={onCloseAutoFocus}
-          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[20%] left-[50%] z-50 w-full max-w-lg translate-x-[-50%] overflow-hidden rounded-lg border p-0 shadow-xl"
+      <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
+        className="top-[20%] translate-y-0 overflow-hidden p-0"
+      >
+        <DialogTitle className="sr-only">Command palette</DialogTitle>
+        <Command
+          shouldFilter={shouldFilter}
+          filter={filter}
+          value={value}
+          defaultValue={defaultValue}
+          onValueChange={onValueChange}
+          className="**:[[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:font-medium **:[[cmdk-input]]:h-12 **:[[cmdk-item]]:px-2 **:[[cmdk-item]]:py-3"
         >
-          <DialogTitle className="sr-only">Command palette</DialogTitle>
-          <Command
-            shouldFilter={shouldFilter}
-            filter={filter}
-            value={value}
-            defaultValue={defaultValue}
-            onValueChange={onValueChange}
-            className="**:[[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:font-medium **:[[cmdk-input]]:h-12 **:[[cmdk-item]]:px-2 **:[[cmdk-item]]:py-3"
-          >
-            {children}
-          </Command>
-        </DialogPrimitive.Content>
-      </DialogPortal>
+          {children}
+        </Command>
+      </DialogContent>
     </Dialog>
   );
 }

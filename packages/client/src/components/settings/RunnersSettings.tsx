@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -143,6 +144,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   const [assignments, setAssignments] = useState<RunnerProjectAssignment[]>([]);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const loadAssignments = async () => {
     // Fetch from the runner's projects list — reuse existing API
@@ -164,11 +166,11 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Remove runner "${runner.name}"? This cannot be undone.`)) return;
     setDeleting(true);
     const result = await api.deleteRunner(runner.runnerId);
     setDeleting(false);
     if (result.isOk()) {
+      setConfirmDelete(false);
       toast.success('Runner removed');
       onDeleted();
     } else {
@@ -253,7 +255,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           <TooltipIconButton
             size="icon"
             className="text-destructive hover:text-destructive size-6"
-            onClick={handleDelete}
+            onClick={() => setConfirmDelete(true)}
             disabled={deleting}
             data-testid={`runner-item-${runner.runnerId}-delete`}
             tooltip={t('common.delete')}
@@ -262,6 +264,17 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           </TooltipIconButton>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Remove runner"
+        description={`Are you sure you want to remove "${runner.name}"? This action cannot be undone.`}
+        confirmLabel={t('common.remove', 'Remove')}
+        loading={deleting}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+      />
 
       <CollapsibleContent className="px-3 pb-3">
         <div className="mt-2 space-y-1">

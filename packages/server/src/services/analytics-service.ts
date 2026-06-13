@@ -151,7 +151,7 @@ export async function getOverview(params: OverviewParams) {
     movedToDoneCount,
     movedToArchivedCount,
   ] = await Promise.all([
-    // Current stage distribution (non-archived threads by stage)
+    // Stage distribution of threads created within the selected time range
     dbAll(
       (db as any)
         .select({
@@ -159,14 +159,28 @@ export async function getOverview(params: OverviewParams) {
           count: sql<number>`COUNT(*)`,
         })
         .from(schema.threads)
-        .where(and(...filters, eq(schema.threads.archived, 0)))
+        .where(
+          and(
+            ...filters,
+            eq(schema.threads.archived, 0),
+            gte(schema.threads.createdAt, range.start),
+            lt(schema.threads.createdAt, range.end),
+          ),
+        )
         .groupBy(schema.threads.stage),
     ),
     dbGet(
       db
         .select({ count: sql<number>`COUNT(*)` })
         .from(schema.threads)
-        .where(and(...filters, eq(schema.threads.archived, 1))),
+        .where(
+          and(
+            ...filters,
+            eq(schema.threads.archived, 1),
+            gte(schema.threads.createdAt, range.start),
+            lt(schema.threads.createdAt, range.end),
+          ),
+        ),
     ),
     // Threads created in time range
     dbGet(

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "//": "Railway service config for a funny RUNNER (not the central server — that is railway.json). A runner connects OUT to a central server and executes agent work. This file is the source of truth for the published 'funny-runner' Railway template; the maintainer wires these settings into the template composer once, then the 'Deploy on Railway' button in ConnectRunnerCard points at it.",
+  "//variables": "Railway config-as-code can ONLY express build/deploy settings — NOT variables or volumes. Set these in the template composer / service: (1) TEAM_SERVER_URL = the central server URL (the only required var; device-link delivers the bearer + forwarded-identity secret on approval, so NO RUNNER_AUTH_SECRET or invite token is needed). (2) FUNNY_DATA_DIR = /data.",
+  "//volume": "REQUIRED: attach a persistent volume mounted at /data (matching FUNNY_DATA_DIR). The runner stores its device-link credentials at $FUNNY_DATA_DIR/runner-credentials.json plus worktrees and scratch state; without a volume every redeploy wipes them and the runner must be re-enrolled (re-approved) each deploy.",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "bun run build"
+  },
+  "deploy": {
+    "//": "bun run start runs bin/funny.js, which enters runner mode because TEAM_SERVER_URL is set, then device-link enrolls.",
+    "startCommand": "bun run start",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}

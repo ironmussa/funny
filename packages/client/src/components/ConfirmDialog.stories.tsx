@@ -133,6 +133,20 @@ export const DeleteWorktree: Story = {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Stories — Remove Runner                                           */
+/* ------------------------------------------------------------------ */
+
+/** Remove runner confirmation as used in RunnersSettings (Settings > Runners). */
+export const RemoveRunner: Story = {
+  args: {
+    title: 'Remove runner',
+    description:
+      'Are you sure you want to remove "argenisleon-ASUS-Vivobook-S-14-M5406WA-M5406WA-funny"? This action cannot be undone.',
+    confirmLabel: 'Remove',
+  },
+};
+
+/* ------------------------------------------------------------------ */
 /*  Stories — Discard / Revert Changes                                */
 /* ------------------------------------------------------------------ */
 

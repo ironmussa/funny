@@ -1,7 +1,9 @@
 import type { Job, JobStatus, Watcher, WatcherStatus } from '@funny/shared';
 import { AlarmClock, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NavItem } from '@/components/ui/nav-item';
@@ -9,11 +11,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
+import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { ACTIVE_WATCHER_STATUSES as ACTIVE_STATUSES, formatCountdown } from '@/lib/watcher-utils';
 import { useJobStore } from '@/stores/job-store';
 import { findThreadById } from '@/stores/store-bridge';
 import { useWatcherStore } from '@/stores/watcher-store';
+
+/** Compact pill used for status chips in the background-activity panel. */
+const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-[9px] leading-none font-medium';
 
 function statusLabel(w: Watcher): string {
   switch (w.status) {
@@ -58,7 +64,7 @@ function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium">{watcher.label}</span>
-          <Badge variant={statusVariant(watcher.status)} className="shrink-0 text-[10px]">
+          <Badge variant={statusVariant(watcher.status)} className={CHIP_CLASS}>
             {statusLabel(watcher)}
           </Badge>
         </div>
@@ -122,7 +128,11 @@ function JobRow({
   scopeId: string | null;
   onOpened: () => void;
 }) {
+  const { t } = useTranslation();
   const cancelJob = useJobStore((s) => s.cancelJob);
+  const [confirmKill, setConfirmKill] = useState(false);
+
+  const isRunning = job.status === 'running';
 
   // Open the job's output in the existing bottom terminal panel: tail -f while
   // running, the captured log once finished. Opened in the current scope so it
@@ -152,13 +162,18 @@ function JobRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium">{job.label || job.command}</span>
-          <Badge variant={jobStatusVariant(job.status)} className="shrink-0 text-[10px]">
+          <Badge variant={jobStatusVariant(job.status)} className={CHIP_CLASS}>
             {jobStatusLabel(job)}
           </Badge>
         </div>
-        <p className="text-muted-foreground truncate font-mono text-xs">{job.command}</p>
+        {/* Relative timing, same format as thread activity rows. */}
+        <p className="text-muted-foreground truncate text-xs">
+          started {timeAgo(job.startedAt, t)}
+          {!isRunning ? ` · ended ${timeAgo(job.updatedAt, t)}` : null}
+        </p>
+        <p className="text-muted-foreground/70 truncate font-mono text-xs">{job.command}</p>
       </div>
-      {job.status === 'running' ? (
+      {isRunning ? (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -166,13 +181,28 @@ function JobRow({
           data-testid={`job-cancel-${job.id}`}
           onClick={(e) => {
             e.stopPropagation();
-            void cancelJob(job.id);
+            setConfirmKill(true);
           }}
-          aria-label="Cancel job"
+          aria-label="Kill job"
+          title="Kill this process"
         >
           <X className="icon-sm" />
         </Button>
       ) : null}
+      <ConfirmDialog
+        open={confirmKill}
+        onOpenChange={setConfirmKill}
+        title="Kill process?"
+        description={`This stops the running process: ${job.label || job.command}`}
+        confirmLabel="Kill"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onCancel={() => setConfirmKill(false)}
+        onConfirm={() => {
+          setConfirmKill(false);
+          void cancelJob(job.id);
+        }}
+      />
     </div>
   );
 }

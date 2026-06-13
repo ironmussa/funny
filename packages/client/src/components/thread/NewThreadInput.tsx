@@ -1,6 +1,5 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { SiGithub } from '@icons-pack/react-simple-icons';
-import { CircleDot, FolderOpen, GitBranch, GitFork, Globe, Loader2 } from 'lucide-react';
+import { CircleDot, FolderOpen, GitFork } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -8,13 +7,10 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
-import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
-import { api } from '@/lib/api';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
-import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -22,8 +18,7 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { AvailableMcpServers } from '../AvailableMcpServers';
 import { PromptInput } from '../PromptInput';
-import { formatRemoteUrl, remoteUrlToBrowseUrl } from '../PromptInputUI';
-import { BranchPicker } from '../SearchablePicker';
+import { NewThreadContextBar } from './NewThreadContextBar';
 import { SaveBacklogDialog } from './SaveBacklogDialog';
 
 /** Replicate server-side slugifyTitle for branch name preview. */
@@ -91,45 +86,8 @@ export function NewThreadInput({
   const defaultThreadMode = project?.defaultMode ?? DEFAULT_THREAD_MODE;
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
-  // ── Branch picker (shared store) ──
-  const branchPickerBranches = useBranchPickerStore((s) => s.branches);
-  const branchPickerRemoteBranches = useBranchPickerStore((s) => s.remoteBranches);
-  const branchPickerDefaultBranch = useBranchPickerStore((s) => s.defaultBranch);
-  const branchPickerLoading = useBranchPickerStore((s) => s.loading);
-  const branchPickerSelected = useBranchPickerStore((s) => s.selectedBranch);
-  const branchPickerSetSelected = useBranchPickerStore((s) => s.setSelectedBranch);
-  const branchPickerCurrentBranch = useBranchPickerStore((s) => s.currentBranch);
-
-  // ── Branch switch on selection (checkout so ReviewPane shows accurate data) ──
-  const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
-  const handleBranchChange = useCallback(
-    async (branch: string) => {
-      // Checkout first so the picker only moves once the branch is actually live.
-      // ensureBranch is a no-op if already on the target branch, and returns
-      // false if the user cancels the dirty-files dialog or the checkout fails.
-      if (effectiveProjectId && branch !== branchPickerCurrentBranch) {
-        const ok = await ensureBranch(effectiveProjectId, branch);
-        if (!ok) return;
-      }
-      branchPickerSetSelected(branch);
-    },
-    [branchPickerSetSelected, effectiveProjectId, branchPickerCurrentBranch, ensureBranch],
-  );
-
-  // ── Remote URL ──
+  // ── Project path (for AvailableMcpServers) ──
   const projectPath = useMemo(() => project?.path ?? '', [project?.path]);
-  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (projectPath) {
-      (async () => {
-        const result = await api.remoteUrl(projectPath);
-        if (result.isOk()) setRemoteUrl(result.value.url);
-        else setRemoteUrl(null);
-      })();
-    } else {
-      setRemoteUrl(null);
-    }
-  }, [projectPath]);
 
   // ── Worktree preview ──
   const [previewBranch, setPreviewBranch] = useState<string | null>(null);
@@ -291,80 +249,9 @@ export function NewThreadInput({
   }
 
   // Context bar content (project / repo / branch) — rendered by the prompt input
-  // at the top, next to the worktree switch. Compact styling to match the input.
-  const contextBar = (
-    <>
-      {project && (
-        <span
-          className="flex max-w-[140px] min-w-0 items-center gap-1 md:max-w-[200px]"
-          title={project.name}
-        >
-          <FolderOpen className="size-4 shrink-0" />
-          <span className="flex min-w-0 items-center font-medium">
-            <span className="truncate">{project.name.slice(0, -8)}</span>
-            <span className="shrink-0">{project.name.slice(-8)}</span>
-          </span>
-        </span>
-      )}
-      {project && remoteUrl && (
-        <>
-          <span className="text-muted-foreground/40 shrink-0">/</span>
-          {(() => {
-            const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
-            const Icon = remoteUrl.includes('github.com') ? SiGithub : Globe;
-            const formatted = formatRemoteUrl(remoteUrl);
-            const content = (
-              <>
-                <Icon className="size-4 shrink-0" />
-                <span className="flex min-w-0 items-center font-medium">
-                  <span className="truncate">{formatted.slice(0, -8)}</span>
-                  <span className="shrink-0">{formatted.slice(-8)}</span>
-                </span>
-              </>
-            );
-            return browseUrl ? (
-              <a
-                href={browseUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:bg-muted hover:text-foreground flex max-w-[180px] min-w-0 items-center gap-1 rounded px-1 py-0.5 transition-colors md:max-w-[280px]"
-                data-testid="new-thread-repo-link"
-                title={browseUrl}
-              >
-                {content}
-              </a>
-            ) : (
-              <span className="flex max-w-[180px] min-w-0 items-center gap-1 md:max-w-[280px]">
-                {content}
-              </span>
-            );
-          })()}
-        </>
-      )}
-      {(branchPickerBranches.length > 0 || branchPickerLoading) && (
-        <>
-          <span className="text-muted-foreground/40">/</span>
-          {branchPickerLoading ? (
-            <span className="flex items-center gap-1">
-              <GitBranch className="size-4 shrink-0" />
-              <Loader2 className="size-4 animate-spin" />
-            </span>
-          ) : (
-            <BranchPicker
-              branches={branchPickerBranches}
-              remoteBranches={branchPickerRemoteBranches}
-              defaultBranch={branchPickerDefaultBranch}
-              selected={branchPickerSelected}
-              onChange={handleBranchChange}
-              showCreateNew
-              testId="new-thread-branch-picker"
-              triggerClassName="flex max-w-[300px] items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden [&_svg]:h-4 [&_svg]:w-4"
-            />
-          )}
-        </>
-      )}
-    </>
-  );
+  // at the top, next to the worktree switch. Shared with the kanban "Add thread"
+  // dialog (SlideUpPrompt) via NewThreadContextBar.
+  const contextBar = <NewThreadContextBar projectId={effectiveProjectId || undefined} />;
 
   return (
     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
@@ -431,7 +318,6 @@ export function NewThreadInput({
         onDiscard={handleDiscard}
         onCancel={handleCancel}
       />
-      {branchSwitchDialog}
     </div>
   );
 }

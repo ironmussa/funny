@@ -424,7 +424,6 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
       <div className="max-w-4xl px-8 py-8">
         {activePreferencesPage === 'general' && (
           <>
-            <h3 className="settings-section-header">{t('settings.general')}</h3>
             <div className="settings-card">
               <SettingRow
                 title={t('settings.defaultEditor')}
@@ -539,8 +538,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
 
         {activePreferencesPage === 'models' && (
           <>
-            <h3 className="settings-section-header">{t('settings.models')}</h3>
-            <p className="text-muted-foreground px-1 pb-3 text-xs">
+            <p className="text-muted-foreground px-1 pb-3 text-sm">
               {t('settings.promptModelVisibilityDesc')}
             </p>
             <div className="settings-card overflow-visible!">
@@ -551,8 +549,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
 
         {activePreferencesPage === 'appearance' && (
           <>
-            <h3 className="settings-section-header">{t('settings.appearance')}</h3>
-            <p className="text-muted-foreground px-1 pb-3 text-xs">{t('settings.themeDesc')}</p>
+            <p className="text-muted-foreground px-1 pb-3 text-sm">{t('settings.themeDesc')}</p>
             <div className="grid grid-cols-3 gap-2">
               {THEME_OPTIONS.map((opt) => (
                 <ThemeCard
@@ -603,8 +600,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
 
         {activePreferencesPage === 'ai-keys' && (
           <>
-            <h3 className="settings-section-header">AI Providers</h3>
-            <p className="text-muted-foreground px-1 pb-3 text-xs">
+            <p className="text-muted-foreground px-1 pb-3 text-sm">
               Configure API keys for AI providers. Keys are encrypted at rest.
             </p>
             <div className="settings-card divide-border space-y-0 divide-y">
@@ -644,8 +640,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
 
         {activePreferencesPage === 'speech' && (
           <>
-            <h3 className="settings-section-header">Speech</h3>
-            <p className="text-muted-foreground px-1 pb-3 text-xs">
+            <p className="text-muted-foreground px-1 pb-3 text-sm">
               Configure an AssemblyAI API key to enable voice dictation in the prompt input.
             </p>
             <div className="settings-card">
@@ -791,7 +786,6 @@ function ProviderKeyPanel({
 }) {
   return (
     <>
-      <h3 className="settings-section-header">GitHub</h3>
       <div className="settings-card">
         <div className="px-4 py-3.5">
           <p className="settings-row-title">{title}</p>
@@ -874,7 +868,6 @@ function SmtpPanel({
   return (
     <>
       <div className="flex items-center gap-2">
-        <h3 className="settings-section-header">Email (SMTP)</h3>
         {smtpSource !== 'none' && (
           <span
             className={cn(
@@ -889,7 +882,7 @@ function SmtpPanel({
           </span>
         )}
       </div>
-      <p className="text-muted-foreground px-1 pb-3 text-xs">
+      <p className="text-muted-foreground px-1 pb-3 text-sm">
         Used for sending team invitation emails. Set via env vars (SMTP_HOST, SMTP_USER, SMTP_PASS)
         or configure below.
       </p>

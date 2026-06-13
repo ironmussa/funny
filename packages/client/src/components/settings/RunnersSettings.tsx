@@ -94,14 +94,11 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
 
   return (
     <div className="border-border/50 bg-muted/30 mt-3 flex flex-col gap-2 rounded border p-3">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-muted-foreground text-sm">
         Assign a project and provide its local path on this runner's machine.
       </p>
       <Select value={projectId} onValueChange={setProjectId}>
-        <SelectTrigger
-          className="h-7 text-xs"
-          data-testid={`runner-assign-project-select-${runnerId}`}
-        >
+        <SelectTrigger size="xs" data-testid={`runner-assign-project-select-${runnerId}`}>
           <SelectValue placeholder="Select project..." />
         </SelectTrigger>
         <SelectContent>
@@ -346,13 +343,11 @@ export function RunnersSettings() {
 
   return (
     <div className="space-y-6">
-      <h3 className="settings-section-header">Runners</h3>
-
       {/* Install command (shared with the onboarding banner) */}
       <div className="settings-card space-y-3 p-4">
         <div>
           <p className="text-sm font-medium">Connect a new runner</p>
-          <p className="text-muted-foreground mt-0.5 text-xs">
+          <p className="text-muted-foreground mt-0.5 text-sm">
             Run this command on any machine you want to use as a runner. It will connect to this
             server under your account.
           </p>

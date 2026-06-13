@@ -79,8 +79,7 @@ export function ExtensionsSettings() {
 
   return (
     <>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="settings-section-header mb-0">Extensions</h3>
+      <div className="mb-2 flex items-center justify-end">
         <TooltipIconButton
           tooltip="Refresh"
           onClick={() => void refresh()}
@@ -90,14 +89,14 @@ export function ExtensionsSettings() {
         </TooltipIconButton>
       </div>
 
-      <p className="text-muted-foreground px-1 pb-3 text-xs">
+      <p className="text-muted-foreground px-1 pb-3 text-sm">
         Visualizer plugins extend how funny renders fenced code blocks and file previews. They run
         with full access to your session — install only extensions you trust.
       </p>
 
       <div className="settings-card mb-4 flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3">
         <AlertTriangle className="icon-base mt-0.5 shrink-0 text-amber-500" />
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-sm">
           Installing an extension runs its code inside your authenticated session, like installing
           an npm package. There is no sandbox.
         </span>
@@ -129,7 +128,7 @@ export function ExtensionsSettings() {
               {installing ? 'Installing…' : 'Install'}
             </Button>
           </div>
-          <p className="text-muted-foreground mt-1 text-[11px]">
+          <p className="text-muted-foreground mt-1 text-xs">
             The directory must contain a <code>package.json</code> with a <code>funny.client</code>{' '}
             entry pointing at the built ESM bundle.
           </p>

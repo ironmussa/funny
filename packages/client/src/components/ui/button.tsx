@@ -3,6 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import * as React from 'react';
 
+import { CONTROL_ICON, FIELD_SIZE, ICON_SIZE } from '@/components/ui/control-size';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
@@ -17,14 +18,20 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
+      // Field heights / padding / text come from the shared control scale so a
+      // text button lines up with an input or select of the same `size`. The
+      // square `icon*` buttons are a separate axis (width === height) and keep
+      // their own sizes. See control-size.ts.
       size: {
-        default: 'h-10 px-4 py-2 text-base [&_svg]:size-4',
-        xs: 'h-7 rounded-md px-2 text-xs [&_svg]:size-3',
-        sm: 'h-9 rounded-md px-3 text-sm [&_svg]:size-3.5',
-        lg: 'h-11 rounded-md px-8 text-base [&_svg]:size-4',
-        icon: 'size-10 [&_svg]:size-4',
-        'icon-xs': 'size-6 [&_svg]:size-3.5',
-        'icon-sm': 'size-8 [&_svg]:size-4',
+        default: cn(FIELD_SIZE.sm, CONTROL_ICON.sm), // app default density = 32px
+        xs: cn(FIELD_SIZE.xs, CONTROL_ICON.xs),
+        sm: cn(FIELD_SIZE.sm, CONTROL_ICON.sm),
+        md: cn(FIELD_SIZE.md, CONTROL_ICON.md),
+        lg: cn(FIELD_SIZE.lg, CONTROL_ICON.lg),
+        icon: cn(ICON_SIZE.lg, CONTROL_ICON.md),
+        'icon-xs': cn(ICON_SIZE.xs, CONTROL_ICON.sm),
+        'icon-sm': cn(ICON_SIZE.sm, CONTROL_ICON.md),
+        'icon-md': cn(ICON_SIZE.md, CONTROL_ICON.md),
       },
     },
     defaultVariants: {

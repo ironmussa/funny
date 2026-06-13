@@ -66,7 +66,6 @@ export function SystemSettings() {
   if (loading && !nativeGit) {
     return (
       <div className="p-1">
-        <h3 className="settings-section-header">System</h3>
         <p className="text-muted-foreground text-sm">Loading…</p>
       </div>
     );
@@ -80,8 +79,7 @@ export function SystemSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="settings-section-header">System</h3>
-        <p className="text-muted-foreground px-1 pb-3 text-xs">
+        <p className="text-muted-foreground px-1 pb-3 text-sm">
           System-level configuration and native module management.
         </p>
       </div>

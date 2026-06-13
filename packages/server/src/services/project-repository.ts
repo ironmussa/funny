@@ -6,11 +6,15 @@
  * adds filesystem/git validation on top of these operations.
  */
 
-import { realpathSync } from 'fs';
-import { homedir } from 'os';
-import { basename, dirname, resolve, isAbsolute, sep } from 'path';
+import { resolve } from 'path';
 
-import { isGitRepoSync, isGitRepoRootSync, ensureWeaveConfigured } from '@funny/core/git';
+import {
+  isGitRepoSync,
+  isGitRepoRootSync,
+  ensureWeaveConfigured,
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+} from '@funny/core/git';
 import type { Project, FollowUpMode } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
@@ -33,154 +37,26 @@ type ProjectRow = typeof schema.projects.$inferSelect;
 // path becomes the trusted scope for `requireProjectPath`, granting
 // file/index/search/agent-spawn access across the host.
 //
-// The defenses below are layered:
-//   1. Reject traversal (`..`), leading-`-` (flag injection), and absolute
-//      paths under known system directories regardless of platform.
-//   2. When filesystem checks are enabled (single-node mode), realpath the
-//      path and require it sits inside one of the caller-relevant homes —
-//      either the OS user's `$HOME` (single-node) or a recorded org-server
-//      data root via the `FUNNY_PROJECT_ROOT` env override (deployments
-//      that genuinely need a wider scope can opt in explicitly).
-//
-// In team-mode (server and runner on different hosts) `isGitRepoSync` on
-// the server is already false for the runner's paths, so the filesystem
-// check naturally rejects them — the prefix block still catches the
-// edge case of a server with `/var` etc. accessible.
-
-/** Unix-style absolute paths that must never become a project root. */
-const PROJECT_BLOCKED_PREFIXES = [
-  '/etc',
-  '/proc',
-  '/sys',
-  '/dev',
-  '/run',
-  '/boot',
-  '/root',
-  '/var',
-  '/usr',
-  '/lib',
-  '/lib64',
-  '/sbin',
-  '/bin',
-  '/srv',
-  '/opt/funny', // app's own install dir; never register itself
-];
-
-/** Windows-style system roots that must never become a project root. */
-const PROJECT_BLOCKED_WINDOWS_PREFIXES = [
-  'C:\\Windows',
-  'C:\\Program Files',
-  'C:\\Program Files (x86)',
-  'C:\\ProgramData',
-  'C:\\$Recycle.Bin',
-  'C:\\System Volume Information',
-];
-
-function projectPathRealpathOrAnchor(target: string): string {
-  let current = resolve(target);
-  const missing: string[] = [];
-  for (let i = 0; i < 64; i++) {
-    try {
-      const real = realpathSync(current);
-      return missing.length === 0 ? real : resolve(real, ...missing.reverse());
-    } catch {
-      const parent = dirname(current);
-      if (parent === current) return resolve(target);
-      missing.push(basename(current));
-      current = parent;
-    }
-  }
-  return resolve(target);
-}
-
-function isUnderPath(target: string, scope: string): boolean {
-  const t = target;
-  const s = resolve(scope);
-  return t === s || t.startsWith(s + sep);
-}
-
-function isUnderPathCaseInsensitive(target: string, scope: string): boolean {
-  const t = target.toLowerCase();
-  const s = resolve(scope).toLowerCase();
-  return t === s || t.startsWith(s + sep);
-}
+// The validation lives in `@funny/core/git` (path-validation.ts) so both the
+// server (single-node) AND the runner (team mode) share one source of truth:
+//   - lexical guards (traversal, leading-`-`, system prefixes) always apply;
+//   - filesystem containment to `$HOME`/`FUNNY_PROJECT_ROOT` must run on the
+//     host that owns the files. In team mode the path lives on the runner, so
+//     the server delegates creation to the runner (see routes/projects.ts),
+//     which validates against ITS $HOME and persists back via the data channel
+//     with `skipFsCheck=true` — the server then skips the containment check
+//     (it would always fail against the unrelated server $HOME).
 
 /**
  * Returns null when the path is acceptable as a project root, or a
- * DomainError describing why it was rejected. Pure function: only filesystem
- * read is `realpath`.
+ * DomainError describing why it was rejected.
  */
 function validateProjectPath(rawPath: string, skipFsCheck: boolean): DomainError | null {
-  if (typeof rawPath !== 'string' || rawPath.length === 0) {
-    return badRequest('Project path must be a non-empty string');
-  }
-  if (rawPath.startsWith('-')) {
-    return badRequest('Project path must not start with "-"');
-  }
-  if (rawPath.includes('\0')) {
-    return badRequest('Project path contains a null byte');
-  }
-  if (!isAbsolute(rawPath)) {
-    return badRequest('Project path must be absolute');
-  }
-  if (rawPath.split(/[\\/]/).includes('..')) {
-    return badRequest('Project path must not contain ".." segments');
-  }
-
-  const lexical = resolve(rawPath);
-
-  // Cross-platform: reject Unix system prefixes regardless of platform.
-  // (A server running on Linux must not register `/etc`; a Windows server
-  // hitting `/etc` via an unusual layout still gets the wrong answer back.)
-  for (const prefix of PROJECT_BLOCKED_PREFIXES) {
-    if (lexical === prefix || lexical.startsWith(prefix + '/')) {
-      return badRequest(`Project path is in a restricted system directory: ${prefix}`);
-    }
-  }
-  for (const prefix of PROJECT_BLOCKED_WINDOWS_PREFIXES) {
-    if (isUnderPathCaseInsensitive(lexical, prefix)) {
-      return badRequest(`Project path is in a restricted system directory: ${prefix}`);
-    }
-  }
-
+  const lexical = validateProjectPathLexical(rawPath);
+  if (lexical.isErr()) return lexical.error;
   if (skipFsCheck) return null;
-
-  // Filesystem-aware checks (single-node deployments).
-  const real = projectPathRealpathOrAnchor(rawPath);
-  // Re-check prefixes against the realpath — a symlink at /home/user/sneaky
-  // pointing to /etc would otherwise still slip through.
-  for (const prefix of PROJECT_BLOCKED_PREFIXES) {
-    if (real === prefix || real.startsWith(prefix + '/')) {
-      return badRequest(`Project path resolves to a restricted system directory: ${prefix}`);
-    }
-  }
-  for (const prefix of PROJECT_BLOCKED_WINDOWS_PREFIXES) {
-    if (isUnderPathCaseInsensitive(real, prefix)) {
-      return badRequest(`Project path resolves to a restricted system directory: ${prefix}`);
-    }
-  }
-
-  // Containment to the OS user's $HOME (the realpath of $HOME), unless an
-  // operator opts in to a wider root via FUNNY_PROJECT_ROOT (comma-sep list
-  // of additional allowed roots — e.g. /workspaces for codespaces-style
-  // deployments).
-  const allowedRoots: string[] = [projectPathRealpathOrAnchor(homedir())];
-  const extraRoots = process.env.FUNNY_PROJECT_ROOT;
-  if (extraRoots) {
-    for (const r of extraRoots
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)) {
-      allowedRoots.push(projectPathRealpathOrAnchor(r));
-    }
-  }
-  const allowed = allowedRoots.some((root) => isUnderPath(real, root));
-  if (!allowed) {
-    return badRequest(
-      `Project path must live under the server's $HOME (or a path in FUNNY_PROJECT_ROOT). Path resolves to: ${real}`,
-    );
-  }
-  return null;
+  const containment = validateProjectRootContainment(rawPath);
+  return containment.isErr() ? containment.error : null;
 }
 
 function toProject(row: ProjectRow): Project {

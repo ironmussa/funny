@@ -30,6 +30,14 @@ export interface RunnerCredentials {
   serverUrl: string;
   runnerId: string;
   token: string;
+  /**
+   * Shared forwarded-identity secret (RUNNER_AUTH_SECRET) delivered during
+   * device-link enrollment. Persisted so a restart can re-load it into the
+   * environment and proxied requests keep verifying — without the operator
+   * ever hand-carrying the secret. Absent for runners configured the classic
+   * way (explicit --secret / env), which already have it in the environment.
+   */
+  forwardedSecret?: string;
 }
 
 function credentialsPath(dir: string): string {
@@ -64,7 +72,15 @@ export function loadRunnerCredentials(
       });
       return null;
     }
-    return { serverUrl: parsed.serverUrl, runnerId: parsed.runnerId, token: parsed.token };
+    return {
+      serverUrl: parsed.serverUrl,
+      runnerId: parsed.runnerId,
+      token: parsed.token,
+      forwardedSecret:
+        typeof parsed.forwardedSecret === 'string' && parsed.forwardedSecret.length > 0
+          ? parsed.forwardedSecret
+          : undefined,
+    };
   } catch (err) {
     log.warn('Failed to read stored runner credentials', {
       namespace: 'runner',

@@ -232,6 +232,21 @@ bun install -g @ironmussa/funny
 funny --team http://<central-server-ip>:3002
 ```
 
+**Connecting a runner — device-link (recommended).** You do **not** need to copy a shared secret or an invite token onto the runner. Start the runner with just the server URL (as above); it prints a short code:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Link this runner to your funny account                   │
+│   1. Open http://<central-server-ip>:3002                 │
+│   2. Go to Settings ▸ Runners ▸ "Link a runner"           │
+│   3. Enter this code:   WXYZ-1234                         │
+└──────────────────────────────────────────────────────────┘
+```
+
+In the funny UI you're already logged into, open **Settings ▸ Runners**, click **"Link a runner"**, enter the code, confirm the runner's hostname/OS/IP, and approve. The runner then receives its credentials automatically (a per-runner bearer token plus the shared forwarded-identity secret) and persists them to `~/.funny`, so subsequent runs only need `funny`. This works the same on a PaaS (Railway/Fly/Render) where you can't easily run a command beyond the container's start command, and behind NAT — only outbound access to the server is required.
+
+**Classic flow (advanced).** You may instead supply the shared secret and a single-use invite token yourself — see the `--secret` / `--token` options below. `RUNNER_AUTH_SECRET` must match the central server's value, or every proxied request fails.
+
 > ⚠️ **Trust boundary — read before exposing a runner to a remote server.**
 >
 > A funny runner is **not sandboxed**. By design it spawns the Claude CLI, runs `git`, executes pre-commit hooks, and opens PTY shells on the host. A runner that points at a remote `TEAM_SERVER_URL` effectively grants that server:
@@ -278,8 +293,14 @@ The runner machine needs:
 TEAM_SERVER_URL=http://<central-server-ip>:3002
 
 # ── Runner authentication ─────────────────────────────────
-# Must match the RUNNER_AUTH_SECRET set on the central server.
-RUNNER_AUTH_SECRET=<same-secret-as-central-server>
+# Device-link (recommended): leave this UNSET. The runner obtains its
+# credentials (bearer + forwarded-identity secret) when you approve its code
+# in Settings ▸ Runners, and persists them to ~/.funny.
+#
+# Classic flow only: set this to match the RUNNER_AUTH_SECRET on the central
+# server (and pair it with a --token invite). A mismatch fails every proxied
+# request.
+# RUNNER_AUTH_SECRET=<same-secret-as-central-server>
 
 # ── Network ──────────────────────────────────────────────
 PORT=3001

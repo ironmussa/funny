@@ -109,6 +109,73 @@ export interface RunnerRegisterResponse {
   token: string;
 }
 
+// ─── HTTP: Device-Link Enrollment ───────────────────────
+// Zero-config runner enrollment, shaped like the OAuth 2.0 Device
+// Authorization Grant. A runner with no credentials starts an enrollment,
+// shows a short `userCode` to the operator, and polls until a logged-in user
+// approves it — at which point the runner receives its credentials (bearer +
+// forwarded-identity secret) and never needs a hand-carried token or secret.
+
+/** Runner → Server (public): begin a device-link enrollment. */
+export interface EnrollStartRequest {
+  /** Machine hostname (shown to the approver). */
+  hostname: string;
+  /** Operating system (e.g. "linux", "darwin", "win32"). */
+  os: string;
+}
+
+/** Server → Runner: the short human code + the long machine poll token. */
+export interface EnrollStartResponse {
+  /** Short, human-readable code the operator enters in the funny UI. */
+  userCode: string;
+  /** Long, high-entropy token the runner keeps and polls with. Never shown to a human. */
+  pollToken: string;
+  /** Seconds until this enrollment expires if not approved. */
+  expiresIn: number;
+  /** Suggested seconds between poll attempts. */
+  interval: number;
+}
+
+/** Runner → Server (public): poll for approval, keyed by the poll token. */
+export interface EnrollPollRequest {
+  pollToken: string;
+}
+
+/**
+ * Server → Runner: enrollment poll result. `pending` until a user approves;
+ * `approved` carries the credentials exactly once (then the enrollment is
+ * consumed). Mirrors the fields a runner needs to connect: the bearer token
+ * and the forwarded-identity secret.
+ */
+export type EnrollPollResponse =
+  | { status: 'pending' }
+  | {
+      status: 'approved';
+      runnerId: string;
+      /** Bearer token for authenticating subsequent runner requests. */
+      token: string;
+      /** Shared forwarded-identity secret (RUNNER_AUTH_SECRET) for proxied requests. */
+      forwardedSecret: string;
+    };
+
+/**
+ * Server → Client: metadata about a pending enrollment, shown in the approval
+ * confirm dialog so the user can verify it is their runner before approving.
+ */
+export interface EnrollmentInfo {
+  userCode: string;
+  hostname: string;
+  os: string;
+  /** Originating IP of the runner's start request. */
+  ip: string;
+  createdAt: string;
+}
+
+/** Client → Server (authenticated): approve a pending enrollment by user code. */
+export interface EnrollApproveRequest {
+  userCode: string;
+}
+
 // ─── HTTP: Heartbeat ────────────────────────────────────
 
 export interface RunnerHeartbeatRequest {

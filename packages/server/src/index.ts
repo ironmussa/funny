@@ -242,6 +242,10 @@ app.use('/api/auth/sign-in/*', loginThrottleMiddleware);
 app.use('/api/auth/*', rateLimit({ windowMs: 60_000, max: 600 }));
 // Strict rate limit on invite link registration: 20 per minute per IP
 app.use('/api/invite-links/register', rateLimit({ windowMs: 60_000, max: 20 }));
+// Device-link enrollment is unauthenticated (start/poll/approve) — keep it
+// tight to blunt user-code brute force. Must precede the generous catch-all
+// below so the stricter limit wins for these paths.
+app.use('/api/runners/enroll/*', rateLimit({ windowMs: 60_000, max: 60, perUser: true }));
 // Runner endpoints are high-frequency (heartbeat + task polling) — give them a generous limit
 app.use('/api/runners/*', rateLimit({ windowMs: 60_000, max: 1200 }));
 

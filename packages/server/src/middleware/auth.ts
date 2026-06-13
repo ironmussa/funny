@@ -17,7 +17,17 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { normalizeUserRole } from '../lib/types.js';
 
-const PUBLIC_PATHS = new Set(['/api/health', '/api/bootstrap']);
+const PUBLIC_PATHS = new Set([
+  '/api/health',
+  '/api/bootstrap',
+  // Device-link runner enrollment: a runner has no credentials yet, so the
+  // start/poll endpoints must be reachable without auth. Approval + the
+  // metadata lookup stay behind the session (see routes/runners.ts). These are
+  // EXACT paths, not a prefix, so `/api/runners/enroll/approve` and
+  // `/api/runners/enroll/:userCode` remain authenticated.
+  '/api/runners/enroll/start',
+  '/api/runners/enroll/poll',
+]);
 
 const PUBLIC_PREFIXES = ['/api/invite-links/verify/', '/api/invite-links/register'];
 

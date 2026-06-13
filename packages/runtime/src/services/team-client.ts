@@ -51,6 +51,7 @@ import {
   loadRunnerCredentials,
   saveRunnerCredentials,
 } from './runner-credentials.js';
+import { enrollRunner } from './runner-enrollment.js';
 import { getServices } from './service-registry.js';
 
 /**
@@ -235,6 +236,13 @@ async function resumeSession(): Promise<boolean> {
   state.runnerId = creds.runnerId;
   state.runnerToken = creds.token;
 
+  // Restore the forwarded-identity secret delivered at enrollment so proxied
+  // requests keep verifying after a restart — without re-enrolling. An explicit
+  // env value always wins (operator override / classic config).
+  if (creds.forwardedSecret && !process.env.RUNNER_AUTH_SECRET) {
+    process.env.RUNNER_AUTH_SECRET = creds.forwardedSecret;
+  }
+
   try {
     const res = await centralFetch('/api/runners/heartbeat', {
       method: 'POST',
@@ -272,6 +280,39 @@ async function resumeSession(): Promise<boolean> {
   state.runnerId = null;
   state.runnerToken = null;
   return false;
+}
+
+/**
+ * Device-link enrollment fallback.
+ *
+ * When the runner has no way to authenticate — no persisted credentials for
+ * this server, and neither an invite token nor a shared secret in the
+ * environment — enroll via the device-link flow: show a code, wait for the
+ * operator to approve it in the funny UI, then persist the delivered
+ * credentials (bearer + forwarded-identity secret) and load the secret into the
+ * environment. After this, the normal resume/register path connects with no
+ * hand-carried secret. No-op when any credential is already available.
+ */
+async function maybeEnroll(): Promise<void> {
+  if (process.env.RUNNER_INVITE_TOKEN || process.env.RUNNER_AUTH_SECRET) return;
+  if (loadRunnerCredentials(state.serverUrl)) return;
+
+  log.info('No runner credentials found — starting device-link enrollment', {
+    namespace: 'runner',
+  });
+  const creds = await enrollRunner(state.serverUrl);
+
+  // Load the forwarded-identity secret so centralFetch can sign/verify proxied
+  // requests, and persist everything so restarts resume without re-enrolling.
+  if (creds.forwardedSecret) process.env.RUNNER_AUTH_SECRET = creds.forwardedSecret;
+  saveRunnerCredentials({
+    serverUrl: state.serverUrl,
+    runnerId: creds.runnerId,
+    token: creds.token,
+    forwardedSecret: creds.forwardedSecret || undefined,
+  });
+  state.runnerId = creds.runnerId;
+  state.runnerToken = creds.token;
 }
 
 /**
@@ -1614,6 +1655,10 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
 
   // Subscribe to local wsBroker events early
   state.unsubscribeBroker = wsBroker.onEvent(forwardEventToCentral);
+
+  // Zero-config path: with no credentials and no token/secret, enroll via the
+  // device-link flow (blocks until an operator approves the runner in the UI).
+  await maybeEnroll();
 
   // Register as a runner (with retries if the server is not yet available)
   const registered = await registerWithRetry();

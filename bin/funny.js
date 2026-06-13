@@ -144,27 +144,30 @@ Options:
   --help                     Show this help message
 
 Team Mode:
-  Connect this instance as a runner to a central server:
+  Connect this instance as a runner to a central server. The easy path is
+  device-link enrollment — just point at the server:
 
-    funny --team http://192.168.1.10:3002 --secret <secret> --token utkn_xxx
+    funny --team http://192.168.1.10:3002
 
-  RUNNER_AUTH_SECRET is a shared secret: the runner MUST use the same value
-  as the central server (ask your admin for it). In team mode funny will NOT
-  invent one — it refuses to start without it, since a mismatched secret
-  breaks every proxied request (browse, agents, git).
-
-  The --team, --secret and --token values are saved to ~/.funny/.env so
-  subsequent runs only need:
+  funny prints a short code; open the server, go to Settings ▸ Runners ▸
+  "Link a runner", enter the code, and approve. The runner then receives its
+  credentials automatically — no secret or token to copy. Credentials are saved
+  to ~/.funny so later runs only need:
 
     funny
+
+  Classic flow (advanced): you may instead supply the shared secret + an invite
+  token yourself. RUNNER_AUTH_SECRET must match the central server's value:
+
+    funny --team http://192.168.1.10:3002 --secret <secret> --token utkn_xxx
 
   To change the server, pass --team again with a new URL.
 
 Examples:
   funny                          # Start standalone on http://127.0.0.1:3001
   funny --port 8080              # Start on custom port
-  funny --team http://central:3002 --secret abc123 --token utkn_xxx  # Connect to team server (saves config)
-  funny --team http://central:3002  # Re-connect with saved secret + token
+  funny --team http://central:3002  # Connect via device-link enrollment (recommended)
+  funny --team http://central:3002 --secret abc123 --token utkn_xxx  # Classic flow
 
 Authentication:
   Always uses Better Auth with login page. Default admin account (admin/admin)
@@ -236,25 +239,40 @@ if (process.env.TEAM_SERVER_URL) {
 // forwarded-identity signature). Minting a random one here would silently
 // break every proxied request — browse, agents, git — with a 500 from the
 // server's auth middleware, because the signature would never validate.
-// So in team mode require it explicitly and fail with a clear message.
-// Only standalone all-in-one mode (no remote server) may generate its own,
-// since there the secret is purely process-internal.
+//
+// Default path is now device-link enrollment: with no secret and no invite
+// token, the runtime shows a code and obtains its secret from the server after
+// the operator approves it in the UI — so we must NOT abort or mint a random
+// secret there. Only standalone all-in-one mode generates its own, and the
+// classic --token flow still requires an explicit secret.
 
 if (!process.env.RUNNER_AUTH_SECRET) {
   if (process.env.TEAM_SERVER_URL) {
-    console.error(
-      '\n[funny] ERROR: RUNNER_AUTH_SECRET is required in team mode.\n\n' +
-        'This runner connects to a central server and must use the SAME\n' +
-        'RUNNER_AUTH_SECRET as that server. Ask your admin for it, then pass\n' +
-        'it via flag or env (it is saved to ~/.funny/.env for next time):\n\n' +
-        `  funny --team ${process.env.TEAM_SERVER_URL} --secret <secret-from-admin> --token <invite-token>\n\n` +
-        'or:\n\n' +
-        `  RUNNER_AUTH_SECRET=<secret-from-admin> funny --team ${process.env.TEAM_SERVER_URL}\n`,
+    // Classic invite-token flow still needs the shared secret for proxied
+    // requests, so flag a token supplied without a secret.
+    if (process.env.RUNNER_INVITE_TOKEN) {
+      console.error(
+        '\n[funny] ERROR: RUNNER_AUTH_SECRET is required when using --token in team mode.\n\n' +
+          'This runner connects to a central server and must use the SAME\n' +
+          'RUNNER_AUTH_SECRET as that server. Ask your admin for it, then pass\n' +
+          'it via flag or env (it is saved to ~/.funny/.env for next time):\n\n' +
+          `  funny --team ${process.env.TEAM_SERVER_URL} --secret <secret-from-admin> --token <invite-token>\n\n` +
+          'Or drop --token and use device-link enrollment (no secret needed):\n\n' +
+          `  funny --team ${process.env.TEAM_SERVER_URL}\n`,
+      );
+      process.exit(1);
+    }
+    // Device-link path: no token, no secret. Leave the secret unset — the
+    // runtime resumes persisted credentials if present, otherwise enrolls
+    // (printing a code to approve in the funny UI) and receives its secret then.
+    console.log(
+      '[funny] No runner secret/token set — connecting via device-link enrollment.\n' +
+        '        A code will be printed below; approve it in Settings ▸ Runners.',
     );
-    process.exit(1);
+  } else {
+    const crypto = await import('crypto');
+    process.env.RUNNER_AUTH_SECRET = crypto.randomUUID();
   }
-  const crypto = await import('crypto');
-  process.env.RUNNER_AUTH_SECRET = crypto.randomUUID();
 }
 
 // ── Resolve entry points and start ────────────────────────

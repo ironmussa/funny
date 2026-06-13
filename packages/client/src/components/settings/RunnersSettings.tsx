@@ -5,7 +5,11 @@
  * connects to the server under their account. No admin involvement needed.
  */
 
-import type { RunnerInfo, RunnerProjectAssignment } from '@funny/shared/runner-protocol';
+import type {
+  EnrollmentInfo,
+  RunnerInfo,
+  RunnerProjectAssignment,
+} from '@funny/shared/runner-protocol';
 import {
   ChevronDown,
   ChevronRight,
@@ -322,6 +326,89 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   );
 }
 
+/**
+ * LinkRunnerForm — device-link enrollment approval. The operator starts a
+ * zero-config runner, which prints a short code; the user enters it here,
+ * confirms the runner's identity, and approves — after which the runner
+ * receives its credentials automatically (no token/secret to copy).
+ */
+function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
+  const [code, setCode] = useState('');
+  const [looking, setLooking] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [pending, setPending] = useState<EnrollmentInfo | null>(null);
+
+  const handleLookup = async () => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setLooking(true);
+    const result = await api.getRunnerEnrollment(trimmed);
+    setLooking(false);
+    if (result.isOk()) {
+      setPending(result.value);
+    } else {
+      toast.error('Unknown or expired code');
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!pending) return;
+    setApproving(true);
+    const result = await api.approveRunnerEnrollment(pending.userCode);
+    setApproving(false);
+    if (result.isOk()) {
+      toast.success('Runner linked');
+      setPending(null);
+      setCode('');
+      onLinked();
+    } else {
+      toast.error('Failed to link runner');
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleLookup();
+        }}
+        placeholder="Enter runner code, e.g. WXYZ-1234"
+        size="xs"
+        className="flex-1 font-mono uppercase"
+        data-testid="link-runner-code"
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleLookup}
+        disabled={!code.trim() || looking}
+        className="shrink-0"
+        data-testid="link-runner-submit"
+      >
+        {looking ? 'Checking…' : 'Link a runner'}
+      </Button>
+
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(open) => !open && setPending(null)}
+        title="Approve this runner?"
+        description={
+          pending
+            ? `Link "${pending.hostname}" (${pending.os}, from ${pending.ip || 'unknown IP'}) ` +
+              `to your account? Only approve runners you started.`
+            : ''
+        }
+        confirmLabel="Approve"
+        loading={approving}
+        onCancel={() => setPending(null)}
+        onConfirm={handleApprove}
+      />
+    </div>
+  );
+}
+
 export function RunnersSettings() {
   const [runners, setRunners] = useState<RunnerInfo[]>([]);
   const [loadingRunners, setLoadingRunners] = useState(true);
@@ -343,16 +430,22 @@ export function RunnersSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Install command (shared with the onboarding banner) */}
+      {/* Connect a new runner — device-link (boot a runner, approve its code) */}
       <div className="settings-card space-y-3 p-4">
         <div>
           <p className="text-sm font-medium">Connect a new runner</p>
           <p className="text-muted-foreground mt-0.5 text-sm">
-            Run this command on any machine you want to use as a runner. It will connect to this
-            server under your account.
+            Start a runner on any machine, then approve the code it prints to link it to your
+            account — no token or secret to copy.
           </p>
         </div>
         <ConnectRunnerCard />
+        <div className="border-border/50 border-t pt-3">
+          <p className="text-muted-foreground mb-2 text-xs">
+            Already started a runner? Enter the code it printed to approve it:
+          </p>
+          <LinkRunnerForm onLinked={loadRunners} />
+        </div>
       </div>
 
       {/* My runners list */}

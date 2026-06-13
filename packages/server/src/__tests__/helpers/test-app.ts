@@ -127,6 +127,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
       'automations',
       'runner_tasks',
       'runner_project_assignments',
+      'runner_enrollments',
       'threads',
       'team_projects',
       'project_members',

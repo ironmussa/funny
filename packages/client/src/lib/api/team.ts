@@ -120,4 +120,15 @@ export const teamApi = {
     ),
   unassignRunnerProject: (runnerId: string, projectId: string) =>
     request<{ ok: boolean }>(`/runners/${runnerId}/projects/${projectId}`, { method: 'DELETE' }),
+
+  // Device-link runner enrollment
+  getRunnerEnrollment: (userCode: string) =>
+    request<import('@funny/shared/runner-protocol').EnrollmentInfo>(
+      `/runners/enroll/${encodeURIComponent(userCode)}`,
+    ),
+  approveRunnerEnrollment: (userCode: string) =>
+    request<{ ok: boolean; runnerId: string }>('/runners/enroll/approve', {
+      method: 'POST',
+      body: JSON.stringify({ userCode }),
+    }),
 };

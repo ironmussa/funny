@@ -528,6 +528,29 @@ export const inviteLinks = sqliteTable('invite_links', {
   createdAt: text('created_at').notNull(),
 });
 
+export const runnerEnrollments = sqliteTable('runner_enrollments', {
+  id: text('id').primaryKey(),
+  /** Short, human-readable code shown to the operator (unique). */
+  userCode: text('user_code').notNull().unique(),
+  /** Hash of the long poll token the runner holds (unique). */
+  pollTokenHash: text('poll_token_hash').notNull().unique(),
+  /** pending | approved | consumed */
+  status: text('status').notNull().default('pending'),
+  hostname: text('hostname').notNull(),
+  os: text('os').notNull().default('unknown'),
+  /** Originating IP of the runner's start request (shown to the approver). */
+  ip: text('ip'),
+  /** Set on approval — the registered runner id to deliver. */
+  runnerId: text('runner_id'),
+  /** Set on approval — the runner bearer token to deliver once. */
+  runnerToken: text('runner_token'),
+  approverUserId: text('approver_user_id'),
+  /** Failed approval attempts against this code (lockout guard). */
+  failedAttempts: integer('failed_attempts').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+});
+
 // ── Better Auth tables ──────────────────────────────────────────
 // These must be passed explicitly to drizzleAdapter since they live
 // outside the runtime schema. Column names match migration 026.

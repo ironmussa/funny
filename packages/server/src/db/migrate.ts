@@ -1345,6 +1345,38 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    // Device-link runner enrollment (OAuth-device-flow shaped). A runner with
+    // no credentials starts an enrollment, shows a short user_code to the
+    // operator, and polls (keyed by poll_token_hash) until a logged-in user
+    // approves it — at which point runner_id + runner_token are filled in and
+    // delivered once (status pending → approved → consumed). Rows self-expire
+    // via expires_at; the service sweeps them lazily.
+    name: '063_runner_enrollments',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_enrollments (
+          id TEXT PRIMARY KEY,
+          user_code TEXT NOT NULL UNIQUE,
+          poll_token_hash TEXT NOT NULL UNIQUE,
+          status TEXT NOT NULL DEFAULT 'pending',
+          hostname TEXT NOT NULL,
+          os TEXT NOT NULL DEFAULT 'unknown',
+          ip TEXT,
+          runner_id TEXT,
+          runner_token TEXT,
+          approver_user_id TEXT,
+          failed_attempts INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_runner_enrollments_expires
+        ON runner_enrollments (expires_at)
+      `);
+    },
+  },
 ];
 
 export async function autoMigrate() {

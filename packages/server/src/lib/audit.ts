@@ -18,6 +18,8 @@ export type AuditAction =
   | 'token.revoke'
   | 'runner.register'
   | 'runner.remove'
+  | 'runner.enroll_approved'
+  | 'runner.enroll_rejected'
   | 'invite.create'
   | 'invite.accept'
   | 'invite.revoke'

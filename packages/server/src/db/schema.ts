@@ -33,6 +33,7 @@ export {
   runners,
   runnerProjectAssignments,
   runnerTasks,
+  runnerEnrollments,
   projectMembers,
   inviteLinks,
   agentTemplates,

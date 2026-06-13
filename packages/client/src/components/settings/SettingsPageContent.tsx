@@ -8,6 +8,7 @@ import { McpServerSettings } from '@/components/McpServerSettings';
 import { PipelineSettings } from '@/components/PipelineSettings';
 import { ProjectConfigSettings } from '@/components/ProjectConfigSettings';
 import { type SettingsItemId } from '@/components/settings/items';
+import { ProjectCollaborators } from '@/components/settings/ProjectCollaborators';
 import { TeamMembers } from '@/components/settings/TeamMembers';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { SkillsSettings } from '@/components/SkillsSettings';
@@ -62,6 +63,8 @@ export function SettingsPageContent({ page, label }: Props) {
       return <UserManagement />;
     case 'team-members':
       return <TeamMembers />;
+    case 'collaborators':
+      return <ProjectCollaborators />;
     default:
       return <p className="text-muted-foreground text-sm">{t('settings.comingSoon', { label })}</p>;
   }

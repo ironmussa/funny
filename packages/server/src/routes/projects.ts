@@ -245,7 +245,7 @@ projectRoutes.get('/:id/members', async (c) => {
     return c.json({ error: 'Not a member of this project' }, 403);
   }
 
-  const members = await pm.listMembers(projectId);
+  const members = await pm.listMembersWithUsers(projectId);
   return c.json({ members });
 });
 

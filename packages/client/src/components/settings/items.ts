@@ -25,7 +25,11 @@ const baseSettingsItems = [
 ] as const;
 
 export const settingsItems = baseSettingsItems;
-export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'users' | 'team-members';
+export type SettingsItemId =
+  | (typeof baseSettingsItems)[number]['id']
+  | 'users'
+  | 'team-members'
+  | 'collaborators';
 
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
@@ -40,4 +44,5 @@ export const settingsLabelKeys: Record<string, string> = {
   'archived-threads': 'settings.archivedThreads',
   users: 'users.title',
   'team-members': 'Team Members',
+  collaborators: 'Collaborators',
 };

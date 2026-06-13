@@ -3,7 +3,8 @@
  * Source of truth for team projects and memberships.
  */
 
-import { eq, and } from 'drizzle-orm';
+import { user } from '@funny/shared/db/schema-sqlite';
+import { eq, and, inArray } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import { projectMembers } from '../db/schema.js';
@@ -17,6 +18,11 @@ export interface ProjectMember {
   role: string;
   localPath: string | null;
   joinedAt: string;
+}
+
+/** A project member joined with their display fields (for the Collaborators UI). */
+export interface ProjectMemberWithUser extends ProjectMember {
+  user: { name: string; username: string | null; email: string } | null;
 }
 
 // ── Membership ───────────────────────────────────────────
@@ -54,6 +60,29 @@ export async function listMembers(projectId: string): Promise<ProjectMember[]> {
     .select()
     .from(projectMembers)
     .where(eq(projectMembers.projectId, projectId))) as ProjectMember[];
+}
+
+/** Like {@link listMembers} but joins each member with their display fields. */
+export async function listMembersWithUsers(projectId: string): Promise<ProjectMemberWithUser[]> {
+  const members = await listMembers(projectId);
+  if (members.length === 0) return [];
+
+  const ids = members.map((m) => m.userId);
+  const users = (await db
+    .select({ id: user.id, name: user.name, username: user.username, email: user.email })
+    .from(user)
+    .where(inArray(user.id, ids))) as Array<{
+    id: string;
+    name: string;
+    username: string | null;
+    email: string;
+  }>;
+  const byId = new Map(users.map((u) => [u.id, u]));
+
+  return members.map((m) => {
+    const u = byId.get(m.userId);
+    return { ...m, user: u ? { name: u.name, username: u.username, email: u.email } : null };
+  });
 }
 
 export async function isProjectMember(projectId: string, userId: string): Promise<boolean> {

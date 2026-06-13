@@ -153,4 +153,37 @@ export const projectsApi = {
       method: 'PUT',
       body: JSON.stringify({ hookType, newOrder }),
     }),
+
+  // Project Collaborators (project_members)
+  listProjectMembers: (projectId: string) =>
+    request<{ members: ProjectMemberEntry[] }>(`/projects/${projectId}/members`),
+  addProjectMember: (projectId: string, userId: string, role: ProjectMemberRole = 'member') =>
+    request<ProjectMemberEntry>(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, role }),
+    }),
+  removeProjectMember: (projectId: string, userId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+
+  // User lookup (for adding collaborators)
+  searchUsers: (q: string) =>
+    request<UserSearchResult[]>(`/users/search?q=${encodeURIComponent(q)}`),
 };
+
+export type ProjectMemberRole = 'admin' | 'member';
+
+export interface ProjectMemberEntry {
+  projectId: string;
+  userId: string;
+  role: string;
+  localPath: string | null;
+  joinedAt: string;
+  user: { name: string; username: string | null; email: string } | null;
+}
+
+export interface UserSearchResult {
+  id: string;
+  username: string | null;
+  name: string;
+  email: string;
+}

@@ -44,7 +44,7 @@ export function ConnectRunnerCard({ showSteps = true, className }: Props) {
   const [copied, setCopied] = useState(false);
 
   const serverUrl = window.location.origin;
-  const installCommand = `bunx funny --team ${serverUrl}`;
+  const installCommand = `bunx @ironmussa/funny --team ${serverUrl}`;
   const railwayDeployUrl = RAILWAY_RUNNER_TEMPLATE_CODE
     ? `https://railway.com/new/template/${RAILWAY_RUNNER_TEMPLATE_CODE}?TEAM_SERVER_URL=${encodeURIComponent(serverUrl)}`
     : null;

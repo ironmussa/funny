@@ -18,6 +18,28 @@ import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 const dlog = createDebugLogger('sdk');
 
 /**
+ * Tools the Claude CLI advertises but that are INERT inside funny's runtime,
+ * so we always disallow them to stop the model from silently relying on them.
+ *
+ * `ScheduleWakeup`: its firing is driven by the interactive CLI's outer loop,
+ * which does not exist in SDK/headless mode — funny's query() ends after the
+ * turn and the process exits, so the scheduled wake never re-invokes the
+ * thread (it just becomes a silent no-op). funny's durable equivalent is the
+ * `funny_watch` MCP tool, whose due-time scanner in `agent-watcher-manager.ts`
+ * actually wakes the thread via sendMessage(). Disallowing ScheduleWakeup
+ * steers the model to funny_watch instead of a wake that never fires.
+ */
+export const FUNNY_DEAD_CLAUDE_TOOLS = ['ScheduleWakeup'] as const;
+
+/**
+ * Merge the always-disallow dead tools with any caller-supplied disallow list,
+ * deduped. The dead tools are always present regardless of the caller input.
+ */
+export function mergeDisallowedTools(callerDisallowed?: string[]): string[] {
+  return [...new Set([...FUNNY_DEAD_CLAUDE_TOOLS, ...(callerDisallowed ?? [])])];
+}
+
+/**
  * Detect the Anthropic 400 that fires when a resumed/continued conversation
  * carries a `thinking` / `redacted_thinking` block that was altered from the
  * original response — e.g. a turn interrupted mid-thinking leaves a partial
@@ -177,7 +199,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       maxTurns: this.options.maxTurns,
       abortController: this.abortController,
       allowedTools: this.options.allowedTools,
-      disallowedTools: this.options.disallowedTools,
+      // Always-disallow the inert CLI tools (e.g. ScheduleWakeup) merged with
+      // any caller-supplied disallow list, deduped.
+      disallowedTools: mergeDisallowedTools(this.options.disallowedTools),
       // `executable` is the JS runtime used to run cli.js; the new native
       // binary is exec'd directly, so omit it in that case.
       ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),

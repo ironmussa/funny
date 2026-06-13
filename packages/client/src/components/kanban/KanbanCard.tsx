@@ -1,20 +1,12 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Thread, ThreadStage } from '@funny/shared';
-import {
-  Archive,
-  FolderOpenDot,
-  MoreVertical,
-  Pin,
-  PinOff,
-  Square,
-  Terminal,
-  Trash2,
-} from 'lucide-react';
+import { Archive, FolderOpenDot, MoreVertical, Square, Terminal, Trash2 } from 'lucide-react';
 import { memo, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
+import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,7 +20,7 @@ import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { openThreadTerminal } from '@/lib/open-terminal-tab';
-import { statusConfig, timeAgo } from '@/lib/thread-utils';
+import { timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -93,8 +85,6 @@ export const KanbanCard = memo(function KanbanCard({
     });
   }, [thread.id, thread.stage, thread.archived, thread.projectId]);
 
-  const StatusIcon = statusConfig[thread.status].icon;
-  const statusClassName = statusConfig[thread.status].className;
   const isRunning = thread.status === 'running';
   const isBusy = isRunning || thread.status === 'setting_up';
 
@@ -122,31 +112,12 @@ export const KanbanCard = memo(function KanbanCard({
     >
       <div className="min-w-0 flex-1 px-3.5 py-3">
         <div className="mb-2 flex min-w-0 items-start gap-2">
-          <div className="relative mt-0.5 size-3.5 shrink-0">
-            {thread.pinned && !isBusy ? (
-              <span
-                className={cn(
-                  'absolute inset-0 flex items-center justify-center text-muted-foreground',
-                  'group-hover/card:hidden',
-                )}
-              >
-                <Pin className="icon-sm" />
-              </span>
-            ) : (
-              <span className={cn('absolute inset-0', 'group-hover/card:hidden')}>
-                <StatusIcon className={cn('icon-sm', statusClassName)} />
-              </span>
-            )}
-            <span
-              className="text-muted-foreground hover:text-foreground absolute inset-0 hidden cursor-pointer items-center justify-center group-hover/card:flex"
-              onClick={(e) => {
-                e.stopPropagation();
-                pinThread(thread.id, thread.projectId, !thread.pinned);
-              }}
-            >
-              {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
-            </span>
-          </div>
+          <ThreadStatusPin
+            thread={thread}
+            onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
+            hoverGroup="card"
+            className="mt-0.5"
+          />
           <ThreadTitle
             title={thread.title}
             search={search || ''}

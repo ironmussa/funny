@@ -21,9 +21,18 @@ export interface StashEntry {
 
 /**
  * Stash current changes (all files).
+ *
+ * When `includeUntracked` is true, untracked (new) files are stashed too via
+ * `-u`. Without it, untracked files stay in the working tree and would follow a
+ * subsequent `git checkout <branch>` onto the target branch — so callers that
+ * want a truly clean tree (e.g. the branch-switch "leave my changes" path) MUST
+ * pass `true`.
  */
-export function stash(cwd: string): ResultAsync<string, DomainError> {
-  return git(['stash', 'push', '-m', 'funny: stashed changes'], cwd);
+export function stash(cwd: string, includeUntracked = false): ResultAsync<string, DomainError> {
+  const args = ['stash', 'push'];
+  if (includeUntracked) args.push('-u');
+  args.push('-m', 'funny: stashed changes');
+  return git(args, cwd);
 }
 
 /**

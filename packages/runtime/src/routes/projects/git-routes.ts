@@ -140,7 +140,10 @@ projectGitRoutes.post('/:id/checkout', async (c) => {
   }
 
   if (strategy === 'stash') {
-    const stashResult = await stash(project.path);
+    // Include untracked files (-u) — otherwise new files stay in the working
+    // tree and follow the checkout onto the target branch, so "leave my
+    // changes" would silently carry them anyway.
+    const stashResult = await stash(project.path, true);
     if (stashResult.isErr()) {
       return c.json({ error: `Failed to stash: ${stashResult.error.message}` }, 500);
     }

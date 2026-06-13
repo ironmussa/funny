@@ -257,7 +257,7 @@ export function TeamMembers() {
               </span>
             </div>
           )}
-          <p className="text-muted-foreground mb-3 text-xs">
+          <p className="text-muted-foreground mb-3 text-sm">
             Send an invitation to join this organization.
           </p>
           <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export function TeamMembers() {
               onValueChange={(v) => setInviteRole(v as InviteRole)}
               disabled={smtpConfigured === false}
             >
-              <SelectTrigger className="h-9 w-[100px]" data-testid="team-invite-role">
+              <SelectTrigger className="w-[100px]" data-testid="team-invite-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -306,12 +306,12 @@ export function TeamMembers() {
       <h3 className="settings-section-header">Invite Link</h3>
       <div className="settings-card">
         <div className="px-4 py-3.5">
-          <p className="text-muted-foreground mb-3 text-xs">
+          <p className="text-muted-foreground mb-3 text-sm">
             Generate a shareable link to invite people to this organization.
           </p>
           <div className="flex items-center gap-2">
             <Select value={linkRole} onValueChange={(v) => setLinkRole(v as InviteRole)}>
-              <SelectTrigger className="h-9 w-[100px]" data-testid="team-link-role">
+              <SelectTrigger className="w-[100px]" data-testid="team-link-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

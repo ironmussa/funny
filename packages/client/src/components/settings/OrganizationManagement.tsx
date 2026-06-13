@@ -157,7 +157,7 @@ export function OrganizationManagement() {
       <h3 className="settings-section-header">Create Organization</h3>
       <div className="settings-card">
         <div className="px-4 py-3.5">
-          <p className="text-muted-foreground mb-3 text-xs">
+          <p className="text-muted-foreground mb-3 text-sm">
             Create a new organization to manage team members and projects.
           </p>
           <div className="space-y-3">

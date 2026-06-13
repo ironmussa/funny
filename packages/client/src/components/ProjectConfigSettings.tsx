@@ -247,7 +247,8 @@ export function ProjectConfigSettings() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Input
-                    className="h-7 w-32 text-sm font-medium"
+                    size="xs"
+                    className="w-32 text-sm font-medium"
                     defaultValue={group.name}
                     onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                     onKeyDown={(e) => {
@@ -256,7 +257,8 @@ export function ProjectConfigSettings() {
                     data-testid={`port-group-${gi}-name`}
                   />
                   <Input
-                    className="h-7 w-20 font-mono text-xs"
+                    size="xs"
+                    className="w-20 font-mono"
                     type="number"
                     defaultValue={group.basePort}
                     onBlur={(e) => updatePortGroup(gi, 'basePort', e.target.value)}

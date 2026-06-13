@@ -111,8 +111,7 @@ export function ProjectCollaborators() {
   return (
     <div className="space-y-4">
       <div className="px-1">
-        <h3 className="text-foreground text-sm font-medium">Collaborators</h3>
-        <p className="text-muted-foreground mt-0.5 text-xs">
+        <p className="text-muted-foreground mt-0.5 text-sm">
           People with access to this project. Each collaborator works through their own runner —
           they’ll be prompted to connect one and set their local directory.
         </p>

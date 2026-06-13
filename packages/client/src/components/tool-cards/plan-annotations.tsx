@@ -126,11 +126,11 @@ export function SelectionPopover({
               className="text-foreground placeholder:text-muted-foreground/50 h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
             />
             <Button
-              size="sm"
+              size="xs"
               onClick={handleSubmitComment}
               disabled={!comment.trim()}
               data-testid="plan-selection-comment-submit"
-              className="h-7 shrink-0 px-3 text-sm"
+              className="shrink-0 px-3 text-sm"
             >
               {t('plan.comment', 'Comment')}
             </Button>

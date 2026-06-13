@@ -132,8 +132,7 @@ export function AgentTemplateSettings() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="settings-section-header mb-0!">Agent Templates</h3>
-          <p className="settings-row-desc mt-1">
+          <p className="settings-row-desc">
             Deep Agent configurations selectable when creating threads.
           </p>
         </div>
@@ -878,7 +877,7 @@ function McpServerForm({
         <div>
           <label className="text-muted-foreground text-[10px]">Type</label>
           <Select value={type} onValueChange={(v) => setType(v as McpServerType)}>
-            <SelectTrigger className="h-7 text-xs" data-testid="agent-template-mcp-type">
+            <SelectTrigger size="xs" data-testid="agent-template-mcp-type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

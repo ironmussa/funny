@@ -24,19 +24,13 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <Select>
-      <SelectTrigger data-testid="select-trigger" className="w-48" size="default">
+      <SelectTrigger data-testid="select-trigger" className="w-48">
         <SelectValue placeholder="Select an option" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="option1" size="default">
-          Option 1
-        </SelectItem>
-        <SelectItem value="option2" size="default">
-          Option 2
-        </SelectItem>
-        <SelectItem value="option3" size="default">
-          Option 3
-        </SelectItem>
+        <SelectItem value="option1">Option 1</SelectItem>
+        <SelectItem value="option2">Option 2</SelectItem>
+        <SelectItem value="option3">Option 3</SelectItem>
       </SelectContent>
     </Select>
   ),
@@ -114,14 +108,14 @@ export const AllSizes: Story = {
         </SelectContent>
       </Select>
       <Select>
-        <SelectTrigger data-testid="select-all-default" className="w-36" size="default">
-          <SelectValue placeholder="Default" />
+        <SelectTrigger data-testid="select-all-md" className="w-36" size="md">
+          <SelectValue placeholder="Medium" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="a" size="default">
+          <SelectItem value="a" size="md">
             Option A
           </SelectItem>
-          <SelectItem value="b" size="default">
+          <SelectItem value="b" size="md">
             Option B
           </SelectItem>
         </SelectContent>

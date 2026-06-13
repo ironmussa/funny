@@ -6,7 +6,7 @@
  * each user manages their own runner's providers.
  */
 import { ACP_MANIFESTS, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
-import { AlertTriangle, Cpu, Package, Power, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Cpu, Package, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -122,18 +122,7 @@ export function ProvidersSettings() {
 
   return (
     <>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="settings-section-header mb-0">Providers</h3>
-        <TooltipIconButton
-          tooltip="Refresh"
-          onClick={() => void refresh()}
-          data-testid="providers-refresh"
-        >
-          <RefreshCw className={loading ? 'icon-base animate-spin' : 'icon-base'} />
-        </TooltipIconButton>
-      </div>
-
-      <p className="text-muted-foreground px-1 pb-3 text-xs">
+      <p className="text-muted-foreground px-1 pb-3 text-sm">
         Install ACP agent providers onto your runner. A provider is a declarative manifest pointing
         at an agent CLI already installed on the runner — installing one lets funny launch that
         binary.
@@ -141,7 +130,7 @@ export function ProvidersSettings() {
 
       <div className="settings-card mb-4 flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3">
         <AlertTriangle className="icon-base mt-0.5 shrink-0 text-amber-500" />
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-sm">
           Installing a provider lets funny spawn the binary it declares on your runner. Install only
           providers you trust.
         </span>
@@ -171,43 +160,43 @@ export function ProvidersSettings() {
             {installing ? 'Installing…' : 'Install'}
           </Button>
         </div>
-        <p className="text-muted-foreground mt-1 text-[11px]">
+        <p className="text-muted-foreground mt-1 text-xs">
           The package must contain a <code>package.json</code> with a <code>funny.provider</code>{' '}
           entry pointing at a <code>funny.provider.json</code> manifest.
         </p>
       </div>
 
-      <div className="mt-2 mb-1 flex items-baseline justify-between px-1">
+      <div className="mt-2 mb-1 flex items-center justify-between px-1">
         <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Built-in providers
         </h4>
-        <span className="text-muted-foreground text-[11px]">saved selection</span>
+        <TooltipIconButton
+          tooltip="Refresh"
+          onClick={() => void refresh()}
+          data-testid="providers-refresh"
+        >
+          <RefreshCw className={loading ? 'icon-base animate-spin' : 'icon-base'} />
+        </TooltipIconButton>
       </div>
-      <p className="text-muted-foreground px-1 pb-2 text-[11px]">
+      <p className="text-muted-foreground px-1 pb-2 text-sm">
         Enable or disable bundled ACP providers in the model picker. Your selection is saved and
         restored when the runner restarts. Set <code>FUNNY_PROVIDERS</code> on the runner to change
         the built-in default.
       </p>
-      <div className="mb-4 flex flex-col gap-2">
+      <div className="settings-card divide-border mb-4 space-y-0 divide-y">
         {BUILTIN_ACP.map(({ id, label }) => {
           const active = isBuiltinActive(id);
           return (
             <div
               key={id}
-              className="settings-card flex items-center gap-3 px-3 py-2.5"
+              className="flex items-center gap-3 px-4 py-3.5"
               data-testid={`builtin-provider-${id}`}
             >
-              <Power
-                className={`icon-base shrink-0 ${active ? 'text-emerald-500' : 'text-muted-foreground/40'}`}
-              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className="truncate text-sm font-medium">{label}</span>
                   <span className="text-muted-foreground text-xs">{id}</span>
                 </div>
-                <p className="text-muted-foreground truncate text-xs">
-                  {active ? 'Active in the model picker' : 'Hidden from the model picker'}
-                </p>
               </div>
               <Switch
                 checked={active}

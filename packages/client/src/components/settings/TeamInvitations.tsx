@@ -95,7 +95,7 @@ export function TeamInvitations() {
       </h3>
       <div className="border-border/50 mb-6 overflow-hidden rounded-lg border">
         <div className="px-4 py-3.5">
-          <p className="text-muted-foreground mb-3 text-xs">
+          <p className="text-muted-foreground mb-3 text-sm">
             Send an invitation to join this organization.
           </p>
           <div className="flex items-center gap-2">
@@ -111,7 +111,7 @@ export function TeamInvitations() {
               data-testid="team-invite-email"
             />
             <Select value={role} onValueChange={(v) => setRole(v as InviteRole)}>
-              <SelectTrigger className="h-9 w-[100px]" data-testid="team-invite-role">
+              <SelectTrigger className="w-[100px]" data-testid="team-invite-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

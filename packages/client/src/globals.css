@@ -206,7 +206,7 @@ mark.md-search-match[data-active='true'] {
 
 @utility settings-row-desc {
   /* Settings row description */
-  @apply text-muted-foreground mt-0.5 text-xs;
+  @apply text-muted-foreground mt-0.5 text-sm;
 }
 
 @utility settings-input {

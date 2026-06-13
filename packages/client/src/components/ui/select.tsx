@@ -3,6 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import * as React from 'react';
 
+import { FIELD_SIZE } from '@/components/ui/control-size';
 import { cn } from '@/lib/utils';
 
 const Select = SelectPrimitive.Root;
@@ -12,11 +13,14 @@ const SelectValue = SelectPrimitive.Value;
 const selectTriggerVariants = cva(
   'flex items-center justify-between gap-1 rounded-md border border-input bg-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 hover:bg-accent/50 cursor-pointer',
   {
+    // Height / padding / text from the shared control scale so a select trigger
+    // lines up with an input or button of the same `size`. See control-size.ts.
     variants: {
       size: {
-        default: 'h-10 px-3 py-2 text-base',
-        xs: 'h-7 px-2 py-1 text-xs',
-        sm: 'h-8 px-2 py-1 text-sm',
+        xs: FIELD_SIZE.xs,
+        sm: FIELD_SIZE.sm,
+        md: FIELD_SIZE.md,
+        lg: FIELD_SIZE.lg,
       },
     },
     defaultVariants: {
@@ -45,7 +49,7 @@ function SelectTrigger({
       {children}
       {!hideChevron && (
         <SelectPrimitive.Icon asChild>
-          <ChevronDown className={cn(size === 'default' ? 'icon-base' : 'icon-xs', 'opacity-50')} />
+          <ChevronDown className={cn(size === 'lg' ? 'icon-base' : 'icon-xs', 'opacity-50')} />
         </SelectPrimitive.Icon>
       )}
     </SelectPrimitive.Trigger>
@@ -140,11 +144,14 @@ function SelectLabel({
 const selectItemVariants = cva(
   'relative flex w-full cursor-pointer select-none items-center rounded-sm outline-hidden hover:bg-accent/50 focus-visible:bg-accent focus-visible:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
   {
+    // Option rows mirror the trigger's `size` text scale (no height — they
+    // size to content). See control-size.ts for the shared scale.
     variants: {
       size: {
-        default: 'py-1.5 pl-2 pr-8 text-base',
         xs: 'py-1 pl-2 pr-6 text-xs',
         sm: 'py-1.5 pl-2 pr-8 text-sm',
+        md: 'py-1.5 pl-2 pr-8 text-sm',
+        lg: 'py-1.5 pl-2 pr-8 text-base',
       },
     },
     defaultVariants: {

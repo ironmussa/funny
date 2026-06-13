@@ -99,8 +99,7 @@ export function UserManagement() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between px-4 pt-2">
-        <h3 className="text-foreground text-sm font-medium">{t('users.title')}</h3>
+      <div className="flex items-center justify-end px-4 pt-2">
         <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)}>
           {showCreate ? t('common.cancel') : t('users.addUser')}
         </Button>

@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { fetchRepoIssues } from '../../routes/github/helpers.js';
+import { prRoutes } from '../../routes/github/prs.js';
+import type { HonoEnv } from '../../types/hono-env.js';
 import { validate, cloneRepoSchema, githubPollSchema } from '../../validation/schemas.js';
 
 /**
@@ -308,6 +310,54 @@ describe('GitHub Routes', () => {
     test('GET /repos returns 401 when not connected', async () => {
       const res = await app.request('/repos');
       expect(res.status).toBe(401);
+    });
+  });
+
+  // POST /pr-merge — request validation runs before any GitHub/service call, so
+  // these paths are deterministic without stubbing the network or DB.
+  describe('POST /pr-merge validation', () => {
+    let app: Hono<HonoEnv>;
+
+    beforeEach(() => {
+      app = new Hono<HonoEnv>();
+      // Mount the real route behind a middleware that injects a userId, mirroring
+      // the auth middleware in production.
+      app.use('*', async (c, next) => {
+        c.set('userId', 'user-1');
+        await next();
+      });
+      app.route('/', prRoutes);
+    });
+
+    test('returns 400 when projectId and prNumber are missing', async () => {
+      const res = await app.request('/pr-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain('projectId');
+    });
+
+    test('returns 400 when prNumber is missing', async () => {
+      const res = await app.request('/pr-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: 'p1' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 400 for an invalid merge method', async () => {
+      const res = await app.request('/pr-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: 'p1', prNumber: 7, method: 'fast-forward' }),
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain('merge method');
     });
   });
 });

@@ -351,7 +351,17 @@
       "noClosedPRs": "No closed pull requests",
       "noPRs": "No pull requests",
       "loadMore": "Load more",
-      "openOnGithub": "Open on GitHub"
+      "openOnGithub": "Open on GitHub",
+      "merge": "Merge",
+      "merged": "Merged",
+      "mergeMethod": "Merge method",
+      "squashAndMerge": "Squash and merge",
+      "squashHint": "Combine all commits into one",
+      "createMergeCommit": "Create a merge commit",
+      "mergeHint": "Keep all commits",
+      "rebaseAndMerge": "Rebase and merge",
+      "rebaseHint": "Rebase commits onto the base",
+      "mergeFailed": "Failed to merge pull request"
     },
     "ci": {
       "tab": "CI",
@@ -1089,6 +1099,8 @@
     "usernamePlaceholder": "Enter your username",
     "password": "Password",
     "passwordPlaceholder": "Enter your password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "loginFailed": "Login failed. Please check your credentials.",
     "logout": "Log out"
   },

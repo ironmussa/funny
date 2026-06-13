@@ -53,11 +53,19 @@ export function SettingsDetailView() {
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="max-w-4xl px-8 py-8">
+      {/* Archived threads owns its own scroll + full width (mirrors /list);
+          every other settings page renders in the centered, padded column. */}
+      {page === 'archived-threads' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
           <SettingsPageContent page={page} label={label ?? ''} />
         </div>
-      </ScrollArea>
+      ) : (
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="max-w-4xl px-8 py-8">
+            <SettingsPageContent page={page} label={label ?? ''} />
+          </div>
+        </ScrollArea>
+      )}
     </div>
   );
 }

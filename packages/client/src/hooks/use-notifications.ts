@@ -97,7 +97,10 @@ export function showAgentNotification(
     const notif = new Notification(title, {
       body,
       tag: opts.tag,
-      icon: '/favicon.ico',
+      // Opaque PNG with a solid tile background. The favicon is a dark bunny on a
+      // transparent ICO/SVG, which the OS notification daemon renders as a black
+      // square — a dedicated opaque raster avoids that.
+      icon: '/notification-icon.png',
     });
     notif.onshow = () => log.info('notification shown', { title, tag: opts.tag });
     notif.onerror = (ev) =>

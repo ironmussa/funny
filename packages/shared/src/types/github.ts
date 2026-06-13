@@ -63,8 +63,50 @@ export interface GitHubPR {
     name: string;
     color: string;
   }>;
+  /** Users assigned to the PR. Populated by both the list and search endpoints. */
+  assignees?: Array<{
+    login: string;
+    avatar_url: string;
+  }>;
+  /**
+   * Users whose review was requested. Only the `/pulls` list endpoint carries
+   * these — the GitHub Search API omits them, so search-mode results leave this
+   * undefined even though `review-requested:` filtering still works server-side.
+   */
+  requested_reviewers?: Array<{
+    login: string;
+    avatar_url: string;
+  }>;
   merged_at: string | null;
 }
+
+/** A user reference used to populate the PR filter dropdowns. */
+export interface GitHubUserRef {
+  login: string;
+  avatar_url: string;
+}
+
+/**
+ * Options used to populate the PR filter UI: the repo's labels and its
+ * assignable users (collaborators/org members) — the latter feeds the author,
+ * assignee, and reviewer pickers.
+ */
+export interface PRFilterOptions {
+  labels: Array<{ name: string; color: string }>;
+  users: GitHubUserRef[];
+}
+
+/**
+ * Unified PR sort key understood by both the list and search endpoints. The
+ * backend translates each key into the per-endpoint GitHub params
+ * (`sort`+`direction` for `/pulls`, `sort`+`order` for `/search/issues`).
+ */
+export type PRSortKey =
+  | 'newest'
+  | 'oldest'
+  | 'recently-updated'
+  | 'least-recently-updated'
+  | 'most-commented';
 
 // ─── PR Detail (rich data for PR Summary Card) ───────────
 

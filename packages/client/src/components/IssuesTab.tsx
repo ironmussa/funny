@@ -15,10 +15,10 @@ import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
@@ -126,6 +126,9 @@ export function IssuesTab({ visible }: IssuesTabProps) {
     [projectId, repoInfo, startNewThreadFromIssue],
   );
 
+  const stateLabel = (s: IssueState): string =>
+    s === 'open' ? t('issues.open', 'Open') : t('issues.closed', 'Closed');
+
   if (!projectId) {
     return (
       <EmptyState
@@ -154,29 +157,19 @@ export function IssuesTab({ visible }: IssuesTabProps) {
           <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
         </Tooltip>
 
-        <ButtonGroup>
-          {(['open', 'closed'] as IssueState[]).map((s) => (
-            <Button
-              key={s}
-              variant={state === s ? 'default' : 'outline'}
-              size="xs"
-              onClick={() => setState(s)}
-              data-testid={`issues-filter-${s}`}
-            >
-              {s === 'open' ? (
-                <>
-                  <CircleDot className="icon-xs mr-1 text-green-500" />
-                  {t('issues.open', 'Open')}
-                </>
-              ) : (
-                <>
-                  <CircleCheck className="icon-xs mr-1 text-purple-500" />
-                  {t('issues.closed', 'Closed')}
-                </>
-              )}
-            </Button>
-          ))}
-        </ButtonGroup>
+        <Select value={state} onValueChange={(v) => setState(v as IssueState)}>
+          <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-state-trigger">
+            <CircleDot className="icon-xs opacity-70" />
+            <span>{stateLabel(state)}</span>
+          </SelectTrigger>
+          <SelectContent>
+            {(['open', 'closed'] as IssueState[]).map((s) => (
+              <SelectItem key={s} value={s} className="text-xs" data-testid={`issues-filter-${s}`}>
+                {stateLabel(s)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="min-w-0 flex-1" />
 

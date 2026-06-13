@@ -69,11 +69,20 @@ export const githubApi = {
     }>(`/github/issues-enriched?${p.toString()}`);
   },
 
-  githubPRs: (projectId: string, params?: { state?: string; page?: number; per_page?: number }) => {
+  githubPRs: (
+    projectId: string,
+    params?: {
+      state?: string;
+      page?: number;
+      per_page?: number;
+      sort?: import('@funny/shared').PRSortKey;
+    },
+  ) => {
     const p = new URLSearchParams({ projectId });
     if (params?.state) p.set('state', params.state);
     if (params?.page) p.set('page', String(params.page));
     if (params?.per_page) p.set('per_page', String(params.per_page));
+    if (params?.sort) p.set('sort', params.sort);
     return request<{
       prs: import('@funny/shared').GitHubPR[];
       hasMore: boolean;
@@ -81,6 +90,43 @@ export const githubApi = {
       repo: string;
     }>(`/github/prs?${p.toString()}`);
   },
+
+  /** Filter PRs across the whole repo via the GitHub Search API (server-side). */
+  githubPRsSearch: (
+    projectId: string,
+    params: {
+      state?: string;
+      page?: number;
+      per_page?: number;
+      sort?: import('@funny/shared').PRSortKey;
+      labels?: string[];
+      authors?: string[];
+      assignees?: string[];
+      reviewers?: string[];
+    },
+  ) => {
+    const p = new URLSearchParams({ projectId });
+    if (params.state) p.set('state', params.state);
+    if (params.page) p.set('page', String(params.page));
+    if (params.per_page) p.set('per_page', String(params.per_page));
+    if (params.sort) p.set('sort', params.sort);
+    if (params.labels?.length) p.set('labels', params.labels.join(','));
+    if (params.authors?.length) p.set('authors', params.authors.join(','));
+    if (params.assignees?.length) p.set('assignees', params.assignees.join(','));
+    if (params.reviewers?.length) p.set('reviewers', params.reviewers.join(','));
+    return request<{
+      prs: import('@funny/shared').GitHubPR[];
+      hasMore: boolean;
+      owner: string;
+      repo: string;
+    }>(`/github/prs-search?${p.toString()}`);
+  },
+
+  /** Labels + assignable users to populate the PR filter dropdowns. */
+  githubPRFilterOptions: (projectId: string) =>
+    request<import('@funny/shared').PRFilterOptions>(
+      `/github/pr-filter-options?projectId=${projectId}`,
+    ),
 
   githubCommitAuthors: (
     projectId: string,

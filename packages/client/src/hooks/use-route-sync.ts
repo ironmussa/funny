@@ -12,7 +12,12 @@ import { useViewRouteSync } from './use-view-route-sync';
 
 const LAST_ROUTE_KEY = 'funny_last_route';
 
-const validSettingsIds = new Set([...settingsItems.map((i) => i.id), 'users', 'team-members']);
+const validSettingsIds = new Set([
+  ...settingsItems.map((i) => i.id),
+  'users',
+  'team-members',
+  'collaborators',
+]);
 
 function isAnyRouteActive(parsed: ParsedRoute): boolean {
   return Boolean(

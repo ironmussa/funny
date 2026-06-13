@@ -65,8 +65,23 @@ function createSqliteMigrationContext(db: any): MigrationContext {
     try {
       const defaultClause = dflt !== undefined ? ` DEFAULT ${dflt}` : '';
       await exec(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}${defaultClause}`));
-    } catch {
-      // Column already exists (SQLite doesn't support IF NOT EXISTS for ADD COLUMN)
+    } catch (err) {
+      // SQLite has no `ADD COLUMN IF NOT EXISTS`, so a re-run hits "duplicate
+      // column name" — that's the only error we may safely ignore. Anything
+      // else (locked db, bad type, missing table) is a real failure: re-raise
+      // it so the migration is NOT recorded as applied and gets retried next
+      // boot. Swallowing everything here once left a migration marked complete
+      // with a column it never managed to add.
+      //
+      // The driver wraps the SQLite error in a DrizzleError whose own message
+      // is just "Failed to run the query '…'", so we must walk the `cause`
+      // chain to find the real "duplicate column name" text.
+      let text = '';
+      for (let e: unknown = err; e != null; e = (e as { cause?: unknown }).cause) {
+        text += ` ${String((e as { message?: string }).message ?? e)}`;
+        if ((e as { cause?: unknown }).cause === e) break;
+      }
+      if (!/duplicate column name/i.test(text)) throw err;
     }
   }
 

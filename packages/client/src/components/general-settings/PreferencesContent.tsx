@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { GeneralPage } from '@/components/PreferencesPanel';
+import { ADMIN_ONLY_PREFERENCES, type GeneralPage } from '@/components/PreferencesPanel';
 import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
@@ -34,6 +34,7 @@ import {
 } from '@/hooks/use-notifications';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   editorLabels,
   type Editor,
@@ -201,6 +202,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
   } = useNotifications();
   const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
   const [keyPresence, setKeyPresence] = useState<Record<string, boolean>>({});
@@ -402,6 +404,20 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
     }
     setSmtpTesting(false);
   }, []);
+
+  // Defense in depth: the nav hides admin-only pages for non-admins, but a
+  // direct URL (e.g. /preferences/system) must not render one either.
+  if (!isAdmin && ADMIN_ONLY_PREFERENCES.has(activePreferencesPage)) {
+    return (
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="max-w-4xl px-8 py-8">
+          <p className="text-muted-foreground text-sm" data-testid="preferences-admin-only">
+            This setting is only available to administrators.
+          </p>
+        </div>
+      </ScrollArea>
+    );
+  }
 
   return (
     <ScrollArea className="min-h-0 flex-1">

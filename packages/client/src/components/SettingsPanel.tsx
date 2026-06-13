@@ -17,6 +17,15 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
+/**
+ * Project settings tabs backed by SHARED, server-owned state (the projects
+ * table + startup_commands DB). Editing these affects every collaborator, so
+ * they're limited to project admins. Everything else in the project settings
+ * (worktrees, hooks, MCP, skills, .funny.json) proxies to the caller's OWN
+ * runner/checkout and is therefore per-user — collaborators keep full access.
+ */
+const PROJECT_ADMIN_ONLY_TABS: ReadonlySet<string> = new Set(['general', 'startup-commands']);
+
 export function SettingsPanelBody() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -25,13 +34,34 @@ export function SettingsPanelBody() {
   const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
   const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedProject = useProjectStore((s) =>
+    s.selectedProjectId ? s.projects.find((p) => p.id === s.selectedProjectId) : undefined,
+  );
   const authUser = useAuthStore((s) => s.user);
+
+  // Project-config tabs mutate shared project state, so they're limited to the
+  // project's admins (owner or `admin` member). Plain collaborators get a
+  // read-only experience: the config tabs are hidden (the server also rejects
+  // their writes — defense in depth). The owner fallback covers older payloads
+  // that predate the `role` field.
+  const isProjectAdmin =
+    selectedProject?.role === 'owner' ||
+    selectedProject?.role === 'admin' ||
+    selectedProject?.userId === authUser?.id;
 
   // Build items list dynamically
   // Hide "Archived Threads" when viewing per-project settings
-  const items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
+  let items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
     ? [...settingsItems].filter((item) => item.id !== 'archived-threads')
     : [...settingsItems];
+  if (selectedProjectId && !isProjectAdmin) {
+    // Collaborators may freely configure their OWN runner/checkout — worktrees,
+    // hooks, MCP servers, skills and `.funny.json` all proxy to their personal
+    // runner, so those stay editable. Only the shared, server-owned config
+    // (project defaults + startup commands, stored once in the DB) is gated to
+    // project admins.
+    items = items.filter((item) => !PROJECT_ADMIN_ONLY_TABS.has(item.id));
+  }
   if (authUser?.role === 'admin') {
     items.push({ id: 'users', label: 'Users', icon: Users });
     items.push({ id: 'team-members', label: 'Team Members', icon: UsersRound });

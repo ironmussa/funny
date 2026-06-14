@@ -12,7 +12,8 @@ import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
-import { canDoGitOps } from '@/lib/thread-variant';
+import { canDoGitOps, isReadOnlyShare } from '@/lib/thread-variant';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useCompactionEvents,
@@ -34,6 +35,10 @@ interface Props {
 
 export function ThreadChatView({ activeThread }: Props) {
   const { t } = useTranslation();
+  const selfUserId = useAuthStore((s) => s.user?.id ?? null);
+  // A sharee (viewing a thread they don't own) is read-only: they may comment
+  // but not drive the agent. Mirrors the server's requireThreadOwner gate.
+  const readOnlyShare = isReadOnlyShare(activeThread, selfUserId);
   const stableMessages = useThreadMessages();
   const stableThreadEvents = useThreadEvents();
   const stableCompactionEvents = useCompactionEvents();
@@ -187,7 +192,17 @@ export function ThreadChatView({ activeThread }: Props) {
             onVisibleMessageChange={setVisibleMessageId}
             prefersReducedMotion={prefersReducedMotion}
             footer={
-              activeThread.waitingReason === 'plan' ? null : (
+              readOnlyShare ? (
+                <div
+                  className="text-muted-foreground border-border border-t px-4 py-3 text-center text-xs"
+                  data-testid="thread-readonly-share-notice"
+                >
+                  {t(
+                    'thread.readOnlyShare',
+                    "You're viewing a shared thread — read-only. You can comment, but only the owner can send messages.",
+                  )}
+                </div>
+              ) : activeThread.waitingReason === 'plan' ? null : (
                 <PromptInput
                   onSubmit={handleSend}
                   onStop={handleStop}

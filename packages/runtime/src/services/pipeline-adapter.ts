@@ -136,7 +136,7 @@ export class RuntimeActionProvider implements ActionProvider {
         userId,
         title: agentOpts.agent ? `Pipeline: ${agentOpts.agent.label}` : `Pipeline agent`,
         mode: 'local',
-        provider: (agentOpts.agent?.provider ?? 'claude') as any,
+        provider: (agentOpts.provider ?? agentOpts.agent?.provider ?? 'claude') as any,
         model: (agentOpts.model ?? agentOpts.agent?.model ?? 'sonnet') as AgentModel,
         permissionMode,
         source: 'automation',

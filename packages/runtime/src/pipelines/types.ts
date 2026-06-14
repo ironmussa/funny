@@ -33,6 +33,12 @@ export interface SpawnAgentOpts {
   mode?: 'plan' | 'autoEdit' | 'confirmEdit';
   /** Model to use (e.g. 'sonnet', 'opus', 'haiku'). */
   model?: string;
+  /**
+   * Provider to use (e.g. 'claude', 'codex', 'gemini'). Takes precedence
+   * over `agent.provider`. Enables heterogeneous panels (Mixture-of-Agents),
+   * where each node targets a different model family.
+   */
+  provider?: string;
   /** Extra context from a previous step. */
   context?: string;
   /**

@@ -20,6 +20,7 @@ import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID, useTerminalStore } from '@/stores/terminal-store';
@@ -34,6 +35,8 @@ import {
 import { useUIStore } from '@/stores/ui-store';
 
 import { MoreActionsMenu } from './MoreActionsMenu';
+import { PresenceAvatars } from './PresenceAvatars';
+import { ShareThreadButton } from './ShareThreadButton';
 import { StageSelectorBadge } from './StageSelectorBadge';
 import { StartupCommandsPopover } from './StartupCommandsPopover';
 
@@ -60,7 +63,12 @@ export function HeaderRightActions() {
   const activeThreadId = useThreadId();
   const activeThreadProjectId = useThreadProjectId();
   const activeThreadStage = useThreadSelector((t) => t?.stage);
-  const activeThreadCanShowGit = useThreadSelector((t) => variant.canDoGitOps(t));
+  const selfUserId = useAuthStore((s) => s.user?.id ?? null);
+  // Sharees (viewing a thread they don't own) get the read-only treatment:
+  // git/review is owner-only, so hide it for them.
+  const activeThreadCanShowGit = useThreadSelector(
+    (t) => variant.canDoGitOps(t) && !variant.isReadOnlyShare(t, selfUserId),
+  );
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
   const activeThreadBranch = useThreadBranch();
@@ -150,6 +158,7 @@ export function HeaderRightActions() {
 
   return (
     <div className="flex shrink-0 items-center gap-2">
+      {activeThreadId && <PresenceAvatars threadId={activeThreadId} />}
       {activeThreadId && activeThreadStage && activeThreadStage !== 'archived' && (
         <StageSelectorBadge
           threadId={activeThreadId!}
@@ -260,6 +269,9 @@ export function HeaderRightActions() {
           reviewActive={reviewPaneOpen && rightPaneTab === 'review'}
           onToggle={toggleReview}
         />
+      )}
+      {activeThreadId && activeThreadCanShowGit && projectId && (
+        <ShareThreadButton threadId={activeThreadId} projectId={projectId} />
       )}
       {activeThreadId && (
         <MoreActionsMenu

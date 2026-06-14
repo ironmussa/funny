@@ -35,6 +35,11 @@ export interface ThreadPowerlineProps {
   copyable?: boolean;
   /** Additional className for the outer wrapper */
   className?: string;
+  /**
+   * When set, the DiffStats chip becomes a button that fires this on click
+   * (e.g. open the review pane from the prompt footer). Omit to keep it passive.
+   */
+  onDiffStatsClick?: () => void;
   'data-testid'?: string;
 }
 
@@ -54,6 +59,7 @@ export function ThreadPowerline({
   variant,
   copyable = false,
   className,
+  onDiffStatsClick,
   ...props
 }: ThreadPowerlineProps) {
   const { t } = useTranslation();
@@ -152,14 +158,30 @@ export function ThreadPowerline({
           data-testid={props['data-testid']}
         />
       )}
-      {hasDiffStats && (
-        <DiffStats
-          linesAdded={gitStatus.linesAdded}
-          linesDeleted={gitStatus.linesDeleted}
-          dirtyFileCount={gitStatus.dirtyFileCount}
-          size={diffStatsSize}
-        />
-      )}
+      {hasDiffStats &&
+        (onDiffStatsClick ? (
+          <button
+            type="button"
+            onClick={onDiffStatsClick}
+            className="focus-visible:ring-ring shrink-0 rounded-lg transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
+            aria-label={t('review.title')}
+            data-testid="prompt-powerline-diffstats"
+          >
+            <DiffStats
+              linesAdded={gitStatus.linesAdded}
+              linesDeleted={gitStatus.linesDeleted}
+              dirtyFileCount={gitStatus.dirtyFileCount}
+              size={diffStatsSize}
+            />
+          </button>
+        ) : (
+          <DiffStats
+            linesAdded={gitStatus.linesAdded}
+            linesDeleted={gitStatus.linesDeleted}
+            dirtyFileCount={gitStatus.dirtyFileCount}
+            size={diffStatsSize}
+          />
+        ))}
     </div>
   );
 }

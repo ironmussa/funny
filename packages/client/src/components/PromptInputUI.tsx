@@ -390,6 +390,8 @@ export interface PromptInputUIProps {
   powerlineProjectColor?: string;
   powerlineProjectPath?: string;
   powerlineGitStatus?: GitStatusInfo;
+  /** Opens the review pane — wired to the DiffStats chip in the powerline (follow-up only). */
+  onOpenReview?: () => void;
 
   // ── Backlog ──
   showBacklog?: boolean;
@@ -476,6 +478,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   powerlineProjectColor,
   powerlineProjectPath,
   powerlineGitStatus,
+  onOpenReview,
   showBacklog = false,
   sendToBacklog = false,
   onSendToBacklogChange,
@@ -1499,6 +1502,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                       gitStatus={powerlineGitStatus}
                       diffStatsSize="xs"
                       copyable
+                      onDiffStatsClick={onOpenReview}
                       data-testid="prompt-powerline"
                     />
                   )}

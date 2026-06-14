@@ -1,5 +1,5 @@
-import type { Thread } from '@funny/shared';
-import { screen } from '@testing-library/react';
+import type { GitStatusInfo, Thread } from '@funny/shared';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, test, expect, vi } from 'vitest';
 
 import { ThreadPowerline } from '@/components/ThreadPowerline';
@@ -65,6 +65,33 @@ describe('ThreadPowerline', () => {
     expect(screen.queryByTestId('powerline-segment-branch')).not.toBeInTheDocument();
     expect(screen.getByTestId('powerline-segment-worktree-branch')).toHaveTextContent(dup);
     expect(screen.getByTestId('powerline-segment-project')).toHaveTextContent('backend-v2');
+  });
+
+  test('DiffStats chip fires onDiffStatsClick (opens review pane)', () => {
+    const gitStatus: GitStatusInfo = {
+      threadId: 'thread-1',
+      branchKey: 'thread-1:master',
+      state: 'dirty',
+      dirtyFileCount: 21,
+      unpushedCommitCount: 0,
+      unpulledCommitCount: 0,
+      hasRemoteBranch: false,
+      isMergedIntoBase: false,
+      linesAdded: 704,
+      linesDeleted: 115,
+    };
+    const onDiffStatsClick = vi.fn();
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({ mode: 'local', baseBranch: 'master' })}
+        projectName="funny"
+        gitStatus={gitStatus}
+        onDiffStatsClick={onDiffStatsClick}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('prompt-powerline-diffstats'));
+    expect(onDiffStatsClick).toHaveBeenCalledTimes(1);
   });
 
   test('local thread keeps its single branch segment', () => {

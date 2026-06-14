@@ -1,37 +1,35 @@
 import type { ThreadStatus } from '@funny/shared';
 import { useTranslation } from 'react-i18next';
 
-import { getStatusLabels } from '@/lib/thread-utils';
+import { getDisplayThreadStatus, getStatusLabels, statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
-
-const badgeStyles: Record<ThreadStatus, string> = {
-  setting_up: 'bg-status-info/10 text-status-info/80',
-  idle: 'bg-status-neutral/10 text-status-neutral/80',
-  pending: 'bg-status-pending/10 text-status-pending/80',
-  running: 'bg-status-info/10 text-status-info/80',
-  waiting: 'bg-status-warning/10 text-status-warning/80',
-  completed: 'bg-status-success/10 text-status-success/80',
-  failed: 'bg-status-error/10 text-status-error/80',
-  stopped: 'bg-status-neutral/10 text-status-neutral/80',
-  interrupted: 'bg-status-interrupted/10 text-status-interrupted/80',
-};
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 
 export function StatusBadge({ status }: { status: ThreadStatus }) {
   const { t } = useTranslation();
-  const style = badgeStyles[status] ?? badgeStyles.pending;
+  const runnerStatus = useRunnerStatusStore((s) => s.status);
+  // Mirror desktop: a running thread on a dead runner shows as runner_offline,
+  // and the icon/color come from the shared statusConfig source of truth.
+  const displayStatus = getDisplayThreadStatus(status, runnerStatus);
+  const cfg = statusConfig[displayStatus] ?? statusConfig.pending;
+  const Icon = cfg.icon;
+  // Color class without the spin animation — the spin belongs on the icon only,
+  // not on the whole badge (and its text label).
+  const colorClass = cfg.className
+    .split(' ')
+    .filter((c) => c !== 'animate-spin')
+    .join(' ');
   const statusLabels = { ...getStatusLabels(t), completed: t('thread.status.done') };
 
   return (
     <span
-      className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', style)}
+      className={cn(
+        'bg-muted/50 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+        colorClass,
+      )}
     >
-      {(status === 'running' || status === 'setting_up') && (
-        <span className="bg-status-info mr-1 size-1.5 animate-pulse rounded-full" />
-      )}
-      {status === 'waiting' && (
-        <span className="bg-status-warning mr-1 size-1.5 animate-pulse rounded-full" />
-      )}
-      {statusLabels[status]}
+      <Icon className={cn('size-3 shrink-0', cfg.className)} />
+      {statusLabels[displayStatus]}
     </span>
   );
 }

@@ -26,6 +26,7 @@ import { log } from '../lib/logger.js';
 import { startSpan } from '../lib/telemetry.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
+import { canViewThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
 import { findRunnerForProject } from '../services/runner-manager.js';
 import * as runnerResolver from '../services/runner-resolver.js';
@@ -84,6 +85,14 @@ const threadRepo = createThreadRepository({
 });
 const messageRepo = createMessageRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
 const toolCallRepo = createToolCallRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
+
+// Centralized per-thread authorization (see middleware/thread-access.ts).
+// `requireThreadView` guards read routes; `requireThreadOwner` guards
+// mutation/lifecycle routes. The two hot-path reads (GET /:id and /:id/events)
+// authorize inline via `canViewThread` to keep their single/parallel fetch.
+const { requireThreadView, requireThreadOwner } = createThreadAccessMiddleware((id) =>
+  threadRepo.getThread(id),
+);
 
 // ── Runner communication helpers ─────────────────────────────────
 
@@ -281,7 +290,7 @@ threadRoutes.get('/:id', async (c) => {
       messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
     ]);
 
-    if (!result || result.userId !== userId) {
+    if (!result || !canViewThread(result, userId)) {
       span.end('ok');
       return c.json({ error: 'Thread not found' }, 404);
     }
@@ -301,12 +310,8 @@ threadRoutes.get('/:id', async (c) => {
 });
 
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50
-threadRoutes.get('/:id/messages', async (c) => {
+threadRoutes.get('/:id/messages', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const cursor = c.req.query('cursor');
   const limitParam = c.req.query('limit');
@@ -321,12 +326,8 @@ threadRoutes.get('/:id/messages', async (c) => {
 });
 
 // GET /api/threads/:id/messages/search?q=xxx&limit=100
-threadRoutes.get('/:id/messages/search', async (c) => {
+threadRoutes.get('/:id/messages/search', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const q = c.req.query('q') || '';
   const limitParam = c.req.query('limit');
@@ -347,24 +348,17 @@ threadRoutes.get('/:id/messages/search', async (c) => {
 });
 
 // GET /api/threads/:id/comments
-threadRoutes.get('/:id/comments', async (c) => {
+threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const comments = await commentRepo.listComments(id);
   return c.json(comments);
 });
 
 // POST /api/threads/:id/comments
-threadRoutes.post('/:id/comments', async (c) => {
+threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const { content } = await c.req.json();
 
@@ -382,26 +376,19 @@ threadRoutes.post('/:id/comments', async (c) => {
 });
 
 // DELETE /api/threads/:id/comments/:commentId
-threadRoutes.delete('/:id/comments/:commentId', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
-
+threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) => {
   const commentId = c.req.param('commentId');
   await commentRepo.deleteComment(commentId);
   return c.json({ ok: true });
 });
 
 // PATCH /api/threads/:id — update thread data
-threadRoutes.patch('/:id', async (c) => {
+threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
   const body = await c.req.json();
 
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+  const thread = c.get('thread');
 
   // Security CR-4: `worktreePath` is intentionally NOT in the PATCH allow-
   // list. It is set exclusively by the runtime's `createWorktree` flow and
@@ -488,7 +475,7 @@ threadRoutes.patch('/:id', async (c) => {
 // of relying on PATCH /:id — give us strict enum validation and a
 // single emission point for the WS event that the kanban UI listens
 // on.
-threadRoutes.patch('/:id/status', async (c) => {
+threadRoutes.patch('/:id/status', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
   let body: { value?: unknown; reason?: unknown };
@@ -511,11 +498,6 @@ threadRoutes.patch('/:id/status', async (c) => {
   }
   const reason = typeof body.reason === 'string' ? body.reason : undefined;
 
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) {
-    return c.json({ error: 'Thread not found' }, 404);
-  }
-
   await threadRepo.updateThread(id, { status: body.value });
   relayToUser(userId, {
     type: 'thread:updated',
@@ -534,7 +516,7 @@ threadRoutes.patch('/:id/status', async (c) => {
   return c.json(updated);
 });
 
-threadRoutes.patch('/:id/stage', async (c) => {
+threadRoutes.patch('/:id/stage', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
   let body: { value?: unknown; reason?: unknown };
@@ -557,11 +539,7 @@ threadRoutes.patch('/:id/stage', async (c) => {
   }
   const reason = typeof body.reason === 'string' ? body.reason : undefined;
 
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) {
-    return c.json({ error: 'Thread not found' }, 404);
-  }
-
+  const thread = c.get('thread');
   const fromStage = thread.stage;
   await threadRepo.updateThread(id, { stage: body.value });
   if (body.value !== fromStage) {
@@ -597,7 +575,7 @@ threadRoutes.patch('/:id/stage', async (c) => {
 // persists the event as a thread:event in the DB and broadcasts the same
 // envelope shape used by emitWorkflowEvent in the runtime, so existing
 // client listeners work unchanged.
-threadRoutes.post('/:id/workflow-event', async (c) => {
+threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
 
@@ -620,11 +598,6 @@ threadRoutes.post('/:id/workflow-event', async (c) => {
     body.data && typeof body.data === 'object' && !Array.isArray(body.data)
       ? (body.data as Record<string, unknown>)
       : {};
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) {
-    return c.json({ error: 'Thread not found' }, 404);
-  }
 
   await threadEventRepo.saveThreadEvent(id, body.type, data);
 
@@ -804,14 +777,11 @@ threadRoutes.post('/:id/approve-tool', proxyToRunner);
 threadRoutes.post('/:id/convert-to-worktree', proxyToRunner);
 
 // POST /api/threads/:id/fork — fork conversation at a user message
-threadRoutes.post('/:id/fork', async (c) => {
+threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
   const sourceThreadId = c.req.param('id');
   const userId = c.get('userId') as string;
 
-  const source = await threadRepo.getThread(sourceThreadId);
-  if (!source || source.userId !== userId) {
-    return c.json({ error: 'Thread not found' }, 404);
-  }
+  const source = c.get('thread');
 
   const resolved = await resolveRunnerForProject(source.projectId, userId);
   if (!resolved) {
@@ -867,14 +837,11 @@ threadRoutes.post('/:id/fork', async (c) => {
 threadRoutes.post('/:id/rewind', proxyToRunner);
 
 // POST /api/threads/:id/fork-and-rewind — fork conversation, then rewind code
-threadRoutes.post('/:id/fork-and-rewind', async (c) => {
+threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
   const sourceThreadId = c.req.param('id');
   const userId = c.get('userId') as string;
 
-  const source = await threadRepo.getThread(sourceThreadId);
-  if (!source || source.userId !== userId) {
-    return c.json({ error: 'Thread not found' }, 404);
-  }
+  const source = c.get('thread');
 
   const resolved = await resolveRunnerForProject(source.projectId, userId);
   if (!resolved) {
@@ -957,7 +924,7 @@ threadRoutes.get('/:id/events', async (c) => {
       getThreadEvents(id).finally(() => eventsSpan.end('ok')),
     ]);
 
-    if (!thread || thread.userId !== userId) {
+    if (!thread || !canViewThread(thread, userId)) {
       span.end('ok');
       return c.json({ error: 'Thread not found' }, 404);
     }
@@ -972,36 +939,24 @@ threadRoutes.get('/:id/events', async (c) => {
 });
 
 // GET /api/threads/:id/touched-files — all unique file paths modified by Write/Edit/NotebookEdit
-threadRoutes.get('/:id/touched-files', async (c) => {
+threadRoutes.get('/:id/touched-files', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const files = await toolCallRepo.getTouchedFiles(id);
   return c.json({ files });
 });
 
 // GET /api/threads/:id/queue — message queue is in the server's DB
-threadRoutes.get('/:id/queue', async (c) => {
+threadRoutes.get('/:id/queue', requireThreadView, async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   return c.json(await messageQueueRepo.listQueue(id));
 });
 
 // DELETE /api/threads/:id/queue/:messageId — cancel a queued message
-threadRoutes.delete('/:id/queue/:messageId', async (c) => {
+threadRoutes.delete('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const success = await messageQueueRepo.cancel(messageId, id);
   const queuedCount = await messageQueueRepo.queueCount(id);
@@ -1009,13 +964,9 @@ threadRoutes.delete('/:id/queue/:messageId', async (c) => {
 });
 
 // PATCH /api/threads/:id/queue/:messageId — update a queued message
-threadRoutes.patch('/:id/queue/:messageId', async (c) => {
+threadRoutes.patch('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
-  const userId = c.get('userId') as string;
-
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   const { content } = await c.req.json();
   if (!content || typeof content !== 'string') {
@@ -1028,13 +979,9 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
 
 // ── Delete thread (native + proxy cleanup) ───────────────────────
 
-threadRoutes.delete('/:id', async (c) => {
+threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
   const threadId = c.req.param('id');
   const userId = c.get('userId') as string;
-
-  // Ownership check
-  const thread = await threadRepo.getThread(threadId);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   // Delete from local DB
   await threadRepo.deleteThread(threadId);

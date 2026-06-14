@@ -24,5 +24,12 @@ export type ServerEnv = {
     runnerId: string;
     organizationId: string | null;
     organizationName: string | null;
+    /**
+     * The thread resolved + authorized by `requireThreadView` /
+     * `requireThreadOwner` (see middleware/thread-access.ts). Present only on
+     * routes guarded by those middlewares; handlers read it via `c.get('thread')`
+     * instead of re-fetching. Typed loosely as the shared `Thread` shape.
+     */
+    thread: import('@funny/shared').Thread;
   };
 };

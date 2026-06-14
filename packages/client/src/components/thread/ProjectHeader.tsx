@@ -93,6 +93,8 @@ import {
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
+import { ShareThreadButton } from './header/ShareThreadButton';
+
 type MessageWithToolCalls = Message & { toolCalls?: ToolCall[] };
 
 function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: boolean): string {
@@ -1119,6 +1121,9 @@ export const ProjectHeader = memo(function ProjectHeader({
                 </TooltipTrigger>
                 <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
               </Tooltip>
+            )}
+            {activeThreadId && projectId && !activeThreadIsScratch && (
+              <ShareThreadButton threadId={activeThreadId} projectId={projectId} />
             )}
             {activeThreadId && (
               <MoreActionsMenu

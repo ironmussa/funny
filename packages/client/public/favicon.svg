@@ -1,12 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <style>
-    .body { fill: #222; }
+    .body { fill: #fff; }
     .pink { fill: #ff8fb1; }
-    .eye  { fill: #fff; }
-    @media (prefers-color-scheme: dark) {
-      .body { fill: #f4f4f5; }
-      .eye  { fill: #222; }
-    }
+    .eye  { fill: #222; }
   </style>
   <!-- ears -->
   <ellipse class="body" cx="37" cy="32" rx="9" ry="26" transform="rotate(-14 37 32)"/>

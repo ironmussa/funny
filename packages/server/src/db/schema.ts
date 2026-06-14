@@ -17,6 +17,7 @@ export {
   userProfiles,
   stageHistory,
   threadComments,
+  threadShares,
   messageQueue,
   mcpOauthTokens,
   pipelines,

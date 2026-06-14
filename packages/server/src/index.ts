@@ -268,7 +268,7 @@ const { authRoutes } = await import('./routes/auth.js');
 const { projectRoutes } = await import('./routes/projects.js');
 const { runnerRoutes } = await import('./routes/runners.js');
 const { profileRoutes } = await import('./routes/profile.js');
-const { threadRoutes } = await import('./routes/threads.js');
+const { threadRoutes, requireThreadOwner } = await import('./routes/threads.js');
 const { automationRoutes } = await import('./routes/automations.js');
 const { settingsRoutes } = await import('./routes/settings.js');
 const { teamProjectRoutes } = await import('./routes/team-projects.js');
@@ -322,6 +322,21 @@ app.route('/api/providers', providerRoutes);
 
 // ── Proxy catch-all: forward remaining API requests to runner ──
 const { proxyToRunner } = await import('./middleware/proxy.js');
+
+// Thread-scoped git ops (`/api/git/:threadId/<action>`) must stay OWNER-ONLY.
+// They have no explicit server route otherwise — they would fall through to the
+// catch-all proxy, which resolves the *requesting user's* runner. For a sharee
+// (a project member with their own checkout) that silently routes the git op to
+// the wrong working copy. The explicit owner gate makes a non-owner cleanly 404
+// before any proxy. Project-scoped git ops (`/api/git/project/<projectId>/…` and
+// the `/api/git/status?projectId=` form) are NOT thread-scoped, so they pass
+// through to the proxy and rely on the existing user-scoped runner resolution —
+// they MUST be registered first so `:id` does not capture the literal `project`
+// segment or the bare `status` path. (See thread-sharing design.)
+app.all('/api/git/project/*', proxyToRunner);
+app.all('/api/git/status', proxyToRunner);
+app.all('/api/git/:id/*', requireThreadOwner, proxyToRunner);
+
 app.all('/api/*', proxyToRunner);
 
 // ── Installed client extensions (visualizer plugins) ──────

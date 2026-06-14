@@ -29,13 +29,20 @@ export function isThreadOwner(thread: Pick<Thread, 'userId'>, userId: string): b
   return thread.userId === userId;
 }
 
+/** Looks up whether `userId` holds an active share grant for `threadId`. */
+export type HasShare = (threadId: string, userId: string) => Promise<boolean>;
+
 /**
- * Whether `userId` may READ `thread`. Today: owner only. `thread-sharing`
- * widens this to `owner OR hasShare(thread.id, userId)` — this is the single
- * seam that change touches.
+ * Whether `userId` may READ `thread`: the owner, OR a user holding an active
+ * share grant (thread-sharing). The owner check short-circuits before any DB
+ * hit; the share lookup is injected so this stays DB-agnostic and testable.
  */
-export function canViewThread(thread: Pick<Thread, 'userId'>, userId: string): boolean {
-  return isThreadOwner(thread, userId);
+export async function canViewThread(
+  thread: Pick<Thread, 'id' | 'userId'>,
+  userId: string,
+  hasShare: HasShare,
+): Promise<boolean> {
+  return isThreadOwner(thread, userId) || hasShare(thread.id, userId);
 }
 
 /** How a thread is resolved by id. Injected so the middleware is testable. */
@@ -49,18 +56,22 @@ export interface ThreadAccessMiddleware {
 }
 
 /**
- * Build the two access middlewares around a thread loader. `routes/threads.ts`
- * wires this with its `threadRepo.getThread`; tests pass a fake loader.
+ * Build the two access middlewares around a thread loader and a share lookup.
+ * `routes/threads.ts` wires these with its `threadRepo.getThread` and
+ * `shareRepo.hasShare`; tests pass fakes.
  */
-export function createThreadAccessMiddleware(loadThread: ThreadLoader): ThreadAccessMiddleware {
+export function createThreadAccessMiddleware(
+  loadThread: ThreadLoader,
+  hasShare: HasShare,
+): ThreadAccessMiddleware {
   function make(
-    authorize: (thread: Thread, userId: string) => boolean,
+    authorize: (thread: Thread, userId: string) => boolean | Promise<boolean>,
   ): MiddlewareHandler<ServerEnv> {
     return async (c, next) => {
       const id = c.req.param('id');
       const userId = c.get('userId') as string;
       const thread = id ? await loadThread(id) : null;
-      if (!thread || !authorize(thread, userId)) {
+      if (!thread || !(await authorize(thread, userId))) {
         return c.json({ error: 'Thread not found' }, 404);
       }
       c.set('thread', thread);
@@ -69,7 +80,7 @@ export function createThreadAccessMiddleware(loadThread: ThreadLoader): ThreadAc
   }
 
   return {
-    requireThreadView: make(canViewThread),
+    requireThreadView: make((thread, userId) => canViewThread(thread, userId, hasShare)),
     requireThreadOwner: make(isThreadOwner),
   };
 }

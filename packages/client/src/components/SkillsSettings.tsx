@@ -332,9 +332,9 @@ export function SkillsSettings() {
             {t('skills.projectSkills')}
           </h3>
           <div className="space-y-1.5">
-            {projectSkills.map((skill) => (
+            {projectSkills.map((skill, i) => (
               <InstalledSkillCard
-                key={`project-${skill.name}`}
+                key={`project-${skill.source}-${skill.name}-${i}`}
                 skill={skill}
                 onRemove={() => {}}
                 removing={false}
@@ -412,9 +412,9 @@ export function SkillsSettings() {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {globalSkills.map((skill) => (
+            {globalSkills.map((skill, i) => (
               <InstalledSkillCard
-                key={skill.name}
+                key={`global-${skill.source}-${skill.name}-${i}`}
                 skill={skill}
                 onRemove={() => handleRemove(skill.name)}
                 removing={removingName === skill.name}

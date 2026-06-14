@@ -90,7 +90,6 @@ export function PreferencesPanelBody() {
   const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
   const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
   const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
-  const setGeneralSettingsOpen = useUIStore((s) => s.setGeneralSettingsOpen);
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   const navItems = isAdmin
@@ -103,7 +102,10 @@ export function PreferencesPanelBody() {
         <div className="flex items-center gap-2">
           <TooltipIconButton
             onClick={() => {
-              setGeneralSettingsOpen(false);
+              // Don't close the overlay imperatively — let route-sync close it
+              // AFTER the URL becomes the thread route. Closing it here reveals
+              // ThreadView one render before the URL updates, flashing the empty
+              // new-thread compose input. See use-view-route-sync.ts.
               const target = settingsReturnPath ?? '/';
               setSettingsReturnPath(null);
               navigate(buildPath(target));

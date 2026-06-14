@@ -12,7 +12,14 @@
  * committed and never bumps the semver in package.json — semver stays an
  * intentional decision (`npm version patch|minor|major`).
  *
- * Build-time only (uses git + fs). Do not import from app runtime code paths.
+ * CI / PaaS fallbacks. Some build environments (Railway/Railpack, many Docker
+ * builders) shallow-clone or strip `.git`, or lack the `git` binary, so the
+ * commit count is unavailable there. In that case we fall back to:
+ *   - FUNNY_BUILD_NUMBER — explicit integer override for the build number, and
+ *   - the commit SHA the platform injects (RAILWAY_GIT_COMMIT_SHA, GITHUB_SHA, …)
+ * so a deployed server still shows its commit instead of a bare version.
+ *
+ * Build-time only (uses git + fs + env). Do not import from app runtime paths.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -52,18 +59,43 @@ function git(...args: string[]): string | null {
   }
 }
 
+/** First non-empty value among the given env var names. */
+function pickEnv(...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return null;
+}
+
 export function getBuildInfo(): BuildInfo {
   const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
     version?: string;
   };
   const version = pkg.version ?? '0.0.0';
 
+  // Build number: explicit override (any CI/PaaS) wins, else the git commit count.
+  const override = Number(process.env.FUNNY_BUILD_NUMBER);
   const count = git('rev-list', '--count', 'HEAD');
-  const build = count ? Number(count) : 0;
-  const commit = git('rev-parse', '--short', 'HEAD') ?? 'nogit';
+  const build = Number.isFinite(override) && override > 0 ? override : count ? Number(count) : 0;
+
+  // Commit: prefer local git, else the SHA the build platform injects.
+  const envSha = pickEnv(
+    'FUNNY_BUILD_COMMIT',
+    'RAILWAY_GIT_COMMIT_SHA',
+    'GITHUB_SHA',
+    'VERCEL_GIT_COMMIT_SHA',
+    'RENDER_GIT_COMMIT',
+    'SOURCE_VERSION',
+  );
+  const commit = git('rev-parse', '--short', 'HEAD') ?? (envSha ? envSha.slice(0, 8) : 'nogit');
   const dirty = (git('status', '--porcelain') ?? '').length > 0;
 
-  const label = build ? `${version} · build ${build} (${commit}${dirty ? '+' : ''})` : version;
+  const label = build
+    ? `${version} · build ${build} (${commit}${dirty ? '+' : ''})`
+    : commit !== 'nogit'
+      ? `${version} (${commit})`
+      : version;
 
   return { version, build, commit, dirty, label };
 }

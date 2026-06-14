@@ -11,6 +11,23 @@ import type { Job, Watcher, WatcherStatus } from '@funny/shared';
  */
 export const ACTIVE_WATCHER_STATUSES: WatcherStatus[] = ['pending'];
 
+/**
+ * Absolute wall-clock timestamp for hover tooltips (e.g. "Jun 13, 14:32:07").
+ * Used to expose the exact "hora" behind the relative "5m ago" labels.
+ * Accepts an epoch-ms number or an ISO date string; returns '' for invalid input.
+ */
+export function formatClock(when: number | string): string {
+  const ms = typeof when === 'number' ? when : new Date(when).getTime();
+  if (!Number.isFinite(ms)) return '';
+  return new Date(ms).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 /** Human countdown to the next wake (e.g. "in 4m 12s" / "due"). */
 export function formatCountdown(nextWakeAt: number, now: number): string {
   const ms = nextWakeAt - now;

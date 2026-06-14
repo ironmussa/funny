@@ -101,6 +101,11 @@ export function selectScratchThreads(state: ThreadState): Thread[] {
   return deriveProjectArray(state.threadsById, state.scratchThreadIds);
 }
 
+/** Ordered "shared with me" thread array. */
+export function selectSharedThreads(state: ThreadState): Thread[] {
+  return deriveProjectArray(state.threadsById, state.sharedThreadIds);
+}
+
 /**
  * Full `{ projectId → Thread[] }` mapping. Use this only when truly iterating
  * across all projects (Activity feed, Kanban, AllThreads); prefer
@@ -135,6 +140,11 @@ export function useThreadsForProject(projectId: string): Thread[] {
 /** Reactive scratch list. Stable reference unless scratch contents change. */
 export function useScratchThreads(): Thread[] {
   return useThreadStore(selectScratchThreads);
+}
+
+/** Reactive "shared with me" list. Stable unless the shared bucket changes. */
+export function useSharedThreads(): Thread[] {
+  return useThreadStore(selectSharedThreads);
 }
 
 /**

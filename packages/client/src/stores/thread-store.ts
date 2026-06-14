@@ -286,8 +286,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   threadsById: {},
   threadIdsByProject: {},
   scratchThreadIds: [],
+  sharedThreadIds: [],
   threadTotalByProject: {},
   scratchThreadTotal: 0,
+  sharedThreadTotal: 0,
   selectedThreadId: null,
   threadDataById: {},
   activeThread: null,
@@ -306,6 +308,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   addScratchThread: (thread: Thread) => {
     set((state) => mutations.prependScratchThread(state, thread));
+  },
+
+  loadSharedThreads: async () => {
+    const result = await api.listSharedWithMe();
+    if (result.isOk()) {
+      set((state) => mutations.replaceSharedThreads(state, result.value.threads));
+    }
   },
 
   loadThreadsForProject: async (projectId: string, includeArchived: boolean = false) => {

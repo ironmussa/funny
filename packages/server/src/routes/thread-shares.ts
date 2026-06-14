@@ -10,7 +10,10 @@
  */
 
 import { createThreadShareRepository } from '@funny/shared/repositories';
-import { THREAD_SHARE_REVOKED_EVENT } from '@funny/shared/socket-events';
+import {
+  THREAD_SHARE_GRANTED_EVENT,
+  THREAD_SHARE_REVOKED_EVENT,
+} from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -76,6 +79,10 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
     sharedWithUserId: targetUserId,
     sharedByUserId: ownerId,
   });
+  // Push the thread into the target's "Shared with me" bucket live (no reload).
+  if (!grant.alreadyExisted) {
+    relayToUser(targetUserId, { type: THREAD_SHARE_GRANTED_EVENT, threadId: id });
+  }
   return c.json(grant, grant.alreadyExisted ? 200 : 201);
 });
 

@@ -11,6 +11,7 @@ const {
   mockDeleteThread,
   mockListThreads,
   mockListScratchThreads,
+  mockListSharedWithMe,
   mockLoadThreadData,
   mockIsThreadDataLoaded,
   mockArchiveThread,
@@ -29,6 +30,7 @@ const {
   mockDeleteThread: vi.fn(),
   mockListThreads: vi.fn(),
   mockListScratchThreads: vi.fn(),
+  mockListSharedWithMe: vi.fn(),
   mockLoadThreadData: vi.fn(),
   mockIsThreadDataLoaded: vi.fn(),
   mockArchiveThread: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock('@/lib/api/threads', () => ({
     getThreadEvents: mockGetThreadEvents,
     listThreads: mockListThreads,
     listScratchThreads: mockListScratchThreads,
+    listSharedWithMe: mockListSharedWithMe,
     updateThread: vi.fn(),
     deleteThread: mockDeleteThread,
     archiveThread: mockArchiveThread,
@@ -652,6 +655,30 @@ describe('thread store actions', () => {
 
       expect(useThreadStore.getState().scratchThreadIds).toEqual(['s1']);
       expect(useThreadStore.getState().threadsById.s1.title).toBe('Scratch idea');
+    });
+  });
+
+  describe('loadSharedThreads', () => {
+    test('replaces the shared bucket on successful fetch', async () => {
+      const shared = { ...baseThread, id: 'sh1', title: 'Shared prueba' };
+      mockListSharedWithMe.mockReturnValue(okAsync({ threads: [shared] }));
+
+      await useThreadStore.getState().loadSharedThreads();
+
+      expect(useThreadStore.getState().sharedThreadIds).toEqual(['sh1']);
+      expect(useThreadStore.getState().threadsById.sh1.title).toBe('Shared prueba');
+    });
+
+    test('handleShareRevoked drops the thread from the shared bucket', async () => {
+      const shared = { ...baseThread, id: 'sh1', title: 'Shared prueba' };
+      mockListSharedWithMe.mockReturnValue(okAsync({ threads: [shared] }));
+      await useThreadStore.getState().loadSharedThreads();
+      expect(useThreadStore.getState().sharedThreadIds).toEqual(['sh1']);
+
+      useThreadStore.getState().handleShareRevoked('sh1');
+
+      expect(useThreadStore.getState().sharedThreadIds).toEqual([]);
+      expect(useThreadStore.getState().threadsById.sh1).toBeUndefined();
     });
   });
 

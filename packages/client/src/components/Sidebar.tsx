@@ -21,6 +21,7 @@ import { SidebarDialogs } from './sidebar/SidebarDialogs';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsSection } from './sidebar/SidebarProjectsSection';
 import { SidebarScratchSection } from './sidebar/SidebarScratchSection';
+import { SidebarSharedSection } from './sidebar/SidebarSharedSection';
 import { SidebarThreadsSection } from './sidebar/SidebarThreadsSection';
 import { SidebarTopBar } from './sidebar/SidebarTopBar';
 
@@ -191,6 +192,8 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
           onRenameThread={handleRenameThread}
           onDeleteThread={handleDeleteThreadFromList}
         />
+
+        <SidebarSharedSection />
 
         <SidebarFooter />
       </div>

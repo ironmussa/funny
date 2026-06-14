@@ -126,6 +126,7 @@ export function App() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
+  const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
@@ -182,10 +183,11 @@ export function App() {
     loadProjects();
     loadTemplates();
     loadScratchThreads();
+    loadSharedThreads();
     // Load installed visualizer extensions (best-effort; failures are logged
     // and never block the app). Runs after auth since AuthGate gates App.
     void loadInstalledVisualizers();
-  }, [loadProjects, loadTemplates, loadScratchThreads]);
+  }, [loadProjects, loadTemplates, loadScratchThreads, loadSharedThreads]);
 
   useDocumentTitle();
 

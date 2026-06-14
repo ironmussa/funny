@@ -81,6 +81,14 @@ export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
       }
     }
 
+    // Mirror the in-thread agent stream to the thread's sharee-only stream room
+    // (thread-sharing). Gated by the ownership check above, so a runner can only
+    // push into rooms for threads its owner owns. The owner is NOT in this room
+    // (they already got the event via `user:`), so there is no double delivery.
+    if (threadId && event) {
+      ctx.wsRelay.relayToThreadStream(threadId, event);
+    }
+
     if (event?.type === 'agent:status' && event?.threadId) {
       threadRegistry
         .updateThreadStatus(event.threadId, event.data?.status || 'running')

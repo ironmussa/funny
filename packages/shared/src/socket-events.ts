@@ -36,6 +36,24 @@ export const BROWSER_SESSION_EVENTS = [
 
 export type BrowserSessionEvent = (typeof BROWSER_SESSION_EVENTS)[number];
 
+// ─── Thread presence (thread-sharing) ────────────────────────────────────────
+// Browser → server: start/stop viewing a thread. On open the server validates
+// view access, joins the presence room (and, for sharees, the stream room), and
+// broadcasts presence. Modeled awareness-style: each viewer is keyed by a
+// per-connection clientId (the socket id) so it can later ride a Yjs awareness
+// provider unchanged. See thread-sharing design D8.
+export const THREAD_OPEN_EVENT = 'thread:open' as const;
+export const THREAD_CLOSE_EVENT = 'thread:close' as const;
+/** Server → browser: full presence roster sent to a viewer right after it opens. */
+export const PRESENCE_SYNC_EVENT = 'presence:sync' as const;
+/** Server → browser: a viewer joined / left a thread's presence room. */
+export const PRESENCE_JOIN_EVENT = 'presence:join' as const;
+export const PRESENCE_LEAVE_EVENT = 'presence:leave' as const;
+/** Server → browser: the caller's share was revoked; drop the thread. */
+export const THREAD_SHARE_REVOKED_EVENT = 'thread:share-revoked' as const;
+
+export const threadOpenSchema = z.object({ threadId: z.string().min(1) });
+
 /** Ack-based RPC from browser → server. */
 export const BROWSER_PTY_LIST_EVENT = 'pty:list' as const;
 

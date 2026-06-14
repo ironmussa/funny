@@ -10,12 +10,14 @@
  */
 
 import { createThreadShareRepository } from '@funny/shared/repositories';
+import { THREAD_SHARE_REVOKED_EVENT } from '@funny/shared/socket-events';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { db, dbAll, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
+import { evictUserFromThread, relayToUser } from '../services/ws-relay.js';
 import { requireThreadOwner } from './threads.js';
 
 const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
@@ -114,9 +116,12 @@ shareRoutes.delete('/:id/shares/:userId', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const targetUserId = c.req.param('userId');
   await shareRepo.deleteShare(id, targetUserId);
-  // NOTE: live WS eviction (force-leave the revoked user's socket from
-  // `thread:${id}` + emit `thread:share-revoked`) lands in group 4 (task 4.4),
-  // once the per-thread room exists. Removing the grant here already fails the
-  // revoked user's access closed on their next request.
+
+  // Live eviction: drop the revoked user's sockets from the thread's rooms so
+  // they stop receiving the stream/presence immediately, and tell their client
+  // to drop the thread. Access already fails closed on their next HTTP request.
+  evictUserFromThread(targetUserId, id);
+  relayToUser(targetUserId, { type: THREAD_SHARE_REVOKED_EVENT, threadId: id });
+
   return c.json({ ok: true });
 });

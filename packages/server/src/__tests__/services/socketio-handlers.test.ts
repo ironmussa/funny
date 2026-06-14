@@ -144,7 +144,7 @@ describe('socketio runner handlers', () => {
       socket,
       runnerId: 'runner-1',
       runnerUserId: 'user-1',
-      wsRelay: { relayToUser } as any,
+      wsRelay: { relayToUser, relayToThreadStream: () => {} } as any,
     });
 
     await socket.trigger(RUNNER_AGENT_EVENT, {
@@ -162,7 +162,7 @@ describe('socketio runner handlers', () => {
       socket,
       runnerId: 'runner-1',
       runnerUserId: 'user-1',
-      wsRelay: { relayToUser } as any,
+      wsRelay: { relayToUser, relayToThreadStream: () => {} } as any,
     });
 
     await socket.trigger(RUNNER_AGENT_EVENT, {

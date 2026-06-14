@@ -7,6 +7,7 @@ import { setupBrowserPtyHandlers } from './browser-pty.js';
 import { setupBrowserSessionHandlers } from './browser-session.js';
 import { isAllowedBrowserOrigin } from './origin.js';
 import { allowedOrigins, authInstance, getIO } from './state.js';
+import { setupThreadPresenceHandlers } from './thread-presence.js';
 
 export function setupBrowserNamespace(): void {
   const io = getIO();
@@ -67,6 +68,7 @@ export function setupBrowserNamespace(): void {
     setupBrowserPtyHandlers(socket, userId);
     setupBrowserPtyListRpc(socket, userId);
     setupBrowserSessionHandlers(socket, userId);
+    setupThreadPresenceHandlers(socket, userId);
 
     socket.on('disconnect', (reason) => {
       clearSocketRate(socket.id);

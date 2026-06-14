@@ -99,3 +99,84 @@ export function getSearchHighlight(
   if (!query) return html;
   return injectSearchMarks(html, query, globalOffset, currentIdx, caseSensitive);
 }
+
+/**
+ * Wrap intra-line word-diff ranges in `<span class={className}>` over already
+ * syntax-highlighted HTML. Like {@link injectSearchMarks}, it only touches text
+ * nodes (never tags). Char offsets are measured against the *rendered* text, so
+ * HTML entities (`&lt;`, `&amp;`, …) count as a single raw character — matching
+ * the offsets produced by the word-diff over the unescaped line text.
+ */
+export function injectWordDiffMarks(
+  html: string,
+  segments: ReadonlyArray<readonly [number, number]>,
+  className: string,
+): string {
+  if (segments.length === 0) return html;
+  let rawPos = 0;
+  let segIdx = 0;
+
+  return html.replace(
+    /(<[^>]*>)|([^<]+)/g,
+    (_, tag: string | undefined, text: string | undefined) => {
+      if (tag) return tag;
+      const t = text ?? '';
+      let out = '';
+      let open = false;
+      let k = 0;
+      while (k < t.length) {
+        // One rendered character — an HTML entity (&...;) is a single raw char.
+        let tok: string;
+        if (t[k] === '&') {
+          const semi = t.indexOf(';', k);
+          if (semi !== -1 && semi - k <= 10) {
+            tok = t.slice(k, semi + 1);
+            k = semi + 1;
+          } else {
+            tok = t[k];
+            k++;
+          }
+        } else {
+          tok = t[k];
+          k++;
+        }
+        while (segIdx < segments.length && rawPos >= segments[segIdx][1]) segIdx++;
+        const inSeg =
+          segIdx < segments.length && rawPos >= segments[segIdx][0] && rawPos < segments[segIdx][1];
+        if (inSeg && !open) {
+          out += `<span class="${className}">`;
+          open = true;
+        } else if (!inSeg && open) {
+          out += '</span>';
+          open = false;
+        }
+        out += tok;
+        rawPos++;
+      }
+      if (open) out += '</span>';
+      return out;
+    },
+  );
+}
+
+/**
+ * Syntax highlight + optional word-diff segment shading + optional search marks,
+ * in that nesting order. Shared by the unified/split/three-pane row components.
+ */
+export function getDiffHighlight(
+  text: string,
+  lang: string,
+  segments?: ReadonlyArray<readonly [number, number]>,
+  segmentClass?: string,
+  query?: string,
+  globalOffset = 0,
+  currentIdx = -1,
+  caseSensitive = false,
+): string {
+  let html = getCachedHighlight(text, lang);
+  if (segments && segments.length > 0 && segmentClass) {
+    html = injectWordDiffMarks(html, segments, segmentClass);
+  }
+  if (query) html = injectSearchMarks(html, query, globalOffset, currentIdx, caseSensitive);
+  return html;
+}

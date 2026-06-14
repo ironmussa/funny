@@ -1,25 +1,32 @@
-import { ArrowLeft, Clock } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
+import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
-import { D4CAnimation } from '@/components/D4CAnimation';
 import { PromptInput } from '@/components/PromptInput';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AgentInterruptedCard, AgentResultCard } from '@/components/thread/AgentStatusCards';
-import { CopyButton, MessageContent } from '@/components/thread/MessageContent';
-import { WaitingActions } from '@/components/thread/WaitingCards';
-import { ToolCallCard } from '@/components/ToolCallCard';
-import { Badge } from '@/components/ui/badge';
+import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
+import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
+import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { LoadingState } from '@/components/ui/loading-state';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { api } from '@/lib/api';
-import { EFFORT_LEVELS } from '@/lib/providers';
-import { resolveModelLabel } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
+import { useImageLightbox } from '@/hooks/use-image-lightbox';
+import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { useAppStore } from '@/stores/app-store';
-import { useThreadSelector } from '@/stores/thread-context';
-import { selectLastMessage } from '@/stores/thread-selectors';
+import {
+  useCompactionEvents,
+  useThreadEvents,
+  useThreadMessages,
+  useThreadSelector,
+  type ThreadCore,
+} from '@/stores/thread-context';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
+
+// Reuse the desktop review pane; lazy-loaded so it stays out of the mobile
+// first-paint bundle (mirrors how App.tsx lazy-loads it).
+const ReviewPane = lazy(() =>
+  import('@/components/ReviewPane').then((m) => ({ default: m.ReviewPane })),
+);
 
 interface Props {
   projectId: string;
@@ -30,11 +37,24 @@ interface Props {
 export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   const { t } = useTranslation();
   const selectThread = useAppStore((s) => s.selectThread);
-  const activeThread = useThreadSelector((t) => t);
-  const [sending, setSending] = useState(false);
-  const scrollViewportRef = useRef<HTMLDivElement>(null);
-  const userHasScrolledUp = useRef(false);
-  const smoothScrollPending = useRef(false);
+  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const activeThread = useThreadSelector((th) => th);
+  const stableMessages = useThreadMessages();
+  const stableThreadEvents = useThreadEvents();
+  const stableCompactionEvents = useCompactionEvents();
+  const loadOlderMessages = useThreadStore((s) => s.loadOlderMessages);
+  const prefersReducedMotion = useReducedMotion();
+  const { openLightbox, lightbox } = useImageLightbox();
+
+  // Shared messaging pipeline — same hook ThreadChatView (desktop) uses, so
+  // send/stop/permission/tool-respond behave identically across form factors.
+  const streamRef = useRef<MessageStreamHandle>(null);
+  const activeThreadRef = useRef<ThreadCore | null>(activeThread);
+  activeThreadRef.current = activeThread;
+  const sendingRef = useRef(false);
+  const { sending, handleSend, handleStop, handlePermissionApproval, handleToolRespond } =
+    useThreadHandlers({ activeThreadRef, sendingRef, streamRef });
 
   useEffect(() => {
     selectThread(threadId);
@@ -43,127 +63,77 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
     };
   }, [threadId, selectThread]);
 
-  const lastMessage = selectLastMessage(activeThread);
-  const scrollFingerprint = [
-    activeThread?.messages?.length,
-    lastMessage?.content?.length,
-    lastMessage?.toolCalls?.length,
-    activeThread?.status,
-  ].join(':');
-
+  // The review pane is an in-place overlay on mobile, driven by the shared
+  // `reviewPaneOpen` flag (the prompt-footer DiffStats chip flips it on). That
+  // flag is persisted, so force it closed when entering/leaving a chat — we
+  // never want to land directly in the review overlay.
   useEffect(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport) return;
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = viewport;
-      userHasScrolledUp.current = scrollHeight - scrollTop - clientHeight > 80;
-    };
-    viewport.addEventListener('scroll', handleScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, []);
+    setReviewPaneOpen(false);
+    return () => setReviewPaneOpen(false);
+  }, [threadId, setReviewPaneOpen]);
 
-  useEffect(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport) return;
-    const scrollToBottom = () => {
-      if (!userHasScrolledUp.current) {
-        const { scrollTop, scrollHeight, clientHeight } = viewport;
-        const actuallyAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-        if (!actuallyAtBottom) {
-          userHasScrolledUp.current = true;
-          return;
-        }
-        if (smoothScrollPending.current) {
-          smoothScrollPending.current = false;
-          viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
-        } else {
-          viewport.scrollTop = viewport.scrollHeight;
-        }
+  // Track which message/tool-call IDs existed when the thread was loaded, so
+  // already-present items skip the entrance animation (matches desktop).
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const prevThreadIdRef = useRef<string | null>(null);
+  if (activeThread?.id && activeThread.id !== prevThreadIdRef.current) {
+    prevThreadIdRef.current = activeThread.id;
+    const ids = new Set<string>();
+    if (stableMessages) {
+      for (const m of stableMessages) {
+        ids.add(m.id);
+        if (m.toolCalls) for (const tc of m.toolCalls) ids.add(tc.id);
       }
-    };
-    scrollToBottom();
-    const observer = new MutationObserver(() => {
-      requestAnimationFrame(scrollToBottom);
-    });
-    observer.observe(viewport, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: true,
-    });
-    const timer = setTimeout(() => observer.disconnect(), 1500);
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [scrollFingerprint]);
-
-  const handleSend = async (
-    prompt: string,
-    opts: {
-      provider?: string;
-      model: string;
-      mode: string;
-      effort?: string;
-      fileReferences?: { path: string; type?: 'file' | 'folder' }[];
-      symbolReferences?: {
-        path: string;
-        name: string;
-        kind: string;
-        line: number;
-        endLine?: number;
-      }[];
-    },
-    images?: any[],
-  ) => {
-    if (!activeThread || sending) return;
-    setSending(true);
-    userHasScrolledUp.current = false;
-    smoothScrollPending.current = true;
-    useAppStore
-      .getState()
-      .appendOptimisticMessage(
-        activeThread.id,
-        prompt,
-        images,
-        opts.model as any,
-        opts.mode as any,
-        opts.fileReferences,
-        opts.effort as any,
-      );
-    const result = await api.sendMessage(
-      activeThread.id,
-      prompt,
-      {
-        provider: opts.provider || undefined,
-        model: opts.model || undefined,
-        permissionMode: opts.mode || undefined,
-        effort: opts.effort || undefined,
-      },
-      images,
-    );
-    if (result.isErr()) {
-      const err = result.error;
-      toast.error(
-        err.type === 'INTERNAL'
-          ? t('thread.sendFailed')
-          : t('thread.sendFailedGeneric', { error: err.message }),
-      );
     }
-    setSending(false);
-  };
+    knownIdsRef.current = ids;
+  }
 
-  const handleStop = async () => {
-    if (!activeThread) return;
-    const result = await api.stopThread(activeThread.id);
-    if (result.isErr()) console.error('Stop failed:', result.error);
-  };
+  const snapshots = useTodoSnapshots();
+  const snapshotMapRef = useRef(new Map<string, number>());
+  const snapshotMap = useMemo(() => {
+    const next = new Map<string, number>();
+    snapshots.forEach((s, i) => next.set(s.toolCallId, i));
+    const prev = snapshotMapRef.current;
+    if (prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) {
+      return prev;
+    }
+    snapshotMapRef.current = next;
+    return next;
+  }, [snapshots]);
 
-  const isRunning = activeThread?.status === 'running';
+  const isExternal = activeThread?.provider === 'external';
+  const isRunning = activeThread?.status === 'running' || (activeThread?.queuedCount ?? 0) > 0;
+  const hasMore = activeThread?.hasMore ?? false;
+  const loadingMore = activeThread?.loadingMore ?? false;
+  const totalMessages = activeThread?.totalMessages ?? 0;
 
   return (
     <>
-      <header className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
+      {lightbox}
+      {reviewPaneOpen && activeThread && (
+        <div
+          className="bg-background fixed inset-0 z-50 flex flex-col"
+          data-testid="mobile-review-overlay"
+        >
+          <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-4">
+            <button
+              onClick={() => setReviewPaneOpen(false)}
+              aria-label={t('common.back', 'Back')}
+              className="hover:bg-accent -ml-1 rounded p-1"
+              data-testid="mobile-review-back"
+            >
+              <ArrowLeft className="icon-lg" />
+            </button>
+            <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{t('review.title')}</h1>
+          </header>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <Suspense fallback={<LoadingState testId="mobile-review-loading" />}>
+              <ReviewPane />
+            </Suspense>
+          </div>
+        </div>
+      )}
+      <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <button
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
@@ -172,7 +142,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
           <ArrowLeft className="icon-lg" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-semibold">
+          <h1 className="truncate text-base font-semibold first-letter:uppercase">
             {activeThread?.title ?? t('thread.loading', 'Loading...')}
           </h1>
         </div>
@@ -182,173 +152,39 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
       {!activeThread ? (
         <LoadingState testId="mobile-chat-loading" />
       ) : (
-        <>
-          <ScrollArea className="flex-1 p-3" viewportRef={scrollViewportRef}>
-            <div className="space-y-3">
-              {activeThread.initInfo &&
-                (() => {
-                  const firstUserEffort = activeThread.messages?.find(
-                    (m: any) => m.role === 'user',
-                  )?.effort;
-                  const effortLabel = firstUserEffort
-                    ? (EFFORT_LEVELS.find((e) => e.value === firstUserEffort)?.label ??
-                      firstUserEffort)
-                    : null;
-                  return (
-                    <div className="border-border bg-muted/50 text-muted-foreground space-y-1 rounded-lg border px-3 py-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{t('initInfo.model')}</span>
-                        <span className="font-mono">
-                          {resolveModelLabel(activeThread.initInfo.model, t)}
-                        </span>
-                        {effortLabel && (
-                          <span className="bg-secondary rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wide uppercase">
-                            {effortLabel}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-              {activeThread.messages?.flatMap((msg) => [
-                msg.content && !msg.toolCalls?.some((tc: any) => tc.name === 'ExitPlanMode') && (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      'relative group rounded-lg px-3 py-2 text-sm w-fit max-w-full',
-                      msg.role === 'user'
-                        ? 'ml-auto bg-primary text-primary-foreground'
-                        : 'bg-secondary text-secondary-foreground',
-                    )}
-                  >
-                    {msg.role !== 'user' && (
-                      <div className="mb-0.5 flex items-start gap-2">
-                        <span className="text-muted-foreground flex-1 text-xs font-medium uppercase">
-                          {msg.role}
-                        </span>
-                        <CopyButton content={msg.content} />
-                      </div>
-                    )}
-                    {msg.images && msg.images.length > 0 && (
-                      <div className="mb-2 flex flex-wrap gap-2">
-                        {msg.images.map((img: any, idx: number) => (
-                          <img
-                            key={`attachment-${idx}`}
-                            src={`data:${img.source.media_type};base64,${img.source.data}`}
-                            alt={`Attachment ${idx + 1}`}
-                            width={128}
-                            height={128}
-                            className="border-border max-h-32 rounded border"
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {msg.role === 'user' ? (
-                      <>
-                        <pre className="overflow-x-auto font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
-                          {msg.content.trim()}
-                        </pre>
-                        {(msg.model || msg.permissionMode) && (
-                          <div className="mt-1.5 flex gap-1">
-                            {msg.model && (
-                              <Badge
-                                variant="outline"
-                                className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/70 h-4 px-1.5 py-0 text-[10px] font-medium"
-                              >
-                                {resolveModelLabel(msg.model, t)}
-                              </Badge>
-                            )}
-                            {msg.permissionMode && (
-                              <Badge
-                                variant="outline"
-                                className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/70 h-4 px-1.5 py-0 text-[10px] font-medium"
-                              >
-                                {t(`prompt.${msg.permissionMode}`)}
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="overflow-x-auto text-xs leading-relaxed wrap-break-word">
-                        <MessageContent content={msg.content.trim()} />
-                      </div>
-                    )}
-                  </div>
-                ),
-                ...(msg.toolCalls?.map((tc: any) => (
-                  <ToolCallCard
-                    key={tc.id}
-                    name={tc.name}
-                    input={tc.input}
-                    output={tc.output}
-                    planText={
-                      tc.name === 'ExitPlanMode' && msg.content?.trim()
-                        ? msg.content.trim()
-                        : undefined
-                    }
-                    onRespond={
-                      tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode'
-                        ? (answer: string) => handleSend(answer, { model: '', mode: '' })
-                        : undefined
-                    }
-                  />
-                )) ?? []),
-              ])}
-
-              {isRunning && (
-                <div className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm">
-                  <D4CAnimation />
-                  <span className="text-xs">{t('thread.agentWorking')}</span>
-                </div>
-              )}
-
-              {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
-                <div className="text-status-warning/80 flex items-center gap-2 text-xs">
-                  <Clock className="size-3.5 animate-pulse text-yellow-400" />
-                  {t('thread.waitingForResponse')}
-                </div>
-              )}
-
-              {activeThread.status === 'waiting' &&
-                activeThread.waitingReason !== 'question' &&
-                activeThread.waitingReason !== 'plan' && (
-                  <WaitingActions onSend={(text) => handleSend(text, { model: '', mode: '' })} />
-                )}
-
-              {activeThread.resultInfo &&
-                !isRunning &&
-                activeThread.status !== 'stopped' &&
-                activeThread.status !== 'interrupted' && (
-                  <AgentResultCard
-                    status={activeThread.resultInfo.status}
-                    cost={activeThread.resultInfo.cost}
-                    duration={activeThread.resultInfo.duration}
-                    onContinue={
-                      activeThread.resultInfo.status === 'failed'
-                        ? () => handleSend('Continue', { model: '', mode: '' })
-                        : undefined
-                    }
-                  />
-                )}
-
-              {activeThread.status === 'interrupted' && (
-                <AgentInterruptedCard
-                  onContinue={() => handleSend('Continue', { model: '', mode: '' })}
-                />
-              )}
-            </div>
-          </ScrollArea>
-
-          <PromptInput
-            onSubmit={handleSend}
-            onStop={handleStop}
-            loading={sending}
-            running={isRunning}
-            placeholder={t('thread.nextPrompt')}
-          />
-        </>
+        <MessageStream
+          ref={streamRef}
+          threadId={activeThread.id}
+          status={activeThread.status}
+          messages={stableMessages ?? EMPTY_MESSAGES}
+          threadEvents={stableThreadEvents}
+          compactionEvents={stableCompactionEvents}
+          initInfo={activeThread.initInfo}
+          resultInfo={activeThread.resultInfo}
+          waitingReason={activeThread.waitingReason}
+          pendingPermission={activeThread.pendingPermission}
+          isExternal={isExternal}
+          model={activeThread.model}
+          permissionMode={activeThread.permissionMode}
+          onSend={handleSend}
+          onPermissionApproval={handlePermissionApproval}
+          onToolRespond={handleToolRespond}
+          pagination={{ hasMore, loadingMore, load: loadOlderMessages, total: totalMessages }}
+          createdAt={activeThread.createdAt}
+          snapshotMap={snapshotMap}
+          knownIds={knownIdsRef.current}
+          onOpenLightbox={openLightbox}
+          prefersReducedMotion={prefersReducedMotion}
+          footer={
+            <PromptInput
+              onSubmit={handleSend}
+              onStop={handleStop}
+              loading={sending}
+              running={isRunning && !isExternal}
+              placeholder={t('thread.nextPrompt')}
+            />
+          }
+        />
       )}
     </>
   );

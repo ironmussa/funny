@@ -1,9 +1,8 @@
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { StatusBadge } from '@/components/StatusBadge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { useAppStore } from '@/stores/app-store';
 
@@ -12,11 +11,18 @@ interface Props {
   onBack: () => void;
   onSelectThread: (threadId: string) => void;
   onNewThread: () => void;
+  onSearch: () => void;
+  onSettings: () => void;
 }
 
-const threadDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
-
-export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread }: Props) {
+export function ThreadListView({
+  projectId,
+  onBack,
+  onSelectThread,
+  onNewThread,
+  onSearch,
+  onSettings,
+}: Props) {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
@@ -40,7 +46,7 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
 
   return (
     <>
-      <header className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
+      <header className="border-border flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <button
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
@@ -50,6 +56,22 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
         </button>
         <h1 className="flex-1 truncate text-base font-semibold">{project?.name ?? 'Project'}</h1>
         <button
+          onClick={onSearch}
+          aria-label={t('sidebar.search', 'Search')}
+          className="hover:bg-accent rounded p-1.5"
+          data-testid="mobile-thread-search"
+        >
+          <Search className="icon-sm" />
+        </button>
+        <button
+          onClick={onSettings}
+          aria-label={t('settings.title', 'Settings')}
+          className="hover:bg-accent rounded p-1.5"
+          data-testid="mobile-thread-settings"
+        >
+          <Settings className="icon-sm" />
+        </button>
+        <button
           onClick={onNewThread}
           className="bg-primary text-primary-foreground active:bg-primary/80 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium"
         >
@@ -57,31 +79,16 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
           {t('sidebar.newThread', 'New')}
         </button>
       </header>
-      <ScrollArea className="flex-1">
-        {sortedThreads.length === 0 ? (
-          <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
-            {t('sidebar.noThreads', 'No threads yet. Create one to start.')}
-          </div>
-        ) : (
-          <div className="space-y-1 p-2">
-            {sortedThreads.map((thread) => (
-              <button
-                key={thread.id}
-                onClick={() => onSelectThread(thread.id)}
-                className="hover:bg-accent active:bg-accent/80 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{thread.title}</div>
-                  <div className="text-muted-foreground mt-0.5 text-xs">
-                    {threadDateFormatter.format(new Date(thread.createdAt))}
-                  </div>
-                </div>
-                <StatusBadge status={thread.status} />
-              </button>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+      <div className="flex min-h-0 flex-1 flex-col px-3 py-2">
+        <VirtualThreadList
+          threads={sortedThreads}
+          search=""
+          emptyMessage={t('sidebar.noThreads', 'No threads yet. Create one to start.')}
+          searchEmptyMessage={t('sidebar.noThreads', 'No threads yet. Create one to start.')}
+          hideBranch
+          onThreadClick={(thread) => onSelectThread(thread.id)}
+        />
+      </div>
     </>
   );
 }

@@ -9,6 +9,10 @@ import {
   Timer,
   Archive,
   Workflow,
+  UserPlus,
+  Users,
+  UsersRound,
+  type LucideIcon,
 } from 'lucide-react';
 
 const baseSettingsItems = [
@@ -30,6 +34,55 @@ export type SettingsItemId =
   | 'users'
   | 'team-members'
   | 'collaborators';
+
+export interface SettingsNavItem {
+  id: SettingsItemId;
+  label: string;
+  icon: LucideIcon;
+}
+
+/**
+ * Project-config tabs mutate shared, server-owned project state, so they're
+ * limited to the project's admins. Plain collaborators get a read-only
+ * experience (the tabs are hidden; the server also rejects their writes).
+ */
+const PROJECT_ADMIN_ONLY_TABS: ReadonlySet<string> = new Set(['general', 'startup-commands']);
+
+/**
+ * Builds the settings menu for the current context, applying the same
+ * project-admin / server-admin gating in one place so the desktop sidebar and
+ * the mobile settings list never drift apart.
+ */
+export function buildSettingsItems(opts: {
+  selectedProjectId: string | null;
+  isProjectAdmin: boolean;
+  isServerAdmin: boolean;
+}): SettingsNavItem[] {
+  const { selectedProjectId, isProjectAdmin, isServerAdmin } = opts;
+
+  // Hide "Archived Threads" in per-project settings (it's a global view).
+  let items: SettingsNavItem[] = selectedProjectId
+    ? [...baseSettingsItems].filter((item) => item.id !== 'archived-threads')
+    : [...baseSettingsItems];
+
+  if (selectedProjectId) {
+    if (!isProjectAdmin) {
+      // Collaborators may freely configure their OWN runner/checkout (worktrees,
+      // hooks, MCP, skills, .funny.json all proxy to their personal runner).
+      // Only the shared, server-owned config is gated to project admins.
+      items = items.filter((item) => !PROJECT_ADMIN_ONLY_TABS.has(item.id));
+    } else {
+      // Managing who can access THIS project is a project-admin action.
+      items.push({ id: 'collaborators', label: 'Collaborators', icon: UserPlus });
+    }
+  } else if (isServerAdmin) {
+    // Global context, server admins only.
+    items.push({ id: 'users', label: 'Users', icon: Users });
+    items.push({ id: 'team-members', label: 'Team Members', icon: UsersRound });
+  }
+
+  return items;
+}
 
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',

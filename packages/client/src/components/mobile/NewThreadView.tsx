@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
+import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -33,7 +34,7 @@ export function NewThreadView({ projectId, onBack, onCreated }: Props) {
 
   return (
     <>
-      <header className="border-border flex shrink-0 items-center gap-3 border-b px-4 py-3">
+      <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <button
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
@@ -50,13 +51,16 @@ export function NewThreadView({ projectId, onBack, onCreated }: Props) {
           <p className="mt-2 text-sm">{t('thread.describeTask')}</p>
         </div>
       </div>
-      <PromptInput
-        onSubmit={createThread}
-        loading={creating}
-        isNewThread
-        showBacklog
-        projectId={projectId}
-      />
+      <div className="px-3 pb-3">
+        <PromptInput
+          onSubmit={createThread}
+          loading={creating}
+          isNewThread
+          showBacklog
+          projectId={projectId}
+          newThreadContextBar={<NewThreadContextBar projectId={projectId} />}
+        />
+      </div>
     </>
   );
 }

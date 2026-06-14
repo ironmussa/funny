@@ -389,6 +389,9 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
   return c.json({ ok: true });
 });
 
+// Thread sharing routes (`/:id/shares`, `/shared-with-me`) live in
+// routes/thread-shares.ts and are mounted alongside this router in index.ts.
+
 // PATCH /api/threads/:id — update thread data
 threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
   const id = c.req.param('id');

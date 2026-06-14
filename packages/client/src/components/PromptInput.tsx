@@ -1,11 +1,12 @@
 import type { ImageAttachment } from '@funny/shared';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 
 import {
   usePromptInputState,
   type SubmitFn,
   type ThreadOverride,
 } from '@/hooks/use-prompt-input-state';
+import { useUIStore } from '@/stores/ui-store';
 
 import { PromptInputUI } from './PromptInputUI';
 
@@ -69,6 +70,11 @@ export const PromptInput = memo(function PromptInput({
     threadOverride,
   });
 
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const handleOpenReview = useCallback(() => {
+    setReviewPaneOpen(true);
+  }, [setReviewPaneOpen]);
+
   return (
     <>
       <PromptInputUI
@@ -109,6 +115,7 @@ export const PromptInput = memo(function PromptInput({
         powerlineProjectColor={state.effectiveProject?.color}
         powerlineProjectPath={state.effectiveProject?.path}
         powerlineGitStatus={state.activeThreadGitStatus}
+        onOpenReview={handleOpenReview}
         showBacklog={showBacklog}
         sendToBacklog={state.sendToBacklog}
         onSendToBacklogChange={state.setSendToBacklog}

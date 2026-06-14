@@ -63,6 +63,26 @@ export function canFetchGitStatus(thread: ThreadLike): boolean {
   return canDoGitOps(thread);
 }
 
+// ── Sharing ──────────────────────────────────────────────────────
+
+/**
+ * Whether the current user is viewing a thread that was SHARED with them
+ * (i.e. they are not its owner). Read-only: a sharee may read + comment but
+ * must never drive the agent, do git, fork/rewind, or change model/permission.
+ * Gate every such affordance on this predicate instead of inlining an owner
+ * check. `currentUserId` comes from the auth store at the call site.
+ *
+ * Mirrors the server's split: `requireThreadView` (owner OR sharee) for reads,
+ * `requireThreadOwner` for everything else.
+ */
+export function isReadOnlyShare(
+  thread: Pick<Thread, 'userId'> | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!thread || !currentUserId) return false;
+  return thread.userId !== currentUserId;
+}
+
 // ── Routing ──────────────────────────────────────────────────────
 
 /**

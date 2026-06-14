@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 
-interface DiffViewerModalProps {
+export interface DiffViewerModalProps {
   // Which file is open (null = closed)
   expandedFile: string | null;
   expandedSummary: FileDiffSummary | undefined;

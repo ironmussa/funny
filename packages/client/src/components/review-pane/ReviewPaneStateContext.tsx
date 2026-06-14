@@ -20,7 +20,7 @@ import {
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
-import { DiffViewerModal } from './DiffViewerModal';
+import { ExpandedDiffPresenter } from './ExpandedDiffPresenter';
 import { ReviewDialogs, type ConfirmDialogState } from './ReviewDialogs';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
@@ -248,7 +248,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Both overlays Radix-portal to document.body, so positioning them here
           is fine regardless of where the tabs render. */}
-      <DiffViewerModal
+      <ExpandedDiffPresenter
         expandedFile={expandedFile}
         expandedSummary={expandedSummary}
         expandedDiffContent={expandedDiffContent}

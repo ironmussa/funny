@@ -26,7 +26,7 @@ import { CITab } from './CITab';
 import { CommitGraphTab } from './CommitGraphTab';
 import { IssuesTab } from './IssuesTab';
 import { PullRequestsTab } from './PullRequestsTab';
-import { DiffViewerModal } from './review-pane/DiffViewerModal';
+import { ExpandedDiffPresenter } from './review-pane/ExpandedDiffPresenter';
 import { ReviewChangesTab } from './review-pane/ReviewChangesTab';
 import { ReviewDialogs, type ConfirmDialogState } from './review-pane/ReviewDialogs';
 import { StashTab } from './review-pane/StashTab';
@@ -297,7 +297,7 @@ export function ReviewPane() {
 
   return (
     <div className="flex h-full flex-col">
-      <DiffViewerModal
+      <ExpandedDiffPresenter
         expandedFile={expandedFile}
         expandedSummary={expandedSummary}
         expandedDiffContent={expandedDiffContent}

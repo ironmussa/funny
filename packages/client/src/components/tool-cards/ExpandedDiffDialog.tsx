@@ -178,6 +178,9 @@ export interface ExpandedDiffViewProps {
   selectAllSignal?: number;
   /** Increment this counter to force deselect all lines (used when file checkbox is unchecked) */
   deselectAllSignal?: number;
+  /** Initial view mode before the user toggles it. Defaults to 'three-pane';
+   *  the mobile diff view passes 'unified' since multi-pane is unusable on a phone. */
+  initialViewMode?: DiffViewMode;
 }
 
 /* ── Diff content ── */
@@ -685,8 +688,9 @@ export function ExpandedDiffView({
   onSelectionStateChange,
   selectAllSignal = 0,
   deselectAllSignal = 0,
+  initialViewMode = 'three-pane',
 }: ExpandedDiffViewProps) {
-  const [userViewMode, setUserViewMode] = useState<DiffViewMode>('three-pane');
+  const [userViewMode, setUserViewMode] = useState<DiffViewMode>(initialViewMode);
   const [wordWrap, setWordWrap] = useState(false);
   const [showFullFile, setShowFullFile] = useState(false);
   const [isPending, startTransition] = useTransition();

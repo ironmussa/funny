@@ -9,11 +9,16 @@ import { Button } from '@/components/ui/button';
 import { NavItem } from '@/components/ui/nav-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
-import { ACTIVE_WATCHER_STATUSES as ACTIVE_STATUSES, formatCountdown } from '@/lib/watcher-utils';
+import {
+  ACTIVE_WATCHER_STATUSES as ACTIVE_STATUSES,
+  formatClock,
+  formatCountdown,
+} from '@/lib/watcher-utils';
 import { useJobStore } from '@/stores/job-store';
 import { findThreadById } from '@/stores/store-bridge';
 import { useWatcherStore } from '@/stores/watcher-store';
@@ -53,40 +58,60 @@ function statusVariant(status: WatcherStatus): 'default' | 'secondary' | 'destru
 }
 
 function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
+  const { t } = useTranslation();
   const cancelWatcher = useWatcherStore((s) => s.cancelWatcher);
   const isActive = ACTIVE_STATUSES.includes(watcher.status);
 
+  const isPending = watcher.status === 'pending';
+  // Pending watchers count down to the next wake; concluded/fired ones show
+  // when they last woke. Either way expose the exact "hora" on hover.
+  const timing = isPending
+    ? formatCountdown(watcher.nextWakeAt, now)
+    : timeAgo(watcher.updatedAt, t);
+  // Absolute fire timestamp, shown inline: when it will fire (pending) or last
+  // fired (concluded/fired).
+  const fireAt = isPending ? watcher.nextWakeAt : watcher.updatedAt;
+  const fireLabel = `${isPending ? 'fires' : 'fired'} ${formatClock(fireAt)}`;
+  const timingTitle = isPending
+    ? `Next wake ${formatClock(watcher.nextWakeAt)} · created ${formatClock(watcher.createdAt)}`
+    : `Last update ${formatClock(watcher.updatedAt)} · created ${formatClock(watcher.createdAt)}`;
+
   return (
-    <div
-      className="hover:bg-accent flex items-start justify-between gap-2 rounded-md px-2 py-1.5"
-      data-testid={`watcher-row-${watcher.id}`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{watcher.label}</span>
-          <Badge variant={statusVariant(watcher.status)} className={CHIP_CLASS}>
-            {statusLabel(watcher)}
-          </Badge>
-        </div>
-        <p className="text-muted-foreground truncate text-xs">
-          {watcher.status === 'pending' ? formatCountdown(watcher.nextWakeAt, now) : null}
-          {watcher.status === 'pending' ? ' · ' : null}
-          checked {watcher.wakeCount}×{watcher.maxWakes ? ` / ${watcher.maxWakes}` : ''}
-        </p>
-      </div>
-      {isActive ? (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground size-6 shrink-0"
-          data-testid={`watcher-cancel-${watcher.id}`}
-          onClick={() => void cancelWatcher(watcher.id)}
-          aria-label="Cancel watcher"
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className="hover:bg-accent flex items-start justify-between gap-2 rounded-md px-2 py-1.5"
+          data-testid={`watcher-row-${watcher.id}`}
         >
-          <X className="icon-sm" />
-        </Button>
-      ) : null}
-    </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-medium">{watcher.label}</span>
+              <Badge variant={statusVariant(watcher.status)} className={CHIP_CLASS}>
+                {statusLabel(watcher)}
+              </Badge>
+            </div>
+            <p className="text-muted-foreground truncate text-xs">
+              {timing ? `${timing} · ` : null}
+              checked {watcher.wakeCount}×{watcher.maxWakes ? ` / ${watcher.maxWakes}` : ''}
+            </p>
+            <p className="text-muted-foreground/70 truncate text-xs">{fireLabel}</p>
+          </div>
+          {isActive ? (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground size-6 shrink-0"
+              data-testid={`watcher-cancel-${watcher.id}`}
+              onClick={() => void cancelWatcher(watcher.id)}
+              aria-label="Cancel watcher"
+            >
+              <X className="icon-sm" />
+            </Button>
+          ) : null}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>{timingTitle}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -145,50 +170,64 @@ function JobRow({
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={openLog}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openLog();
-        }
-      }}
-      title="Open output in the terminal panel"
-      className="hover:bg-accent flex cursor-pointer items-start justify-between gap-2 rounded-md px-2 py-1.5"
-      data-testid={`job-row-${job.id}`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{job.label || job.command}</span>
-          <Badge variant={jobStatusVariant(job.status)} className={CHIP_CLASS}>
-            {jobStatusLabel(job)}
-          </Badge>
-        </div>
-        {/* Relative timing, same format as thread activity rows. */}
-        <p className="text-muted-foreground truncate text-xs">
-          started {timeAgo(job.startedAt, t)}
-          {!isRunning ? ` · ended ${timeAgo(job.updatedAt, t)}` : null}
-        </p>
-        <p className="text-muted-foreground/70 truncate font-mono text-xs">{job.command}</p>
-      </div>
-      {isRunning ? (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground size-6 shrink-0"
-          data-testid={`job-cancel-${job.id}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmKill(true);
-          }}
-          aria-label="Kill job"
-          title="Kill this process"
-        >
-          <X className="icon-sm" />
-        </Button>
-      ) : null}
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={openLog}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openLog();
+              }
+            }}
+            className="hover:bg-accent flex cursor-pointer items-start justify-between gap-2 rounded-md px-2 py-1.5"
+            data-testid={`job-row-${job.id}`}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-medium">{job.label || job.command}</span>
+                <Badge variant={jobStatusVariant(job.status)} className={CHIP_CLASS}>
+                  {jobStatusLabel(job)}
+                </Badge>
+              </div>
+              {/* Relative timing, same format as thread activity rows. */}
+              <p className="text-muted-foreground truncate text-xs">
+                started {timeAgo(job.startedAt, t)}
+                {!isRunning ? ` · ended ${timeAgo(job.updatedAt, t)}` : null}
+              </p>
+              <p className="text-muted-foreground/70 truncate font-mono text-xs">{job.command}</p>
+            </div>
+            {isRunning ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground size-6 shrink-0"
+                data-testid={`job-cancel-${job.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmKill(true);
+                }}
+                aria-label="Kill job"
+                title="Kill this process"
+              >
+                <X className="icon-sm" />
+              </Button>
+            ) : null}
+          </div>
+        </TooltipTrigger>
+        {/* Absolute "hora" plus the click hint, for the whole card. */}
+        <TooltipContent>
+          <div>
+            {`Started ${formatClock(job.startedAt)}${
+              !isRunning ? ` · ended ${formatClock(job.updatedAt)}` : ''
+            }`}
+          </div>
+          <div className="text-muted-foreground">Open output in the terminal panel</div>
+        </TooltipContent>
+      </Tooltip>
       <ConfirmDialog
         open={confirmKill}
         onOpenChange={setConfirmKill}
@@ -203,7 +242,7 @@ function JobRow({
           void cancelJob(job.id);
         }}
       />
-    </div>
+    </>
   );
 }
 

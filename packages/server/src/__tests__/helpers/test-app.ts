@@ -83,6 +83,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { projectRoutes } = await import('../../routes/projects.js');
   const { runnerRoutes } = await import('../../routes/runners.js');
   const { threadRoutes } = await import('../../routes/threads.js');
+  const { shareRoutes } = await import('../../routes/thread-shares.js');
   const { settingsRoutes } = await import('../../routes/settings.js');
   const { profileRoutes } = await import('../../routes/profile.js');
   const { orchestratorRoutes } = await import('../../routes/orchestrator.js');
@@ -98,6 +99,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/projects', projectRoutes);
   app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
+  app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/settings', settingsRoutes);
   app.route('/api/profile', profileRoutes);

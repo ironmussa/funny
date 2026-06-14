@@ -269,6 +269,7 @@ const { projectRoutes } = await import('./routes/projects.js');
 const { runnerRoutes } = await import('./routes/runners.js');
 const { profileRoutes } = await import('./routes/profile.js');
 const { threadRoutes, requireThreadOwner } = await import('./routes/threads.js');
+const { shareRoutes } = await import('./routes/thread-shares.js');
 const { automationRoutes } = await import('./routes/automations.js');
 const { settingsRoutes } = await import('./routes/settings.js');
 const { teamProjectRoutes } = await import('./routes/team-projects.js');
@@ -288,6 +289,9 @@ app.route('/api/projects', projectRoutes);
 app.route('/api/users', userRoutes);
 app.route('/api/runners', runnerRoutes);
 app.route('/api/profile', profileRoutes);
+// Share routes mounted BEFORE threadRoutes so `/api/threads/shared-with-me` and
+// `/:id/shares` are matched before the generic `/:id` pattern.
+app.route('/api/threads', shareRoutes);
 app.route('/api/threads', threadRoutes);
 app.route('/api/automations', automationRoutes);
 app.route('/api/settings', settingsRoutes);

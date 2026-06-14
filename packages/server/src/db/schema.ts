@@ -38,4 +38,16 @@ export {
   projectMembers,
   inviteLinks,
   agentTemplates,
+  // Better Auth identity tables. `user`/`member` are read directly by the
+  // share routes (org-membership validation + invited-user display). The full
+  // set is re-exported so this module satisfies `DatabaseConnection.schema`
+  // (typeof sqliteSchema) — partial re-export left a long-standing type error
+  // at the setConnection call sites.
+  user,
+  session,
+  account,
+  verification,
+  member,
+  organization,
+  invitation,
 } from '@funny/shared/db/schema-sqlite';

@@ -1377,6 +1377,28 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    // Per-thread share grants (thread-sharing). Identity-gated read+comment
+    // access; PK (thread_id, shared_with_user_id) makes a re-share idempotent.
+    // The index backs "shared with me" lookups by the invited user.
+    name: '064_thread_shares',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS thread_shares (
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          shared_with_user_id TEXT NOT NULL,
+          shared_by_user_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (thread_id, shared_with_user_id)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_thread_shares_user
+        ON thread_shares (shared_with_user_id)
+      `);
+    },
+  },
 ];
 
 export async function autoMigrate() {

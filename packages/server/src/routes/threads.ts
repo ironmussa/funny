@@ -17,6 +17,7 @@ import {
   createCommentRepository,
   createStageHistoryRepository,
   createToolCallRepository,
+  createThreadShareRepository,
 } from '@funny/shared/repositories';
 import { Hono } from 'hono';
 
@@ -85,13 +86,19 @@ const threadRepo = createThreadRepository({
 });
 const messageRepo = createMessageRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
 const toolCallRepo = createToolCallRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
+const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
 
 // Centralized per-thread authorization (see middleware/thread-access.ts).
-// `requireThreadView` guards read routes; `requireThreadOwner` guards
-// mutation/lifecycle routes. The two hot-path reads (GET /:id and /:id/events)
-// authorize inline via `canViewThread` to keep their single/parallel fetch.
-const { requireThreadView, requireThreadOwner } = createThreadAccessMiddleware((id) =>
-  threadRepo.getThread(id),
+// `requireThreadView` guards read routes (owner OR active share grant);
+// `requireThreadOwner` guards mutation/lifecycle routes. The two hot-path reads
+// (GET /:id and /:id/events) authorize inline via `canViewThread` to keep their
+// single/parallel fetch.
+// `requireThreadOwner` is also exported so the git-route gate in index.ts can
+// reuse the same owner check (git ops must stay owner-only — a sharee never
+// reaches another user's runner; see thread-sharing design).
+export const { requireThreadView, requireThreadOwner } = createThreadAccessMiddleware(
+  (id) => threadRepo.getThread(id),
+  (threadId, userId) => shareRepo.hasShare(threadId, userId),
 );
 
 // ── Runner communication helpers ─────────────────────────────────
@@ -290,7 +297,7 @@ threadRoutes.get('/:id', async (c) => {
       messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
     ]);
 
-    if (!result || !canViewThread(result, userId)) {
+    if (!result || !(await canViewThread(result, userId, shareRepo.hasShare))) {
       span.end('ok');
       return c.json({ error: 'Thread not found' }, 404);
     }
@@ -924,7 +931,7 @@ threadRoutes.get('/:id/events', async (c) => {
       getThreadEvents(id).finally(() => eventsSpan.end('ok')),
     ]);
 
-    if (!thread || !canViewThread(thread, userId)) {
+    if (!thread || !(await canViewThread(thread, userId, shareRepo.hasShare))) {
       span.end('ok');
       return c.json({ error: 'Thread not found' }, 404);
     }

@@ -9,6 +9,10 @@ export { createMessageRepository, type MessageRepositoryDeps } from './message-r
 export { createToolCallRepository, type ToolCallRepositoryDeps } from './tool-call-repository.js';
 export { createThreadRepository, type ThreadRepositoryDeps } from './thread-repository.js';
 export { createCommentRepository, type CommentRepositoryDeps } from './comment-repository.js';
+export {
+  createThreadShareRepository,
+  type ThreadShareRepositoryDeps,
+} from './thread-share-repository.js';
 export { createStageHistoryRepository, type StageHistoryDeps } from './stage-history.js';
 export { createDesignRepository, type DesignRepositoryDeps } from './design-repository.js';
 export {

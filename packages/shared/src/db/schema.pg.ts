@@ -289,6 +289,24 @@ export const threadComments = pgTable('thread_comments', {
   createdAt: text('created_at').notNull(),
 });
 
+/**
+ * Per-thread share grants — see schema.sqlite.ts for the full contract.
+ * Identity-gated read+comment access to a single thread; PK makes re-share
+ * idempotent.
+ */
+export const threadShares = pgTable(
+  'thread_shares',
+  {
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    sharedWithUserId: text('shared_with_user_id').notNull(),
+    sharedByUserId: text('shared_by_user_id').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.sharedWithUserId] })],
+);
+
 export const messageQueue = pgTable('message_queue', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')

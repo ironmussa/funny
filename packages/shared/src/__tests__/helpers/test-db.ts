@@ -134,6 +134,16 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS thread_shares (
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      shared_with_user_id TEXT NOT NULL,
+      shared_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (thread_id, shared_with_user_id)
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS team_projects (
       id TEXT PRIMARY KEY,
       team_id TEXT NOT NULL,

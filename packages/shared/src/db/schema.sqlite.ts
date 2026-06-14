@@ -278,6 +278,25 @@ export const threadComments = sqliteTable('thread_comments', {
   createdAt: text('created_at').notNull(),
 });
 
+/**
+ * Per-thread share grants. A thread owner grants a specific user read+comment
+ * access to a single thread. Identity-gated: access is decided by the requesting
+ * user's id against this table, not by a link/token. See the `thread-sharing`
+ * change. PK `(thread_id, shared_with_user_id)` makes a re-share idempotent.
+ */
+export const threadShares = sqliteTable(
+  'thread_shares',
+  {
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    sharedWithUserId: text('shared_with_user_id').notNull(),
+    sharedByUserId: text('shared_by_user_id').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.sharedWithUserId] })],
+);
+
 export const messageQueue = sqliteTable('message_queue', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
+import { BUILD_INFO } from '@/lib/build-info';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 import { useNativeGitStore } from '@/stores/native-git-store';
@@ -257,7 +258,7 @@ function BuildIdentityCard() {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    void navigator.clipboard.writeText(__BUILD_INFO__.label).then(() => {
+    void navigator.clipboard.writeText(BUILD_INFO.label).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     });
@@ -274,9 +275,9 @@ function BuildIdentityCard() {
               className="h-5 px-2 text-[10px]"
               data-testid="system-build-number"
             >
-              #{__BUILD_INFO__.build}
+              #{BUILD_INFO.build}
             </Badge>
-            {__BUILD_INFO__.dirty && (
+            {BUILD_INFO.dirty && (
               <Badge
                 variant="outline"
                 className="h-5 border-yellow-500/30 px-2 text-[10px] text-yellow-500"
@@ -303,7 +304,7 @@ function BuildIdentityCard() {
           className="bg-muted mt-3 block rounded px-3 py-2 text-xs"
           data-testid="system-build-label"
         >
-          {__BUILD_INFO__.label}
+          {BUILD_INFO.label}
         </code>
       </div>
     </div>

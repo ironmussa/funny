@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
 import { PushButton } from '@/components/push-button';
 import { Button } from '@/components/ui/button';
+import { CountBadge } from '@/components/ui/count-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ProjectGitStatus } from '@/stores/git-status-store';
@@ -137,11 +138,7 @@ export function ChangesToolbar({
               data-testid="review-publish-toolbar"
             >
               <Upload className="icon-base" />
-              {unpushedCommitCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] leading-none font-bold text-white">
-                  {unpushedCommitCount}
-                </span>
-              )}
+              {unpushedCommitCount > 0 && <CountBadge count={unpushedCommitCount} />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">

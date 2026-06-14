@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 import { Button } from './ui/button';
+import { CountBadge } from './ui/count-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 interface PullFetchButtonsProps {
@@ -38,11 +39,7 @@ export function PullFetchButtons({
             data-testid={`${testIdPrefix}-pull`}
           >
             <Download className={cn('icon-base', pullInProgress && 'animate-pulse')} />
-            {unpulledCommitCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] leading-none font-bold text-white">
-                {unpulledCommitCount}
-              </span>
-            )}
+            {unpulledCommitCount > 0 && <CountBadge count={unpulledCommitCount} />}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top">

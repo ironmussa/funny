@@ -13,6 +13,9 @@ import { useCallback, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 
+// Vite resolves this to a URL for the worklet module loaded off the main thread.
+import pcmWorkletUrl from './pcm-worklet.js?url';
+
 const ASSEMBLYAI_WS_BASE = 'wss://streaming.assemblyai.com/v3/ws';
 
 /** Play a short synthesized beep. Rising tone = mic on, falling tone = mic off. */
@@ -71,7 +74,7 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
 
   const cleanup = useCallback(() => {
     // Stop mic stream
@@ -206,23 +209,20 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
       const source = audioContext.createMediaStreamSource(stream);
       sourceRef.current = source;
 
-      // Smaller buffer = more frequent audio chunks = faster silence detection
-      const bufferSize = 2048;
-      const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      // AudioWorklet replaces the deprecated ScriptProcessorNode. The worklet
+      // converts float32 → PCM16 off the main thread and posts ready-to-send
+      // chunks back to us.
+      await audioContext.audioWorklet.addModule(pcmWorkletUrl);
+      const processor = new AudioWorkletNode(audioContext, 'pcm-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        channelCount: 1,
+      });
       processorRef.current = processor;
 
-      processor.onaudioprocess = (e) => {
+      processor.port.onmessage = (e) => {
         if (ws.readyState !== WebSocket.OPEN) return;
-
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Convert float32 [-1,1] to int16
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
-
-        ws.send(pcm16.buffer);
+        ws.send(e.data as ArrayBuffer);
       };
 
       source.connect(processor);

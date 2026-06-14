@@ -22,6 +22,11 @@ mock.module('../../services/ws-relay.js', () => ({
   getAnyConnectedRunnerId: () => null,
   getConnectedBrowserUserIds: () => [],
   getRelayStats: () => ({ runners: 0, browserClients: 0 }),
+  threadStreamRoom: (id: string) => `thread:${id}:stream`,
+  threadPresenceRoom: (id: string) => `thread:${id}:presence`,
+  relayToThreadStream: () => {},
+  relayToThreadPresence: () => {},
+  evictUserFromThread: () => {},
 }));
 
 mock.module('../../services/ws-tunnel.js', () => ({

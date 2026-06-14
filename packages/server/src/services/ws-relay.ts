@@ -135,6 +135,50 @@ export function broadcast(event: Record<string, unknown>): void {
   _io.of('/').emit(eventType, event);
 }
 
+// ── Per-thread rooms (thread-sharing) ───────────────────
+//
+// Two rooms per shared thread, deliberately separate so the owner never
+// double-receives the agent stream:
+//   thread:<id>:stream   — joined ONLY by sharees. The agent stream is mirrored
+//                          here IN ADDITION to the owner's `user:` room. The
+//                          owner is NOT in this room (they get the stream via
+//                          `user:`), so no duplicate delivery — important
+//                          because some events (e.g. agent:tool_output) append
+//                          rather than upsert on the client.
+//   thread:<id>:presence — joined by ALL current viewers (owner + sharees) so
+//                          everyone sees everyone's avatar. Carries only
+//                          presence (awareness) events, never the agent stream.
+
+export const threadStreamRoom = (threadId: string): string => `thread:${threadId}:stream`;
+export const threadPresenceRoom = (threadId: string): string => `thread:${threadId}:presence`;
+
+/** Mirror an in-thread agent event to the sharee-only stream room. */
+export function relayToThreadStream(threadId: string, event: Record<string, unknown>): void {
+  if (!_io) return;
+  const eventType = (event.type as string) || 'event';
+  _io.of('/').to(threadStreamRoom(threadId)).emit(eventType, event);
+}
+
+/** Broadcast a presence event to every viewer of a thread. */
+export function relayToThreadPresence(threadId: string, event: Record<string, unknown>): void {
+  if (!_io) return;
+  const eventType = (event.type as string) || 'event';
+  _io.of('/').to(threadPresenceRoom(threadId)).emit(eventType, event);
+}
+
+/**
+ * Evict a user from a thread's rooms (on share revoke). Makes every one of the
+ * user's browser sockets leave the stream + presence rooms, so they stop
+ * receiving live data immediately even before their next HTTP request 404s.
+ */
+export function evictUserFromThread(userId: string, threadId: string): void {
+  if (!_io) return;
+  _io
+    .of('/')
+    .in(`user:${userId}`)
+    .socketsLeave([threadStreamRoom(threadId), threadPresenceRoom(threadId)]);
+}
+
 /**
  * Send a command to a specific runner via Socket.IO.
  *

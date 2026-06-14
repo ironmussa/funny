@@ -669,6 +669,16 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     api.deleteThread(threadId);
   },
 
+  handleShareRevoked: (threadId) => {
+    cleanupThreadActor(threadId);
+    set((state) => mutations.removeThread(state, threadId));
+    _liveThreadRefCounts.delete(threadId);
+    set((state) => mutations.clearThreadData(state, threadId));
+    if (get().selectedThreadId === threadId) {
+      set({ selectedThreadId: null, activeThread: null });
+    }
+  },
+
   appendOptimisticMessage: (
     threadId,
     content,

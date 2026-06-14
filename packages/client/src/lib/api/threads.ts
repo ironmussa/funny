@@ -9,6 +9,15 @@ import type {
 
 import { request } from './_core';
 
+/** A per-thread share grant with the invited user's display fields. */
+export interface ThreadShareGrant {
+  threadId: string;
+  sharedWithUserId: string;
+  sharedByUserId: string;
+  createdAt: string;
+  user: { id: string; name: string; image: string | null; username: string | null } | null;
+}
+
 export const threadsApi = {
   listThreads: (projectId?: string, includeArchived?: boolean, limit?: number, offset?: number) => {
     const params = new URLSearchParams();
@@ -293,6 +302,18 @@ export const threadsApi = {
     }),
   deleteThreadComment: (threadId: string, commentId: string) =>
     request(`/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' }),
+
+  // Thread sharing
+  listThreadShares: (threadId: string) =>
+    request<ThreadShareGrant[]>(`/threads/${threadId}/shares`),
+  shareThread: (threadId: string, userId: string) =>
+    request<{ threadId: string; sharedWithUserId: string; sharedByUserId: string }>(
+      `/threads/${threadId}/shares`,
+      { method: 'POST', body: JSON.stringify({ userId }) },
+    ),
+  unshareThread: (threadId: string, userId: string) =>
+    request<{ ok: boolean }>(`/threads/${threadId}/shares/${userId}`, { method: 'DELETE' }),
+  listSharedWithMe: () => request<{ threads: Thread[] }>('/threads/shared-with-me'),
   uploadFile: (
     threadId: string,
     body: { provider: string; filename: string; contentBase64: string },

@@ -26,6 +26,10 @@ const wsLog = createClientLogger('ws');
 // (React StrictMode double-mounts effects in development).
 let activeSocket: Socket | null = null;
 let refCount = 0;
+// The thread the user is currently viewing, mirrored to the server for
+// thread-sharing presence. Module-level so the on-connect handler can re-join
+// the room after a reconnect (Socket.IO room membership is lost on disconnect).
+let lastOpenThreadId: string | undefined;
 // Deferred teardown handle — coalesces StrictMode/HMR remount cycles so we
 // don't tear down a still-handshaking socket and re-run the heavy on-connect
 // refresh path on every Vite HMR update.
@@ -83,6 +87,10 @@ function connect() {
     // Reset runner readiness so we re-evaluate on this fresh connection — the
     // server emits the current `runner:status` to every browser-connect.
     useRunnerStatusStore.getState().reset();
+
+    // Re-announce the open thread so the server re-joins us to the presence/
+    // stream rooms — Socket.IO room membership is lost across a reconnect.
+    if (lastOpenThreadId) socket.emit('thread:open', { threadId: lastOpenThreadId });
 
     // Ack-based RPC: ask the server for the active PTY sessions and get a
     // single deterministic response — `{ status, sessions }`. Re-issued each
@@ -204,10 +212,22 @@ export function useWS() {
     refCount++;
     if (refCount === 1 && !activeSocket) connect();
 
-    // Auto-manage remote WS connections when the active thread is remote
+    // Auto-manage remote WS connections when the active thread is remote, and
+    // announce which thread we're viewing for thread-sharing presence/stream.
     let lastContainerUrl: string | undefined;
     const unsub = useThreadStore.subscribe((state) => {
       const thread = state.activeThread;
+
+      // Presence: tell the server which thread is open so it joins us to the
+      // presence room (and, for sharees, the stream room) and broadcasts our
+      // avatar. Event names mirror `@funny/shared/socket-events`.
+      const openId = thread?.id;
+      if (openId !== lastOpenThreadId) {
+        if (lastOpenThreadId) activeSocket?.emit('thread:close', { threadId: lastOpenThreadId });
+        if (openId) activeSocket?.emit('thread:open', { threadId: openId });
+        lastOpenThreadId = openId;
+      }
+
       const containerUrl = thread?.runtime === 'remote' ? thread.containerUrl : undefined;
 
       if (containerUrl === lastContainerUrl) return;

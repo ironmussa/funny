@@ -399,6 +399,35 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       }
       break;
     }
+    // ── Thread sharing: presence + revoke ──────────────────────
+    case 'presence:sync': {
+      import('@/stores/presence-store').then(({ usePresenceStore }) => {
+        usePresenceStore.getState().setRoster(threadId, data.viewers ?? []);
+      });
+      break;
+    }
+    case 'presence:join': {
+      if (data.viewer) {
+        import('@/stores/presence-store').then(({ usePresenceStore }) => {
+          usePresenceStore.getState().upsertViewer(threadId, data.viewer);
+        });
+      }
+      break;
+    }
+    case 'presence:leave': {
+      import('@/stores/presence-store').then(({ usePresenceStore }) => {
+        usePresenceStore.getState().removeViewer(threadId, data.clientId);
+      });
+      break;
+    }
+    case 'thread:share-revoked': {
+      // The owner revoked our access — drop the thread + its presence.
+      import('@/stores/presence-store').then(({ usePresenceStore }) => {
+        usePresenceStore.getState().clearThread(threadId);
+      });
+      useThreadStore.getState().handleShareRevoked(threadId);
+      break;
+    }
     case 'git:status': {
       useGitStatusStore.getState().updateFromWS(data.statuses);
       const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
@@ -693,6 +722,11 @@ const ALL_EVENT_TYPES = [
   'thread:comment_deleted',
   'thread:stage-changed',
   'thread:updated',
+  // Thread sharing — presence + revoke
+  'presence:sync',
+  'presence:join',
+  'presence:leave',
+  'thread:share-revoked',
   'git:status',
   'git:refs-updated',
   'git:workflow_progress',

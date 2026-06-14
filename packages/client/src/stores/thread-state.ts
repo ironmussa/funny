@@ -76,6 +76,12 @@ export interface ThreadState {
   deleteThread: (threadId: string, projectId: string) => Promise<void>;
   /** Delete a scratch thread (no project / no worktree). */
   deleteScratchThread: (threadId: string) => Promise<void>;
+  /**
+   * A thread shared with the current user was revoked by its owner. Drop it
+   * locally (sidebar + active view) WITHOUT calling the delete API — the user
+   * never owned it. Fired by the `thread:share-revoked` WS event.
+   */
+  handleShareRevoked: (threadId: string) => void;
   appendOptimisticMessage: (
     threadId: string,
     content: string,

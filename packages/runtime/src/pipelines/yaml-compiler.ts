@@ -140,6 +140,15 @@ export function compileYamlPipeline(
           maxIterations: loopNode.loop!.max_iterations,
         }
       : undefined,
+    // DAG merge: each node writes only its own `outputs[id]`, so folding the
+    // outputs map of every node that completed in a level is collision-free.
+    // Other ctx fields (inputs, cwd, provider, progress) are level-invariant,
+    // so taking them from the base is correct. Declaration order keeps the
+    // merge deterministic regardless of which node finished first.
+    mergeContexts: (base, results) => ({
+      ...base,
+      outputs: Object.assign({}, base.outputs, ...results.map((r) => r.outputs)),
+    }),
   });
 }
 
@@ -182,12 +191,17 @@ function buildEngineNode(
 ): PipelineNode<YamlPipelineContext> {
   // Approval has its own helper that already wires WS + capture_response.
   if (yamlNode.approval) {
-    return approvalNode<YamlPipelineContext>(yamlNode.id, {
-      message: (ctx) => render(yamlNode.approval!.message, scopeOf(ctx)),
-      captureResponse: yamlNode.approval.capture_response ?? false,
-      timeoutMs: yamlNode.approval.timeout_ms,
-      when: yamlNode.when ? makePredicate(yamlNode.when, parsed.name) : undefined,
-    });
+    // approvalNode() doesn't take dependsOn, so attach it to the built node
+    // — the engine reads it off the PipelineNode for DAG level computation.
+    return {
+      ...approvalNode<YamlPipelineContext>(yamlNode.id, {
+        message: (ctx) => render(yamlNode.approval!.message, scopeOf(ctx)),
+        captureResponse: yamlNode.approval.capture_response ?? false,
+        timeoutMs: yamlNode.approval.timeout_ms,
+        when: yamlNode.when ? makePredicate(yamlNode.when, parsed.name) : undefined,
+      }),
+      dependsOn: yamlNode.depends_on,
+    };
   }
 
   const retry = compileRetry(yamlNode, parsed, options);
@@ -237,6 +251,7 @@ function buildEngineNode(
     {
       when: yamlNode.when ? makePredicate(yamlNode.when, parsed.name) : undefined,
       retry,
+      dependsOn: yamlNode.depends_on,
     },
   );
 }
@@ -260,6 +275,7 @@ async function dispatch(
       cwd: ctx.cwd,
       agent: agentDef,
       model: opts.model,
+      provider: opts.provider,
       mode: coercePermissionMode(opts.permission_mode),
       allowedTools: opts.allowed_tools,
       disallowedTools: opts.denied_tools,

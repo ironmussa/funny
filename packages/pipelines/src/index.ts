@@ -22,7 +22,14 @@
  */
 
 // ── Engine primitives ───────────────────────────────────────
-export { definePipeline, node, subPipeline, compose, runPipeline } from './engine.js';
+export {
+  definePipeline,
+  node,
+  subPipeline,
+  compose,
+  runPipeline,
+  computeLevels,
+} from './engine.js';
 
 export type {
   NodeFn,

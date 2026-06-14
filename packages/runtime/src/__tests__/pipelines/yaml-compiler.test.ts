@@ -401,4 +401,159 @@ nodes:
     expect(result.outcome).toBe('failed'); // hits max_iterations
     expect(attempts).toBeGreaterThanOrEqual(3);
   });
+
+  // ── Phase 3: parallel DAG execution of YAML pipelines ──────
+  describe('parallel DAG (depends_on)', () => {
+    test('sibling proposer nodes run concurrently and the judge merges their outputs', async () => {
+      let active = 0;
+      let maxActive = 0;
+      // spawnAgent echoes the prompt so we can assert the judge saw both
+      // proposer outputs interpolated into its prompt.
+      const spawnAgent = vi.fn(async (args: { prompt: string }) => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((r) => setTimeout(r, 10));
+        active--;
+        return { ok: true, output: `out:${args.prompt}` };
+      });
+      const provider = mockProvider({ spawnAgent });
+
+      // Fusion shape: three rootless proposers + a judge depending on all.
+      const pipeline = compile(`
+name: fusion
+inputs:
+  question: { type: string, required: true }
+nodes:
+  - id: proposer-a
+    spawn_agent: { prompt: "A:{{question}}" }
+  - id: proposer-b
+    spawn_agent: { prompt: "B:{{question}}" }
+  - id: proposer-c
+    spawn_agent: { prompt: "C:{{question}}" }
+  - id: judge
+    depends_on: [proposer-a, proposer-b, proposer-c]
+    spawn_agent:
+      prompt: "{{proposer-a.output}}|{{proposer-b.output}}|{{proposer-c.output}}"
+      `);
+
+      const result = await runPipeline(pipeline, ctxOf(provider, { question: 'q' }));
+
+      expect(result.outcome).toBe('completed');
+      // All three proposers were in flight simultaneously.
+      expect(maxActive).toBe(3);
+      // The judge ran last and saw all three proposer outputs merged in.
+      expect(spawnAgent).toHaveBeenLastCalledWith(
+        expect.objectContaining({ prompt: 'out:A:q|out:B:q|out:C:q' }),
+      );
+    });
+
+    test('on_error: continue lets the judge proceed when a proposer fails (quorum)', async () => {
+      const spawnAgent = vi.fn(async (args: { prompt: string }) => {
+        if (args.prompt.startsWith('B:')) return { ok: false, error: 'B died' };
+        return { ok: true, output: `out:${args.prompt}` };
+      });
+      const provider = mockProvider({ spawnAgent });
+
+      const pipeline = compile(`
+name: fusion-quorum
+inputs:
+  question: { type: string, required: true }
+nodes:
+  - id: proposer-a
+    spawn_agent: { prompt: "A:{{question}}" }
+  - id: proposer-b
+    on_error: continue
+    spawn_agent: { prompt: "B:{{question}}" }
+  - id: proposer-c
+    spawn_agent: { prompt: "C:{{question}}" }
+  - id: judge
+    depends_on: [proposer-a, proposer-b, proposer-c]
+    spawn_agent:
+      prompt: "{{proposer-a.output}}|{{proposer-b.output}}|{{proposer-c.output}}"
+      `);
+
+      const result = await runPipeline(pipeline, ctxOf(provider, { question: 'q' }));
+
+      expect(result.outcome).toBe('completed');
+      // B's output is empty (swallowed), A and C present.
+      expect(spawnAgent).toHaveBeenLastCalledWith(
+        expect.objectContaining({ prompt: 'out:A:q||out:C:q' }),
+      );
+    });
+
+    test('a sibling failure without on_error fails the whole pipeline', async () => {
+      const spawnAgent = vi.fn(async (args: { prompt: string }) => {
+        if (args.prompt.startsWith('B:')) return { ok: false, error: 'B exploded' };
+        return { ok: true, output: 'ok' };
+      });
+      const provider = mockProvider({ spawnAgent });
+
+      const pipeline = compile(`
+name: fusion-strict
+inputs:
+  question: { type: string, required: true }
+nodes:
+  - id: proposer-a
+    spawn_agent: { prompt: "A:{{question}}" }
+  - id: proposer-b
+    spawn_agent: { prompt: "B:{{question}}" }
+  - id: judge
+    depends_on: [proposer-a, proposer-b]
+    spawn_agent: { prompt: "{{proposer-a.output}}|{{proposer-b.output}}" }
+      `);
+
+      const result = await runPipeline(pipeline, ctxOf(provider, { question: 'q' }));
+      expect(result.outcome).toBe('failed');
+      expect(result.error).toMatch(/B exploded/);
+      // judge must NOT have run (its level never started).
+      const judgeCalled = (spawnAgent as ReturnType<typeof vi.fn>).mock.calls.some((c) =>
+        String(c[0].prompt).includes('|'),
+      );
+      expect(judgeCalled).toBe(false);
+    });
+  });
+
+  // ── Per-node provider forwarding (heterogeneous panels) ─────
+  describe('per-node provider', () => {
+    test('forwards spawn_agent.provider to the ActionProvider', async () => {
+      const spawnAgent = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      const provider = mockProvider({ spawnAgent });
+
+      const pipeline = compile(`
+name: heterogeneous
+inputs:
+  q: { type: string, required: true }
+nodes:
+  - id: a
+    spawn_agent: { provider: codex, model: gpt-5.5, prompt: "{{q}}" }
+  - id: b
+    depends_on: [a]
+    spawn_agent: { provider: gemini, model: gemini-3-pro, prompt: "{{q}}" }
+      `);
+
+      const result = await runPipeline(pipeline, ctxOf(provider, { q: 'hi' }));
+      expect(result.outcome).toBe('completed');
+      expect(spawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'codex', model: 'gpt-5.5' }),
+      );
+      expect(spawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'gemini', model: 'gemini-3-pro' }),
+      );
+    });
+
+    test('omitting provider leaves it undefined (adapter default applies)', async () => {
+      const spawnAgent = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      const provider = mockProvider({ spawnAgent });
+
+      const pipeline = compile(`
+name: default-provider
+nodes:
+  - id: a
+    spawn_agent: { prompt: "hi" }
+      `);
+
+      await runPipeline(pipeline, ctxOf(provider));
+      expect(spawnAgent).toHaveBeenCalledWith(expect.objectContaining({ provider: undefined }));
+    });
+  });
 });

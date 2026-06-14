@@ -275,3 +275,95 @@ describe('built-in: code-quality', () => {
     expect(provider.notify).toHaveBeenCalled(); // 'done' node still ran
   });
 });
+
+// ── fusion (Mixture-of-Agents / parallel DAG) ────────────────
+
+describe('built-in: fusion', () => {
+  /**
+   * spawnAgent mock that distinguishes panel proposers (prompt == question)
+   * from the judge (prompt contains "Respuesta"), tracks panel concurrency,
+   * and can be told to fail a specific model.
+   */
+  function panelProvider(opts: { failModel?: string } = {}) {
+    let active = 0;
+    const max = { n: 0 };
+    const spawnAgent = vi.fn(async (a: { model?: string; prompt: string }) => {
+      const isPanel = !a.prompt.includes('Respuesta');
+      if (!isPanel) return { ok: true, output: 'FINAL' }; // judge
+      active++;
+      max.n = Math.max(max.n, active);
+      await new Promise((r) => setTimeout(r, 10));
+      active--;
+      if (opts.failModel && a.model === opts.failModel) {
+        return { ok: false, error: `${a.model} died` };
+      }
+      return { ok: true, output: `answer-from-${a.model}` };
+    });
+    return { provider: mockProvider({ spawnAgent }), spawnAgent, max };
+  }
+
+  const judgeCallOf = (spawnAgent: ReturnType<typeof vi.fn>) =>
+    spawnAgent.mock.calls.find((c) => String(c[0].prompt).includes('Respuesta'));
+
+  test('runs the panel concurrently, then synthesizes', async () => {
+    const { provider, spawnAgent, max } = panelProvider();
+    const pipelines = await loadBuiltins();
+    const result = await runPipeline(
+      pipelines.get('fusion')!.definition,
+      ctx(provider, { question: 'What is X?' }),
+    );
+
+    expect(result.outcome).toBe('completed');
+    expect(spawnAgent).toHaveBeenCalledTimes(4); // 3 panel + 1 judge
+    expect(max.n).toBe(3); // all three proposers in flight at once
+    // The synthesizer's output is the final pipeline output.
+    expect((result.ctx.outputs as Record<string, any>).synthesize.output).toBe('FINAL');
+  });
+
+  test('judge sees all three answers, anonymized as Respuesta 1/2/3', async () => {
+    const { provider, spawnAgent } = panelProvider();
+    const pipelines = await loadBuiltins();
+    await runPipeline(pipelines.get('fusion')!.definition, ctx(provider, { question: 'q' }));
+
+    const jp = String(judgeCallOf(spawnAgent)![0].prompt);
+    expect(jp).toContain('answer-from-sonnet');
+    expect(jp).toContain('answer-from-opus');
+    expect(jp).toContain('answer-from-haiku');
+    expect(jp).toContain('Respuesta 1');
+    expect(jp).toContain('Respuesta 2');
+    expect(jp).toContain('Respuesta 3');
+  });
+
+  test('panel uses three distinct models (heterogeneity)', async () => {
+    const { provider, spawnAgent } = panelProvider();
+    const pipelines = await loadBuiltins();
+    await runPipeline(pipelines.get('fusion')!.definition, ctx(provider, { question: 'q' }));
+
+    const panelModels = spawnAgent.mock.calls
+      .filter((c) => !String(c[0].prompt).includes('Respuesta'))
+      .map((c) => c[0].model)
+      .sort();
+    expect(panelModels).toEqual(['haiku', 'opus', 'sonnet']);
+  });
+
+  test('tolerates a failed proposer (on_error: continue) and still synthesizes', async () => {
+    const { provider, spawnAgent } = panelProvider({ failModel: 'opus' });
+    const pipelines = await loadBuiltins();
+    const result = await runPipeline(
+      pipelines.get('fusion')!.definition,
+      ctx(provider, { question: 'q' }),
+    );
+
+    expect(result.outcome).toBe('completed');
+    const jp = String(judgeCallOf(spawnAgent)![0].prompt);
+    // The dead model contributes an empty slot; the survivors are present.
+    expect(jp).toContain('answer-from-sonnet');
+    expect(jp).toContain('answer-from-haiku');
+    expect(jp).not.toContain('answer-from-opus');
+  });
+
+  test('is loaded from the built-in layer', async () => {
+    const pipelines = await loadBuiltins();
+    expect(pipelines.get('fusion')?.source).toBe('built-in');
+  });
+});

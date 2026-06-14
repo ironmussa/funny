@@ -6,7 +6,14 @@
  */
 import { describe, test, expect, vi } from 'vitest';
 
-import { definePipeline, node, runPipeline, compose, subPipeline } from '../engine.js';
+import {
+  definePipeline,
+  node,
+  runPipeline,
+  compose,
+  subPipeline,
+  computeLevels,
+} from '../engine.js';
 
 describe('Pipeline Engine', () => {
   test('sequential pipeline runs nodes in order', async () => {
@@ -368,6 +375,201 @@ describe('Pipeline Engine', () => {
       const result = await runPipeline(pipeline, { limit: 3 });
       expect(result.outcome).toBe('completed');
       expect(attempts).toBe(3);
+    });
+  });
+
+  // ── Phase 3: DAG parallel execution ───────────────────────
+  describe('DAG mode (dependsOn)', () => {
+    type Ctx = { outputs: Record<string, unknown> };
+    const init = (): Ctx => ({ outputs: {} });
+
+    /** Node that records its own name into outputs and (optionally) tracks concurrency. */
+    const trackNode = (
+      name: string,
+      deps: string[],
+      track?: { active: { n: number }; max: { n: number }; delayMs?: number },
+    ) =>
+      node<Ctx>(
+        name,
+        async (ctx) => {
+          if (track) {
+            track.active.n++;
+            track.max.n = Math.max(track.max.n, track.active.n);
+            await new Promise((r) => setTimeout(r, track.delayMs ?? 10));
+            track.active.n--;
+          }
+          return { ...ctx, outputs: { ...ctx.outputs, [name]: name } };
+        },
+        { dependsOn: deps },
+      );
+
+    test('computeLevels groups a diamond into topological levels', () => {
+      const levels = computeLevels<Ctx>([
+        trackNode('a', []),
+        trackNode('b', ['a']),
+        trackNode('c', ['a']),
+        trackNode('d', ['b', 'c']),
+      ]);
+      expect(levels.map((l) => l.map((n) => n.name))).toEqual([['a'], ['b', 'c'], ['d']]);
+    });
+
+    test('computeLevels throws on a cycle', () => {
+      expect(() => computeLevels<Ctx>([trackNode('a', ['b']), trackNode('b', ['a'])])).toThrow(
+        /Cycle detected/,
+      );
+    });
+
+    test('computeLevels throws on an unknown dependency', () => {
+      expect(() => computeLevels<Ctx>([trackNode('a', ['ghost'])])).toThrow(/does not exist/);
+    });
+
+    test('independent nodes run concurrently (wall-clock ≈ max, not sum)', async () => {
+      const active = { n: 0 };
+      const max = { n: 0 };
+      const pipeline = definePipeline<Ctx>({
+        name: 'fan-out',
+        nodes: [
+          trackNode('a', [], { active, max }),
+          trackNode('b', [], { active, max }),
+          trackNode('c', [], { active, max }),
+        ],
+      });
+
+      const result = await runPipeline(pipeline, init());
+      expect(result.outcome).toBe('completed');
+      expect(max.n).toBe(3); // all three were in flight at once
+      expect(result.ctx.outputs).toEqual({ a: 'a', b: 'b', c: 'c' });
+    });
+
+    test('dependents wait for their dependencies', async () => {
+      const order: string[] = [];
+      const rec = (name: string, deps: string[]) =>
+        node<Ctx>(
+          name,
+          async (ctx) => {
+            order.push(name);
+            return ctx;
+          },
+          { dependsOn: deps },
+        );
+
+      // diamond: a → {b, c} → d
+      const result = await runPipeline(
+        definePipeline<Ctx>({
+          name: 'diamond',
+          nodes: [rec('a', []), rec('b', ['a']), rec('c', ['a']), rec('d', ['b', 'c'])],
+        }),
+        init(),
+      );
+
+      expect(result.outcome).toBe('completed');
+      expect(order[0]).toBe('a');
+      expect(order[3]).toBe('d');
+      expect(order.slice(1, 3).sort()).toEqual(['b', 'c']);
+    });
+
+    test('merge is deterministic regardless of which sibling finishes first', async () => {
+      // `b` finishes long before `a`, but the fold uses declaration order.
+      const slow = node<Ctx>(
+        'a',
+        async (ctx) => {
+          await new Promise((r) => setTimeout(r, 25));
+          return { ...ctx, outputs: { ...ctx.outputs, last: 'a' } };
+        },
+        { dependsOn: [] },
+      );
+      const fast = node<Ctx>(
+        'b',
+        async (ctx) => {
+          await new Promise((r) => setTimeout(r, 1));
+          return { ...ctx, outputs: { ...ctx.outputs, last: 'b' } };
+        },
+        { dependsOn: [] },
+      );
+
+      const result = await runPipeline(
+        definePipeline<Ctx>({ name: 'det', nodes: [slow, fast] }),
+        init(),
+      );
+      // Declaration order [a, b] ⇒ b's value wins on the shared key.
+      expect((result.ctx.outputs as Record<string, unknown>).last).toBe('b');
+    });
+
+    test('a node failure fails the pipeline after its level settles', async () => {
+      const result = await runPipeline(
+        definePipeline<Ctx>({
+          name: 'boom',
+          nodes: [
+            trackNode('a', []),
+            node<Ctx>(
+              'b',
+              async () => {
+                throw new Error('b exploded');
+              },
+              { dependsOn: [] },
+            ),
+          ],
+        }),
+        init(),
+      );
+      expect(result.outcome).toBe('failed');
+      expect(result.error).toMatch(/b exploded/);
+    });
+
+    test('maxConcurrency caps in-flight nodes within a level', async () => {
+      const active = { n: 0 };
+      const max = { n: 0 };
+      const pipeline = definePipeline<Ctx>({
+        name: 'capped',
+        nodes: [
+          trackNode('a', [], { active, max }),
+          trackNode('b', [], { active, max }),
+          trackNode('c', [], { active, max }),
+          trackNode('d', [], { active, max }),
+        ],
+      });
+
+      const result = await runPipeline(pipeline, init(), { maxConcurrency: 2 });
+      expect(result.outcome).toBe('completed');
+      expect(max.n).toBe(2);
+    });
+
+    test('skipped sibling (when=false) contributes no output but does not fail', async () => {
+      const result = await runPipeline(
+        definePipeline<Ctx>({
+          name: 'skip-sibling',
+          nodes: [
+            trackNode('a', []),
+            node<Ctx>('b', async (ctx) => ({ ...ctx, outputs: { ...ctx.outputs, b: 'b' } }), {
+              dependsOn: [],
+              when: () => false,
+            }),
+          ],
+        }),
+        init(),
+      );
+      expect(result.outcome).toBe('completed');
+      expect(result.ctx.outputs).toEqual({ a: 'a' });
+    });
+
+    test('backward-compat: no dependsOn anywhere stays sequential', async () => {
+      const active = { n: 0 };
+      const max = { n: 0 };
+      // No dependsOn ⇒ legacy sequential path; nodes never overlap.
+      const seqNode = (name: string) =>
+        node<Ctx>(name, async (ctx) => {
+          active.n++;
+          max.n = Math.max(max.n, active.n);
+          await new Promise((r) => setTimeout(r, 5));
+          active.n--;
+          return ctx;
+        });
+
+      await runPipeline(
+        definePipeline<Ctx>({ name: 'legacy', nodes: [seqNode('a'), seqNode('b')] }),
+        init(),
+      );
+      expect(max.n).toBe(1);
     });
   });
 });

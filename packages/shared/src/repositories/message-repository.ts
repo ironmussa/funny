@@ -72,6 +72,15 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     let messages: (typeof schema.messages.$inferSelect)[];
     let hasMore = false;
 
+    // Total message count for the thread. Lets the client reserve scroll space
+    // for not-yet-loaded older messages (phantom spacer) so the scrollbar is
+    // sized to the whole conversation, not just the loaded window. Only needed
+    // when paginating (messageLimit set); a full load already knows the total.
+    let total: number | undefined;
+    if (messageLimit) {
+      total = await countThreadMessages(id);
+    }
+
     if (messageLimit) {
       const rows = await dbAll(
         db
@@ -148,6 +157,8 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       ...thread,
       messages: enrichedMessages,
       hasMore,
+      // When fully loaded (no messageLimit) the loaded window IS the total.
+      total: total ?? enrichedMessages.length,
       lastUserMessage: enrichedLastUser,
       initInfo: thread.initTools
         ? {
@@ -159,8 +170,22 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     };
   }
 
+  /** Count all messages belonging to a thread. Cheap COUNT(*) over the
+   *  threadId index — used to size the client's phantom scroll spacer. */
+  async function countThreadMessages(threadId: string): Promise<number> {
+    const row = await dbGet(
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.messages)
+        .where(eq(schema.messages.threadId, threadId)),
+    );
+    return Number(row?.count ?? 0);
+  }
+
   /** Get paginated messages for a thread, older than cursor.
-   *  Returns messages in ASC order (oldest first). */
+   *  Returns messages in ASC order (oldest first).
+   *  `total` is the full message count so the client can size the scrollbar
+   *  for messages it has not loaded yet. */
   async function getThreadMessages(opts: {
     threadId: string;
     cursor?: string;
@@ -168,26 +193,30 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
   }): Promise<{
     messages: Awaited<ReturnType<typeof enrichMessages>>;
     hasMore: boolean;
+    total: number;
   }> {
     const { threadId, cursor, limit } = opts;
 
-    const rows = await dbAll(
-      db
-        .select()
-        .from(schema.messages)
-        .where(
-          cursor
-            ? and(eq(schema.messages.threadId, threadId), lt(schema.messages.timestamp, cursor))
-            : eq(schema.messages.threadId, threadId),
-        )
-        .orderBy(desc(schema.messages.timestamp))
-        .limit(limit + 1),
-    );
+    const [rows, total] = await Promise.all([
+      dbAll(
+        db
+          .select()
+          .from(schema.messages)
+          .where(
+            cursor
+              ? and(eq(schema.messages.threadId, threadId), lt(schema.messages.timestamp, cursor))
+              : eq(schema.messages.threadId, threadId),
+          )
+          .orderBy(desc(schema.messages.timestamp))
+          .limit(limit + 1),
+      ),
+      countThreadMessages(threadId),
+    ]);
 
     const hasMore = rows.length > limit;
     const sliced = (hasMore ? rows.slice(0, limit) : rows).reverse();
 
-    return { messages: await enrichMessages(sliced), hasMore };
+    return { messages: await enrichMessages(sliced), hasMore, total };
   }
 
   /** Insert a new message, returns the generated ID */

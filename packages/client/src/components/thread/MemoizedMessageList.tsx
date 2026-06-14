@@ -477,6 +477,21 @@ export const MemoizedMessageList = memo(
       return h;
     }, [groupedItems, windowStart, containerWidth, fontConfig]);
 
+    // Content-space offset of the item container's top. Non-zero when content
+    // sits above this list in the same scroll viewport — notably the phantom
+    // spacer MessageStream renders for not-yet-loaded older messages. The
+    // window-expansion checks below compare against absolute scrollTop, so they
+    // must add this offset or they'd never fire once a tall phantom pushes the
+    // list down. Measured lazily (only while items are still hidden).
+    const getContainerTop = useCallback(() => {
+      const viewport = scrollRef.current;
+      const container = itemContainerRef.current;
+      if (!viewport || !container) return 0;
+      const vpRect = viewport.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      return cRect.top - vpRect.top + viewport.scrollTop;
+    }, [scrollRef]);
+
     // Refs so the scroll listener always reads fresh values without re-attaching
     const spacerHeightRef = useRef(spacerHeight);
     spacerHeightRef.current = spacerHeight;
@@ -512,7 +527,7 @@ export const MemoizedMessageList = memo(
 
       const onScroll = () => {
         if (windowStartRef.current <= 0) return;
-        if (scrollEl.scrollTop < spacerHeightRef.current + 600) {
+        if (scrollEl.scrollTop < getContainerTop() + spacerHeightRef.current + 600) {
           captureScrollAnchorRef.current();
           setRenderCount((prev) => Math.min(groupedLenRef.current, prev + EXPAND_BATCH));
         }
@@ -520,7 +535,7 @@ export const MemoizedMessageList = memo(
 
       scrollEl.addEventListener('scroll', onScroll, { passive: true });
       return () => scrollEl.removeEventListener('scroll', onScroll);
-    }, [scrollRef]);
+    }, [scrollRef, getContainerTop]);
 
     // After each expansion, restore the scroll anchor.
     // If the expansion came from effectiveInitialWindow growth (no anchor
@@ -543,13 +558,13 @@ export const MemoizedMessageList = memo(
       if (!scrollEl) return;
 
       const rafId = requestAnimationFrame(() => {
-        if (scrollEl.scrollTop < spacerHeightRef.current + 600) {
+        if (scrollEl.scrollTop < getContainerTop() + spacerHeightRef.current + 600) {
           captureScrollAnchorRef.current();
           setRenderCount((prev) => Math.min(groupedLenRef.current, prev + EXPAND_BATCH));
         }
       });
       return () => cancelAnimationFrame(rafId);
-    }, [windowStart, scrollRef]);
+    }, [windowStart, scrollRef, getContainerTop]);
 
     // When the window finishes expanding (windowStart hits 0) the user may be
     // parked at scrollTop≈0 — wheel-up at the top fires no scroll events and

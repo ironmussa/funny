@@ -429,6 +429,7 @@ export async function handleDataMessageWithAck(
           type: 'data:get_thread_messages_response',
           messages: result.messages,
           hasMore: result.hasMore,
+          total: result.total,
         };
       }
       case 'data:get_tool_call': {

@@ -131,6 +131,8 @@ export interface ThreadWithMessages extends Thread {
   pendingPermission?: { toolName: string; toolInput?: string };
   hasMore?: boolean;
   loadingMore?: boolean;
+  /** Full message count for the thread — sizes the phantom scroll spacer. */
+  totalMessages?: number;
   contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
   /** Setup progress steps for threads in setting_up status */
@@ -516,6 +518,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const hydrated: ThreadWithMessages = {
         ...thread,
         hasMore: thread.hasMore ?? false,
+        totalMessages: thread.total ?? thread.messages?.length ?? 0,
         threadEvents,
         initInfo: thread.initInfo || buffered || undefined,
         resultInfo,
@@ -816,7 +819,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       return;
     }
 
-    const { messages: olderMessages, hasMore } = result.value;
+    const { messages: olderMessages, hasMore, total } = result.value;
     set((state) =>
       mutations.applyThreadDataPatch(state, threadId, (t) => {
         // Deduplicate in case of overlapping timestamps
@@ -826,6 +829,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           ...t,
           messages: [...newMessages, ...t.messages],
           hasMore,
+          totalMessages: total ?? t.totalMessages,
           loadingMore: false,
         };
       }),

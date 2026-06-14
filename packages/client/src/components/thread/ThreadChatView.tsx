@@ -46,6 +46,7 @@ export function ThreadChatView({ activeThread }: Props) {
   const loadOlderMessages = useThreadStore((s) => s.loadOlderMessages);
   const hasMore = activeThread.hasMore ?? false;
   const loadingMore = activeThread.loadingMore ?? false;
+  const totalMessages = activeThread.totalMessages ?? 0;
   const prefersReducedMotion = useReducedMotion();
 
   const streamRef = useRef<MessageStreamHandle>(null);
@@ -184,7 +185,7 @@ export function ThreadChatView({ activeThread }: Props) {
                     'This thread was started without file checkpointing',
                   )
             }
-            pagination={{ hasMore, loadingMore, load: loadOlderMessages }}
+            pagination={{ hasMore, loadingMore, load: loadOlderMessages, total: totalMessages }}
             createdAt={activeThread.createdAt}
             snapshotMap={snapshotMap}
             knownIds={knownIdsRef.current}

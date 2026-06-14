@@ -197,6 +197,23 @@ describe('getThreadWithMessages', () => {
     expect(result!.hasMore).toBe(false);
   });
 
+  test('total is the full count when windowed, and equals loaded count otherwise', async () => {
+    for (let i = 0; i < 6; i++) {
+      seedMessage(deps.db, { id: `m${i}`, role: 'user', content: `m-${i}`, timestamp: ts(i) });
+    }
+
+    // Windowed load reports the full total (for the phantom scroll spacer)…
+    const windowed = await repo.getThreadWithMessages('t1', 2);
+    expect(windowed!.messages).toHaveLength(2);
+    expect(windowed!.hasMore).toBe(true);
+    expect(windowed!.total).toBe(6);
+
+    // …and a full load (no limit) reports total === messages.length.
+    const full = await repo.getThreadWithMessages('t1');
+    expect(full!.messages).toHaveLength(6);
+    expect(full!.total).toBe(6);
+  });
+
   test('lastUserMessage is reused from the window when present (no extra fetch)', async () => {
     // When the window already contains the most-recent user message, the
     // implementation reuses it instead of issuing the fallback query — this
@@ -380,5 +397,33 @@ describe('getThreadMessages (pagination)', () => {
     const result = await repo.getThreadMessages({ threadId: 't1', limit: 10 });
     expect(result.messages).toHaveLength(1);
     expect(result.hasMore).toBe(false);
+  });
+
+  test('total reflects the full message count regardless of the limit', async () => {
+    for (let i = 0; i < 5; i++) {
+      seedMessage(deps.db, { id: `m${i}`, role: 'user', content: `msg-${i}`, timestamp: ts(i) });
+    }
+
+    // Limited window still reports the full total so the client can size the
+    // phantom scroll spacer for the not-yet-loaded messages.
+    const limited = await repo.getThreadMessages({ threadId: 't1', limit: 2 });
+    expect(limited.messages).toHaveLength(2);
+    expect(limited.hasMore).toBe(true);
+    expect(limited.total).toBe(5);
+
+    // Fully loaded → total equals the loaded count.
+    const full = await repo.getThreadMessages({ threadId: 't1', limit: 50 });
+    expect(full.hasMore).toBe(false);
+    expect(full.total).toBe(5);
+  });
+
+  test('total counts only the requested thread (isolation)', async () => {
+    seedThread(deps.db, { id: 't2' });
+    seedMessage(deps.db, { id: 'a', threadId: 't1', role: 'user', content: 'x', timestamp: ts(0) });
+    seedMessage(deps.db, { id: 'b', threadId: 't1', role: 'user', content: 'y', timestamp: ts(1) });
+    seedMessage(deps.db, { id: 'c', threadId: 't2', role: 'user', content: 'z', timestamp: ts(0) });
+
+    const result = await repo.getThreadMessages({ threadId: 't1', limit: 50 });
+    expect(result.total).toBe(2);
   });
 });

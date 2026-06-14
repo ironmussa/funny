@@ -4,6 +4,8 @@ import { VISUALIZER_IMPORT_MAP_JSON } from '@funny/shared/visualizer-importmap';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 
+import { getBuildInfo } from '../../scripts/build-info';
+
 /**
  * Inject the visualizer import map into index.html so dynamically-loaded
  * visualizer plugins resolve `react` / `@funny/host` to the host's instances.
@@ -42,6 +44,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir: monorepoRoot,
+    // Inject the git-derived build identity as a compile-time constant so the
+    // built bundle carries the build number two users can compare. See
+    // scripts/build-info.ts and the __BUILD_INFO__ declaration in vite-env.d.ts.
+    define: {
+      __BUILD_INFO__: JSON.stringify(getBuildInfo()),
+    },
     plugins: [react(), visualizerImportMap()],
     resolve: {
       alias: {

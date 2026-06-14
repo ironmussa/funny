@@ -1,4 +1,4 @@
-import { RefreshCw, Hammer, CircleCheck, CircleX, Circle } from 'lucide-react';
+import { RefreshCw, Hammer, CircleCheck, CircleX, Circle, Copy } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -240,6 +240,71 @@ export function SystemSettings() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Build identity — compare this between two installs to tell who has the newer build */}
+      <BuildIdentityCard />
+    </div>
+  );
+}
+
+/**
+ * Shows the git-derived build identity injected at build time (`__BUILD_INFO__`).
+ * The "build" number is the git commit count — a short, autoincremental integer
+ * two users can compare directly to tell whose install is newer.
+ */
+function BuildIdentityCard() {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    void navigator.clipboard.writeText(__BUILD_INFO__.label).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <div className="settings-card">
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="settings-row-title">Build</p>
+            <Badge
+              variant="outline"
+              className="h-5 px-2 text-[10px]"
+              data-testid="system-build-number"
+            >
+              #{__BUILD_INFO__.build}
+            </Badge>
+            {__BUILD_INFO__.dirty && (
+              <Badge
+                variant="outline"
+                className="h-5 border-yellow-500/30 px-2 text-[10px] text-yellow-500"
+              >
+                dirty
+              </Badge>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={copy} data-testid="system-build-copy">
+            {copied ? (
+              <CircleCheck className="icon-sm text-green-500" />
+            ) : (
+              <Copy className="icon-sm" />
+            )}
+          </Button>
+        </div>
+
+        <p className="settings-row-desc mt-1">
+          Compare this between two installs to tell who has the newer build — the number grows by
+          one with every commit.
+        </p>
+
+        <code
+          className="bg-muted mt-3 block rounded px-3 py-2 text-xs"
+          data-testid="system-build-label"
+        >
+          {__BUILD_INFO__.label}
+        </code>
       </div>
     </div>
   );

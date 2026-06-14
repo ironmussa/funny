@@ -24,9 +24,12 @@ export interface ThreadState {
   threadIdsByProject: Record<string, string[]>;
   /** Scratch threads (no project) — ordered, most recent first. */
   scratchThreadIds: string[];
+  /** Threads other users have shared WITH the current user — ordered. */
+  sharedThreadIds: string[];
   /** Pagination totals returned by the server. */
   threadTotalByProject: Record<string, number>;
   scratchThreadTotal: number;
+  sharedThreadTotal: number;
 
   selectedThreadId: string | null;
   /**
@@ -57,6 +60,8 @@ export interface ThreadState {
   loadThreadsForProject: (projectId: string, includeArchived?: boolean) => Promise<void>;
   /** Load the current user's scratch threads. */
   loadScratchThreads: () => Promise<void>;
+  /** Load the threads other users have shared with the current user. */
+  loadSharedThreads: () => Promise<void>;
   /** Add a freshly created scratch thread to the local cache. */
   addScratchThread: (thread: Thread) => void;
   /** Load the next page of threads for a project (appends to existing list) */

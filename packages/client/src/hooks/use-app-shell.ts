@@ -48,6 +48,7 @@ export function useAppShell(): ShellState {
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
+  const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
 
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
@@ -91,7 +92,8 @@ export function useAppShell(): ShellState {
     loadProjects();
     loadTemplates();
     loadScratchThreads();
-  }, [loadProjects, loadTemplates, loadScratchThreads]);
+    loadSharedThreads();
+  }, [loadProjects, loadTemplates, loadScratchThreads, loadSharedThreads]);
 
   useDocumentTitle();
 

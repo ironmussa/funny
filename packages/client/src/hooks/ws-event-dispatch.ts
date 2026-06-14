@@ -428,6 +428,11 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       useThreadStore.getState().handleShareRevoked(threadId);
       break;
     }
+    case 'thread:share-granted': {
+      // A thread was just shared WITH us — pull it into "Shared with me".
+      void useThreadStore.getState().loadSharedThreads();
+      break;
+    }
     case 'git:status': {
       useGitStatusStore.getState().updateFromWS(data.statuses);
       const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
@@ -727,6 +732,7 @@ const ALL_EVENT_TYPES = [
   'presence:join',
   'presence:leave',
   'thread:share-revoked',
+  'thread:share-granted',
   'git:status',
   'git:refs-updated',
   'git:workflow_progress',

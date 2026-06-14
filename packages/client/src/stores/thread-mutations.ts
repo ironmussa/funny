@@ -152,6 +152,21 @@ export function replaceScratchThreads(
   };
 }
 
+// ── Public mutations: shared-with-me bucket ──────────────────────────────
+
+/** Replace the "shared with me" list (server response order). */
+export function replaceSharedThreads(
+  state: ThreadState,
+  threads: Thread[],
+  total?: number,
+): Partial<ThreadState> {
+  return {
+    threadsById: withThreadsUpserted(state.threadsById, threads),
+    sharedThreadIds: threads.map((t) => t.id),
+    sharedThreadTotal: total ?? threads.length,
+  };
+}
+
 /** Add a freshly created scratch thread to the front of the list. */
 export function prependScratchThread(state: ThreadState, thread: Thread): Partial<ThreadState> {
   // De-dupe against WS-vs-API ordering races.
@@ -176,6 +191,10 @@ export function removeThread(state: ThreadState, threadId: string): Partial<Thre
   if (state.scratchThreadIds.includes(threadId)) {
     patch.scratchThreadIds = state.scratchThreadIds.filter((id) => id !== threadId);
     patch.scratchThreadTotal = Math.max(0, state.scratchThreadTotal - 1);
+  }
+  if (state.sharedThreadIds.includes(threadId)) {
+    patch.sharedThreadIds = state.sharedThreadIds.filter((id) => id !== threadId);
+    patch.sharedThreadTotal = Math.max(0, state.sharedThreadTotal - 1);
   }
   for (const pid in state.threadIdsByProject) {
     const ids = state.threadIdsByProject[pid];

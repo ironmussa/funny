@@ -51,6 +51,8 @@ export const PRESENCE_JOIN_EVENT = 'presence:join' as const;
 export const PRESENCE_LEAVE_EVENT = 'presence:leave' as const;
 /** Server → browser: the caller's share was revoked; drop the thread. */
 export const THREAD_SHARE_REVOKED_EVENT = 'thread:share-revoked' as const;
+/** Server → browser: a thread was just shared WITH the caller; pull it into "Shared with me". */
+export const THREAD_SHARE_GRANTED_EVENT = 'thread:share-granted' as const;
 
 export const threadOpenSchema = z.object({ threadId: z.string().min(1) });
 

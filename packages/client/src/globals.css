@@ -1063,6 +1063,22 @@ mark.md-search-match[data-active='true'] {
     outline: 1px solid #cc6600;
   }
 
+  /* Intra-line (word-level) diff shading — layered over the softer line bg
+     so the exact changed characters read as a more intense green/red. */
+  .diff-word-add {
+    background-color: hsl(var(--diff-added) / 0.4);
+    border-radius: 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .diff-word-del {
+    background-color: hsl(var(--diff-removed) / 0.4);
+    border-radius: 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
   /* Message content wrapping */
   pre {
     word-wrap: break-word;

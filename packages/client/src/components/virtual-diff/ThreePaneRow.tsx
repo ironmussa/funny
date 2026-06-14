@@ -7,7 +7,7 @@ import {
   GUTTER_BG_REMOVED,
   H_SCROLL_STYLE,
 } from '@/lib/diff/conflict-colors';
-import { countTextMatches, getSearchHighlight } from '@/lib/diff/highlight';
+import { countTextMatches, getDiffHighlight, getSearchHighlight } from '@/lib/diff/highlight';
 import type { DiffLine } from '@/lib/diff/types';
 import { cn } from '@/lib/utils';
 
@@ -82,9 +82,11 @@ export const ThreePaneRow = memo(function ThreePaneRow({
             )}
             style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
-              __html: getSearchHighlight(
+              __html: getDiffHighlight(
                 left.text,
                 lang,
+                left.segments,
+                'diff-word-del',
                 searchQuery,
                 matchOffset ?? 0,
                 currentMatchIdx ?? -1,
@@ -155,9 +157,11 @@ export const ThreePaneRow = memo(function ThreePaneRow({
             )}
             style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
-              __html: getSearchHighlight(
+              __html: getDiffHighlight(
                 right.text,
                 lang,
+                right.segments,
+                'diff-word-add',
                 searchQuery,
                 (matchOffset ?? 0) + leftMatches + centerMatches,
                 currentMatchIdx ?? -1,

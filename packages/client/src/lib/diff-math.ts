@@ -1,3 +1,4 @@
+import { annotateWordDiff } from '@/lib/diff/word-diff';
 import { metric, startSpan } from '@/lib/telemetry';
 
 /* ── Types ── */
@@ -13,6 +14,12 @@ export interface DiffLine {
   conflictRole?: ConflictRole;
   /** Index of the conflict block (0-based) */
   conflictBlockId?: number;
+  /**
+   * Char ranges `[start, end)` into `text` that changed vs the paired line
+   * (intra-line word diff). Set by `annotateWordDiff`. Absent when the whole
+   * line changed or there's no paired counterpart.
+   */
+  segments?: import('@/lib/diff/word-diff').CharRange[];
 }
 
 export interface ConflictBlock {
@@ -176,6 +183,7 @@ export function parseUnifiedDiff(diff: string): ParsedDiff {
   }
 
   const conflictBlocks = annotateConflicts(lines);
+  annotateWordDiff(lines);
   span.end();
   metric('diff.parse.lines', lines.length, { type: 'gauge' });
   metric('diff.parse.hunks', hunkHeaders.size, { type: 'gauge' });

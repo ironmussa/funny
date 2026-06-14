@@ -7,7 +7,7 @@ import {
   getUnifiedRowTextClass,
   isConflictMarkerLine,
 } from '@/lib/diff/conflict-colors';
-import { getSearchHighlight } from '@/lib/diff/highlight';
+import { getDiffHighlight } from '@/lib/diff/highlight';
 import type { DiffLine } from '@/lib/diff/types';
 import { cn } from '@/lib/utils';
 
@@ -87,9 +87,11 @@ export const UnifiedRow = memo(function UnifiedRow({
           textClass,
         )}
         dangerouslySetInnerHTML={{
-          __html: getSearchHighlight(
+          __html: getDiffHighlight(
             displayText,
             isConflictMarker ? 'plaintext' : lang,
+            isConflictMarker ? undefined : line.segments,
+            line.type === 'add' ? 'diff-word-add' : 'diff-word-del',
             searchQuery,
             matchOffset ?? 0,
             currentMatchIdx ?? -1,

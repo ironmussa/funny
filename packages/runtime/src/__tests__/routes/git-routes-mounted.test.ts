@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listThreads: vi.fn(),
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
+  resolveProjectPath: vi.fn(),
   stageFiles: vi.fn(),
   gitServiceStage: vi.fn(),
   getDiff: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('../../services/service-registry.js', () => ({
     projects: {
       getProject: mocks.getProject,
       isProjectInOrg: mocks.isProjectInOrg,
+      resolveProjectPath: mocks.resolveProjectPath,
     },
   }),
 }));
@@ -220,6 +222,7 @@ describe('gitRoutes (mounted)', () => {
     vi.mocked(resolveIdentity).mockResolvedValue(undefined);
     mocks.listThreads.mockResolvedValue({ threads: [] });
     mocks.isProjectInOrg.mockResolvedValue(false);
+    mocks.resolveProjectPath.mockReturnValue(errAsync(badRequest('no collaborator path')));
     mocks.getProject.mockResolvedValue({
       id: 'p1',
       userId: 'user-1',

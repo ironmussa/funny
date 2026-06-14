@@ -345,6 +345,12 @@ projectRoutes.get('/:id/commands', async (c) => {
 projectRoutes.post('/:id/commands', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  // Hide existence from callers with no access to the project (IDOR: a
+  // cross-tenant user must not be able to tell the project even exists).
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
   if (!(await isProjectAdmin(projectId, userId))) {
     return c.json({ error: 'Only project admins can edit startup commands' }, 403);
   }
@@ -361,6 +367,10 @@ projectRoutes.put('/:id/commands/:cmdId', async (c) => {
   const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
   if (!(await isProjectAdmin(projectId, userId))) {
     return c.json({ error: 'Only project admins can edit startup commands' }, 403);
   }
@@ -382,6 +392,10 @@ projectRoutes.delete('/:id/commands/:cmdId', async (c) => {
   const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? null;
+  if (!(await userCanAccessProject(projectId, userId, orgId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
   if (!(await isProjectAdmin(projectId, userId))) {
     return c.json({ error: 'Only project admins can edit startup commands' }, 403);
   }

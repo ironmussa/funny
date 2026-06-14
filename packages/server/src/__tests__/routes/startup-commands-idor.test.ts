@@ -8,7 +8,15 @@
  */
 import { mock } from 'bun:test';
 
+import * as realGit from '@funny/core/git';
+
+// bun shares the mock.module registry across the whole test run, so anything we
+// override here leaks into sibling test files. Spread the REAL module and only
+// stub the git-repo existence checks (project creation in this suite uses direct
+// DB seeding, not real repos) — keeping the real path validators so we don't
+// silently neuter HI-3 path-containment assertions in other files.
 mock.module('@funny/core/git', () => ({
+  ...realGit,
   isGitRepoSync: () => true,
   isGitRepoRootSync: () => true,
   ensureWeaveConfigured: () => Promise.resolve(),

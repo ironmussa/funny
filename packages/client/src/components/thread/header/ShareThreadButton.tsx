@@ -1,5 +1,6 @@
 import { Check, Link2, Share2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -92,7 +93,10 @@ export function ShareThreadButton({
   const share = async (userId: string) => {
     setBusy(true);
     const res = await threadsApi.shareThread(threadId, userId);
-    res.mapErr((err) => log.warn('Failed to share thread', { error: String(err) }));
+    res.mapErr((err) => {
+      log.warn('Failed to share thread', { error: String(err) });
+      toast.error('Could not share thread', { description: String(err) });
+    });
     await refreshShares();
     setBusy(false);
   };

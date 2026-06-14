@@ -1,7 +1,7 @@
 /**
  * Integration tests for thread sharing (server-owned share grants).
  *
- * Covers the share admin API (create/list/revoke), org-membership gating, and
+ * Covers the share admin API (create/list/revoke), project-membership gating, and
  * the end-to-end effect of a grant: a sharee can read + comment but is 404 on
  * mutation. Runner-proxied routes (follow-up/start/stop) are not exercised here.
  */
@@ -40,11 +40,11 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 import { sql } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedThread } from '../helpers/test-db.js';
+import { seedProject, seedProjectMember, seedThread } from '../helpers/test-db.js';
 
 const OWNER = 'owner-1';
-const ANA = 'ana-2'; // org co-member
-const BOB = 'bob-3'; // NOT in the org
+const ANA = 'ana-2'; // member of the thread's project (p1)
+const BOB = 'bob-3'; // NOT a member of the project
 const ORG = 'org-1';
 
 /** Seed the better-auth identity rows the share routes read (raw SQL avoids
@@ -88,12 +88,15 @@ describe('Thread sharing (Integration)', () => {
     t.db.run(sql`DELETE FROM "user"`);
     seedProject(t.db as any, { id: 'p1', userId: OWNER, path: '/a' });
     seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: OWNER });
+    // Owner + Ana are members of the thread's project; Bob is not.
+    seedProjectMember(t.db as any, { projectId: 'p1', userId: OWNER, role: 'admin' });
+    seedProjectMember(t.db as any, { projectId: 'p1', userId: ANA });
     seedIdentity(t);
   });
 
   // ── POST /:id/shares ───────────────────────────────────
 
-  test('owner shares a thread with an org co-member (201)', async () => {
+  test('owner shares a thread with a project member (201)', async () => {
     const res = await t.requestAs(OWNER, 'user', { orgId: ORG }).post('/api/threads/t1/shares', {
       userId: ANA,
     });
@@ -112,12 +115,12 @@ describe('Thread sharing (Integration)', () => {
     expect(res.status).toBe(200);
   });
 
-  test('sharing with a non-org user is rejected (400)', async () => {
+  test('sharing with a non-project user is rejected (400)', async () => {
     const res = await t.requestAs(OWNER, 'user', { orgId: ORG }).post('/api/threads/t1/shares', {
       userId: BOB,
     });
     expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('share-target-not-in-org');
+    expect((await res.json()).code).toBe('share-target-not-in-project');
   });
 
   test('sharing with yourself is rejected (400)', async () => {
@@ -127,10 +130,10 @@ describe('Thread sharing (Integration)', () => {
     expect(res.status).toBe(400);
   });
 
-  test('sharing without an active organization is rejected (400)', async () => {
+  test('sharing a project member works without an active organization (201)', async () => {
+    // Project membership — not org membership — gates sharing now.
     const res = await t.requestAs(OWNER).post('/api/threads/t1/shares', { userId: ANA });
-    expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('sharing-requires-org');
+    expect(res.status).toBe(201);
   });
 
   test('a non-owner cannot create a share (404, owner-only)', async () => {

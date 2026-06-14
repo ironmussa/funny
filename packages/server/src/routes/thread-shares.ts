@@ -11,12 +11,13 @@
 
 import { createThreadShareRepository } from '@funny/shared/repositories';
 import { THREAD_SHARE_REVOKED_EVENT } from '@funny/shared/socket-events';
-import { and, eq, inArray } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { db, dbAll, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isProjectMember } from '../services/project-manager.js';
 import { evictUserFromThread, relayToUser } from '../services/ws-relay.js';
 import { requireThreadOwner } from './threads.js';
 
@@ -38,7 +39,7 @@ shareRoutes.get('/shared-with-me', async (c) => {
 shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const ownerId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
+  const thread = c.get('thread');
 
   let body: { userId?: unknown };
   try {
@@ -54,20 +55,18 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
     return c.json({ error: 'Cannot share a thread with yourself', code: 'share-self' }, 400);
   }
 
-  // Sharing is scoped to the owner's active organization: the target MUST be a
-  // co-member. Without an active org there is no audience to share within.
-  if (!orgId) {
-    return c.json({ error: 'Sharing requires an organization', code: 'sharing-requires-org' }, 400);
-  }
-  const coMember = await dbAll(
-    db
-      .select({ userId: schema.member.userId })
-      .from(schema.member)
-      .where(and(eq(schema.member.organizationId, orgId), eq(schema.member.userId, targetUserId))),
-  );
-  if (coMember.length === 0) {
+  // Sharing is scoped to the thread's PROJECT: the target MUST be a member of
+  // it. Scratch threads have no project, so there is no audience to share with.
+  const projectId = thread?.projectId;
+  if (!projectId) {
     return c.json(
-      { error: 'User is not a member of your organization', code: 'share-target-not-in-org' },
+      { error: 'This thread has no project to share within', code: 'share-no-project' },
+      400,
+    );
+  }
+  if (!(await isProjectMember(projectId, targetUserId))) {
+    return c.json(
+      { error: 'User is not a member of this project', code: 'share-target-not-in-project' },
       400,
     );
   }

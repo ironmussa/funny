@@ -11,7 +11,15 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { threadsApi, type ThreadShareGrant } from '@/lib/api/threads';
 import { authClient } from '@/lib/auth-client';
@@ -30,9 +38,11 @@ interface OrgMember {
 }
 
 /**
- * Owner-only "Share" affordance: invite a specific org member to read+comment
- * on this thread, list/revoke current shares, and copy a deep link. The link
- * is identity-gated server-side — only granted users can open it.
+ * Owner-only "Share" affordance, rendered as a Google-Drive-style modal:
+ * invite a specific org member to read+comment on this thread, see who
+ * currently has access (with the owner pinned on top), revoke shares, and
+ * copy a deep link. The link is identity-gated server-side — only granted
+ * users can open it.
  */
 export function ShareThreadButton({
   threadId,
@@ -42,8 +52,10 @@ export function ShareThreadButton({
   projectId: string;
 }) {
   const selfId = useAuthStore((s) => s.user?.id ?? null);
+  const selfName = useAuthStore((s) => s.user?.displayName ?? s.user?.username ?? 'You');
   const orgId = useAuthStore((s) => s.activeOrgId);
   const ownerId = useThreadSelector((t) => t?.userId ?? null);
+  const threadTitle = useThreadSelector((t) => t?.title ?? null);
   const isOwner = !!selfId && ownerId === selfId;
 
   const [open, setOpen] = useState(false);
@@ -110,10 +122,10 @@ export function ShareThreadButton({
   const pickable = members.filter((m) => !sharedIds.has(m.userId));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
+          <DialogTrigger asChild>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -122,86 +134,115 @@ export function ShareThreadButton({
             >
               <Share2 className="icon-base" />
             </Button>
-          </PopoverTrigger>
+          </DialogTrigger>
         </TooltipTrigger>
         <TooltipContent>Share thread</TooltipContent>
       </Tooltip>
-      <PopoverContent className="w-72 p-0" align="end" data-testid="share-thread-popover">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-medium">Share this thread</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 gap-1 px-1.5 text-xs"
-            onClick={copyLink}
-            data-testid="share-copy-link"
-          >
-            {copied ? <Check className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
-            {copied ? 'Copied' : 'Copy link'}
-          </Button>
+
+      <DialogContent className="max-w-md gap-0 p-0" data-testid="share-thread-dialog">
+        <DialogHeader className="px-6 pt-6 pb-0">
+          <DialogTitle className="truncate">
+            {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="px-6 pt-4">
+          <Command className="rounded-lg border" shouldFilter>
+            <CommandInput placeholder="Add an org member…" className="h-10" />
+            <CommandList className="max-h-44">
+              <CommandEmpty className="text-muted-foreground py-6 text-center text-sm">
+                {orgId ? 'No members to add.' : 'Select an organization to share.'}
+              </CommandEmpty>
+              <CommandGroup>
+                {pickable.map((m) => (
+                  <CommandItem
+                    key={m.userId}
+                    value={m.name}
+                    disabled={busy}
+                    onSelect={() => void share(m.userId)}
+                    className="gap-2"
+                    data-testid={`share-add-${m.userId}`}
+                  >
+                    <Avatar className="h-7 w-7">
+                      {m.image && <AvatarImage src={m.image} alt={m.name} />}
+                      <AvatarFallback name={m.name} className="text-xs">
+                        {m.name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-sm">{m.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
         </div>
 
-        {shares.length > 0 && (
-          <div className="border-b px-1 py-1" data-testid="share-current-list">
+        <div className="px-6 pt-5">
+          <p className="text-muted-foreground mb-2 text-xs font-medium">People with access</p>
+          <div className="space-y-1" data-testid="share-current-list">
+            {/* Owner row (you) — always pinned on top, not revocable */}
+            <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback name={selfName} className="text-xs">
+                  {selfName.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{selfName} (you)</p>
+              </div>
+              <span className="text-muted-foreground text-xs">Owner</span>
+            </div>
+
             {shares.map((s) => (
               <div
                 key={s.sharedWithUserId}
-                className="flex items-center gap-2 rounded-md px-2 py-1"
+                className="hover:bg-muted/50 flex items-center gap-3 rounded-md px-1 py-1.5"
                 data-testid={`share-row-${s.sharedWithUserId}`}
               >
-                <Avatar className="h-5 w-5">
+                <Avatar className="h-8 w-8">
                   {s.user?.image && <AvatarImage src={s.user.image} alt={s.user?.name ?? ''} />}
-                  <AvatarFallback name={s.user?.name ?? s.sharedWithUserId} className="text-[9px]">
+                  <AvatarFallback name={s.user?.name ?? s.sharedWithUserId} className="text-xs">
                     {(s.user?.name ?? '?').charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <span className="flex-1 truncate text-xs">
-                  {s.user?.name ?? s.sharedWithUserId}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">{s.user?.name ?? s.sharedWithUserId}</p>
+                </div>
+                <span className="text-muted-foreground text-xs">Can comment</span>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-muted-foreground hover:text-status-danger h-5 w-5"
+                  className="text-muted-foreground hover:text-status-danger h-7 w-7"
                   disabled={busy}
                   onClick={() => revoke(s.sharedWithUserId)}
                   data-testid={`share-revoke-${s.sharedWithUserId}`}
+                  aria-label="Remove access"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             ))}
           </div>
-        )}
+        </div>
 
-        <Command>
-          <CommandInput placeholder="Add an org member…" className="h-9 text-xs" />
-          <CommandList>
-            <CommandEmpty className="text-muted-foreground py-3 text-center text-xs">
-              {orgId ? 'No members to add.' : 'Select an organization to share.'}
-            </CommandEmpty>
-            <CommandGroup>
-              {pickable.map((m) => (
-                <CommandItem
-                  key={m.userId}
-                  value={m.name}
-                  disabled={busy}
-                  onSelect={() => void share(m.userId)}
-                  className="gap-2 text-xs"
-                  data-testid={`share-add-${m.userId}`}
-                >
-                  <Avatar className="h-5 w-5">
-                    {m.image && <AvatarImage src={m.image} alt={m.name} />}
-                    <AvatarFallback name={m.name} className="text-[9px]">
-                      {m.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="truncate">{m.name}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+        <DialogFooter className="items-center justify-between border-t px-6 py-4 sm:justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={copyLink}
+            data-testid="share-copy-link"
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+            {copied ? 'Copied' : 'Copy link'}
+          </Button>
+          <DialogClose asChild>
+            <Button size="sm" data-testid="share-done">
+              Done
+            </Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

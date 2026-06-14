@@ -19,7 +19,9 @@ import { join } from 'path';
 
 import { describe, test, expect } from 'vitest';
 
-const ROOT = process.cwd();
+// Anchor to the repo root from this file's location so the guards work
+// regardless of the cwd vitest runs under (root vs. packages/runtime).
+const ROOT = join(import.meta.dirname, '../../../../..');
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf-8');
 
 describe('runner connect resilience wiring', () => {

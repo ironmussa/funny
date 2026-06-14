@@ -275,7 +275,9 @@ function BuildIdentityCard() {
               className="h-5 px-2 text-[10px]"
               data-testid="system-build-number"
             >
-              #{BUILD_INFO.build}
+              {/* Build number when git history is available; fall back to the
+                  commit SHA on platforms that shallow-clone (e.g. Railway). */}
+              {BUILD_INFO.build > 0 ? `#${BUILD_INFO.build}` : BUILD_INFO.commit}
             </Badge>
             {BUILD_INFO.dirty && (
               <Badge

@@ -81,6 +81,9 @@ export interface MessageStreamProps {
     hasMore: boolean;
     loadingMore: boolean;
     load: () => void;
+    /** Full message count for the thread — sizes the phantom spacer that
+     *  reserves scroll height for older messages not yet loaded. */
+    total?: number;
   };
   /** Thread creation timestamp */
   createdAt?: string;
@@ -113,6 +116,13 @@ export interface MessageStreamHandle {
 
 const EMPTY_SNAPSHOT_MAP = new Map<string, number>();
 const EMPTY_KNOWN_IDS = new Set<string>();
+
+// Fallback per-message height before we've measured the real rendered content.
+const DEFAULT_MSG_HEIGHT_PX = 140;
+// Clamp the measured average to sane bounds so one freak message (or an empty
+// container mid-mount) can't blow the phantom spacer up or collapse it.
+const MIN_MSG_HEIGHT_PX = 24;
+const MAX_MSG_HEIGHT_PX = 2000;
 
 /* ── Component ────────────────────────────────────────────────────── */
 
@@ -159,6 +169,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const isRunning = status === 'running';
     const hasMore = pagination?.hasMore ?? false;
     const loadingMore = pagination?.loadingMore ?? false;
+    const totalMessages = pagination?.total ?? 0;
+    const loadedCount = messages?.length ?? 0;
+    // How many older messages exist on the server that we haven't loaded yet.
+    // Only meaningful while there's more to fetch — once hasMore is false the
+    // loaded window IS the whole conversation, so reserve nothing.
+    const unloadedCount = hasMore ? Math.max(0, totalMessages - loadedCount) : 0;
 
     // ── Scroll refs ──────────────────────────────────────────────────
     const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -171,6 +187,29 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const scrollDownRef = useRef<HTMLDivElement>(null);
     const contentStackRef = useRef<HTMLDivElement>(null);
     const messageListRef = useRef<MemoizedMessageListHandle>(null);
+
+    // ── Phantom spacer for not-yet-loaded older messages ─────────────
+    // Reserves scroll height above the loaded window so the scrollbar is sized
+    // to the whole conversation, not just the loaded chunk. As pages load, the
+    // phantom shrinks while real content grows by ~the same amount, so total
+    // scroll height (and the thumb) stays stable instead of jumping.
+    const listWrapperRef = useRef<HTMLDivElement>(null);
+    // Running estimate of pixels per loaded message; refined from measurements.
+    const avgMsgHeightRef = useRef(DEFAULT_MSG_HEIGHT_PX);
+    const [phantomHeight, setPhantomHeight] = useState(0);
+    const phantomHeightRef = useRef(0);
+    phantomHeightRef.current = phantomHeight;
+    const prevPhantomAppliedRef = useRef(0);
+    const prevThreadForPhantomRef = useRef(threadId);
+    // Reset the phantom synchronously when the thread changes (render-phase
+    // adjust-state-on-prop-change pattern) so a tall conversation's spacer never
+    // paints into the next thread before its own total/height is measured.
+    if (prevThreadForPhantomRef.current !== threadId) {
+      prevThreadForPhantomRef.current = threadId;
+      avgMsgHeightRef.current = DEFAULT_MSG_HEIGHT_PX;
+      prevPhantomAppliedRef.current = 0;
+      if (phantomHeight !== 0) setPhantomHeight(0);
+    }
 
     // Prompt pinning (full mode only)
     const pinnedPromptIdRef = useRef<string | null>(null);
@@ -263,10 +302,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           scrollDownRef.current.style.display = shouldShow ? '' : 'none';
         }
 
-        // Load older messages when scrolled near the top
+        // Load older messages when scrolled near the top of the loaded window.
+        // The phantom spacer pushes real content down by its height, so the
+        // trigger zone shifts down with it.
         if (
           pagination &&
-          scrollTop < 200 &&
+          scrollTop < phantomHeightRef.current + 200 &&
           hasMore &&
           !loadingMore &&
           !messageListRef.current?.hasHiddenItems()
@@ -422,6 +463,59 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       }
     }, [firstMessageId, pagination]);
 
+    // ── Phantom spacer sizing ────────────────────────────────────────
+    // The MemoizedMessageList wrapper height already approximates the FULL
+    // loaded-content height (its internal spacer stands in for windowed-out
+    // items), so wrapperHeight / loadedCount is a good per-message estimate.
+    const recomputePhantom = useCallback(() => {
+      const wrapper = listWrapperRef.current;
+      if (wrapper && loadedCount > 0) {
+        const measured = wrapper.offsetHeight / loadedCount;
+        if (measured > 0) {
+          avgMsgHeightRef.current = Math.min(
+            MAX_MSG_HEIGHT_PX,
+            Math.max(MIN_MSG_HEIGHT_PX, measured),
+          );
+        }
+      }
+      const next = unloadedCount > 0 ? Math.round(unloadedCount * avgMsgHeightRef.current) : 0;
+      setPhantomHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+    }, [loadedCount, unloadedCount]);
+
+    // Recompute when the loaded/unloaded counts change.
+    useLayoutEffect(() => {
+      recomputePhantom();
+    }, [recomputePhantom]);
+
+    // Re-measure as the rendered list grows (items mount / heights settle).
+    useEffect(() => {
+      const wrapper = listWrapperRef.current;
+      if (!wrapper) return;
+      const ro = new ResizeObserver(() => recomputePhantom());
+      ro.observe(wrapper);
+      return () => ro.disconnect();
+    }, [recomputePhantom]);
+
+    // Keep the viewport visually anchored when the phantom resizes. The phantom
+    // sits at the very top, so growing/shrinking it by `delta` shifts everything
+    // below by `delta`; matching scrollTop keeps the read position (and the
+    // bottom pin) stable instead of lurching. Pagination commits (firstMessageId
+    // changed) are owned by restoreScrollAnchor, which measures the true drift
+    // including the phantom shrink — so we skip those to avoid double-correcting.
+    const prevFirstIdForPhantomRef = useRef(firstMessageId);
+    useLayoutEffect(() => {
+      const prevPhantom = prevPhantomAppliedRef.current;
+      prevPhantomAppliedRef.current = phantomHeight;
+      const firstChanged = prevFirstIdForPhantomRef.current !== firstMessageId;
+      prevFirstIdForPhantomRef.current = firstMessageId;
+
+      if (firstChanged) return;
+      const delta = phantomHeight - prevPhantom;
+      if (delta === 0) return;
+      const viewport = scrollViewportRef.current;
+      if (viewport) viewport.scrollTop += delta;
+    }, [phantomHeight, firstMessageId]);
+
     // ── scrollToBottom callback ───────────────────────────────────────
     const scrollToBottom = useCallback(() => {
       const viewport = scrollViewportRef.current;
@@ -502,6 +596,17 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             compact && 'space-y-2 px-2 py-2',
           )}
         >
+          {/* Phantom spacer: reserves scroll height for older messages not yet
+              loaded, so the scrollbar reflects the whole conversation and the
+              thumb doesn't jump as pages stream in. */}
+          {phantomHeight > 0 && (
+            <div
+              aria-hidden="true"
+              data-testid="message-stream-phantom-spacer"
+              style={{ height: phantomHeight }}
+            />
+          )}
+
           {/* Loading indicator (pagination) */}
           {pagination?.loadingMore && (
             <LoadingState
@@ -532,28 +637,31 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             />
           )}
 
-          {/* Message list */}
-          <MemoizedMessageList
-            ref={messageListRef}
-            messages={messages ?? EMPTY_MESSAGES}
-            threadEvents={threadEvents}
-            compactionEvents={compactionEvents}
-            threadId={threadId}
-            threadStatus={status}
-            knownIds={knownIds}
-            prefersReducedMotion={prefersReducedMotion}
-            snapshotMap={snapshotMap}
-            onSend={onSend}
-            onOpenLightbox={effectiveOpenLightbox}
-            onToolRespond={onToolRespond}
-            onFork={onFork}
-            onRewind={onRewind}
-            onForkAndRewind={onForkAndRewind}
-            forkingMessageId={forkingMessageId}
-            rewindDisabled={rewindDisabled}
-            rewindDisabledReason={rewindDisabledReason}
-            scrollRef={scrollViewportRef}
-          />
+          {/* Message list — wrapped so we can measure its full height for the
+              phantom spacer's per-message estimate. */}
+          <div ref={listWrapperRef}>
+            <MemoizedMessageList
+              ref={messageListRef}
+              messages={messages ?? EMPTY_MESSAGES}
+              threadEvents={threadEvents}
+              compactionEvents={compactionEvents}
+              threadId={threadId}
+              threadStatus={status}
+              knownIds={knownIds}
+              prefersReducedMotion={prefersReducedMotion}
+              snapshotMap={snapshotMap}
+              onSend={onSend}
+              onOpenLightbox={effectiveOpenLightbox}
+              onToolRespond={onToolRespond}
+              onFork={onFork}
+              onRewind={onRewind}
+              onForkAndRewind={onForkAndRewind}
+              forkingMessageId={forkingMessageId}
+              rewindDisabled={rewindDisabled}
+              rewindDisabledReason={rewindDisabledReason}
+              scrollRef={scrollViewportRef}
+            />
+          </div>
 
           {/* Running indicator */}
           {isRunning && !isExternal && (

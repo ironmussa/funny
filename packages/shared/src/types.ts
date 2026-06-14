@@ -357,6 +357,9 @@ export interface Message {
 export interface ThreadWithMessages extends Thread {
   messages: (Message & { toolCalls?: ToolCall[] })[];
   hasMore?: boolean;
+  /** Full message count for the thread — sizes the phantom scroll spacer for
+   *  older messages not yet loaded into the window. */
+  total?: number;
   initInfo?: { tools: string[]; cwd: string; model: string };
   /** Last user message — always included even when messages are paginated,
    *  so the UI can show the sticky prompt without loading all messages. */
@@ -366,6 +369,8 @@ export interface ThreadWithMessages extends Thread {
 export interface PaginatedMessages {
   messages: (Message & { toolCalls?: ToolCall[] })[];
   hasMore: boolean;
+  /** Full message count for the thread (phantom scroll spacer sizing). */
+  total?: number;
 }
 
 // ─── Tool Calls ──────────────────────────────────────────

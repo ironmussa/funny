@@ -556,6 +556,8 @@ export interface DataGetThreadMessagesResponse {
   requestId: string;
   messages: Array<Record<string, any>>;
   hasMore: boolean;
+  /** Full message count for the thread (for the client's phantom scroll spacer). */
+  total?: number;
 }
 
 export interface DataGetToolCallResponse {

@@ -47,6 +47,8 @@ export interface ThreadWithMessages extends Thread {
   pendingPermission?: { toolName: string; toolInput?: string };
   hasMore?: boolean;
   loadingMore?: boolean;
+  /** Full message count for the thread — sizes the phantom scroll spacer. */
+  totalMessages?: number;
   contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
   setupProgress?: GitProgressStep[];

@@ -251,8 +251,9 @@ export function SystemSettings() {
 
 /**
  * Shows the git-derived build identity injected at build time (`__BUILD_INFO__`).
- * The "build" number is the git commit count — a short, autoincremental integer
- * two users can compare directly to tell whose install is newer.
+ * The identity is the short commit SHA — the one value that is identical between
+ * a local build and the deployed server for the same commit (the commit count
+ * can't be reproduced on Railway's shallow clone, so it isn't shown here).
  */
 function BuildIdentityCard() {
   const [copied, setCopied] = useState(false);
@@ -272,12 +273,12 @@ function BuildIdentityCard() {
             <p className="settings-row-title">Build</p>
             <Badge
               variant="outline"
-              className="h-5 px-2 text-[10px]"
+              className="h-5 px-2 font-mono text-[10px]"
               data-testid="system-build-number"
             >
-              {/* Build number when git history is available; fall back to the
-                  commit SHA on platforms that shallow-clone (e.g. Railway). */}
-              {BUILD_INFO.build > 0 ? `#${BUILD_INFO.build}` : BUILD_INFO.commit}
+              {/* Canonical identity = short commit SHA. Identical in local and
+                  in the Railway deploy for the same commit. */}
+              {BUILD_INFO.commit}
             </Badge>
             {BUILD_INFO.dirty && (
               <Badge
@@ -298,8 +299,8 @@ function BuildIdentityCard() {
         </div>
 
         <p className="settings-row-desc mt-1">
-          Compare this between two installs to tell who has the newer build — the number grows by
-          one with every commit.
+          The commit this build was made from. Compare it between two installs — including the
+          deployed server — to tell whether they are running the exact same code.
         </p>
 
         <code

@@ -1,23 +1,22 @@
 /**
  * Build identity — single source of truth.
  *
- * The "build number" is the git commit count (`git rev-list --count HEAD`):
- * a short, autoincremental integer that strictly grows with every commit. Two
- * people can compare it at a glance ("you're on 142, I'm on 139 → yours is
- * newer") without reading a long hash. The short hash is kept alongside for
- * exact identification.
+ * The canonical identifier is the SHORT COMMIT SHA (first 8 hex of HEAD). It is
+ * the ONE value that is identical in every build environment for a given commit:
+ * locally it comes from `git`, and on a shallow-cloning PaaS (Railway/Railpack,
+ * Docker builders without `.git`) it comes from the SHA the platform injects as
+ * an env var. So a local build and the deployed server show the exact same
+ * `0.1.3 (a1b2c3d4)` — never two different strings for the same commit.
+ *
+ * A commit COUNT (`git rev-list --count HEAD`) is also exposed as `build` when
+ * git history is present, but it is metadata only — NOT the identity — because
+ * it cannot be reproduced on a shallow clone, so showing it as the identifier
+ * would make local and deploy disagree. `FUNNY_BUILD_NUMBER` can override it.
  *
  * Computed at BUILD time and injected as the `__BUILD_INFO__` global via Vite's
  * `define` (client) and Bun.build's `define` (runtime/server). It is NOT
  * committed and never bumps the semver in package.json — semver stays an
  * intentional decision (`npm version patch|minor|major`).
- *
- * CI / PaaS fallbacks. Some build environments (Railway/Railpack, many Docker
- * builders) shallow-clone or strip `.git`, or lack the `git` binary, so the
- * commit count is unavailable there. In that case we fall back to:
- *   - FUNNY_BUILD_NUMBER — explicit integer override for the build number, and
- *   - the commit SHA the platform injects (RAILWAY_GIT_COMMIT_SHA, GITHUB_SHA, …)
- * so a deployed server still shows its commit instead of a bare version.
  *
  * Build-time only (uses git + fs + env). Do not import from app runtime paths.
  */
@@ -29,13 +28,13 @@ import { fileURLToPath } from 'node:url';
 export interface BuildInfo {
   /** Semver from the root package.json, e.g. "0.1.3". */
   version: string;
-  /** Git commit count — short, autoincremental build number, e.g. 142. 0 when git is unavailable. */
-  build: number;
-  /** Short commit hash, e.g. "a1b2c3d", or "nogit" when unavailable. */
+  /** Canonical identity: short commit SHA (first 8 hex), or "nogit" when unavailable. Identical in local + deploy. */
   commit: string;
+  /** Metadata only — git commit count when history is present, else 0. NOT the identity (can't be reproduced on a shallow clone). */
+  build: number;
   /** True when the working tree had uncommitted changes at build time. */
   dirty: boolean;
-  /** Human-readable label, e.g. "0.1.3 · build 142 (a1b2c3d)". */
+  /** Human-readable label, identical local + deploy for a commit, e.g. "0.1.3 (a1b2c3d4)". */
   label: string;
 }
 
@@ -74,30 +73,31 @@ export function getBuildInfo(): BuildInfo {
   };
   const version = pkg.version ?? '0.0.0';
 
-  // Build number: explicit override (any CI/PaaS) wins, else the git commit count.
+  // Canonical identity = short commit SHA. Take the FULL sha (from git locally,
+  // else the SHA the build platform injects) and slice to a fixed 8 chars in
+  // JS, so local and deploy produce a byte-identical string for the same commit.
+  const fullSha =
+    git('rev-parse', 'HEAD') ??
+    pickEnv(
+      'FUNNY_BUILD_COMMIT',
+      'RAILWAY_GIT_COMMIT_SHA',
+      'GITHUB_SHA',
+      'VERCEL_GIT_COMMIT_SHA',
+      'RENDER_GIT_COMMIT',
+      'SOURCE_VERSION',
+    );
+  const commit = fullSha ? fullSha.slice(0, 8) : 'nogit';
+
+  // Metadata only — never part of the identity (unavailable on shallow clones).
   const override = Number(process.env.FUNNY_BUILD_NUMBER);
   const count = git('rev-list', '--count', 'HEAD');
   const build = Number.isFinite(override) && override > 0 ? override : count ? Number(count) : 0;
 
-  // Commit: prefer local git, else the SHA the build platform injects.
-  const envSha = pickEnv(
-    'FUNNY_BUILD_COMMIT',
-    'RAILWAY_GIT_COMMIT_SHA',
-    'GITHUB_SHA',
-    'VERCEL_GIT_COMMIT_SHA',
-    'RENDER_GIT_COMMIT',
-    'SOURCE_VERSION',
-  );
-  const commit = git('rev-parse', '--short', 'HEAD') ?? (envSha ? envSha.slice(0, 8) : 'nogit');
   const dirty = (git('status', '--porcelain') ?? '').length > 0;
 
-  const label = build
-    ? `${version} · build ${build} (${commit}${dirty ? '+' : ''})`
-    : commit !== 'nogit'
-      ? `${version} (${commit})`
-      : version;
+  const label = commit !== 'nogit' ? `${version} (${commit}${dirty ? '+' : ''})` : version;
 
-  return { version, build, commit, dirty, label };
+  return { version, commit, build, dirty, label };
 }
 
 // CLI: `bun scripts/build-info.ts` prints the current build info as JSON.

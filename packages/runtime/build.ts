@@ -9,8 +9,15 @@
 import { cp, rm, mkdir } from 'fs/promises';
 import { join } from 'path';
 
+import { getBuildInfo } from '../../scripts/build-info';
+
 const ROOT = import.meta.dir;
 const DIST = join(ROOT, 'dist');
+
+// Git-derived build identity, embedded as the __BUILD_INFO__ compile-time
+// constant so the published bundle reports its build number in logs even when
+// .git is absent at runtime (e.g. installed from an npm tarball).
+const BUILD_INFO = getBuildInfo();
 
 // Clean previous build
 await rm(DIST, { recursive: true, force: true });
@@ -21,6 +28,9 @@ const result = await Bun.build({
   entrypoints: [join(ROOT, 'src/index.ts')],
   outdir: DIST,
   target: 'bun',
+  define: {
+    __BUILD_INFO__: JSON.stringify(BUILD_INFO),
+  },
   // Bun.build() bundles by default — all workspace packages (@funny/shared,
   // @funny/core) and npm deps (hono, drizzle-orm, etc.) are inlined.
   external: [
@@ -64,7 +74,7 @@ await cp(join(ROOT, 'src/pipelines/defaults'), join(DIST, 'defaults'), {
   recursive: true,
 });
 
-console.info('Server build complete!');
+console.info(`Server build complete! (${BUILD_INFO.label})`);
 for (const output of result.outputs) {
   const size = (output.size / 1024).toFixed(1);
   console.info(`  ${output.path} (${size} KB)`);

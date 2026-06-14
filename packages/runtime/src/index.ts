@@ -30,6 +30,7 @@ import { initRuntime } from './app/init-runtime.js';
 import { registerRoutes } from './app/register-routes.js';
 import { setupMiddleware } from './app/setup-middleware.js';
 import { registerSystemRoutes } from './app/system-routes.js';
+import { BUILD_INFO } from './lib/build-info.js';
 import { log } from './lib/logger.js';
 import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 
@@ -160,10 +161,13 @@ process.on('unhandledRejection', (reason) => {
 });
 
 log.info(
-  `Runner listening on http://${host}:${server.port} (stateless, server: ${process.env.TEAM_SERVER_URL})`,
+  `Runner listening on http://${host}:${server.port} (${BUILD_INFO.label}, stateless, server: ${process.env.TEAM_SERVER_URL})`,
   {
     namespace: 'server',
     port: server.port,
     host,
+    build: BUILD_INFO.build,
+    commit: BUILD_INFO.commit,
+    version: BUILD_INFO.version,
   },
 );

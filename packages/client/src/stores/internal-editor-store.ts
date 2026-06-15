@@ -14,6 +14,13 @@ interface InternalEditorState {
   filePath: string | null;
   initialContent: string | null;
   openFile: (path: string, options?: OpenFileOptions) => Promise<void>;
+  /**
+   * Open a file handled by a `binary` visualizer (image, Parquet, …) WITHOUT
+   * fetching its contents as text — that read would corrupt binary data. The
+   * dialog renders the visualizer from the raw-bytes `src` URL instead, so
+   * `initialContent` is left empty.
+   */
+  openBinaryFile: (path: string) => void;
   closeEditor: () => void;
 }
 
@@ -37,5 +44,6 @@ export const useInternalEditorStore = create<InternalEditorState>((set) => ({
       description: result.error.message,
     });
   },
+  openBinaryFile: (path) => set({ isOpen: true, filePath: path, initialContent: '' }),
   closeEditor: () => set({ isOpen: false, filePath: null, initialContent: null }),
 }));

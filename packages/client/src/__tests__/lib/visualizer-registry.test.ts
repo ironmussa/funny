@@ -71,4 +71,14 @@ describe('built-in visualizers (regression: Mermaid + CSV dispatch)', () => {
     expect(getVisualizerForFence('mermaid')?.id).toBe('@funny/visualizer-mermaid');
     expect(getVisualizerForFence('csv')?.id).toBe('@funny/visualizer-csv');
   });
+
+  test('video is a built-in binary file visualizer (no fence)', () => {
+    for (const ext of ['mp4', 'webm', 'mov', 'mkv']) {
+      const plugin = getVisualizerForFileExt(ext);
+      expect(plugin?.id).toBe('@funny/visualizer-video');
+      expect(plugin?.contributes.binary).toBe(true);
+    }
+    // Binary visualizers claim file extensions only — never a fenced lang.
+    expect(getVisualizerForFence('mp4')).toBeUndefined();
+  });
 });

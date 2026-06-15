@@ -14,6 +14,14 @@ export interface VisualizerContributes {
   fences?: string[];
   /** File extensions that enable a preview, e.g. `['.csv']`. Leading dot optional. */
   fileExtensions?: string[];
+  /**
+   * Declares the visualizer reads the file as raw **bytes**, not UTF-8 text
+   * (images, Parquet, Arrow, …). For a binary visualizer the host skips the
+   * text fetch — which would corrupt binary data — and instead passes a `src`
+   * URL to the raw bytes (see `VisualizerProps.src`). Only meaningful alongside
+   * `fileExtensions`; fenced blocks are always text. Defaults to `false`.
+   */
+  binary?: boolean;
 }
 
 /** The serializable identity + capabilities of a visualizer plugin. */

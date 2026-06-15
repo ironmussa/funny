@@ -126,6 +126,15 @@ export function NewThreadInput({
 
   const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
   const lastPromptRef = useRef('');
+  // Pin the "Preparing…" loader from a successful submit until this component
+  // unmounts via the navigation onSuccess triggers. The hook flips its local
+  // `creating` flag back to false as soon as onSuccess resolves, but react-
+  // router's URL commit (which is what unmounts this compose form) lands a
+  // render later than that flip + the synchronous `cancelNewThread()` store
+  // update. Without this pin there is a one-commit window where ThreadView
+  // still renders the compose form with `creating === false`, flashing the
+  // empty new-thread screen between "Preparing…" and the thread view.
+  const [submitted, setSubmitted] = useState(false);
 
   const { creating, createThread: createThreadFromHook } = useThreadCreation({
     projectId: newThreadIsScratch ? null : (effectiveProjectId ?? null),
@@ -197,13 +206,21 @@ export function NewThreadInput({
       if (!ok) {
         // Restore the user's text so they don't lose it on a failed submit.
         setRestoredPrompt(lastPromptRef.current);
+        return ok;
       }
+      // Only pin the loader when onSuccess will navigate away (and thus unmount
+      // this component). Idle threads and design-view creates stay on this
+      // screen, so pinning there would strand the loader forever. Mirrors the
+      // navigation conditions in onSuccess above.
+      const willNavigateAway =
+        !onCreated && !newThreadIdleOnly && (newThreadIsScratch || !activeDesignId);
+      if (willNavigateAway) setSubmitted(true);
       return ok;
     },
-    [createThreadFromHook],
+    [createThreadFromHook, onCreated, newThreadIdleOnly, newThreadIsScratch, activeDesignId],
   );
 
-  if (creating) {
+  if (creating || submitted) {
     return (
       <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
         <LoadingState testId="new-thread-creating" label={t('common.preparing', 'Preparing…')} />

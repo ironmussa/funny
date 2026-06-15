@@ -26,6 +26,14 @@ const wsLog = createClientLogger('ws');
 // (React StrictMode double-mounts effects in development).
 let activeSocket: Socket | null = null;
 let refCount = 0;
+// Tracks whether the socket has fired `connect` at least once this page
+// session. The on-connect thread resync recovers events missed *while
+// disconnected*, which only applies to RECONNECTS — on the very first connect
+// the cold-load path has already fetched every visible thread fresh, so the
+// resync is pure redundant work. For a heavy thread (megabytes of inline
+// images) that duplicate full-payload refetch + merge forces the whole message
+// list to repaint, which the user sees as a second load ("double refresh").
+let hasConnectedBefore = false;
 // The thread the user is currently viewing, mirrored to the server for
 // thread-sharing presence. Module-level so the on-connect handler can re-join
 // the room after a reconnect (Socket.IO room membership is lost on disconnect).
@@ -72,7 +80,13 @@ function connect() {
     });
 
     useCircuitBreakerStore.getState().recordSuccess();
-    if (routeNeedsThreadResync(window.location.pathname)) {
+    // Only resync threads on RECONNECT. On the initial connect the cold-load
+    // path already fetched everything fresh; resyncing here would refetch the
+    // active thread's full payload a second time and repaint the message list
+    // — visible as a "double refresh" on heavy threads (large inline images).
+    const isReconnect = hasConnectedBefore;
+    hasConnectedBefore = true;
+    if (shouldResyncThreadsOnConnect(isReconnect, window.location.pathname)) {
       useThreadStore.getState().refreshAllLoadedThreads();
     }
     // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
@@ -178,6 +192,19 @@ let lastVisibilityResyncAt = 0;
 function routeNeedsThreadResync(pathname: string): boolean {
   const route = parseRoute(pathname);
   return !(route.settingsPage || route.preferencesPage || route.addProject || route.scratchNew);
+}
+
+/**
+ * Whether the on-`connect` handler should run the (expensive) thread resync.
+ *
+ * Gated on `isReconnect`: the resync only recovers events missed while the
+ * socket was down, so it's needed on reconnects but is pure redundant work on
+ * the initial connect — the cold-load path already fetched every visible
+ * thread. Skipping it on first connect avoids a duplicate full-payload refetch
+ * of the active thread (the "double refresh" symptom on heavy threads).
+ */
+export function shouldResyncThreadsOnConnect(isReconnect: boolean, pathname: string): boolean {
+  return isReconnect && routeNeedsThreadResync(pathname);
 }
 
 function resyncOnFocus(reason: 'visibility' | 'focus') {

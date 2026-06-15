@@ -1,4 +1,4 @@
-import type { ThreadEvent } from '@funny/shared';
+import type { FileDiffSummary, ThreadEvent } from '@funny/shared';
 import {
   useState,
   useRef,
@@ -41,6 +41,7 @@ import type { CompactionEvent } from '@/stores/thread-store';
 import { ToolCallCard } from '../ToolCallCard';
 import { ToolCallGroup } from '../ToolCallGroup';
 import { AuthorAvatar } from './AuthorAvatar';
+import { ChangedFilesSummary } from './ChangedFilesSummary';
 import { CompactionEventCard } from './CompactionEventCard';
 import { GitEventCard } from './GitEventCard';
 import { MessageContent, CopyButton } from './MessageContent';
@@ -129,6 +130,9 @@ function messageListAreEqual(
     rewindDisabled?: boolean;
     rewindDisabledReason?: string;
     scrollRef: any;
+    sessionChanges?: Map<string, FileDiffSummary[]>;
+    changeSummaryRunning?: boolean;
+    onSessionReverted?: () => void;
   },
   next: typeof prev,
 ) {
@@ -137,6 +141,9 @@ function messageListAreEqual(
     prev.threadEvents === next.threadEvents &&
     prev.compactionEvents === next.compactionEvents &&
     prev.threadId === next.threadId &&
+    prev.sessionChanges === next.sessionChanges &&
+    prev.changeSummaryRunning === next.changeSummaryRunning &&
+    prev.onSessionReverted === next.onSessionReverted &&
     (prev.threadStatus === 'waiting') === (next.threadStatus === 'waiting') &&
     prev.snapshotMap === next.snapshotMap &&
     prev.onSend === next.onSend &&
@@ -177,6 +184,13 @@ export const MemoizedMessageList = memo(
       rewindDisabled?: boolean;
       rewindDisabledReason?: string;
       scrollRef: React.RefObject<HTMLElement | null>;
+      /** Per-session changed files, keyed by the session's user-message id.
+       *  Each entry renders a changed-files summary at the end of that session. */
+      sessionChanges?: Map<string, FileDiffSummary[]>;
+      /** Whether the agent is running (disables the latest session's revert). */
+      changeSummaryRunning?: boolean;
+      /** Called after a revert so the diff data refetches. */
+      onSessionReverted?: () => void;
     }
   >(function MemoizedMessageList(
     {
@@ -198,6 +212,9 @@ export const MemoizedMessageList = memo(
       rewindDisabled,
       rewindDisabledReason,
       scrollRef,
+      sessionChanges,
+      changeSummaryRunning,
+      onSessionReverted,
     },
     ref,
   ) {
@@ -886,11 +903,27 @@ export const MemoizedMessageList = memo(
             );
           }
 
+          // Changed files modified during this session (user turn → agent run),
+          // rendered at the end of the session so each one carries its own
+          // "what changed here" summary as the thread grows.
+          const sessionFiles = sessionChanges?.get(section.userItem.msg.id);
+          const isLastSection = sIdx === sections.length - 1;
+
           return (
             <div key={sectionKey} data-section-msg-id={section.userItem.msg.id}>
               {renderUserMessage(section.userItem)}
               {section.items.length > 0 && (
                 <div className="space-y-4">{section.items.map(renderNonUserItem)}</div>
+              )}
+              {sessionFiles && sessionFiles.length > 0 && (
+                <div className="mt-3">
+                  <ChangedFilesSummary
+                    threadId={threadId}
+                    files={sessionFiles}
+                    running={isLastSection && !!changeSummaryRunning}
+                    onReverted={onSessionReverted}
+                  />
+                </div>
               )}
             </div>
           );

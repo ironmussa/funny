@@ -10,6 +10,7 @@ import { MessageStream, type MessageStreamHandle } from '@/components/thread/Mes
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
+import { useThreadChangedFiles, collectSessionChanges } from '@/hooks/use-thread-changed-files';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { canDoGitOps, canSteerShare, isReadOnlyShare } from '@/lib/thread-variant';
@@ -142,6 +143,17 @@ export function ThreadChatView({ activeThread }: Props) {
   const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
   const isQueueMode = followUpMode === 'queue';
 
+  // Per-session changed-files summaries: bucket the thread's changed files by the
+  // session (user turn) whose tool calls touched them, so each session carries a
+  // summary at its end. Only for git-capable, non-external threads.
+  const gitCapable = canDoGitOps(activeThread) && !isExternal;
+  const { files: allChangedFiles, refresh: refreshChangedFiles } =
+    useThreadChangedFiles(gitCapable);
+  const sessionChanges = useMemo(
+    () => (gitCapable ? collectSessionChanges(stableMessages ?? [], allChangedFiles) : undefined),
+    [gitCapable, stableMessages, allChangedFiles],
+  );
+
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
       {activeThread.id && <PipelineProgressBanner threadId={activeThread.id} />}
@@ -167,6 +179,8 @@ export function ThreadChatView({ activeThread }: Props) {
             isExternal={isExternal}
             model={activeThread.model}
             permissionMode={activeThread.permissionMode}
+            sessionChanges={sessionChanges}
+            onSessionReverted={refreshChangedFiles}
             onSend={handleSend}
             onPermissionApproval={handlePermissionApproval}
             onToolRespond={handleToolRespond}

@@ -73,6 +73,11 @@ export interface MessageStreamProps {
   /** Model and permission mode for passing to onSend from status cards */
   model?: string;
   permissionMode?: string;
+  /** Per-session changed files keyed by the session's user-message id — renders a
+   *  changed-files summary at the end of each session. */
+  sessionChanges?: Map<string, import('@funny/shared').FileDiffSummary[]>;
+  /** Called after a revert inside a session summary so diff data refetches. */
+  onSessionReverted?: () => void;
 
   // ── Optional advanced features ──
 
@@ -150,6 +155,8 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       rewindDisabledReason,
       model = '',
       permissionMode = '',
+      sessionChanges,
+      onSessionReverted,
       pagination,
       createdAt,
       snapshotMap = EMPTY_SNAPSHOT_MAP,
@@ -660,6 +667,9 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               rewindDisabled={rewindDisabled}
               rewindDisabledReason={rewindDisabledReason}
               scrollRef={scrollViewportRef}
+              sessionChanges={sessionChanges}
+              changeSummaryRunning={isRunning}
+              onSessionReverted={onSessionReverted}
             />
           </div>
 

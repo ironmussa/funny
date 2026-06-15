@@ -33,9 +33,23 @@ import { useThreadSelector } from '@/stores/thread-context';
 
 const log = createClientLogger('thread-share');
 
-/** Human label for a grant's permission level. */
-function levelLabel(level: ShareLevel): string {
-  return level === 'steer' ? 'Can steer' : 'Can comment';
+/** Short label per share level, shown in the picker. */
+const LEVEL_LABEL: Record<ShareLevel, string> = {
+  view: 'Viewer',
+  comment: 'Commenter',
+  steer: 'Editor',
+};
+
+/** One-line description of what each level grants. */
+const LEVEL_HINT: Record<ShareLevel, string> = {
+  view: 'View the thread (read-only).',
+  comment: 'View the thread and leave comments.',
+  steer: 'View, comment, read-only git, and send follow-ups to the agent.',
+};
+
+/** Human label for a grant's level, shown next to a person in the access list. */
+function accessLabel(level: ShareLevel): string {
+  return `Can ${level === 'steer' ? 'edit' : level === 'comment' ? 'comment' : 'view'}`;
 }
 
 interface ProjectMemberPick {
@@ -68,8 +82,8 @@ export function ShareThreadButton({
   const [members, setMembers] = useState<ProjectMemberPick[]>([]);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Permission level applied to the NEXT member added (thread-sharing-steer).
-  // `view` = read + comment; `steer` = view + git read-only + follow-ups.
+  // Permission level applied to the NEXT member added: viewer / commenter /
+  // editor (view | comment | steer). See `ShareLevel`.
   const [level, setLevel] = useState<ShareLevel>('view');
 
   const refreshShares = useCallback(async () => {
@@ -167,7 +181,7 @@ export function ShareThreadButton({
             role="group"
             data-testid="share-level-picker"
           >
-            {(['view', 'steer'] as const).map((lvl) => (
+            {(['view', 'comment', 'steer'] as const).map((lvl) => (
               <button
                 key={lvl}
                 type="button"
@@ -181,15 +195,11 @@ export function ShareThreadButton({
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {lvl === 'view' ? 'Can comment' : 'Can steer'}
+                {LEVEL_LABEL[lvl]}
               </button>
             ))}
           </div>
-          <p className="text-muted-foreground mt-1.5 text-[11px]">
-            {level === 'steer'
-              ? 'View + read-only git + send follow-ups to the agent.'
-              : 'View the thread and leave comments.'}
-          </p>
+          <p className="text-muted-foreground mt-1.5 text-[11px]">{LEVEL_HINT[level]}</p>
         </div>
 
         <div className="min-w-0 px-6 pt-4">
@@ -256,7 +266,7 @@ export function ShareThreadButton({
                   className="text-muted-foreground shrink-0 text-xs"
                   data-testid={`share-row-level-${s.sharedWithUserId}`}
                 >
-                  {levelLabel(s.level ?? 'view')}
+                  {accessLabel(s.level ?? 'view')}
                 </span>
                 <Button
                   variant="ghost"

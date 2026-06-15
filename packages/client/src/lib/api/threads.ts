@@ -10,9 +10,13 @@ import type {
 import { request } from './_core';
 
 /** A per-thread share grant with the invited user's display fields. */
-/** Share permission level (thread-sharing-steer). `view` = read + comment;
- *  `steer` = view + git read-only + follow-ups. */
-export type ShareLevel = 'view' | 'steer';
+/**
+ * Thread share level (unified-rbac-grants). Three explicit levels:
+ *   `view`    — read only
+ *   `comment` — read + post comments
+ *   `steer`   — read + comment + read-only git + send follow-ups (edit)
+ */
+export type ShareLevel = 'view' | 'comment' | 'steer';
 
 export interface ThreadShareGrant {
   threadId: string;
@@ -330,11 +334,17 @@ export const threadsApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  listArchivedThreads: (params?: { page?: number; limit?: number; search?: string }) => {
+  listArchivedThreads: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    projectId?: string;
+  }) => {
     const p = new URLSearchParams();
     if (params?.page) p.set('page', String(params.page));
     if (params?.limit) p.set('limit', String(params.limit));
     if (params?.search) p.set('search', params.search);
+    if (params?.projectId) p.set('projectId', params.projectId);
     const qs = p.toString();
     return request<{ threads: Thread[]; total: number; page: number; limit: number }>(
       `/threads/archived${qs ? `?${qs}` : ''}`,

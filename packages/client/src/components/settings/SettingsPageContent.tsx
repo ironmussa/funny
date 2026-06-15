@@ -9,8 +9,6 @@ import { PipelineSettings } from '@/components/PipelineSettings';
 import { ProjectConfigSettings } from '@/components/ProjectConfigSettings';
 import { type SettingsItemId } from '@/components/settings/items';
 import { ProjectCollaborators } from '@/components/settings/ProjectCollaborators';
-import { TeamMembers } from '@/components/settings/TeamMembers';
-import { UserManagement } from '@/components/settings/UserManagement';
 import { SkillsSettings } from '@/components/SkillsSettings';
 import { StartupCommandsSettings } from '@/components/StartupCommandsSettings';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -59,10 +57,6 @@ export function SettingsPageContent({ page, label }: Props) {
       return <PipelineSettings />;
     case 'archived-threads':
       return <ArchivedThreadsSettings />;
-    case 'users':
-      return <UserManagement />;
-    case 'team-members':
-      return <TeamMembers />;
     case 'collaborators':
       return <ProjectCollaborators />;
     default:

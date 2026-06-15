@@ -16,6 +16,8 @@ import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { SystemSettings } from '@/components/settings/SystemSettings';
+import { TeamMembers } from '@/components/settings/TeamMembers';
+import { UserManagement } from '@/components/settings/UserManagement';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -674,7 +676,9 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
           </>
         )}
 
+        {activePreferencesPage === 'users' && <UserManagement />}
         {activePreferencesPage === 'organizations' && <OrganizationManagement />}
+        {activePreferencesPage === 'team-members' && <TeamMembers />}
         {activePreferencesPage === 'runners' && <RunnersSettings />}
         {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
         {activePreferencesPage === 'extensions' && <ExtensionsSettings />}

@@ -42,7 +42,6 @@ export function SettingsPanelBody() {
   const items = buildSettingsItems({
     selectedProjectId,
     isProjectAdmin,
-    isServerAdmin: authUser?.role === 'admin',
   });
 
   const settingsPath = (pageId: string) =>

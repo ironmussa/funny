@@ -10,8 +10,6 @@ import {
   Archive,
   Workflow,
   UserPlus,
-  Users,
-  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -29,11 +27,7 @@ const baseSettingsItems = [
 ] as const;
 
 export const settingsItems = baseSettingsItems;
-export type SettingsItemId =
-  | (typeof baseSettingsItems)[number]['id']
-  | 'users'
-  | 'team-members'
-  | 'collaborators';
+export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'collaborators';
 
 export interface SettingsNavItem {
   id: SettingsItemId;
@@ -49,21 +43,21 @@ export interface SettingsNavItem {
 const PROJECT_ADMIN_ONLY_TABS: ReadonlySet<string> = new Set(['general', 'startup-commands']);
 
 /**
- * Builds the settings menu for the current context, applying the same
- * project-admin / server-admin gating in one place so the desktop sidebar and
- * the mobile settings list never drift apart.
+ * Builds the per-project settings menu, applying project-admin gating in one
+ * place so the desktop sidebar and the mobile settings list never drift apart.
+ *
+ * Instance-wide / server-admin pages (Users, Team Members, Organizations, …)
+ * deliberately do NOT live here — they belong to the global "Preferences"
+ * surface (see PreferencesPanel). funny has exactly two settings surfaces:
+ * General (instance-wide, in Preferences) and per-project (here).
  */
 export function buildSettingsItems(opts: {
   selectedProjectId: string | null;
   isProjectAdmin: boolean;
-  isServerAdmin: boolean;
 }): SettingsNavItem[] {
-  const { selectedProjectId, isProjectAdmin, isServerAdmin } = opts;
+  const { selectedProjectId, isProjectAdmin } = opts;
 
-  // Hide "Archived Threads" in per-project settings (it's a global view).
-  let items: SettingsNavItem[] = selectedProjectId
-    ? [...baseSettingsItems].filter((item) => item.id !== 'archived-threads')
-    : [...baseSettingsItems];
+  let items: SettingsNavItem[] = [...baseSettingsItems];
 
   if (selectedProjectId) {
     if (!isProjectAdmin) {
@@ -75,10 +69,6 @@ export function buildSettingsItems(opts: {
       // Managing who can access THIS project is a project-admin action.
       items.push({ id: 'collaborators', label: 'Collaborators', icon: UserPlus });
     }
-  } else if (isServerAdmin) {
-    // Global context, server admins only.
-    items.push({ id: 'users', label: 'Users', icon: Users });
-    items.push({ id: 'team-members', label: 'Team Members', icon: UsersRound });
   }
 
   return items;
@@ -95,7 +85,5 @@ export const settingsLabelKeys: Record<string, string> = {
   automations: 'settings.automations',
   pipelines: 'settings.pipelines',
   'archived-threads': 'settings.archivedThreads',
-  users: 'users.title',
-  'team-members': 'Team Members',
   collaborators: 'Collaborators',
 };

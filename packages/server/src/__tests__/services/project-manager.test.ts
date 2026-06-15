@@ -38,6 +38,21 @@ describe('project-manager service', () => {
       const members = await pm.listMembers('p1');
       expect(members[0]?.role).toBe('admin');
     });
+
+    test('dual-writes a unified project grant with the canonical role', async () => {
+      const { createGrantRepository } = await import('@funny/shared/repositories');
+      const { db, dbAll, dbRun, schema } = await import('../../db/index.js');
+      const grants = createGrantRepository({ db, schema, dbAll, dbRun } as any);
+
+      await pm.addMember('p1', 'user-2', 'member'); // legacy 'member' → canonical 'contributor'
+      expect(await grants.getGrantRole('user-2', 'project', 'p1')).toBe('contributor');
+
+      await pm.addMember('p1', 'user-2', 'admin'); // upsert raises the grant
+      expect(await grants.getGrantRole('user-2', 'project', 'p1')).toBe('admin');
+
+      await pm.removeMember('p1', 'user-2');
+      expect(await grants.getGrantRole('user-2', 'project', 'p1')).toBeNull();
+    });
   });
 
   describe('removeMember', () => {

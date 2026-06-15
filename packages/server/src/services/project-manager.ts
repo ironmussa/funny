@@ -3,12 +3,28 @@
  * Source of truth for team projects and memberships.
  */
 
+import type { Role } from '@funny/shared/auth/roles';
 import { user } from '@funny/shared/db/schema-sqlite';
+import { createGrantRepository } from '@funny/shared/repositories';
 import { eq, and, inArray } from 'drizzle-orm';
 
-import { db } from '../db/index.js';
+import { db, dbAll, dbRun, schema } from '../db/index.js';
 import { projectMembers } from '../db/schema.js';
 import { log } from '../lib/logger.js';
+
+// unified-rbac-grants Phase 4: dual-write membership into `resource_grants`
+// (project rows) alongside `project_members`, so new memberships populate the
+// unified table immediately. Reads stay on `project_members` (still
+// authoritative for role + localPath shape) — cutover happens after backfill.
+const grants = createGrantRepository({ db, schema, dbAll, dbRun });
+
+/** Legacy project role string → canonical lattice role. */
+function projectRoleToCanonical(role: string): Role {
+  if (role === 'admin') return 'admin';
+  if (role === 'owner') return 'owner';
+  if (role === 'viewer') return 'viewer';
+  return 'contributor'; // 'member' and any legacy/default value
+}
 
 // ── Types ────────────────────────────────────────────────
 
@@ -43,6 +59,15 @@ export async function addMember(
       set: { role },
     });
 
+  // Dual-write the unified grant (project row).
+  await grants.upsertGrant({
+    subjectId: userId,
+    resourceType: 'project',
+    resourceId: projectId,
+    role: projectRoleToCanonical(role),
+    grantedBy: userId, // best-effort; route-level actor wiring lands in Phase 7
+  });
+
   log.info('Member added to project', { namespace: 'project', projectId, userId, role });
 
   return { projectId, userId, role, localPath: null, joinedAt: now };
@@ -52,6 +77,7 @@ export async function removeMember(projectId: string, userId: string): Promise<v
   await db
     .delete(projectMembers)
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+  await grants.deleteGrant(userId, 'project', projectId);
   log.info('Member removed from project', { namespace: 'project', projectId, userId });
 }
 
@@ -86,6 +112,10 @@ export async function listMembersWithUsers(projectId: string): Promise<ProjectMe
 }
 
 export async function isProjectMember(projectId: string, userId: string): Promise<boolean> {
+  // Expand phase: reads stay on `project_members` (authoritative). Reads switch
+  // to `resource_grants` at cutover (Phase 8), after grant-cleanup-on-delete
+  // lands — project grant rows are polymorphic and don't cascade on project
+  // delete. Dual-write keeps the two in lockstep meanwhile.
   const rows = await db
     .select({ userId: projectMembers.userId })
     .from(projectMembers)

@@ -452,6 +452,35 @@ export async function addProjectToOrg(projectId: string, orgId: string): Promise
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  // Purge unified grants for the project AND its threads BEFORE the cascade —
+  // resource_grants is polymorphic and does NOT cascade (unified-rbac-grants).
+  // Thread grants must go now, while the threads still exist for the subquery.
+  await dbRun(
+    db
+      .delete(schema.resourceGrants)
+      .where(
+        and(
+          eq(schema.resourceGrants.resourceType, 'thread'),
+          inArray(
+            schema.resourceGrants.resourceId,
+            db
+              .select({ id: schema.threads.id })
+              .from(schema.threads)
+              .where(eq(schema.threads.projectId, id)),
+          ),
+        ),
+      ),
+  );
+  await dbRun(
+    db
+      .delete(schema.resourceGrants)
+      .where(
+        and(
+          eq(schema.resourceGrants.resourceType, 'project'),
+          eq(schema.resourceGrants.resourceId, id),
+        ),
+      ),
+  );
   await dbRun(db.delete(schema.projects).where(eq(schema.projects.id, id)));
 }
 

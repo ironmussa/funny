@@ -29,6 +29,7 @@ import {
   requireThreadWithMessages,
   requireProject,
   requireThreadCwd,
+  isSteerGrantFor,
 } from '../../utils/route-helpers.js';
 
 describe('route-helpers', () => {
@@ -202,6 +203,97 @@ describe('route-helpers', () => {
     }
     // Per-user resolution wins — we never fall back to the owner project path.
     expect(mocks.getProject).not.toHaveBeenCalled();
+  });
+
+  // ── Steer-share delegation (thread-sharing-steer) ──────────────────────
+
+  test('isSteerGrantFor matches only a steer grant for the same thread', () => {
+    expect(isSteerGrantFor('t-1', { shareLevel: 'steer', onBehalfOfThread: 't-1' })).toBe(true);
+    expect(isSteerGrantFor('t-1', { shareLevel: 'steer', onBehalfOfThread: 't-2' })).toBe(false);
+    expect(isSteerGrantFor('t-1', { shareLevel: 'view', onBehalfOfThread: 't-1' })).toBe(false);
+    expect(isSteerGrantFor('t-1', undefined)).toBe(false);
+  });
+
+  test('requireThread authorizes a steer sharee for the matching thread', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1' };
+    mocks.getThread.mockResolvedValue(thread);
+    mocks.isProjectInOrg.mockResolvedValue(false);
+
+    const result = await requireThread('t-1', 'sharee', null, {
+      shareLevel: 'steer',
+      onBehalfOfThread: 't-1',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) expect(result.value).toEqual(thread);
+    // Authorized off the signed claim — no org lookup needed.
+    expect(mocks.isProjectInOrg).not.toHaveBeenCalled();
+  });
+
+  test('requireThread rejects a steer claim pointed at a DIFFERENT thread', async () => {
+    mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
+    mocks.isProjectInOrg.mockResolvedValue(false);
+
+    const result = await requireThread('t-1', 'sharee', null, {
+      shareLevel: 'steer',
+      onBehalfOfThread: 't-2',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.type).toBe('FORBIDDEN');
+  });
+
+  test('requireThread rejects a view-level claim (only steer delegates)', async () => {
+    mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
+    mocks.isProjectInOrg.mockResolvedValue(false);
+
+    const result = await requireThread('t-1', 'sharee', null, {
+      shareLevel: 'view',
+      onBehalfOfThread: 't-1',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.type).toBe('FORBIDDEN');
+  });
+
+  test('requireThreadCwd resolves a steer sharee to the OWNER path, not the sharee', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-1',
+      worktreePath: null,
+    });
+    // Path resolution must be attempted with the OWNER id, returning the owner's
+    // checkout — the sharee has no path on this runner.
+    mocks.resolveProjectPath.mockImplementation(async (_pid: string, uid: string) =>
+      uid === 'owner' ? ok('/home/owner/repo') : err({ type: 'BAD_REQUEST', message: 'no path' }),
+    );
+
+    const result = await requireThreadCwd('t-1', 'sharee', null, {
+      shareLevel: 'steer',
+      onBehalfOfThread: 't-1',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) expect(result.value).toBe('/home/owner/repo');
+    expect(mocks.resolveProjectPath).toHaveBeenCalledWith('p-1', 'owner');
+  });
+
+  test('requireThreadCwd prefers the owner worktreePath for a steer sharee', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-1',
+      worktreePath: '/wt/owner-feature',
+    });
+
+    const result = await requireThreadCwd('t-1', 'sharee', null, {
+      shareLevel: 'steer',
+      onBehalfOfThread: 't-1',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) expect(result.value).toBe('/wt/owner-feature');
   });
 
   test('requireThreadCwd returns not found when project is missing', async () => {

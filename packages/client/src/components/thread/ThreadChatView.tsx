@@ -12,7 +12,7 @@ import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
-import { canDoGitOps, isReadOnlyShare } from '@/lib/thread-variant';
+import { canDoGitOps, canSteerShare, isReadOnlyShare } from '@/lib/thread-variant';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
@@ -36,9 +36,12 @@ interface Props {
 export function ThreadChatView({ activeThread }: Props) {
   const { t } = useTranslation();
   const selfUserId = useAuthStore((s) => s.user?.id ?? null);
-  // A sharee (viewing a thread they don't own) is read-only: they may comment
-  // but not drive the agent. Mirrors the server's requireThreadOwner gate.
-  const readOnlyShare = isReadOnlyShare(activeThread, selfUserId);
+  // A sharee (viewing a thread they don't own) is read-only UNLESS their grant
+  // level is `steer` — a steer sharee may send follow-ups (thread-sharing-steer).
+  // Mirrors the server's requireThreadSteer gate: only a `view` sharee is locked
+  // out of the PromptInput.
+  const readOnlyShare =
+    isReadOnlyShare(activeThread, selfUserId) && !canSteerShare(activeThread, selfUserId);
   const stableMessages = useThreadMessages();
   const stableThreadEvents = useThreadEvents();
   const stableCompactionEvents = useCompactionEvents();
@@ -200,8 +203,16 @@ export function ThreadChatView({ activeThread }: Props) {
                 >
                   {t(
                     'thread.readOnlyShare',
-                    "You're viewing a shared thread — read-only. You can comment, but only the owner can send messages.",
-                  )}
+                    "You're viewing a shared thread — read-only. Only the owner can send messages.",
+                  )}{' '}
+                  <button
+                    type="button"
+                    className="text-status-info hover:underline"
+                    onClick={() => useUIStore.getState().setCommentsPaneOpen(true)}
+                    data-testid="thread-readonly-open-comments"
+                  >
+                    {t('thread.readOnlyShareComment', 'Open Comments to leave a note.')}
+                  </button>
                 </div>
               ) : activeThread.waitingReason === 'plan' ? null : (
                 <PromptInput

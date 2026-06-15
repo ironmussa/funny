@@ -6,6 +6,8 @@ import {
   canDoGitOps,
   canFetchGitStatus,
   canShowPowerline,
+  canSteerShare,
+  canViewGitShare,
   getSidebarBucket,
   getThreadRoute,
   isScratch,
@@ -89,6 +91,41 @@ describe('getThreadRoute', () => {
   test('routes project threads under /projects/:pid/threads/:id', () => {
     expect(getThreadRoute(makeThread({ id: 't-2', projectId: 'proj-9', isScratch: false }))).toBe(
       '/projects/proj-9/threads/t-2',
+    );
+  });
+});
+
+describe('canSteerShare / canViewGitShare (thread-sharing-steer)', () => {
+  const OWNER = 'owner-1';
+  const SHAREE = 'ana-2';
+
+  test('owner can always steer + view git, regardless of level field', () => {
+    const t = makeThread({ userId: OWNER });
+    expect(canSteerShare(t, OWNER)).toBe(true);
+    expect(canViewGitShare(t, OWNER)).toBe(true);
+  });
+
+  test('a steer sharee can steer + view git', () => {
+    const t = makeThread({ userId: OWNER, viewerShareLevel: 'steer' });
+    expect(canSteerShare(t, SHAREE)).toBe(true);
+    expect(canViewGitShare(t, SHAREE)).toBe(true);
+  });
+
+  test('a view sharee can NOT steer or view git', () => {
+    const t = makeThread({ userId: OWNER, viewerShareLevel: 'view' });
+    expect(canSteerShare(t, SHAREE)).toBe(false);
+    expect(canViewGitShare(t, SHAREE)).toBe(false);
+  });
+
+  test('a sharee with no loaded level (list-only thread) can NOT steer', () => {
+    const t = makeThread({ userId: OWNER });
+    expect(canSteerShare(t, SHAREE)).toBe(false);
+  });
+
+  test('returns false for null thread or missing user', () => {
+    expect(canSteerShare(null, SHAREE)).toBe(false);
+    expect(canSteerShare(makeThread({ userId: OWNER, viewerShareLevel: 'steer' }), null)).toBe(
+      false,
     );
   });
 });

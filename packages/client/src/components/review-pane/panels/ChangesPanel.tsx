@@ -71,6 +71,7 @@ export function ChangesPanel() {
           stashInProgress: ctx.stashInProgress,
           gitStatus: ctx.gitStatus,
           isAgentRunning: ctx.isAgentRunning,
+          readOnly: ctx.viewerReadOnly,
         }}
         filesPanel={{
           summaries: ctx.summaries,
@@ -110,6 +111,7 @@ export function ChangesPanel() {
           handleCopyPath: ctx.handleCopyPath,
           handleOpenDirectory: ctx.handleOpenDirectory,
           basePath: ctx.basePath,
+          readOnly: ctx.viewerReadOnly,
         }}
         commitDraft={{
           commitEntry: ctx.commitEntry,
@@ -137,6 +139,7 @@ export function ChangesPanel() {
           isWorktree: ctx.isWorktree,
           handleOpenInEditorConflict: ctx.handleOpenInEditorConflict,
           handleAskAgentResolve: ctx.handleAskAgentResolve,
+          readOnly: ctx.viewerReadOnly,
         }}
       />
     </div>

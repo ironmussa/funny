@@ -122,6 +122,10 @@ interface ChangesFilesPanelProps {
   handleOpenDirectory: (path: string, isFile: boolean) => void;
 
   basePath: string | undefined;
+  /** A steer sharee viewing read-only (thread-sharing-steer): per-row git write
+   *  actions (stage/unstage/revert/discard/ignore) are owner-only, so they're
+   *  hidden. Read-only items (open, copy path) stay. */
+  readOnly?: boolean;
 }
 
 /**
@@ -171,6 +175,7 @@ export function ChangesFilesPanel({
   handleCopyPath,
   handleOpenDirectory,
   basePath,
+  readOnly,
 }: ChangesFilesPanelProps) {
   const { t } = useTranslation();
   const fileListRef = useRef<HTMLDivElement>(null);
@@ -404,63 +409,68 @@ export function ChangesFilesPanel({
                               {t('sidebar.openDirectory')}
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDiscardFolder(row.path);
-                            }}
-                            className="text-destructive focus:text-destructive"
-                            data-testid={`review-folder-discard-${row.path}`}
-                          >
-                            <Undo2 />
-                            {t('review.discardFolder')}
-                          </DropdownMenuItem>
-                          {(() => {
-                            const folderOptions = ['/' + row.path, ...getParentFolders(row.path)];
-                            if (folderOptions.length === 1) {
+                          {/* Folder git WRITE actions — hidden for a read-only
+                              (steer-sharee) viewer; owner-only. */}
+                          {!readOnly && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDiscardFolder(row.path);
+                              }}
+                              className="text-destructive focus:text-destructive"
+                              data-testid={`review-folder-discard-${row.path}`}
+                            >
+                              <Undo2 />
+                              {t('review.discardFolder')}
+                            </DropdownMenuItem>
+                          )}
+                          {!readOnly &&
+                            (() => {
+                              const folderOptions = ['/' + row.path, ...getParentFolders(row.path)];
+                              if (folderOptions.length === 1) {
+                                return (
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleIgnore(folderOptions[0]);
+                                    }}
+                                    data-testid={`review-folder-ignore-${row.path}`}
+                                  >
+                                    <FolderX />
+                                    {t('review.ignoreFolder')}
+                                  </DropdownMenuItem>
+                                );
+                              }
                               return (
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleIgnore(folderOptions[0]);
-                                  }}
-                                  data-testid={`review-folder-ignore-${row.path}`}
-                                >
-                                  <FolderX />
-                                  {t('review.ignoreFolder')}
-                                </DropdownMenuItem>
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    data-testid={`review-folder-ignore-${row.path}`}
+                                  >
+                                    <FolderX />
+                                    {t('review.ignoreFolder')}
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                  >
+                                    {folderOptions.map((folder) => (
+                                      <DropdownMenuItem
+                                        key={folder}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleIgnore(folder);
+                                        }}
+                                        data-testid={`review-folder-ignore-${row.path}-option-${folder}`}
+                                      >
+                                        {folder}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                               );
-                            }
-                            return (
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  data-testid={`review-folder-ignore-${row.path}`}
-                                >
-                                  <FolderX />
-                                  {t('review.ignoreFolder')}
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                >
-                                  {folderOptions.map((folder) => (
-                                    <DropdownMenuItem
-                                      key={folder}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleIgnore(folder);
-                                      }}
-                                      data-testid={`review-folder-ignore-${row.path}-option-${folder}`}
-                                    >
-                                      {folder}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                            );
-                          })()}
+                            })()}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -741,109 +751,118 @@ export function ChangesFilesPanel({
                             {t('sidebar.openDirectory')}
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuSeparator />
-                        {f.staged ? (
+                        {/* Per-file git WRITE actions — hidden for a read-only
+                            (steer-sharee) viewer; they are owner-only. */}
+                        {!readOnly && <DropdownMenuSeparator />}
+                        {!readOnly &&
+                          (f.staged ? (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnstageFile(f.path);
+                              }}
+                              data-testid={`review-unstage-file-${f.path}`}
+                            >
+                              <ArchiveRestore />
+                              {t('review.unstageFile', { defaultValue: 'Unstage file' })}
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStageFile(f.path);
+                              }}
+                              data-testid={`review-stage-file-${f.path}`}
+                            >
+                              <Archive />
+                              {t('review.stageFile', { defaultValue: 'Stage file' })}
+                            </DropdownMenuItem>
+                          ))}
+                        {!readOnly && (
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleUnstageFile(f.path);
+                              handleRevertFile(f.path);
                             }}
-                            data-testid={`review-unstage-file-${f.path}`}
+                            className="text-destructive focus:text-destructive"
                           >
-                            <ArchiveRestore />
-                            {t('review.unstageFile', { defaultValue: 'Unstage file' })}
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStageFile(f.path);
-                            }}
-                            data-testid={`review-stage-file-${f.path}`}
-                          >
-                            <Archive />
-                            {t('review.stageFile', { defaultValue: 'Stage file' })}
+                            <Undo2 />
+                            {t('review.discardChanges')}
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRevertFile(f.path);
-                          }}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Undo2 />
-                          {t('review.discardChanges')}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleIgnore(f.path);
-                          }}
-                        >
-                          <EyeOff />
-                          {t('review.ignoreFile')}
-                        </DropdownMenuItem>
-                        {(() => {
-                          const folders = getParentFolders(f.path);
-                          if (folders.length === 0) return null;
-                          if (folders.length === 1) {
+                        {!readOnly && <DropdownMenuSeparator />}
+                        {!readOnly && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleIgnore(f.path);
+                            }}
+                          >
+                            <EyeOff />
+                            {t('review.ignoreFile')}
+                          </DropdownMenuItem>
+                        )}
+                        {!readOnly &&
+                          (() => {
+                            const folders = getParentFolders(f.path);
+                            if (folders.length === 0) return null;
+                            if (folders.length === 1) {
+                              return (
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleIgnore(folders[0]);
+                                  }}
+                                >
+                                  <FolderX />
+                                  {t('review.ignoreFolder')}
+                                </DropdownMenuItem>
+                              );
+                            }
+                            return (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger
+                                  onClick={(e) => e.stopPropagation()}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                >
+                                  <FolderX />
+                                  {t('review.ignoreFolder')}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent
+                                  onClick={(e) => e.stopPropagation()}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                >
+                                  {folders.map((folder) => (
+                                    <DropdownMenuItem
+                                      key={folder}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleIgnore(folder);
+                                      }}
+                                    >
+                                      {folder}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            );
+                          })()}
+                        {!readOnly &&
+                          (() => {
+                            const ext = getFileExtension(f.path);
+                            if (!ext) return null;
                             return (
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleIgnore(folders[0]);
+                                  handleIgnore(`*${ext}`);
                                 }}
                               >
-                                <FolderX />
-                                {t('review.ignoreFolder')}
+                                <EyeOff />
+                                {t('review.ignoreExtension', { ext })}
                               </DropdownMenuItem>
                             );
-                          }
-                          return (
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger
-                                onClick={(e) => e.stopPropagation()}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                <FolderX />
-                                {t('review.ignoreFolder')}
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent
-                                onClick={(e) => e.stopPropagation()}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                {folders.map((folder) => (
-                                  <DropdownMenuItem
-                                    key={folder}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleIgnore(folder);
-                                    }}
-                                  >
-                                    {folder}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                          );
-                        })()}
-                        {(() => {
-                          const ext = getFileExtension(f.path);
-                          if (!ext) return null;
-                          return (
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleIgnore(`*${ext}`);
-                              }}
-                            >
-                              <EyeOff />
-                              {t('review.ignoreExtension', { ext })}
-                            </DropdownMenuItem>
-                          );
-                        })()}
+                          })()}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={(e) => {

@@ -85,6 +85,9 @@ const ActivityPane = lazy(() =>
 const ProjectFilesPane = lazy(() =>
   import('@/components/ProjectFilesPane').then((m) => ({ default: m.ProjectFilesPane })),
 );
+const CommentsPane = lazy(() =>
+  import('@/components/CommentsPane').then((m) => ({ default: m.CommentsPane })),
+);
 const SettingsDetailView = lazy(() =>
   import('@/components/SettingsDetailView').then((m) => ({ default: m.SettingsDetailView })),
 );
@@ -238,7 +241,11 @@ export function App() {
     <div className="bg-sidebar h-full w-full overflow-hidden">
       <ErrorBoundary area="right-pane">
         <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
-          {rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
+          {rightPaneTab === 'comments' ? (
+            // Comments work for any viewable thread (owner or sharee), with or
+            // without git — unlike files, they are not gated on git context.
+            <CommentsPane />
+          ) : rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
             <ProjectFilesPane />
           ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
             // Compose mode (no thread) — activity has nothing to render, so

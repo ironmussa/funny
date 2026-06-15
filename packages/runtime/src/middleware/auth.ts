@@ -25,6 +25,8 @@ import { timingSafeEqual } from 'crypto';
 
 import {
   NONCE_HEADER,
+  ON_BEHALF_OF_THREAD_HEADER,
+  SHARE_LEVEL_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
@@ -92,12 +94,16 @@ export async function authMiddleware(c: Context, next: Next) {
     const role = c.req.header('X-Forwarded-Role') || 'user';
     const orgId = c.req.header('X-Forwarded-Org') || null;
     const orgName = c.req.header('X-Forwarded-Org-Name') || null;
+    // Steer-share delegation claim (thread-sharing-steer). Part of the signed
+    // payload, so it cannot be forged by a caller without the secret.
+    const shareLevel = c.req.header(SHARE_LEVEL_HEADER) || null;
+    const onBehalfOfThread = c.req.header(ON_BEHALF_OF_THREAD_HEADER) || null;
 
     const signature = c.req.header(SIGNATURE_HEADER);
     const timestamp = c.req.header(TIMESTAMP_HEADER);
     const nonce = c.req.header(NONCE_HEADER);
     const valid = verifyForwardedIdentity(
-      { userId, role, orgId, orgName },
+      { userId, role, orgId, orgName, shareLevel, onBehalfOfThread },
       RUNNER_AUTH_SECRET,
       signature,
       timestamp,
@@ -117,6 +123,8 @@ export async function authMiddleware(c: Context, next: Next) {
     c.set('userRole', role);
     c.set('organizationId', orgId);
     c.set('organizationName', orgName);
+    c.set('shareLevel', shareLevel);
+    c.set('onBehalfOfThread', onBehalfOfThread);
     return next();
   }
 

@@ -21,7 +21,7 @@ import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThread, requireThreadCwd } from '../../utils/route-helpers.js';
+import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
 import { requireProjectCwd } from './helpers.js';
 
 export const logRoutes = new Hono<HonoEnv>();
@@ -213,11 +213,12 @@ logRoutes.get('/:threadId/log', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const steer = steerFromContext(c);
+  const threadResult = await requireThread(threadId, userId, orgId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -236,10 +237,11 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const steer = steerFromContext(c);
+  const threadResult = await requireThread(threadId, userId, orgId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -259,7 +261,12 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
 logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(
     c,
@@ -275,7 +282,12 @@ logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
 logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const filePath = c.req.query('path');
   if (!filePath) {
@@ -295,7 +307,12 @@ logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
 logRoutes.get('/:threadId/commit/:hash/body', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(
     c,

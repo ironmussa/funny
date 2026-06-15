@@ -61,6 +61,9 @@ interface CommitDraftPanelProps {
   isWorktree: boolean | undefined;
   handleOpenInEditorConflict: () => void;
   handleAskAgentResolve: () => void;
+  /** A steer sharee viewing the pane read-only (thread-sharing-steer): commit is
+   *  owner-only, so the whole draft panel is hidden. */
+  readOnly?: boolean;
 }
 
 /**
@@ -97,8 +100,12 @@ export function CommitDraftPanel({
   isWorktree,
   handleOpenInEditorConflict,
   handleAskAgentResolve,
+  readOnly,
 }: CommitDraftPanelProps) {
   const { t } = useTranslation();
+
+  // A read-only (steer-sharee) viewer never commits — hide the draft entirely.
+  if (readOnly) return null;
 
   return (
     <>

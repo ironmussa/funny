@@ -28,12 +28,15 @@
 
 import {
   NONCE_HEADER,
+  ON_BEHALF_OF_THREAD_HEADER,
+  SHARE_LEVEL_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
   signForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
 import type { Context } from 'hono';
 
+import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as runnerResolver from '../services/runner-resolver.js';
@@ -110,13 +113,36 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
+  // ── Steer-share delegation (thread-sharing-steer) ──────────────────────
+  // The runner-isolation invariant routes a request ONLY to the requester's
+  // own runner. The single intentional exception: when an ALLOW-LISTED route
+  // (`POST /:id/message`, read-only git GETs) has already authorized a `steer`
+  // sharee, the upstream middleware (`requireThreadSteer`) loaded the thread
+  // into context. The thread lives on its OWNER's runner, so we resolve by the
+  // owner's id — never a blind fallback. Reaching here as a non-owner means the
+  // gate passed; we resolve by owner and AUDIT the crossing. Routes NOT guarded
+  // by a thread-access middleware never set `thread`, so they can never trigger
+  // this path. See CLAUDE.md "Runner Isolation (CRITICAL)".
+  const thread = c.get('thread') as ServerEnv['Variables']['thread'] | undefined;
+  let resolveUserId = userId;
+  if (thread && userId && thread.userId && thread.userId !== userId) {
+    resolveUserId = thread.userId;
+    audit({
+      action: 'share.steer_delegation',
+      actorId: userId,
+      detail: `sharee routed to owner runner for ${c.req.method} ${path}`,
+      meta: { threadId: thread.id, ownerId: thread.userId, method: c.req.method, path },
+    });
+  }
+
   // Resolve which runner should handle this request.
   // OAuth callbacks are unauthenticated (external redirect) — find any runner.
-  // All other requests are scoped to the requesting user.
+  // All other requests are scoped to the requesting user (or, for an authorized
+  // steer sharee, the thread owner — see delegation above).
   const query = Object.fromEntries(url.searchParams.entries());
   const resolved = isOAuthCallback
     ? await deps.resolveAnyRunner()
-    : await deps.resolveRunner(path, query, userId);
+    : await deps.resolveRunner(path, query, resolveUserId);
 
   if (!resolved) {
     log.warn('No reachable runner for proxy request', {
@@ -166,6 +192,18 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   const userRole = (c.get('userRole') as string | undefined) || 'user';
   forwardedHeaders['X-Forwarded-Role'] = userRole;
 
+  // When this request was delegated to the owner's runner for a steer sharee
+  // (see above), bind a signed `steer` claim for the thread. The runtime has no
+  // DB to look up the grant — it trusts this signed claim (the server set it
+  // only after requireThreadSteer verified the grant) to authorize the sharee.
+  const isSteerDelegation = !!thread && resolveUserId !== userId;
+  const shareLevel = isSteerDelegation ? 'steer' : null;
+  const onBehalfOfThread = isSteerDelegation ? thread!.id : null;
+  if (isSteerDelegation) {
+    forwardedHeaders[SHARE_LEVEL_HEADER] = 'steer';
+    forwardedHeaders[ON_BEHALF_OF_THREAD_HEADER] = thread!.id;
+  }
+
   // HMAC-sign the forwarded identity so the runtime can distinguish a real
   // server-proxied request from a spoofed one carrying the shared secret.
   if (userId) {
@@ -174,6 +212,8 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       role: userRole,
       orgId: orgId ?? null,
       orgName: orgName ?? null,
+      shareLevel,
+      onBehalfOfThread,
     };
     const { signature, timestamp, nonce } = signForwardedIdentity(
       signedIdentity,

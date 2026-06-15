@@ -53,6 +53,10 @@ export const PRESENCE_LEAVE_EVENT = 'presence:leave' as const;
 export const THREAD_SHARE_REVOKED_EVENT = 'thread:share-revoked' as const;
 /** Server → browser: a thread was just shared WITH the caller; pull it into "Shared with me". */
 export const THREAD_SHARE_GRANTED_EVENT = 'thread:share-granted' as const;
+/** Server → browser: a new comment was posted on a thread; appended live for all current viewers. */
+export const THREAD_COMMENT_EVENT = 'thread:comment' as const;
+/** Server → browser: a comment was deleted from a thread. */
+export const THREAD_COMMENT_DELETED_EVENT = 'thread:comment_deleted' as const;
 
 export const threadOpenSchema = z.object({ threadId: z.string().min(1) });
 

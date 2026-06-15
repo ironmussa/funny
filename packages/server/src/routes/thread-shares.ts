@@ -44,7 +44,7 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   const ownerId = c.get('userId') as string;
   const thread = c.get('thread');
 
-  let body: { userId?: unknown };
+  let body: { userId?: unknown; level?: unknown };
   try {
     body = await c.req.json();
   } catch {
@@ -54,6 +54,9 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   if (!targetUserId) {
     return c.json({ error: 'userId is required' }, 400);
   }
+  // Share level (thread-sharing-steer): only 'view' | 'steer'. Anything else
+  // (incl. omitted) falls back to the safe default 'view'.
+  const level: 'view' | 'steer' = body.level === 'steer' ? 'steer' : 'view';
   if (targetUserId === ownerId) {
     return c.json({ error: 'Cannot share a thread with yourself', code: 'share-self' }, 400);
   }
@@ -78,6 +81,7 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
     threadId: id,
     sharedWithUserId: targetUserId,
     sharedByUserId: ownerId,
+    level,
   });
   // Push the thread into the target's "Shared with me" bucket live (no reload).
   if (!grant.alreadyExisted) {
@@ -111,6 +115,7 @@ shareRoutes.get('/:id/shares', requireThreadOwner, async (c) => {
       threadId: s.threadId,
       sharedWithUserId: s.sharedWithUserId,
       sharedByUserId: s.sharedByUserId,
+      level: s.level === 'steer' ? 'steer' : 'view',
       createdAt: s.createdAt,
       user: byId.get(s.sharedWithUserId) ?? null,
     })),

@@ -138,6 +138,7 @@ export function createTestDb() {
       thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
       shared_with_user_id TEXT NOT NULL,
       shared_by_user_id TEXT NOT NULL,
+      level TEXT NOT NULL DEFAULT 'view',
       created_at TEXT NOT NULL,
       PRIMARY KEY (thread_id, shared_with_user_id)
     )

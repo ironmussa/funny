@@ -11,6 +11,7 @@ import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import * as threadMutations from '@/stores/thread-mutations';
 import { useThreadStore } from '@/stores/thread-store';
 import { getNavigate, getUrlThreadId } from '@/stores/thread-store-internals';
 
@@ -18,6 +19,16 @@ import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
 
 const wsLog = createClientLogger('ws');
+
+/** Bump a thread's comment-count badge live (floored at 0). */
+function adjustCommentCount(threadId: string, delta: number): void {
+  useThreadStore.setState((state) =>
+    threadMutations.patchThread(state, threadId, (t) => ({
+      ...t,
+      commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
+    })),
+  );
+}
 
 // ── Remote container WS connections ─────────────────────────────
 const remoteConnections = new Map<string, WebSocket>();
@@ -363,10 +374,29 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         useThreadStore.getState().loadThreadsForProject(data.projectId);
       }
       break;
+    case 'thread:comment': {
+      // A new comment was posted — append it live for every current viewer and
+      // bump the header badge. See thread-sharing design D9.
+      if (data.comment) {
+        import('@/stores/comment-store').then(({ useCommentStore }) => {
+          useCommentStore.getState().applyAdded(threadId, data.comment);
+        });
+        adjustCommentCount(threadId, +1);
+      }
+      break;
+    }
     case 'thread:comment_deleted': {
-      const store = useThreadStore.getState();
-      if ((getUrlThreadId() ?? store.selectedThreadId) === threadId) {
-        store.refreshActiveThread();
+      if (data.commentId) {
+        import('@/stores/comment-store').then(({ useCommentStore }) => {
+          useCommentStore.getState().applyDeleted(threadId, data.commentId);
+        });
+        adjustCommentCount(threadId, -1);
+      } else {
+        // Legacy payload without an id — fall back to a refetch.
+        const store = useThreadStore.getState();
+        if ((getUrlThreadId() ?? store.selectedThreadId) === threadId) {
+          store.refreshActiveThread();
+        }
       }
       break;
     }
@@ -724,6 +754,7 @@ const ALL_EVENT_TYPES = [
   'thread:retry-queued',
   'thread:released',
   'thread:created',
+  'thread:comment',
   'thread:comment_deleted',
   'thread:stage-changed',
   'thread:updated',

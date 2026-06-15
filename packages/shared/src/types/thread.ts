@@ -70,6 +70,14 @@ export interface Thread {
    * code" are available; otherwise the UI grays them out.
    */
   fileCheckpointingEnabled?: boolean;
+  /**
+   * The VIEWER's own share level on this thread, populated only by the
+   * single-thread fetch (`GET /threads/:id`). `null`/undefined when the viewer
+   * is the owner (not a sharee). `'steer'` unlocks follow-ups + git read for a
+   * non-owner. See `thread-sharing-steer`. Use the `canSteerShare` /
+   * `canViewGitShare` predicates in `thread-variant.ts`, not this field directly.
+   */
+  viewerShareLevel?: 'view' | 'steer' | null;
 }
 
 export interface PaginatedThreadsResponse {

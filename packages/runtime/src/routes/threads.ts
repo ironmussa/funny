@@ -35,7 +35,7 @@ import { convertToWorktree } from '../services/thread-service/update.js';
 import { uploadFile } from '../services/thread-service/upload.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { requireThread } from '../utils/route-helpers.js';
+import { requireThread, steerFromContext } from '../utils/route-helpers.js';
 import {
   createThreadSchema,
   createIdleThreadSchema,
@@ -135,7 +135,11 @@ threadRoutes.post('/:id/message', async (c) => {
 
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  // Steer-share delegation (thread-sharing-steer): a verified `steer` grant on
+  // this thread authorizes a non-owner sharee to send follow-ups. The cwd/agent
+  // still resolve off the thread (owner's machine); the sharee only steers.
+  const steer = steerFromContext(c);
+  const threadResult = await requireThread(id, userId, orgId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });

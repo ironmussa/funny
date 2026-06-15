@@ -16,6 +16,13 @@ import { and, asc, eq } from 'drizzle-orm';
 import type { AppDatabase, dbAll as dbAllFn, dbRun as dbRunFn } from '../db/connection.js';
 import type * as sqliteSchema from '../db/schema.sqlite.js';
 
+/**
+ * Share permission level. `view` is read + comment + presence (the original
+ * thread-sharing scope); `steer` adds git read-only + follow-ups. See change
+ * `thread-sharing-steer`.
+ */
+export type ShareLevel = 'view' | 'steer';
+
 export interface ThreadShareRepositoryDeps {
   db: AppDatabase;
   schema: typeof sqliteSchema;
@@ -43,28 +50,52 @@ export function createThreadShareRepository(deps: ThreadShareRepositoryDeps) {
   }
 
   /**
-   * Grant `sharedWithUserId` read+comment access to `threadId`. Idempotent: a
-   * repeat share with the same pair returns the existing grant rather than
-   * violating the composite primary key.
+   * The share level `userId` holds on `threadId`, or `null` when there is no
+   * grant. A grant row missing an explicit level (created before the
+   * `thread-sharing-steer` migration) reads as `view`.
+   */
+  async function getShareLevel(threadId: string, userId: string): Promise<ShareLevel | null> {
+    const rows = await dbAll(
+      db
+        .select({ level: schema.threadShares.level })
+        .from(schema.threadShares)
+        .where(
+          and(
+            eq(schema.threadShares.threadId, threadId),
+            eq(schema.threadShares.sharedWithUserId, userId),
+          ),
+        ),
+    );
+    if (rows.length === 0) return null;
+    return (rows[0] as { level?: string }).level === 'steer' ? 'steer' : 'view';
+  }
+
+  /**
+   * Grant `sharedWithUserId` access to `threadId` at the given `level`
+   * (default `view`). Idempotent: a repeat share with the same pair returns the
+   * existing grant rather than violating the composite primary key.
    */
   async function createShare(data: {
     threadId: string;
     sharedWithUserId: string;
     sharedByUserId: string;
+    level?: ShareLevel;
   }) {
     const createdAt = new Date().toISOString();
+    const level: ShareLevel = data.level ?? 'view';
     if (await hasShare(data.threadId, data.sharedWithUserId)) {
-      return { ...data, createdAt, alreadyExisted: true as const };
+      return { ...data, level, createdAt, alreadyExisted: true as const };
     }
     await dbRun(
       db.insert(schema.threadShares).values({
         threadId: data.threadId,
         sharedWithUserId: data.sharedWithUserId,
         sharedByUserId: data.sharedByUserId,
+        level,
         createdAt,
       }),
     );
-    return { ...data, createdAt, alreadyExisted: false as const };
+    return { ...data, level, createdAt, alreadyExisted: false as const };
   }
 
   /** All grants on a thread, oldest first (for the owner's "shared with" list). */
@@ -109,6 +140,7 @@ export function createThreadShareRepository(deps: ThreadShareRepositoryDeps) {
 
   return {
     hasShare,
+    getShareLevel,
     createShare,
     listSharesForThread,
     listThreadsSharedWithUser,

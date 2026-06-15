@@ -5,6 +5,7 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
+import type { CommentAuthor, ThreadComment } from '@funny/shared';
 import {
   NONCE_HEADER,
   SIGNATURE_HEADER,
@@ -19,6 +20,8 @@ import {
   createToolCallRepository,
   createThreadShareRepository,
 } from '@funny/shared/repositories';
+import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
+import { inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
@@ -34,7 +37,7 @@ import * as runnerResolver from '../services/runner-resolver.js';
 import type { ResolvedRunner } from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
-import { relayToUser } from '../services/ws-relay.js';
+import { relayToUser, relayToThreadViewers } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
@@ -96,10 +99,12 @@ const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll
 // `requireThreadOwner` is also exported so the git-route gate in index.ts can
 // reuse the same owner check (git ops must stay owner-only — a sharee never
 // reaches another user's runner; see thread-sharing design).
-export const { requireThreadView, requireThreadOwner } = createThreadAccessMiddleware(
-  (id) => threadRepo.getThread(id),
-  (threadId, userId) => shareRepo.hasShare(threadId, userId),
-);
+export const { requireThreadView, requireThreadOwner, requireThreadSteer } =
+  createThreadAccessMiddleware(
+    (id) => threadRepo.getThread(id),
+    (threadId, userId) => shareRepo.hasShare(threadId, userId),
+    (threadId, userId) => shareRepo.getShareLevel(threadId, userId),
+  );
 
 // ── Runner communication helpers ─────────────────────────────────
 
@@ -302,6 +307,12 @@ threadRoutes.get('/:id', async (c) => {
       return c.json({ error: 'Thread not found' }, 404);
     }
 
+    // Expose the VIEWER's own grant level (thread-sharing-steer) so the client
+    // can gate steer-only affordances (PromptInput, git read panel). The owner
+    // gets `null` (they are not a sharee); a sharee gets 'view' | 'steer'.
+    const viewerShareLevel =
+      result.userId === userId ? null : await shareRepo.getShareLevel(id, userId);
+
     span.attributes['thread.message_count'] = result.messages?.length ?? 0;
     span.attributes['thread.queued_count'] = queuedCount;
     span.end('ok');
@@ -309,6 +320,7 @@ threadRoutes.get('/:id', async (c) => {
       ...result,
       queuedCount,
       queuedNextMessage: queuedNext?.content,
+      viewerShareLevel,
     });
   } catch (e) {
     span.end('error', e instanceof Error ? e.message : String(e));
@@ -354,12 +366,32 @@ threadRoutes.get('/:id/messages/search', requireThreadView, async (c) => {
   return c.json({ results });
 });
 
+// Join author display info (name/image) onto a set of comments so the client
+// can render avatars + names without a second round-trip. Mirrors the
+// enrichment done for share grants in routes/thread-shares.ts.
+async function authorsByIds(userIds: string[]): Promise<Map<string, CommentAuthor>> {
+  if (userIds.length === 0) return new Map();
+  const rows = await dbAll(
+    db
+      .select({
+        id: schema.user.id,
+        name: schema.user.name,
+        image: schema.user.image,
+        username: schema.user.username,
+      })
+      .from(schema.user)
+      .where(inArray(schema.user.id, userIds)),
+  );
+  return new Map(rows.map((u: any) => [u.id, u as CommentAuthor]));
+}
+
 // GET /api/threads/:id/comments
 threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
 
-  const comments = await commentRepo.listComments(id);
-  return c.json(comments);
+  const comments = (await commentRepo.listComments(id)) as ThreadComment[];
+  const authors = await authorsByIds([...new Set(comments.map((cm) => cm.userId))]);
+  return c.json(comments.map((cm) => ({ ...cm, user: authors.get(cm.userId) ?? null })));
 });
 
 // POST /api/threads/:id/comments
@@ -369,23 +401,35 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
 
   const { content } = await c.req.json();
 
-  if (!content || typeof content !== 'string') {
+  if (!content || typeof content !== 'string' || !content.trim()) {
     return c.json({ error: 'content is required' }, 400);
   }
 
-  const comment = await commentRepo.insertComment({
+  const inserted = await commentRepo.insertComment({
     threadId: id,
     userId,
     source: 'user',
     content,
   });
+  const authors = await authorsByIds([userId]);
+  const comment: ThreadComment = {
+    ...inserted,
+    user: authors.get(userId) ?? null,
+  } as ThreadComment;
+
+  // Live append for every current viewer (owner + sharees) via the thread's
+  // presence room. The client also refetches on panel open as a backstop.
+  relayToThreadViewers(id, { type: THREAD_COMMENT_EVENT, threadId: id, comment });
+
   return c.json(comment, 201);
 });
 
 // DELETE /api/threads/:id/comments/:commentId
 threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) => {
+  const id = c.req.param('id');
   const commentId = c.req.param('commentId');
   await commentRepo.deleteComment(commentId);
+  relayToThreadViewers(id, { type: THREAD_COMMENT_DELETED_EVENT, threadId: id, commentId });
   return c.json({ ok: true });
 });
 
@@ -771,20 +815,29 @@ threadRoutes.post('/:id/orchestrator/workflow-event', async (c) => {
   return c.json({ ok: true });
 });
 
-// POST /api/threads/:id/message — send message to running agent
-threadRoutes.post('/:id/message', proxyToRunner);
+// POST /api/threads/:id/message — send message to running agent.
+// ALLOW-LISTED for steer sharees (thread-sharing-steer): owner OR a sharee
+// whose grant level is `steer`. This is one of only two runner-bound actions a
+// non-owner may reach; the gate runs BEFORE proxyToRunner so a `view` sharee /
+// non-sharee gets 404 here instead of crossing runner isolation.
+threadRoutes.post('/:id/message', requireThreadSteer, proxyToRunner);
 
-// POST /api/threads/:id/upload — upload a user-attached file to the runner
-threadRoutes.post('/:id/upload', proxyToRunner);
+// POST /api/threads/:id/upload — upload a user-attached file to the runner.
+// Owner-only: writes a file onto the owner's machine. NOT part of the steer
+// allow-list. The explicit owner gate replaces the previous reliance on runner
+// isolation (which steer resolution now crosses).
+threadRoutes.post('/:id/upload', requireThreadOwner, proxyToRunner);
 
-// POST /api/threads/:id/stop — stop running agent
-threadRoutes.post('/:id/stop', proxyToRunner);
+// POST /api/threads/:id/stop — stop running agent. Owner-only (not steer).
+threadRoutes.post('/:id/stop', requireThreadOwner, proxyToRunner);
 
-// POST /api/threads/:id/approve-tool — approve a tool call
-threadRoutes.post('/:id/approve-tool', proxyToRunner);
+// POST /api/threads/:id/approve-tool — approve a tool call. Owner-only:
+// authorizes command execution on the owner's machine. Never steer.
+threadRoutes.post('/:id/approve-tool', requireThreadOwner, proxyToRunner);
 
-// POST /api/threads/:id/convert-to-worktree — convert local thread to worktree
-threadRoutes.post('/:id/convert-to-worktree', proxyToRunner);
+// POST /api/threads/:id/convert-to-worktree — convert local thread to worktree.
+// Owner-only git operation.
+threadRoutes.post('/:id/convert-to-worktree', requireThreadOwner, proxyToRunner);
 
 // POST /api/threads/:id/fork — fork conversation at a user message
 threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
@@ -843,8 +896,9 @@ threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
   }
 });
 
-// POST /api/threads/:id/rewind — proxy to runner
-threadRoutes.post('/:id/rewind', proxyToRunner);
+// POST /api/threads/:id/rewind — proxy to runner. Owner-only: mutates the
+// owner's worktree. Not part of the steer allow-list.
+threadRoutes.post('/:id/rewind', requireThreadOwner, proxyToRunner);
 
 // POST /api/threads/:id/fork-and-rewind — fork conversation, then rewind code
 threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
@@ -904,8 +958,9 @@ threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
   }
 });
 
-// PATCH /api/threads/:id/tool-calls/:toolCallId — update tool call output
-threadRoutes.patch('/:id/tool-calls/:toolCallId', proxyToRunner);
+// PATCH /api/threads/:id/tool-calls/:toolCallId — update tool call output.
+// Owner-only: mutates agent execution state. Not part of the steer allow-list.
+threadRoutes.patch('/:id/tool-calls/:toolCallId', requireThreadOwner, proxyToRunner);
 
 // GET /api/threads/:id/events — served from server DB
 threadRoutes.get('/:id/events', async (c) => {

@@ -302,6 +302,9 @@ export const threadShares = pgTable(
       .references(() => threads.id, { onDelete: 'cascade' }),
     sharedWithUserId: text('shared_with_user_id').notNull(),
     sharedByUserId: text('shared_by_user_id').notNull(),
+    // Permission level: 'view' (read + comment + presence) or 'steer' (view +
+    // git read-only + follow-ups). See change `thread-sharing-steer`.
+    level: text('level').notNull().default('view'),
     createdAt: text('created_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.threadId, t.sharedWithUserId] })],

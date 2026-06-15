@@ -38,6 +38,10 @@ export type AuditAction =
   | 'auth.orchestrator_rejected'
   /** Runner-scoped resource access refused because runner.userId ≠ requester/owner. */
   | 'authz.cross_tenant_refused'
+  /** A `steer` sharee's allow-listed request was routed to the thread OWNER's
+   *  runner — the single intentional exception to runner isolation
+   *  (thread-sharing-steer). */
+  | 'share.steer_delegation'
   /** ADMIN_PASSWORD env failed the password policy on first-run bootstrap. */
   | 'auth.weak_admin_password_rejected';
 

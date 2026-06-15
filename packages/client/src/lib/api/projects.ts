@@ -170,7 +170,9 @@ export const projectsApi = {
     request<UserSearchResult[]>(`/users/search?q=${encodeURIComponent(q)}`),
 };
 
-export type ProjectMemberRole = 'admin' | 'member';
+/** Project-assignable roles (unified-rbac-grants). `viewer` reads, `member`
+ *  contributes, `admin` manages. `owner` is the creator and is not assignable. */
+export type ProjectMemberRole = 'viewer' | 'member' | 'admin';
 
 export interface ProjectMemberEntry {
   projectId: string;

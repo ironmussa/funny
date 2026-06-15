@@ -55,6 +55,41 @@ describe('project collaborators', () => {
     });
   });
 
+  describe('role assignment (unified-rbac-grants)', () => {
+    test('owner adds a collaborator with an explicit valid role → 201', async () => {
+      const res = await t
+        .requestAs('owner')
+        .post('/api/projects/p1/members', { userId: 'alice', role: 'viewer' });
+      expect(res.status).toBe(201);
+      const pm = await import('../../services/project-manager.js');
+      const members = await pm.listMembers('p1');
+      expect(members.find((m) => m.userId === 'alice')?.role).toBe('viewer');
+    });
+
+    test('an invalid role is rejected → 400, no member written', async () => {
+      const res = await t
+        .requestAs('owner')
+        .post('/api/projects/p1/members', { userId: 'alice', role: 'superuser' });
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('invalid-project-role');
+      const pm = await import('../../services/project-manager.js');
+      expect(await pm.isProjectMember('p1', 'alice')).toBe(false);
+    });
+
+    test('re-adding upserts the role (admin → viewer)', async () => {
+      await t
+        .requestAs('owner')
+        .post('/api/projects/p1/members', { userId: 'alice', role: 'admin' });
+      await t
+        .requestAs('owner')
+        .post('/api/projects/p1/members', { userId: 'alice', role: 'viewer' });
+      const pm = await import('../../services/project-manager.js');
+      const members = await pm.listMembers('p1');
+      expect(members.filter((m) => m.userId === 'alice')).toHaveLength(1);
+      expect(members.find((m) => m.userId === 'alice')?.role).toBe('viewer');
+    });
+  });
+
   describe('Bug 2 — collaborator sees the shared project', () => {
     test('a member sees the project they were added to, flagged needsSetup', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });

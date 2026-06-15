@@ -15,8 +15,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { ProjectMemberEntry, UserSearchResult } from '@/lib/api/projects';
+import type { ProjectMemberEntry, ProjectMemberRole, UserSearchResult } from '@/lib/api/projects';
 import { createClientLogger } from '@/lib/client-logger';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -24,9 +31,18 @@ import { useProjectStore } from '@/stores/project-store';
 const log = createClientLogger('project-collaborators');
 
 const ROLE_COLORS: Record<string, string> = {
+  owner: 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
   admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   member: 'bg-green-500/15 text-green-700 dark:text-green-400',
+  viewer: 'bg-muted text-muted-foreground',
 };
+
+/** Assignable project roles (owner is the creator, not assignable here). */
+const PROJECT_ROLES: { value: ProjectMemberRole; label: string; hint: string }[] = [
+  { value: 'viewer', label: 'Viewer', hint: 'Read-only access to the project.' },
+  { value: 'member', label: 'Member', hint: 'Work in the project and run threads.' },
+  { value: 'admin', label: 'Admin', hint: 'Manage collaborators and project settings.' },
+];
 
 export function ProjectCollaborators() {
   const projectId = useProjectStore((s) => s.selectedProjectId);
@@ -40,6 +56,8 @@ export function ProjectCollaborators() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  // Role applied to the NEXT collaborator added.
+  const [addRole, setAddRole] = useState<ProjectMemberRole>('member');
   const searchSeq = useRef(0);
 
   const loadMembers = useCallback(async () => {
@@ -77,14 +95,29 @@ export function ProjectCollaborators() {
   const handleAdd = useCallback(
     async (u: UserSearchResult) => {
       if (!projectId) return;
-      const result = await api.addProjectMember(projectId, u.id, 'member');
+      const result = await api.addProjectMember(projectId, u.id, addRole);
       if (result.isOk()) {
-        toast.success(`Added ${u.username ?? u.name}`);
+        toast.success(`Added ${u.username ?? u.name} as ${addRole}`);
         setQuery('');
         setResults([]);
         loadMembers();
       } else {
         toast.error('Failed to add collaborator');
+      }
+    },
+    [projectId, addRole, loadMembers],
+  );
+
+  // Re-role an existing collaborator (addProjectMember upserts on the server).
+  const handleChangeRole = useCallback(
+    async (m: ProjectMemberEntry, role: ProjectMemberRole) => {
+      if (!projectId || m.role === role) return;
+      const result = await api.addProjectMember(projectId, m.userId, role);
+      if (result.isOk()) {
+        toast.success('Role updated');
+        loadMembers();
+      } else {
+        toast.error('Failed to update role');
       }
     },
     [projectId, loadMembers],
@@ -119,16 +152,38 @@ export function ProjectCollaborators() {
 
       {/* Add collaborator */}
       <div className="settings-card space-y-2 p-3">
-        <div className="relative">
-          <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search users by name, username or email…"
-            className="pl-8 text-sm"
-            data-testid="collaborators-search"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search users by name, username or email…"
+              className="pl-8 text-sm"
+              data-testid="collaborators-search"
+            />
+          </div>
+          {/* Role applied to the next collaborator added. */}
+          <Select value={addRole} onValueChange={(v) => setAddRole(v as ProjectMemberRole)}>
+            <SelectTrigger className="w-32 shrink-0" data-testid="collaborators-role-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROJECT_ROLES.map((r) => (
+                <SelectItem
+                  key={r.value}
+                  value={r.value}
+                  data-testid={`collaborators-role-opt-${r.value}`}
+                >
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        <p className="text-muted-foreground text-[11px]">
+          {PROJECT_ROLES.find((r) => r.value === addRole)?.hint}
+        </p>
 
         {query.trim().length > 0 && (
           <div className="border-border/50 divide-border/50 divide-y rounded-md border">
@@ -193,9 +248,37 @@ export function ProjectCollaborators() {
                       {label}
                       {isSelf && <span className="text-muted-foreground ml-1 text-xs">(you)</span>}
                     </p>
-                    <Badge variant="secondary" className={ROLE_COLORS[m.role] ?? ''}>
-                      {isOwner ? 'owner' : m.role}
-                    </Badge>
+                    {isOwner || isSelf ? (
+                      <Badge
+                        variant="secondary"
+                        className={ROLE_COLORS[isOwner ? 'owner' : m.role] ?? ''}
+                      >
+                        {isOwner ? 'owner' : m.role}
+                      </Badge>
+                    ) : (
+                      <Select
+                        value={
+                          (['viewer', 'member', 'admin'] as string[]).includes(m.role)
+                            ? m.role
+                            : 'member'
+                        }
+                        onValueChange={(v) => void handleChangeRole(m, v as ProjectMemberRole)}
+                      >
+                        <SelectTrigger
+                          className="h-6 w-24 text-xs"
+                          data-testid={`collaborators-role-${m.userId}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PROJECT_ROLES.map((r) => (
+                            <SelectItem key={r.value} value={r.value} className="text-xs">
+                              {r.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     {!m.localPath && !isOwner && (
                       <Badge
                         variant="secondary"

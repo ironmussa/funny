@@ -22,6 +22,9 @@ import * as cmdRepo from '../services/startup-commands-repository.js';
 
 export const projectRoutes = new Hono<ServerEnv>();
 
+/** Roles a project admin may assign to a collaborator (owner = creator only). */
+const ASSIGNABLE_PROJECT_ROLES = new Set(['viewer', 'member', 'admin']);
+
 // ── Project CRUD ─────────────────────────────────────────
 
 /** GET /api/projects — list projects for the current user */
@@ -262,7 +265,14 @@ projectRoutes.post('/:id/members', async (c) => {
     return c.json({ error: 'Missing required field: userId' }, 400);
   }
 
-  const member = await pm.addMember(projectId, body.userId, body.role);
+  // Validate the role against the project-assignable set (unified-rbac-grants).
+  // `owner` is the creator and is never assigned here.
+  const role = body.role ?? 'member';
+  if (!ASSIGNABLE_PROJECT_ROLES.has(role)) {
+    return c.json({ error: `Invalid role: ${role}`, code: 'invalid-project-role' }, 400);
+  }
+
+  const member = await pm.addMember(projectId, body.userId, role);
   return c.json(member, 201);
 });
 

@@ -1292,6 +1292,34 @@ export async function remoteGetThreadMessages(opts: {
   };
 }
 
+/** A matching message returned by {@link remoteSearchThreads}. */
+export interface RemoteThreadMessageMatch {
+  threadId: string;
+  threadTitle: string;
+  messageId: string;
+  role: string;
+  author: string | null;
+  timestamp: string;
+  snippet: string;
+}
+
+/**
+ * Search the runner-user's threads on the server by message text, author,
+ * and/or time range. The server scopes results to the authenticated runner
+ * owner (never a caller-supplied id), so no userId is sent here.
+ */
+export async function remoteSearchThreads(opts: {
+  query?: string;
+  author?: string;
+  since?: string;
+  until?: string;
+  limit?: number;
+  caseSensitive?: boolean;
+}): Promise<RemoteThreadMessageMatch[]> {
+  const response = await sendDataMessage('data:search_threads', { ...opts });
+  return Array.isArray(response?.results) ? (response.results as RemoteThreadMessageMatch[]) : [];
+}
+
 /** Get an agent template from the server by ID */
 export async function remoteGetAgentTemplate(templateId: string): Promise<any> {
   const response = await sendDataMessage('data:get_agent_template', { templateId });

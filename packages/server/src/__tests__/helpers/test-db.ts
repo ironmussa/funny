@@ -411,6 +411,7 @@ export function seedMessage(
     threadId: overrides.threadId ?? 'test-thread-1',
     role: overrides.role ?? 'user',
     content: overrides.content ?? 'Hello world',
+    author: overrides.author ?? null,
     timestamp: overrides.timestamp ?? new Date().toISOString(),
   };
   db.insert(schema.messages).values(message).run();

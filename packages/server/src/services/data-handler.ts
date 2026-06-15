@@ -437,6 +437,25 @@ export async function handleDataMessageWithAck(
         const toolCall = await toolCallRepo.getToolCall(data.toolCallId);
         return { type: 'data:get_tool_call_response', toolCall: toolCall ?? null };
       }
+      case 'data:search_threads': {
+        // Carries no entity id — scoped to the runner's own user (like the
+        // watcher/job list ops), so no per-entity ownership check is needed.
+        if (!runnerUserId) {
+          return { type: 'data:search_threads_response', results: [] };
+        }
+        const { searchThreadMessages } = await import('./search-repository.js');
+        const results = await searchThreadMessages({
+          userId: runnerUserId,
+          query: typeof data.query === 'string' ? data.query : undefined,
+          author: typeof data.author === 'string' ? data.author : undefined,
+          since: typeof data.since === 'string' ? data.since : undefined,
+          until: typeof data.until === 'string' ? data.until : undefined,
+          projectId: typeof data.projectId === 'string' ? data.projectId : undefined,
+          limit: typeof data.limit === 'number' ? data.limit : undefined,
+          caseSensitive: typeof data.caseSensitive === 'boolean' ? data.caseSensitive : undefined,
+        });
+        return { type: 'data:search_threads_response', results };
+      }
       case 'data:find_tool_call': {
         const toolCallRepo = getToolCallRepo();
         const tc = await toolCallRepo.findToolCall(

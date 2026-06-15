@@ -11,17 +11,30 @@ import { mock } from 'bun:test';
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 const relayCalls: Array<{ userId: string; event: Record<string, unknown> }> = [];
+const threadViewerCalls: Array<{ threadId: string; event: Record<string, unknown> }> = [];
 
-// Mock WebSocket/Socket.IO modules to prevent side effects
+// Mock WebSocket/Socket.IO modules to prevent side effects. Must export EVERY
+// symbol any app module binds from ws-relay (ESM binding is checked at import
+// time) — capture the two we assert on, no-op the rest.
 mock.module('../../services/ws-relay.js', () => ({
   setIO: () => {},
   addRunnerClient: () => {},
   removeRunnerClient: () => {},
   isRunnerConnected: () => false,
+  getRunnerSocketId: () => null,
+  userHasConnectedRunner: () => false,
   relayToUser: (userId: string, event: Record<string, unknown>) => {
     relayCalls.push({ userId, event });
   },
   broadcast: () => {},
+  threadStreamRoom: (id: string) => `thread:${id}:stream`,
+  threadPresenceRoom: (id: string) => `thread:${id}:presence`,
+  relayToThreadStream: () => {},
+  relayToThreadPresence: () => {},
+  relayToThreadViewers: (threadId: string, event: Record<string, unknown>) => {
+    threadViewerCalls.push({ threadId, event });
+  },
+  evictUserFromThread: () => {},
   sendToRunner: () => false,
   forwardBrowserMessageToRunner: () => {},
   getAnyConnectedRunnerId: () => null,
@@ -359,6 +372,13 @@ describe('Thread Routes (Integration)', () => {
       expect(body.content).toBe('This is a comment');
       expect(body.userId).toBe('user-1');
       expect(body.id).toBeTruthy();
+      // Enriched with an author field (null when no user row is seeded).
+      expect('user' in body).toBe(true);
+      // Broadcasts a `thread:comment` to the thread's viewers for live append.
+      const broadcast = threadViewerCalls.at(-1);
+      expect(broadcast?.threadId).toBe('t1');
+      expect(broadcast?.event.type).toBe('thread:comment');
+      expect((broadcast?.event.comment as any)?.id).toBe(body.id);
     });
 
     test('returns 400 when content is missing', async () => {
@@ -408,6 +428,11 @@ describe('Thread Routes (Integration)', () => {
 
       const delRes = await t.requestAs('user-1').delete(`/api/threads/t1/comments/${id}`);
       expect(delRes.status).toBe(200);
+
+      // Broadcasts a `thread:comment_deleted` with the id so viewers drop it live.
+      const broadcast = threadViewerCalls.at(-1);
+      expect(broadcast?.event.type).toBe('thread:comment_deleted');
+      expect(broadcast?.event.commentId).toBe(id);
 
       // Verify it's gone
       const listRes = await t.requestAs('user-1').get('/api/threads/t1/comments');

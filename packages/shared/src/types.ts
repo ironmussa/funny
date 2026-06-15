@@ -313,6 +313,14 @@ export interface AgentDefinition {
 
 export type CommentSource = 'user' | 'system' | 'agent';
 
+/** Author display info, joined onto a comment for rendering. */
+export interface CommentAuthor {
+  id: string;
+  name: string | null;
+  image: string | null;
+  username: string | null;
+}
+
 export interface ThreadComment {
   id: string;
   threadId: string;
@@ -320,6 +328,8 @@ export interface ThreadComment {
   source: CommentSource;
   content: string;
   createdAt: string;
+  /** Joined author display info (name/image). Populated by the comment routes. */
+  user?: CommentAuthor | null;
 }
 
 // ─── Messages ────────────────────────────────────────────

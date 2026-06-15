@@ -25,6 +25,7 @@ import {
   FlaskConical,
   Activity,
   Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 import {
   memo,
@@ -75,8 +76,9 @@ import { api } from '@/lib/api';
 import { stageConfig } from '@/lib/thread-utils';
 import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
-import { resolveThreadBranch } from '@/lib/utils';
+import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -712,7 +714,21 @@ export const ProjectHeader = memo(function ProjectHeader({
   const activeThreadTitle = useThreadSelector((t) => t?.title);
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
-  const activeThreadCanShowGit = useThreadSelector((t) => variant.canDoGitOps(t));
+  // Git/review affordances require git ops AND must hide from a `view` sharee
+  // (thread-sharing-steer) — their git API 404s. Fail OPEN: only hide when we
+  // POSITIVELY know the viewer is a non-owner sharee without a steer grant. While
+  // auth is still loading (selfUserId null) we don't hide, so the owner never
+  // loses git in that window. A `steer` sharee keeps the (read-only) panel.
+  const selfUserId = useAuthStore((s) => s.user?.id ?? null);
+  const activeThreadCanShowGit = useThreadSelector(
+    (t) =>
+      variant.canDoGitOps(t) &&
+      !(
+        !!selfUserId &&
+        variant.isReadOnlyShare(t, selfUserId) &&
+        !variant.canViewGitShare(t, selfUserId)
+      ),
+  );
   const activeThreadIsScratch = useThreadSelector((t) => variant.isScratch(t));
   const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
@@ -765,7 +781,10 @@ export const ProjectHeader = memo(function ProjectHeader({
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
+  const setCommentsPaneOpen = useUIStore((s) => s.setCommentsPaneOpen);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
+  const canShowComments = useThreadSelector((t) => variant.canShowComments(t));
+  const commentCount = useThreadSelector((t) => t?.commentCount ?? 0);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
   const { openPreview, isTauri } = usePreviewWindow();
   const toggleTerminalPanel = useTerminalStore((s) => s.togglePanel);
@@ -1120,6 +1139,47 @@ export const ProjectHeader = memo(function ProjectHeader({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
+              </Tooltip>
+            )}
+            {activeThreadId && canShowComments && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() =>
+                      startTransition(() => {
+                        if (reviewPaneOpen && rightPaneTab === 'comments') {
+                          setCommentsPaneOpen(false);
+                          updatePanelParam(null);
+                        } else {
+                          setCommentsPaneOpen(true);
+                          updatePanelParam('comments');
+                        }
+                      })
+                    }
+                    data-testid="header-toggle-comments"
+                    className={cn(
+                      'relative',
+                      reviewPaneOpen && rightPaneTab === 'comments'
+                        ? 'text-foreground'
+                        : commentCount > 0
+                          ? 'text-status-info'
+                          : 'text-muted-foreground',
+                    )}
+                  >
+                    <MessageSquare className="icon-base" />
+                    {commentCount > 0 && (
+                      <span
+                        className="bg-status-info absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-medium text-white"
+                        data-testid="comments-badge"
+                      >
+                        {commentCount > 99 ? '99+' : commentCount}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('comments.title', 'Comments')}</TooltipContent>
               </Tooltip>
             )}
             {activeThreadId && projectId && !activeThreadIsScratch && (

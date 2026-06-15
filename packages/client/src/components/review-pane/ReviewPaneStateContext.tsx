@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useReviewState } from '@/hooks/use-review-state';
 import { resolveThreadBranch } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   useGitStatusStore,
   useGitStatusForThread,
@@ -61,6 +62,14 @@ type ReviewPaneContextValue = ReturnType<typeof useReviewState> & {
   // Local UI state
   confirmDialog: ConfirmDialogState | null;
   setConfirmDialog: React.Dispatch<React.SetStateAction<ConfirmDialogState | null>>;
+  /**
+   * True when the current viewer is a NON-OWNER sharee (thread-sharing-steer):
+   * the review pane is READ-ONLY for them. A `view` sharee can't even open the
+   * pane (gated upstream in ProjectHeader), so in practice this flags a `steer`
+   * sharee. Every git WRITE is owner-only server-side; this just hides the write
+   * affordances so a steer sharee sees a clean read-only diff view.
+   */
+  viewerReadOnly: boolean;
 };
 
 const ReviewPaneContext = createContext<ReviewPaneContextValue | null>(null);
@@ -138,6 +147,13 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
 
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
+  // A non-owner viewer (necessarily a `steer` sharee — `view` sharees can't open
+  // the pane) gets a read-only review pane. In project-mode (no thread owner) or
+  // while auth loads, this is false, so the owner never loses write controls.
+  const selfUserId = useAuthStore((s) => s.user?.id ?? null);
+  const threadOwnerId = useThreadSelector((t) => t?.userId ?? null);
+  const viewerReadOnly = !!selfUserId && !!threadOwnerId && threadOwnerId !== selfUserId;
+
   const review = useReviewState({
     effectiveThreadId,
     projectModeId,
@@ -199,6 +215,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       setReviewSubTab,
       confirmDialog,
       setConfirmDialog,
+      viewerReadOnly,
     }),
     [
       review,
@@ -220,6 +237,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       setReviewPaneOpen,
       setReviewSubTab,
       confirmDialog,
+      viewerReadOnly,
     ],
   );
 

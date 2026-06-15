@@ -40,6 +40,14 @@ export const SIGNATURE_HEADER = 'X-Forwarded-Signature';
 export const TIMESTAMP_HEADER = 'X-Forwarded-Timestamp';
 /** Name of the per-request nonce header */
 export const NONCE_HEADER = 'X-Forwarded-Nonce';
+/**
+ * Share-delegation headers (thread-sharing-steer). Set by the server ONLY after
+ * it has verified that `X-Forwarded-User` holds a `steer` grant on the thread.
+ * They are part of the signed payload, so a caller without the secret cannot
+ * forge them — the runtime trusts them in lieu of a DB lookup it cannot do.
+ */
+export const SHARE_LEVEL_HEADER = 'X-Forwarded-Share-Level';
+export const ON_BEHALF_OF_THREAD_HEADER = 'X-Forwarded-On-Behalf-Of-Thread';
 
 /**
  * Accept signatures within ±60 seconds of the server's clock.
@@ -86,10 +94,14 @@ export interface ForwardedIdentity {
   role?: string | null;
   orgId?: string | null;
   orgName?: string | null;
+  /** Share level the user holds on `onBehalfOfThread` (thread-sharing-steer). */
+  shareLevel?: string | null;
+  /** The thread this request is delegated for (thread-sharing-steer). */
+  onBehalfOfThread?: string | null;
 }
 
 function canonicalize(identity: ForwardedIdentity, timestamp: number, nonce: string): string {
-  return [
+  const base = [
     identity.userId,
     identity.role ?? '',
     identity.orgId ?? '',
@@ -97,6 +109,14 @@ function canonicalize(identity: ForwardedIdentity, timestamp: number, nonce: str
     String(timestamp),
     nonce,
   ].join('|');
+  // Append the share-delegation claim ONLY when present, so the overwhelmingly
+  // common non-shared request produces the EXACT legacy canonical string — zero
+  // back-compat risk. A steer-delegated request signs (and verifies) the extra
+  // suffix, binding the claim to the signature.
+  if (identity.shareLevel || identity.onBehalfOfThread) {
+    return `${base}|${identity.shareLevel ?? ''}|${identity.onBehalfOfThread ?? ''}`;
+  }
+  return base;
 }
 
 /**

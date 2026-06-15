@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useReviewState } from '@/hooks/use-review-state';
 import { useThreadById } from '@/lib/thread-selectors';
 import { resolveThreadBranch } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { usePRDetail } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -82,6 +83,12 @@ export function ReviewPane() {
       }),
     [worktreePath, lightThread, threadProjectId, selectedProjectId, projectsForPath],
   );
+
+  // A non-owner viewer (a `steer` sharee — `view` sharees can't open the pane)
+  // gets a read-only review pane: git writes are owner-only (thread-sharing-steer).
+  const selfUserId = useAuthStore((s) => s.user?.id ?? null);
+  const threadOwnerId = useThreadSelector((t) => t?.userId ?? null);
+  const viewerReadOnly = !!selfUserId && !!threadOwnerId && threadOwnerId !== selfUserId;
 
   const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
   const baseBranch = useThreadSelector((t) => t?.baseBranch);
@@ -450,6 +457,7 @@ export function ReviewPane() {
             stashInProgress,
             gitStatus,
             isAgentRunning,
+            readOnly: viewerReadOnly,
           }}
           filesPanel={{
             summaries,
@@ -489,6 +497,7 @@ export function ReviewPane() {
             handleCopyPath,
             handleOpenDirectory,
             basePath,
+            readOnly: viewerReadOnly,
           }}
           commitDraft={{
             commitEntry,
@@ -516,6 +525,7 @@ export function ReviewPane() {
             isWorktree,
             handleOpenInEditorConflict,
             handleAskAgentResolve,
+            readOnly: viewerReadOnly,
           }}
         />
 

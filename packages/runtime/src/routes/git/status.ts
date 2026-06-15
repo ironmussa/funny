@@ -28,7 +28,12 @@ import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { computeBranchKey } from '../../utils/git-status-helpers.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThread, requireProject } from '../../utils/route-helpers.js';
+import {
+  requireThread,
+  requireProject,
+  steerFromContext,
+  isSteerGrantFor,
+} from '../../utils/route-helpers.js';
 import {
   _gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
@@ -423,11 +428,19 @@ statusRoutes.get('/:threadId/status', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  // Steer-share delegation (thread-sharing-steer): a verified `steer` grant
+  // authorizes a non-owner sharee for read-only git. The working directory must
+  // resolve off the thread OWNER (the checkout lives on their machine), so all
+  // project-path lookups below use `pathUserId`. GH_TOKEN still resolves off the
+  // SHAREE (`userId`) — a sharee has no token, so PR detection simply degrades;
+  // the sharee never borrows the owner's GitHub credentials.
+  const steer = steerFromContext(c);
+  const threadResult = await requireThread(threadId, userId, orgId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
+  const pathUserId = isSteerGrantFor(threadId, steer) ? thread.userId : userId;
 
-  // Resolve GH_TOKEN for PR detection
+  // Resolve GH_TOKEN for PR detection (off the requester — a sharee has none).
   const identity = await resolveIdentity(userId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
   const branchForPR = thread.branch || thread.baseBranch;
@@ -436,7 +449,7 @@ statusRoutes.get('/:threadId/status', async (c) => {
   // after merge). Without this, local-mode threads with branch=null get
   // hardcoded zero stats instead of real git status.
   if (!thread.worktreePath && !thread.branch && thread.baseBranch && thread.mergedAt) {
-    const projectResult = await requireProject(thread.projectId, userId, orgId ?? undefined);
+    const projectResult = await requireProject(thread.projectId, pathUserId, orgId ?? undefined);
     const projectPath = projectResult.isOk() ? projectResult.value.path : null;
     const span = requestSpan(c, 'git.unpushed_count', { threadId, branch: thread.baseBranch });
     const unpushed = projectPath ? await countUnpushedCommits(projectPath, thread.baseBranch) : 0;

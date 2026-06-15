@@ -25,17 +25,56 @@ function checkOwnership(thread: { userId: string }, userId: string): Result<void
   return ok(undefined);
 }
 
-/** Get a thread by ID or return Err(NOT_FOUND). Verifies ownership. */
+/**
+ * A verified steer-share delegation claim (thread-sharing-steer). Lifted from
+ * the SIGNED forwarded identity by the runtime auth middleware, so it cannot be
+ * forged. When `shareLevel === 'steer'` and `onBehalfOfThread === <thread id>`,
+ * the runtime authorizes the sharee for the allow-listed routes on that thread
+ * even though they are not the owner. The thread's cwd/agent still resolve off
+ * the thread itself (the owner's machine) — never off the sharee.
+ */
+export interface SteerGrant {
+  shareLevel?: string | null;
+  onBehalfOfThread?: string | null;
+}
+
+/** True when `steer` is a valid `steer` grant for thread `id`. */
+export function isSteerGrantFor(id: string, steer?: SteerGrant): boolean {
+  return !!steer && steer.shareLevel === 'steer' && steer.onBehalfOfThread === id;
+}
+
+/**
+ * Read the verified steer-share delegation claim off a Hono context. The runtime
+ * auth middleware lifts these from the SIGNED forwarded identity, so they are
+ * trustworthy. Pass the result to `requireThread` / `requireThreadCwd` on the
+ * allow-listed routes (follow-up + git read-only).
+ */
+export function steerFromContext(c: {
+  get: (k: 'shareLevel' | 'onBehalfOfThread') => string | null | undefined;
+}): SteerGrant {
+  return {
+    shareLevel: c.get('shareLevel') ?? null,
+    onBehalfOfThread: c.get('onBehalfOfThread') ?? null,
+  };
+}
+
+/** Get a thread by ID or return Err(NOT_FOUND). Verifies ownership (or a
+ *  verified steer-share delegation for the allow-listed routes). */
 export async function requireThread(
   id: string,
   userId?: string,
   organizationId?: string | null,
+  steer?: SteerGrant,
 ): Promise<Result<Awaited<ReturnType<typeof tm.getThread>> & {}, DomainError>> {
   const thread = await tm.getThread(id);
   if (!thread) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(thread, userId);
     if (ownerCheck.isErr()) {
+      // Steer-share delegation: a verified `steer` grant on THIS thread
+      // authorizes the sharee (thread-sharing-steer). The server already gated
+      // the route + signed the claim; here we just honor it.
+      if (isSteerGrantFor(id, steer)) return ok(thread);
       // Ownership failed — check if the thread's project is shared with the org
       if (organizationId) {
         const isTeam = await getServices().projects.isProjectInOrg(
@@ -122,16 +161,18 @@ export async function requireThreadCwd(
   threadId: string,
   userId?: string,
   organizationId?: string | null,
+  steer?: SteerGrant,
 ): Promise<Result<string, DomainError>> {
-  const threadResult = await requireThread(threadId, userId, organizationId);
+  const threadResult = await requireThread(threadId, userId, organizationId, steer);
   if (threadResult.isErr()) return err(threadResult.error);
   const thread = threadResult.value;
   if (thread.worktreePath) return ok(thread.worktreePath);
-  // Local mode: resolve the project path for THIS user. A collaborator runs the
-  // agent on their own runner against their own configured directory, so prefer
-  // the per-user resolution and fall back to the project's own path.
-  if (userId) {
-    const resolved = await getServices().projects.resolveProjectPath(thread.projectId, userId);
+  // For a steer sharee the thread lives on the OWNER's machine — resolve the
+  // working directory by the thread owner, never by the sharee (who has no
+  // checkout on this runner). Owners/collaborators resolve by their own id.
+  const pathUserId = isSteerGrantFor(threadId, steer) ? thread.userId : userId;
+  if (pathUserId) {
+    const resolved = await getServices().projects.resolveProjectPath(thread.projectId, pathUserId);
     if (resolved.isOk()) return ok(resolved.value);
   }
   const project = await getServices().projects.getProject(thread.projectId);

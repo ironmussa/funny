@@ -23,14 +23,20 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
-import { threadsApi, type ThreadShareGrant } from '@/lib/api/threads';
+import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';
 import { createClientLogger } from '@/lib/client-logger';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThreadSelector } from '@/stores/thread-context';
 
 const log = createClientLogger('thread-share');
+
+/** Human label for a grant's permission level. */
+function levelLabel(level: ShareLevel): string {
+  return level === 'steer' ? 'Can steer' : 'Can comment';
+}
 
 interface ProjectMemberPick {
   userId: string;
@@ -62,6 +68,9 @@ export function ShareThreadButton({
   const [members, setMembers] = useState<ProjectMemberPick[]>([]);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Permission level applied to the NEXT member added (thread-sharing-steer).
+  // `view` = read + comment; `steer` = view + git read-only + follow-ups.
+  const [level, setLevel] = useState<ShareLevel>('view');
 
   const refreshShares = useCallback(async () => {
     const res = await threadsApi.listThreadShares(threadId);
@@ -92,7 +101,7 @@ export function ShareThreadButton({
 
   const share = async (userId: string) => {
     setBusy(true);
-    const res = await threadsApi.shareThread(threadId, userId);
+    const res = await threadsApi.shareThread(threadId, userId, level);
     res.mapErr((err) => {
       log.warn('Failed to share thread', { error: String(err) });
       toast.error('Could not share thread', { description: String(err) });
@@ -149,6 +158,39 @@ export function ShareThreadButton({
             {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Access-level picker applied to the next member added. */}
+        <div className="min-w-0 px-6 pt-4">
+          <p className="text-muted-foreground mb-1.5 text-xs font-medium">Access level</p>
+          <div
+            className="bg-muted/50 inline-flex rounded-md p-0.5"
+            role="group"
+            data-testid="share-level-picker"
+          >
+            {(['view', 'steer'] as const).map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => setLevel(lvl)}
+                aria-pressed={level === lvl}
+                data-testid={`share-level-${lvl}`}
+                className={cn(
+                  'rounded px-3 py-1 text-xs font-medium transition-colors',
+                  level === lvl
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {lvl === 'view' ? 'Can comment' : 'Can steer'}
+              </button>
+            ))}
+          </div>
+          <p className="text-muted-foreground mt-1.5 text-[11px]">
+            {level === 'steer'
+              ? 'View + read-only git + send follow-ups to the agent.'
+              : 'View the thread and leave comments.'}
+          </p>
+        </div>
 
         <div className="min-w-0 px-6 pt-4">
           <Command className="rounded-lg border" shouldFilter>
@@ -210,7 +252,12 @@ export function ShareThreadButton({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">{s.user?.name ?? s.sharedWithUserId}</p>
                 </div>
-                <span className="text-muted-foreground shrink-0 text-xs">Can comment</span>
+                <span
+                  className="text-muted-foreground shrink-0 text-xs"
+                  data-testid={`share-row-level-${s.sharedWithUserId}`}
+                >
+                  {levelLabel(s.level ?? 'view')}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon-sm"

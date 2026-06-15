@@ -150,4 +150,72 @@ describe('forwarded-identity', () => {
     );
     expect(a.signature).toBe(b.signature);
   });
+
+  describe('steer-share delegation claim (thread-sharing-steer)', () => {
+    test('sign/verify round-trips the steer claim', () => {
+      const now = 1_700_000_000_000;
+      const identity = {
+        userId: 'ana',
+        role: 'user',
+        orgId: 'org_1',
+        orgName: 'Acme',
+        shareLevel: 'steer',
+        onBehalfOfThread: 't1',
+      };
+      const { signature, timestamp, nonce } = signForwardedIdentity(identity, SECRET, now);
+      expect(verifyForwardedIdentity(identity, SECRET, signature, timestamp, nonce, now)).toBe(
+        true,
+      );
+    });
+
+    test('a request WITHOUT the claim signs the EXACT legacy string (zero back-compat risk)', () => {
+      const now = 1_700_000_000_000;
+      // Same userId, one with explicit null claim fields, one without — identical
+      // to a pre-steer signer. Both must produce the same signature.
+      const legacy = signForwardedIdentity({ userId: 'u', role: 'user' }, SECRET, now, 'fixed');
+      const withNullClaim = signForwardedIdentity(
+        { userId: 'u', role: 'user', shareLevel: null, onBehalfOfThread: null },
+        SECRET,
+        now,
+        'fixed',
+      );
+      expect(legacy.signature).toBe(withNullClaim.signature);
+    });
+
+    test('the claim is bound to the signature — tampering the thread id fails', () => {
+      const now = 1_700_000_000_000;
+      const identity = {
+        userId: 'ana',
+        role: 'user',
+        orgId: null,
+        orgName: null,
+        shareLevel: 'steer',
+        onBehalfOfThread: 't1',
+      };
+      const { signature, timestamp, nonce } = signForwardedIdentity(identity, SECRET, now);
+      // Attacker re-points the delegation at a different thread.
+      expect(
+        verifyForwardedIdentity(
+          { ...identity, onBehalfOfThread: 't2' },
+          SECRET,
+          signature,
+          timestamp,
+          nonce,
+          now,
+        ),
+      ).toBe(false);
+      // Attacker can't strip the claim to make a steer request look like an
+      // ordinary one either (the signed suffix is missing → HMAC differs).
+      expect(
+        verifyForwardedIdentity(
+          { userId: 'ana', role: 'user', orgId: null, orgName: null },
+          SECRET,
+          signature,
+          timestamp,
+          nonce,
+          now,
+        ),
+      ).toBe(false);
+    });
+  });
 });

@@ -21,7 +21,7 @@ import { requestSpan } from '../../middleware/tracing.js';
 import { validateFilePaths } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThreadCwd } from '../../utils/route-helpers.js';
+import { requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
 import { requireProjectCwd } from './helpers.js';
 
 export const diffRoutes = new Hono<HonoEnv>();
@@ -154,7 +154,12 @@ diffRoutes.get('/project/:projectId/diff/file', async (c) => {
 diffRoutes.get('/:threadId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
@@ -182,7 +187,12 @@ diffRoutes.get('/:threadId/diff/summary', async (c) => {
 diffRoutes.get('/:threadId/diff/submodule', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const relPath = c.req.query('path');
@@ -211,7 +221,12 @@ diffRoutes.get('/:threadId/diff/submodule', async (c) => {
 diffRoutes.get('/:threadId/diff/submodule/file', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const submodulePath = c.req.query('submodule');
@@ -251,7 +266,12 @@ diffRoutes.get('/:threadId/diff/submodule/file', async (c) => {
 diffRoutes.get('/:threadId/diff/file', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const filePath = c.req.query('path');
@@ -277,7 +297,12 @@ diffRoutes.get('/:threadId/diff/file', async (c) => {
 diffRoutes.get('/:threadId/diff', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(
+    c.req.param('threadId'),
+    userId,
+    orgId,
+    steerFromContext(c),
+  );
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {

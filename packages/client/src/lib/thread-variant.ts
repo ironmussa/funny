@@ -83,6 +83,49 @@ export function isReadOnlyShare(
   return thread.userId !== currentUserId;
 }
 
+/**
+ * Whether the current viewer may STEER this thread (send follow-ups). True for
+ * the owner, OR a sharee whose grant level is `steer` (thread-sharing-steer).
+ * `viewerShareLevel` is populated by the single-thread fetch (`GET /threads/:id`);
+ * a `view` sharee — or a sharee on a list-only thread with no level loaded —
+ * returns false. Mirrors the server's `requireThreadSteer` gate.
+ */
+export function canSteerShare(
+  thread: Pick<Thread, 'userId' | 'viewerShareLevel'> | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!thread || !currentUserId) return false;
+  if (thread.userId === currentUserId) return true; // owner
+  return thread.viewerShareLevel === 'steer';
+}
+
+/**
+ * Whether the current viewer may READ git state (status/diff/log) for this
+ * thread. Owner → yes; a `steer` sharee → yes (read-only); a `view` sharee → no.
+ * Git WRITE (commit/push/PR) stays owner-only — gate those on ownership, never
+ * on this predicate. Mirrors the server git-route split (reads → steer, writes →
+ * owner). Kept separate from `canSteerShare` so the two can diverge later
+ * without touching call sites, though today `steer` unlocks both.
+ */
+export function canViewGitShare(
+  thread: Pick<Thread, 'userId' | 'viewerShareLevel'> | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  return canSteerShare(thread, currentUserId);
+}
+
+/**
+ * Whether the Comments affordance (header icon + docked panel) should appear.
+ * Comments are a thread-level discussion shared by the owner and every sharee,
+ * so this is true for ANY real thread the user can view — owner OR sharee, with
+ * or without git. The only exclusion is scratch threads, which are private,
+ * projectless, and have no audience to comment with.
+ */
+export function canShowComments(thread: ThreadLike): boolean {
+  if (!thread) return false;
+  return !thread.isScratch;
+}
+
 // ── Routing ──────────────────────────────────────────────────────
 
 /**

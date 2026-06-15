@@ -1399,6 +1399,16 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    // Share permission level: 'view' (read + comment + presence) or 'steer'
+    // (view + git read-only + follow-ups). Default 'view' keeps every existing
+    // grant at today's behavior. See change `thread-sharing-steer`.
+    name: '065_thread_shares_level',
+    async up() {
+      await ctx().addColumn('thread_shares', 'level', 'TEXT NOT NULL', "'view'");
+    },
+  },
 ];
 
 export async function autoMigrate() {

@@ -32,6 +32,9 @@ export function isThreadOwner(thread: Pick<Thread, 'userId'>, userId: string): b
 /** Looks up whether `userId` holds an active share grant for `threadId`. */
 export type HasShare = (threadId: string, userId: string) => Promise<boolean>;
 
+/** Looks up the share level `userId` holds on `threadId` (`null` if no grant). */
+export type GetShareLevel = (threadId: string, userId: string) => Promise<'view' | 'steer' | null>;
+
 /**
  * Whether `userId` may READ `thread`: the owner, OR a user holding an active
  * share grant (thread-sharing). The owner check short-circuits before any DB
@@ -45,6 +48,21 @@ export async function canViewThread(
   return isThreadOwner(thread, userId) || hasShare(thread.id, userId);
 }
 
+/**
+ * Whether `userId` may STEER `thread`: the owner, OR a sharee whose grant level
+ * is `steer` (thread-sharing-steer). Steer = send follow-ups + git read-only.
+ * This is the ONLY predicate that admits a non-owner to a runner-bound action,
+ * and it gates exactly the allow-listed routes — never the rest.
+ */
+export async function canSteerThread(
+  thread: Pick<Thread, 'id' | 'userId'>,
+  userId: string,
+  getShareLevel: GetShareLevel,
+): Promise<boolean> {
+  if (isThreadOwner(thread, userId)) return true;
+  return (await getShareLevel(thread.id, userId)) === 'steer';
+}
+
 /** How a thread is resolved by id. Injected so the middleware is testable. */
 export type ThreadLoader = (id: string) => Promise<Thread | null | undefined>;
 
@@ -53,16 +71,20 @@ export interface ThreadAccessMiddleware {
   requireThreadView: MiddlewareHandler<ServerEnv>;
   /** Owner-only access for mutation / lifecycle / git / share-admin routes. */
   requireThreadOwner: MiddlewareHandler<ServerEnv>;
+  /** Owner-or-steer-sharee access for the allow-listed runner-bound routes
+   *  (follow-ups + git read-only). See `thread-sharing-steer`. */
+  requireThreadSteer: MiddlewareHandler<ServerEnv>;
 }
 
 /**
- * Build the two access middlewares around a thread loader and a share lookup.
- * `routes/threads.ts` wires these with its `threadRepo.getThread` and
- * `shareRepo.hasShare`; tests pass fakes.
+ * Build the access middlewares around a thread loader and share lookups.
+ * `routes/threads.ts` wires these with its `threadRepo.getThread`,
+ * `shareRepo.hasShare`, and `shareRepo.getShareLevel`; tests pass fakes.
  */
 export function createThreadAccessMiddleware(
   loadThread: ThreadLoader,
   hasShare: HasShare,
+  getShareLevel: GetShareLevel,
 ): ThreadAccessMiddleware {
   function make(
     authorize: (thread: Thread, userId: string) => boolean | Promise<boolean>,
@@ -82,5 +104,6 @@ export function createThreadAccessMiddleware(
   return {
     requireThreadView: make((thread, userId) => canViewThread(thread, userId, hasShare)),
     requireThreadOwner: make(isThreadOwner),
+    requireThreadSteer: make((thread, userId) => canSteerThread(thread, userId, getShareLevel)),
   };
 }

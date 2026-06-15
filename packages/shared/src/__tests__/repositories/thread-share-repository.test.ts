@@ -70,4 +70,38 @@ describe('thread-share-repository', () => {
     deps.sqlite.run("DELETE FROM threads WHERE id = 't1'");
     expect(await repo.hasShare('t1', 'ana')).toBe(false);
   });
+
+  describe('share level (thread-sharing-steer)', () => {
+    test('a grant created without an explicit level defaults to view', async () => {
+      await repo.createShare({
+        threadId: 't1',
+        sharedWithUserId: 'ana',
+        sharedByUserId: 'owner-1',
+      });
+      expect(await repo.getShareLevel('t1', 'ana')).toBe('view');
+    });
+
+    test('a legacy row inserted without level reads back as view', async () => {
+      // Simulate a grant persisted before the level migration (no level column
+      // value) — the DB default keeps it at view.
+      deps.sqlite.run(
+        "INSERT INTO thread_shares (thread_id, shared_with_user_id, shared_by_user_id, created_at) VALUES ('t1', 'leo', 'owner-1', '2026-01-01T00:00:00.000Z')",
+      );
+      expect(await repo.getShareLevel('t1', 'leo')).toBe('view');
+    });
+
+    test('a steer grant reads back as steer', async () => {
+      await repo.createShare({
+        threadId: 't1',
+        sharedWithUserId: 'ana',
+        sharedByUserId: 'owner-1',
+        level: 'steer',
+      });
+      expect(await repo.getShareLevel('t1', 'ana')).toBe('steer');
+    });
+
+    test('getShareLevel returns null when there is no grant', async () => {
+      expect(await repo.getShareLevel('t1', 'nobody')).toBeNull();
+    });
+  });
 });

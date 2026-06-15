@@ -10,10 +10,16 @@ import type {
 import { request } from './_core';
 
 /** A per-thread share grant with the invited user's display fields. */
+/** Share permission level (thread-sharing-steer). `view` = read + comment;
+ *  `steer` = view + git read-only + follow-ups. */
+export type ShareLevel = 'view' | 'steer';
+
 export interface ThreadShareGrant {
   threadId: string;
   sharedWithUserId: string;
   sharedByUserId: string;
+  /** Defaults to `view` for grants created before the steer feature. */
+  level: ShareLevel;
   createdAt: string;
   user: { id: string; name: string; image: string | null; username: string | null } | null;
 }
@@ -306,11 +312,13 @@ export const threadsApi = {
   // Thread sharing
   listThreadShares: (threadId: string) =>
     request<ThreadShareGrant[]>(`/threads/${threadId}/shares`),
-  shareThread: (threadId: string, userId: string) =>
-    request<{ threadId: string; sharedWithUserId: string; sharedByUserId: string }>(
-      `/threads/${threadId}/shares`,
-      { method: 'POST', body: JSON.stringify({ userId }) },
-    ),
+  shareThread: (threadId: string, userId: string, level: ShareLevel = 'view') =>
+    request<{
+      threadId: string;
+      sharedWithUserId: string;
+      sharedByUserId: string;
+      level: ShareLevel;
+    }>(`/threads/${threadId}/shares`, { method: 'POST', body: JSON.stringify({ userId, level }) }),
   unshareThread: (threadId: string, userId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/shares/${userId}`, { method: 'DELETE' }),
   listSharedWithMe: () => request<{ threads: Thread[] }>('/threads/shared-with-me'),

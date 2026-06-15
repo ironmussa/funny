@@ -61,6 +61,10 @@ interface ChangesToolbarProps {
 
   // Agent
   isAgentRunning: boolean | undefined;
+
+  /** A steer sharee viewing read-only (thread-sharing-steer): every git WRITE is
+   *  owner-only, so the toolbar collapses to just Refresh. */
+  readOnly?: boolean;
 }
 
 /**
@@ -100,8 +104,32 @@ export function ChangesToolbar({
   stashInProgress,
   gitStatus,
   isAgentRunning,
+  readOnly,
 }: ChangesToolbarProps) {
   const { t } = useTranslation();
+
+  // Read-only viewer (steer sharee): collapse to just Refresh — every other
+  // control here is a git write, which is owner-only server-side.
+  if (readOnly) {
+    return (
+      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={refresh}
+              className="text-muted-foreground"
+              data-testid="review-refresh"
+            >
+              <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
 
   return (
     <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">

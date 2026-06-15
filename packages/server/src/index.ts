@@ -268,7 +268,8 @@ const { authRoutes } = await import('./routes/auth.js');
 const { projectRoutes } = await import('./routes/projects.js');
 const { runnerRoutes } = await import('./routes/runners.js');
 const { profileRoutes } = await import('./routes/profile.js');
-const { threadRoutes, requireThreadOwner } = await import('./routes/threads.js');
+const { threadRoutes, requireThreadOwner, requireThreadSteer } =
+  await import('./routes/threads.js');
 const { shareRoutes } = await import('./routes/thread-shares.js');
 const { automationRoutes } = await import('./routes/automations.js');
 const { settingsRoutes } = await import('./routes/settings.js');
@@ -339,6 +340,22 @@ const { proxyToRunner } = await import('./middleware/proxy.js');
 // segment or the bare `status` path. (See thread-sharing design.)
 app.all('/api/git/project/*', proxyToRunner);
 app.all('/api/git/status', proxyToRunner);
+
+// READ-ONLY thread-scoped git is ALLOW-LISTED for steer sharees
+// (thread-sharing-steer): owner OR a `steer` sharee may GET status / diff / log
+// / commit details. These run on the OWNER's runner (steer resolution crosses
+// isolation), so they are deliberately limited to GET on these exact read
+// sub-paths and registered BEFORE the owner-only catch-all. Every other git op
+// (stage, commit, stash, push, PR, convert) stays owner-only below — a sharee
+// never uses the owner's GitHub token. The runtime re-checks the same grant.
+app.get('/api/git/:id/status', requireThreadSteer, proxyToRunner);
+app.get('/api/git/:id/diff', requireThreadSteer, proxyToRunner);
+app.get('/api/git/:id/diff/*', requireThreadSteer, proxyToRunner);
+app.get('/api/git/:id/log', requireThreadSteer, proxyToRunner);
+app.get('/api/git/:id/graph-log', requireThreadSteer, proxyToRunner);
+app.get('/api/git/:id/commit/*', requireThreadSteer, proxyToRunner);
+
+// Everything else thread-scoped under /api/git stays OWNER-ONLY.
 app.all('/api/git/:id/*', requireThreadOwner, proxyToRunner);
 
 app.all('/api/*', proxyToRunner);

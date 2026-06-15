@@ -6,6 +6,7 @@ import {
   canDoGitOps,
   canFetchGitStatus,
   canShowPowerline,
+  canCommentShare,
   canSteerShare,
   canViewGitShare,
   getSidebarBucket,
@@ -127,6 +128,32 @@ describe('canSteerShare / canViewGitShare (thread-sharing-steer)', () => {
     expect(canSteerShare(makeThread({ userId: OWNER, viewerShareLevel: 'steer' }), null)).toBe(
       false,
     );
+  });
+});
+
+describe('canCommentShare (viewer < commenter < editor)', () => {
+  const OWNER = 'owner-1';
+  const SHAREE = 'ana-2';
+
+  test('owner can always comment', () => {
+    expect(canCommentShare(makeThread({ userId: OWNER }), OWNER)).toBe(true);
+  });
+
+  test('commenter and editor (steer) sharees can comment', () => {
+    expect(
+      canCommentShare(makeThread({ userId: OWNER, viewerShareLevel: 'comment' }), SHAREE),
+    ).toBe(true);
+    expect(canCommentShare(makeThread({ userId: OWNER, viewerShareLevel: 'steer' }), SHAREE)).toBe(
+      true,
+    );
+  });
+
+  test('a view-only sharee can NOT comment', () => {
+    expect(canCommentShare(makeThread({ userId: OWNER, viewerShareLevel: 'view' }), SHAREE)).toBe(
+      false,
+    );
+    // No loaded level (list-only) → also false.
+    expect(canCommentShare(makeThread({ userId: OWNER }), SHAREE)).toBe(false);
   });
 });
 

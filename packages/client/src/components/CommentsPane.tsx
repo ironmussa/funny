@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { timeAgo } from '@/lib/thread-utils';
+import { canCommentShare } from '@/lib/thread-variant';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCommentStore } from '@/stores/comment-store';
 import { useThreadSelector } from '@/stores/thread-context';
@@ -25,6 +26,9 @@ export function CommentsPane() {
   const ownerId = useThreadSelector((th) => th?.userId ?? null);
   const selfId = useAuthStore((s) => s.user?.id ?? null);
   const isOwner = !!selfId && ownerId === selfId;
+  // A view-only sharee can READ comments but not post (server enforces 403). The
+  // owner and comment/editor sharees can post.
+  const canComment = useThreadSelector((th) => canCommentShare(th, selfId));
 
   const comments = useCommentStore((s) => (threadId ? (s.byThread[threadId] ?? null) : null));
   const loading = useCommentStore((s) => (threadId ? !!s.loadingByThread[threadId] : false));
@@ -135,31 +139,43 @@ export function CommentsPane() {
         </div>
       </ScrollArea>
 
-      <div className="border-border flex shrink-0 items-end gap-2 border-t p-3">
-        <Textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder={t('comments.placeholder', 'Write a comment…')}
-          className="max-h-32 min-h-9 resize-none text-sm"
-          rows={1}
-          data-testid="comment-input"
-        />
-        <Button
-          size="icon"
-          disabled={!canSend}
-          onClick={() => void submit()}
-          data-testid="comment-send"
-          aria-label={t('comments.send', 'Send comment')}
+      {canComment ? (
+        <div className="border-border flex shrink-0 items-end gap-2 border-t p-3">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder={t('comments.placeholder', 'Write a comment…')}
+            className="max-h-32 min-h-9 resize-none text-sm"
+            rows={1}
+            data-testid="comment-input"
+          />
+          <Button
+            size="icon"
+            disabled={!canSend}
+            onClick={() => void submit()}
+            data-testid="comment-send"
+            aria-label={t('comments.send', 'Send comment')}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <div
+          className="border-border text-muted-foreground shrink-0 border-t p-3 text-center text-xs"
+          data-testid="comment-readonly-notice"
         >
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
+          {t(
+            'comments.viewOnly',
+            'You have view-only access — you can read comments but not post.',
+          )}
+        </div>
+      )}
     </div>
   );
 }

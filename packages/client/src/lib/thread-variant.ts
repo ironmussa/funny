@@ -100,6 +100,21 @@ export function canSteerShare(
 }
 
 /**
+ * Whether the current viewer may POST a comment on this thread. Owner → yes; a
+ * `comment` or `steer` sharee → yes; a `view` (read-only) sharee → no. Mirrors
+ * the server's `comment` capability gate on `POST /:id/comments`. Use this to
+ * gate the comment INPUT; reading comments is governed by `canShowComments`.
+ */
+export function canCommentShare(
+  thread: Pick<Thread, 'userId' | 'viewerShareLevel'> | null | undefined,
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!thread || !currentUserId) return false;
+  if (thread.userId === currentUserId) return true; // owner
+  return thread.viewerShareLevel === 'comment' || thread.viewerShareLevel === 'steer';
+}
+
+/**
  * Whether the current viewer may READ git state (status/diff/log) for this
  * thread. Owner → yes; a `steer` sharee → yes (read-only); a `view` sharee → no.
  * Git WRITE (commit/push/PR) stays owner-only — gate those on ownership, never

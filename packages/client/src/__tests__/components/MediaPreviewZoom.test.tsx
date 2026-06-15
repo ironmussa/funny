@@ -27,4 +27,26 @@ describe('MediaPreview image zoom controls', () => {
     // Cannot zoom below fit.
     expect(screen.getByTestId('image-zoom-out')).toBeDisabled();
   });
+
+  test('panning while zoomed does not throw and moves the image', () => {
+    const { container } = render(
+      <MediaPreview src="/api/files/raw?path=%2Fa.png" name="a.png" kind="image" />,
+    );
+    const img = container.querySelector('img') as HTMLImageElement;
+
+    // Zoom in so pan is enabled.
+    fireEvent.click(screen.getByTestId('image-zoom-in'));
+    const before = img.style.transform;
+
+    // Regression: pointerdown read `e.currentTarget` inside a setState updater,
+    // where it is already null → "Cannot read properties of null
+    // (reading 'setPointerCapture')". A drag must not throw.
+    expect(() => {
+      fireEvent.pointerDown(img, { pointerId: 1, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(img, { pointerId: 1, clientX: 160, clientY: 140 });
+      fireEvent.pointerUp(img, { pointerId: 1, clientX: 160, clientY: 140 });
+    }).not.toThrow();
+
+    expect(img.style.transform).not.toBe(before);
+  });
 });

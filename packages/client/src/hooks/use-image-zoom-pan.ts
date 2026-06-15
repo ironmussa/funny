@@ -64,14 +64,24 @@ export function useImageZoomPan(): ImageZoomPan {
   const [transform, setTransform] = useState<Transform>(IDENTITY);
   const [dragging, setDragging] = useState(false);
 
+  // Mirror of `transform` so pointer handlers can read the live value
+  // synchronously — React nulls the synthetic event before a `setState`
+  // updater runs, so the event must be read OUTSIDE the updater.
+  const transformRef = useRef<Transform>(IDENTITY);
   const dragStart = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
-  const reset = useCallback(() => setTransform(IDENTITY), []);
+  const apply = useCallback((next: Transform) => {
+    transformRef.current = next;
+    setTransform(next);
+  }, []);
 
-  const zoomBy = useCallback((factor: number, originX?: number, originY?: number) => {
-    setTransform((t) => {
+  const reset = useCallback(() => apply(IDENTITY), [apply]);
+
+  const zoomBy = useCallback(
+    (factor: number, originX?: number, originY?: number) => {
+      const t = transformRef.current;
       const nextScale = clamp(t.scale * factor, MIN_SCALE, MAX_SCALE);
-      if (nextScale === t.scale) return t;
+      if (nextScale === t.scale) return;
       // Zoom toward the given screen point (cursor); fall back to viewport
       // center. The image is centered, so its center ≈ viewport center.
       const cx = window.innerWidth / 2;
@@ -79,13 +89,16 @@ export function useImageZoomPan(): ImageZoomPan {
       const ux = (originX ?? cx) - cx;
       const uy = (originY ?? cy) - cy;
       const ratio = nextScale / t.scale;
-      return clampOffset({
-        scale: nextScale,
-        x: ux - ratio * (ux - t.x),
-        y: uy - ratio * (uy - t.y),
-      });
-    });
-  }, []);
+      apply(
+        clampOffset({
+          scale: nextScale,
+          x: ux - ratio * (ux - t.x),
+          y: uy - ratio * (uy - t.y),
+        }),
+      );
+    },
+    [apply],
+  );
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLImageElement>) => {
@@ -96,45 +109,52 @@ export function useImageZoomPan(): ImageZoomPan {
   );
 
   const onPointerDown = useCallback((e: PointerEvent<HTMLImageElement>) => {
-    setTransform((t) => {
-      if (t.scale <= 1) return t;
-      e.currentTarget.setPointerCapture(e.pointerId);
-      dragStart.current = { x: e.clientX, y: e.clientY, ox: t.x, oy: t.y };
-      setDragging(true);
-      return t;
-    });
+    const t = transformRef.current;
+    if (t.scale <= 1) return;
+    // Read the event synchronously — this must NOT run inside a setState updater.
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragStart.current = { x: e.clientX, y: e.clientY, ox: t.x, oy: t.y };
+    setDragging(true);
   }, []);
 
-  const onPointerMove = useCallback((e: PointerEvent<HTMLImageElement>) => {
-    const start = dragStart.current;
-    if (!start) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    if (Math.abs(dx) <= DRAG_THRESHOLD_PX && Math.abs(dy) <= DRAG_THRESHOLD_PX) return;
-    setTransform((t) => clampOffset({ scale: t.scale, x: start.ox + dx, y: start.oy + dy }));
-  }, []);
+  const onPointerMove = useCallback(
+    (e: PointerEvent<HTMLImageElement>) => {
+      const start = dragStart.current;
+      if (!start) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (Math.abs(dx) <= DRAG_THRESHOLD_PX && Math.abs(dy) <= DRAG_THRESHOLD_PX) return;
+      apply(clampOffset({ scale: transformRef.current.scale, x: start.ox + dx, y: start.oy + dy }));
+    },
+    [apply],
+  );
 
   const onPointerUp = useCallback((e: PointerEvent<HTMLImageElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
     }
     dragStart.current = null;
     setDragging(false);
   }, []);
 
-  const onDoubleClick = useCallback((e: PointerEvent<HTMLImageElement>) => {
-    setTransform((t) => {
+  const onDoubleClick = useCallback(
+    (e: PointerEvent<HTMLImageElement>) => {
+      const t = transformRef.current;
       // Toggle: if already magnified, snap back to fit; otherwise zoom to 2×
       // anchored on the cursor.
-      if (t.scale > 1) return IDENTITY;
+      if (t.scale > 1) {
+        apply(IDENTITY);
+        return;
+      }
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
       const ux = e.clientX - cx;
       const uy = e.clientY - cy;
       const ratio = 2 / t.scale;
-      return clampOffset({ scale: 2, x: ux - ratio * (ux - t.x), y: uy - ratio * (uy - t.y) });
-    });
-  }, []);
+      apply(clampOffset({ scale: 2, x: ux - ratio * (ux - t.x), y: uy - ratio * (uy - t.y) }));
+    },
+    [apply],
+  );
 
   return {
     transform,

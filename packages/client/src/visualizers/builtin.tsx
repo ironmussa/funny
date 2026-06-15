@@ -52,6 +52,28 @@ function VideoVisualizer({ src, fill }: VisualizerProps) {
 }
 
 /**
+ * Built-in image preview. A `binary` visualizer (sibling of the video one): it
+ * renders from `src` (the raw-bytes URL from `/api/files/raw`), since `source`
+ * text would be corrupt image bytes. Covers the Monaco-dialog and internal-editor
+ * paths (review-pane changed files, open-in-editor), where a `.png`/`.jpg`/… would
+ * otherwise open as garbled text. No dependency — a native <img> — so it ships
+ * inline. In the thread's markdown sink, images stay on the native <img>+lightbox
+ * path (markdown-components.tsx skips the binary deferral for image kinds).
+ */
+function ImageVisualizer({ src, fill }: VisualizerProps) {
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt="preview"
+      loading="lazy"
+      data-testid="visualizer-image"
+      className={cn('w-full bg-muted/30 object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
+    />
+  );
+}
+
+/**
  * Register funny's built-in visualizers. These ship in the base bundle because
  * they're broadly useful and cheap to maintain (Mermaid has one dep and is
  * lazy-loaded; CSV and video have none). Video is the reference `binary`
@@ -73,14 +95,23 @@ export function registerBuiltinVisualizers(): void {
     contributes: { fences: ['csv'], fileExtensions: ['.csv'] },
     Component: CsvVisualizer,
   });
-  // Binary visualizer (reads `src`, not `source`). In the project file tree
-  // these extensions hit the richer `MediaPreview` lightbox first; this entry
-  // covers the Monaco-dialog path (review-pane changed files, internal editor),
-  // where a video would otherwise open as corrupt text.
+  // Binary visualizers (read `src`, not `source`). In the project file tree
+  // these extensions hit the richer `MediaPreview` lightbox first; these entries
+  // cover the Monaco-dialog path (review-pane changed files, internal editor),
+  // where a video/image would otherwise open as corrupt text.
   registerVisualizer({
     id: '@funny/visualizer-video',
     version: '1.0.0',
     contributes: { fileExtensions: ['.mp4', '.webm', '.mov', '.mkv'], binary: true },
     Component: VideoVisualizer,
+  });
+  registerVisualizer({
+    id: '@funny/visualizer-image',
+    version: '1.0.0',
+    contributes: {
+      fileExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.avif', '.ico'],
+      binary: true,
+    },
+    Component: ImageVisualizer,
   });
 }

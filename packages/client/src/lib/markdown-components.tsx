@@ -5,7 +5,8 @@ import remarkGfm from 'remark-gfm';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureLanguage, getFileExtension, highlightCode } from '@/hooks/use-highlight';
-import { isExternalUrl, resolveImageSrc } from '@/lib/raw-file-src';
+import { isExternalUrl } from '@/lib/raw-file-src';
+import { useResolvedMediaSrc } from '@/lib/use-direct-media';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 
@@ -26,6 +27,11 @@ export const remarkPlugins = [remarkGfm];
 export const markdownProseClassName = 'prose max-w-none';
 
 const MARKDOWN_LANGS = new Set(['markdown', 'md']);
+
+// Extensions a native <img> renders directly. Kept in sync with the image
+// visualizer's `fileExtensions` in `visualizers/builtin.tsx`. Local images stay
+// on the <img>+lightbox path below instead of deferring to the binary visualizer.
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico']);
 
 /**
  * Heuristic: does this text look like markdown content rather than code?
@@ -130,13 +136,19 @@ function HighlightedCode({ code, language }: { code: string; language: string })
  * app's markdown security policy.
  */
 function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
-  const resolved = resolveImageSrc(src);
+  // Proxied `/api/files/raw` URL immediately, upgraded to a signed direct-runner
+  // URL (transport C) when the runner supports it. Falls back silently otherwise.
+  const resolved = useResolvedMediaSrc(src);
   if (!resolved) return null;
   const isLocal = !!src && !isExternalUrl(src);
   // A local file claimed by a binary visualizer (e.g. the built-in video
   // renderer) is rendered through that visualizer inline — like GitHub turning
   // `![](clip.mp4)` into a player — rather than a broken <img> of raw bytes.
-  if (isLocal) {
+  // Images are the exception: a native <img> already renders them, and this sink
+  // wraps locals in the click-to-zoom media lightbox below — richer than the bare
+  // binary visualizer — so we keep images on that path even though an image
+  // binary visualizer is registered (it covers the Monaco/internal-editor paths).
+  if (isLocal && !IMAGE_EXTS.has(getFileExtension(src).toLowerCase())) {
     const viz = getVisualizerForFileExt(getFileExtension(src));
     if (viz?.contributes.binary) {
       const Visualizer = viz.Component;

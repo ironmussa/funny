@@ -58,6 +58,17 @@ describe('markdown img', () => {
     expect(container.querySelector('img')).toBeNull();
   });
 
+  test('a local image keeps the native <img>+lightbox path even with the image visualizer registered', () => {
+    // The image visualizer is binary, but markdown images must NOT defer to it —
+    // a native <img> renders them and this sink adds the click-to-zoom lightbox.
+    registerBuiltinVisualizers();
+    render(createElement(Img, { src: '/abs/diagram.png', alt: 'd' }));
+    expect(screen.queryByTestId('markdown-binary-visualizer')).toBeNull();
+    expect(screen.queryByTestId('visualizer-image')).toBeNull();
+    expect(screen.getByTestId('markdown-image')).toBeTruthy();
+    expect(screen.getByTestId('markdown-image-button')).toBeTruthy();
+  });
+
   test('a web video URL is left as a plain <img> (not routed through the visualizer)', () => {
     registerBuiltinVisualizers();
     render(createElement(Img, { src: 'https://x.com/clip.mp4', alt: 'remote' }));

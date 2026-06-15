@@ -2,8 +2,9 @@
 
 Visualizer plugins extend how funny renders content — they turn a fenced code
 block or a file preview into a rich, interactive view. funny ships **Mermaid**
-(diagrams), **CSV** (tables), and **video** (`.mp4`/`.webm`/`.mov`/`.mkv`, the
-reference [binary visualizer](#binary-visualizers)) as built-ins, built on the
+(diagrams), **CSV** (tables), **video** (`.mp4`/`.webm`/`.mov`/`.mkv`) and
+**image** (`.png`/`.jpg`/`.gif`/`.webp`/`.svg`/…) as built-ins — video and image
+being the reference [binary visualizers](#binary-visualizers) — built on the
 exact same contract a third-party plugin uses, so anything a built-in does, your
 plugin can too. Heavier / more niche renderers (e.g. DBML) ship as installable
 extensions.
@@ -204,18 +205,19 @@ through props.
 Arrow, …). To render bytes, set `contributes.binary: true` and read from `src`
 instead — a URL to the file's raw bytes the host serves from
 `/api/files/raw?path=…`. The host detects a binary visualizer and **skips the
-text fetch**, so `source` arrives empty and only `src` is populated.
+text fetch**, so `source` arrives empty and only `src` is populated. (Images and
+video already ship as built-in binary visualizers; the same pattern covers your
+own formats, e.g. Parquet below.)
 
 ```ts
 const plugin: VisualizerPlugin = {
-  id: 'funny-visualizer-image',
+  id: 'funny-visualizer-parquet',
   version: '0.1.0',
   contributes: {
-    fileExtensions: ['.png', '.jpg', '.webp', '.gif'],
+    fileExtensions: ['.parquet'],
     binary: true, // ← read `src`, not `source`
   },
-  Component: ({ src }: VisualizerProps) =>
-    src ? <img src={src} style={{ maxWidth: '100%' }} /> : null,
+  Component: ({ src }: VisualizerProps) => (src ? <ParquetTable src={src} /> : null),
 };
 ```
 

@@ -4,9 +4,10 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
-import { ImageLightbox } from '@/components/ImageLightbox';
+import { ImageZoomControls } from '@/components/ImageZoomControls';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useImageZoomPan } from '@/hooks/use-image-zoom-pan';
 import { createClientLogger } from '@/lib/client-logger';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
@@ -167,29 +168,26 @@ function ImagePreview({
   name?: string;
   onError?: (error: Error) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const zoom = useImageZoomPan();
   return (
-    <>
-      <button
-        type="button"
-        data-testid="media-preview-image-button"
-        onClick={() => setOpen(true)}
-        className="group bg-muted/30 flex items-center justify-center p-2"
-      >
-        <img
-          src={src}
-          alt={name ?? 'preview'}
-          loading="lazy"
-          onError={() => onError?.(new Error(`Failed to load image: ${src}`))}
-          className="max-h-[60vh] max-w-full rounded object-contain transition-transform group-hover:scale-[1.01]"
-        />
-      </button>
-      <ImageLightbox
-        images={[{ src, alt: name ?? 'preview' }]}
-        open={open}
-        onClose={() => setOpen(false)}
+    <div
+      data-testid="media-preview-image"
+      className="bg-muted/30 relative flex max-h-[70vh] min-h-[12rem] items-center justify-center overflow-hidden p-2"
+    >
+      <img
+        {...zoom.imgProps}
+        src={src}
+        alt={name ?? 'preview'}
+        loading="lazy"
+        onError={() => onError?.(new Error(`Failed to load image: ${src}`))}
+        className={cn(
+          'max-h-[66vh] max-w-full rounded object-contain select-none',
+          zoom.zoomed ? (zoom.dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in',
+          zoom.dragging ? '' : 'transition-transform duration-150',
+        )}
       />
-    </>
+      <ImageZoomControls zoom={zoom} className="absolute bottom-3 left-1/2 -translate-x-1/2" />
+    </div>
   );
 }
 

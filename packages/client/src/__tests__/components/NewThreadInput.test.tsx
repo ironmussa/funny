@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
@@ -147,6 +147,37 @@ describe('NewThreadInput', () => {
 
     expect(screen.getByTestId('initial-prompt')).toHaveTextContent('Prefilled prompt');
     expect(useUIStore.getState().composePrefillPrompt).toBeNull();
+  });
+
+  test('keeps the loader pinned after a successful submit (no compose flash)', async () => {
+    // Regression: the hook flips `creating` back to false as soon as the create
+    // resolves, but react-router's URL commit (which unmounts this form) lands a
+    // render later. The component must keep showing "Preparing…" — not flash the
+    // empty compose form — until it unmounts.
+    mockCreateThread.mockResolvedValueOnce(true);
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+
+    expect(screen.getByTestId('mock-prompt-input')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mock-prompt-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('new-thread-creating')).toBeInTheDocument());
+    // Compose form is gone — the loader replaced it even though the mocked hook
+    // reports `creating: false`.
+    expect(screen.queryByTestId('mock-prompt-input')).not.toBeInTheDocument();
+  });
+
+  test('does NOT pin the loader for idle (backlog) submits', async () => {
+    // Idle creates stay on this screen (no navigation), so the loader must not
+    // stick — otherwise the compose form would be replaced by a stuck spinner.
+    useUIStore.setState({ newThreadIdleOnly: true } as any);
+    mockCreateThread.mockResolvedValueOnce(true);
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+
+    fireEvent.click(screen.getByTestId('mock-prompt-submit'));
+
+    await waitFor(() => expect(mockCreateThread).toHaveBeenCalled());
+    expect(screen.queryByTestId('new-thread-creating')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mock-prompt-input')).toBeInTheDocument();
   });
 
   test('shows worktree branch preview when worktree mode is enabled', () => {

@@ -44,6 +44,7 @@ function useFilteredCommandItems(
   projects: ProjectEntry[],
   search: string,
   t: (key: string) => string,
+  hasActiveProject: boolean,
 ) {
   const searchLower = search.toLowerCase();
   const displayProjects = useMemo(() => {
@@ -62,13 +63,17 @@ function useFilteredCommandItems(
   }, [projects, searchLower]);
 
   const displaySettings = useMemo(() => {
+    // Settings items are per-project; they navigate to the active project's
+    // settings. With no active project there's nothing to configure, so hide
+    // them. (Instance-wide settings live in Preferences, opened via the gear.)
+    if (!hasActiveProject) return [];
     if (!searchLower) return settingsItems;
     return settingsItems.filter((item) => {
       const label = item.label.toLowerCase();
       const translated = t(settingsLabelKeys[item.id] ?? item.label).toLowerCase();
       return label.includes(searchLower) || translated.includes(searchLower);
     });
-  }, [searchLower, t]);
+  }, [searchLower, t, hasActiveProject]);
 
   const hasNoResults =
     !!searchLower && displayProjects.length === 0 && displaySettings.length === 0;
@@ -105,8 +110,8 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const projects = useProjectStore((s) => s.projects);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const startNewThread = useUIStore((s) => s.startNewThread);
-  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const navigatedRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
@@ -114,6 +119,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
     projects,
     search,
     t,
+    !!selectedProjectId,
   );
 
   // cmdk uses scrollIntoView({block:"nearest"}), which leaves the first
@@ -179,12 +185,15 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
   }, []);
 
   const handleSettingsSelect = (itemId: string) => {
+    // Settings are per-project. The group is hidden when no project is active,
+    // so selectedProjectId is set here; route-sync opens the settings panel
+    // from the URL (mirrors the project kebab → Settings entry point).
+    if (!selectedProjectId) return;
     navigatedRef.current = true;
     onOpenChange(false);
 
     setTimeout(() => {
-      setSettingsOpen(true);
-      navigate(buildPath(`/settings/${itemId}`));
+      navigate(buildPath(`/projects/${selectedProjectId}/settings/${itemId}`));
     }, 150);
   };
 

@@ -18,6 +18,7 @@ const PAGE_SIZE = 100;
 export function ArchivedThreadsSettings() {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
+  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -34,22 +35,26 @@ export function ArchivedThreadsSettings() {
 
   // Fetch one page. page 1 replaces the list (initial load / new search);
   // later pages append for infinite scroll.
-  const fetchArchived = useCallback(async (p: number, s: string) => {
-    if (p === 1) setLoading(true);
-    else setLoadingMore(true);
-    const result = await api.listArchivedThreads({
-      page: p,
-      limit: PAGE_SIZE,
-      search: s || undefined,
-    });
-    if (result.isOk()) {
-      setTotal(result.value.total);
-      setThreads((prev) => (p === 1 ? result.value.threads : [...prev, ...result.value.threads]));
-    }
-    // silently ignore errors
-    setLoading(false);
-    setLoadingMore(false);
-  }, []);
+  const fetchArchived = useCallback(
+    async (p: number, s: string) => {
+      if (p === 1) setLoading(true);
+      else setLoadingMore(true);
+      const result = await api.listArchivedThreads({
+        page: p,
+        limit: PAGE_SIZE,
+        search: s || undefined,
+        projectId: selectedProjectId || undefined,
+      });
+      if (result.isOk()) {
+        setTotal(result.value.total);
+        setThreads((prev) => (p === 1 ? result.value.threads : [...prev, ...result.value.threads]));
+      }
+      // silently ignore errors
+      setLoading(false);
+      setLoadingMore(false);
+    },
+    [selectedProjectId],
+  );
 
   // Reset to page 1 and refetch whenever the debounced query changes.
   useEffect(() => {

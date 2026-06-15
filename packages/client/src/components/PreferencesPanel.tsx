@@ -12,6 +12,8 @@ import {
   Server,
   SlidersHorizontal,
   Sparkles,
+  Users,
+  UsersRound,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -37,7 +39,9 @@ export type GeneralPage =
   | 'ai-keys'
   | 'speech'
   | 'email'
+  | 'users'
   | 'organizations'
+  | 'team-members'
   | 'runners'
   | 'system'
   | 'extensions'
@@ -57,7 +61,9 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'ai-keys', label: 'AI Providers', icon: Bot },
   { id: 'speech', label: 'Speech', icon: Mic },
   { id: 'email', label: 'Email (SMTP)', icon: Mail },
+  { id: 'users', label: 'Users', icon: Users },
   { id: 'organizations', label: 'settings.organizations', icon: Building2 },
+  { id: 'team-members', label: 'Team Members', icon: UsersRound },
   { id: 'runners', label: 'settings.runners', icon: Server },
   { id: 'agent-templates', label: 'settings.agentTemplates', icon: Bot },
   { id: 'extensions', label: 'Extensions', icon: Puzzle },
@@ -73,7 +79,9 @@ export const PREFERENCES_NAV_ITEMS: Array<{
  */
 export const ADMIN_ONLY_PREFERENCES: ReadonlySet<GeneralPage> = new Set([
   'email',
+  'users',
   'organizations',
+  'team-members',
   'extensions',
   'system',
 ]);

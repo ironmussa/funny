@@ -30,6 +30,7 @@ import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { isAgentRunning } from './agent-runner.js';
 import { createOrReschedule } from './agent-watcher-manager.js';
+import { buildLogTail } from './job-log-tail.js';
 import { getServices } from './service-registry.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { sendMessage } from './thread-service/messaging.js';
@@ -195,8 +196,7 @@ async function onTerminal(job: Job, status: JobStatus, exitCode: number | null):
 
 function tailLog(logPath: string, maxLines = 50): string {
   if (!existsSync(logPath)) return '(no output captured)';
-  const lines = readFileSync(logPath, 'utf8').split('\n');
-  return lines.slice(-maxLines).join('\n').trim() || '(empty)';
+  return buildLogTail(readFileSync(logPath, 'utf8'), maxLines);
 }
 
 function renderCompletion(job: Job): string {

@@ -1416,7 +1416,141 @@ const migrations: Migration[] = [
       await ctx().addColumn('runners', 'public_media_url', 'TEXT');
     },
   },
+  {
+    // unified-rbac-grants, Phase 1. Owning org for org→project role
+    // inheritance; NULL = personal. Backfilled from `team_projects` in a later
+    // phase, after which `team_projects` is retired. No behavior change yet.
+    name: '067_projects_organization_id',
+    async up() {
+      await ctx().addColumn('projects', 'organization_id', 'TEXT');
+    },
+  },
+  {
+    // unified-rbac-grants, Phase 1. Single source of truth for resource access
+    // grants (org/project/thread). Composite PK makes a re-grant idempotent.
+    // Created empty — no reads/writes wired until later phases.
+    name: '068_resource_grants',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS resource_grants (
+          subject_id TEXT NOT NULL,
+          resource_type TEXT NOT NULL,
+          resource_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          granted_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (subject_id, resource_type, resource_id)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_resource_grants_resource
+        ON resource_grants (resource_type, resource_id)
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_resource_grants_subject
+        ON resource_grants (subject_id, resource_type)
+      `);
+    },
+  },
+  {
+    // unified-rbac-grants, Phase 1. Per-collaborator project config (local
+    // working path), split out from authorization. Membership/role moves to
+    // `resource_grants`; this table only answers "where is the user's copy?".
+    name: '069_project_member_config',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_member_config (
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          local_path TEXT,
+          joined_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, user_id)
+        )
+      `);
+    },
+  },
+  {
+    // unified-rbac-grants, Phase 6. Backfill the unified table from the legacy
+    // membership tables, and denormalize the org→project edge. Idempotent via
+    // `ON CONFLICT DO NOTHING` (composite PK) — safe to re-run and safe alongside
+    // the Phase 4 dual-write (existing rows are kept). Org membership stays
+    // canonical in Better Auth `member` (design D1), so it is NOT copied here.
+    //
+    // Role mapping (legacy → canonical lattice):
+    //   project_members.role: admin→admin, owner→owner, viewer→viewer, else→contributor
+    //   thread_shares.level:  steer→contributor, else (view)→viewer
+    name: '070_backfill_resource_grants',
+    async up() {
+      await backfillResourceGrants((q) => ctx().exec(q));
+    },
+  },
 ];
+
+/**
+ * Backfill `resource_grants` + `projects.organization_id` from the legacy
+ * membership tables (unified-rbac-grants, Phase 6). Idempotent via
+ * `ON CONFLICT DO NOTHING`. Exported so the migration test can run it against a
+ * seeded legacy DB without duplicating the SQL.
+ *
+ * Role mapping (legacy → canonical lattice):
+ *   project_members.role: admin→admin, owner→owner, viewer→viewer, else→contributor
+ *   thread_shares.level:  steer→contributor, else (view)→viewer
+ * Org membership stays canonical in Better Auth `member` (design D1) — not copied.
+ */
+export async function backfillResourceGrants(
+  exec: (q: ReturnType<typeof sql>) => Promise<unknown>,
+) {
+  // project_members → project grants. `WHERE NOT EXISTS` keeps it idempotent and
+  // avoids the INSERT…SELECT…ON CONFLICT parse ambiguity (rejected by SQLite).
+  await exec(sql`
+    INSERT INTO resource_grants
+      (subject_id, resource_type, resource_id, role, granted_by, created_at)
+    SELECT
+      pm.user_id, 'project', pm.project_id,
+      CASE pm.role
+        WHEN 'admin' THEN 'admin'
+        WHEN 'owner' THEN 'owner'
+        WHEN 'viewer' THEN 'viewer'
+        ELSE 'contributor'
+      END,
+      pm.user_id, pm.joined_at
+    FROM project_members pm
+    WHERE NOT EXISTS (
+      SELECT 1 FROM resource_grants rg
+      WHERE rg.subject_id = pm.user_id
+        AND rg.resource_type = 'project'
+        AND rg.resource_id = pm.project_id
+    )
+  `);
+
+  // thread_shares → thread grants
+  await exec(sql`
+    INSERT INTO resource_grants
+      (subject_id, resource_type, resource_id, role, granted_by, created_at)
+    SELECT
+      ts.shared_with_user_id, 'thread', ts.thread_id,
+      CASE ts.level WHEN 'steer' THEN 'contributor' ELSE 'viewer' END,
+      ts.shared_by_user_id, ts.created_at
+    FROM thread_shares ts
+    WHERE NOT EXISTS (
+      SELECT 1 FROM resource_grants rg
+      WHERE rg.subject_id = ts.shared_with_user_id
+        AND rg.resource_type = 'thread'
+        AND rg.resource_id = ts.thread_id
+    )
+  `);
+
+  // team_projects → projects.organization_id (denormalize the org→project edge;
+  // design D2). A project maps to at most one org in practice.
+  await exec(sql`
+    UPDATE projects
+    SET organization_id = (
+      SELECT team_id FROM team_projects WHERE team_projects.project_id = projects.id LIMIT 1
+    )
+    WHERE organization_id IS NULL
+      AND EXISTS (SELECT 1 FROM team_projects WHERE team_projects.project_id = projects.id)
+  `);
+}
 
 export async function autoMigrate() {
   await runMigrations(db as any, migrations, log, 'central-db', dbDialect);

@@ -39,6 +39,26 @@ describe('thread-share-repository', () => {
     expect(await repo.listSharesForThread('t1')).toHaveLength(0);
   });
 
+  test('createShare dual-writes a unified grant; deleteShare removes it (unified-rbac-grants)', async () => {
+    const { createGrantRepository } = await import('../../repositories/grant-repository.js');
+    const g = createGrantRepository(deps);
+    const grantRole = (subject: string) => g.getGrantRole(subject, 'thread', 't1');
+
+    await repo.createShare({ threadId: 't1', sharedWithUserId: 'ana', sharedByUserId: 'owner-1' });
+    expect(await grantRole('ana')).toBe('viewer'); // view → viewer
+
+    await repo.createShare({
+      threadId: 't1',
+      sharedWithUserId: 'leo',
+      sharedByUserId: 'owner-1',
+      level: 'steer',
+    });
+    expect(await grantRole('leo')).toBe('contributor'); // steer → contributor
+
+    await repo.deleteShare('t1', 'ana');
+    expect(await grantRole('ana')).toBeNull();
+  });
+
   test('createShare is idempotent on the same (thread, user) pair', async () => {
     await repo.createShare({ threadId: 't1', sharedWithUserId: 'ana', sharedByUserId: 'owner-1' });
     const second = await repo.createShare({

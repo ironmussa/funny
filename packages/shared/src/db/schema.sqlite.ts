@@ -50,6 +50,9 @@ export const projects = sqliteTable('projects', {
   launcherUrl: text('launcher_url'),
   defaultAgentTemplateId: text('default_agent_template_id'), // default template for new threads
   userId: text('user_id').notNull(),
+  // Owning organization for org→project role inheritance (unified-rbac-grants).
+  // NULL = personal project. Replaces the `team_projects` join table.
+  organizationId: text('organization_id'),
   sortOrder: integer('sort_order').notNull().default(0),
   closed: integer('closed').notNull().default(0),
   createdAt: text('created_at').notNull(),
@@ -532,6 +535,49 @@ export const projectMembers = sqliteTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull(),
     role: text('role').notNull().default('member'),
+    localPath: text('local_path'),
+    joinedAt: text('joined_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
+);
+
+/**
+ * Unified resource-access grants (unified-rbac-grants). One row = one subject's
+ * canonical role on one resource. `resource_type` ∈ {'org','project','thread'};
+ * `role` is the canonical lattice value {'owner','admin','contributor','viewer'}.
+ * The composite PK makes a re-grant idempotent. Collapses `project_members.role`,
+ * `thread_shares`, and `team_projects` behind a single authorizer that walks the
+ * thread→project→org inheritance chain. Org rows are shadow-synced from Better
+ * Auth `member` (which stays canonical for org membership).
+ */
+export const resourceGrants = sqliteTable(
+  'resource_grants',
+  {
+    subjectId: text('subject_id').notNull(),
+    resourceType: text('resource_type').notNull(),
+    resourceId: text('resource_id').notNull(),
+    role: text('role').notNull(),
+    grantedBy: text('granted_by').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  // Lookup indexes (idx_resource_grants_resource / _subject) are created in the
+  // server migration, matching how thread_shares' index is defined.
+  (t) => [primaryKey({ columns: [t.subjectId, t.resourceType, t.resourceId] })],
+);
+
+/**
+ * Per-collaborator project configuration, split out from authorization
+ * (unified-rbac-grants). Holds the member's own local working directory for a
+ * project — a config fact, not an access fact. Membership/role lives in
+ * `resource_grants`; this table only answers "where is this user's local copy?".
+ */
+export const projectMemberConfig = sqliteTable(
+  'project_member_config',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
     localPath: text('local_path'),
     joinedAt: text('joined_at').notNull(),
   },

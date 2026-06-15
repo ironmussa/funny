@@ -16,6 +16,7 @@ import {
   seedRunner,
   seedRunnerProjectAssignment,
   seedProjectMember,
+  seedResourceGrant,
   seedTeamProject,
   seedThreadEvent,
 } from '../helpers/test-db.js';
@@ -52,6 +53,84 @@ describe('Database Schema', () => {
     expect(testDb.db.select().from(testDb.schema.runnerProjectAssignments).all()).toHaveLength(1);
     expect(testDb.db.select().from(testDb.schema.projectMembers).all()).toHaveLength(1);
     expect(testDb.db.select().from(testDb.schema.teamProjects).all()).toHaveLength(1);
+  });
+
+  // unified-rbac-grants, Phase 1: data model only (no resolver/behavior yet).
+  describe('resource_grants (unified-rbac-grants)', () => {
+    test('round-trips a grant', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      seedResourceGrant(testDb.db, {
+        subjectId: 'u1',
+        resourceType: 'thread',
+        resourceId: 't1',
+        role: 'contributor',
+        grantedBy: 'owner-1',
+      });
+
+      const rows = testDb.db.select().from(testDb.schema.resourceGrants).all();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].role).toBe('contributor');
+      expect(rows[0].resourceType).toBe('thread');
+    });
+
+    test('composite PK makes a re-grant idempotent (upsert, not duplicate)', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      const base = {
+        subjectId: 'u1',
+        resourceType: 'thread',
+        resourceId: 't1',
+        grantedBy: 'owner-1',
+        createdAt: new Date().toISOString(),
+      };
+
+      testDb.db
+        .insert(testDb.schema.resourceGrants)
+        .values({ ...base, role: 'viewer' })
+        .run();
+      // Re-grant with a different role must update the single row, not add one.
+      testDb.db
+        .insert(testDb.schema.resourceGrants)
+        .values({ ...base, role: 'contributor' })
+        .onConflictDoUpdate({
+          target: [
+            testDb.schema.resourceGrants.subjectId,
+            testDb.schema.resourceGrants.resourceType,
+            testDb.schema.resourceGrants.resourceId,
+          ],
+          set: { role: 'contributor' },
+        })
+        .run();
+
+      const rows = testDb.db.select().from(testDb.schema.resourceGrants).all();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].role).toBe('contributor');
+    });
+  });
+
+  test('project_member_config + projects.organization_id exist and accept inserts', () => {
+    seedProject(testDb.db, { id: 'p1', organizationId: 'org-1' });
+    testDb.db
+      .insert(testDb.schema.projectMemberConfig)
+      .values({
+        projectId: 'p1',
+        userId: 'u1',
+        localPath: '/home/u1/p1',
+        joinedAt: new Date().toISOString(),
+      })
+      .run();
+
+    const cfg = testDb.db.select().from(testDb.schema.projectMemberConfig).all();
+    expect(cfg).toHaveLength(1);
+    expect(cfg[0].localPath).toBe('/home/u1/p1');
+
+    const proj = testDb.db
+      .select()
+      .from(testDb.schema.projects)
+      .where(eq(testDb.schema.projects.id, 'p1'))
+      .get();
+    expect(proj!.organizationId).toBe('org-1');
   });
 
   test('instance_settings table works', () => {

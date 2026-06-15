@@ -33,11 +33,24 @@ export function createTestDb() {
       system_prompt TEXT,
       launcher_url TEXT,
       user_id TEXT NOT NULL DEFAULT '',
+      organization_id TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       memory_enabled INTEGER NOT NULL DEFAULT 0,
       default_agent_template_id TEXT,
       closed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS resource_grants (
+      subject_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      granted_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (subject_id, resource_type, resource_id)
     )
   `);
 
@@ -220,6 +233,7 @@ export function seedProject(db: any, overrides: Partial<typeof schema.projects.$
     name: overrides.name ?? 'Test Project',
     path: overrides.path ?? '/tmp/test-repo',
     userId: overrides.userId ?? 'user-1',
+    organizationId: overrides.organizationId ?? null,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
   };
   db.insert(schema.projects).values(project).run();

@@ -7,26 +7,19 @@
  * it stays cheap on the WS hot path.
  */
 
-import { createThreadShareRepository } from '@funny/shared/repositories';
 import { eq } from 'drizzle-orm';
 
-import { db, dbAll, dbRun } from '../db/index.js';
+import { db, dbAll } from '../db/index.js';
 import * as schema from '../db/schema.js';
+import { authorizer } from '../lib/server-authorizer.js';
 
-const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
-
-/** Whether `userId` may view `threadId` (owner or active share grant). */
+/**
+ * Whether `userId` may view `threadId`. Delegates to the unified authorizer so
+ * the WS presence path resolves identically to the HTTP gate — owner, explicit
+ * share, or inherited (project/org) access all admit a viewer.
+ */
 export async function canUserViewThread(threadId: string, userId: string): Promise<boolean> {
-  const rows = await dbAll(
-    db
-      .select({ userId: schema.threads.userId })
-      .from(schema.threads)
-      .where(eq(schema.threads.id, threadId)),
-  );
-  const owner = (rows[0] as { userId: string } | undefined)?.userId;
-  if (owner === undefined) return false; // thread does not exist
-  if (owner === userId) return true;
-  return shareRepo.hasShare(threadId, userId);
+  return authorizer.authorize(userId, 'thread', threadId, 'view');
 }
 
 /** Whether `userId` is the owner of `threadId` (no share grants count). */

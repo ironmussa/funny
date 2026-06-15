@@ -20,6 +20,8 @@
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
     "./socket-events": "./src/socket-events.ts",
+    "./auth/roles": "./src/auth/roles.ts",
+    "./auth/authorizer": "./src/auth/authorizer.ts",
     "./auth/forwarded-identity": "./src/auth/forwarded-identity.ts",
     "./auth/media-url-signature": "./src/auth/media-url-signature.ts",
     "./dom/extract": "./src/dom/extract.ts",

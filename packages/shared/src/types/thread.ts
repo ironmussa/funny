@@ -77,7 +77,7 @@ export interface Thread {
    * non-owner. See `thread-sharing-steer`. Use the `canSteerShare` /
    * `canViewGitShare` predicates in `thread-variant.ts`, not this field directly.
    */
-  viewerShareLevel?: 'view' | 'steer' | null;
+  viewerShareLevel?: 'view' | 'comment' | 'steer' | null;
 }
 
 export interface PaginatedThreadsResponse {

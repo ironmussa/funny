@@ -24,6 +24,12 @@ export interface UpdateUserRequest {
 
 // ─── Teams / Organizations ───────────────────────────────
 
+/**
+ * Better Auth org role vocabulary ('member' == canonical `contributor`).
+ * The unified RBAC lattice lives in `@funny/shared/auth/roles` (`Role`,
+ * `rank`, `roleLabel`, `orgRoleToRole`); migrate call sites onto it
+ * (unified-rbac-grants, Phases 4/7) rather than extending this type.
+ */
 export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export interface Organization {

@@ -34,6 +34,7 @@ export function createTestDb() {
       system_prompt TEXT,
       launcher_url TEXT,
       user_id TEXT NOT NULL DEFAULT '',
+      organization_id TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       memory_enabled INTEGER NOT NULL DEFAULT 0,
       default_agent_template_id TEXT,
@@ -253,6 +254,28 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS resource_grants (
+      subject_id TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      granted_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (subject_id, resource_type, resource_id)
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_member_config (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      local_path TEXT,
+      joined_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, user_id)
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS orchestrator_runs (
       thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
       pipeline_run_id TEXT,
@@ -306,6 +329,7 @@ export function seedProject(
     name: overrides.name ?? 'Test Project',
     path: overrides.path ?? '/tmp/test-repo',
     userId: overrides.userId ?? 'user-1',
+    organizationId: overrides.organizationId ?? null,
     sortOrder: overrides.sortOrder ?? 0,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
   };
@@ -458,6 +482,28 @@ export function seedProjectMember(
   };
   db.insert(schema.projectMembers).values(member).run();
   return member;
+}
+
+export function seedResourceGrant(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: {
+    subjectId?: string;
+    resourceType?: string;
+    resourceId?: string;
+    role?: string;
+    grantedBy?: string;
+  } = {},
+) {
+  const grant = {
+    subjectId: overrides.subjectId ?? 'user-1',
+    resourceType: overrides.resourceType ?? 'thread',
+    resourceId: overrides.resourceId ?? 'test-thread-1',
+    role: overrides.role ?? 'viewer',
+    grantedBy: overrides.grantedBy ?? 'owner-1',
+    createdAt: new Date().toISOString(),
+  };
+  db.insert(schema.resourceGrants).values(grant).run();
+  return grant;
 }
 
 export function seedMessageQueue(

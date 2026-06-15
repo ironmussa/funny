@@ -27,10 +27,11 @@ import { Hono } from 'hono';
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { authorizer } from '../lib/server-authorizer.js';
 import { startSpan } from '../lib/telemetry.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
-import { canViewThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
+import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
 import { findRunnerForProject } from '../services/runner-manager.js';
 import * as runnerResolver from '../services/runner-resolver.js';
@@ -102,8 +103,11 @@ const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll
 export const { requireThreadView, requireThreadOwner, requireThreadSteer } =
   createThreadAccessMiddleware(
     (id) => threadRepo.getThread(id),
-    (threadId, userId) => shareRepo.hasShare(threadId, userId),
-    (threadId, userId) => shareRepo.getShareLevel(threadId, userId),
+    // View: effective role with thread→project→org inheritance (unified-rbac).
+    (thread, userId) => authorizer.authorize(userId, 'thread', thread.id, 'view'),
+    // Steer: owner OR explicit thread steer grant ONLY — inheritance must NOT
+    // cross runner isolation, so this stays `canSteerThread` (unchanged behavior).
+    (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
   );
 
 // ── Runner communication helpers ─────────────────────────────────
@@ -260,8 +264,9 @@ threadRoutes.get('/archived', async (c) => {
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
   const limit = Math.min(1000, Math.max(1, parseInt(c.req.query('limit') || '100', 10)));
   const search = c.req.query('search')?.trim() || '';
+  const projectId = c.req.query('projectId')?.trim() || undefined;
 
-  const result = await threadRepo.listArchivedThreads({ page, limit, search, userId });
+  const result = await threadRepo.listArchivedThreads({ page, limit, search, userId, projectId });
   return c.json({ ...result, page, limit });
 });
 
@@ -302,14 +307,14 @@ threadRoutes.get('/:id', async (c) => {
       messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
     ]);
 
-    if (!result || !(await canViewThread(result, userId, shareRepo.hasShare))) {
+    if (!result || !(await authorizer.authorize(userId, 'thread', result.id, 'view'))) {
       span.end('ok');
       return c.json({ error: 'Thread not found' }, 404);
     }
 
-    // Expose the VIEWER's own grant level (thread-sharing-steer) so the client
-    // can gate steer-only affordances (PromptInput, git read panel). The owner
-    // gets `null` (they are not a sharee); a sharee gets 'view' | 'steer'.
+    // Expose the VIEWER's own grant level so the client can gate level-specific
+    // affordances (comment box, PromptInput, git read panel). The owner gets
+    // `null` (not a sharee); a sharee gets 'view' | 'comment' | 'steer'.
     const viewerShareLevel =
       result.userId === userId ? null : await shareRepo.getShareLevel(id, userId);
 
@@ -398,6 +403,13 @@ threadRoutes.get('/:id/comments', requireThreadView, async (c) => {
 threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
+
+  // Posting a comment needs the `comment` capability (commenter+): a plain
+  // viewer can read the thread and its comments but not post. They already see
+  // the thread, so this is an honest 403 rather than existence-hiding 404.
+  if (!(await authorizer.authorize(userId, 'thread', id, 'comment'))) {
+    return c.json({ error: 'You do not have permission to comment on this thread' }, 403);
+  }
 
   const { content } = await c.req.json();
 
@@ -989,7 +1001,7 @@ threadRoutes.get('/:id/events', async (c) => {
       getThreadEvents(id).finally(() => eventsSpan.end('ok')),
     ]);
 
-    if (!thread || !(await canViewThread(thread, userId, shareRepo.hasShare))) {
+    if (!thread || !(await authorizer.authorize(userId, 'thread', thread.id, 'view'))) {
       span.end('ok');
       return c.json({ error: 'Thread not found' }, 404);
     }

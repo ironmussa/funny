@@ -21,6 +21,7 @@
     "./runner-protocol": "./src/runner-protocol.ts",
     "./socket-events": "./src/socket-events.ts",
     "./auth/forwarded-identity": "./src/auth/forwarded-identity.ts",
+    "./auth/media-url-signature": "./src/auth/media-url-signature.ts",
     "./dom/extract": "./src/dom/extract.ts",
     "./db/columns": "./src/db/columns.ts",
     "./db/provider": "./src/db/provider.ts",

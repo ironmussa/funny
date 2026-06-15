@@ -5,6 +5,7 @@
  * No more manual requestId tracking, HTTP long-polling, or deduplication.
  */
 
+import type { TunnelHttpResponse } from '@funny/shared/runner-protocol';
 import type { Server as SocketIOServer } from 'socket.io';
 
 import { getRunnerSocketId } from './ws-relay.js';
@@ -20,11 +21,13 @@ export function setIO(io: SocketIOServer): void {
 
 const TUNNEL_TIMEOUT_MS = 30_000;
 
-export interface TunnelResponse {
-  status: number;
-  headers: Record<string, string>;
-  body: string | null;
-}
+/**
+ * Response carried back from a runner over the Socket.IO ack. `bodyEncoding`
+ * distinguishes a UTF-8 text body from a base64-encoded binary body — see
+ * {@link TunnelHttpResponse}. The proxy decodes base64 before handing bytes to
+ * the browser.
+ */
+export type TunnelResponse = TunnelHttpResponse;
 
 /**
  * Raised when the runner did not ack within {@link TUNNEL_TIMEOUT_MS}.

@@ -112,6 +112,7 @@ function toRunnerInfo(
     os: r.os,
     workspace: r.workspace ?? undefined,
     httpUrl: r.httpUrl ?? undefined,
+    publicMediaUrl: r.publicMediaUrl ?? undefined,
     status,
     activeThreadCount: (JSON.parse(r.activeThreadIds) as string[]).length,
     assignedProjectIds,
@@ -155,6 +156,7 @@ export async function registerRunner(
       status: 'online',
       os: req.os,
       httpUrl: req.httpUrl ?? null,
+      publicMediaUrl: req.publicMediaUrl ?? null,
       lastHeartbeatAt: now,
     };
     if (userId) {
@@ -188,6 +190,7 @@ export async function registerRunner(
     os: req.os,
     workspace: req.workspace ?? null,
     httpUrl: req.httpUrl ?? null,
+    publicMediaUrl: req.publicMediaUrl ?? null,
     activeThreadIds: '[]',
     registeredAt: now,
     lastHeartbeatAt: now,
@@ -505,6 +508,15 @@ export async function getRunnerHttpUrl(runnerId: string): Promise<string | null>
     .from(runners)
     .where(eq(runners.id, runnerId));
   return rows[0]?.httpUrl ?? null;
+}
+
+/** Browser-reachable public media base URL for a runner (transport C), or null. */
+export async function getRunnerPublicMediaUrl(runnerId: string): Promise<string | null> {
+  const rows = await db
+    .select({ publicMediaUrl: runners.publicMediaUrl })
+    .from(runners)
+    .where(eq(runners.id, runnerId));
+  return rows[0]?.publicMediaUrl ?? null;
 }
 
 export async function removeRunner(runnerId: string): Promise<void> {

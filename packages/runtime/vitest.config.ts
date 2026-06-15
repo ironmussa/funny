@@ -26,6 +26,7 @@ export default defineConfig({
       '@funny/shared/runner-protocol': path.join(shared, 'runner-protocol.ts'),
       '@funny/shared/socket-events': path.join(shared, 'socket-events.ts'),
       '@funny/shared/auth/forwarded-identity': path.join(shared, 'auth/forwarded-identity.ts'),
+      '@funny/shared/auth/media-url-signature': path.join(shared, 'auth/media-url-signature.ts'),
       '@funny/shared/evflow-model': path.join(shared, 'evflow.model.ts'),
       '@funny/shared/lib/crypto': path.join(shared, 'lib/crypto.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),

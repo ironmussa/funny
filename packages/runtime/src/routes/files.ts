@@ -6,15 +6,17 @@
  */
 
 import { mkdir, readFile, writeFile, stat, realpath } from 'fs/promises';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { basename, dirname, join, normalize, resolve, sep } from 'path';
 
 import { WORKTREE_DIR_NAME, getBlame } from '@funny/core/git';
+import { MEDIA_SIG_PARAMS, verifyMediaUrl } from '@funny/shared/auth/media-url-signature';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { ResultAsync, err } from 'neverthrow';
 
 import { getServices } from '../services/service-registry.js';
+import { tmpAssetsDirName } from '../services/thread-context.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resolveClaudeHomeConfigScope } from '../utils/claude-config-paths.js';
 import { resultToResponse } from '../utils/result-response.js';
@@ -47,6 +49,28 @@ async function resolveProjectScope(
   const scratchRoot = normalize(resolve(homedir(), '.funny', 'scratch', userId));
   if (normalizedTarget === scratchRoot || normalizedTarget.startsWith(scratchRoot + sep)) {
     return { projectPath: scratchRoot, worktreeBase: scratchRoot };
+  }
+
+  // Browser-previewable dev assets the agent generates outside any project,
+  // under a per-user namespaced temp root (`<os-tmpdir>/funny-<userId>/`). Same
+  // isolation model as scratch: the userId in the path is the cross-user
+  // boundary. We accept BOTH the resolve()'d and realpath()'d tmp base because
+  // os.tmpdir() is itself a symlink on some platforms (macOS: /var →
+  // /private/var) and the caller may supply either form; the scope we return is
+  // the canonical (realpath) base so the post-canonicalize isInScope re-check
+  // in streamRawFile matches the realpath'd target.
+  const assetsName = tmpAssetsDirName(userId);
+  const assetsBaseRaw = normalize(join(tmpdir(), assetsName));
+  let assetsBaseReal = assetsBaseRaw;
+  try {
+    assetsBaseReal = normalize(join(await realpath(tmpdir()), assetsName));
+  } catch {
+    /* tmpdir unresolvable — fall back to the resolve()'d form */
+  }
+  const underAssets = (base: string) =>
+    normalizedTarget === base || normalizedTarget.startsWith(base + sep);
+  if (underAssets(assetsBaseRaw) || underAssets(assetsBaseReal)) {
+    return { projectPath: assetsBaseReal, worktreeBase: assetsBaseReal };
   }
 
   const claudeConfig = resolveClaudeHomeConfigScope(normalizedTarget);
@@ -319,16 +343,54 @@ const RAW_MAX_SIZE = 100 * 1024 * 1024; // 100MB
  * file as a stream with an inferred Content-Type so the browser can render
  * images, audio, video, PDFs, etc.
  */
-app.get('/raw', async (c) => {
-  const filePath = c.req.query('path');
-  if (!filePath) {
-    return c.json({ error: 'path is required' }, 400);
+/**
+ * Parse a single-range HTTP `Range: bytes=…` header against a known file size.
+ * Returns inclusive `{ start, end }` byte offsets, or null when there is no
+ * range, the syntax is unsupported (multi-range), or the range is unsatisfiable
+ * (caller then serves the full 200 body). Supports `start-end`, `start-`, and
+ * the `-suffix` (last N bytes) forms.
+ */
+function parseByteRange(
+  rangeHeader: string | undefined,
+  size: number,
+): { start: number; end: number } | null {
+  if (!rangeHeader) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+  if (!match || size <= 0) return null;
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === '' && rawEnd === '') return null;
+
+  let start: number;
+  let end: number;
+  if (rawStart === '') {
+    // Suffix range: last N bytes.
+    const suffix = Number.parseInt(rawEnd, 10);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number.parseInt(rawStart, 10);
+    end = rawEnd === '' ? size - 1 : Number.parseInt(rawEnd, 10);
   }
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  end = Math.min(end, size - 1);
+  if (start > end || start < 0) return null;
+  return { start, end };
+}
 
-  const userId = c.get('userId') as string;
-  const scope = await resolveProjectScope(filePath, userId);
-  if (!scope) return deny();
-
+/**
+ * Resolve + scope-check + stream a raw file, honoring a `Range` request (206
+ * partial content) so browsers can seek video/audio. Shared by `/raw`
+ * (server-proxied, session/forwarded-identity auth) and `/raw-signed`
+ * (browser-direct, HMAC auth). The caller MUST have already authorized
+ * `filePath` for the request's user and passed the matching `scope` — this
+ * enforces the symlink-escape re-check.
+ */
+async function streamRawFile(
+  c: Context<HonoEnv>,
+  filePath: string,
+  scope: ProjectScope,
+): Promise<Response> {
   const canon = await canonicalize(filePath, false);
   if (!canon.ok) {
     return resultToResponse(
@@ -342,10 +404,11 @@ app.get('/raw', async (c) => {
     e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
   );
   if (statsResult.isErr()) return resultToResponse(c, statsResult);
-  if (!statsResult.value.isFile()) {
+  const stats = statsResult.value;
+  if (!stats.isFile()) {
     return resultToResponse(c, err(badRequest('Not a regular file')));
   }
-  if (statsResult.value.size > RAW_MAX_SIZE) {
+  if (stats.size > RAW_MAX_SIZE) {
     return resultToResponse(
       c,
       err(badRequest(`File too large for preview (max ${RAW_MAX_SIZE} bytes)`)),
@@ -360,15 +423,91 @@ app.get('/raw', async (c) => {
   // Bun.file returns a BunFile with a Web ReadableStream — passes straight
   // through Hono/Bun's Response without a Node-stream → Web-stream cast.
   const file = Bun.file(canon.canonical);
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': contentType,
+    'Cache-Control': 'private, max-age=60',
+    'Content-Disposition': `inline; filename="${encodeURIComponent(basename(canon.canonical))}"`,
+    // Advertise range support so media players enable seek. Note: over the
+    // server's WS tunnel this header is filtered out by the proxy allowlist, so
+    // seek only works on the direct path (`/raw-signed` or direct HTTP).
+    'Accept-Ranges': 'bytes',
+  };
+
+  const range = parseByteRange(c.req.header('range'), stats.size);
+  if (range) {
+    return new Response(file.slice(range.start, range.end + 1), {
+      status: 206,
+      headers: {
+        ...baseHeaders,
+        'Content-Range': `bytes ${range.start}-${range.end}/${stats.size}`,
+        'Content-Length': String(range.end - range.start + 1),
+      },
+    });
+  }
+
   return new Response(file, {
     status: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Content-Length': String(statsResult.value.size),
-      'Cache-Control': 'private, max-age=60',
-      'Content-Disposition': `inline; filename="${encodeURIComponent(basename(canon.canonical))}"`,
-    },
+    headers: { ...baseHeaders, 'Content-Length': String(stats.size) },
   });
+}
+
+/**
+ * Stream raw file contents (binary or text) for media preview.
+ * GET /api/files/raw?path=/absolute/path/to/file.png
+ *
+ * Same project-scope/symlink-escape protections as /read, but serves the
+ * file as a stream with an inferred Content-Type so the browser can render
+ * images, audio, video, PDFs, etc.
+ */
+app.get('/raw', async (c) => {
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return c.json({ error: 'path is required' }, 400);
+  }
+
+  const userId = c.get('userId') as string;
+  const scope = await resolveProjectScope(filePath, userId);
+  if (!scope) return deny();
+
+  return streamRawFile(c, filePath, scope);
+});
+
+/**
+ * Stream raw file contents authenticated by an HMAC-signed URL (transport C).
+ * GET /api/files/raw-signed?path=…&u=<userId>&exp=<unixMs>&sig=<hex>
+ *
+ * This route is PUBLIC in the auth middleware (a cross-origin <img>/<video>
+ * request carries no cookie or shared-secret header). Authentication is the
+ * signature itself: the server minted it with `RUNNER_AUTH_SECRET`, binding the
+ * path + user + expiry. We re-derive the user from the verified claim and run
+ * the SAME per-user project-scope check as /raw — the signature is
+ * authentication, NOT authorization (see media-url-signature.ts).
+ */
+app.get('/raw-signed', async (c) => {
+  const secret = process.env.RUNNER_AUTH_SECRET;
+  if (!secret) return deny();
+
+  const verified = verifyMediaUrl(
+    {
+      path: c.req.query(MEDIA_SIG_PARAMS.path),
+      userId: c.req.query(MEDIA_SIG_PARAMS.userId),
+      expires: c.req.query(MEDIA_SIG_PARAMS.expires),
+      signature: c.req.query(MEDIA_SIG_PARAMS.signature),
+    },
+    secret,
+  );
+  if (!verified.ok) {
+    // 401 for expired/forged so the browser can distinguish from a 403 scope deny.
+    return c.json({ error: `Invalid signed media URL: ${verified.reason}` }, 401);
+  }
+
+  const { path: filePath, userId } = verified.claim;
+  // Re-run the SAME per-user scope check /raw does — the token authenticates the
+  // user, it does not bypass authorization.
+  const scope = await resolveProjectScope(filePath, userId);
+  if (!scope) return deny();
+
+  return streamRawFile(c, filePath, scope);
 });
 
 export default app;

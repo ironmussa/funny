@@ -35,10 +35,12 @@ import type { Project, WSEvent } from '@funny/shared';
 import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
+  isTextualContentType,
   type DataInsertMessage,
   type DataInsertToolCall,
   type RunnerRegisterResponse,
   type RunnerTask,
+  type TunnelHttpResponse,
 } from '@funny/shared/runner-protocol';
 import { nanoid } from 'nanoid';
 import { io, type Socket } from 'socket.io-client';
@@ -154,6 +156,13 @@ async function register(): Promise<RegisterResult> {
       ? ''
       : (process.env.RUNNER_HTTP_URL ?? `http://127.0.0.1:${runnerPort}`);
 
+    // Transport C: browser-reachable base URL for direct media streaming. Opt-in
+    // via RUNNER_PUBLIC_MEDIA_URL (e.g. a public/LAN URL or tunnel hostname the
+    // BROWSER can reach). Absent ⇒ the server keeps proxying media over the WS
+    // tunnel (transport A). Distinct from RUNNER_HTTP_URL, which is where the
+    // SERVER reaches the runner and may be loopback/unreachable by browsers.
+    const publicMediaUrl = process.env.RUNNER_PUBLIC_MEDIA_URL?.trim() || undefined;
+
     const inviteToken = process.env.RUNNER_INVITE_TOKEN;
     const extraHeaders: Record<string, string> = inviteToken
       ? { 'X-Runner-Invite-Token': inviteToken }
@@ -167,6 +176,7 @@ async function register(): Promise<RegisterResult> {
         hostname: hostname(),
         os: process.platform,
         httpUrl: httpUrl || undefined,
+        publicMediaUrl,
         ...(await advertisedProviderState()),
       }),
     });
@@ -917,7 +927,7 @@ async function handleTunnelRequest(data: {
   path: string;
   headers: Record<string, string>;
   body: string | null;
-}): Promise<{ status: number; headers: Record<string, string>; body: string | null }> {
+}): Promise<TunnelHttpResponse> {
   if (!state.localApp) {
     log.warn('Received tunnel:request but no local app registered', { namespace: 'runner' });
     return { status: 503, headers: {}, body: 'Local app not initialized' };
@@ -936,22 +946,39 @@ async function handleTunnelRequest(data: {
     const request = new Request(url, init);
     const response = await state.localApp.fetch(request);
 
-    const responseBody = await response.text();
     const responseHeaders: Record<string, string> = {};
     response.headers.forEach((value, key) => {
       responseHeaders[key] = value;
     });
 
+    // Binary responses (images, video, PDF, octet-stream…) must be base64-encoded
+    // so the bytes survive the JSON ack — `response.text()` would decode them as
+    // UTF-8 and corrupt the file. Textual responses (JSON API payloads, HTML, SVG)
+    // stay as a UTF-8 string to avoid the ~33% base64 inflation against the size
+    // cap and to preserve the exact legacy wire format.
+    const textual = isTextualContentType(responseHeaders['content-type']);
+    let responseBody: string;
+    let bodyEncoding: TunnelHttpResponse['bodyEncoding'];
+    if (textual) {
+      responseBody = await response.text();
+      bodyEncoding = 'utf8';
+    } else {
+      responseBody = Buffer.from(await response.arrayBuffer()).toString('base64');
+      bodyEncoding = 'base64';
+    }
+
     // Short-circuit oversized responses with a structured 413. If we let it
     // through, Socket.IO would silently drop the ack (over `maxHttpBufferSize`)
     // and the request would appear to hang until the 30s tunnel timeout —
-    // making this look like the runner crashed.
+    // making this look like the runner crashed. We measure the ENCODED body
+    // (what actually crosses the socket) so the base64 inflation is accounted for.
     const bodyBytes = Buffer.byteLength(responseBody, 'utf8');
     if (bodyBytes > TUNNEL_MAX_RESPONSE_BODY_BYTES) {
       log.warn('Tunnel response too large — short-circuiting with 413', {
         namespace: 'runner',
         path: data.path,
         bodyBytes,
+        bodyEncoding,
         limitBytes: TUNNEL_MAX_RESPONSE_BODY_BYTES,
       });
       return {
@@ -963,10 +990,11 @@ async function handleTunnelRequest(data: {
           limitBytes: TUNNEL_MAX_RESPONSE_BODY_BYTES,
           hint: 'Increase maxHttpBufferSize in server socketio config or paginate the response.',
         }),
+        bodyEncoding: 'utf8',
       };
     }
 
-    return { status: response.status, headers: responseHeaders, body: responseBody };
+    return { status: response.status, headers: responseHeaders, body: responseBody, bodyEncoding };
   } catch (err) {
     log.error('Failed to handle tunnel request', {
       namespace: 'runner',

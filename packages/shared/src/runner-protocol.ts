@@ -27,6 +27,47 @@ import type { AgentModel, AgentProvider, PermissionMode } from './types.js';
  */
 export const TUNNEL_MAX_RESPONSE_BODY_BYTES = 31 * 1024 * 1024;
 
+/**
+ * How a tunneled response body string is encoded on the wire.
+ *
+ * The Socket.IO ack carries the body as a JSON string. A `utf8` body is the
+ * response text verbatim (JSON API responses, HTML, SVG…). A `base64` body is a
+ * base64 encoding of the raw bytes — used for binary responses (images, video,
+ * PDFs, octet-stream) that `response.text()` would corrupt by decoding as UTF-8.
+ * Absent ⇒ `utf8` for back-compat with older runners.
+ */
+export type TunnelBodyEncoding = 'utf8' | 'base64';
+
+/** A tunneled HTTP response carried back to the server over the Socket.IO ack. */
+export interface TunnelHttpResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string | null;
+  /** Encoding of `body`. Absent ⇒ `utf8` (back-compat). */
+  bodyEncoding?: TunnelBodyEncoding;
+}
+
+/**
+ * True when a response with this `content-type` is safe to carry as a UTF-8
+ * string through the tunnel. Everything else (images, video, audio, PDF,
+ * octet-stream, fonts…) must be base64-encoded so the bytes survive intact.
+ *
+ * Textual = `text/*`, JSON (`application/json`, `*+json`, ndjson), XML/SVG
+ * (`application/xml`, `*+xml`, `image/svg+xml`), JS/ECMAScript, and YAML. A
+ * missing content-type is treated as textual to preserve the legacy behavior
+ * (every pre-existing tunneled response is a JSON API payload).
+ */
+export function isTextualContentType(contentType: string | undefined | null): boolean {
+  if (!contentType) return true;
+  const ct = contentType.toLowerCase();
+  if (ct.startsWith('text/')) return true;
+  if (ct.startsWith('image/svg+xml')) return true;
+  if (/^application\/(json|ld\+json|x-ndjson|xml|javascript|ecmascript|yaml|x-yaml)\b/.test(ct)) {
+    return true;
+  }
+  return /\+(json|xml)\b/.test(ct);
+}
+
 // ─── Runner Identity ────────────────────────────────────
 
 export type RunnerStatus = 'online' | 'busy' | 'offline';
@@ -40,6 +81,11 @@ export interface RunnerInfo {
   workspace?: string;
   /** HTTP base URL where this runner accepts requests (e.g. "http://192.168.1.5:3001") */
   httpUrl?: string;
+  /** Browser-reachable public base URL for direct media streaming (transport C).
+   *  When set, the server hands browsers a signed URL to `<this>/api/files/raw-signed`
+   *  so media bytes stream straight from the runner instead of through the WS tunnel.
+   *  Absent ⇒ media falls back to the proxied `/api/files/raw` (tunnel). */
+  publicMediaUrl?: string;
   status: RunnerStatus;
   activeThreadCount: number;
   /** Project IDs assigned to this runner by the admin */
@@ -91,6 +137,9 @@ export interface RunnerRegisterRequest {
   /** HTTP base URL where this runner accepts proxied requests (e.g. "http://192.168.1.5:3001").
    *  Optional — if not provided, the server uses the WebSocket tunnel for all communication. */
   httpUrl?: string;
+  /** Browser-reachable public base URL for direct media streaming (transport C).
+   *  From `RUNNER_PUBLIC_MEDIA_URL`. Optional — absent disables direct media. */
+  publicMediaUrl?: string;
   /** External providers installed on this runner (public face only). */
   providers?: AdvertisedProvider[];
   /** Built-in ACP providers currently ACTIVE on this runner (lean-core: the set

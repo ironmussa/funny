@@ -284,11 +284,13 @@ const { orchestratorSystemRoutes } = await import('./routes/orchestrator-system.
 const { watcherRoutes } = await import('./routes/watchers.js');
 const { jobRoutes } = await import('./routes/jobs.js');
 const { userRoutes } = await import('./routes/users.js');
+const { mediaRoutes } = await import('./routes/media.js');
 
 app.route('/api/auth', authRoutes);
 app.route('/api/projects', projectRoutes);
 app.route('/api/users', userRoutes);
 app.route('/api/runners', runnerRoutes);
+app.route('/api/media', mediaRoutes);
 app.route('/api/profile', profileRoutes);
 // Share routes mounted BEFORE threadRoutes so `/api/threads/shared-with-me` and
 // `/:id/shares` are matched before the generic `/:id` pattern.

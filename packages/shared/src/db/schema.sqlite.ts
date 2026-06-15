@@ -488,6 +488,7 @@ export const runners = sqliteTable('runners', {
   os: text('os').notNull().default('unknown'),
   workspace: text('workspace'),
   httpUrl: text('http_url'),
+  publicMediaUrl: text('public_media_url'),
   activeThreadIds: text('active_thread_ids').notNull().default('[]'),
   registeredAt: text('registered_at').notNull(),
   lastHeartbeatAt: text('last_heartbeat_at').notNull(),

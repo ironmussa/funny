@@ -41,6 +41,10 @@ const PUBLIC_PATHS = new Set([
   '/api/auth/mode',
   '/api/bootstrap',
   '/api/mcp/oauth/callback',
+  // Transport C: a cross-origin <img>/<video> request from the browser carries
+  // neither a session cookie nor the shared-secret header. It authenticates with
+  // the HMAC-signed query params instead, verified inside the route handler.
+  '/api/files/raw-signed',
 ]);
 
 const TEAM_SERVER_URL = process.env.TEAM_SERVER_URL;

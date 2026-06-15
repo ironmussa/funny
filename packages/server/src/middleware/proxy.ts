@@ -247,12 +247,20 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
         body,
       });
 
+      // A binary response (image, video, PDF…) arrives base64-encoded so its
+      // bytes survive the JSON ack — decode it back to raw bytes here. A text
+      // response (the common JSON API payload) is passed through verbatim.
+      const tunnelBody =
+        tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
+          ? Buffer.from(tunnelResp.body, 'base64')
+          : tunnelResp.body;
+
       // Security M5: filter runner response headers on the tunnel path too —
       // not just direct HTTP. The tunnel is the primary transport whenever the
       // runner is connected, so leaving it unfiltered let a malicious runner
       // set `Set-Cookie` / `Access-Control-*` / security-policy headers on the
       // central server's origin for the requesting user's browser.
-      return new Response(tunnelResp.body, {
+      return new Response(tunnelBody, {
         status: tunnelResp.status,
         headers: filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
       });

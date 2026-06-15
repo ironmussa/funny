@@ -12,7 +12,7 @@
  * See: openspec/changes/scratch-threads/design.md (D3, D7).
  */
 
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Thread } from '@funny/shared';
@@ -96,4 +96,31 @@ export function scratchPathFor(userId: string, threadId: string): string {
     );
   }
   return join(homedir(), '.funny', 'scratch', userId, threadId);
+}
+
+/**
+ * Per-user directory NAME (not full path) for the temp assets root. Lives
+ * under the OS tmpdir as `funny-<userId>`. The `userId` is the cross-user
+ * isolation boundary — same invariant as scratch — so it must pass the shape
+ * check before it becomes part of a trusted filesystem scope.
+ */
+export function tmpAssetsDirName(userId: string): string {
+  if (!SCRATCH_ID_RE.test(userId)) {
+    throw new Error(`tmpAssetsDirName: userId failed shape check (got: ${JSON.stringify(userId)})`);
+  }
+  return `funny-${userId}`;
+}
+
+/**
+ * On-disk root for browser-previewable dev assets the agent generates OUTSIDE
+ * any project tree (screenshots, renders, short clips) — `<os-tmpdir>/funny-<userId>/`.
+ *
+ * This is exposed to the agent as `FUNNY_ASSETS_DIR` and authorized for media
+ * serving by `resolveProjectScope` in `routes/files.ts`. The directory is
+ * created lazily (0700) on agent spawn; the OS tmpdir parent is world-writable,
+ * so the mode matters and reads are still gated by the realpath/scope re-check
+ * on every request.
+ */
+export function tmpAssetsPathFor(userId: string): string {
+  return join(tmpdir(), tmpAssetsDirName(userId));
 }

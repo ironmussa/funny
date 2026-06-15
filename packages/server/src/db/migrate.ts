@@ -1409,6 +1409,13 @@ const migrations: Migration[] = [
       await ctx().addColumn('thread_shares', 'level', 'TEXT NOT NULL', "'view'");
     },
   },
+  {
+    name: '066_runner_public_media_url',
+    async up() {
+      // Transport C: browser-reachable base URL for direct media streaming.
+      await ctx().addColumn('runners', 'public_media_url', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

@@ -28,7 +28,7 @@ import { recoverThreadContext } from './agent-startup/recover-context.js';
 import type { AgentStateTracker } from './agent-state.js';
 import type { IThreadManager } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
-import { resolveThreadCwd } from './thread-context.js';
+import { resolveThreadCwd, tmpAssetsPathFor } from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
@@ -354,6 +354,11 @@ export class AgentLifecycleManager {
       };
     }
 
+    // Per-user browser-previewable assets dir. Computed here so we can tell the
+    // agent about it in the system prefix; the directory itself is created
+    // (0700) and exported as FUNNY_ASSETS_DIR in the agentEnv block below.
+    const assetsDir = thread?.userId ? tmpAssetsPathFor(thread.userId) : undefined;
+
     const systemPrefix =
       [
         // For Deep Agent templates with 'prepend' mode, add template prompt before project prompt
@@ -362,6 +367,9 @@ export class AgentLifecycleManager {
           : undefined,
         projectSystemPrompt
           ? `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]`
+          : undefined,
+        assetsDir
+          ? `[PREVIEWABLE ASSETS]\nWrite any images, videos, or other media you want the user to preview inline to ${assetsDir} (also available as the $FUNNY_ASSETS_DIR environment variable). Files there are served to the UI for inline preview even though they live outside the project tree. Reference them in your replies by their absolute path.\n[/PREVIEWABLE ASSETS]`
           : undefined,
         resumePrefix,
       ]
@@ -416,6 +424,27 @@ export class AgentLifecycleManager {
         agentEnv.GIT_AUTHOR_EMAIL = gitIdentity.email;
         agentEnv.GIT_COMMITTER_NAME = gitIdentity.name;
         agentEnv.GIT_COMMITTER_EMAIL = gitIdentity.email;
+      }
+
+      // Per-user temp assets dir — a browser-previewable scratch space OUTSIDE
+      // the project tree for dev assets the agent generates (screenshots,
+      // renders, clips). Authorized for media serving by resolveProjectScope
+      // (routes/files.ts) and announced to the agent in systemPrefix above.
+      // Created 0700 because the OS tmpdir parent is world-writable; reads stay
+      // gated by the realpath/scope re-check.
+      if (assetsDir) {
+        try {
+          mkdirSync(assetsDir, { recursive: true, mode: 0o700 });
+          agentEnv ??= {};
+          agentEnv.FUNNY_ASSETS_DIR = assetsDir;
+        } catch (assetsErr) {
+          log.warn('Failed to prepare per-user assets dir', {
+            namespace: 'media',
+            threadId,
+            userId: thread.userId,
+            error: (assetsErr as Error).message,
+          });
+        }
       }
     }
 

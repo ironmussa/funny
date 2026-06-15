@@ -413,7 +413,11 @@ describe('AgentLifecycleManager', () => {
 
     test('idle status falls back to START without resume prefix', async () => {
       const call = await startWithStatus('idle');
-      expect(call.systemPrefix).toBeUndefined();
+      // Idle adds no resume prefix. The previewable-assets announcement is
+      // always present for a user-owned thread, so systemPrefix is that block
+      // alone rather than undefined.
+      expect(call.systemPrefix).toEqual(expect.stringContaining('[PREVIEWABLE ASSETS]'));
+      expect(call.systemPrefix).not.toMatch(/resume|follow-up|responded to your question/i);
     });
   });
 
@@ -542,7 +546,10 @@ describe('AgentLifecycleManager', () => {
       );
 
       expect(mocks.remoteGetAgentTemplate).not.toHaveBeenCalled();
-      expect(call.systemPrefix).toBeUndefined();
+      // No template prompt is injected for non-deepagent providers. (The always
+      // -on previewable-assets block may still be present, so assert the absence
+      // of the template marker rather than a fully undefined prefix.)
+      expect(call.systemPrefix ?? '').not.toMatch(/\[AGENT TEMPLATE\]/);
       expect(call.disallowedTools).toBeUndefined();
     });
   });

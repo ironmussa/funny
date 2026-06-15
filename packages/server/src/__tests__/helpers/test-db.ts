@@ -224,6 +224,7 @@ export function createTestDb() {
       os TEXT NOT NULL DEFAULT 'unknown',
       workspace TEXT,
       http_url TEXT,
+      public_media_url TEXT,
       active_thread_ids TEXT NOT NULL DEFAULT '[]',
       registered_at TEXT NOT NULL,
       last_heartbeat_at TEXT NOT NULL

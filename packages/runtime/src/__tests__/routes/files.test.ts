@@ -7,10 +7,11 @@
  */
 
 import { execFileSync } from 'child_process';
-import { mkdirSync, writeFileSync, symlinkSync, mkdtempSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, symlinkSync, mkdtempSync, rmSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { signMediaClaim } from '@funny/shared/auth/media-url-signature';
 import { Hono } from 'hono';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
@@ -92,6 +93,69 @@ describe('files routes — symlink escape protection', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { content: string };
     expect(body.content).toBe('hello');
+  });
+});
+
+describe('files routes — per-user temp assets scope', () => {
+  // The agent writes dev assets to `<os-tmpdir>/funny-<userId>/`; those paths
+  // are authorized for media serving even though they live outside any project.
+  const USER = 'user-1';
+  let assetsRoot: string;
+  let assetFile: string;
+  let app: Hono;
+
+  beforeAll(() => {
+    // Must match the canonical scope: <realpath(tmpdir)>/funny-<userId>.
+    assetsRoot = join(realpathSync(tmpdir()), `funny-${USER}`);
+    mkdirSync(assetsRoot, { recursive: true });
+    assetFile = join(assetsRoot, 'render.png');
+    writeFileSync(assetFile, 'PNGBYTES', 'utf-8');
+
+    const fakeServices = {
+      projects: {
+        // No projects — proves the assets scope is independent of any project.
+        listProjects: async (_userId: string) => [],
+      },
+    } as unknown as RuntimeServiceProvider;
+    resetServices();
+    setServices(fakeServices);
+
+    app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, USER as never);
+      await next();
+    });
+    app.route('/', filesRoutes);
+  });
+
+  afterAll(() => {
+    resetServices();
+    try {
+      rmSync(assetsRoot, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  });
+
+  test('GET /raw allows a file inside the per-user assets root', async () => {
+    // Bun.file is undefined under vitest's Node env, so the stream stage 500s —
+    // assert the security wiring instead: an in-scope assets path is NOT denied
+    // (403) at the scope check. Under Bun at runtime this is a 200 stream.
+    const res = await app.request(`/raw?path=${encodeURIComponent(assetFile)}`);
+    expect(res.status).not.toBe(403);
+  });
+
+  test("GET /raw denies another user's assets root", async () => {
+    const otherFile = join(realpathSync(tmpdir()), 'funny-user-2', 'render.png');
+    const res = await app.request(`/raw?path=${encodeURIComponent(otherFile)}`);
+    expect(res.status).toBe(403);
+  });
+
+  test('GET /raw denies a sibling-prefix escape of the assets root', async () => {
+    // `funny-user-1evil` must not match `funny-user-1` (the `+ sep` guard).
+    const sibling = join(realpathSync(tmpdir()), `funny-${USER}evil`, 'x.png');
+    const res = await app.request(`/raw?path=${encodeURIComponent(sibling)}`);
+    expect(res.status).toBe(403);
   });
 });
 
@@ -178,6 +242,99 @@ describe('files routes — git blame', () => {
   test('GET /blame denies a symlink that escapes the project scope', async () => {
     const escape = join(repoDir, 'escape.txt');
     const res = await app.request(`/blame?path=${encodeURIComponent(escape)}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('files routes — /raw-signed (transport C)', () => {
+  const SECRET = 'runtime-test-secret';
+  const USER = 'user-1';
+  let projectDir: string;
+  let outsideDir: string;
+  let insideFile: string;
+  let outsideFile: string;
+  let app: Hono;
+
+  function signedUrl(opts: {
+    urlPath: string;
+    signPath?: string;
+    expires?: number;
+    secret?: string;
+  }): string {
+    const expires = opts.expires ?? Date.now() + 60_000;
+    const sig = signMediaClaim(
+      { path: opts.signPath ?? opts.urlPath, userId: USER, expires },
+      opts.secret ?? SECRET,
+    );
+    const p = new URLSearchParams({ path: opts.urlPath, u: USER, exp: String(expires), sig });
+    return `/raw-signed?${p.toString()}`;
+  }
+
+  beforeAll(() => {
+    process.env.RUNNER_AUTH_SECRET = SECRET;
+    const tmp = mkdtempSync(join(tmpdir(), 'funny-rawsigned-test-'));
+    projectDir = join(tmp, 'project');
+    outsideDir = join(tmp, 'outside');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(outsideDir, { recursive: true });
+    insideFile = join(projectDir, 'pic.png');
+    outsideFile = join(outsideDir, 'secret.png');
+    writeFileSync(insideFile, 'PNGBYTES', 'utf-8');
+    writeFileSync(outsideFile, 'SECRET', 'utf-8');
+
+    const fakeServices = {
+      projects: {
+        listProjects: async (_userId: string) => [{ id: 'p1', name: 'p', path: projectDir }],
+      },
+    } as unknown as RuntimeServiceProvider;
+    resetServices();
+    setServices(fakeServices);
+
+    // NO auth middleware here — /raw-signed authenticates via the signature alone.
+    app = new Hono();
+    app.route('/', filesRoutes);
+  });
+
+  afterAll(() => {
+    resetServices();
+    try {
+      rmSync(join(projectDir, '..'), { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  });
+
+  test('a valid in-scope signature passes auth + scope (reaches the stream stage)', async () => {
+    // NOTE: the actual byte streaming uses `Bun.file`, which is undefined under
+    // vitest's Node env (the same reason /raw's happy path isn't asserted here) —
+    // so this 500s on the stream itself. What we assert is the security wiring:
+    // a valid signature for an in-scope path is NOT rejected at auth (401) or
+    // scope (403); it gets all the way to streaming. Under Bun at runtime it's 200.
+    const res = await app.request(signedUrl({ urlPath: insideFile }));
+    expect(res.status).not.toBe(401);
+    expect(res.status).not.toBe(403);
+  });
+
+  test('401 for an expired signature', async () => {
+    const res = await app.request(signedUrl({ urlPath: insideFile, expires: Date.now() - 1 }));
+    expect(res.status).toBe(401);
+  });
+
+  test('401 when the path is tampered (signature no longer matches)', async () => {
+    // Sign the in-scope file but request a different path under the same params.
+    const res = await app.request(signedUrl({ urlPath: outsideFile, signPath: insideFile }));
+    expect(res.status).toBe(401);
+  });
+
+  test('401 for a signature minted with the wrong secret', async () => {
+    const res = await app.request(signedUrl({ urlPath: insideFile, secret: 'wrong-secret' }));
+    expect(res.status).toBe(401);
+  });
+
+  test('403 for a validly-signed path that is OUTSIDE the user project scope', async () => {
+    // The signature is authentication, not authorization: a valid token for an
+    // out-of-scope path is still denied by the per-user scope check.
+    const res = await app.request(signedUrl({ urlPath: outsideFile }));
     expect(res.status).toBe(403);
   });
 });

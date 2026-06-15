@@ -36,6 +36,8 @@ export {
   runnerTasks,
   runnerEnrollments,
   projectMembers,
+  projectMemberConfig,
+  resourceGrants,
   inviteLinks,
   agentTemplates,
   // Better Auth identity tables. `user`/`member` are read directly by the

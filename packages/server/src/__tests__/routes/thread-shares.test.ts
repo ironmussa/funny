@@ -83,6 +83,9 @@ describe('Thread sharing (Integration)', () => {
   beforeEach(() => {
     t.cleanup();
     t.db.run(sql`DELETE FROM thread_shares`);
+    // unified-rbac-grants: shares dual-write resource_grants; clear it too so
+    // grants don't leak across tests (hasShare reads both tables).
+    t.db.run(sql`DELETE FROM resource_grants`);
     t.db.run(sql`DELETE FROM member`);
     t.db.run(sql`DELETE FROM organization`);
     t.db.run(sql`DELETE FROM "user"`);
@@ -175,23 +178,34 @@ describe('Thread sharing (Integration)', () => {
 
   // ── End-to-end effect of a grant ───────────────────────
 
-  test('a sharee can read and comment but is 404 on mutation', async () => {
+  test('a commenter sharee can read and comment but is 404 on mutation', async () => {
     await t
       .requestAs(OWNER, 'user', { orgId: ORG })
-      .post('/api/threads/t1/shares', { userId: ANA });
+      .post('/api/threads/t1/shares', { userId: ANA, level: 'comment' });
 
     // Read: detail + messages + events
     expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(200);
     expect((await t.requestAs(ANA).get('/api/threads/t1/messages')).status).toBe(200);
     expect((await t.requestAs(ANA).get('/api/threads/t1/events')).status).toBe(200);
 
-    // Comment: allowed
+    // Comment: allowed at commenter level
     const comment = await t.requestAs(ANA).post('/api/threads/t1/comments', { content: 'nice' });
     expect(comment.status).toBe(201);
 
     // Mutation: forbidden (owner-only) — indistinguishable 404
     expect((await t.requestAs(ANA).patch('/api/threads/t1', { title: 'hijack' })).status).toBe(404);
     expect((await t.requestAs(ANA).delete('/api/threads/t1')).status).toBe(404);
+  });
+
+  test('a viewer sharee can read but CANNOT comment (403)', async () => {
+    // Default level is 'view' → viewer (read-only).
+    await t
+      .requestAs(OWNER, 'user', { orgId: ORG })
+      .post('/api/threads/t1/shares', { userId: ANA });
+
+    expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(200);
+    const comment = await t.requestAs(ANA).post('/api/threads/t1/comments', { content: 'nope' });
+    expect(comment.status).toBe(403);
   });
 
   test('a stranger (no grant) cannot read the thread (404)', async () => {

@@ -48,8 +48,8 @@ function makeApp(currentUser: string) {
   const { requireThreadView, requireThreadOwner, requireThreadSteer } =
     createThreadAccessMiddleware(
       async (id: string) => (id === 't1' ? threadFixture : null),
-      hasShare,
-      getShareLevel,
+      (thread, userId) => canViewThread(thread, userId, hasShare),
+      (thread, userId) => canSteerThread(thread, userId, getShareLevel),
     );
   app.get('/view/:id', requireThreadView, (c) => c.json({ thread: c.get('thread') }));
   app.get('/owner/:id', requireThreadOwner, (c) => c.json({ thread: c.get('thread') }));
@@ -151,8 +151,8 @@ describe('git-route gate (server wiring)', () => {
     });
     const { requireThreadOwner, requireThreadSteer } = createThreadAccessMiddleware(
       async (id: string) => (id === 't1' ? threadFixture : null),
-      hasShare,
-      getShareLevel,
+      (thread, userId) => canViewThread(thread, userId, hasShare),
+      (thread, userId) => canSteerThread(thread, userId, getShareLevel),
     );
     const proxied = (c: any) => c.json({ proxied: true });
     app.all('/api/git/project/*', proxied);

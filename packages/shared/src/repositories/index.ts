@@ -13,6 +13,12 @@ export {
   createThreadShareRepository,
   type ThreadShareRepositoryDeps,
 } from './thread-share-repository.js';
+export {
+  createGrantRepository,
+  type GrantRepositoryDeps,
+  type GrantRepository,
+  type ResourceGrant,
+} from './grant-repository.js';
 export { createStageHistoryRepository, type StageHistoryDeps } from './stage-history.js';
 export { createDesignRepository, type DesignRepositoryDeps } from './design-repository.js';
 export {

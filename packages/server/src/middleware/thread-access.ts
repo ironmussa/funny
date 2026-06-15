@@ -33,7 +33,10 @@ export function isThreadOwner(thread: Pick<Thread, 'userId'>, userId: string): b
 export type HasShare = (threadId: string, userId: string) => Promise<boolean>;
 
 /** Looks up the share level `userId` holds on `threadId` (`null` if no grant). */
-export type GetShareLevel = (threadId: string, userId: string) => Promise<'view' | 'steer' | null>;
+export type GetShareLevel = (
+  threadId: string,
+  userId: string,
+) => Promise<'view' | 'comment' | 'steer' | null>;
 
 /**
  * Whether `userId` may READ `thread`: the owner, OR a user holding an active
@@ -76,19 +79,25 @@ export interface ThreadAccessMiddleware {
   requireThreadSteer: MiddlewareHandler<ServerEnv>;
 }
 
+/** Decides view/steer access for a loaded thread + requesting user. */
+export type ThreadAuthorize = (thread: Thread, userId: string) => boolean | Promise<boolean>;
+
 /**
- * Build the access middlewares around a thread loader and share lookups.
- * `routes/threads.ts` wires these with its `threadRepo.getThread`,
- * `shareRepo.hasShare`, and `shareRepo.getShareLevel`; tests pass fakes.
+ * Build the access middlewares around a thread loader and two authorize
+ * predicates. `routes/threads.ts` wires these with the unified authorizer
+ * (unified-rbac-grants Phase 4b): `authorizeView` admits the owner OR anyone
+ * whose EFFECTIVE role (with thread→project→org inheritance) can view;
+ * `authorizeSteer` admits the owner OR an EXPLICIT thread steer grant ONLY
+ * (inheritance must NOT cross runner isolation — see the authorizer's
+ * `canCrossToOwnerRunner`). `requireThreadOwner` is always the thread creator.
+ * Tests pass fakes.
  */
 export function createThreadAccessMiddleware(
   loadThread: ThreadLoader,
-  hasShare: HasShare,
-  getShareLevel: GetShareLevel,
+  authorizeView: ThreadAuthorize,
+  authorizeSteer: ThreadAuthorize,
 ): ThreadAccessMiddleware {
-  function make(
-    authorize: (thread: Thread, userId: string) => boolean | Promise<boolean>,
-  ): MiddlewareHandler<ServerEnv> {
+  function make(authorize: ThreadAuthorize): MiddlewareHandler<ServerEnv> {
     return async (c, next) => {
       const id = c.req.param('id');
       const userId = c.get('userId') as string;
@@ -102,8 +111,8 @@ export function createThreadAccessMiddleware(
   }
 
   return {
-    requireThreadView: make((thread, userId) => canViewThread(thread, userId, hasShare)),
+    requireThreadView: make(authorizeView),
     requireThreadOwner: make(isThreadOwner),
-    requireThreadSteer: make((thread, userId) => canSteerThread(thread, userId, getShareLevel)),
+    requireThreadSteer: make(authorizeSteer),
   };
 }

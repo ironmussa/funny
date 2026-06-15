@@ -54,9 +54,11 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   if (!targetUserId) {
     return c.json({ error: 'userId is required' }, 400);
   }
-  // Share level (thread-sharing-steer): only 'view' | 'steer'. Anything else
-  // (incl. omitted) falls back to the safe default 'view'.
-  const level: 'view' | 'steer' = body.level === 'steer' ? 'steer' : 'view';
+  // Share level: 'view' (read), 'comment' (read + comment), or 'steer' (read +
+  // comment + follow-ups / edit). Anything else (incl. omitted) falls back to
+  // the safe default 'view'. Maps to canonical viewer/commenter/contributor.
+  const level: 'view' | 'comment' | 'steer' =
+    body.level === 'steer' ? 'steer' : body.level === 'comment' ? 'comment' : 'view';
   if (targetUserId === ownerId) {
     return c.json({ error: 'Cannot share a thread with yourself', code: 'share-self' }, 400);
   }
@@ -115,7 +117,7 @@ shareRoutes.get('/:id/shares', requireThreadOwner, async (c) => {
       threadId: s.threadId,
       sharedWithUserId: s.sharedWithUserId,
       sharedByUserId: s.sharedByUserId,
-      level: s.level === 'steer' ? 'steer' : 'view',
+      level: s.level === 'steer' ? 'steer' : s.level === 'comment' ? 'comment' : 'view',
       createdAt: s.createdAt,
       user: byId.get(s.sharedWithUserId) ?? null,
     })),

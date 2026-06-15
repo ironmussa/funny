@@ -76,6 +76,16 @@ const member = ac.newRole({
   invitation: [],
 });
 
+// Read-only org member (unified-rbac-grants, canonical rank 0). Previously the
+// `TeamRole` type declared 'viewer' but no role was registered, so it was a
+// phantom. A viewer can create nothing and administer nothing.
+const viewer = ac.newRole({
+  project: [],
+  runner: [],
+  member: [],
+  invitation: [],
+});
+
 const adminRole = ac.newRole({
   project: ['create', 'update', 'delete'],
   runner: ['create', 'update', 'delete'],
@@ -205,7 +215,7 @@ export async function initBetterAuth(): Promise<void> {
         membershipLimit: 100,
         creatorRole: 'owner',
         ac,
-        roles: { owner, admin: adminRole, member },
+        roles: { owner, admin: adminRole, member, viewer },
       }),
     ],
   });

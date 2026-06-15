@@ -20,6 +20,7 @@ import type {
 } from '../db/connection.js';
 import type * as sqliteSchema from '../db/schema.sqlite.js';
 import type { createCommentRepository } from './comment-repository.js';
+import { createGrantRepository } from './grant-repository.js';
 import type { createStageHistoryRepository } from './stage-history.js';
 
 /** Max characters for the last-message snippet returned with thread lists */
@@ -196,14 +197,20 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     limit: number;
     search: string;
     userId: string;
+    projectId?: string;
   }) {
-    const { page, limit, search, userId } = opts;
+    const { page, limit, search, userId, projectId } = opts;
     const offset = (page - 1) * limit;
 
     const safeSearch = search ? escapeLike(search) : '';
     const filters: ReturnType<typeof eq>[] = [eq(schema.threads.archived, 1)];
 
     filters.push(eq(schema.threads.userId, userId));
+
+    // Archived threads are scoped per-project in the project settings view.
+    if (projectId) {
+      filters.push(eq(schema.threads.projectId, projectId));
+    }
 
     if (search) {
       filters.push(
@@ -339,6 +346,9 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
 
   /** Delete a thread (cascade deletes messages + tool_calls) */
   async function deleteThread(id: string) {
+    // Purge unified grants first — resource_grants is polymorphic and does NOT
+    // cascade on thread delete (unified-rbac-grants).
+    await createGrantRepository({ db, schema, dbAll, dbRun }).deleteGrantsForResource('thread', id);
     await dbRun(db.delete(schema.threads).where(eq(schema.threads.id, id)));
   }
 

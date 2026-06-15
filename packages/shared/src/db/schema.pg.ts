@@ -62,6 +62,9 @@ export const projects = pgTable('projects', {
   launcherUrl: text('launcher_url'),
   defaultAgentTemplateId: text('default_agent_template_id'),
   userId: text('user_id').notNull(),
+  // Owning organization for org→project role inheritance (unified-rbac-grants).
+  // NULL = personal project. Replaces the `team_projects` join table.
+  organizationId: text('organization_id'),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),
 });
@@ -531,6 +534,40 @@ export const projectMembers = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull(),
     role: text('role').notNull().default('member'),
+    localPath: text('local_path'),
+    joinedAt: text('joined_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
+);
+
+/**
+ * Unified resource-access grants (unified-rbac-grants). See schema.sqlite.ts for
+ * the full contract. Mirror definition.
+ */
+export const resourceGrants = pgTable(
+  'resource_grants',
+  {
+    subjectId: text('subject_id').notNull(),
+    resourceType: text('resource_type').notNull(),
+    resourceId: text('resource_id').notNull(),
+    role: text('role').notNull(),
+    grantedBy: text('granted_by').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.subjectId, t.resourceType, t.resourceId] })],
+);
+
+/**
+ * Per-collaborator project configuration (local working path), split out from
+ * authorization (unified-rbac-grants). Mirror definition.
+ */
+export const projectMemberConfig = pgTable(
+  'project_member_config',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
     localPath: text('local_path'),
     joinedAt: text('joined_at').notNull(),
   },

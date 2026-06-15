@@ -47,10 +47,11 @@ describe('ProjectSettingsView — list → detail → back', () => {
     render(<ProjectSettingsView projectId="p1" onBack={onBack} />);
 
     // The list shows multiple options (general, mcp-server, …). Archived
-    // threads is a global view and must not appear in project context.
+    // Threads is now a per-project view (scoped to the active project), so it
+    // appears within project settings.
     expect(screen.getByTestId('mobile-settings-nav-general')).toBeTruthy();
     expect(screen.getByTestId('mobile-settings-nav-mcp-server')).toBeTruthy();
-    expect(screen.queryByTestId('mobile-settings-nav-archived-threads')).toBeNull();
+    expect(screen.getByTestId('mobile-settings-nav-archived-threads')).toBeTruthy();
 
     // Drill into MCP Server.
     fireEvent.click(screen.getByTestId('mobile-settings-nav-mcp-server'));

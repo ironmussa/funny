@@ -23,10 +23,20 @@ export type { VisualizerContributes, VisualizerManifest } from '@funny/shared';
  *  share the host's React tree, they read theme / font size from the host hooks
  *  below rather than via props. */
 export interface VisualizerProps {
-  /** Source text to render: fenced-block contents, or full file contents. */
+  /**
+   * Source text to render: fenced-block contents, or full file contents. Empty
+   * for a `binary` file visualizer (read `src` instead — see below).
+   */
   source: string;
   /** True when rendered as a full file-preview pane rather than an inline block. */
   fill?: boolean;
+  /**
+   * URL to the file's raw bytes (`/api/files/raw?path=…`), present only in
+   * file-preview mode. Binary visualizers (`contributes.binary`) render from
+   * this — `<img src={src}>`, `fetch(src).then(r => r.arrayBuffer())`, etc. —
+   * because `source` would corrupt non-text data. Undefined for fenced blocks.
+   */
+  src?: string;
 }
 
 /** A visualizer plugin: serializable manifest + its React component. */

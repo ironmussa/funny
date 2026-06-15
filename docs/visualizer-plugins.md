@@ -2,9 +2,11 @@
 
 Visualizer plugins extend how funny renders content — they turn a fenced code
 block or a file preview into a rich, interactive view. funny ships **Mermaid**
-(diagrams) and **CSV** (tables) as built-in visualizers, built on the exact same
-contract a third-party plugin uses, so anything a built-in does, your plugin can
-too. Heavier / more niche renderers (e.g. DBML) ship as installable extensions.
+(diagrams), **CSV** (tables), and **video** (`.mp4`/`.webm`/`.mov`/`.mkv`, the
+reference [binary visualizer](#binary-visualizers)) as built-ins, built on the
+exact same contract a third-party plugin uses, so anything a built-in does, your
+plugin can too. Heavier / more niche renderers (e.g. DBML) ship as installable
+extensions.
 
 A plugin can claim:
 
@@ -147,10 +149,11 @@ non-React widget, a hand-rolled renderer, and an isolated second React app. The
 CSV snippet below is an illustrative minimal walkthrough (CSV itself ships
 built-in).
 
-> **Binary file formats (e.g. Parquet) aren't supported yet.** A visualizer's
-> `source` is delivered as a UTF-8 **string** (the fenced-block text or file
-> contents), which corrupts binary data. Supporting `.parquet`/Arrow/images
-> would need a bytes channel in the host contract (`VisualizerProps`) first.
+> **Binary file formats (e.g. Parquet, images).** A visualizer's `source` is a
+> UTF-8 **string**, which corrupts binary data. To render bytes, declare
+> `contributes.binary: true` and read from `VisualizerProps.src` — a URL to the
+> file's raw bytes (`/api/files/raw?path=…`) — instead of `source`. The host
+> then skips the text fetch entirely. See [Binary visualizers](#binary-visualizers).
 
 ### The contract
 
@@ -187,12 +190,37 @@ export default plugin;
 
 | prop     | type       | meaning                                                                                                  |
 | -------- | ---------- | -------------------------------------------------------------------------------------------------------- |
-| `source` | `string`   | the fenced-block contents, or the full file contents                                                     |
+| `source` | `string`   | the fenced-block contents, or the full file contents (empty for a `binary` visualizer)                   |
 | `fill`   | `boolean?` | `true` when rendered as a full file-preview pane (vs. an inline block) — use it to fill available height |
+| `src`    | `string?`  | URL to the file's raw bytes (`/api/files/raw?path=…`), present only in file-preview mode — see below     |
 
 Props are intentionally minimal: because your component shares the host's React
 tree, read theme / font size from the host hooks rather than threading them
 through props.
+
+### Binary visualizers
+
+`source` is a UTF-8 string, so it corrupts binary formats (images, Parquet,
+Arrow, …). To render bytes, set `contributes.binary: true` and read from `src`
+instead — a URL to the file's raw bytes the host serves from
+`/api/files/raw?path=…`. The host detects a binary visualizer and **skips the
+text fetch**, so `source` arrives empty and only `src` is populated.
+
+```ts
+const plugin: VisualizerPlugin = {
+  id: 'funny-visualizer-image',
+  version: '0.1.0',
+  contributes: {
+    fileExtensions: ['.png', '.jpg', '.webp', '.gif'],
+    binary: true, // ← read `src`, not `source`
+  },
+  Component: ({ src }: VisualizerProps) =>
+    src ? <img src={src} style={{ maxWidth: '100%' }} /> : null,
+};
+```
+
+`binary` only applies to `fileExtensions` — fenced code blocks are always text,
+so a `binary` visualizer's `fences` (if any) still receive `source`.
 
 ### `package.json`
 

@@ -125,7 +125,17 @@ export function openDirectoryInEditor(dirPath: string, editor?: Editor): void {
  */
 export function openFileInInternalEditor(filePath: string): void {
   // Dynamic import to avoid circular dependencies
-  import('@/stores/internal-editor-store').then(({ useInternalEditorStore }) => {
+  Promise.all([
+    import('@/stores/internal-editor-store'),
+    import('@/hooks/use-highlight'),
+    import('@/lib/visualizer-registry'),
+  ]).then(([{ useInternalEditorStore }, { getFileExtension }, { getVisualizerForFileExt }]) => {
+    // A binary visualizer (e.g. an installed Parquet/image extension) reads raw
+    // bytes — open it without the text fetch that would corrupt binary data.
+    if (getVisualizerForFileExt(getFileExtension(filePath))?.contributes.binary) {
+      useInternalEditorStore.getState().openBinaryFile(filePath);
+      return;
+    }
     useInternalEditorStore.getState().openFile(filePath);
   });
 }

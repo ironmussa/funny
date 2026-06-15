@@ -4,8 +4,10 @@ import remarkGfm from 'remark-gfm';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
-import { getVisualizerForFence } from '@/lib/visualizer-registry';
+import { ensureLanguage, getFileExtension, highlightCode } from '@/hooks/use-highlight';
+import { isExternalUrl, resolveImageSrc } from '@/lib/raw-file-src';
+import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
+import { useMediaPreviewStore } from '@/stores/media-preview-store';
 
 import { cn } from './utils';
 
@@ -119,7 +121,58 @@ function HighlightedCode({ code, language }: { code: string; language: string })
   );
 }
 
+/**
+ * Inline markdown image. Web/data URLs render directly; a local file path the
+ * agent emitted (e.g. `![shot](/abs/out.png)`) is routed through the runner's
+ * `/api/files/raw` endpoint so the browser can load it. Clicking a local image
+ * opens it in the shared media lightbox. `rehypeSanitize` keeps a protocol-less
+ * absolute path (it has no scheme) but strips `data:` — consistent with the
+ * app's markdown security policy.
+ */
+function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
+  const resolved = resolveImageSrc(src);
+  if (!resolved) return null;
+  const isLocal = !!src && !isExternalUrl(src);
+  // A local file claimed by a binary visualizer (e.g. the built-in video
+  // renderer) is rendered through that visualizer inline — like GitHub turning
+  // `![](clip.mp4)` into a player — rather than a broken <img> of raw bytes.
+  if (isLocal) {
+    const viz = getVisualizerForFileExt(getFileExtension(src));
+    if (viz?.contributes.binary) {
+      const Visualizer = viz.Component;
+      return (
+        <div className="my-2" data-testid="markdown-binary-visualizer">
+          <Visualizer source="" src={resolved} />
+        </div>
+      );
+    }
+  }
+  const img = (
+    <img
+      src={resolved}
+      alt={alt ?? ''}
+      title={title}
+      loading="lazy"
+      data-testid="markdown-image"
+      className="my-2 max-h-[60vh] max-w-full rounded border object-contain"
+    />
+  );
+  if (!isLocal) return img;
+  return (
+    <button
+      type="button"
+      onClick={() => useMediaPreviewStore.getState().open(src as string)}
+      className="block cursor-zoom-in"
+      aria-label={alt ? `Open image: ${alt}` : 'Open image'}
+      data-testid="markdown-image-button"
+    >
+      {img}
+    </button>
+  );
+}
+
 export const baseMarkdownComponents = {
+  img: ({ src, alt, title }: any) => <MarkdownImage src={src} alt={alt} title={title} />,
   table: ({ children }: any) => (
     <div className="overflow-x-auto">
       <table>{children}</table>

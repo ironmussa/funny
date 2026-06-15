@@ -77,6 +77,12 @@ export function MonacoEditorDialog({
   // them `canPreview` reduces to `isMarkdown` (no behavior change).
   const fileVisualizer = getVisualizerForFileExt(ext);
   const canPreview = isMarkdown || !!fileVisualizer;
+  // Raw-bytes URL for the current file — handed to binary visualizers (images,
+  // Parquet, …) whose `source` text would be corrupt. Text visualizers ignore it.
+  const rawFileSrc = `/api/files/raw?path=${encodeURIComponent(filePath)}`;
+  // A binary visualizer has no meaningful text view — lock to preview so the
+  // code/preview toggle (which would show an empty Monaco) is hidden.
+  const lockPreview = !!fileVisualizer?.contributes.binary;
 
   const [showPreview, setShowPreview] = useState(canPreview);
   const [copied, copy] = useCopyToClipboard();
@@ -485,7 +491,7 @@ export function MonacoEditorDialog({
             </TooltipTrigger>
             <TooltipContent side="bottom">{t('editor.copy', 'Copy')}</TooltipContent>
           </Tooltip>
-          {canPreview && (
+          {canPreview && !lockPreview && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -606,7 +612,7 @@ export function MonacoEditorDialog({
               </div>
             </ScrollArea>
           ) : showPreview && fileVisualizer ? (
-            <fileVisualizer.Component source={content} fill />
+            <fileVisualizer.Component source={content} src={rawFileSrc} fill />
           ) : (
             <Suspense fallback={<div className="h-full" />}>
               <MonacoCodeView

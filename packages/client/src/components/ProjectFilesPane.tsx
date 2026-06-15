@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getFileExtension } from '@/hooks/use-highlight';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -161,6 +163,12 @@ export function ProjectFilesPane() {
       const fileName = relativePath.split('/').pop() ?? relativePath;
       if (isMediaFile(fileName)) {
         useMediaPreviewStore.getState().open(absolutePath);
+        return;
+      }
+      // A binary visualizer (e.g. an installed Parquet/image extension) reads
+      // raw bytes, not text — open it in the dialog without a text fetch.
+      if (getVisualizerForFileExt(getFileExtension(fileName))?.contributes.binary) {
+        useInternalEditorStore.getState().openBinaryFile(absolutePath);
         return;
       }
       void useInternalEditorStore.getState().openFile(absolutePath);

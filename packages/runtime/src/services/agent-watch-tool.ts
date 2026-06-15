@@ -40,7 +40,9 @@ const WATCH_INSTRUCTIONS =
   'thread starts in the same project on the SAME current branch by default and ' +
   'begins working on the prompt you give it immediately. Only pass ' +
   'mode:"worktree" when the user explicitly wants the subtask on its own ' +
-  'isolated branch.';
+  'isolated branch. To recall something from your past conversations, use ' +
+  'funny_search_threads — it searches across your threads by message text, ' +
+  'author, and/or time range.';
 
 /** Args the model supplies to `funny_spawn_thread`. */
 export interface SpawnThreadArgs {
@@ -218,6 +220,83 @@ export function buildWatchMcpServer(threadId: string, userId: string) {
                   `Launched background job ${job.label ? `"${job.label}" ` : ''}(id ${job.id}, ` +
                   `pid ${job.pid}). Output → ${job.logPath}. It runs detached; ` +
                   `I'll wake you when it finishes. You can end your turn now.`,
+              },
+            ],
+          };
+        },
+      ),
+      tool(
+        'funny_search_threads',
+        'Search across YOUR threads (past conversations) by message text, ' +
+          'author, and/or a time range. Returns matching messages with their ' +
+          'thread title/id, role/author, timestamp and a text snippet — use it ' +
+          'to recall where something was discussed before. At least one of ' +
+          '`query`, `author`, `since`, or `until` must be provided.',
+        {
+          query: z
+            .string()
+            .optional()
+            .describe('Substring to find in message text (case-insensitive by default).'),
+          author: z
+            .string()
+            .optional()
+            .describe('Filter by message author (substring match), e.g. a model name or username.'),
+          since: z
+            .string()
+            .optional()
+            .describe(
+              'Only messages at/after this ISO-8601 timestamp (e.g. 2026-06-01T00:00:00Z).',
+            ),
+          until: z.string().optional().describe('Only messages at/before this ISO-8601 timestamp.'),
+          limit: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe('Max matches to return (default 50, max 500).'),
+          caseSensitive: z
+            .boolean()
+            .optional()
+            .describe('Match `query` case-sensitively (default false).'),
+        },
+        async (args) => {
+          if (!args.query?.trim() && !args.author?.trim() && !args.since && !args.until) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'Provide at least one filter: query, author, since, or until.',
+                },
+              ],
+              isError: true,
+            };
+          }
+          const { remoteSearchThreads } = await import('./team-client.js');
+          const results = await remoteSearchThreads({
+            query: args.query,
+            author: args.author,
+            since: args.since,
+            until: args.until,
+            limit: args.limit,
+            caseSensitive: args.caseSensitive,
+          });
+          if (results.length === 0) {
+            return {
+              content: [{ type: 'text' as const, text: 'No matching messages found.' }],
+            };
+          }
+          const lines = results.map(
+            (r) =>
+              `• [${r.timestamp}] ${r.role}${r.author ? ` (${r.author})` : ''} in ` +
+              `"${r.threadTitle}" (thread ${r.threadId}, msg ${r.messageId})\n    ${r.snippet}`,
+          );
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text:
+                  `Found ${results.length} matching message${results.length === 1 ? '' : 's'}:\n` +
+                  lines.join('\n'),
               },
             ],
           };

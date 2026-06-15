@@ -3,7 +3,7 @@
  * Supports FTS5 (SQLite), tsvector (PostgreSQL), and LIKE fallback.
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { sql, type SQL } from 'drizzle-orm';
 
 import { db, dbAll, dbDialect, schema } from '../db/index.js';
@@ -59,6 +59,121 @@ export async function searchThreadIdsByContent(opts: {
   } catch {
     return await searchViaLike(query, projectId, userId, false);
   }
+}
+
+/** One matching message returned by {@link searchThreadMessages}. */
+export interface ThreadMessageMatch {
+  threadId: string;
+  threadTitle: string;
+  messageId: string;
+  role: string;
+  author: string | null;
+  timestamp: string;
+  snippet: string;
+}
+
+/**
+ * Search a user's messages across ALL their threads, combining any of:
+ *   - free-text substring (`query`, in message content)
+ *   - `author` substring (matched against `messages.author`)
+ *   - a time window (`since` / `until`, ISO-8601 timestamps; inclusive)
+ *
+ * Always scoped to `userId` (the runner's authenticated owner) — never trust a
+ * caller-supplied id. Returns at most `limit` matches, most-recent first.
+ *
+ * Unlike {@link searchThreadIdsByContent} (one snippet PER thread, for the UI
+ * search panel) this returns one row PER matching message, which is what the
+ * `funny_search_threads` agent tool surfaces. LIKE-based so the text/author/
+ * time filters compose in a single dialect-agnostic query (FTS5/tsvector can't
+ * be combined with the structured filters cleanly).
+ *
+ * At least one positive filter (query/author/since/until) is required; with
+ * only the user scope it returns [] rather than the user's entire history.
+ */
+export async function searchThreadMessages(opts: {
+  userId: string;
+  query?: string;
+  author?: string;
+  since?: string;
+  until?: string;
+  projectId?: string;
+  limit?: number;
+  caseSensitive?: boolean;
+}): Promise<ThreadMessageMatch[]> {
+  const { userId, projectId, since, until, limit = 50, caseSensitive = false } = opts;
+  const query = opts.query?.trim() ?? '';
+  const author = opts.author?.trim() ?? '';
+
+  if (!userId) return [];
+  if (!query && !author && !since && !until) return [];
+
+  const filters: SQL[] = [eq(schema.threads.userId, userId)];
+  if (projectId) filters.push(eq(schema.threads.projectId, projectId));
+  if (query) {
+    filters.push(sql`${schema.messages.content} like ${`%${escapeLike(query)}%`} escape '\\'`);
+  }
+  if (author) {
+    filters.push(sql`${schema.messages.author} like ${`%${escapeLike(author)}%`} escape '\\'`);
+  }
+  if (since) filters.push(sql`${schema.messages.timestamp} >= ${since}`);
+  if (until) filters.push(sql`${schema.messages.timestamp} <= ${until}`);
+
+  const cap = Math.max(1, Math.min(500, Math.trunc(limit) || 50));
+
+  // Over-fetch when we'll re-filter for case-sensitivity in JS (SQLite LIKE is
+  // ASCII case-insensitive, so the SQL pass is only a coarse pre-filter there).
+  const fetchLimit = query && caseSensitive ? cap * 4 : cap;
+
+  const rows = await dbAll(
+    db
+      .select({
+        threadId: schema.messages.threadId,
+        threadTitle: schema.threads.title,
+        messageId: schema.messages.id,
+        role: schema.messages.role,
+        author: schema.messages.author,
+        timestamp: schema.messages.timestamp,
+        content: schema.messages.content,
+      })
+      .from(schema.messages)
+      .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
+      .where(and(...filters))
+      .orderBy(desc(schema.messages.timestamp))
+      .limit(fetchLimit),
+  );
+
+  const needle = caseSensitive ? query : query.toLowerCase();
+  const results: ThreadMessageMatch[] = [];
+  for (const row of rows) {
+    let snippet: string;
+    if (query) {
+      const haystack = caseSensitive ? row.content : row.content.toLowerCase();
+      const idx = haystack.indexOf(needle);
+      // caseSensitive: the coarse SQL LIKE may have matched a different case;
+      // drop rows that don't contain the exact-case needle.
+      if (caseSensitive && idx === -1) continue;
+      const at = idx === -1 ? 0 : idx;
+      const start = Math.max(0, at - 30);
+      const end = Math.min(row.content.length, at + needle.length + 50);
+      snippet = row.content.slice(start, end).replace(/\n/g, ' ');
+      if (start > 0) snippet = '…' + snippet;
+      if (end < row.content.length) snippet = snippet + '…';
+    } else {
+      snippet = row.content.slice(0, 80).replace(/\n/g, ' ');
+      if (row.content.length > 80) snippet += '…';
+    }
+    results.push({
+      threadId: row.threadId,
+      threadTitle: row.threadTitle,
+      messageId: row.messageId,
+      role: row.role,
+      author: row.author,
+      timestamp: row.timestamp,
+      snippet,
+    });
+    if (results.length >= cap) break;
+  }
+  return results;
 }
 
 // ── SQLite FTS5 ──────────────────────────────────────────────────

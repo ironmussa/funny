@@ -723,6 +723,101 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
   });
 
+  test('search_threads finds messages by text, scoped to the runner user', async () => {
+    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedMessage(db as any, {
+      id: 'm-mine',
+      threadId: 't1',
+      content: 'deploy the pipeline today',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
+    seedMessage(db as any, {
+      id: 'm-theirs',
+      threadId: 't2',
+      content: 'deploy the pipeline now',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:search_threads',
+      query: 'pipeline',
+    });
+
+    expect(res.type).toBe('data:search_threads_response');
+    const ids = res.results.map((r: { messageId: string }) => r.messageId);
+    expect(ids).toContain('m-mine');
+    expect(ids).not.toContain('m-theirs'); // cross-tenant isolation
+    expect(res.results[0].threadTitle).toBe('Thread');
+    expect(res.results[0].snippet).toContain('pipeline');
+  });
+
+  test('search_threads filters by time range', async () => {
+    seedMessage(db as any, {
+      id: 'm-old',
+      threadId: 't1',
+      content: 'old note',
+      timestamp: '2025-01-01T00:00:00.000Z',
+    });
+    seedMessage(db as any, {
+      id: 'm-new',
+      threadId: 't1',
+      content: 'new note',
+      timestamp: '2026-06-01T00:00:00.000Z',
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:search_threads',
+      since: '2026-01-01T00:00:00.000Z',
+    });
+
+    const ids = res.results.map((r: { messageId: string }) => r.messageId);
+    expect(ids).toContain('m-new');
+    expect(ids).not.toContain('m-old');
+  });
+
+  test('search_threads filters by author', async () => {
+    db.insert(schema.messages)
+      .values({
+        id: 'm-auth',
+        threadId: 't1',
+        role: 'assistant',
+        content: 'from claude',
+        author: 'claude-opus-4-8',
+        timestamp: '2026-02-01T00:00:00.000Z',
+      })
+      .run();
+    db.insert(schema.messages)
+      .values({
+        id: 'm-noauth',
+        threadId: 't1',
+        role: 'user',
+        content: 'from user',
+        author: 'argenis',
+        timestamp: '2026-02-01T00:00:01.000Z',
+      })
+      .run();
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:search_threads',
+      author: 'claude',
+    });
+
+    const ids = res.results.map((r: { messageId: string }) => r.messageId);
+    expect(ids).toContain('m-auth');
+    expect(ids).not.toContain('m-noauth');
+  });
+
+  test('search_threads returns empty when no filter is provided', async () => {
+    seedMessage(db as any, { id: 'm1', threadId: 't1', content: 'whatever' });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:search_threads',
+    });
+
+    expect(res.type).toBe('data:search_threads_response');
+    expect(res.results).toEqual([]);
+  });
+
   test('resolve_project_path returns owner project path', async () => {
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:resolve_project_path',
@@ -935,6 +1030,85 @@ describe('data-handler handleDataMessageWithAck', () => {
         .where(eq(schema.messageQueue.id, 'q-foreign'))
         .get();
       expect(stillThere).toBeTruthy();
+    });
+  });
+
+  describe('data:search_threads', () => {
+    test('matches by text and only within the runner-user threads', async () => {
+      // Owned thread/messages.
+      seedMessage(db as any, {
+        id: 'm-own-1',
+        threadId: 't1',
+        role: 'user',
+        content: 'detect faces at native resolution',
+        timestamp: '2026-06-10T12:00:00Z',
+      });
+      // Foreign user's thread with the same term — must NOT leak.
+      seedThread(db as any, { id: 't-foreign', projectId: 'p1', userId: 'user-2', title: 'Other' });
+      seedMessage(db as any, {
+        id: 'm-foreign-1',
+        threadId: 't-foreign',
+        role: 'user',
+        content: 'detect faces elsewhere',
+        timestamp: '2026-06-10T12:00:00Z',
+      });
+
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:search_threads',
+        query: 'faces',
+      });
+
+      expect(res.type).toBe('data:search_threads_response');
+      expect(res.results).toHaveLength(1);
+      expect(res.results[0].messageId).toBe('m-own-1');
+      expect(res.results[0].threadId).toBe('t1');
+      expect(res.results[0].snippet).toContain('faces');
+    });
+
+    test('filters by author and time range', async () => {
+      seedMessage(db as any, {
+        id: 'm-old',
+        threadId: 't1',
+        role: 'user',
+        author: 'argenis',
+        content: 'old note',
+        timestamp: '2026-05-01T00:00:00Z',
+      });
+      seedMessage(db as any, {
+        id: 'm-new-argenis',
+        threadId: 't1',
+        role: 'user',
+        author: 'argenis',
+        content: 'recent note',
+        timestamp: '2026-06-10T00:00:00Z',
+      });
+      seedMessage(db as any, {
+        id: 'm-new-other',
+        threadId: 't1',
+        role: 'assistant',
+        author: 'opus',
+        content: 'recent reply',
+        timestamp: '2026-06-10T01:00:00Z',
+      });
+
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:search_threads',
+        author: 'argenis',
+        since: '2026-06-01T00:00:00Z',
+      });
+
+      expect(res.results).toHaveLength(1);
+      expect(res.results[0].messageId).toBe('m-new-argenis');
+    });
+
+    test('returns [] when no filter is given (never dumps full history)', async () => {
+      seedMessage(db as any, { id: 'm-x', threadId: 't1', content: 'anything' });
+
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:search_threads',
+      });
+
+      expect(res.results).toEqual([]);
     });
   });
 });

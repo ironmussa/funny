@@ -16,13 +16,15 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   }),
 }));
 
-const { getThread, createAndStartThread } = vi.hoisted(() => ({
+const { getThread, createAndStartThread, remoteSearchThreads } = vi.hoisted(() => ({
   getThread: vi.fn(),
   createAndStartThread: vi.fn(),
+  remoteSearchThreads: vi.fn(),
 }));
 
 vi.mock('../../services/thread-manager.js', () => ({ getThread }));
 vi.mock('../../services/thread-service/create.js', () => ({ createAndStartThread }));
+vi.mock('../../services/team-client.js', () => ({ remoteSearchThreads }));
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -43,9 +45,17 @@ function spawnTool() {
   return t;
 }
 
+function searchTool() {
+  const server = buildWatchMcpServer(PARENT_THREAD, USER) as any;
+  const t = server.tools.find((x: any) => x.name === 'funny_search_threads');
+  if (!t) throw new Error('funny_search_threads tool not registered');
+  return t;
+}
+
 beforeEach(() => {
   getThread.mockReset();
   createAndStartThread.mockReset();
+  remoteSearchThreads.mockReset();
   createAndStartThread.mockReturnValue(okAsync({ id: 'child-1' }));
 });
 
@@ -121,5 +131,56 @@ describe('funny_spawn_thread', () => {
 
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain('boom');
+  });
+});
+
+describe('funny_search_threads', () => {
+  test('errors (without hitting the server) when no filter is provided', async () => {
+    const res = await searchTool().handler({});
+
+    expect(res.isError).toBe(true);
+    expect(remoteSearchThreads).not.toHaveBeenCalled();
+  });
+
+  test('forwards filters and formats matches with thread/role/snippet', async () => {
+    remoteSearchThreads.mockResolvedValue([
+      {
+        threadId: 'th-1',
+        threadTitle: 'Pipeline work',
+        messageId: 'm-1',
+        role: 'user',
+        author: 'argenis',
+        timestamp: '2026-06-10T12:00:00Z',
+        snippet: '…detect faces at native res…',
+      },
+    ]);
+
+    const res = await searchTool().handler({
+      query: 'faces',
+      author: 'argenis',
+      since: '2026-06-01T00:00:00Z',
+    });
+
+    expect(remoteSearchThreads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'faces',
+        author: 'argenis',
+        since: '2026-06-01T00:00:00Z',
+      }),
+    );
+    expect(res.isError).toBeFalsy();
+    expect(res.content[0].text).toContain('Found 1 matching message');
+    expect(res.content[0].text).toContain('Pipeline work');
+    expect(res.content[0].text).toContain('th-1');
+    expect(res.content[0].text).toContain('detect faces');
+  });
+
+  test('reports cleanly when there are no matches', async () => {
+    remoteSearchThreads.mockResolvedValue([]);
+
+    const res = await searchTool().handler({ query: 'nonexistent' });
+
+    expect(res.isError).toBeFalsy();
+    expect(res.content[0].text).toContain('No matching messages');
   });
 });

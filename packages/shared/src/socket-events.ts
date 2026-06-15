@@ -109,6 +109,7 @@ export const RUNNER_DATA_EVENTS = [
   'data:get_tool_call',
   'data:find_tool_call',
   'data:find_last_unanswered_interactive_tool_call',
+  'data:search_threads',
   'data:get_project',
   'data:list_projects',
   'data:list_project_threads',

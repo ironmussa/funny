@@ -159,7 +159,7 @@ export interface ThreadState {
   ) => void;
   handleWSCompactBoundary: (
     threadId: string,
-    data: { trigger: 'manual' | 'auto'; preTokens: number; timestamp: string },
+    data: { trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number; timestamp: string },
   ) => void;
   handleWSContextUsage: (
     threadId: string,

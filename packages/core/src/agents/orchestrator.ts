@@ -148,6 +148,57 @@ function snapshotProcessOptions(opts: {
   };
 }
 
+/**
+ * Default system-note prepended to a follow-up prompt on session resume so the
+ * model continues from where it left off instead of re-planning. Used when the
+ * caller doesn't supply its own `systemPrefix`.
+ */
+export const DEFAULT_RESUME_PREFIX =
+  '[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]';
+
+/**
+ * The Claude Agent SDK only EXECUTES a slash command (e.g. `/compact`) when the
+ * user message STARTS with the command. funny prepends a resume system-note to
+ * follow-ups on session resume (see {@link buildEffectivePrompt}); if that note
+ * lands in front of `/compact`, the SDK treats the whole message as literal text
+ * and hands it to the model. The model then writes a "compacted" summary but the
+ * context window is NEVER actually compacted — so no `compact_boundary` fires and
+ * the context-usage counter never drops (it keeps climbing). Detect pure
+ * slash-command follow-ups so they're sent verbatim.
+ *
+ * Guards against absolute paths (`/home/user/...`): the first token must be a
+ * lone `/word` (letters, digits, `-`, `_`) with no further slash.
+ */
+export function isPureSlashCommand(prompt: string): boolean {
+  return /^\/[a-zA-Z][\w-]*(?:\s|$)/.test(prompt.trimStart());
+}
+
+/**
+ * Extract the command name (without the leading slash) from a pure slash-command
+ * prompt — e.g. `"/compact keep notes"` → `"compact"`. Returns `null` when the
+ * prompt isn't a pure slash command. Used at the send boundary to validate the
+ * command against the SDK-reported list before forwarding.
+ */
+export function extractSlashCommandName(prompt: string): string | null {
+  const m = /^\/([a-zA-Z][\w-]*)(?:\s|$)/.exec(prompt.trimStart());
+  return m ? m[1] : null;
+}
+
+/**
+ * Build the prompt actually sent to the agent on (re)start. On session resume we
+ * prepend a system-note so the model continues instead of re-planning — EXCEPT
+ * for slash commands, which must reach the SDK verbatim to be executed (see
+ * {@link isPureSlashCommand}).
+ */
+export function buildEffectivePrompt(
+  prompt: string,
+  opts: { isResume: boolean; resumePrefix?: string },
+): string {
+  if (!opts.isResume || isPureSlashCommand(prompt)) return prompt;
+  const prefix = opts.resumePrefix ?? DEFAULT_RESUME_PREFIX;
+  return `${prefix}\n\n${prompt}`;
+}
+
 // ── Orchestrator ──────────────────────────────────────────────────
 
 export class AgentOrchestrator extends EventEmitter {
@@ -304,15 +355,20 @@ export class AgentOrchestrator extends EventEmitter {
     this.resultReceived.delete(threadId);
     this.lastOptions.delete(threadId);
 
-    // Build effective prompt for session resume
-    let effectivePrompt = prompt;
+    // Build effective prompt for session resume. buildEffectivePrompt skips the
+    // resume system-note for slash commands so e.g. "/compact" reaches the SDK
+    // verbatim and actually compacts (see isPureSlashCommand / buildEffectivePrompt).
     if (isResume) {
-      dlog.info('Resuming session with sessionId', { threadId, sessionId });
-      const prefix =
-        systemPrefix ??
-        `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]`;
-      effectivePrompt = `${prefix}\n\n${prompt}`;
+      dlog.info('Resuming session with sessionId', {
+        threadId,
+        sessionId,
+        slashCommand: isPureSlashCommand(prompt),
+      });
     }
+    const effectivePrompt = buildEffectivePrompt(prompt, {
+      isResume,
+      resumePrefix: systemPrefix,
+    });
 
     // Resolve model ID and permission mode via registry
     const resolvedModel = resolveModelId(provider, model);

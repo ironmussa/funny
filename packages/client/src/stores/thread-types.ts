@@ -35,6 +35,7 @@ export interface AgentResultInfo {
 export interface CompactionEvent {
   trigger: 'manual' | 'auto';
   preTokens: number;
+  postTokens?: number;
   timestamp: string;
 }
 

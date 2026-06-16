@@ -5,6 +5,7 @@
  * @domain layer: application
  */
 
+import { isPureSlashCommand, extractSlashCommandName } from '@funny/core/agents';
 import type {
   WSEvent,
   AgentProvider,
@@ -28,7 +29,12 @@ import {
   type FileRef,
   type SymbolRef,
 } from '../../utils/file-mentions.js';
-import { startAgent, stopAgent, isAgentRunning } from '../agent-runner.js';
+import {
+  startAgent,
+  stopAgent,
+  isAgentRunning,
+  getSupportedSlashCommands,
+} from '../agent-runner.js';
 import { cleanupExternalThread } from '../ingest-mapper.js';
 import { listPermissionRules } from '../permission-rules-client.js';
 import { getServices } from '../service-registry.js';
@@ -103,6 +109,23 @@ export function sendMessage(
 async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageResult> {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
+
+  // Guardrail: reject an unknown slash command up front instead of forwarding it
+  // to the model as literal text. The SDK only executes a recognized /command;
+  // a typo or non-existent command would otherwise silently turn into a prompt
+  // the model "describes" — the same class of bug as /compact not compacting.
+  // Only enforced when we actually captured the SDK's command list this process
+  // lifetime (`undefined` ⇒ can't validate ⇒ allow through).
+  if (isPureSlashCommand(params.content)) {
+    const known = getSupportedSlashCommands(params.threadId);
+    const name = extractSlashCommandName(params.content);
+    if (known && known.size > 0 && name && !known.has(name)) {
+      throw new ThreadServiceError(
+        `Unknown slash command "/${name}". It is not available in this session, so it was not sent.`,
+        400,
+      );
+    }
+  }
 
   log.info('sendMessage called', {
     namespace: 'thread-service',

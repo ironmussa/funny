@@ -41,6 +41,7 @@ vi.mock('../../services/agent-runner.js', () => ({
   startAgent: vi.fn(async () => undefined),
   stopAgent: vi.fn(async () => undefined),
   isAgentRunning: vi.fn(() => false),
+  getSupportedSlashCommands: vi.fn(() => undefined),
 }));
 
 vi.mock('../../services/ingest-mapper.js', () => ({
@@ -73,7 +74,12 @@ vi.mock('../../services/service-registry.js', () => ({
 
 import { ok } from 'neverthrow';
 
-import { startAgent, stopAgent, isAgentRunning } from '../../services/agent-runner.js';
+import {
+  startAgent,
+  stopAgent,
+  isAgentRunning,
+  getSupportedSlashCommands,
+} from '../../services/agent-runner.js';
 import { cleanupExternalThread } from '../../services/ingest-mapper.js';
 import {
   createPermissionRule,
@@ -88,6 +94,67 @@ import {
   deleteComment,
 } from '../../services/thread-service/messaging.js';
 import { wsBroker } from '../../services/ws-broker.js';
+
+describe('sendMessage — slash-command guardrail', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projects.getProject.mockResolvedValue({ followUpMode: 'interrupt' });
+    mocks.tm.getThreadMessages.mockResolvedValue({ messages: [], hasMore: false });
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-cmd',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 's-1',
+      worktreePath: null,
+    });
+  });
+
+  test('rejects an unknown slash command with a 400 instead of sending it', async () => {
+    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
+
+    const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content: '/compcat' });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('allows a known slash command through to the agent', async () => {
+    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
+
+    const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content: '/compact' });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test('allows any slash command when no command list was captured (cannot validate)', async () => {
+    vi.mocked(getSupportedSlashCommands).mockReturnValue(undefined);
+
+    const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content: '/whatever' });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not treat a normal prompt as a command', async () => {
+    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+
+    const result = await sendMessage({
+      threadId: 't-cmd',
+      userId: 'u-1',
+      content: 'please run /compact for me',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('sendMessage — idle/backlog regression', () => {
   beforeEach(() => {

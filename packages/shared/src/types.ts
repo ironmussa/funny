@@ -460,6 +460,8 @@ export interface WSErrorData {
 export interface WSCompactBoundaryData {
   trigger: 'manual' | 'auto';
   preTokens: number;
+  /** Context size AFTER compaction (0 when the SDK doesn't report it). */
+  postTokens?: number;
   timestamp: string;
 }
 

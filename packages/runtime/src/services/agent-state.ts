@@ -57,8 +57,27 @@ export class AgentStateTracker {
     { toolName: string; toolUseId: string; toolInput?: string }
   >();
 
+  /**
+   * Threads whose current run hit a provider error (rate limit / API error)
+   * that the agent did NOT recover from. Set when a `ProviderError` tool card
+   * is emitted, cleared as soon as the agent makes real progress afterwards.
+   * At result time a still-set flag turns the run into a `waiting` state
+   * (waitingReason `provider_error`) so the user can resume instead of seeing
+   * a misleading "completed".
+   */
+  readonly providerErrorPending = new Set<string>();
+
   /** Cumulative input token count per thread (tracks context window usage) */
   readonly cumulativeInputTokens = new Map<string, number>();
+
+  /**
+   * Slash commands the SDK reported as available per thread (names without the
+   * leading slash, incl. aliases). Captured from the `init` system message and
+   * refreshed by `commands_changed`. Used at the send boundary to reject an
+   * unknown `/command` with a clear error instead of forwarding it to the model
+   * as literal text (the silent "typo'd command does nothing" failure mode).
+   */
+  readonly supportedSlashCommands = new Map<string, Set<string>>();
 
   /** Cached userId per thread — avoids DB reads on every WS emission */
   readonly threadUserIds = new Map<string, string>();
@@ -102,6 +121,7 @@ export class AgentStateTracker {
     this.completedEmitted.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
+    this.providerErrorPending.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
   }
 
@@ -115,7 +135,9 @@ export class AgentStateTracker {
     this.cliToDbMsgId.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
+    this.providerErrorPending.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
+    this.supportedSlashCommands.delete(threadId);
     this.threadUserIds.delete(threadId);
   }
 

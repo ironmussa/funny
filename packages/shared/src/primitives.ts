@@ -23,7 +23,7 @@ export type ThreadStatus =
   | 'stopped'
   | 'interrupted';
 export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
-export type WaitingReason = 'question' | 'plan' | 'permission';
+export type WaitingReason = 'question' | 'plan' | 'permission' | 'provider_error';
 export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
 
 // ─── Agent ──────────────────────────────────────────────

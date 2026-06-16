@@ -5,7 +5,13 @@ import type {
   IAgentProcessFactory,
   AgentProcessOptions,
 } from '../agents/interfaces.js';
-import { AgentOrchestrator } from '../agents/orchestrator.js';
+import {
+  AgentOrchestrator,
+  buildEffectivePrompt,
+  DEFAULT_RESUME_PREFIX,
+  extractSlashCommandName,
+  isPureSlashCommand,
+} from '../agents/orchestrator.js';
 import type { CLIMessage } from '../agents/types.js';
 
 // ── Mock process ────────────────────────────────────────────────
@@ -116,6 +122,61 @@ function baseOpts(overrides?: Record<string, any>) {
 }
 
 // ── Tests ───────────────────────────────────────────────────────
+
+describe('isPureSlashCommand', () => {
+  test.each(['/compact', '/clear', '/compact keep the API-design notes', '  /compact  '])(
+    'detects %j as a slash command',
+    (p) => expect(isPureSlashCommand(p)).toBe(true),
+  );
+
+  test.each([
+    'please /compact this',
+    'read /etc/hosts',
+    '/home/user/file.ts',
+    '//comment',
+    '/123abc',
+    'compact',
+    '',
+  ])('does NOT treat %j as a slash command', (p) => expect(isPureSlashCommand(p)).toBe(false));
+});
+
+describe('extractSlashCommandName', () => {
+  test.each([
+    ['/compact', 'compact'],
+    ['/compact keep the API-design notes', 'compact'],
+    ['  /context  ', 'context'],
+    ['/model opus', 'model'],
+  ])('extracts the command name from %j', (input, expected) =>
+    expect(extractSlashCommandName(input)).toBe(expected),
+  );
+
+  test.each(['please /compact', '/home/user/file.ts', '/123', '', 'compact'])(
+    'returns null for %j',
+    (p) => expect(extractSlashCommandName(p)).toBeNull(),
+  );
+});
+
+describe('buildEffectivePrompt', () => {
+  test('prepends the resume prefix to a normal resumed prompt', () => {
+    const out = buildEffectivePrompt('keep going', { isResume: true });
+    expect(out).toBe(`${DEFAULT_RESUME_PREFIX}\n\nkeep going`);
+  });
+
+  test('uses the caller-supplied resumePrefix when provided', () => {
+    const out = buildEffectivePrompt('keep going', { isResume: true, resumePrefix: '[PREFIX]' });
+    expect(out).toBe('[PREFIX]\n\nkeep going');
+  });
+
+  test('leaves a slash command verbatim on resume (the bug fix)', () => {
+    expect(
+      buildEffectivePrompt('/compact', { isResume: true, resumePrefix: '[PREVIEWABLE]' }),
+    ).toBe('/compact');
+  });
+
+  test('never prefixes when not resuming', () => {
+    expect(buildEffectivePrompt('hello', { isResume: false })).toBe('hello');
+  });
+});
 
 describe('AgentOrchestrator', () => {
   let orchestrator: AgentOrchestrator;
@@ -386,6 +447,35 @@ describe('AgentOrchestrator', () => {
 
       expect(factory.lastProcess.options.prompt).toContain('[SYSTEM NOTE:');
       expect(factory.lastProcess.options.sessionId).toBe('sess-old');
+    });
+
+    // Regression: a slash command (/compact, /clear, …) must reach the SDK CLI
+    // raw — with the command as the very first characters — or the CLI forwards
+    // it to the model as literal text and never actually runs the command (so
+    // /compact never compacts and the context-usage ring stays frozen). The
+    // resume prefix (or systemPrefix) must NOT be prepended to it.
+    test('does NOT prepend resume prefix to a slash command', async () => {
+      await orchestrator.startAgent(
+        baseOpts({
+          sessionId: 'sess-old',
+          prompt: '/compact',
+          systemPrefix: '[PREVIEWABLE ASSETS]…',
+        }),
+      );
+
+      expect(factory.lastProcess.options.prompt).toBe('/compact');
+      expect(factory.lastProcess.options.prompt).not.toContain('[SYSTEM NOTE:');
+      expect(factory.lastProcess.options.prompt).not.toContain('[PREVIEWABLE ASSETS]');
+      expect(factory.lastProcess.options.sessionId).toBe('sess-old');
+    });
+
+    test('still prefixes a normal prompt that merely contains a slash', async () => {
+      await orchestrator.startAgent(
+        baseOpts({ sessionId: 'sess-old', prompt: 'please read /etc/hosts and summarize' }),
+      );
+
+      expect(factory.lastProcess.options.prompt).toContain('[SYSTEM NOTE:');
+      expect(factory.lastProcess.options.prompt).toContain('please read /etc/hosts');
     });
 
     test('retries fresh when resume crashes without messages', async () => {

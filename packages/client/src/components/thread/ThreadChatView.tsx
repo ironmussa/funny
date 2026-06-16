@@ -10,12 +10,13 @@ import { MessageStream, type MessageStreamHandle } from '@/components/thread/Mes
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
-import { useThreadChangedFiles, collectSessionChanges } from '@/hooks/use-thread-changed-files';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
 import { canDoGitOps, canSteerShare, isReadOnlyShare } from '@/lib/thread-variant';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useReviewPaneStore } from '@/stores/review-pane-store';
 import {
   useCompactionEvents,
   useThreadEvents,
@@ -143,16 +144,20 @@ export function ThreadChatView({ activeThread }: Props) {
   const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
   const isQueueMode = followUpMode === 'queue';
 
-  // Per-session changed-files summaries: bucket the thread's changed files by the
-  // session (user turn) whose tool calls touched them, so each session carries a
-  // summary at its end. Only for git-capable, non-external threads.
+  // Per-session changed-files summaries: each completed session carries a frozen
+  // summary at its end. The runtime snapshots it when the agent run finishes and
+  // persists it as a `changed_files_summary` thread event, so it's replayed
+  // verbatim here — only at the end of a session, never recomputed from the live
+  // working tree on refresh. A running session has no event yet → no card.
+  // Git-capable, non-external threads only.
   const gitCapable = canDoGitOps(activeThread) && !isExternal;
-  const { files: allChangedFiles, refresh: refreshChangedFiles } =
-    useThreadChangedFiles(gitCapable);
   const sessionChanges = useMemo(
-    () => (gitCapable ? collectSessionChanges(stableMessages ?? [], allChangedFiles) : undefined),
-    [gitCapable, stableMessages, allChangedFiles],
+    () => (gitCapable ? sessionChangesFromEvents(stableThreadEvents) : undefined),
+    [gitCapable, stableThreadEvents],
   );
+  // After an Undo reverts a session's files, refresh the live diff/review views
+  // (the historical summary card itself stays — it's a record of the session).
+  const refreshAfterRevert = useReviewPaneStore((s) => s.notifyDirty);
 
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
@@ -180,7 +185,7 @@ export function ThreadChatView({ activeThread }: Props) {
             model={activeThread.model}
             permissionMode={activeThread.permissionMode}
             sessionChanges={sessionChanges}
-            onSessionReverted={refreshChangedFiles}
+            onSessionReverted={() => refreshAfterRevert(activeThread.id)}
             onSend={handleSend}
             onPermissionApproval={handlePermissionApproval}
             onToolRespond={handleToolRespond}

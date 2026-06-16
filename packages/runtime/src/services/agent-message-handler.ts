@@ -8,8 +8,9 @@
  */
 
 import type { CLIMessage } from '@funny/core/agents';
-import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
+import { getStatusSummary, deriveGitSyncState, getDiffSummary } from '@funny/core/git';
 import type { WSEvent, ThreadStatus } from '@funny/shared';
+import { latestSessionChanges } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import { computeBranchKey } from '../utils/git-status-helpers.js';
@@ -17,6 +18,7 @@ import type { AgentStateTracker } from './agent-state.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { flushPendingMessageUpdates } from './team-client.js';
+import { canDoGitOps } from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
@@ -870,8 +872,81 @@ export class AgentMessageHandler {
       this.state.pendingPermissionRequest.delete(threadId);
     }
 
+    // Snapshot the session's changed-files summary once the run truly finishes
+    // (not while merely waiting for user input). Persisted as a thread event so
+    // it renders as a frozen "what this session changed" card — only at the end,
+    // and without recomputing the diff on every refresh. Best-effort.
+    if (finalStatus !== 'waiting') {
+      await this.persistChangedFilesSummary(threadId).catch((err) => {
+        log.warn('Failed to persist changed-files summary', {
+          namespace: 'agent',
+          threadId,
+          error: (err as Error)?.message ?? String(err),
+        });
+      });
+    }
+
     // Emit git status for worktree threads (async, non-blocking)
     this.emitGitStatus(threadId).catch(() => {});
+  }
+
+  // ── Changed-files session summary ──────────────────────────────
+
+  /**
+   * Snapshot the files modified during the just-completed session and persist
+   * them as a `changed_files_summary` thread event, keyed by the session's
+   * user-message id. The file list comes from the session's file-mutating tool
+   * calls; +/- stats from a one-shot working-tree diff taken at completion. The
+   * snapshot is frozen — the client renders it verbatim on reload instead of
+   * recomputing against the live working tree.
+   */
+  private async persistChangedFilesSummary(threadId: string): Promise<void> {
+    const data = await this.threadManager.getThreadWithMessages(threadId);
+    if (!data) return;
+    // Scratch threads have no repo — nothing to diff or summarize.
+    if (!canDoGitOps(data as { isScratch?: boolean })) return;
+
+    const messages = (data as { messages?: any[] }).messages ?? [];
+    if (messages.length === 0) return;
+
+    const project = await this.getProject((data as unknown as { projectId: string }).projectId);
+    const cwd = (data as { worktreePath?: string | null }).worktreePath || project?.path || '';
+    if (!cwd) return;
+
+    // Best-effort working-tree diff for +/- stats. A failure (or a clean tree)
+    // just yields stat-less rows — the file list still comes from tool calls.
+    let changedFiles: import('@funny/shared').FileDiffSummary[] = [];
+    const diffResult = await getDiffSummary(cwd);
+    if (diffResult.isOk()) changedFiles = diffResult.value.files;
+
+    const summary = latestSessionChanges(messages, changedFiles, cwd);
+    if (!summary) return;
+
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    await getServices().threadEvents.createThreadEvent({
+      id,
+      threadId,
+      type: 'changed_files_summary',
+      data: summary as unknown as Record<string, unknown>,
+    });
+
+    await this.emitWS(threadId, 'thread:event', {
+      event: {
+        id,
+        threadId,
+        type: 'changed_files_summary',
+        data: JSON.stringify(summary),
+        createdAt,
+      },
+    });
+
+    log.info('Persisted changed-files summary', {
+      namespace: 'agent',
+      threadId,
+      userMessageId: summary.userMessageId,
+      fileCount: String(summary.files.length),
+    });
   }
 
   // ── Git status emission ────────────────────────────────────────

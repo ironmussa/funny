@@ -8,65 +8,10 @@ import { useThreadId, useThreadStatus } from '@/stores/thread-context';
 /** Stable empty Set so that referential equality is preserved across renders. */
 const EMPTY_SET = new Set<string>();
 
-/** Tool calls that write to a file path, used to attribute changes to a session. */
-const FILE_MUTATING_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
-
-/** Extract the file path a file-mutating tool call targeted, or null. */
-function toolCallFilePath(tc: any): string | null {
-  if (!tc || !FILE_MUTATING_TOOLS.has(tc.name)) return null;
-  let input: any = tc.input;
-  if (typeof input === 'string') {
-    try {
-      input = JSON.parse(input);
-    } catch {
-      return null;
-    }
-  }
-  const p = input?.file_path ?? input?.notebook_path;
-  return typeof p === 'string' && p ? p : null;
-}
-
-/**
- * Partition the thread's changed files into per-session buckets, keyed by the
- * user-message id that opened each session (turn). A file lands in every session
- * whose tool calls touched it, so scrolling the thread shows what each session
- * modified. Diff stats come from the current working tree (cumulative), so a file
- * touched across sessions shows the same stats in each — the value is the per-
- * session file list, not a per-session line delta.
- */
-export function collectSessionChanges(
-  messages: any[],
-  changedFiles: FileDiffSummary[],
-): Map<string, FileDiffSummary[]> {
-  const result = new Map<string, FileDiffSummary[]>();
-  if (changedFiles.length === 0) return result;
-
-  // touched paths per user turn
-  const touchedByTurn = new Map<string, Set<string>>();
-  let currentUserId: string | null = null;
-  for (const msg of messages) {
-    if (msg.role === 'user') {
-      currentUserId = String(msg.id);
-      if (!touchedByTurn.has(currentUserId)) touchedByTurn.set(currentUserId, new Set());
-    }
-    if (!currentUserId) continue;
-    const set = touchedByTurn.get(currentUserId)!;
-    for (const tc of msg.toolCalls ?? []) {
-      const p = toolCallFilePath(tc);
-      if (p) set.add(p);
-    }
-  }
-
-  for (const [uid, touched] of touchedByTurn) {
-    if (touched.size === 0) continue;
-    // Tool-call paths are absolute; diff summary paths are repo-root-relative.
-    const files = changedFiles.filter((f) =>
-      [...touched].some((tp) => tp === f.path || tp.endsWith(`/${f.path}`)),
-    );
-    if (files.length > 0) result.set(uid, files);
-  }
-  return result;
-}
+// The per-session attribution logic is shared with the runtime (which snapshots
+// each session's summary at completion) — see `@funny/shared`. Re-exported here
+// so existing client callers keep their import path.
+export { collectSessionChanges } from '@funny/shared';
 
 /**
  * Fetch ALL file paths touched by file-modifying tool calls (Write, Edit, NotebookEdit)

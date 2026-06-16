@@ -357,6 +357,43 @@ export function buildThreePaneTriples(
   return triples;
 }
 
+/* ── View-mode heuristics ── */
+
+/**
+ * A diff is "one-sided" when it only adds or only removes lines — i.e. a freshly
+ * created or fully deleted file. Split / three-pane views would render an empty
+ * column for these, so callers force unified ('1 column') mode.
+ *
+ * Detection prefers the git status (cheap + authoritative) and otherwise falls
+ * back to the diff content, so the rule holds even where no file status is
+ * available — e.g. the thread's Edit/Write tool cards and the end-of-session
+ * changed-files summary, which open a single file without a `files` list.
+ */
+export function isOneSidedDiff(input: {
+  status?: string;
+  rawDiff?: string;
+  oldValue?: string;
+  newValue?: string;
+}): boolean {
+  if (input.status === 'added' || input.status === 'deleted') return true;
+
+  if (input.rawDiff) {
+    let hasAdd = false;
+    let hasDel = false;
+    for (const line of input.rawDiff.split('\n')) {
+      // Skip the +++/--- file headers; only body lines reveal add/del.
+      if (line.startsWith('+') && !line.startsWith('+++')) hasAdd = true;
+      else if (line.startsWith('-') && !line.startsWith('---')) hasDel = true;
+      if (hasAdd && hasDel) return false;
+    }
+    return hasAdd !== hasDel;
+  }
+
+  // No raw diff: infer from the snippet/file values. Exactly one side empty ⇒
+  // pure add or pure delete; both present ⇒ a real two-sided change.
+  return Boolean(input.oldValue) !== Boolean(input.newValue);
+}
+
 /* ── Search utilities ── */
 
 export function escapeRegExp(s: string): string {

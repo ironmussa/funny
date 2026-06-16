@@ -223,7 +223,12 @@ export function buildGroupedRenderItems(
   if (!hasEvents) return final;
 
   const filteredEvents = (threadEvents ?? []).filter(
-    (e) => e.type !== 'git:changed' && e.type !== 'compact_boundary',
+    (e) =>
+      e.type !== 'git:changed' &&
+      e.type !== 'compact_boundary' &&
+      // Consumed by ThreadChatView to render the per-session changed-files
+      // summary at the end of each session — not as a standalone event card.
+      e.type !== 'changed_files_summary',
   );
 
   // Group workflow events: all events sharing the same workflowId become a

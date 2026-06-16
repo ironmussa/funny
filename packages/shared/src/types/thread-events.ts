@@ -14,6 +14,7 @@ export type ThreadEventType =
   | 'git:stash_pop'
   | 'git:reset_soft'
   | 'compact_boundary'
+  | 'changed_files_summary'
   | 'workflow:started'
   | 'workflow:completed'
   | 'workflow:hooks'

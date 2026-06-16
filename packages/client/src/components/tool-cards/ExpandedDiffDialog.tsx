@@ -35,6 +35,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { isOneSidedDiff } from '@/lib/diff-math';
 import { parseRawDiff, getChangeableIndices } from '@/lib/patch-builder';
 import { cn } from '@/lib/utils';
 
@@ -310,10 +311,7 @@ export function ExpandedDiffDialog({
   >(new Map());
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
 
-  // Force unified mode for fully added/deleted files (split/three-pane would show empty columns)
   const currentFileStatus = files?.find((f) => f.path === filePath)?.status;
-  const isOneSided = currentFileStatus === 'deleted' || currentFileStatus === 'added';
-  const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
 
   // ── Search state ──
   const [showSearch, setShowSearch] = useState(false);
@@ -436,6 +434,18 @@ export function ExpandedDiffDialog({
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.oldValue : oldValue;
   const effectiveNewValue =
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.newValue : newValue;
+
+  // Force unified ('1 column') for one-sided diffs — a freshly created or fully
+  // deleted file — since split/three-pane would render an empty column. Derived
+  // from content (not just git status) so it also applies when no `files` list
+  // is passed: the thread's Edit/Write cards and the end-of-session summary.
+  const isOneSided = isOneSidedDiff({
+    status: currentFileStatus,
+    rawDiff: effectiveRawDiff,
+    oldValue: effectiveOldValue,
+    newValue: effectiveNewValue,
+  });
+  const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -700,9 +710,6 @@ export function ExpandedDiffView({
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
 
   const currentFileStatus = files?.find((f) => f.path === filePath)?.status;
-  const isOneSided = currentFileStatus === 'deleted' || currentFileStatus === 'added';
-  // Force unified view only when the file is fully added/deleted (one-sided)
-  const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
 
   // ── Line selection state ──
   const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
@@ -951,6 +958,16 @@ export function ExpandedDiffView({
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.oldValue : oldValue;
   const effectiveNewValue =
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.newValue : newValue;
+
+  // Force unified ('1 column') for one-sided diffs (created / fully deleted
+  // files); derived from content so it holds without a `files` status too.
+  const isOneSided = isOneSidedDiff({
+    status: currentFileStatus,
+    rawDiff: effectiveRawDiff,
+    oldValue: effectiveOldValue,
+    newValue: effectiveNewValue,
+  });
+  const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
 
   return (
     <div className="bg-background flex h-full flex-col" data-testid="expanded-diff-view">

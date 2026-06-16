@@ -1492,7 +1492,12 @@ export const PromptInputUI = memo(function PromptInputUI({
                   )}
                 </div>
               ) : (
-                <div className="no-scrollbar flex items-center gap-2 overflow-x-auto">
+                // min-h matches the DiffStats "xs" chip height (text-xs + py-0.5
+                // + border ≈ 22px) so the powerline stays vertically centered at
+                // the same offset whether or not the diff-stats chip is present —
+                // otherwise the row collapses to the shorter powerline height when
+                // there are no changes, shrinking the gap below the prompt box.
+                <div className="no-scrollbar flex min-h-[22px] items-center gap-2 overflow-x-auto">
                   {powerlineThread && (
                     <ThreadPowerline
                       thread={powerlineThread}

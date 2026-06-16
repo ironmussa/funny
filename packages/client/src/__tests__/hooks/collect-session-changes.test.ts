@@ -81,18 +81,39 @@ describe('collectSessionChanges', () => {
     ).toEqual(['nb.ipynb', 'x.md']);
   });
 
-  test('omits sessions whose touched files are not in the working-tree diff', () => {
+  test('still lists a touched file missing from the diff (committed/reverted), stat-less', () => {
     const messages = [userMsg('u1'), editMsg('a1', '/repo/committed.ts')];
     // committed.ts is no longer dirty → not in the diff summary
     const changed = [diff('other.ts')];
 
-    const result = collectSessionChanges(messages, changed);
+    const result = collectSessionChanges(messages, changed, '/repo');
 
-    expect(result.size).toBe(0);
+    // The file still appears (derived from the persisted tool call), relativized,
+    // but carries no +/- stats since it's not in the working-tree diff.
+    const files = result.get('u1')!;
+    expect(files.map((f) => f.path)).toEqual(['committed.ts']);
+    expect(files[0].additions).toBeUndefined();
+    expect(files[0].deletions).toBeUndefined();
   });
 
-  test('returns an empty map when there are no changed files', () => {
-    const messages = [userMsg('u1'), editMsg('a1', '/repo/a.ts')];
+  test('prefers the working-tree diff entry (with stats) over a synthesized one', () => {
+    const messages = [userMsg('u1'), editMsg('a1', '/repo/src/a.ts')];
+    const changed = [diff('src/a.ts', 7, 3)];
+
+    const files = collectSessionChanges(messages, changed, '/repo').get('u1')!;
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({ path: 'src/a.ts', additions: 7, deletions: 3 });
+  });
+
+  test('lists files derived purely from tool calls even with no diff data (post-refresh)', () => {
+    const messages = [userMsg('u1'), editMsg('a1', '/repo/src/a.ts', '/repo/src/b.ts')];
+    // changedFiles empty → diff hasn't loaded yet, but the session list still shows.
+    const result = collectSessionChanges(messages, [], '/repo');
+    expect(result.get('u1')!.map((f) => f.path)).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+
+  test('returns an empty map when no session touched any file', () => {
+    const messages = [userMsg('u1'), { id: 'a1', role: 'assistant', content: 'hi', toolCalls: [] }];
     expect(collectSessionChanges(messages, []).size).toBe(0);
   });
 });

@@ -216,6 +216,15 @@ export type {
 
 export type { ThreadEventType, ThreadEvent } from './types/thread-events.js';
 
+export type { ChangedFilesSummaryEventData } from './session-changed-files.js';
+export {
+  collectSessionChanges,
+  latestSessionChanges,
+  toolCallFilePath,
+  relativizePath,
+  FILE_MUTATING_TOOLS,
+} from './session-changed-files.js';
+
 // ─── Projects ────────────────────────────────────────────
 
 export interface Project {

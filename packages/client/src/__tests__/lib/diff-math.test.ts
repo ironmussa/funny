@@ -8,6 +8,7 @@ import {
   buildVirtualRows,
   countTextMatches,
   escapeRegExp,
+  isOneSidedDiff,
   parseUnifiedDiff,
   type DiffLine,
 } from '@/lib/diff-math';
@@ -162,6 +163,42 @@ describe('buildThreePaneTriples', () => {
       center: lines[1],
       right: lines[1],
     });
+  });
+});
+
+describe('isOneSidedDiff', () => {
+  test('git status added/deleted is one-sided regardless of content', () => {
+    expect(isOneSidedDiff({ status: 'added' })).toBe(true);
+    expect(isOneSidedDiff({ status: 'deleted' })).toBe(true);
+    expect(isOneSidedDiff({ status: 'modified' })).toBe(false);
+  });
+
+  test('raw diff with only additions is one-sided (created file)', () => {
+    const created = ['@@ -0,0 +1,2 @@', '+line one', '+line two'].join('\n');
+    expect(isOneSidedDiff({ rawDiff: created })).toBe(true);
+  });
+
+  test('raw diff with only deletions is one-sided (deleted file)', () => {
+    const deleted = ['@@ -1,2 +0,0 @@', '-line one', '-line two'].join('\n');
+    expect(isOneSidedDiff({ rawDiff: deleted })).toBe(true);
+  });
+
+  test('raw diff with both adds and dels is two-sided', () => {
+    expect(isOneSidedDiff({ rawDiff: SAMPLE_DIFF })).toBe(false);
+  });
+
+  test('+++/--- file headers do not count as body changes', () => {
+    const headerOnly = ['--- a/x.ts', '+++ b/x.ts', '@@ -0,0 +1,1 @@', '+added'].join('\n');
+    expect(isOneSidedDiff({ rawDiff: headerOnly })).toBe(true);
+  });
+
+  // Thread Edit/Write cards & end-of-session summary pass no `files` status:
+  // fall back to old/new snippet emptiness.
+  test('falls back to old/new values when no status or raw diff', () => {
+    expect(isOneSidedDiff({ oldValue: '', newValue: 'created content' })).toBe(true);
+    expect(isOneSidedDiff({ oldValue: 'removed content', newValue: '' })).toBe(true);
+    expect(isOneSidedDiff({ oldValue: 'before', newValue: 'after' })).toBe(false);
+    expect(isOneSidedDiff({ oldValue: '', newValue: '' })).toBe(false);
   });
 });
 

@@ -3,4 +3,5 @@ export {
   buildSplitPairs,
   buildThreePaneTriples,
   buildVirtualRows,
+  isOneSidedDiff,
 } from '@/lib/diff-math';

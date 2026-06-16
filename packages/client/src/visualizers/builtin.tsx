@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
+import { MediaLoadError } from '@/components/MediaLoadError';
 import { cn } from '@/lib/utils';
 import { registerVisualizer, type VisualizerProps } from '@/lib/visualizer-registry';
 
@@ -38,12 +39,16 @@ function CsvVisualizer({ source, fill }: VisualizerProps) {
  * it ships inline rather than lazy-loaded.
  */
 function VideoVisualizer({ src, fill }: VisualizerProps) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
   if (!src) return null;
+  if (failed) return <MediaLoadError probeUrl={src} fill={fill} />;
   return (
     <video
       controls
       src={src}
       data-testid="visualizer-video"
+      onError={() => setFailed(true)}
       className={cn('w-full bg-gray-950 object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
     >
       Your browser does not support the video element.
@@ -61,13 +66,17 @@ function VideoVisualizer({ src, fill }: VisualizerProps) {
  * path (markdown-components.tsx skips the binary deferral for image kinds).
  */
 function ImageVisualizer({ src, fill }: VisualizerProps) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
   if (!src) return null;
+  if (failed) return <MediaLoadError probeUrl={src} fill={fill} />;
   return (
     <img
       src={src}
       alt="preview"
       loading="lazy"
       data-testid="visualizer-image"
+      onError={() => setFailed(true)}
       className={cn('w-full bg-muted/30 object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
     />
   );

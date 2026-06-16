@@ -350,7 +350,7 @@ const RAW_MAX_SIZE = 100 * 1024 * 1024; // 100MB
  * (caller then serves the full 200 body). Supports `start-end`, `start-`, and
  * the `-suffix` (last N bytes) forms.
  */
-function parseByteRange(
+export function parseByteRange(
   rangeHeader: string | undefined,
   size: number,
 ): { start: number; end: number } | null {
@@ -435,14 +435,23 @@ async function streamRawFile(
 
   const range = parseByteRange(c.req.header('range'), stats.size);
   if (range) {
-    return new Response(file.slice(range.start, range.end + 1), {
-      status: 206,
-      headers: {
-        ...baseHeaders,
-        'Content-Range': `bytes ${range.start}-${range.end}/${stats.size}`,
-        'Content-Length': String(range.end - range.start + 1),
-      },
-    });
+    const rangeHeaders = {
+      ...baseHeaders,
+      'Content-Range': `bytes ${range.start}-${range.end}/${stats.size}`,
+      'Content-Length': String(range.end - range.start + 1),
+    };
+    // CRITICAL: a BunFile slice that ends before EOF must NOT be streamed.
+    // `Bun.file().slice(start, end).stream()` ignores `end` and streams
+    // start→EOF, and Bun.serve drops the explicit Content-Length — so the 206
+    // body overruns the advertised `Content-Range`. Browsers reject that and a
+    // `<video>`/`<audio>` fails to play or seek (looks like "could not be
+    // displayed"). Materialize bounded ranges to an ArrayBuffer so the body
+    // matches the range exactly; a range that already runs to EOF streams fine.
+    if (range.end >= stats.size - 1) {
+      return new Response(file.slice(range.start), { status: 206, headers: rangeHeaders });
+    }
+    const slice = await file.slice(range.start, range.end + 1).arrayBuffer();
+    return new Response(slice, { status: 206, headers: rangeHeaders });
   }
 
   return new Response(file, {

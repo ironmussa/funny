@@ -2,13 +2,13 @@ import { Check, Copy } from 'lucide-react';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import remarkGfm from 'remark-gfm';
 
+import { MarkdownImageCard } from '@/components/MarkdownImageCard';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureLanguage, getFileExtension, highlightCode } from '@/hooks/use-highlight';
 import { isExternalUrl } from '@/lib/raw-file-src';
 import { useResolvedMediaSrc } from '@/lib/use-direct-media';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
-import { useMediaPreviewStore } from '@/stores/media-preview-store';
 
 import { cn } from './utils';
 
@@ -130,24 +130,22 @@ function HighlightedCode({ code, language }: { code: string; language: string })
 /**
  * Inline markdown image. Web/data URLs render directly; a local file path the
  * agent emitted (e.g. `![shot](/abs/out.png)`) is routed through the runner's
- * `/api/files/raw` endpoint so the browser can load it. Clicking a local image
- * opens it in the shared media lightbox. `rehypeSanitize` keeps a protocol-less
- * absolute path (it has no scheme) but strips `data:` — consistent with the
- * app's markdown security policy.
+ * `/api/files/raw` endpoint so the browser can load it. `rehypeSanitize` keeps a
+ * protocol-less absolute path (it has no scheme) but strips `data:` — consistent
+ * with the app's markdown security policy.
+ *
+ * This is a thin dispatcher: a local NON-image file claimed by a binary
+ * visualizer (e.g. a `.mp4` → the video renderer) is rendered through that
+ * visualizer inline; everything else (an image, local or web) goes to
+ * `MarkdownImageCard`, which adds the Mermaid-style chrome — a bordered card
+ * with a filename header and a hover toolbar (zoom %, in/out, 1:1, expand).
  */
 function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   // Proxied `/api/files/raw` URL immediately, upgraded to a signed direct-runner
   // URL (transport C) when the runner supports it. Falls back silently otherwise.
-  const resolved = useResolvedMediaSrc(src);
+  const { src: resolved, onError: onMediaError } = useResolvedMediaSrc(src);
   if (!resolved) return null;
   const isLocal = !!src && !isExternalUrl(src);
-  // A local file claimed by a binary visualizer (e.g. the built-in video
-  // renderer) is rendered through that visualizer inline — like GitHub turning
-  // `![](clip.mp4)` into a player — rather than a broken <img> of raw bytes.
-  // Images are the exception: a native <img> already renders them, and this sink
-  // wraps locals in the click-to-zoom media lightbox below — richer than the bare
-  // binary visualizer — so we keep images on that path even though an image
-  // binary visualizer is registered (it covers the Monaco/internal-editor paths).
   if (isLocal && !IMAGE_EXTS.has(getFileExtension(src).toLowerCase())) {
     const viz = getVisualizerForFileExt(getFileExtension(src));
     if (viz?.contributes.binary) {
@@ -159,27 +157,14 @@ function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?
       );
     }
   }
-  const img = (
-    <img
-      src={resolved}
-      alt={alt ?? ''}
-      title={title}
-      loading="lazy"
-      data-testid="markdown-image"
-      className="my-2 max-h-[60vh] max-w-full rounded border object-contain"
-    />
-  );
-  if (!isLocal) return img;
   return (
-    <button
-      type="button"
-      onClick={() => useMediaPreviewStore.getState().open(src as string)}
-      className="block cursor-zoom-in"
-      aria-label={alt ? `Open image: ${alt}` : 'Open image'}
-      data-testid="markdown-image-button"
-    >
-      {img}
-    </button>
+    <MarkdownImageCard
+      src={resolved}
+      originalSrc={src}
+      alt={alt}
+      title={title}
+      onMediaError={onMediaError}
+    />
   );
 }
 

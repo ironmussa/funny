@@ -5,6 +5,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 
 import { ImageZoomControls } from '@/components/ImageZoomControls';
+import { MediaLoadError } from '@/components/MediaLoadError';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useImageZoomPan } from '@/hooks/use-image-zoom-pan';
@@ -169,6 +170,9 @@ function ImagePreview({
   onError?: (error: Error) => void;
 }) {
   const zoom = useImageZoomPan();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (failed) return <MediaLoadError probeUrl={src} path={name} fill />;
   return (
     <div
       data-testid="media-preview-image"
@@ -179,7 +183,10 @@ function ImagePreview({
         src={src}
         alt={name ?? 'preview'}
         loading="lazy"
-        onError={() => onError?.(new Error(`Failed to load image: ${src}`))}
+        onError={() => {
+          setFailed(true);
+          onError?.(new Error(`Failed to load image: ${src}`));
+        }}
         className={cn(
           'max-h-[66vh] max-w-full rounded object-contain select-none',
           zoom.zoomed ? (zoom.dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in',
@@ -225,12 +232,18 @@ function VideoPreview({
   name?: string;
   onError?: (error: Error) => void;
 }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (failed) return <MediaLoadError probeUrl={src} path={name} fill />;
   return (
     <video
       controls
       src={src}
       data-testid="media-preview-video"
-      onError={() => onError?.(new Error(`Failed to load video: ${src}`))}
+      onError={() => {
+        setFailed(true);
+        onError?.(new Error(`Failed to load video: ${src}`));
+      }}
       className="max-h-[70vh] w-full bg-gray-950"
     >
       {name && <track kind="metadata" label={name} />}
@@ -377,9 +390,5 @@ function PreviewSpinner() {
 }
 
 function PreviewError() {
-  return (
-    <div className="text-destructive p-6 text-sm" data-testid="media-preview-error">
-      Failed to load preview.
-    </div>
-  );
+  return <MediaLoadError reason="Failed to load preview." className="m-4" />;
 }

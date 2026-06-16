@@ -176,6 +176,17 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     forwardedHeaders['X-Forwarded-Proto'] = fwdProto;
   }
 
+  // Forward the client's Range so the runner can answer media requests with
+  // 206 Partial Content. Without this the runtime never sees a range and always
+  // returns the full 200 body — breaking <video>/<audio> seek and any MP4 whose
+  // `moov` atom sits at the end (the browser must range-read it to start
+  // playback). The matching response headers (Accept-Ranges / Content-Range)
+  // are allowlisted in SAFE_RUNNER_RESPONSE_HEADERS.
+  const rangeHeader = c.req.header('range');
+  if (rangeHeader) {
+    forwardedHeaders['range'] = rangeHeader;
+  }
+
   const orgId = c.get('organizationId') as string | undefined;
   if (orgId) {
     forwardedHeaders['X-Forwarded-Org'] = orgId;
@@ -371,6 +382,11 @@ const SAFE_RUNNER_RESPONSE_HEADERS = new Set([
   'last-modified',
   'vary',
   'x-content-type-options',
+  // Range/partial-content headers — payload-describing and safe (no security
+  // surface like Set-Cookie / CORS). Required so a runner's 206 reaches the
+  // browser intact for <video>/<audio> seek; see the Range forwarding above.
+  'accept-ranges',
+  'content-range',
 ]);
 
 function filterSafeRunnerResponseHeaders(source: Headers): Headers {

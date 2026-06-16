@@ -183,11 +183,31 @@ export class AgentMessageHandler {
         sessionId: msg.session_id,
       });
 
+      // Capture the SDK-reported slash commands so the send boundary can reject
+      // an unknown /command instead of forwarding it to the model as text.
+      if (msg.slashCommands?.length) {
+        this.state.supportedSlashCommands.set(
+          threadId,
+          new Set(msg.slashCommands.map((c) => c.replace(/^\//, ''))),
+        );
+      }
+
       await this.emitWS(threadId, 'agent:init', {
         tools: msg.tools ?? [],
         cwd: msg.cwd ?? '',
         model: msg.model ?? '',
       });
+      return;
+    }
+
+    // Mid-session refresh of available slash commands (e.g. skills discovered
+    // dynamically). Replace the cached set so the send-boundary guard stays
+    // accurate.
+    if (msg.type === 'commands_changed') {
+      this.state.supportedSlashCommands.set(
+        threadId,
+        new Set(msg.commands.map((c) => c.replace(/^\//, ''))),
+      );
       return;
     }
 
@@ -212,10 +232,14 @@ export class AgentMessageHandler {
         preTokens: String(msg.preTokens),
         timestamp,
       });
-      this.state.cumulativeInputTokens.set(threadId, 0);
+      // After compaction the context is the summary, not empty — track the
+      // SDK-reported post-compaction size (0 when unavailable) so the ring
+      // shows the real reduced usage instead of freezing or vanishing.
+      this.state.cumulativeInputTokens.set(threadId, msg.postTokens);
       await this.emitWS(threadId, 'agent:compact_boundary', {
         trigger: msg.trigger,
         preTokens: msg.preTokens,
+        postTokens: msg.postTokens,
         timestamp,
       });
 
@@ -224,6 +248,7 @@ export class AgentMessageHandler {
         .threadEvents.saveThreadEvent(threadId, 'compact_boundary', {
           trigger: msg.trigger,
           preTokens: msg.preTokens,
+          postTokens: msg.postTokens,
           timestamp,
         })
         .catch((err) => {
@@ -300,6 +325,13 @@ export class AgentMessageHandler {
       raw: JSON.stringify(msg.message),
     });
 
+    // Real assistant text means the agent made progress AFTER any earlier
+    // provider error — so it recovered. Clear the pending-provider-error flag
+    // so the run isn't forced into `waiting` at result time.
+    if (textContent) {
+      this.state.providerErrorPending.delete(threadId);
+    }
+
     if (textContent) {
       let msgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
       if (msgId) {
@@ -337,7 +369,20 @@ export class AgentMessageHandler {
     // **full context window size** for this API call, not an incremental addition.
     // So we use the latest totalInputTokens directly as the context window usage
     // rather than accumulating across messages (which would vastly overcount).
-    const usage = msg.message.usage as Record<string, unknown> | undefined;
+    // The compaction-summary assistant message carries a `compaction` content
+    // block and reports `usage` equal to the FULL pre-compaction context it
+    // just read to build the summary. The SDK emits it AFTER the
+    // `compact_boundary` system message, so forwarding its usage as an
+    // `agent:context_usage` event would clobber the reset the client just
+    // applied on the boundary — leaving the context-usage ring frozen at the
+    // pre-compaction value (the "compacted but the meter didn't move" bug).
+    // The boundary is authoritative for post-compaction usage, so skip this.
+    const isCompactionSummary = msg.message.content.some(
+      (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
+    );
+    const usage = isCompactionSummary
+      ? undefined
+      : (msg.message.usage as Record<string, unknown> | undefined);
     if (usage) {
       const inputTokens =
         (usage.input_tokens as number) ??
@@ -480,6 +525,20 @@ export class AgentMessageHandler {
             input: block.input,
             parentToolCallId,
           });
+        }
+
+        // Track provider errors (rate limits / API errors rendered as a
+        // `ProviderError` tool card). A still-pending flag at result time turns
+        // the run into `waiting` so the user can resume instead of seeing a
+        // misleading "completed". Any other (real) tool call means the agent
+        // moved on, so clear it.
+        if (block.name === 'ProviderError') {
+          log.info('ProviderError detected — marking thread for provider-error waiting', {
+            ...(await this.threadCtx(threadId)),
+          });
+          this.state.providerErrorPending.add(threadId);
+        } else {
+          this.state.providerErrorPending.delete(threadId);
         }
 
         // Track if this tool call means Claude is waiting for user input
@@ -769,6 +828,18 @@ export class AgentMessageHandler {
       });
     }
 
+    // An unrecovered provider error (rate limit / API error) should leave the
+    // thread in `waiting` — not `completed`/`failed` — so the user can nudge it
+    // to retry. Lowest priority: a real user-input/permission wait wins.
+    if (!waitingReason && this.state.providerErrorPending.has(threadId)) {
+      waitingReason = 'provider_error';
+      log.info('handleResult forcing provider-error waiting status', {
+        namespace: 'agent-message',
+        threadId,
+        resultSubtype: msg.subtype,
+      });
+    }
+
     const isWaitingForUser = !!waitingReason;
     const preThread = await this.threadManager.getThread(threadId);
     const currentStatus = preThread?.status ?? 'running';
@@ -799,6 +870,7 @@ export class AgentMessageHandler {
     });
 
     this.state.pendingUserInput.delete(threadId);
+    this.state.providerErrorPending.delete(threadId);
 
     await this.threadManager.updateThread(threadId, {
       status: finalStatus,
@@ -924,12 +996,14 @@ export class AgentMessageHandler {
 
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    await getServices().threadEvents.createThreadEvent({
-      id,
+    // Persist via saveThreadEvent — the runtime proxies this to the server's DB
+    // (RunnerServiceProvider.createThreadEvent is a no-op, so the explicit-id
+    // path would silently drop the event and the card would vanish on reload).
+    await getServices().threadEvents.saveThreadEvent(
       threadId,
-      type: 'changed_files_summary',
-      data: summary as unknown as Record<string, unknown>,
-    });
+      'changed_files_summary',
+      summary as unknown as Record<string, unknown>,
+    );
 
     await this.emitWS(threadId, 'thread:event', {
       event: {

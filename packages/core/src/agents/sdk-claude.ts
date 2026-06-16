@@ -700,7 +700,18 @@ export class SDKClaudeProcess extends BaseAgentProcess {
             tools: (sdkMsg as any).tools,
             model: (sdkMsg as any).model,
             cwd: (sdkMsg as any).cwd,
+            // `slash_commands` is a string[] of command names (no leading slash).
+            slashCommands: (sdkMsg as any).slash_commands ?? [],
           };
+        }
+        if ('subtype' in sdkMsg && sdkMsg.subtype === 'commands_changed') {
+          const raw = sdkMsg as any;
+          // SlashCommand objects → flat list of names + aliases (no leading slash).
+          const commands: string[] = (raw.commands ?? []).flatMap(
+            (c: { name?: string; aliases?: string[] }) =>
+              [c.name, ...(c.aliases ?? [])].filter((n): n is string => !!n),
+          );
+          return { type: 'commands_changed', commands, sessionId: raw.session_id ?? '' };
         }
         if ('subtype' in sdkMsg && sdkMsg.subtype === 'compact_boundary') {
           const raw = sdkMsg as any;
@@ -708,6 +719,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
             type: 'compact_boundary',
             trigger: raw.compact_metadata?.trigger ?? 'auto',
             preTokens: raw.compact_metadata?.pre_tokens ?? 0,
+            postTokens: raw.compact_metadata?.post_tokens ?? 0,
             sessionId: raw.session_id ?? '',
           };
         }

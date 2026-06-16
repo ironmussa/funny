@@ -281,6 +281,33 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(state.threadDataById[THREAD_ID].compactionEvents).toHaveLength(1);
   });
 
+  test('handleWSCompactBoundary uses postTokens when the SDK reports it', () => {
+    const usageBefore = {
+      cumulativeInputTokens: 175_000,
+      lastInputTokens: 5_000,
+      lastOutputTokens: 1_200,
+    };
+    const state = makeState({
+      contextUsageByThread: { [THREAD_ID]: usageBefore },
+      threadDataById: {
+        [THREAD_ID]: { ...makeState().activeThread, contextUsage: usageBefore },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSCompactBoundary(get, set, THREAD_ID, {
+      trigger: 'manual',
+      preTokens: 175_000,
+      postTokens: 32_000,
+      timestamp: new Date().toISOString(),
+    });
+
+    // The ring should drop to the real post-compaction size, not freeze at the
+    // pre-compaction value and not vanish to 0.
+    expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(32_000);
+    expect(state.threadDataById[THREAD_ID].contextUsage.cumulativeInputTokens).toBe(32_000);
+  });
+
   test('handleWSMessage does NOT duplicate user msg already present in payload tail', () => {
     // Regression: bug 4 — visual duplicate of the dequeued message.
     // The server `startAgent` path inserts the user message into the DB, so

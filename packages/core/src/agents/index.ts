@@ -15,6 +15,10 @@ export {
 } from './acp-tool-input.js';
 export {
   AgentOrchestrator,
+  isPureSlashCommand,
+  extractSlashCommandName,
+  buildEffectivePrompt,
+  DEFAULT_RESUME_PREFIX,
   type StartAgentOptions,
   type OrchestratorEvents,
 } from './orchestrator.js';

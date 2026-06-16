@@ -6,6 +6,8 @@ import {
   Send,
   ShieldCheck,
   ShieldQuestion,
+  AlertTriangle,
+  RotateCw,
 } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -76,6 +78,74 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
         />
         <button
           data-testid="waiting-send"
+          onClick={handleSubmitInput}
+          disabled={!input.trim()}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+            input.trim()
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'bg-muted text-muted-foreground cursor-not-allowed',
+          )}
+        >
+          <Send className="icon-xs" />
+          {t('thread.send')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }) {
+  const { t } = useTranslation();
+  const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmitInput = () => {
+    const text = input.trim();
+    if (!text) return;
+    onSend(text);
+    setInput('');
+  };
+
+  return (
+    <div
+      data-testid="provider-error-card"
+      className="border-status-warning/20 bg-status-warning/5 space-y-2.5 rounded-lg border p-3"
+    >
+      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
+        <AlertTriangle className="icon-sm" />
+        {t('thread.providerErrorWaiting', 'The provider returned an error. The run is paused.')}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          data-testid="provider-error-retry"
+          onClick={() => onSend('Continue')}
+          className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+        >
+          <RotateCw className="icon-sm" />
+          {t('common.retry')}
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        <Input
+          ref={inputRef}
+          data-testid="provider-error-input"
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmitInput();
+            }
+          }}
+          placeholder={t('thread.waitingInputPlaceholder')}
+          className="h-auto flex-1 py-1.5"
+        />
+        <button
+          data-testid="provider-error-send"
           onClick={handleSubmitInput}
           disabled={!input.trim()}
           className={cn(

@@ -26,6 +26,7 @@ import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 export class AgentRunner {
   private lifecycle: AgentLifecycleManager;
   private eventRouter: AgentEventRouter;
+  private state: AgentStateTracker;
 
   constructor(
     threadManager: IThreadManager,
@@ -35,6 +36,7 @@ export class AgentRunner {
   ) {
     const orchestrator = new AgentOrchestrator(processFactory);
     const state = new AgentStateTracker();
+    this.state = state;
     state.startAutoSweep();
     const messageHandler = new AgentMessageHandler(state, threadManager, wsBroker, getProject);
 
@@ -111,6 +113,15 @@ export class AgentRunner {
   extractActiveAgents(): Map<string, any> {
     return this.lifecycle.extractActiveAgents();
   }
+
+  /**
+   * Slash commands the SDK reported for this thread (names without leading
+   * slash), or `undefined` if none captured yet (no run this process lifetime).
+   * `undefined` means "can't validate" — callers should allow through.
+   */
+  getSupportedSlashCommands(threadId: string): Set<string> | undefined {
+    return this.state.supportedSlashCommands.get(threadId);
+  }
 }
 
 // ── Default singleton (backward-compatible exports) ─────────────
@@ -127,6 +138,8 @@ export const stopAllAgents = defaultRunner.stopAllAgents.bind(defaultRunner);
 export const isAgentRunning = defaultRunner.isAgentRunning.bind(defaultRunner);
 export const cleanupThreadState = defaultRunner.cleanupThreadState.bind(defaultRunner);
 export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaultRunner);
+export const getSupportedSlashCommands =
+  defaultRunner.getSupportedSlashCommands.bind(defaultRunner);
 
 // ── Bridge core debug logs to Winston/OTLP ──────────────────
 setLogSink((level, namespace, message, data) => {

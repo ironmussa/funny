@@ -28,7 +28,7 @@ import {
   EMPTY_MESSAGES,
   type MemoizedMessageListHandle,
 } from './MemoizedMessageList';
-import { WaitingActions, PermissionApprovalCard } from './WaitingCards';
+import { WaitingActions, PermissionApprovalCard, ProviderErrorCard } from './WaitingCards';
 
 /* ── Types ────────────────────────────────────────────────────────── */
 
@@ -731,6 +731,17 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
                 onAlwaysAllow={handlePermissionAlwaysAllow}
                 onDeny={handlePermissionDeny}
               />
+            </m.div>
+          )}
+
+          {/* Waiting: provider error (rate limit / API error) */}
+          {status === 'waiting' && waitingReason === 'provider_error' && (
+            <m.div
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <ProviderErrorCard onSend={(text) => onSend(text, { model, mode: permissionMode })} />
             </m.div>
           )}
 

@@ -172,6 +172,7 @@
     "addProjectDescription": "Open a project from the sidebar to start running agents in parallel",
     "agentWorking": "Agent is working...",
     "waitingForResponse": "Waiting for your response...",
+    "providerErrorWaiting": "The provider returned an error. The run is paused — retry or send a message to continue.",
     "planWaitingForResponse": "Accept or reject the plan",
     "rejectPlan": "Reject plan",
     "taskCompleted": "Task completed",

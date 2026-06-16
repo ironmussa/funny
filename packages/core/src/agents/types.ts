@@ -14,6 +14,23 @@ export interface CLISystemMessage {
   tools?: string[];
   model?: string;
   cwd?: string;
+  /**
+   * Slash commands the SDK reports as available for this session (names without
+   * the leading slash, e.g. "compact"). Captured so the send boundary can
+   * reject unknown commands instead of forwarding them to the model as text.
+   */
+  slashCommands?: string[];
+}
+
+/**
+ * Mid-session refresh of the available slash commands (e.g. skills discovered
+ * dynamically as the agent works in a subdirectory). Replaces the cached list.
+ */
+export interface CLICommandsChangedMessage {
+  type: 'commands_changed';
+  /** Command names without the leading slash, including aliases. */
+  commands: string[];
+  sessionId: string;
 }
 
 export interface CLIAssistantMessage {
@@ -56,6 +73,8 @@ export interface CLICompactBoundaryMessage {
   type: 'compact_boundary';
   trigger: 'manual' | 'auto';
   preTokens: number;
+  /** Context size AFTER compaction (0 when the SDK doesn't report it). */
+  postTokens: number;
   sessionId: string;
 }
 
@@ -78,6 +97,7 @@ export interface CLIRateLimitMessage {
 
 export type CLIMessage =
   | CLISystemMessage
+  | CLICommandsChangedMessage
   | CLIAssistantMessage
   | CLIUserMessage
   | CLIResultMessage

@@ -169,6 +169,7 @@
     "addProjectDescription": "Abra um projeto na barra lateral para executar agentes em paralelo",
     "agentWorking": "O agente está trabalhando...",
     "waitingForResponse": "Aguardando sua resposta...",
+    "providerErrorWaiting": "O provedor retornou um erro. A execução está pausada — tente novamente ou envie uma mensagem para continuar.",
     "planWaitingForResponse": "Aceite ou rejeite o plano",
     "rejectPlan": "Rejeitar plano",
     "taskCompleted": "Tarefa concluída",

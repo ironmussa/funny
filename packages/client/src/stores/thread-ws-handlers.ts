@@ -813,7 +813,7 @@ export function handleWSCompactBoundary(
   get: Get,
   set: Set,
   threadId: string,
-  data: { trigger: 'manual' | 'auto'; preTokens: number; timestamp: string },
+  data: { trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number; timestamp: string },
 ): void {
   const state = get();
   if (!isHydrated(state, threadId)) {
@@ -822,8 +822,15 @@ export function handleWSCompactBoundary(
   }
   // Mirror the server-side reset of cumulativeInputTokens (agent-message-handler.ts).
   // Without this the context-usage ring stays frozen at the pre-compaction value
-  // until the next agent turn emits a fresh context_usage event.
-  const resetUsage = { cumulativeInputTokens: 0, lastInputTokens: 0, lastOutputTokens: 0 };
+  // until the next agent turn emits a fresh context_usage event. Use the
+  // SDK-reported post-compaction size when available so the ring reflects the
+  // real reduced context instead of dropping to 0 (which hides the ring).
+  const post = data.postTokens ?? 0;
+  const resetUsage = {
+    cumulativeInputTokens: post,
+    lastInputTokens: post,
+    lastOutputTokens: 0,
+  };
   emitContextUsage(threadId, resetUsage);
   set((s) => ({
     contextUsageByThread: { ...s.contextUsageByThread, [threadId]: resetUsage },

@@ -6,12 +6,16 @@
 
 import { z } from 'zod';
 
+// NOTE: zod 4 changed `.default()` to expect the *output* type. For object
+// schemas whose fields all have their own defaults we use `.prefault({})` so
+// the empty object is parsed and the nested defaults fill it in.
+
 export const PipelineServiceConfigSchema = z.object({
   branch: z
     .object({
       main: z.string().default('main'),
     })
-    .default({}),
+    .prefault({}),
 
   llm_providers: z
     .object({
@@ -20,22 +24,22 @@ export const PipelineServiceConfigSchema = z.object({
           api_key_env: z.string().default('ANTHROPIC_API_KEY'),
           base_url: z.string().default(''),
         })
-        .default({}),
+        .prefault({}),
       funny_api_acp: z
         .object({
           api_key_env: z.string().default('FUNNY_API_ACP_KEY'),
           base_url: z.string().default('http://localhost:4010'),
         })
-        .default({}),
+        .prefault({}),
       ollama: z
         .object({
           base_url: z.string().default('http://localhost:11434'),
         })
-        .default({}),
+        .prefault({}),
       default_provider: z.string().default('funny-api-acp'),
       fallback_provider: z.string().optional(),
     })
-    .default({}),
+    .prefault({}),
 
   webhook_secret: z.string().optional(),
 
@@ -43,13 +47,13 @@ export const PipelineServiceConfigSchema = z.object({
     .object({
       path: z.string().nullable().default(null),
     })
-    .default({}),
+    .prefault({}),
 
   logging: z
     .object({
       level: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
     })
-    .default({}),
+    .prefault({}),
 
   // ── Issue Tracker ──────────────────────────────────────────────
 
@@ -65,7 +69,7 @@ export const PipelineServiceConfigSchema = z.object({
       /** Max concurrent sessions */
       max_parallel: z.number().int().min(1).default(5),
     })
-    .default({}),
+    .prefault({}),
 
   // ── Orchestrator Agent ─────────────────────────────────────────
 
@@ -82,7 +86,7 @@ export const PipelineServiceConfigSchema = z.object({
       /** Max turns for the implementing agent */
       max_implementing_turns: z.number().int().min(1).default(200),
     })
-    .default({}),
+    .prefault({}),
 
   // ── Sessions ───────────────────────────────────────────────────
 
@@ -99,7 +103,7 @@ export const PipelineServiceConfigSchema = z.object({
       /** Path for session persistence */
       persist_path: z.string().optional(),
     })
-    .default({}),
+    .prefault({}),
 
   // ── Reactions ──────────────────────────────────────────────────
 
@@ -113,7 +117,7 @@ export const PipelineServiceConfigSchema = z.object({
             .default('CI failed on this PR. Read the failure logs and fix the issues.'),
           max_retries: z.number().int().min(0).default(3),
         })
-        .default({}),
+        .prefault({}),
       changes_requested: z
         .object({
           action: z.enum(['respawn_agent', 'notify', 'escalate']).default('respawn_agent'),
@@ -123,22 +127,22 @@ export const PipelineServiceConfigSchema = z.object({
           max_retries: z.number().int().min(0).default(2),
           escalate_after_min: z.number().int().min(0).default(30),
         })
-        .default({}),
+        .prefault({}),
       approved_and_green: z
         .object({
           action: z.enum(['notify', 'auto_merge']).default('notify'),
           message: z.string().default('PR approved and CI green — ready to merge'),
         })
-        .default({}),
+        .prefault({}),
       agent_stuck: z
         .object({
           action: z.enum(['escalate', 'notify']).default('escalate'),
           after_min: z.number().int().min(1).default(15),
           message: z.string().default('Session stuck — needs human review'),
         })
-        .default({}),
+        .prefault({}),
     })
-    .default({}),
+    .prefault({}),
 });
 
 export type PipelineServiceConfig = z.infer<typeof PipelineServiceConfigSchema>;

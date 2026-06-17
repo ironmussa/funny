@@ -27,7 +27,7 @@
     "bench:longmemeval": "bun benchmark/src/cli.ts longmemeval"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.0",
+    "@libsql/client": "^0.17.4",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "hono": "^4.7.10",
     "neverthrow": "^8.2.0",
@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.3.8",
-    "typescript": "^5.8.2",
-    "vitest": "^4.1.2"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

@@ -36,21 +36,20 @@ describe('StatusBadge', () => {
     expect(badge).toBeInTheDocument();
   });
 
-  test('shows animated pulse for running status', () => {
+  test('shows spin animation for running status', () => {
     const { container } = renderWithProviders(<StatusBadge status="running" />);
-    const pulse = container.querySelector('.animate-pulse');
-    expect(pulse).not.toBeNull();
+    expect(container.querySelector('.animate-spin')).not.toBeNull();
   });
 
-  test('shows animated pulse for waiting status', () => {
+  test('does not animate the waiting status', () => {
     const { container } = renderWithProviders(<StatusBadge status="waiting" />);
-    const pulse = container.querySelector('.animate-pulse');
-    expect(pulse).not.toBeNull();
+    expect(container.querySelector('.animate-spin')).toBeNull();
+    expect(container.querySelector('.animate-pulse')).toBeNull();
   });
 
-  test('does not show pulse for completed status', () => {
+  test('does not animate the completed status', () => {
     const { container } = renderWithProviders(<StatusBadge status="completed" />);
-    const pulse = container.querySelector('.animate-pulse');
-    expect(pulse).toBeNull();
+    expect(container.querySelector('.animate-spin')).toBeNull();
+    expect(container.querySelector('.animate-pulse')).toBeNull();
   });
 });

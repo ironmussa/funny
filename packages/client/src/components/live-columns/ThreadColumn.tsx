@@ -151,7 +151,7 @@ export const ThreadColumn = memo(function ThreadColumn({
         className={cn(
           'group/col relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border',
           isDragging && 'opacity-50',
-          isSelected && 'border-primary ring-primary/40 ring-1',
+          isSelected && 'border-primary/25',
         )}
         data-testid={`grid-column-${threadId}`}
         data-selected={isSelected ? 'true' : undefined}

@@ -34,7 +34,7 @@
     "@socket.io/bun-engine": "^0.1.0",
     "better-auth": "^1.6.19",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.11.9",
+    "hono": "^4.12.25",
     "kysely": "^0.29.2",
     "nanoid": "^5.0.9",
     "neverthrow": "^8.2.0",

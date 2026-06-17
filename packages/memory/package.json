@@ -29,7 +29,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "hono": "^4.7.10",
+    "hono": "^4.12.25",
     "neverthrow": "^8.2.0",
     "zod": "^4.3.6"
   },

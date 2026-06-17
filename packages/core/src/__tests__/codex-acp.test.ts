@@ -224,3 +224,82 @@ describe('CodexACPProcess.translateUpdate', () => {
     expect(m1.message.content[0]).toMatchObject({ type: 'text', text: 'foo bar' });
   });
 });
+
+/**
+ * Regression: ACP SDK 0.26 removed the dedicated `unstable_setSessionModel`
+ * method (it was `undefined` on the connection → "is not a function"), so the
+ * model was never applied. The model is now a `category: 'model'` session
+ * config option set via `setSessionConfigOption`.
+ */
+describe('CodexACPProcess.applyModelSelection', () => {
+  type Internal = {
+    activeSessionId: string | null;
+    captureModelConfigOption: (c: unknown) => void;
+    applyModelSelection: (c: unknown) => Promise<void>;
+  };
+
+  test('applies the model via setSessionConfigOption when the agent advertises a model option', async () => {
+    const proc = new CodexACPProcess({ prompt: 'x', cwd: '/tmp/test', model: 'gpt-5.5' });
+    const internal = proc as unknown as Internal;
+    internal.activeSessionId = 'sess-1';
+    internal.captureModelConfigOption([
+      {
+        id: 'model',
+        category: 'model',
+        type: 'select',
+        name: 'Model',
+        options: [
+          { value: 'gpt-5.5', name: 'GPT-5.5' },
+          { value: 'gpt-5.4', name: 'GPT-5.4' },
+        ],
+      },
+    ]);
+
+    const calls: Array<Record<string, unknown>> = [];
+    const conn = {
+      setSessionConfigOption: async (p: Record<string, unknown>) => {
+        calls.push(p);
+      },
+      // unstable_setSessionModel intentionally absent — removed in SDK 0.26.
+    };
+    await internal.applyModelSelection(conn);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      sessionId: 'sess-1',
+      configId: 'model',
+      value: { value: 'gpt-5.5' },
+    });
+  });
+
+  test('skips setSessionConfigOption when the requested model is not offered', async () => {
+    const proc = new CodexACPProcess({ prompt: 'x', cwd: '/tmp/test', model: 'gpt-9.9' });
+    const internal = proc as unknown as Internal;
+    internal.activeSessionId = 'sess-1';
+    internal.captureModelConfigOption([
+      {
+        id: 'model',
+        category: 'model',
+        type: 'select',
+        name: 'Model',
+        options: [{ value: 'gpt-5.5', name: 'GPT-5.5' }],
+      },
+    ]);
+
+    let called = false;
+    await internal.applyModelSelection({
+      setSessionConfigOption: async () => {
+        called = true;
+      },
+    });
+    expect(called).toBe(false);
+  });
+
+  test('resolves without throwing when the connection exposes no model-selection method', async () => {
+    const proc = new CodexACPProcess({ prompt: 'x', cwd: '/tmp/test', model: 'gpt-5.5' });
+    const internal = proc as unknown as Internal;
+    internal.activeSessionId = 'sess-1';
+    // No configOptions captured and a bare connection: must resolve, not throw.
+    await expect(internal.applyModelSelection({})).resolves.toBeUndefined();
+  });
+});

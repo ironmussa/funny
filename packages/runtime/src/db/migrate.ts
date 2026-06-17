@@ -948,6 +948,15 @@ const migrations: Migration[] = [
       await exec(sql`UPDATE projects SET follow_up_mode = 'queue' WHERE follow_up_mode = 'ask'`);
     },
   },
+  {
+    // SDK-reported slash commands captured at session init (JSON string[]),
+    // persisted so the slash-command autocomplete survives a reload before the
+    // next agent run. Mirrors `init_tools` / `init_cwd`.
+    name: '061_threads_init_slash_commands',
+    async up() {
+      await addColumn('threads', 'init_slash_commands', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

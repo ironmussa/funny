@@ -23,6 +23,9 @@ export interface AgentInitInfo {
   tools: string[];
   cwd: string;
   model: string;
+  // SDK-reported slash commands for this session (names without leading slash).
+  // Feeds the prompt editor's slash-command autocomplete.
+  slashCommands?: string[];
 }
 
 export interface AgentResultInfo {

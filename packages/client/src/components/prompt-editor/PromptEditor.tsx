@@ -40,6 +40,26 @@ import { cn } from '@/lib/utils';
 
 const SLASH_RESULTS_LIMIT = 50;
 
+// Human-readable blurbs for the built-in SDK slash commands. The SDK reports
+// command names but no descriptions, so we annotate the well-known ones; any
+// other reported command falls back to a generic label.
+const BUILTIN_SLASH_DESCRIPTIONS: Record<string, string> = {
+  compact: 'Summarize the conversation to free up context',
+  clear: 'Clear the conversation history',
+  context: 'Show current context window usage',
+  cost: 'Show token usage and cost for this session',
+  init: 'Generate a CLAUDE.md for this project',
+  review: 'Review a pull request',
+  'pr-comments': 'Get comments from a GitHub pull request',
+  'add-dir': 'Add a working directory to the session',
+  'output-style': 'Change the agent output style',
+  agents: 'Manage available subagents',
+  mcp: 'Manage MCP server connections',
+  memory: 'Edit memory files',
+  vim: 'Toggle vim editing mode',
+};
+const BUILTIN_SLASH_FALLBACK = 'Built-in command';
+
 // ── Types ────────────────────────────────────────────────────────
 
 export interface PromptEditorHandle {
@@ -84,6 +104,9 @@ interface PromptEditorProps {
   cwd?: string;
   /** Callback to load skills on first / trigger */
   loadSkills?: () => Promise<Skill[]>;
+  /** SDK-reported slash commands for the active thread (names without leading
+   *  slash), merged into the / autocomplete alongside skills. */
+  sdkSlashCommands?: string[];
   className?: string;
   /** Ref to the outer container — suggestion popup will match its width */
   containerRef?: React.RefObject<HTMLElement | null>;
@@ -356,6 +379,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     onFileMentionDrop,
     cwd,
     loadSkills,
+    sdkSlashCommands,
     className,
     containerRef,
   },
@@ -383,6 +407,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   cwdRef.current = cwd;
   const loadSkillsRef = useRef(loadSkills);
   loadSkillsRef.current = loadSkills;
+  const sdkSlashCommandsRef = useRef(sdkSlashCommands);
+  sdkSlashCommandsRef.current = sdkSlashCommands;
 
   // Refs for suggestion state accessed inside closures captured at editor creation time
   const suggestionItemsRef = useRef(suggestionItems);
@@ -577,16 +603,44 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           setSuggestionLoading(false);
         }
         const skills = skillsCacheRef.current ?? [];
+        const sdkCommands = sdkSlashCommandsRef.current ?? [];
         const q = fullQuery.toLowerCase();
         const t0 = performance.now();
+        const skillByName = new Map(skills.map((s) => [s.name, s.description] as const));
+
+        // Build one ordered, de-duped candidate list so the SDK's built-in
+        // commands (e.g. /compact) aren't crowded past the result cap by the
+        // long skills list — the SDK reports built-ins at the TAIL of its array.
+        // Order: curated built-ins → skills → any other SDK-reported command.
+        const ordered: { name: string; description: string }[] = [];
+        const seen = new Set<string>();
+        const add = (name: string, description: string) => {
+          if (seen.has(name)) return;
+          seen.add(name);
+          ordered.push({ name, description });
+        };
+        // 1) Curated built-ins the SDK actually reports for this session.
+        for (const name of sdkCommands) {
+          if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name]);
+        }
+        // 2) Skills — they carry their own descriptions.
+        for (const s of skills) add(s.name, s.description);
+        // 3) Remaining SDK-reported commands (plugin / dynamically-loaded).
+        for (const name of sdkCommands) {
+          add(
+            name,
+            skillByName.get(name) ?? BUILTIN_SLASH_DESCRIPTIONS[name] ?? BUILTIN_SLASH_FALLBACK,
+          );
+        }
+
         const matched: SuggestionItem[] = [];
-        for (let i = 0; i < skills.length && matched.length < SLASH_RESULTS_LIMIT; i++) {
-          const s = skills[i];
-          if (s.name.toLowerCase().includes(q)) {
+        for (let i = 0; i < ordered.length && matched.length < SLASH_RESULTS_LIMIT; i++) {
+          const o = ordered[i];
+          if (o.name.toLowerCase().includes(q)) {
             matched.push({
-              id: s.name,
-              label: s.name,
-              description: s.description,
+              id: o.name,
+              label: o.name,
+              description: o.description,
               type: 'slash' as const,
             });
           }
@@ -595,7 +649,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           type: 'gauge',
           attributes: {
             query_len: String(fullQuery.length),
-            total: String(skills.length),
+            total: String(skills.length + sdkCommands.length),
             matched: String(matched.length),
           },
         });

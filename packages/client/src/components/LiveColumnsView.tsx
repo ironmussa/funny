@@ -64,6 +64,9 @@ export function LiveColumnsView() {
   }, []);
 
   const [gridCells, setGridCells] = useState<GridCellAssignments>(getGridCells);
+  // Threads currently placed in the grid — used by the per-cell thread picker
+  // to flag entries that are already on screen.
+  const gridThreadIds = useMemo(() => new Set(Object.values(gridCells)), [gridCells]);
   // Tracks cells where the user has pre-selected a project (via the header
   // "+") but hasn't typed a prompt yet. The EmptyGridCell uses this to skip
   // the project picker and jump straight to the prompt input — same flow as
@@ -384,9 +387,11 @@ export function LiveColumnsView() {
                       <EmptyGridCell
                         cellIndex={cellIndex}
                         onCreated={(newThreadId) => assignThreadToCell(cellIndex, newThreadId)}
+                        onLoadExisting={(existingId) => assignThreadToCell(cellIndex, existingId)}
                         initialProjectId={pendingProjectByCell[cellIndex]}
                         onConsumePreset={() => consumePreset(cellIndex)}
                         onRequestPickProject={() => setPickerTarget({ kind: 'cell', cellIndex })}
+                        gridThreadIds={gridThreadIds}
                       />
                     )}
                   </GridCellDropTarget>

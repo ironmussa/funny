@@ -1,28 +1,36 @@
-import { Plus, Sparkles } from 'lucide-react';
+import { ListTree, Plus, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ThreadPickerDialog } from '@/components/live-columns/ThreadPickerDialog';
 import { NewThreadInput } from '@/components/thread/NewThreadInput';
 import { Button } from '@/components/ui/button';
 
 interface Props {
   cellIndex: number;
   onCreated: (threadId: string) => void;
+  /** Load an existing thread into this cell. */
+  onLoadExisting: (threadId: string) => void;
   initialProjectId?: string;
   onConsumePreset?: () => void;
   onRequestPickProject: () => void;
+  /** Thread ids already placed in the grid (for the "in grid" hint). */
+  gridThreadIds?: Set<string>;
 }
 
 export const EmptyGridCell = memo(function EmptyGridCell({
   cellIndex,
   onCreated,
+  onLoadExisting,
   initialProjectId,
   onConsumePreset,
   onRequestPickProject,
+  gridThreadIds,
 }: Props) {
   const { t } = useTranslation();
   const [selectedProject, setSelectedProject] = useState<string | null>(initialProjectId ?? null);
   const [scratchMode, setScratchMode] = useState(false);
+  const [threadPickerOpen, setThreadPickerOpen] = useState(false);
 
   // Sync from preset coming in via props (header "+" or Ctrl+N landed a project
   // in this cell). Mount-time presets and post-mount presets are handled the
@@ -92,6 +100,25 @@ export const EmptyGridCell = memo(function EmptyGridCell({
         projectIdOverride={selectedProject}
         onCreated={onCreated}
         onCancel={handleCancel}
+      />
+      <div className="border-border/40 flex shrink-0 items-center justify-center border-t px-3 py-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground h-7"
+          data-testid={`grid-load-existing-${cellIndex}`}
+          onClick={() => setThreadPickerOpen(true)}
+        >
+          <ListTree className="icon-sm" />
+          {t('live.loadExisting', 'Load existing thread')}
+        </Button>
+      </div>
+      <ThreadPickerDialog
+        open={threadPickerOpen}
+        onOpenChange={setThreadPickerOpen}
+        projectId={selectedProject}
+        gridThreadIds={gridThreadIds}
+        onSelect={onLoadExisting}
       />
     </div>
   );

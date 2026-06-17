@@ -30,6 +30,7 @@ import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThreadSelector } from '@/stores/thread-context';
+import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('thread-share');
 
@@ -77,7 +78,11 @@ export function ShareThreadButton({
   const threadTitle = useThreadSelector((t) => t?.title ?? null);
   const isOwner = !!selfId && ownerId === selfId;
 
-  const [open, setOpen] = useState(false);
+  // Open state lives in the UI store so the Alt+H global shortcut can toggle
+  // it. Reset to false whenever the thread changes (this dialog only mounts on
+  // owned threads, but the flag would otherwise leak across navigation).
+  const open = useUIStore((s) => s.shareDialogOpen);
+  const setOpen = useUIStore((s) => s.setShareDialogOpen);
   const [shares, setShares] = useState<ThreadShareGrant[]>([]);
   const [members, setMembers] = useState<ProjectMemberPick[]>([]);
   const [busy, setBusy] = useState(false);
@@ -85,6 +90,14 @@ export function ShareThreadButton({
   // Permission level applied to the NEXT member added: viewer / commenter /
   // editor (view | comment | steer). See `ShareLevel`.
   const [level, setLevel] = useState<ShareLevel>('view');
+
+  // Close the dialog when the active thread changes so a stale open flag from
+  // a previous (owned) thread can't pop the dialog on an unrelated thread.
+  useEffect(() => {
+    setOpen(false);
+    // Intentionally only on threadId change, not on setOpen identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
 
   const refreshShares = useCallback(async () => {
     const res = await threadsApi.listThreadShares(threadId);

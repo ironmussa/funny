@@ -1114,6 +1114,10 @@
     "prevThread": "Ir al hilo anterior",
     "backThread": "Volver al hilo visitado anterior",
     "forwardThread": "Avanzar al siguiente hilo visitado",
+    "toggleReview": "Mostrar/ocultar panel de commit / diff",
+    "toggleFiles": "Mostrar/ocultar gestor de archivos",
+    "toggleShare": "Compartir hilo",
+    "toggleComments": "Mostrar/ocultar panel de comentarios",
     "toggleTerminal": "Mostrar/ocultar terminal",
     "openShortcuts": "Mostrar atajos de teclado"
   },

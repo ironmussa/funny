@@ -31,6 +31,10 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Alt', '['], labelKey: 'shortcuts.prevThread' },
   { keys: ['Alt', '←'], labelKey: 'shortcuts.backThread' },
   { keys: ['Alt', '→'], labelKey: 'shortcuts.forwardThread' },
+  { keys: ['Alt', 'G'], labelKey: 'shortcuts.toggleReview' },
+  { keys: ['Alt', 'F'], labelKey: 'shortcuts.toggleFiles' },
+  { keys: ['Alt', 'H'], labelKey: 'shortcuts.toggleShare' },
+  { keys: ['Alt', 'M'], labelKey: 'shortcuts.toggleComments' },
   { keys: ['Ctrl', '`'], labelKey: 'shortcuts.toggleTerminal' },
   { keys: ['?'], labelKey: 'shortcuts.openShortcuts' },
 ];

@@ -95,6 +95,14 @@ interface UIState {
     exclude: string;
   };
   keyboardShortcutsOpen: boolean;
+  /**
+   * Controlled open state for the header's Share-thread dialog. Lifted out of
+   * the button so the Alt+H global shortcut can toggle it. Auto-reset to false
+   * when the active thread changes (the dialog only mounts on owned threads).
+   */
+  shareDialogOpen: boolean;
+  setShareDialogOpen: (open: boolean) => void;
+  toggleShareDialog: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setFileSearchOpen: (open: boolean) => void;
   setTextSearchOpen: (open: boolean) => void;
@@ -238,6 +246,9 @@ export const useUIStore = create<UIState>((set) => ({
     exclude: '',
   },
   keyboardShortcutsOpen: false,
+  shareDialogOpen: false,
+  setShareDialogOpen: (open) => set({ shareDialogOpen: open }),
+  toggleShareDialog: () => set((s) => ({ shareDialogOpen: !s.shareDialogOpen })),
   setCommandPaletteOpen: (open) =>
     set(
       open

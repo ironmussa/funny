@@ -171,6 +171,39 @@ export function useGlobalShortcuts(
         return;
       }
 
+      // Alt+G / Alt+F / Alt+H / Alt+M toggle the right-sidebar panels:
+      //   Alt+G → commit (review/diff)    Alt+F → file manager (project files)
+      //   Alt+H → share dialog            Alt+M → comments
+      // preventDefault() also suppresses the macOS Option+letter typographic
+      // glyphs and Chrome's Alt+F app-menu when the key is handled here.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'g' || k === 'f' || k === 'h' || k === 'm') {
+          const ui = useUIStore.getState();
+          e.preventDefault();
+          e.stopPropagation();
+          if (k === 'g') {
+            log.info('shortcut.toggle_review');
+            ui.setReviewPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'review'));
+          } else if (k === 'f') {
+            log.info('shortcut.toggle_files');
+            ui.setFilesPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'files'));
+          } else if (k === 'm') {
+            log.info('shortcut.toggle_comments');
+            ui.setCommentsPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'comments'));
+          } else {
+            // Share is owner-only: the dialog mounts only when the header's
+            // Share button is rendered. Gate on its presence so we never strand
+            // a stale `shareDialogOpen` flag on a thread with no share dialog.
+            if (document.querySelector('[data-testid="header-share-thread"]')) {
+              log.info('shortcut.toggle_share');
+              ui.toggleShareDialog();
+            }
+          }
+          return;
+        }
+      }
+
       // Ctrl+Shift+L for thread list/search — scope to current thread's project
       // by default. (Was Ctrl+Shift+F until text-in-files search took that slot
       // to match the VSCode convention.)

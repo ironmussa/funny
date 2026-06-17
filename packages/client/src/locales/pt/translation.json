@@ -1109,6 +1109,10 @@
     "prevThread": "Ir para o thread anterior",
     "backThread": "Voltar para o thread visitado anterior",
     "forwardThread": "Avançar para o próximo thread visitado",
+    "toggleReview": "Mostrar/ocultar painel de commit / diff",
+    "toggleFiles": "Mostrar/ocultar gerenciador de arquivos",
+    "toggleShare": "Compartilhar thread",
+    "toggleComments": "Mostrar/ocultar painel de comentários",
     "toggleTerminal": "Mostrar/ocultar terminal",
     "openShortcuts": "Mostrar atalhos de teclado"
   },

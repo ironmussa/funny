@@ -1122,6 +1122,10 @@
     "prevThread": "Go to previous thread",
     "backThread": "Back to previously visited thread",
     "forwardThread": "Forward to next visited thread",
+    "toggleReview": "Toggle commit / diff panel",
+    "toggleFiles": "Toggle file manager",
+    "toggleShare": "Share thread",
+    "toggleComments": "Toggle comments panel",
     "toggleTerminal": "Toggle terminal panel",
     "openShortcuts": "Show keyboard shortcuts"
   },

@@ -23,7 +23,6 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { LoadingState } from '@/components/ui/loading-state';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { darkenHex } from '@/components/ui/project-chip';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
@@ -728,10 +727,14 @@ function GraphCommitRow({
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
   const refSegments = useMemo<PowerlineSegmentData[]>(
     () =>
-      foldGraphRefs(entry.refs, entry.headBranch).map((r, i) => {
-        const color = r.isCurrent
-          ? lanePastel
-          : darkenHex(lanePastel, Math.min(0.18 + i * 0.14, 0.5));
+      // All refs on a commit share its lane color — they decorate the SAME
+      // commit on the SAME lane, so a uniform hue reads correctly as "these
+      // branches live here". (The old progressive per-chip darkening only
+      // existed to edge-separate connected powerline chevrons; now that refs
+      // render as separate chips, the gap does that.) The checked-out branch is
+      // distinguished by weight (bold via `emphasis`), not color.
+      foldGraphRefs(entry.refs, entry.headBranch).map((r) => {
+        const color = lanePastel;
         if (r.kind === 'tag') {
           return {
             key: `tag:${r.name}`,
@@ -926,9 +929,15 @@ function GraphCommitRow({
               className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
               style={{ height: chipLineH }}
             >
+              {/* Branches on a commit are siblings, not a hierarchy — render
+                  them as separate pills (`chips`) rather than connected powerline
+                  chevrons, which read as one continuous path when two branch tips
+                  share a commit. A folded local+remote pair is already ONE chip,
+                  so distinct chips here always mean distinct branches/tags. */}
               <PowerlineBar
                 segments={refSegments}
                 size="sm"
+                variant="chips"
                 className="min-w-0 shrink"
                 query={searchQuery}
               />

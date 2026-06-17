@@ -91,17 +91,15 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 }}
                 data-testid={`stash-entry-${idx}`}
               >
-                <Archive className="text-muted-foreground size-3 shrink-0" />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{entry.message}</span>
                   <span className="text-muted-foreground text-[10px]">{entry.relativeDate}</span>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground shrink-0"
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent shrink-0 rounded p-1 transition-colors disabled:pointer-events-none disabled:opacity-50"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleStashPop();
@@ -110,11 +108,11 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                       data-testid={`stash-pop-${idx}`}
                     >
                       {stashPopInProgress && idx === '0' ? (
-                        <Loader2 className="icon-sm animate-spin" />
+                        <Loader2 className="icon-xs animate-spin" />
                       ) : (
-                        <ArchiveRestore className="icon-sm" />
+                        <ArchiveRestore className="icon-xs" />
                       )}
-                    </Button>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent side="left">
                     {idx === '0'
@@ -124,10 +122,9 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive hover:bg-sidebar-accent shrink-0 rounded p-1 transition-colors disabled:pointer-events-none disabled:opacity-50"
                       onClick={(e) => {
                         e.stopPropagation();
                         onRequestDrop(idx);
@@ -136,11 +133,11 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                       data-testid={`stash-drop-${idx}`}
                     >
                       {stashDropInProgress === idx ? (
-                        <Loader2 className="icon-sm animate-spin" />
+                        <Loader2 className="icon-xs animate-spin" />
                       ) : (
-                        <Trash2 className="icon-sm" />
+                        <Trash2 className="icon-xs" />
                       )}
-                    </Button>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent side="left">
                     {t('review.dropStash', 'Discard stash')}

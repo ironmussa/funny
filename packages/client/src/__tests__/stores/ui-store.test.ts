@@ -656,4 +656,26 @@ describe('useUIStore', () => {
       expect(localStorage.getItem('timeline_visible')).toBe('true');
     });
   });
+
+  describe('grid selected thread', () => {
+    test('setGridSelectedThreadId sets state and persists to localStorage', () => {
+      useUIStore.getState().setGridSelectedThreadId('thread-7');
+      expect(useUIStore.getState().gridSelectedThreadId).toBe('thread-7');
+      expect(localStorage.getItem('funny:grid-selected-thread:v1')).toBe('thread-7');
+    });
+
+    test('setGridSelectedThreadId(null) clears state and removes the key', () => {
+      useUIStore.getState().setGridSelectedThreadId('thread-7');
+      useUIStore.getState().setGridSelectedThreadId(null);
+      expect(useUIStore.getState().gridSelectedThreadId).toBeNull();
+      expect(localStorage.getItem('funny:grid-selected-thread:v1')).toBeNull();
+    });
+
+    test('round-trips a new selection over an existing one', () => {
+      useUIStore.getState().setGridSelectedThreadId('thread-a');
+      useUIStore.getState().setGridSelectedThreadId('thread-b');
+      expect(useUIStore.getState().gridSelectedThreadId).toBe('thread-b');
+      expect(localStorage.getItem('funny:grid-selected-thread:v1')).toBe('thread-b');
+    });
+  });
 });

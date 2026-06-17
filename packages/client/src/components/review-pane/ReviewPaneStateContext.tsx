@@ -3,6 +3,7 @@ import { type ReactNode, createContext, useCallback, useContext, useMemo, useSta
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useReviewState } from '@/hooks/use-review-state';
+import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -18,7 +19,6 @@ import {
   useThreadStatus,
   useThreadWorktreePath,
 } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { ExpandedDiffPresenter } from './ExpandedDiffPresenter';
@@ -100,9 +100,9 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedProjectId = useRightPaneProjectId();
 
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const selectedThreadId = useRightPaneThreadId();
   const effectiveThreadId = selectedThreadId || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const hasGitContext = !!(effectiveThreadId || projectModeId);

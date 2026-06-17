@@ -15,6 +15,7 @@ const TIMELINE_VISIBLE_KEY = 'timeline_visible';
 const RIGHT_PANE_OPEN_KEY = 'right_pane_open';
 const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
 const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
+const GRID_SELECTED_THREAD_KEY = 'funny:grid-selected-thread:v1';
 
 export type RightPaneTab = 'review' | 'activity' | 'files' | 'comments';
 export type ReviewSubTab = 'changes' | 'graph' | 'stash' | 'prs' | 'ci' | 'issues';
@@ -50,6 +51,14 @@ interface UIState {
   addProjectOpen: boolean;
   analyticsOpen: boolean;
   liveColumnsOpen: boolean;
+  /**
+   * The thread currently selected in the grid view (`LiveColumnsView`). The
+   * grid's consolidated header action bar and the global right pane act on this
+   * thread while the grid is open. Persisted to localStorage so it survives a
+   * reload; falls back to auto-select-first when the stored id is no longer
+   * placed in the grid. Null when the grid is empty / nothing selected.
+   */
+  gridSelectedThreadId: string | null;
   orchestratorOpen: boolean;
   testRunnerOpen: boolean;
   designViewProjectId: string | null;
@@ -143,6 +152,7 @@ interface UIState {
   setDesignsListOpen: (projectId: string) => void;
   closeDesignsList: () => void;
   setTimelineVisible: (visible: boolean) => void;
+  setGridSelectedThreadId: (threadId: string | null) => void;
   setKanbanContext: (
     context: {
       projectId?: string;
@@ -205,6 +215,14 @@ export const useUIStore = create<UIState>((set) => ({
   addProjectOpen: false,
   analyticsOpen: false,
   liveColumnsOpen: false,
+  gridSelectedThreadId: (() => {
+    try {
+      const stored = localStorage.getItem(GRID_SELECTED_THREAD_KEY);
+      return stored && stored.length > 0 ? stored : null;
+    } catch {
+      return null;
+    }
+  })(),
   orchestratorOpen: false,
   testRunnerOpen: false,
   designViewProjectId: null,
@@ -683,6 +701,16 @@ export const useUIStore = create<UIState>((set) => ({
       localStorage.setItem(TIMELINE_VISIBLE_KEY, String(visible));
     } catch {}
     set({ timelineVisible: visible });
+  },
+  setGridSelectedThreadId: (threadId) => {
+    try {
+      if (threadId) {
+        localStorage.setItem(GRID_SELECTED_THREAD_KEY, threadId);
+      } else {
+        localStorage.removeItem(GRID_SELECTED_THREAD_KEY);
+      }
+    } catch {}
+    set({ gridSelectedThreadId: threadId });
   },
   setKanbanContext: (context) =>
     set(() => {

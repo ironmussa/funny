@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useReviewState } from '@/hooks/use-review-state';
+import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -20,7 +21,6 @@ import {
   useThreadStatus,
   useThreadWorktreePath,
 } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { CITab } from './CITab';
@@ -50,11 +50,12 @@ export function ReviewPane() {
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedProjectId = useRightPaneProjectId();
 
   // selectedThreadId updates immediately on thread click (before the thread
   // data loads), so git fetches start ~1-2s sooner than waiting for activeThread.
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  // In the grid view this follows the grid-selected thread instead.
+  const selectedThreadId = useRightPaneThreadId();
   const effectiveThreadId = selectedThreadId || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const hasGitContext = !!(effectiveThreadId || projectModeId);

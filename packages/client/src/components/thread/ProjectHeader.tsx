@@ -67,6 +67,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { ShortcutHint } from '@/components/ui/kbd';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -687,38 +688,43 @@ const VISIBLE_STAGES: ThreadStage[] = [
   'archived',
 ];
 
-interface ProjectHeaderProps {
+interface ThreadHeaderActionsProps {
   hideFiles?: boolean;
   hideTests?: boolean;
   hideStartup?: boolean;
   hideTerminal?: boolean;
   hideTimeline?: boolean;
-  leading?: ReactNode;
   trailing?: ReactNode;
 }
 
-export const ProjectHeader = memo(function ProjectHeader({
+/**
+ * The right-side cluster of thread action icons (startup / preview / terminal /
+ * review / tests / files / comments / share / more-actions). Extracted from
+ * `ProjectHeader` so it can be mounted standalone in the grid view header
+ * (`LiveColumnsView`) bound to the grid-selected thread via `ThreadProvider`.
+ *
+ * Everything it needs is read from the thread context + stores, so binding it
+ * to a different thread is purely a matter of wrapping it in the right
+ * `ThreadProvider`. It self-gates to nothing while the thread is setting up.
+ */
+export const ThreadHeaderActions = memo(function ThreadHeaderActions({
   hideFiles = false,
   hideTests = false,
   hideStartup = false,
   hideTerminal = false,
   hideTimeline = false,
-  leading,
   trailing,
-}: ProjectHeaderProps = {}) {
+}: ThreadHeaderActionsProps = {}) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const location = useLocation();
   const activeThreadId = useThreadId();
   const activeThreadProjectId = useThreadProjectId();
-  const activeThreadTitle = useThreadSelector((t) => t?.title);
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
   // Git/review affordances require git ops AND must hide from a `view` sharee
   // (thread-sharing-steer) — their git API 404s. Fail OPEN: only hide when we
-  // POSITIVELY know the viewer is a non-owner sharee without a steer grant. While
-  // auth is still loading (selfUserId null) we don't hide, so the owner never
-  // loses git in that window. A `steer` sharee keeps the (read-only) panel.
+  // POSITIVELY know the viewer is a non-owner sharee without a steer grant.
   const selfUserId = useAuthStore((s) => s.user?.id ?? null);
   const activeThreadCanShowGit = useThreadSelector(
     (t) =>
@@ -729,6 +735,309 @@ export const ProjectHeader = memo(function ProjectHeader({
         !variant.canViewGitShare(t, selfUserId)
       ),
   );
+  const activeThreadIsScratch = useThreadSelector((t) => variant.isScratch(t));
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const projects = useProjectStore((s) => s.projects);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
+  const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
+  const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
+  const setCommentsPaneOpen = useUIStore((s) => s.setCommentsPaneOpen);
+  const rightPaneTab = useUIStore((s) => s.rightPaneTab);
+  const canShowComments = useThreadSelector((t) => variant.canShowComments(t));
+  const commentCount = useThreadSelector((t) => t?.commentCount ?? 0);
+  const { openPreview, isTauri } = usePreviewWindow();
+  const toggleTerminalPanel = useTerminalStore((s) => s.togglePanel);
+  const panelVisibleByProject = useTerminalStore((s) => s.panelVisibleByProject);
+  const setPanelVisible = useTerminalStore((s) => s.setPanelVisible);
+  const addTab = useTerminalStore((s) => s.addTab);
+
+  // Prefer the context thread's project (grid-aware) over the globally selected
+  // one, so startup / terminal / preview in the grid header target the selected
+  // thread's project. In the main view the two are equivalent.
+  const projectId = activeThreadProjectId ?? selectedProjectId;
+  const project = projects.find((p) => p.id === projectId);
+  const terminalPanelVisible = projectId ? (panelVisibleByProject[projectId] ?? false) : false;
+  const tabs = useTerminalStore((s) => s.tabs);
+  const runningWithPort = tabs.filter(
+    (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port,
+  );
+
+  /** Update the ?panel= query param in the URL without a full navigation. */
+  const updatePanelParam = useCallback(
+    (panel: string | null) => {
+      const params = new URLSearchParams(location.search);
+      if (panel) {
+        params.set('panel', panel);
+      } else {
+        params.delete('panel');
+      }
+      if (!panel || panel !== 'review') {
+        params.delete('tab');
+      }
+      const search = params.toString();
+      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true });
+    },
+    [location.pathname, location.search, navigate],
+  );
+
+  const handleOpenInEditor = async (editor: Editor) => {
+    if (!project) return;
+    const folderPath = activeThreadWorktreePath || project.path;
+    const result = await api.openInEditor(folderPath, editor);
+    if (result.isErr()) {
+      toast.error(t('sidebar.openInEditorError', 'Failed to open in editor'));
+    }
+  };
+
+  if (activeThreadStatus === 'setting_up') return null;
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {!hideStartup && !activeThreadIsScratch && projectId && (
+        <StartupCommandsPopover projectId={projectId} />
+      )}
+      {!activeThreadIsScratch && runningWithPort.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              data-testid="header-preview"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                const cmd = runningWithPort[0];
+                openPreview({
+                  commandId: cmd.commandId!,
+                  projectId: cmd.projectId,
+                  port: cmd.port!,
+                  commandLabel: cmd.label,
+                });
+              }}
+              className="text-status-info hover:text-status-info/80"
+            >
+              <Globe className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('preview.openPreview')}</TooltipContent>
+        </Tooltip>
+      )}
+      {!hideTerminal && !activeThreadIsScratch && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                if (!projectId) return;
+                const projectTabs = tabs.filter((t) => t.projectId === projectId);
+
+                if (projectTabs.length === 0 && !terminalPanelVisible) {
+                  const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
+                  const id = crypto.randomUUID();
+                  const label = 'Terminal 1';
+                  addTab({
+                    id,
+                    label,
+                    cwd,
+                    alive: true,
+                    projectId,
+                    type: isTauri ? undefined : 'pty',
+                  });
+                  setPanelVisible(projectId, true);
+                } else {
+                  toggleTerminalPanel(projectId);
+                }
+              }}
+              data-testid="header-toggle-terminal"
+              className={terminalPanelVisible ? 'text-foreground' : 'text-muted-foreground'}
+            >
+              <Terminal className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <ShortcutHint label={t('terminal.toggle', 'Toggle Terminal')} keys={['Ctrl', '`']} />
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {(activeThreadCanShowGit ||
+        (!activeThreadId && selectedProjectId && !activeThreadIsScratch)) && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() =>
+                startTransition(() => {
+                  if (reviewPaneOpen && rightPaneTab === 'review') {
+                    setReviewPaneOpen(false);
+                    updatePanelParam(null);
+                  } else {
+                    setReviewPaneOpen(true);
+                    updatePanelParam('review');
+                  }
+                })
+              }
+              data-testid="header-toggle-review"
+              className={
+                reviewPaneOpen && rightPaneTab === 'review'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground'
+              }
+            >
+              <GitCompare className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <ShortcutHint label={t('review.title')} keys={['Alt', 'G']} />
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {!hideTests && !activeThreadIsScratch && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() =>
+                startTransition(() => {
+                  const opening = !testRunnerOpen;
+                  setTestRunnerOpen(opening);
+                  updatePanelParam(opening ? 'tests' : null);
+                })
+              }
+              data-testid="header-toggle-tests"
+              className={testRunnerOpen ? 'text-foreground' : 'text-muted-foreground'}
+            >
+              <FlaskConical className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
+        </Tooltip>
+      )}
+      {!hideFiles && !activeThreadIsScratch && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() =>
+                startTransition(() => {
+                  if (reviewPaneOpen && rightPaneTab === 'files') {
+                    setFilesPaneOpen(false);
+                    updatePanelParam(null);
+                  } else {
+                    setFilesPaneOpen(true);
+                    updatePanelParam('files');
+                  }
+                })
+              }
+              data-testid="header-toggle-project-files"
+              disabled={!projectId}
+              className={
+                reviewPaneOpen && rightPaneTab === 'files'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground'
+              }
+            >
+              <FolderTree className="icon-base" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <ShortcutHint label={t('projectFiles.title', 'Project Files')} keys={['Alt', 'F']} />
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {activeThreadId && canShowComments && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() =>
+                startTransition(() => {
+                  if (reviewPaneOpen && rightPaneTab === 'comments') {
+                    setCommentsPaneOpen(false);
+                    updatePanelParam(null);
+                  } else {
+                    setCommentsPaneOpen(true);
+                    updatePanelParam('comments');
+                  }
+                })
+              }
+              data-testid="header-toggle-comments"
+              className={cn(
+                'relative',
+                reviewPaneOpen && rightPaneTab === 'comments'
+                  ? 'text-foreground'
+                  : commentCount > 0
+                    ? 'text-status-info'
+                    : 'text-muted-foreground',
+              )}
+            >
+              <MessageSquare className="icon-base" />
+              {commentCount > 0 && (
+                <span
+                  className="bg-status-info absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-medium text-white"
+                  data-testid="comments-badge"
+                >
+                  {commentCount > 99 ? '99+' : commentCount}
+                </span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <ShortcutHint label={t('comments.title', 'Comments')} keys={['Alt', 'M']} />
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {activeThreadId && projectId && !activeThreadIsScratch && (
+        <ShareThreadButton threadId={activeThreadId} projectId={projectId} />
+      )}
+      {activeThreadId && (
+        <MoreActionsMenu
+          onOpenInEditor={!activeThreadIsScratch ? handleOpenInEditor : undefined}
+          editorLabels={!activeThreadIsScratch ? editorLabels : undefined}
+          hideTimeline={hideTimeline}
+        />
+      )}
+      {trailing}
+    </div>
+  );
+});
+
+interface ProjectHeaderProps {
+  hideFiles?: boolean;
+  hideTests?: boolean;
+  hideStartup?: boolean;
+  hideTerminal?: boolean;
+  hideTimeline?: boolean;
+  /**
+   * Suppress the entire thread action cluster (review/files/tests/comments/
+   * share/more). Used by the grid column header (`ThreadColumn`), where those
+   * actions are consolidated into the grid's view header bound to the selected
+   * thread. `trailing` (e.g. the per-cell remove button) is still rendered.
+   */
+  hideActions?: boolean;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+}
+
+export const ProjectHeader = memo(function ProjectHeader({
+  hideFiles = false,
+  hideTests = false,
+  hideStartup = false,
+  hideTerminal = false,
+  hideTimeline = false,
+  hideActions = false,
+  leading,
+  trailing,
+}: ProjectHeaderProps = {}) {
+  const { t } = useTranslation();
+  const navigate = useStableNavigate();
+  const activeThreadId = useThreadId();
+  const activeThreadProjectId = useThreadProjectId();
+  const activeThreadTitle = useThreadSelector((t) => t?.title);
   const activeThreadIsScratch = useThreadSelector((t) => variant.isScratch(t));
   const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
@@ -775,34 +1084,12 @@ export const ProjectHeader = memo(function ProjectHeader({
   }, [activeThreadId]);
 
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
-  const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
-  const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
-  const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
-  const setCommentsPaneOpen = useUIStore((s) => s.setCommentsPaneOpen);
-  const rightPaneTab = useUIStore((s) => s.rightPaneTab);
-  const canShowComments = useThreadSelector((t) => variant.canShowComments(t));
-  const commentCount = useThreadSelector((t) => t?.commentCount ?? 0);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
-  const { openPreview, isTauri } = usePreviewWindow();
-  const toggleTerminalPanel = useTerminalStore((s) => s.togglePanel);
-  const panelVisibleByProject = useTerminalStore((s) => s.panelVisibleByProject);
-  const setPanelVisible = useTerminalStore((s) => s.setPanelVisible);
-  const addTab = useTerminalStore((s) => s.addTab);
-  const terminalPanelVisible = selectedProjectId
-    ? (panelVisibleByProject[selectedProjectId] ?? false)
-    : false;
   const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
   const fetchProjectStatus = useGitStatusStore((s) => s.fetchProjectStatus);
 
   const projectId = activeThreadProjectId ?? selectedProjectId;
-  const project = projects.find((p) => p.id === projectId);
-  const tabs = useTerminalStore((s) => s.tabs);
-  const runningWithPort = tabs.filter(
-    (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port,
-  );
   // Fetch git status when activeThread changes
   useEffect(() => {
     if (activeThreadId) {
@@ -811,34 +1098,6 @@ export const ProjectHeader = memo(function ProjectHeader({
       fetchProjectStatus(selectedProjectId);
     }
   }, [activeThreadId, selectedProjectId, fetchForThread, fetchProjectStatus]);
-
-  /** Update the ?panel= query param in the URL without a full navigation. */
-  const updatePanelParam = useCallback(
-    (panel: string | null) => {
-      const params = new URLSearchParams(location.search);
-      if (panel) {
-        params.set('panel', panel);
-      } else {
-        params.delete('panel');
-      }
-      // Also clear tab param when closing review
-      if (!panel || panel !== 'review') {
-        params.delete('tab');
-      }
-      const search = params.toString();
-      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true });
-    },
-    [location.pathname, location.search, navigate],
-  );
-
-  const handleOpenInEditor = async (editor: Editor) => {
-    if (!project) return;
-    const folderPath = activeThreadWorktreePath || project.path;
-    const result = await api.openInEditor(folderPath, editor);
-    if (result.isErr()) {
-      toast.error(t('sidebar.openInEditorError', 'Failed to open in editor'));
-    }
-  };
 
   const handleBackToKanban = useCallback(() => {
     if (!kanbanContext) return;
@@ -864,8 +1123,8 @@ export const ProjectHeader = memo(function ProjectHeader({
   if (!projectId && !activeThreadIsScratch) return null;
 
   return (
-    <div className="border-border h-12 border-b px-4 py-2">
-      <div className="flex items-center justify-between">
+    <div className="border-border flex h-12 items-center border-b px-4 py-2">
+      <div className="flex w-full items-center justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {leading}
           {kanbanContext && activeThreadId && (
@@ -992,208 +1251,19 @@ export const ProjectHeader = memo(function ProjectHeader({
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-        {activeThreadStatus !== 'setting_up' && (
-          <div className="flex shrink-0 items-center gap-2">
-            {!hideStartup && !activeThreadIsScratch && projectId && (
-              <StartupCommandsPopover projectId={projectId} />
-            )}
-            {!activeThreadIsScratch && runningWithPort.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    data-testid="header-preview"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => {
-                      const cmd = runningWithPort[0];
-                      openPreview({
-                        commandId: cmd.commandId!,
-                        projectId: cmd.projectId,
-                        port: cmd.port!,
-                        commandLabel: cmd.label,
-                      });
-                    }}
-                    className="text-status-info hover:text-status-info/80"
-                  >
-                    <Globe className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('preview.openPreview')}</TooltipContent>
-              </Tooltip>
-            )}
-            {!hideTerminal && !activeThreadIsScratch && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => {
-                      if (!selectedProjectId) return;
-                      const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
-
-                      if (projectTabs.length === 0 && !terminalPanelVisible) {
-                        const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
-                        const id = crypto.randomUUID();
-                        const label = 'Terminal 1';
-                        addTab({
-                          id,
-                          label,
-                          cwd,
-                          alive: true,
-                          projectId: selectedProjectId,
-                          type: isTauri ? undefined : 'pty',
-                        });
-                        setPanelVisible(selectedProjectId, true);
-                      } else {
-                        toggleTerminalPanel(selectedProjectId);
-                      }
-                    }}
-                    data-testid="header-toggle-terminal"
-                    className={terminalPanelVisible ? 'text-foreground' : 'text-muted-foreground'}
-                  >
-                    <Terminal className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')} (Ctrl+`)</TooltipContent>
-              </Tooltip>
-            )}
-            {(activeThreadCanShowGit ||
-              (!activeThreadId && selectedProjectId && !activeThreadIsScratch)) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() =>
-                      startTransition(() => {
-                        if (reviewPaneOpen && rightPaneTab === 'review') {
-                          setReviewPaneOpen(false);
-                          updatePanelParam(null);
-                        } else {
-                          setReviewPaneOpen(true);
-                          updatePanelParam('review');
-                        }
-                      })
-                    }
-                    data-testid="header-toggle-review"
-                    className={
-                      reviewPaneOpen && rightPaneTab === 'review'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground'
-                    }
-                  >
-                    <GitCompare className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('review.title')}</TooltipContent>
-              </Tooltip>
-            )}
-            {!hideTests && !activeThreadIsScratch && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() =>
-                      startTransition(() => {
-                        const opening = !testRunnerOpen;
-                        setTestRunnerOpen(opening);
-                        updatePanelParam(opening ? 'tests' : null);
-                      })
-                    }
-                    data-testid="header-toggle-tests"
-                    className={testRunnerOpen ? 'text-foreground' : 'text-muted-foreground'}
-                  >
-                    <FlaskConical className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
-              </Tooltip>
-            )}
-            {!hideFiles && !activeThreadIsScratch && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() =>
-                      startTransition(() => {
-                        if (reviewPaneOpen && rightPaneTab === 'files') {
-                          setFilesPaneOpen(false);
-                          updatePanelParam(null);
-                        } else {
-                          setFilesPaneOpen(true);
-                          updatePanelParam('files');
-                        }
-                      })
-                    }
-                    data-testid="header-toggle-project-files"
-                    disabled={!projectId}
-                    className={
-                      reviewPaneOpen && rightPaneTab === 'files'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground'
-                    }
-                  >
-                    <FolderTree className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
-              </Tooltip>
-            )}
-            {activeThreadId && canShowComments && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() =>
-                      startTransition(() => {
-                        if (reviewPaneOpen && rightPaneTab === 'comments') {
-                          setCommentsPaneOpen(false);
-                          updatePanelParam(null);
-                        } else {
-                          setCommentsPaneOpen(true);
-                          updatePanelParam('comments');
-                        }
-                      })
-                    }
-                    data-testid="header-toggle-comments"
-                    className={cn(
-                      'relative',
-                      reviewPaneOpen && rightPaneTab === 'comments'
-                        ? 'text-foreground'
-                        : commentCount > 0
-                          ? 'text-status-info'
-                          : 'text-muted-foreground',
-                    )}
-                  >
-                    <MessageSquare className="icon-base" />
-                    {commentCount > 0 && (
-                      <span
-                        className="bg-status-info absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-medium text-white"
-                        data-testid="comments-badge"
-                      >
-                        {commentCount > 99 ? '99+' : commentCount}
-                      </span>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('comments.title', 'Comments')}</TooltipContent>
-              </Tooltip>
-            )}
-            {activeThreadId && projectId && !activeThreadIsScratch && (
-              <ShareThreadButton threadId={activeThreadId} projectId={projectId} />
-            )}
-            {activeThreadId && (
-              <MoreActionsMenu
-                onOpenInEditor={!activeThreadIsScratch ? handleOpenInEditor : undefined}
-                editorLabels={!activeThreadIsScratch ? editorLabels : undefined}
-                hideTimeline={hideTimeline}
-              />
-            )}
-            {trailing}
-          </div>
+        {hideActions ? (
+          trailing ? (
+            <div className="flex shrink-0 items-center gap-2">{trailing}</div>
+          ) : null
+        ) : (
+          <ThreadHeaderActions
+            hideFiles={hideFiles}
+            hideTests={hideTests}
+            hideStartup={hideStartup}
+            hideTerminal={hideTerminal}
+            hideTimeline={hideTimeline}
+            trailing={trailing}
+          />
         )}
       </div>
     </div>

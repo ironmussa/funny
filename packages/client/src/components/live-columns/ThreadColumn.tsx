@@ -1,28 +1,23 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { Loader2, X, GripVertical } from 'lucide-react';
-import { useReducedMotion } from 'motion/react';
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
-import { PromptInput } from '@/components/PromptInput';
-import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
-import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
+import { type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
+import { ThreadConversation } from '@/components/thread/ThreadConversation';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { LoadingState } from '@/components/ui/loading-state';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
-import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
-import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('ThreadColumn');
 
@@ -34,7 +29,12 @@ interface Props {
   onOpenLightbox?: OpenLightboxFn;
 }
 
-/** A single column that loads and streams a thread in real-time. */
+/**
+ * A single grid column. Owns the column chrome (header, drag handle, selection,
+ * per-column search) and renders the shared `ThreadConversation` for the body,
+ * so the messages / tool cards / session summary / follow-up input behave
+ * exactly like the main thread view.
+ */
 export const ThreadColumn = memo(function ThreadColumn({
   threadId,
   onRemove,
@@ -42,22 +42,25 @@ export const ThreadColumn = memo(function ThreadColumn({
 }: Props) {
   const { t } = useTranslation();
   const streamRef = useRef<MessageStreamHandle>(null);
-  const prefersReducedMotion = useReducedMotion();
 
   const columnRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Grid selection: the grid's consolidated header action bar + the global
+  // right pane act on the selected thread. Any pointer-down inside this column
+  // selects it (capture phase, so inner handlers can't swallow it).
+  const isSelected = useUIStore((s) => s.gridSelectedThreadId === threadId);
+  const setGridSelectedThreadId = useUIStore((s) => s.setGridSelectedThreadId);
+  const selectThisColumn = useCallback(() => {
+    setGridSelectedThreadId(threadId);
+  }, [setGridSelectedThreadId, threadId]);
 
   // Register for WS updates; fetch + unregister on unmount. The register
   // call anchors `threadDataById[threadId]` so the same map that backs the
   // right pane also keeps this column hydrated.
   const registerLiveThread = useThreadStore((s) => s.registerLiveThread);
   const unregisterLiveThread = useThreadStore((s) => s.unregisterLiveThread);
-
-  const onRemoveRef = useRef(onRemove);
-  useEffect(() => {
-    onRemoveRef.current = onRemove;
-  }, [onRemove]);
 
   useEffect(() => {
     registerLiveThread(threadId);
@@ -66,26 +69,11 @@ export const ThreadColumn = memo(function ThreadColumn({
     };
   }, [threadId, registerLiveThread, unregisterLiveThread]);
 
-  // Read directly from the unified payload map. WS handlers patch it in
-  // place; selecting this thread in the right pane points `activeThread`
-  // at the same entry.
+  // Read directly from the unified payload map (this component body runs OUTSIDE
+  // its own <ThreadProvider>). The conversation below reads the same thread via
+  // context once it's mounted under the provider.
   const thread = useThreadStore((s) => s.threadDataById[threadId] ?? null);
   const loading = thread === null;
-
-  // Track which message/tool-call IDs existed when the thread was loaded.
-  const knownIdsRef = useRef<Set<string>>(new Set());
-  const prevThreadIdRef = useRef<string | null>(null);
-  if (thread?.id && thread.id !== prevThreadIdRef.current) {
-    prevThreadIdRef.current = thread.id;
-    const ids = new Set<string>();
-    if (thread.messages) {
-      for (const m of thread.messages) {
-        ids.add(m.id);
-        if (m.toolCalls) for (const tc of m.toolCalls) ids.add(tc.id);
-      }
-    }
-    knownIdsRef.current = ids;
-  }
 
   useEffect(() => {
     const el = columnRef.current;
@@ -103,78 +91,6 @@ export const ThreadColumn = memo(function ThreadColumn({
       onDrop: () => setIsDragging(false),
     });
   }, [threadId, loading]);
-
-  const [sending, setSending] = useState(false);
-
-  const handleSend = useCallback(
-    async (
-      prompt: string,
-      opts: {
-        provider?: string;
-        model: string;
-        mode: string;
-        effort?: string;
-        fileReferences?: { path: string; type?: 'file' | 'folder' }[];
-        symbolReferences?: {
-          path: string;
-          name: string;
-          kind: string;
-          line: number;
-          endLine?: number;
-        }[];
-      },
-      images?: any[],
-    ) => {
-      if (sending || !thread) return;
-      setSending(true);
-      streamRef.current?.scrollToBottom();
-      startTransition(() => {
-        useAppStore
-          .getState()
-          .appendOptimisticMessage(
-            threadId,
-            prompt,
-            images,
-            opts.model as any,
-            opts.mode as any,
-            opts.fileReferences,
-            opts.effort as any,
-          );
-      });
-      const { allowedTools, disallowedTools } = deriveToolLists(
-        useSettingsStore.getState().toolPermissions,
-      );
-      const result = await api.sendMessage(
-        threadId,
-        prompt,
-        {
-          provider: opts.provider || undefined,
-          model: opts.model || undefined,
-          permissionMode: opts.mode || undefined,
-          effort: opts.effort || undefined,
-          allowedTools,
-          disallowedTools,
-          fileReferences: opts.fileReferences,
-          symbolReferences: opts.symbolReferences,
-        },
-        images,
-      );
-      if (result.isErr()) {
-        const err = result.error;
-        toast.error(
-          err.type === 'INTERNAL'
-            ? t('thread.sendFailed')
-            : t('thread.sendFailedGeneric', { error: err.message }),
-        );
-      }
-      setSending(false);
-    },
-    [sending, threadId, thread, t],
-  );
-
-  const handleStop = useCallback(async () => {
-    await api.stopThread(threadId);
-  }, [threadId]);
 
   // Per-column search: Ctrl+F opens search for the column under focus or
   // pointer hover. Mirrors ThreadChatView but scoped so only one column
@@ -212,31 +128,6 @@ export const ThreadColumn = memo(function ThreadColumn({
   const StatusIcon = statusConfig[status]?.icon ?? Loader2;
   const statusClass = statusConfig[status]?.className ?? '';
 
-  const threadOverride = useMemo(
-    () => ({
-      provider: thread?.provider,
-      model: thread?.model,
-      permissionMode: thread?.permissionMode,
-      branch: thread?.branch,
-      baseBranch: thread?.baseBranch,
-      worktreePath: thread?.worktreePath,
-      contextUsage: thread?.contextUsage,
-      queuedCount: thread?.queuedCount,
-      projectId: thread?.projectId,
-    }),
-    [
-      thread?.provider,
-      thread?.model,
-      thread?.permissionMode,
-      thread?.branch,
-      thread?.baseBranch,
-      thread?.worktreePath,
-      thread?.contextUsage,
-      thread?.queuedCount,
-      thread?.projectId,
-    ],
-  );
-
   if (loading) {
     return (
       <div className="border-border flex min-h-0 flex-1 rounded-sm border">
@@ -253,8 +144,6 @@ export const ThreadColumn = memo(function ThreadColumn({
     );
   }
 
-  const isRunning = status === 'running';
-
   return (
     <ThreadProvider threadId={threadId}>
       <div
@@ -262,8 +151,11 @@ export const ThreadColumn = memo(function ThreadColumn({
         className={cn(
           'group/col relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border',
           isDragging && 'opacity-50',
+          isSelected && 'border-primary ring-primary/40 ring-1',
         )}
         data-testid={`grid-column-${threadId}`}
+        data-selected={isSelected ? 'true' : undefined}
+        onPointerDownCapture={selectThisColumn}
         onPointerEnter={() => {
           isHoveredRef.current = true;
         }}
@@ -273,6 +165,7 @@ export const ThreadColumn = memo(function ThreadColumn({
       >
         <div ref={dragHandleRef} className="shrink-0 cursor-grab active:cursor-grabbing">
           <ProjectHeader
+            hideActions
             hideFiles
             hideTests
             hideStartup
@@ -308,36 +201,10 @@ export const ThreadColumn = memo(function ThreadColumn({
           className="border-border bg-popover absolute top-9 right-2 z-30 gap-1.5 rounded-md border px-2 py-1.5 shadow-md"
         />
 
-        <MessageStream
-          ref={streamRef}
-          threadId={thread.id}
-          status={status}
-          messages={thread.messages ?? EMPTY_MESSAGES}
-          threadEvents={thread.threadEvents}
-          compactionEvents={thread.compactionEvents}
-          initInfo={thread.initInfo}
-          resultInfo={thread.resultInfo}
-          waitingReason={thread.waitingReason}
-          pendingPermission={thread.pendingPermission}
-          isExternal={thread.provider === 'external'}
-          model={thread.model}
-          permissionMode={thread.permissionMode}
-          onSend={handleSend}
+        <ThreadConversation
+          streamRef={streamRef}
           onOpenLightbox={onOpenLightbox}
-          knownIds={knownIdsRef.current}
-          prefersReducedMotion={prefersReducedMotion}
           className="min-h-0 flex-1"
-          footer={
-            <PromptInput
-              onSubmit={handleSend}
-              onStop={handleStop}
-              loading={sending}
-              running={isRunning}
-              projectId={thread.projectId}
-              placeholder={t('thread.nextPrompt')}
-              threadOverride={threadOverride}
-            />
-          }
         />
       </div>
     </ThreadProvider>

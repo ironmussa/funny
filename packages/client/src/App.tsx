@@ -26,6 +26,7 @@ import { useRouteSync } from '@/hooks/use-route-sync';
 import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
+import { effectiveThreadId, isRightPaneVisible } from '@/lib/grid-right-pane';
 import { canDoGitOps } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
@@ -147,7 +148,20 @@ export function App() {
   // (header, review pane) reads this immediate, URL-derived id.
   const activeThreadId = useActiveThreadId();
   const displayThreadId = useDisplayThreadId();
-  const activeThreadCanShowGit = useThreadStore((s) => canDoGitOps(s.activeThread));
+  // While the grid view is open, the app-level thread context + right pane act
+  // on the grid-selected thread (which has no URL), not the URL-derived active
+  // thread. Outside the grid, nothing changes. See `grid-thread-actions`.
+  const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
+  const effectiveId = effectiveThreadId(liveColumnsOpen, gridSelectedThreadId, activeThreadId);
+  const activeThreadCanShowGit = useThreadStore((s) =>
+    canDoGitOps(
+      liveColumnsOpen
+        ? gridSelectedThreadId
+          ? (s.threadDataById[gridSelectedThreadId] ?? null)
+          : null
+        : s.activeThread,
+    ),
+  );
   const hasSelectedProject = useProjectStore((s) => s.selectedProjectId != null);
   const navigate = useNavigate();
 
@@ -217,7 +231,15 @@ export function App() {
     </ErrorBoundary>
   );
 
-  const rightPaneVisible = reviewPaneOpen && !isFullScreenView;
+  // The grid view is full-screen, but unlike the other full-screen views it
+  // hosts the right pane in a sibling dockview slot (acting on the selected
+  // thread). Allow it through when a thread is selected. See `grid-thread-actions`.
+  const rightPaneVisible = isRightPaneVisible(
+    reviewPaneOpen,
+    isFullScreenView,
+    liveColumnsOpen,
+    gridSelectedThreadId,
+  );
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
 
@@ -330,7 +352,7 @@ export function App() {
 
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
-      <ThreadProvider threadId={activeThreadId}>
+      <ThreadProvider threadId={effectiveId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
           <ReviewPaneStateProvider>
             <SidebarAwareDockview
@@ -338,6 +360,7 @@ export function App() {
               centerPanel={centerPanel}
               terminalDockview={terminalDockview}
               isFullScreenView={isFullScreenView}
+              liveColumnsOpen={liveColumnsOpen}
               browserPanelOpen={browserPanelOpen}
               togglebrowserPanel={togglebrowserPanel}
               browserPanelWidth={browserPanelWidth}
@@ -361,6 +384,7 @@ function SidebarAwareDockview({
   centerPanel,
   terminalDockview,
   isFullScreenView,
+  liveColumnsOpen,
   browserPanelOpen,
   togglebrowserPanel,
   browserPanelWidth,
@@ -369,6 +393,7 @@ function SidebarAwareDockview({
   centerPanel: ReactNode;
   terminalDockview: ReturnType<typeof useTerminalDockview>;
   isFullScreenView: boolean;
+  liveColumnsOpen: boolean;
   browserPanelOpen: boolean;
   togglebrowserPanel: () => void;
   browserPanelWidth: number;
@@ -384,7 +409,7 @@ function SidebarAwareDockview({
       onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}
       onBottomTabClose={terminalDockview.onBottomTabClose}
       onBottomTabsReorder={terminalDockview.onBottomTabsReorder}
-      bottomPaneOpen={terminalDockview.bottomPaneOpen && !isFullScreenView}
+      bottomPaneOpen={terminalDockview.bottomPaneOpen && (!isFullScreenView || liveColumnsOpen)}
       bottomPrefixActions={terminalDockview.bottomPrefixActions}
       bottomLeftActions={terminalDockview.bottomLeftActions}
       bottomRightActions={terminalDockview.bottomRightActions}

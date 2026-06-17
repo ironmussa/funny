@@ -61,6 +61,14 @@ export class GenericACPProcess extends BaseAgentProcess {
   private totalCost = 0;
   /** True if the agent advertises `promptCapabilities.image` at init. */
   private supportsImages = false;
+  /**
+   * The agent's "model" select config option, captured from the newSession
+   * response (ACP 0.26+ replaced the dedicated `unstable_setSessionModel`
+   * method with the generic session-config-option mechanism). Holds the
+   * option's `configId` and the set of selectable value ids so the model can
+   * be applied via `setSessionConfigOption`.
+   */
+  private modelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
 
   // ── Per-turn state (reset on each runOnePrompt) ──────────────────
   private assistantMsgId: string = randomUUID();
@@ -280,6 +288,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           mcpServers: mcpServerList,
         });
         this.activeSessionId = sessionResponse.sessionId;
+        this.captureModelConfigOption(sessionResponse.configOptions);
       }
 
       this.emitInit(
@@ -369,27 +378,95 @@ export class GenericACPProcess extends BaseAgentProcess {
     const requestedModel = this.options.model;
     if (!requestedModel || requestedModel === 'default' || !this.activeSessionId) return;
 
-    const method = this.manifest.setModel.method;
+    const conn = connection as any;
+    const declaredMethod = this.manifest.setModel.method;
     try {
-      if (method === 'session/set_model') {
-        // opencode implements the raw method without advertising the capability.
-        await (connection as any).extMethod('session/set_model', {
+      // opencode implements the raw method without advertising the capability.
+      if (declaredMethod === 'session/set_model') {
+        await conn.extMethod('session/set_model', {
           sessionId: this.activeSessionId,
           modelId: requestedModel,
         });
-      } else {
-        await (connection as any).unstable_setSessionModel({
-          sessionId: this.activeSessionId,
-          modelId: requestedModel,
-        });
+        this.dlog.info('model selected', { via: 'session/set_model', modelId: requestedModel });
+        return;
       }
-      this.dlog.info('model selected', { method, modelId: requestedModel });
+
+      // ACP 0.26+ removed the dedicated `unstable_setSessionModel` method —
+      // the model is now a `category: 'model'` session config option set via
+      // `setSessionConfigOption`. Prefer this when the agent advertised it.
+      if (typeof conn.setSessionConfigOption === 'function' && this.modelConfigOption) {
+        const { configId, valueIds } = this.modelConfigOption;
+        if (valueIds.size > 0 && !valueIds.has(requestedModel)) {
+          this.dlog.warn('requested model not offered by agent — using provider default', {
+            modelId: requestedModel,
+            available: [...valueIds],
+          });
+          return;
+        }
+        await conn.setSessionConfigOption({
+          sessionId: this.activeSessionId,
+          configId,
+          value: { value: requestedModel },
+        });
+        this.dlog.info('model selected', {
+          via: 'setSessionConfigOption',
+          configId,
+          modelId: requestedModel,
+        });
+        return;
+      }
+
+      // Legacy SDK fallback (<0.26): the typed `unstable_setSessionModel` method.
+      if (typeof conn.unstable_setSessionModel === 'function') {
+        await conn.unstable_setSessionModel({
+          sessionId: this.activeSessionId,
+          modelId: requestedModel,
+        });
+        this.dlog.info('model selected', {
+          via: 'unstable_setSessionModel',
+          modelId: requestedModel,
+        });
+        return;
+      }
+
+      this.dlog.warn('no model-selection method on ACP connection — using provider default', {
+        modelId: requestedModel,
+      });
     } catch (e) {
       this.dlog.warn('set-model failed — falling back to provider default', {
-        method,
         modelId: requestedModel,
         error: (e as Error)?.message,
       });
+    }
+  }
+
+  /**
+   * Capture the agent's "model" select config option from a newSession
+   * response so {@link applyModelSelection} can apply the model via
+   * `setSessionConfigOption` (ACP 0.26+). Flattens grouped option lists and
+   * records the configId + selectable value ids. No-op when the agent does
+   * not advertise a model option.
+   */
+  private captureModelConfigOption(configOptions: unknown): void {
+    this.modelConfigOption = null;
+    if (!Array.isArray(configOptions)) return;
+    for (const opt of configOptions) {
+      const o = opt as Record<string, unknown> | null;
+      if (!o || o.category !== 'model' || o.type !== 'select') continue;
+      const valueIds = new Set<string>();
+      const collect = (entries: unknown): void => {
+        if (!Array.isArray(entries)) return;
+        for (const e of entries) {
+          const entry = e as Record<string, unknown> | null;
+          if (!entry) continue;
+          if (typeof entry.value === 'string') valueIds.add(entry.value);
+          // Grouped options nest their selectable values under `options`.
+          if (Array.isArray(entry.options)) collect(entry.options);
+        }
+      };
+      collect(o.options);
+      this.modelConfigOption = { configId: String(o.id), valueIds };
+      return;
     }
   }
 

@@ -20,7 +20,7 @@ gix = { version = "0.84", default-features = false, features = [
   "sha1",
 ] }
 gix-status = "0.31"
-lru = "0.12"
+lru = "0.18"
 
 [build-dependencies]
 napi-build = "2.3"

@@ -62,8 +62,33 @@ describe('PiACPProcess.translateUpdate', () => {
       sessionUpdate: 'agent_message_chunk',
       content: { type: 'text', text: 'pi v0.70.2\n---\n' },
     });
-    // stripPiBanner reduces this to '' so no assistant message is emitted.
+    // stripBanner reduces this to '' so no assistant message is emitted.
     expect(messages).toHaveLength(0);
+  });
+
+  test('strips pi MCP adapter source/dependency bullets before assistant text', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'agent_message_chunk',
+      content: {
+        type: 'text',
+        text:
+          'pi v0.70.2\n' +
+          '---\n' +
+          '- index.ts\n' +
+          '- npm:pi-mcp-adapter\n' +
+          '  - index.ts\n' +
+          '¡Hola! ¿En qué puedo ayudarte?',
+      },
+    });
+
+    expect(messages).toHaveLength(1);
+    const m = messages[0];
+    if (m.type !== 'assistant') throw new Error('unreachable');
+    const block = m.message.content[0];
+    if (block.type !== 'text') throw new Error('unreachable');
+    expect(block.text).toBe('¡Hola! ¿En qué puedo ayudarte?');
   });
 
   test('tool_call (read) populates file_path from rawInput', () => {
@@ -188,5 +213,57 @@ describe('PiACPProcess.translateUpdate', () => {
     expect(block.text).toContain('**Plan:**');
     expect(block.text).toContain('[x] 1. Read');
     expect(block.text).toContain('[~] 2. Edit');
+  });
+});
+
+describe('GenericACPProcess empty-turn guard', () => {
+  type Internals = {
+    connection: unknown;
+    activeSessionId: string | null;
+    runOnePrompt: (prompt: string, images?: unknown[]) => Promise<void>;
+    translateUpdate: (u: unknown) => void;
+  };
+
+  function assistantTexts(messages: CLIMessage[]): string[] {
+    return messages
+      .filter((m) => m.type === 'assistant' && m.message.content[0]?.type === 'text')
+      .map((m) => (m as { message: { content: Array<{ text: string }> } }).message.content[0].text);
+  }
+
+  test('surfaces a visible notice when the agent ends a turn with no output', async () => {
+    const { proc, messages } = makeProcess();
+    const internals = proc as unknown as Internals;
+    // end_turn with zero session updates — the silent-success case.
+    internals.connection = { prompt: async () => ({ stopReason: 'end_turn' }) };
+    internals.activeSessionId = 'sess-1';
+
+    await internals.runOnePrompt('haz varios commits y push', []);
+
+    const texts = assistantTexts(messages);
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toContain('without producing any output');
+    expect(texts[0]).toContain('end_turn');
+  });
+
+  test('does NOT add a notice when the turn produced real assistant text', async () => {
+    const { proc, messages } = makeProcess();
+    const internals = proc as unknown as Internals;
+    internals.connection = {
+      prompt: async () => {
+        // The agent streams a real chunk (banner + answer) during the turn.
+        internals.translateUpdate({
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'pi v0.70.2\n---\nListo' },
+        });
+        return { stopReason: 'end_turn' };
+      },
+    };
+    internals.activeSessionId = 'sess-1';
+
+    await internals.runOnePrompt('hola', []);
+
+    const texts = assistantTexts(messages);
+    expect(texts).toEqual(['Listo']);
+    expect(texts.some((t) => t.includes('without producing any output'))).toBe(false);
   });
 });

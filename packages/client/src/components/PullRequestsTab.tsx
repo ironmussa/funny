@@ -259,7 +259,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       <button
         key={pr.number}
         onClick={() => setSelectedPR(pr)}
-        className="hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs transition-colors"
+        className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs transition-colors"
         data-testid={`pr-item-${pr.number}`}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -308,6 +308,24 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             )}
           </div>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={pr.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent shrink-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              data-testid={`pr-open-github-${pr.number}`}
+              aria-label={t('review.pullRequests.openOnGithub', 'Open on GitHub')}
+            >
+              <ExternalLink className="icon-xs" />
+            </a>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            {t('review.pullRequests.openOnGithub', 'Open on GitHub')}
+          </TooltipContent>
+        </Tooltip>
       </button>
     );
   };

@@ -34,7 +34,7 @@ export function GridPicker({ cols, rows, onChange }: Props) {
           {cols}×{rows}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="end" sideOffset={4}>
+      <PopoverContent className="w-auto p-3" align="start" sideOffset={4}>
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${MAX_GRID_COLS}, 1fr)` }}

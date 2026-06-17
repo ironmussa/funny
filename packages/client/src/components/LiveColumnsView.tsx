@@ -1,5 +1,5 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { LayoutGrid, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -130,17 +130,25 @@ export function LiveColumnsView() {
     setPendingProjectByCell((prev) => ({ ...prev, [cellIndex]: projectId }));
   }, []);
 
-  const assignThreadToCell = useCallback((cellIndex: number, threadId: string) => {
-    setGridCells((prev) => {
-      const updated = { ...prev };
-      for (const [key, val] of Object.entries(updated)) {
-        if (val === threadId) delete updated[key];
-      }
-      updated[String(cellIndex)] = threadId;
-      localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  const assignThreadToCell = useCallback(
+    (cellIndex: number, threadId: string) => {
+      setGridCells((prev) => {
+        const updated = { ...prev };
+        for (const [key, val] of Object.entries(updated)) {
+          if (val === threadId) delete updated[key];
+        }
+        updated[String(cellIndex)] = threadId;
+        localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
+        return updated;
+      });
+      // Focus the freshly placed thread (created or loaded) so its header
+      // action icons surface — auto-select otherwise only fires on the
+      // empty→non-empty transition, leaving new threads in a populated grid
+      // unselected.
+      setGridSelectedThreadId(threadId);
+    },
+    [setGridSelectedThreadId],
+  );
 
   const handleRemoveFromGrid = useCallback(
     (cellIndex: number) => {
@@ -362,11 +370,8 @@ export function LiveColumnsView() {
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
       <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2">
-        <span className="flex items-center gap-2 text-sm font-medium">
-          <LayoutGrid className="icon-sm text-muted-foreground" /> {t('live.title', 'Grid')}
-        </span>
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
           className="size-7"
           data-testid="grid-new-thread"
@@ -375,6 +380,16 @@ export function LiveColumnsView() {
         >
           <Plus className="icon-base" />
         </Button>
+        <GridPicker
+          cols={gridCols}
+          rows={gridRows}
+          onChange={(c, r) => {
+            setGridCols(c);
+            setGridRows(r);
+            localStorage.setItem(GRID_COLS_KEY, String(c));
+            localStorage.setItem(GRID_ROWS_KEY, String(r));
+          }}
+        />
 
         {/* Consolidated thread actions — act on the selected thread. Hidden
             when nothing is selected (empty grid). */}
@@ -383,31 +398,6 @@ export function LiveColumnsView() {
             <ThreadProvider threadId={gridSelectedThreadId}>
               <ThreadHeaderActions hideTimeline />
             </ThreadProvider>
-            <div className="bg-border h-5 w-px" aria-hidden />
-            <GridPicker
-              cols={gridCols}
-              rows={gridRows}
-              onChange={(c, r) => {
-                setGridCols(c);
-                setGridRows(r);
-                localStorage.setItem(GRID_COLS_KEY, String(c));
-                localStorage.setItem(GRID_ROWS_KEY, String(r));
-              }}
-            />
-          </div>
-        )}
-        {!gridSelectedThreadId && (
-          <div className="ml-auto">
-            <GridPicker
-              cols={gridCols}
-              rows={gridRows}
-              onChange={(c, r) => {
-                setGridCols(c);
-                setGridRows(r);
-                localStorage.setItem(GRID_COLS_KEY, String(c));
-                localStorage.setItem(GRID_ROWS_KEY, String(r));
-              }}
-            />
           </div>
         )}
       </div>

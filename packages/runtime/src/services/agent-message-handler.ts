@@ -176,6 +176,7 @@ export class AgentMessageHandler {
         sessionId: msg.session_id,
         initTools: JSON.stringify(msg.tools ?? []),
         initCwd: msg.cwd ?? '',
+        initSlashCommands: JSON.stringify(msg.slashCommands ?? []),
       });
       log.info('Session ID persisted to server', {
         namespace: 'agent',
@@ -196,6 +197,7 @@ export class AgentMessageHandler {
         tools: msg.tools ?? [],
         cwd: msg.cwd ?? '',
         model: msg.model ?? '',
+        slashCommands: msg.slashCommands ?? [],
       });
       return;
     }
@@ -204,10 +206,20 @@ export class AgentMessageHandler {
     // dynamically). Replace the cached set so the send-boundary guard stays
     // accurate.
     if (msg.type === 'commands_changed') {
-      this.state.supportedSlashCommands.set(
-        threadId,
-        new Set(msg.commands.map((c) => c.replace(/^\//, ''))),
-      );
+      const commands = msg.commands.map((c) => c.replace(/^\//, ''));
+      this.state.supportedSlashCommands.set(threadId, new Set(commands));
+      // Persist + mirror to the client so the slash autocomplete reflects
+      // commands discovered mid-session (e.g. dynamically loaded skills).
+      await this.threadManager.updateThread(threadId, {
+        initSlashCommands: JSON.stringify(commands),
+      });
+      const thread = await this.threadManager.getThread(threadId);
+      await this.emitWS(threadId, 'agent:init', {
+        tools: thread?.initTools ? (JSON.parse(thread.initTools) as string[]) : [],
+        cwd: thread?.initCwd ?? '',
+        model: thread?.model ?? '',
+        slashCommands: commands,
+      });
       return;
     }
 

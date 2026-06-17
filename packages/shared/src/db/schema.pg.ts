@@ -116,6 +116,7 @@ export const threads = pgTable('threads', {
   containerName: text('container_name'),
   initTools: text('init_tools'),
   initCwd: text('init_cwd'),
+  initSlashCommands: text('init_slash_commands'),
   runnerId: text('runner_id'),
   mergedAt: text('merged_at'),
   contextRecoveryReason: text('context_recovery_reason'),

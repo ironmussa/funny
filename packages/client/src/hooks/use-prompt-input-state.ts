@@ -32,6 +32,9 @@ import { useThreadStore } from '@/stores/thread-store';
 
 const queueLog = createClientLogger('PromptInputQueue');
 
+// Stable empty default so threads without an init payload don't churn the editor.
+const EMPTY_SLASH_COMMANDS: string[] = [];
+
 export type SubmitOpts = {
   provider?: string;
   model: string;
@@ -195,6 +198,10 @@ export function usePromptInputState({
   const activeThreadBaseBranch = useThreadSelector((t) => t?.baseBranch);
   // Full active thread + its working-tree status, for the prompt powerline bar.
   const activeThread = useThreadSelector((t) => t);
+  // SDK-reported slash commands for this thread — merged into the editor's
+  // slash autocomplete alongside skills.
+  const sdkSlashCommands =
+    useThreadSelector((t) => t?.initInfo?.slashCommands) ?? EMPTY_SLASH_COMMANDS;
   const activeThreadGitStatus = useGitStatusForThread(effectiveThreadId);
   const activeThreadContextTokens = useThreadSelector(
     (t) => t?.contextUsage?.cumulativeInputTokens ?? 0,
@@ -760,6 +767,7 @@ export function usePromptInputState({
     handleEditorPaste,
     handleCheckoutPreflight,
     loadSkillsForEditor,
+    sdkSlashCommands,
 
     // Misc
     threadCwd,

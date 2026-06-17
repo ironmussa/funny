@@ -567,6 +567,7 @@ async function handleCLISystem(
       status: 'running',
       initTools: JSON.stringify(msg.tools ?? []),
       initCwd: msg.cwd ?? '',
+      initSlashCommands: JSON.stringify(msg.slash_commands ?? []),
     });
 
     emitWS(threadState, {

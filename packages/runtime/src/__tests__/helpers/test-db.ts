@@ -96,6 +96,7 @@ export function createTestDb() {
       container_name TEXT,
       init_tools TEXT,
       init_cwd TEXT,
+      init_slash_commands TEXT,
       runner_id TEXT,
       merged_at TEXT,
       context_recovery_reason TEXT,

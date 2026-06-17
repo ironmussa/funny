@@ -105,6 +105,7 @@ export const threads = sqliteTable('threads', {
   containerName: text('container_name'),
   initTools: text('init_tools'),
   initCwd: text('init_cwd'),
+  initSlashCommands: text('init_slash_commands'), // SDK-reported slash commands (JSON string[])
   runnerId: text('runner_id'), // which runner handles this thread (multi/team mode)
   mergedAt: text('merged_at'), // set when worktree is merged+cleaned — explicit post-merge signal
   contextRecoveryReason: text('context_recovery_reason'), // why context recovery is needed (model_changed, provider_changed)

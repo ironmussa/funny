@@ -127,6 +127,7 @@ export const PromptInput = memo(function PromptInput({
         placeholder={placeholder}
         editorCwd={state.threadCwd}
         loadSkills={state.loadSkillsForEditor}
+        sdkSlashCommands={state.sdkSlashCommands}
         setPromptRef={setPromptRef}
         editorRef={state.editorRef}
         editorContainerRef={state.editorContainerRef}

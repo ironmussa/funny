@@ -276,6 +276,33 @@ describe('getThreadWithMessages', () => {
     expect(result!.initInfo!.tools).toEqual(['Read', 'Write']);
     expect(result!.initInfo!.cwd).toBe('/tmp');
   });
+
+  test('hydrates initInfo.slashCommands from thread initSlashCommands', async () => {
+    seedThread(deps.db, {
+      id: 't3',
+      // @ts-ignore — drizzle insert type is loose in the test helper
+      initTools: '["Read"]',
+      initCwd: '/tmp',
+      model: 'opus',
+      initSlashCommands: '["compact","clear","context"]',
+    });
+
+    const result = await repo.getThreadWithMessages('t3');
+    expect(result!.initInfo!.slashCommands).toEqual(['compact', 'clear', 'context']);
+  });
+
+  test('leaves initInfo.slashCommands undefined when none were captured', async () => {
+    seedThread(deps.db, {
+      id: 't4',
+      // @ts-ignore — drizzle insert type is loose in the test helper
+      initTools: '["Read"]',
+      initCwd: '/tmp',
+      model: 'opus',
+    });
+
+    const result = await repo.getThreadWithMessages('t4');
+    expect(result!.initInfo!.slashCommands).toBeUndefined();
+  });
 });
 
 describe('deleteMessagesAfter', () => {

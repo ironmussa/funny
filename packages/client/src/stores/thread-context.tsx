@@ -119,7 +119,9 @@ export function useThreadInitInfo(): AgentInitInfo | undefined {
       prev.cwd === next.cwd &&
       prev.model === next.model &&
       prev.tools.length === next.tools.length &&
-      prev.tools.every((t, i) => t === next.tools[i])
+      prev.tools.every((t, i) => t === next.tools[i]) &&
+      (prev.slashCommands?.length ?? 0) === (next.slashCommands?.length ?? 0) &&
+      (prev.slashCommands ?? []).every((c, i) => c === next.slashCommands?.[i])
     ) {
       return prev;
     }

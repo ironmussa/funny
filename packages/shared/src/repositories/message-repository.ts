@@ -165,6 +165,9 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
             tools: JSON.parse(thread.initTools) as string[],
             cwd: thread.initCwd ?? '',
             model: thread.model ?? '',
+            slashCommands: thread.initSlashCommands
+              ? (JSON.parse(thread.initSlashCommands) as string[])
+              : undefined,
           }
         : undefined,
     };

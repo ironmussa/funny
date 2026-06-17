@@ -409,6 +409,8 @@ export interface PromptInputUIProps {
   placeholder?: string;
   editorCwd?: string;
   loadSkills?: () => Promise<Skill[]>;
+  /** SDK-reported slash commands for the active thread (names without leading slash) */
+  sdkSlashCommands?: string[];
   /** Imperative ref — writes setPrompt into it so the parent can restore text */
   setPromptRef?: React.RefObject<((text: string) => void) | null>;
   editorRef?: React.RefObject<PromptEditorHandle | null>;
@@ -490,6 +492,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   placeholder,
   editorCwd,
   loadSkills,
+  sdkSlashCommands,
   setPromptRef,
   editorRef: externalEditorRef,
   editorContainerRef: externalEditorContainerRef,
@@ -1305,6 +1308,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               onFileMentionDrop={() => setIsDragging(false)}
               cwd={editorCwd}
               loadSkills={loadSkills}
+              sdkSlashCommands={sdkSlashCommands}
               containerRef={promptBoxRef}
             />
           </div>

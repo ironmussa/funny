@@ -290,6 +290,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       provider: string;
       initTools: string;
       initCwd: string;
+      initSlashCommands: string;
     }>,
   ) {
     const needsStageCheck = updates.stage !== undefined || updates.archived !== undefined;

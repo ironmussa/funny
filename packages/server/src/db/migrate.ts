@@ -1484,6 +1484,15 @@ const migrations: Migration[] = [
       await backfillResourceGrants((q) => ctx().exec(q));
     },
   },
+  {
+    // SDK-reported slash commands captured at session init (JSON string[]),
+    // persisted so the slash-command autocomplete survives a reload before the
+    // next agent run. Mirrors `init_tools` / `init_cwd`.
+    name: '071_threads_init_slash_commands',
+    async up() {
+      await ctx().addColumn('threads', 'init_slash_commands', 'TEXT');
+    },
+  },
 ];
 
 /**

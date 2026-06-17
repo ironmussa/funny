@@ -412,6 +412,10 @@ export interface WSInitData {
   tools: string[];
   cwd: string;
   model: string;
+  // Slash commands the SDK reports for this session (names without leading
+  // slash), e.g. ['compact', 'clear', 'context', ...]. Drives the client's
+  // slash-command autocomplete and the send-boundary guard.
+  slashCommands?: string[];
 }
 
 export interface WSMessageData {

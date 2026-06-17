@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ShortcutHint } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';
@@ -173,7 +174,9 @@ export function ShareThreadButton({
             </Button>
           </DialogTrigger>
         </TooltipTrigger>
-        <TooltipContent>Share thread</TooltipContent>
+        <TooltipContent>
+          <ShortcutHint label="Share thread" keys={['Alt', 'H']} />
+        </TooltipContent>
       </Tooltip>
 
       <DialogContent

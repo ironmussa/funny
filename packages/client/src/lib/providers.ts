@@ -139,9 +139,10 @@ const CLAUDE_MODELS_WITH_MAX = new Set(['opus-4.7', 'opus-4.8', 'opus', 'sonnet-
 export function getEffortLevels(model: string, provider?: string): EffortConfig[] {
   if (provider && !PROVIDERS_WITH_EFFORT.has(provider)) return [];
   if (provider !== 'claude') {
-    // Codex and other effort-capable providers only expose low/medium/high.
+    // Codex exposes low/medium/high/xhigh. Keep max limited to Claude models
+    // that advertise it below.
     return EFFORT_LEVELS.filter(
-      (e) => e.value === 'low' || e.value === 'medium' || e.value === 'high',
+      (e) => e.value === 'low' || e.value === 'medium' || e.value === 'high' || e.value === 'xhigh',
     );
   }
   return EFFORT_LEVELS.filter((e) => {

@@ -11,6 +11,7 @@ import {
   isPromptModelConfigurable,
   getContextWindow,
   parseUnifiedModel,
+  getEffortLevels,
 } from '@/lib/providers';
 
 /** Mock translation function — returns the key itself (simulating missing i18n). */
@@ -174,6 +175,38 @@ describe('isPromptModelConfigurable', () => {
 
   test('returns true for normal models', () => {
     expect(isPromptModelConfigurable('claude:sonnet')).toBe(true);
+  });
+});
+
+// ── getEffortLevels ─────────────────────────────────────────────
+
+describe('getEffortLevels', () => {
+  test('exposes xhigh for codex models but keeps max hidden', () => {
+    expect(getEffortLevels('gpt-5.5', 'codex').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+  });
+
+  test('returns no effort levels for providers without effort support', () => {
+    expect(getEffortLevels('gemini-2.5-pro', 'gemini')).toEqual([]);
+  });
+
+  test('gates claude xhigh and max by model support', () => {
+    expect(getEffortLevels('sonnet', 'claude').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+    ]);
+    expect(getEffortLevels('opus-4.8', 'claude').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
   });
 });
 

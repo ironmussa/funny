@@ -547,6 +547,69 @@ export function getDiffSummary(
 }
 
 /**
+ * Compute line stats for gitignored files that a session touched.
+ *
+ * `getDiffSummary` deliberately excludes ignored files — both `git diff` and
+ * `ls-files --exclude-standard` skip them — so a session that edits an ignored
+ * path (e.g. an `openspec/` doc) gets no +/- in the changed-files summary. Git
+ * has no committed baseline for an ignored file, so the only honest signal is
+ * its current contents counted as additions, exactly how `getDiffSummary` stats
+ * untracked files (`git diff --no-index` against `/dev/null`).
+ *
+ * Only paths git actually reports as ignored are stat'd, so tracked paths the
+ * caller mixes in (e.g. committed/reverted session files that are correctly
+ * stat-less) are never miscounted as full-file additions. Binary/oversized
+ * files are skipped via the same guard untracked-file stats use.
+ *
+ * @param relPaths repo-root-relative paths to consider
+ * @returns map of repo-relative path → { additions, deletions } for ignored files only
+ */
+export function getIgnoredFileStats(
+  cwd: string,
+  relPaths: string[],
+): ResultAsync<Map<string, { additions: number; deletions: number }>, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const stats = new Map<string, { additions: number; deletions: number }>();
+      if (relPaths.length === 0) return stats;
+
+      // Which of these are ignored? check-ignore echoes back the ignored subset;
+      // exit 0 = some ignored, 1 = none, 128 = error.
+      const check = await gitRead(['check-ignore', '--', ...relPaths], { cwd, reject: false });
+      if (check.exitCode !== 0) return stats;
+      const ignored = check.stdout
+        .trim()
+        .split('\n')
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (ignored.length === 0) return stats;
+
+      await Promise.all(
+        ignored.map(async (relPath) => {
+          if (shouldSkipUntrackedDiff(cwd, relPath)) return;
+          const r = await gitRead(['diff', '--no-index', '--numstat', '--', '/dev/null', relPath], {
+            cwd,
+            reject: false,
+          });
+          // --no-index exits 1 when differences exist (expected); bail on 2+ (error).
+          if (r.exitCode !== 0 && r.exitCode !== 1) return;
+          const line = r.stdout.trim().split('\n')[0];
+          if (!line) return;
+          const parts = line.split('\t');
+          if (parts.length < 3) return;
+          const additions = parseInt(parts[0], 10);
+          const deletions = parseInt(parts[1], 10);
+          if (isNaN(additions) || isNaN(deletions)) return; // binary files → "-\t-"
+          stats.set(relPath, { additions, deletions });
+        }),
+      );
+      return stats;
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
  * Get the diff content for a single file.
  */
 export function getSingleFileDiff(

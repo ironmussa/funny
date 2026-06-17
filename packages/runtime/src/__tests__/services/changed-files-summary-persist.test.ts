@@ -3,11 +3,13 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getDiffSummary: vi.fn(),
+  getIgnoredFileStats: vi.fn(),
   saveThreadEvent: vi.fn(async () => undefined),
 }));
 
 vi.mock('@funny/core/git', () => ({
   getDiffSummary: mocks.getDiffSummary,
+  getIgnoredFileStats: mocks.getIgnoredFileStats,
   getStatusSummary: vi.fn(),
   deriveGitSyncState: vi.fn(),
 }));
@@ -64,6 +66,8 @@ const session = (userId: string, ...absPaths: string[]) => [
 describe('AgentMessageHandler.persistChangedFilesSummary', () => {
   beforeEach(() => {
     mocks.getDiffSummary.mockReset();
+    mocks.getIgnoredFileStats.mockReset();
+    mocks.getIgnoredFileStats.mockReturnValue(ok(new Map()));
     mocks.saveThreadEvent.mockReset();
     mocks.saveThreadEvent.mockResolvedValue(undefined);
   });
@@ -97,6 +101,33 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
     const ev = wsEvents.find((e) => e.type === 'thread:event');
     expect(ev).toBeTruthy();
     expect(ev.data.event.type).toBe('changed_files_summary');
+  });
+
+  test('backfills +/- for gitignored files absent from the working-tree diff', async () => {
+    // openspec/ is gitignored, so getDiffSummary never reports it → stat-less row.
+    mocks.getDiffSummary.mockReturnValue(ok({ files: [], total: 0 }));
+    mocks.getIgnoredFileStats.mockReturnValue(
+      ok(new Map([['openspec/changes/x/tasks.md', { additions: 12, deletions: 0 }]])),
+    );
+    const { handler } = makeHandler({
+      projectId: 'p1',
+      worktreePath: null,
+      isScratch: false,
+      messages: session('u1', '/repo/openspec/changes/x/tasks.md'),
+    });
+
+    await (handler as any).persistChangedFilesSummary('t1');
+
+    // The ignored subset is the only stat-less path we ask about.
+    expect(mocks.getIgnoredFileStats).toHaveBeenCalledWith('/repo', [
+      'openspec/changes/x/tasks.md',
+    ]);
+    const [, , data]: any = mocks.saveThreadEvent.mock.calls[0] as any;
+    expect(data.files[0]).toMatchObject({
+      path: 'openspec/changes/x/tasks.md',
+      additions: 12,
+      deletions: 0,
+    });
   });
 
   test('skips scratch threads (no repo)', async () => {

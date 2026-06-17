@@ -14,6 +14,7 @@ import {
   getCurrentBranch,
   getDiff,
   getDiffSummary,
+  getIgnoredFileStats,
   getLog,
   getSingleFileDiff,
   getStatusSummary,
@@ -909,5 +910,66 @@ describe('integration: diff accuracy', () => {
       expect(file!.additions).toBe(3);
       expect(file!.deletions).toBe(0);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Group: getIgnoredFileStats — line counts for gitignored files
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('integration: getIgnoredFileStats', () => {
+  let repoPath: string;
+
+  beforeEach(() => {
+    invalidateStatusCache();
+    mkdirSync(TMP, { recursive: true });
+    repoPath = initTestRepo();
+    // Ignore an `openspec/` tree, mirroring the real-world case that motivated this.
+    writeFileSync(resolve(repoPath, '.gitignore'), 'openspec/\n');
+  });
+
+  afterEach(() => {
+    rmSync(TMP, { recursive: true, force: true });
+  });
+
+  test('reports full-file additions for an ignored file (absent from getDiffSummary)', async () => {
+    mkdirSync(resolve(repoPath, 'openspec/changes/x'), { recursive: true });
+    const rel = 'openspec/changes/x/tasks.md';
+    writeFileSync(resolve(repoPath, rel), 'a\nb\nc\nd\n');
+
+    // The normal summary excludes ignored files entirely.
+    const summary = await getDiffSummary(repoPath);
+    expect(summary.isOk()).toBe(true);
+    if (summary.isOk()) {
+      expect(summary.value.files.some((f) => f.path === rel)).toBe(false);
+    }
+
+    // getIgnoredFileStats backfills them: full contents counted as additions.
+    const stats = await getIgnoredFileStats(repoPath, [rel]);
+    expect(stats.isOk()).toBe(true);
+    if (stats.isOk()) {
+      expect(stats.value.get(rel)).toEqual({ additions: 4, deletions: 0 });
+    }
+  });
+
+  test('skips non-ignored paths so tracked files are never miscounted', async () => {
+    // A tracked, committed file is on disk but NOT ignored → must be skipped.
+    const tracked = 'README.md'; // committed in initTestRepo
+    mkdirSync(resolve(repoPath, 'openspec'), { recursive: true });
+    const ignored = 'openspec/note.md';
+    writeFileSync(resolve(repoPath, ignored), 'one\ntwo\n');
+
+    const stats = await getIgnoredFileStats(repoPath, [tracked, ignored]);
+    expect(stats.isOk()).toBe(true);
+    if (stats.isOk()) {
+      expect(stats.value.has(tracked)).toBe(false);
+      expect(stats.value.get(ignored)).toEqual({ additions: 2, deletions: 0 });
+    }
+  });
+
+  test('returns an empty map when nothing is ignored', async () => {
+    const stats = await getIgnoredFileStats(repoPath, ['README.md', 'src/whatever.ts']);
+    expect(stats.isOk()).toBe(true);
+    if (stats.isOk()) expect(stats.value.size).toBe(0);
   });
 });

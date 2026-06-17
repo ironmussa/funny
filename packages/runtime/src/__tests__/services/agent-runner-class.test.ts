@@ -400,6 +400,7 @@ describe('AgentRunner class', () => {
         tools: ['Read', 'Edit'],
         cwd: '/tmp',
         model: 'claude-sonnet-4-5-20250929',
+        slashCommands: [],
       });
     });
   });

@@ -8,7 +8,12 @@
  */
 
 import type { CLIMessage } from '@funny/core/agents';
-import { getStatusSummary, deriveGitSyncState, getDiffSummary } from '@funny/core/git';
+import {
+  getStatusSummary,
+  deriveGitSyncState,
+  getDiffSummary,
+  getIgnoredFileStats,
+} from '@funny/core/git';
 import type { WSEvent, ThreadStatus } from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
 
@@ -1005,6 +1010,23 @@ export class AgentMessageHandler {
 
     const summary = latestSessionChanges(messages, changedFiles, cwd);
     if (!summary) return;
+
+    // Gitignored files (e.g. openspec/ docs) never appear in the working-tree
+    // diff above, so latestSessionChanges leaves them stat-less and the in-chat
+    // summary shows no +/-. Backfill line counts for the ignored subset only —
+    // tracked stat-less files (committed/reverted) stay stat-less, as they
+    // should. See getIgnoredFileStats for why ignored files count as additions.
+    const statless = summary.files.filter((f) => f.additions == null).map((f) => f.path);
+    if (statless.length > 0) {
+      const ignoredStats = await getIgnoredFileStats(cwd, statless);
+      if (ignoredStats.isOk() && ignoredStats.value.size > 0) {
+        const m = ignoredStats.value;
+        summary.files = summary.files.map((f) => {
+          const s = f.additions == null ? m.get(f.path) : undefined;
+          return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;
+        });
+      }
+    }
 
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();

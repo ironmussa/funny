@@ -10,6 +10,20 @@ import { cn } from '@/lib/utils';
 // eslint-disable-next-line no-control-regex -- ESC is the literal ANSI CSI marker we're detecting
 const ANSI_ESC_RE = /\x1b\[/;
 
+function commandToText(command: unknown): string | null {
+  if (typeof command === 'string') return command;
+  if (command == null) return null;
+  if (typeof command === 'number' || typeof command === 'boolean' || typeof command === 'bigint') {
+    return String(command);
+  }
+
+  try {
+    return JSON.stringify(command, null, 2) ?? String(command);
+  } catch {
+    return String(command);
+  }
+}
+
 /**
  * Pick a syntax-highlighting language for command output based on the command
  * itself. Conservative: returns null when we can't be confident, so we don't
@@ -45,7 +59,7 @@ export function BashCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const command = parsed.command as string | undefined;
+  const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
   // Security M6: `createAnsiConverter` enforces escapeXML regardless of caller.
   const ansiConverter = useMemo(
     () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),

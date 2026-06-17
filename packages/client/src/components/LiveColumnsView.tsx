@@ -1,6 +1,6 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { LayoutGrid, Plus } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -12,12 +12,17 @@ import { GridColumnInsertDropTarget } from '@/components/live-columns/GridColumn
 import { GridPicker } from '@/components/live-columns/GridPicker';
 import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDialog';
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
+import { ThreadHeaderActions } from '@/components/thread/ProjectHeader';
 import { Button } from '@/components/ui/button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
+import { firstPlacedThreadId, resolveGridSelection } from '@/lib/grid-selection';
 import { GRID_CELLS_KEY, getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
+import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('LiveColumnsView');
 
@@ -67,6 +72,38 @@ export function LiveColumnsView() {
   // Threads currently placed in the grid — used by the per-cell thread picker
   // to flag entries that are already on screen.
   const gridThreadIds = useMemo(() => new Set(Object.values(gridCells)), [gridCells]);
+
+  // --- Selected thread (drives the consolidated header actions + right pane) ---
+  const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
+  const setGridSelectedThreadId = useUIStore((s) => s.setGridSelectedThreadId);
+  const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
+  const initedSelectionRef = useRef(false);
+  const prevHadThreadsRef = useRef(false);
+
+  // Keep the selection valid and auto-select the first occupied cell at
+  // load time (and when threads first appear in a previously-empty grid).
+  // Removing the selected cell strict-clears (no auto-jump) — handled here by
+  // only auto-selecting on initial resolution / empty→non-empty transitions.
+  useEffect(() => {
+    const current = useUIStore.getState().gridSelectedThreadId;
+    const next = resolveGridSelection({
+      current,
+      placedIds: gridThreadIds,
+      firstPlaced: firstPlacedThreadId(gridCells, gridCols, gridRows),
+      inited: initedSelectionRef.current,
+      prevHadThreads: prevHadThreadsRef.current,
+    });
+    if (next !== current) setGridSelectedThreadId(next);
+    initedSelectionRef.current = true;
+    prevHadThreadsRef.current = gridThreadIds.size > 0;
+  }, [gridThreadIds, gridCells, gridCols, gridRows, setGridSelectedThreadId]);
+
+  // The grid is full-screen, so ProjectHeader's git-status fetch never runs
+  // here — fetch for the selected thread so the right pane (review/files) has
+  // data to show.
+  useEffect(() => {
+    if (gridSelectedThreadId) fetchForThread(gridSelectedThreadId);
+  }, [gridSelectedThreadId, fetchForThread]);
   // Tracks cells where the user has pre-selected a project (via the header
   // "+") but hasn't typed a prompt yet. The EmptyGridCell uses this to skip
   // the project picker and jump straight to the prompt input — same flow as
@@ -339,18 +376,40 @@ export function LiveColumnsView() {
           <Plus className="icon-base" />
         </Button>
 
-        <div className="ml-auto">
-          <GridPicker
-            cols={gridCols}
-            rows={gridRows}
-            onChange={(c, r) => {
-              setGridCols(c);
-              setGridRows(r);
-              localStorage.setItem(GRID_COLS_KEY, String(c));
-              localStorage.setItem(GRID_ROWS_KEY, String(r));
-            }}
-          />
-        </div>
+        {/* Consolidated thread actions — act on the selected thread. Hidden
+            when nothing is selected (empty grid). */}
+        {gridSelectedThreadId && (
+          <div className="ml-auto flex items-center gap-2" data-testid="grid-thread-actions">
+            <ThreadProvider threadId={gridSelectedThreadId}>
+              <ThreadHeaderActions hideTimeline />
+            </ThreadProvider>
+            <div className="bg-border h-5 w-px" aria-hidden />
+            <GridPicker
+              cols={gridCols}
+              rows={gridRows}
+              onChange={(c, r) => {
+                setGridCols(c);
+                setGridRows(r);
+                localStorage.setItem(GRID_COLS_KEY, String(c));
+                localStorage.setItem(GRID_ROWS_KEY, String(r));
+              }}
+            />
+          </div>
+        )}
+        {!gridSelectedThreadId && (
+          <div className="ml-auto">
+            <GridPicker
+              cols={gridCols}
+              rows={gridRows}
+              onChange={(c, r) => {
+                setGridCols(c);
+                setGridRows(r);
+                localStorage.setItem(GRID_COLS_KEY, String(c));
+                localStorage.setItem(GRID_ROWS_KEY, String(r));
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div
@@ -384,15 +443,21 @@ export function LiveColumnsView() {
                         onOpenLightbox={openLightbox}
                       />
                     ) : (
-                      <EmptyGridCell
-                        cellIndex={cellIndex}
-                        onCreated={(newThreadId) => assignThreadToCell(cellIndex, newThreadId)}
-                        onLoadExisting={(existingId) => assignThreadToCell(cellIndex, existingId)}
-                        initialProjectId={pendingProjectByCell[cellIndex]}
-                        onConsumePreset={() => consumePreset(cellIndex)}
-                        onRequestPickProject={() => setPickerTarget({ kind: 'cell', cellIndex })}
-                        gridThreadIds={gridThreadIds}
-                      />
+                      // Isolate the compose cell from the app-level thread
+                      // context (which follows the grid-selected thread) — a new
+                      // thread must not inherit the selected thread's queue /
+                      // context. See `grid-thread-actions`.
+                      <ThreadProvider threadId={null}>
+                        <EmptyGridCell
+                          cellIndex={cellIndex}
+                          onCreated={(newThreadId) => assignThreadToCell(cellIndex, newThreadId)}
+                          onLoadExisting={(existingId) => assignThreadToCell(cellIndex, existingId)}
+                          initialProjectId={pendingProjectByCell[cellIndex]}
+                          onConsumePreset={() => consumePreset(cellIndex)}
+                          onRequestPickProject={() => setPickerTarget({ kind: 'cell', cellIndex })}
+                          gridThreadIds={gridThreadIds}
+                        />
+                      </ThreadProvider>
                     )}
                   </GridCellDropTarget>
                 );

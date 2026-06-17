@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getFileExtension } from '@/hooks/use-highlight';
+import { useRightPaneProjectId } from '@/hooks/use-right-pane-target';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { getVisualizerForFileExt } from '@/lib/visualizer-registry';
@@ -52,7 +53,7 @@ function saveCollapsed(basePath: string | undefined, set: Set<string>): void {
 export function ProjectFilesPane() {
   const { t } = useTranslation();
   const designViewDesignId = useUIStore((s) => s.designViewDesignId);
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedProjectId = useRightPaneProjectId();
   const projects = useProjectStore((s) => s.projects);
   const project = projects.find((p) => p.id === selectedProjectId);
   const activeThreadWorktreePath = useThreadWorktreePath();

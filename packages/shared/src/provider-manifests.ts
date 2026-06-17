@@ -110,7 +110,15 @@ export const opencodeModels = {
 
 // pi's first agent_message_chunk is prefixed with a banner; strip it in core.
 // Kept as a DATA string so the behavior is selectable, not hardcoded per call.
-const PI_BANNER_REGEX = '^pi v[\\d.]+\\s*\\n-{3,}\\s*\\n+(?:##[^\\n]*\\n(?:[-*][^\\n]*\\n)*\\n*)*';
+// Some pi-acp/pi-mcp-adapter versions append a small source/dependency bullet
+// tree (for example `- index.ts`, `- npm:pi-mcp-adapter`, `  - index.ts`)
+// before the real assistant text. Strip that too, but only when the block names
+// the pi MCP adapter so we do not accidentally remove a real bullet-list answer.
+const PI_BANNER_REGEX =
+  '^pi v[\\d.]+\\s*\\n-{3,}\\s*\\n+' +
+  '(?:##[^\\n]*\\n(?:[-*][^\\n]*\\n)*\\n*)*' +
+  '(?:(?=(?:(?:[-*]|\\s+[-*])[^\\n]*\\n){0,8}[-*]\\s+npm:pi-mcp-adapter(?:\\n|$))' +
+  '(?:[-*]\\s+(?:[^\\n]*\\.tsx?|npm:pi-mcp-adapter[^\\n]*)\\n|\\s+[-*]\\s+[^\\n]*\\.tsx?\\s*)+\\n*)?';
 
 // ─── Manifests ───────────────────────────────────────────────────────────────
 

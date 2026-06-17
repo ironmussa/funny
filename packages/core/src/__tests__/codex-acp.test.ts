@@ -302,4 +302,26 @@ describe('CodexACPProcess.applyModelSelection', () => {
     // No configOptions captured and a bare connection: must resolve, not throw.
     await expect(internal.applyModelSelection({})).resolves.toBeUndefined();
   });
+
+  test('surfaces a one-time visible notice when the requested model cannot be applied', async () => {
+    const { proc, messages } = makeProcess();
+    const internal = proc as unknown as Internal;
+    internal.activeSessionId = 'sess-1';
+
+    // Bare connection (no model-selection method) — falls back to provider default.
+    await internal.applyModelSelection({});
+    // A second fallback (e.g. on resume) must NOT re-notify the user.
+    await internal.applyModelSelection({});
+
+    const notices = messages.filter(
+      (m) =>
+        m.type === 'assistant' &&
+        m.message.content[0]?.type === 'text' &&
+        (m.message.content[0] as { text: string }).text.includes('could not be applied'),
+    );
+    expect(notices).toHaveLength(1);
+    expect(
+      (notices[0] as { message: { content: Array<{ text: string }> } }).message.content[0].text,
+    ).toContain('gpt-5.4');
+  });
 });

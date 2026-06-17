@@ -69,6 +69,8 @@ export class GenericACPProcess extends BaseAgentProcess {
    * be applied via `setSessionConfigOption`.
    */
   private modelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
+  /** True once a model-selection fallback has been surfaced to the user this process. */
+  private modelFallbackNotified = false;
 
   // ── Per-turn state (reset on each runOnePrompt) ──────────────────
   private assistantMsgId: string = randomUUID();
@@ -77,6 +79,13 @@ export class GenericACPProcess extends BaseAgentProcess {
   private lastAssistantText = '';
   /** Buffer for `agent_thought_chunk` text — collapsed into a single Think tool call. */
   private pendingThought: { id: string; text: string } | null = null;
+  /**
+   * Count of `message` events emitted during the current turn. Drives the
+   * empty-turn guard: an ACP `end_turn` that produced zero messages (no text,
+   * no tool calls, no thought) is surfaced as a visible notice instead of a
+   * silent "success" the user reads as the agent not responding.
+   */
+  private turnEmitCount = 0;
   /**
    * Tool calls whose initial event lacked the field its card needs to render.
    * Buffered until an update carries the missing field, or dropped at terminal
@@ -93,13 +102,24 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.dlog = createDebugLogger(`acp-${manifest.id}`);
   }
 
+  /**
+   * Emit a CLI `message` and count it toward the current turn's empty-turn
+   * guard. ALL visible output (assistant text, tool calls, thoughts, permission
+   * cards) must go through here so {@link runOnePrompt} can tell a genuinely
+   * empty turn from one that produced something.
+   */
+  private emitMessage(msg: CLIMessage): void {
+    this.turnEmitCount++;
+    this.emit('message', msg);
+  }
+
   private flushPendingThought(): void {
     if (!this.pendingThought) return;
     const { id, text } = this.pendingThought;
     this.pendingThought = null;
     if (!text.trim()) return;
 
-    this.emit('message', {
+    this.emitMessage({
       type: 'assistant',
       message: {
         id: randomUUID(),
@@ -107,7 +127,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       },
     } as CLIMessage);
 
-    this.emit('message', {
+    this.emitMessage({
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: id, content: text }],
@@ -368,6 +388,36 @@ export class GenericACPProcess extends BaseAgentProcess {
   }
 
   /**
+   * Record a model-selection fallback: keep the existing debug warn (for log
+   * greppability) AND surface it to the user once per process as a visible
+   * notice. Without the visible half, asking for model X and silently getting
+   * the provider default is indistinguishable from the model being honored.
+   */
+  private notifyModelFallback(
+    requestedModel: string,
+    logMessage: string,
+    detail: Record<string, unknown> = {},
+  ): void {
+    this.dlog.warn(logMessage, { modelId: requestedModel, ...detail });
+    if (this.modelFallbackNotified) return;
+    this.modelFallbackNotified = true;
+    this.emitMessage({
+      type: 'assistant',
+      message: {
+        id: randomUUID(),
+        content: [
+          {
+            type: 'text',
+            text:
+              `Requested model \`${requestedModel}\` could not be applied to ${this.manifest.label} ` +
+              `via ACP — running on the provider's configured default model instead.`,
+          },
+        ],
+      },
+    } as CLIMessage);
+  }
+
+  /**
    * Select the requested model after session setup, per the manifest's
    * `setModel` strategy. Skips the sentinel `default` (= the provider's
    * configured default). For `modelVia: 'cli-arg'` (gemini) the model is
@@ -397,10 +447,11 @@ export class GenericACPProcess extends BaseAgentProcess {
       if (typeof conn.setSessionConfigOption === 'function' && this.modelConfigOption) {
         const { configId, valueIds } = this.modelConfigOption;
         if (valueIds.size > 0 && !valueIds.has(requestedModel)) {
-          this.dlog.warn('requested model not offered by agent — using provider default', {
-            modelId: requestedModel,
-            available: [...valueIds],
-          });
+          this.notifyModelFallback(
+            requestedModel,
+            'requested model not offered by agent — using provider default',
+            { available: [...valueIds] },
+          );
           return;
         }
         await conn.setSessionConfigOption({
@@ -429,14 +480,18 @@ export class GenericACPProcess extends BaseAgentProcess {
         return;
       }
 
-      this.dlog.warn('no model-selection method on ACP connection — using provider default', {
-        modelId: requestedModel,
-      });
+      this.notifyModelFallback(
+        requestedModel,
+        'no model-selection method on ACP connection — using provider default',
+      );
     } catch (e) {
-      this.dlog.warn('set-model failed — falling back to provider default', {
-        modelId: requestedModel,
-        error: (e as Error)?.message,
-      });
+      this.notifyModelFallback(
+        requestedModel,
+        'set-model failed — falling back to provider default',
+        {
+          error: (e as Error)?.message,
+        },
+      );
     }
   }
 
@@ -505,6 +560,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.deferredToolInputs.clear();
     this.lastAssistantText = '';
     this.pendingThought = null;
+    this.turnEmitCount = 0;
 
     const startTime = Date.now();
 
@@ -543,6 +599,27 @@ export class GenericACPProcess extends BaseAgentProcess {
 
       this.flushPendingThought();
       this.flushDeferredToolInputs();
+
+      // Empty-turn guard: a turn that the agent reports as completed but which
+      // produced no visible output at all (no assistant text, no tool calls, no
+      // thought) reads to the user as the agent silently not responding. Surface
+      // it as a visible notice instead of an empty "success".
+      if (this.turnEmitCount === 0 && !this.isAborted) {
+        const notice =
+          `${this.manifest.label} ended the turn without producing any output ` +
+          `(stopReason: ${promptResponse.stopReason ?? 'unknown'}) — no text, tool calls, ` +
+          `or reasoning. This usually means the model was not applied or the backend ` +
+          `returned nothing.`;
+        this.dlog.warn('empty turn — agent produced no output', {
+          stopReason: promptResponse.stopReason,
+          modelId: this.options.model,
+        });
+        this.emitMessage({
+          type: 'assistant',
+          message: { id: randomUUID(), content: [{ type: 'text', text: notice }] },
+        } as CLIMessage);
+        this.lastAssistantText = notice;
+      }
 
       this.emitResult({
         sessionId: this.activeSessionId,
@@ -644,7 +721,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       `${this.manifest.label} requested permissions to use ${toolName} but the user hasn't been granted approval. ` +
       `Waiting for user approval.`;
 
-    this.emit('message', {
+    this.emitMessage({
       type: 'assistant',
       message: {
         id: randomUUID(),
@@ -652,7 +729,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       },
     } as CLIMessage);
 
-    this.emit('message', {
+    this.emitMessage({
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: toolUseId, content: denialText }],
@@ -687,7 +764,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   private emitToolUse(toolCallId: string, toolName: string, input: Record<string, unknown>): void {
     this.deferredToolInputs.delete(toolCallId);
     this.toolCallsSeen.set(toolCallId, toolName);
-    this.emit('message', {
+    this.emitMessage({
       type: 'assistant',
       message: {
         id: randomUUID(),
@@ -700,7 +777,7 @@ export class GenericACPProcess extends BaseAgentProcess {
 
   private emitToolResult(toolCallId: string, content: string): void {
     this.toolCallsSeen.set(toolCallId, 'done');
-    this.emit('message', {
+    this.emitMessage({
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: toolCallId, content }],
@@ -753,7 +830,7 @@ export class GenericACPProcess extends BaseAgentProcess {
             ? stripBanner(this.accumulatedText, bannerSrc)
             : this.accumulatedText;
           if (visible) {
-            this.emit('message', {
+            this.emitMessage({
               type: 'assistant',
               message: {
                 id: this.assistantMsgId,
@@ -912,14 +989,14 @@ export class GenericACPProcess extends BaseAgentProcess {
             // own card with a fresh id — matching how the Claude SDK surfaces
             // successive TodoWrite calls.
             const toolCallId = randomUUID();
-            this.emit('message', {
+            this.emitMessage({
               type: 'assistant',
               message: {
                 id: randomUUID(),
                 content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
               },
             } as CLIMessage);
-            this.emit('message', {
+            this.emitMessage({
               type: 'user',
               message: {
                 content: [
@@ -950,7 +1027,7 @@ export class GenericACPProcess extends BaseAgentProcess {
             for (const [tcId, tcState] of this.toolCallsSeen) {
               if (tcState === 'Task') {
                 this.toolCallsSeen.set(tcId, 'done');
-                this.emit('message', {
+                this.emitMessage({
                   type: 'user',
                   message: {
                     content: [{ type: 'tool_result', tool_use_id: tcId, content: planText }],
@@ -959,7 +1036,7 @@ export class GenericACPProcess extends BaseAgentProcess {
               }
             }
 
-            this.emit('message', {
+            this.emitMessage({
               type: 'assistant',
               message: {
                 id: this.assistantMsgId,

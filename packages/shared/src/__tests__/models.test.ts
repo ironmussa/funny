@@ -178,8 +178,8 @@ describe('getDefaultModel', () => {
     expect(getDefaultModel('claude')).toBe('opus-4.8');
   });
 
-  test('returns gpt-5.4 for codex', () => {
-    expect(getDefaultModel('codex')).toBe('gpt-5.4');
+  test('returns gpt-5.5 for codex', () => {
+    expect(getDefaultModel('codex')).toBe('gpt-5.5');
   });
 
   test('returns gemini-3.1-pro-preview for gemini', () => {
@@ -212,11 +212,12 @@ describe('getProviderModels', () => {
 
   test('returns all codex models', () => {
     const models = getProviderModels('codex');
+    expect(models).toContain('gpt-5.5');
     expect(models).toContain('gpt-5.4');
     expect(models).toContain('gpt-5.4-mini');
     expect(models).toContain('gpt-5.3-codex');
     expect(models).toContain('gpt-5.2');
-    expect(models).toHaveLength(4);
+    expect(models).toHaveLength(5);
   });
 
   test('returns all gemini models', () => {

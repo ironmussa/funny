@@ -21,6 +21,7 @@ const MB = 1024 * 1024;
 // ─── ACP model catalogs (owned here; re-exported by models.ts) ───────────────
 
 export const codexModels = {
+  'gpt-5.5': { id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 400_000, i18nKey: 'gpt55' },
   'gpt-5.4': { id: 'gpt-5.4', label: 'GPT-5.4', contextWindow: 400_000, i18nKey: 'gpt54' },
   'gpt-5.4-mini': {
     id: 'gpt-5.4-mini',
@@ -123,7 +124,7 @@ export const codexManifest: ProviderManifest = {
     binEnvVars: ['CODEX_ACP_BINARY_PATH', 'ACP_CODEX_BIN', 'CODEX_BIN'],
     npxSpec: { useEnvVar: 'CODEX_ACP_USE_NPX', pkg: ['-y', '@zed-industries/codex-acp'] },
   },
-  models: { kind: 'static', entries: codexModels, defaultModel: 'gpt-5.4' },
+  models: { kind: 'static', entries: codexModels, defaultModel: 'gpt-5.5' },
   setModel: { method: 'unstable_setSessionModel' },
   modelVia: 'acp-method',
   modeVia: 'acp-setSessionMode',

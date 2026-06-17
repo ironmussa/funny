@@ -13,7 +13,7 @@
     "@funny/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.37",
-    "esbuild": "^0.24.0"
+    "@types/chrome": "^0.1.43",
+    "esbuild": "^0.28.1"
   }
 }

@@ -10,7 +10,8 @@
     "declarationMap": false,
     "outDir": "./dist",
     "rootDir": "./src",
-    "baseUrl": ".",
+    // No baseUrl — deprecated in TS6 / removed in TS7. `paths` resolve
+    // relative to this tsconfig's directory, so "@/*" still maps to ./src/*.
     "paths": {
       "@/*": ["./src/*"]
     }

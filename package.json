@@ -71,39 +71,39 @@
     "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^0.25.0",
-    "@anthropic-ai/claude-agent-sdk": "^0.3.170",
-    "@langchain/google-genai": "^2.1.26",
-    "@langchain/openai": "^1.3.0",
-    "deepagents-acp": "^0.1.3",
-    "hono": "^4.12.9",
-    "undici": "^8.4.0"
+    "@agentclientprotocol/sdk": "^0.26.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.179",
+    "@langchain/google-genai": "^2.1.31",
+    "@langchain/openai": "^1.4.7",
+    "deepagents-acp": "^0.1.12",
+    "hono": "^4.12.25",
+    "undici": "^8.5.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.61.0",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/cli": "^2.10.0",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/cli": "^2.11.2",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "husky": "^9.1.7",
     "neverthrow": "^8.2.0",
-    "oxfmt": "^0.53.0",
-    "oxlint": "^1.50.0",
+    "oxfmt": "^0.55.0",
+    "oxlint": "^1.70.0",
     "secretlint": "^13.0.2",
     "tailwindcss-animate": "^1.0.7",
     "vitepress": "^1.6.4"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0",
-    "playwright": "^1.50.0"
+    "playwright": "^1.61.0"
   },
   "resolutions": {
-    "dompurify": "^3.4.6",
-    "esbuild": ">=0.24.3",
+    "dompurify": "^3.4.10",
+    "esbuild": ">=0.28.1",
     "uuid": "^11.1.1",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.9"
   },
   "engines": {
     "bun": ">=1.3.5"

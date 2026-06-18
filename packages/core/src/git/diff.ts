@@ -3,7 +3,7 @@
  */
 
 import { existsSync, statSync, openSync, readSync, closeSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 
 import type {
   FileDiff,
@@ -604,6 +604,71 @@ export function getIgnoredFileStats(
         }),
       );
       return stats;
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
+ * Backfill +/- stats for files edited by ABSOLUTE path that live OUTSIDE the
+ * thread's cwd — e.g. a sibling git repo the agent touched directly. Such files
+ * never appear in the thread repo's working-tree diff, so they reach the
+ * changed-files summary stat-less. Here we group them by their enclosing git
+ * repo (`rev-parse --show-toplevel`), diff each external repo once, and match
+ * the requested absolute paths back to their stats.
+ *
+ * Files under `excludeRoot` (the thread's own repo/worktree) are skipped — those
+ * belong to the in-repo diff, not here.
+ *
+ * @param absPaths absolute filesystem paths to resolve
+ * @param excludeRoot the thread's cwd/worktree; files under it are ignored
+ * @returns map of absolute path → { additions, deletions } for resolved files
+ */
+export function getExternalRepoFileStats(
+  absPaths: string[],
+  excludeRoot: string,
+): ResultAsync<Map<string, { additions: number; deletions: number }>, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const out = new Map<string, { additions: number; deletions: number }>();
+      const external = absPaths.filter(
+        (p) =>
+          isAbsolute(p) && p !== excludeRoot && (!excludeRoot || !p.startsWith(`${excludeRoot}/`)),
+      );
+      if (external.length === 0) return out;
+
+      // Group the requested files by their enclosing git repo toplevel.
+      const byRepo = new Map<string, string[]>();
+      await Promise.all(
+        external.map(async (abs) => {
+          const dir = dirname(abs);
+          if (!existsSync(dir)) return;
+          const r = await gitRead(['rev-parse', '--show-toplevel'], { cwd: dir, reject: false });
+          if (r.exitCode !== 0) return;
+          const top = r.stdout.trim();
+          if (!top) return;
+          const list = byRepo.get(top) ?? [];
+          list.push(abs);
+          byRepo.set(top, list);
+        }),
+      );
+
+      // Diff each external repo once; match our absolute paths to its rows.
+      await Promise.all(
+        [...byRepo.entries()].map(async ([top, files]) => {
+          const summary = await getDiffSummary(top);
+          if (summary.isErr()) return;
+          for (const abs of files) {
+            const hit = summary.value.files.find(
+              (f) => abs === join(top, f.path) || abs.endsWith(`/${f.path}`),
+            );
+            if (hit && (hit.additions != null || hit.deletions != null)) {
+              out.set(abs, { additions: hit.additions ?? 0, deletions: hit.deletions ?? 0 });
+            }
+          }
+        }),
+      );
+      return out;
     })(),
     (error) => processError(String(error), 1, ''),
   );

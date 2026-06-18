@@ -153,7 +153,9 @@ export function ChangedFilesSummary({
           <div
             key={f.path}
             data-testid={`changed-files-row-${f.path}`}
-            className="flex items-center gap-2"
+            // min-h keeps every row the same height even when DiffStats renders
+            // nothing (stat-less files), so the list doesn't get uneven spacing.
+            className="flex min-h-6 items-center gap-2"
           >
             <button
               type="button"

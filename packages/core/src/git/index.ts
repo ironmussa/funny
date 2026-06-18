@@ -70,6 +70,7 @@ export {
   getDiff,
   getDiffSummary,
   getIgnoredFileStats,
+  getExternalRepoFileStats,
   getSingleFileDiff,
   getFullContextFileDiff,
 } from './diff.js';

@@ -53,13 +53,8 @@ jobs:
       # `npm audit` / `audit-ci` cannot read it (they build a phantom tree from
       # a non-existent package-lock.json and report false positives). `bun audit`
       # audits exactly what bun installs, so it is the correct gate here.
-      #
-      # --ignore GHSA-4w7w-66w2-5vf9: vite <=6.4.1 dev-server path traversal,
-      # only reachable transitively via vitepress (docs build) which pins
-      # vite ^5 — no patched 5.x release exists. Dev/docs-build only; never
-      # shipped in the app runtime. Revisit when vitepress moves off vite 5.
       - name: Audit dependencies (bun audit)
-        run: bun audit --audit-level=moderate --ignore GHSA-4w7w-66w2-5vf9
+        run: bun audit --audit-level=moderate
         continue-on-error: false # Fail the build on moderate+ vulnerabilities
 
       # Non-gating JSON report for the uploaded artifact (never fails the build).

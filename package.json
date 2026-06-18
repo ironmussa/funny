@@ -53,7 +53,7 @@
     "prepare": "husky",
     "security:check": "npm run security:secrets && npm run security:audit",
     "security:secrets": "npx secretlint \"**/*\"",
-    "security:audit": "bun audit --audit-level=moderate --ignore GHSA-4w7w-66w2-5vf9",
+    "security:audit": "bun audit --audit-level=moderate",
     "security:snyk": "npx snyk test --all-projects",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
@@ -93,7 +93,7 @@
     "oxlint": "^1.70.0",
     "secretlint": "^13.0.2",
     "tailwindcss-animate": "^1.0.7",
-    "vitepress": "^1.6.4"
+    "vitepress": "^2.0.0-alpha.17"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0",

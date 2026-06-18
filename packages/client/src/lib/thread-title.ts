@@ -47,3 +47,21 @@ export function cleanThreadTitle(title: string): {
   }
   return { displayTitle: title, attachedFiles: files };
 }
+
+/**
+ * Detect a leading `/slash-command` at the very start of a (already cleaned)
+ * thread title. Returns the command name (without the leading slash) and the
+ * remaining title text, so list/card surfaces can render the command as a chip
+ * to match how it appears in the main thread's user message.
+ *
+ * Mirrors the slash-command grammar used by the prompt editor / UserMessageCard
+ * (word chars, colons, dots, hyphens — e.g. `/skill-creator:skill-creator`).
+ */
+export function parseLeadingSlashCommand(title: string): {
+  command: string | null;
+  rest: string;
+} {
+  const match = /^\/([\w:.-]+)(?=\s|$)/.exec(title);
+  if (!match) return { command: null, rest: title };
+  return { command: match[1], rest: title.slice(match[0].length).trimStart() };
+}

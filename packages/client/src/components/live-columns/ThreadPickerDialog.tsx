@@ -63,7 +63,9 @@ export function ThreadPickerDialog({
                 onSelect={() => commit(thread.id)}
               >
                 <Icon className={cn('size-3.5 shrink-0', className)} />
-                <span className="truncate">{thread.title || t('common.untitled', 'Untitled')}</span>
+                <span className="truncate first-letter:uppercase">
+                  {thread.title || t('common.untitled', 'Untitled')}
+                </span>
                 {inGrid && (
                   <span className="text-muted-foreground ml-auto shrink-0 text-[10px]">
                     {t('live.inGrid', 'in grid')}

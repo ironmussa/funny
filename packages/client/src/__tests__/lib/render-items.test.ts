@@ -1,6 +1,12 @@
 import { describe, test, expect } from 'vitest';
 
-import { getItemTimestamp, getItemKey, buildGroupedRenderItems } from '@/lib/render-items';
+import {
+  buildGroupedRenderItems,
+  buildRenderItemIdIndexMap,
+  findNearestPrecedingUserMessageItem,
+  getItemKey,
+  getItemTimestamp,
+} from '@/lib/render-items';
 import type { RenderItem } from '@/lib/render-items';
 
 // --- Helpers ---
@@ -442,5 +448,73 @@ describe('buildGroupedRenderItems', () => {
     }
     expect(exitPlanTc).toBeDefined();
     expect(exitPlanTc._planText).toBe('# Plan from MD');
+  });
+});
+
+describe('buildRenderItemIdIndexMap', () => {
+  test('maps messages, tool calls, grouped calls, runs, and events to grouped indexes', () => {
+    const items: RenderItem[] = [
+      { type: 'message', msg: { id: 'm1', role: 'user' } },
+      { type: 'toolcall', tc: { id: 'tc1' } },
+      {
+        type: 'toolcall-group',
+        name: 'Read',
+        calls: [{ id: 'tc2' }, { id: 'tc3' }],
+      },
+      {
+        type: 'toolcall-run',
+        items: [
+          { type: 'toolcall', tc: { id: 'tc4' } },
+          {
+            type: 'toolcall-group',
+            name: 'Grep',
+            calls: [{ id: 'tc5' }, { id: 'tc6' }],
+          },
+        ],
+      },
+      {
+        type: 'thread-event',
+        event: { id: 'evt1', threadId: 't1', type: 'git:commit', data: '{}', createdAt: '' },
+      },
+      {
+        type: 'workflow-event-group',
+        events: [
+          { id: 'wf1', threadId: 't1', type: 'git:stage', data: '{}', createdAt: '' } as any,
+          { id: 'wf2', threadId: 't1', type: 'git:commit', data: '{}', createdAt: '' } as any,
+        ],
+      },
+    ];
+
+    const map = buildRenderItemIdIndexMap(items);
+
+    expect(Object.fromEntries(map)).toEqual({
+      m1: 0,
+      tc1: 1,
+      tc2: 2,
+      tc3: 2,
+      tc4: 3,
+      tc5: 3,
+      tc6: 3,
+      evt1: 4,
+      wf1: 5,
+      wf2: 5,
+    });
+    expect(map.get('missing')).toBeUndefined();
+  });
+});
+
+describe('findNearestPrecedingUserMessageItem', () => {
+  test('returns the nearest user message before the requested index', () => {
+    const items: RenderItem[] = [
+      { type: 'message', msg: { id: 'u1', role: 'user' } },
+      { type: 'message', msg: { id: 'a1', role: 'assistant' } },
+      { type: 'toolcall', tc: { id: 'tc1' } },
+      { type: 'message', msg: { id: 'u2', role: 'user' } },
+      { type: 'message', msg: { id: 'a2', role: 'assistant' } },
+    ];
+
+    expect(findNearestPrecedingUserMessageItem(items, 3)?.msg.id).toBe('u1');
+    expect(findNearestPrecedingUserMessageItem(items, 5)?.msg.id).toBe('u2');
+    expect(findNearestPrecedingUserMessageItem(items, 0)).toBeNull();
   });
 });

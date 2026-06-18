@@ -3,8 +3,8 @@ import { Hono } from 'hono';
 import { log } from '../../lib/logger.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import {
-  getCommandMetrics,
-  isCommandRunning,
+  getCommandMetricsForProject,
+  isCommandRunningForProject,
   startCommand,
   stopCommand,
 } from '../../services/command-runner.js';
@@ -104,7 +104,7 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  const cmd = await getServices().startupCommands.getCommand(cmdId);
+  const cmd = await getServices().startupCommands.getCommand(cmdId, projectId);
   if (!cmd) return c.json({ error: 'Command not found' }, 404);
 
   let options: import('../../services/command-runner.js').RestartOptions | undefined;
@@ -154,22 +154,58 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
 });
 
 // POST /api/projects/:id/commands/:cmdId/stop
-projectCommandsRoutes.post('/:id/commands/:cmdId/stop', async (c) => {
+projectCommandsRoutes.post('/:id/commands/:cmdId/stop', requireAdmin, async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
+
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const cmd = await getServices().startupCommands.getCommand(cmdId, projectId);
+  if (!cmd) return c.json({ error: 'Command not found' }, 404);
+
   await stopCommand(cmdId);
   return c.json({ ok: true });
 });
 
 // GET /api/projects/:id/commands/:cmdId/status
-projectCommandsRoutes.get('/:id/commands/:cmdId/status', (c) => {
+projectCommandsRoutes.get('/:id/commands/:cmdId/status', async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
-  return c.json({ running: isCommandRunning(cmdId) });
+
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const cmd = await getServices().startupCommands.getCommand(cmdId, projectId);
+  if (!cmd) return c.json({ error: 'Command not found' }, 404);
+
+  return c.json({ running: isCommandRunningForProject(cmdId, projectId) });
 });
 
 // GET /api/projects/:id/commands/:cmdId/metrics
-projectCommandsRoutes.get('/:id/commands/:cmdId/metrics', (c) => {
+projectCommandsRoutes.get('/:id/commands/:cmdId/metrics', async (c) => {
+  const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
-  const metrics = getCommandMetrics(cmdId);
+
+  const projectResult = await requireProject(
+    projectId,
+    c.get('userId'),
+    c.get('organizationId') ?? undefined,
+  );
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const cmd = await getServices().startupCommands.getCommand(cmdId, projectId);
+  if (!cmd) return c.json({ error: 'Command not found' }, 404);
+
+  const metrics = getCommandMetricsForProject(cmdId, projectId);
   if (!metrics) return c.json({ error: 'Command not running' }, 404);
   return c.json(metrics);
 });

@@ -71,6 +71,11 @@ export async function deleteCommand(cmdId: string, projectId: string) {
   );
 }
 
-export async function getCommand(cmdId: string) {
-  return dbGet(db.select().from(startupCommands).where(eq(startupCommands.id, cmdId)));
+export async function getCommand(cmdId: string, projectId: string) {
+  return dbGet(
+    db
+      .select()
+      .from(startupCommands)
+      .where(and(eq(startupCommands.id, cmdId), eq(startupCommands.projectId, projectId))),
+  );
 }

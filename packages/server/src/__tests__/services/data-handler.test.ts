@@ -46,6 +46,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       'runners',
       'user_profiles',
       'project_members',
+      'startup_commands',
       'projects',
     ];
     for (const table of tables) {
@@ -183,6 +184,54 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(res.type).toBe('data:get_agent_template_response');
     expect(res.template?.id).toBe('tpl-custom');
     expect(res.template?.name).toBe('My Agent');
+  });
+
+  test('get_startup_command returns command scoped to project', async () => {
+    const now = new Date().toISOString();
+    db.insert(schema.startupCommands)
+      .values({
+        id: 'cmd-dev',
+        projectId: 'p1',
+        label: 'Dev',
+        command: 'bun dev',
+        sortOrder: 0,
+        createdAt: now,
+      })
+      .run();
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_startup_command',
+      projectId: 'p1',
+      cmdId: 'cmd-dev',
+    });
+
+    expect(res.type).toBe('data:get_startup_command_response');
+    expect(res.command?.id).toBe('cmd-dev');
+    expect(res.command?.projectId).toBe('p1');
+  });
+
+  test('get_startup_command does not return command from another project', async () => {
+    const now = new Date().toISOString();
+    seedProject(db as any, { id: 'p2', userId: 'user-1', path: '/tmp/repo-2' });
+    db.insert(schema.startupCommands)
+      .values({
+        id: 'cmd-dev',
+        projectId: 'p2',
+        label: 'Dev',
+        command: 'bun dev',
+        sortOrder: 0,
+        createdAt: now,
+      })
+      .run();
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_startup_command',
+      projectId: 'p1',
+      cmdId: 'cmd-dev',
+    });
+
+    expect(res.type).toBe('data:get_startup_command_response');
+    expect(res.command).toBeNull();
   });
 
   test('mark_and_list_stale_threads marks running threads interrupted', async () => {

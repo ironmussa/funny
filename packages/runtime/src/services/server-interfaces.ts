@@ -327,7 +327,7 @@ export interface IStartupCommandsService {
     data: { label: string; command: string; port?: number; portEnvVar?: string },
   ): Promise<void>;
   deleteCommand(cmdId: string, projectId: string): Promise<void>;
-  getCommand(cmdId: string): Promise<any | undefined>;
+  getCommand(cmdId: string, projectId: string): Promise<any | undefined>;
 }
 
 // ── Thread event service ────────────────────────────────────────

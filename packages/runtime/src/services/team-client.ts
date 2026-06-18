@@ -1421,6 +1421,12 @@ export function invalidateProjectCache(projectId: string): void {
   projectCache.delete(projectId);
 }
 
+/** Get a startup command from the server, scoped to its parent project. */
+export async function remoteGetStartupCommand(cmdId: string, projectId: string): Promise<any> {
+  const response = await sendDataMessage('data:get_startup_command', { cmdId, projectId });
+  return response?.command ?? null;
+}
+
 /** List projects for a user on the server */
 export async function remoteListProjects(userId: string): Promise<any[]> {
   const result = await sendDataMessage('data:list_projects', { userId });

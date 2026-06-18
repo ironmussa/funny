@@ -2,6 +2,7 @@ import type { StartupCommand } from '@funny/shared';
 import { GitBranch, Loader2, Play, Rocket, Square } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,6 +26,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
   const { t } = useTranslation();
   const [commands, setCommands] = useState<StartupCommand[]>([]);
   const [open, setOpen] = useState(false);
+  const [pendingCommandId, setPendingCommandId] = useState<string | null>(null);
   const { tooltipProps, menuProps, contentProps } = useTooltipMenu();
 
   const tabs = useTerminalStore((s) => s.tabs);
@@ -43,6 +45,15 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
   }, [open, loadCommands]);
 
   const handleRun = async (cmd: StartupCommand) => {
+    if (pendingCommandId) return;
+    setPendingCommandId(cmd.id);
+    const result = await api.runCommand(projectId, cmd.id, threadId);
+    setPendingCommandId(null);
+    if (result.isErr()) {
+      toast.error(t('startup.commandRunError', 'Failed to start command'));
+      return;
+    }
+
     const store = useTerminalStore.getState();
     store.addTab({
       id: crypto.randomUUID(),
@@ -52,11 +63,13 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
       commandId: cmd.id,
       projectId,
     });
-    await api.runCommand(projectId, cmd.id, threadId);
   };
 
   const handleStop = async (cmd: StartupCommand) => {
-    await api.stopCommand(projectId, cmd.id);
+    const result = await api.stopCommand(projectId, cmd.id);
+    if (result.isErr()) {
+      toast.error(t('startup.commandStopError', 'Failed to stop command'));
+    }
   };
 
   const anyRunning = commands.some((cmd) => runningIds.has(cmd.id));
@@ -110,6 +123,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
           <div className="space-y-1">
             {commands.map((cmd) => {
               const isRunning = runningIds.has(cmd.id);
+              const isPending = pendingCommandId === cmd.id;
               return (
                 <div
                   key={cmd.id}
@@ -140,9 +154,14 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleRun(cmd)}
+                      disabled={!!pendingCommandId}
                       className="text-status-success hover:text-status-success/80 shrink-0"
                     >
-                      <Play className="icon-xs" />
+                      {isPending ? (
+                        <Loader2 className="icon-xs animate-spin" />
+                      ) : (
+                        <Play className="icon-xs" />
+                      )}
                     </Button>
                   )}
                 </div>

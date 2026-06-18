@@ -349,6 +349,71 @@ function getFileName(filePath: string): string {
 const FILE_SEARCH_LIMIT = 100;
 const FILE_BROWSE_MAX_LIMIT = 20000;
 
+export type BrowseItem = { path: string; type: 'file' | 'folder' };
+
+/** Score a candidate name/path against a lowercased query, or -1 for no match. */
+function scoreCandidate(name: string, fullPath: string, lowerQuery: string): number {
+  if (name.startsWith(lowerQuery)) return 0; // name starts with query — best match
+  if (name.includes(lowerQuery)) return 1; // exact substring in name
+  if (fuzzyMatch(name, lowerQuery)) return 2; // fuzzy match in name
+  if (fullPath.includes(lowerQuery)) return 3; // match somewhere in the path
+  if (fuzzyMatch(fullPath, lowerQuery)) return 4; // fuzzy match in full path
+  return -1;
+}
+
+/**
+ * Scored search over a flat file list. Folders are derived from the file paths
+ * and matched too, so a query like `@somedir` surfaces the directory itself as
+ * a selectable item — not only the files inside it. Folders are biased slightly
+ * ahead of equally-scored files so the directory the user typed isn't buried
+ * under its own children.
+ */
+export function searchFilesAndFolders(
+  allFiles: string[],
+  query: string,
+  limit = FILE_SEARCH_LIMIT,
+): { files: BrowseItem[]; truncated: boolean } {
+  const lowerQuery = query.toLowerCase();
+  const scored: Array<{ item: BrowseItem; score: number }> = [];
+
+  // Derive every ancestor directory from the file list (resolveGitFiles only
+  // returns files), so folders become selectable.
+  const dirSet = new Set<string>();
+  for (const filePath of allFiles) {
+    let slash = filePath.indexOf('/');
+    while (slash !== -1) {
+      dirSet.add(filePath.slice(0, slash));
+      slash = filePath.indexOf('/', slash + 1);
+    }
+  }
+
+  for (const dirEntry of dirSet) {
+    const score = scoreCandidate(
+      getFileName(dirEntry).toLowerCase(),
+      dirEntry.toLowerCase(),
+      lowerQuery,
+    );
+    if (score >= 0) {
+      scored.push({ item: { path: dirEntry, type: 'folder' }, score: score - 0.5 });
+    }
+  }
+
+  for (const filePath of allFiles) {
+    const score = scoreCandidate(
+      getFileName(filePath).toLowerCase(),
+      filePath.toLowerCase(),
+      lowerQuery,
+    );
+    if (score >= 0) {
+      scored.push({ item: { path: filePath, type: 'file' }, score });
+    }
+  }
+
+  scored.sort((a, b) => a.score - b.score);
+  const truncated = scored.length > limit;
+  return { files: scored.slice(0, limit).map((s) => s.item), truncated };
+}
+
 /**
  * Return the full file index for a project. Used by the client-side fuzzy
  * search (Ctrl+P) — clients fetch once, then score locally on every keystroke.
@@ -451,8 +516,6 @@ app.get('/files', async (c) => {
       return c.json({ files: [], truncated: false });
     }
 
-    type BrowseItem = { path: string; type: 'file' | 'folder' };
-
     if (!query) {
       // No query — return first N files (no folders needed for search dialog)
       const files: BrowseItem[] = allFiles.slice(0, requestedLimit).map((f) => ({
@@ -462,37 +525,7 @@ app.get('/files', async (c) => {
       return c.json({ files, truncated: allFiles.length > requestedLimit });
     }
 
-    // Server-side scored search
-    const lowerQuery = query.toLowerCase();
-    const scored: Array<{ item: BrowseItem; score: number }> = [];
-
-    for (const filePath of allFiles) {
-      const fileName = getFileName(filePath).toLowerCase();
-      const lowerPath = filePath.toLowerCase();
-
-      let score = -1;
-      if (fileName.startsWith(lowerQuery)) {
-        score = 0; // Filename starts with query — best match
-      } else if (fileName.includes(lowerQuery)) {
-        score = 1; // Exact substring in filename
-      } else if (fuzzyMatch(fileName, lowerQuery)) {
-        score = 2; // Fuzzy match in filename
-      } else if (lowerPath.includes(lowerQuery)) {
-        score = 3; // Match in directory path
-      } else if (fuzzyMatch(lowerPath, lowerQuery)) {
-        score = 4; // Fuzzy match in full path
-      }
-
-      if (score >= 0) {
-        scored.push({ item: { path: filePath, type: 'file' as const }, score });
-      }
-    }
-
-    scored.sort((a, b) => a.score - b.score);
-    const truncated = scored.length > FILE_SEARCH_LIMIT;
-    const files = scored.slice(0, FILE_SEARCH_LIMIT).map((s) => s.item);
-
-    return c.json({ files, truncated });
+    return c.json(searchFilesAndFolders(allFiles, query));
   } catch {
     return c.json({ files: [], truncated: false, error: 'Failed to search files' });
   }

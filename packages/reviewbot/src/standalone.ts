@@ -18,7 +18,7 @@
  *   REVIEWBOT_REPOS         — Repo mappings: owner/repo:/path,owner/repo2:/path2
  */
 
-import { timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 import { FunnyClient } from '@funny/sdk';
 import { Hono } from 'hono';
@@ -36,6 +36,22 @@ const ingestSecret = process.env.INGEST_WEBHOOK_SECRET ?? '';
 const funnyClient = new FunnyClient({ baseUrl: funnyBaseUrl, secret: ingestSecret });
 const acpBaseUrl = process.env.ACP_BASE_URL;
 const model = process.env.REVIEWBOT_MODEL;
+const MAX_WEBHOOK_BYTES = 1024 * 1024;
+
+export function verifyGitHubSignature(
+  rawBody: string | Uint8Array,
+  signature: string | undefined,
+  secret: string,
+) {
+  const prefix = 'sha256=';
+  if (!signature?.startsWith(prefix)) return false;
+
+  const expected = `${prefix}${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+
+  return provided.length === expectedBuffer.length && timingSafeEqual(provided, expectedBuffer);
+}
 
 // ── App ──────────────────────────────────────────────────────
 
@@ -61,11 +77,12 @@ app.post('/webhook', async (c) => {
     return c.json({ error: 'Webhook secret not configured (set REVIEW_WEBHOOK_SECRET)' }, 503);
   }
 
-  const provided = c.req.header('X-Webhook-Secret') ?? c.req.header('X-Hub-Signature-256') ?? '';
-  if (
-    provided.length !== WEBHOOK_SECRET.length ||
-    !timingSafeEqual(Buffer.from(provided), Buffer.from(WEBHOOK_SECRET))
-  ) {
+  const rawBody = Buffer.from(await c.req.arrayBuffer());
+  if (rawBody.byteLength > MAX_WEBHOOK_BYTES) {
+    return c.json({ error: 'Payload too large' }, 413);
+  }
+
+  if (!verifyGitHubSignature(rawBody, c.req.header('X-Hub-Signature-256'), WEBHOOK_SECRET)) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
@@ -75,7 +92,12 @@ app.post('/webhook', async (c) => {
     return c.json({ status: 'ok', skipped: true, reason: `Ignoring event: ${githubEvent}` }, 200);
   }
 
-  const body = await c.req.json<PRWebhookPayload>();
+  let body: PRWebhookPayload;
+  try {
+    body = JSON.parse(rawBody.toString('utf8')) as PRWebhookPayload;
+  } catch {
+    return c.json({ error: 'Invalid JSON payload' }, 400);
+  }
 
   // Validate minimal payload structure
   if (!body.action || !body.number || !body.pull_request || !body.repository) {

@@ -1,7 +1,7 @@
 {
   "identifier": "default",
-  "description": "Capability for the main window, preview browser, and annotator",
-  "windows": ["main", "preview-browser", "annotator"],
+  "description": "Capability for trusted funny app windows",
+  "windows": ["main", "preview-browser"],
   "permissions": [
     "core:default",
     "core:window:allow-create",

@@ -7,12 +7,15 @@
  * @domain depends: AgentStateTracker, ThreadManager, WSBroker, ThreadEventBus
  */
 
+import { isAbsolute } from 'node:path';
+
 import type { CLIMessage } from '@funny/core/agents';
 import {
   getStatusSummary,
   deriveGitSyncState,
   getDiffSummary,
   getIgnoredFileStats,
+  getExternalRepoFileStats,
 } from '@funny/core/git';
 import type { WSEvent, ThreadStatus } from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
@@ -744,9 +747,10 @@ export class AgentMessageHandler {
             this.state.pendingUserInput.delete(threadId);
           }
 
-          // Detect permission denial pattern (includes SDK native messages and hook denial messages)
+          // Detect permission denial pattern (includes SDK native messages and hook denial messages).
+          // Plain command failures like ssh(1) "Permission denied" are not approval prompts.
           const permissionDeniedMatch = decodedOutput.match(
-            /(?:requested permissions? to (?:use|edit)|is a sensitive file|hasn't been granted|hasn't granted|permission.*denied|not in the allowed tools list|hook error:.*(?:approval|permission)|denied this tool|Blocked by hook)/i,
+            /(?:requested permissions? to (?:use|edit)|is a sensitive file|hasn't been granted|hasn't granted|not in the allowed tools list|hook error:.*(?:approval|permission)|denied this tool|Blocked by hook)/i,
           );
 
           if (permissionDeniedMatch && tc?.name) {
@@ -1021,6 +1025,24 @@ export class AgentMessageHandler {
       const ignoredStats = await getIgnoredFileStats(cwd, statless);
       if (ignoredStats.isOk() && ignoredStats.value.size > 0) {
         const m = ignoredStats.value;
+        summary.files = summary.files.map((f) => {
+          const s = f.additions == null ? m.get(f.path) : undefined;
+          return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;
+        });
+      }
+    }
+
+    // Files the agent edited by ABSOLUTE path outside the thread's repo (e.g. a
+    // sibling repo) never appear in the in-repo diff above, so they stay
+    // stat-less with their absolute path preserved. Backfill +/- from each
+    // file's OWN enclosing git repo so the row carries stats like any other.
+    const externalStatless = summary.files
+      .filter((f) => f.additions == null && isAbsolute(f.path))
+      .map((f) => f.path);
+    if (externalStatless.length > 0) {
+      const externalStats = await getExternalRepoFileStats(externalStatless, cwd);
+      if (externalStats.isOk() && externalStats.value.size > 0) {
+        const m = externalStats.value;
         summary.files = summary.files.map((f) => {
           const s = f.additions == null ? m.get(f.path) : undefined;
           return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;

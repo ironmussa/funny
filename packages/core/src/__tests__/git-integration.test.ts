@@ -14,6 +14,7 @@ import {
   getCurrentBranch,
   getDiff,
   getDiffSummary,
+  getExternalRepoFileStats,
   getIgnoredFileStats,
   getLog,
   getSingleFileDiff,
@@ -971,5 +972,67 @@ describe('integration: getIgnoredFileStats', () => {
     const stats = await getIgnoredFileStats(repoPath, ['README.md', 'src/whatever.ts']);
     expect(stats.isOk()).toBe(true);
     if (stats.isOk()) expect(stats.value.size).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Group: getExternalRepoFileStats — stats for files edited by absolute path in
+// a SIBLING repo outside the thread's cwd (the in-chat changed-files summary).
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('getExternalRepoFileStats', () => {
+  let threadRepo: string;
+  let siblingRepo: string;
+
+  beforeEach(() => {
+    invalidateStatusCache();
+    mkdirSync(TMP, { recursive: true });
+    threadRepo = initTestRepo();
+    // A second, independent git repo the agent could touch by absolute path.
+    siblingRepo = resolve(TMP, 'sibling');
+    mkdirSync(siblingRepo, { recursive: true });
+    executeSync('git', ['init'], { cwd: siblingRepo });
+    executeSync('git', ['config', 'user.email', 'test@test.com'], { cwd: siblingRepo });
+    executeSync('git', ['config', 'user.name', 'Test'], { cwd: siblingRepo });
+  });
+
+  afterEach(() => {
+    rmSync(TMP, { recursive: true, force: true });
+  });
+
+  test('resolves +/- for a tracked file modified in a sibling repo', async () => {
+    // Commit a baseline, then modify it — like an agent editing relay-worker.
+    mkdirSync(resolve(siblingRepo, 'src'), { recursive: true });
+    const abs = resolve(siblingRepo, 'src/m3u8.ts');
+    writeFileSync(abs, 'export const a = 1;\n');
+    executeSync('git', ['add', '.'], { cwd: siblingRepo });
+    executeSync('git', ['commit', '-m', 'baseline'], { cwd: siblingRepo });
+    writeFileSync(abs, 'export const a = 1;\nexport const b = 2;\nexport const c = 3;\n');
+
+    const stats = await getExternalRepoFileStats([abs], threadRepo);
+    expect(stats.isOk()).toBe(true);
+    if (stats.isOk()) {
+      expect(stats.value.get(abs)).toEqual({ additions: 2, deletions: 0 });
+    }
+  });
+
+  test('skips files that live under the thread repo (excludeRoot)', async () => {
+    const inRepo = resolve(threadRepo, 'inside.ts');
+    writeFileSync(inRepo, 'x\n');
+    const stats = await getExternalRepoFileStats([inRepo], threadRepo);
+    expect(stats.isOk()).toBe(true);
+    if (stats.isOk()) expect(stats.value.has(inRepo)).toBe(false);
+  });
+
+  test('returns an empty map for a clean (unmodified) sibling file', async () => {
+    mkdirSync(resolve(siblingRepo, 'src'), { recursive: true });
+    const abs = resolve(siblingRepo, 'src/m3u8.ts');
+    writeFileSync(abs, 'export const a = 1;\n');
+    executeSync('git', ['add', '.'], { cwd: siblingRepo });
+    executeSync('git', ['commit', '-m', 'baseline'], { cwd: siblingRepo });
+
+    const stats = await getExternalRepoFileStats([abs], threadRepo);
+    expect(stats.isOk()).toBe(true);
+    if (stats.isOk()) expect(stats.value.has(abs)).toBe(false);
   });
 });

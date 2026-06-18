@@ -1,4 +1,4 @@
-import type { StartupCommand, Message, ToolCall, ThreadStage } from '@funny/shared';
+import type { Message, ToolCall, ThreadStage } from '@funny/shared';
 import {
   AppWindow,
   GitCompare,
@@ -9,9 +9,6 @@ import {
   ExternalLink,
   Pin,
   PinOff,
-  Rocket,
-  Play,
-  Square,
   Loader2,
   Columns3,
   ArrowLeft,
@@ -68,7 +65,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { ShortcutHint } from '@/components/ui/kbd';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
@@ -97,6 +93,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { ShareThreadButton } from './header/ShareThreadButton';
+import { StartupCommandsPopover } from './header/StartupCommandsPopover';
 
 type MessageWithToolCalls = Message & { toolCalls?: ToolCall[] };
 
@@ -569,116 +566,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu({
   );
 });
 
-function StartupCommandsPopover({ projectId }: { projectId: string }) {
-  const { t } = useTranslation();
-  const [commands, setCommands] = useState<StartupCommand[]>([]);
-  const [open, setOpen] = useState(false);
-
-  const tabs = useTerminalStore((s) => s.tabs);
-  const runningIds = new Set<string>();
-  for (const tab of tabs) {
-    if (tab.commandId && tab.alive) runningIds.add(tab.commandId);
-  }
-
-  const loadCommands = useCallback(async () => {
-    const result = await api.listCommands(projectId);
-    if (result.isOk()) setCommands(result.value);
-  }, [projectId]);
-
-  useEffect(() => {
-    if (open) loadCommands();
-  }, [open, loadCommands]);
-
-  const handleRun = async (cmd: StartupCommand) => {
-    const store = useTerminalStore.getState();
-    store.addTab({
-      id: crypto.randomUUID(),
-      label: cmd.label,
-      cwd: '',
-      alive: true,
-      commandId: cmd.id,
-      projectId,
-    });
-    await api.runCommand(projectId, cmd.id);
-  };
-
-  const handleStop = async (cmd: StartupCommand) => {
-    await api.stopCommand(projectId, cmd.id);
-  };
-
-  const anyRunning = commands.some((cmd) => runningIds.has(cmd.id));
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              data-testid="header-startup-commands"
-              variant="ghost"
-              size="icon-sm"
-              className={anyRunning ? 'text-status-success' : 'text-muted-foreground'}
-            >
-              <Rocket className="icon-base" />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t('startup.title', 'Startup Commands')}</TooltipContent>
-      </Tooltip>
-      <PopoverContent align="end" className="w-64 p-2">
-        {commands.length === 0 ? (
-          <p className="text-muted-foreground py-3 text-center text-xs">
-            {t('startup.noCommands')}
-          </p>
-        ) : (
-          <div className="space-y-1">
-            {commands.map((cmd) => {
-              const isRunning = runningIds.has(cmd.id);
-              return (
-                <div
-                  key={cmd.id}
-                  className="hover:bg-accent/50 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      {isRunning && (
-                        <Loader2 className="icon-xs text-status-success shrink-0 animate-spin" />
-                      )}
-                      <span className="truncate text-sm">{cmd.label}</span>
-                    </div>
-                    <span className="text-muted-foreground mt-0.5 block truncate font-mono text-xs">
-                      {cmd.command}
-                    </span>
-                  </div>
-                  {isRunning ? (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => handleStop(cmd)}
-                      className="text-status-error hover:text-status-error/80 shrink-0"
-                    >
-                      <Square className="icon-xs" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => handleRun(cmd)}
-                      className="text-status-success hover:text-status-success/80 shrink-0"
-                    >
-                      <Play className="icon-xs" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 const VISIBLE_STAGES: ThreadStage[] = [
   'backlog',
   'planning',
@@ -722,6 +609,7 @@ export const ThreadHeaderActions = memo(function ThreadHeaderActions({
   const activeThreadProjectId = useThreadProjectId();
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
+  const activeThreadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
   // Git/review affordances require git ops AND must hide from a `view` sharee
   // (thread-sharing-steer) — their git API 404s. Fail OPEN: only hide when we
   // POSITIVELY know the viewer is a non-owner sharee without a steer grant.
@@ -796,7 +684,11 @@ export const ThreadHeaderActions = memo(function ThreadHeaderActions({
   return (
     <div className="flex shrink-0 items-center gap-2">
       {!hideStartup && !activeThreadIsScratch && projectId && (
-        <StartupCommandsPopover projectId={projectId} />
+        <StartupCommandsPopover
+          projectId={projectId}
+          threadId={activeThreadId ?? undefined}
+          worktreeBranch={activeThreadBranch}
+        />
       )}
       {!activeThreadIsScratch && runningWithPort.length > 0 && (
         <Tooltip>

@@ -293,8 +293,9 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       },
       async updateCommand() {},
       async deleteCommand() {},
-      async getCommand() {
-        return undefined;
+      async getCommand(cmdId, projectId) {
+        const { remoteGetStartupCommand } = await import('./team-client.js');
+        return remoteGetStartupCommand(cmdId, projectId);
       },
     },
 

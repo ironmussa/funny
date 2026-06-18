@@ -27,6 +27,7 @@ import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
+import * as startupCommandsRepo from './startup-commands-repository.js';
 
 // Create shared repository instances (lazy-initialized)
 let _messageRepo: ReturnType<typeof createMessageRepository> | null = null;
@@ -476,6 +477,10 @@ export async function handleDataMessageWithAck(
       case 'data:get_project': {
         const project = await projectRepo.getProject(data.projectId);
         return { type: 'data:get_project_response', project: project ?? null };
+      }
+      case 'data:get_startup_command': {
+        const command = await startupCommandsRepo.getCommand(data.cmdId, data.projectId);
+        return { type: 'data:get_startup_command_response', command: command ?? null };
       }
       case 'data:get_agent_template': {
         // Check builtin templates first

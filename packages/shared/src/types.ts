@@ -383,6 +383,10 @@ export interface ThreadWithMessages extends Thread {
   /** Last user message — always included even when messages are paginated,
    *  so the UI can show the sticky prompt without loading all messages. */
   lastUserMessage?: Message & { toolCalls?: ToolCall[] };
+  /** Number of messages currently queued for this thread. */
+  queuedCount?: number;
+  /** Preview/content of the next queued message. */
+  queuedNextMessage?: string;
 }
 
 export interface PaginatedMessages {

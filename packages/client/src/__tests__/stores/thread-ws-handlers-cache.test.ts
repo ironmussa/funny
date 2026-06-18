@@ -80,6 +80,8 @@ function makeState(overrides: Record<string, unknown> = {}) {
     setupProgressByThread: {},
     contextUsageByThread: {},
     queuedCountByThread: {},
+    queuedMessagesByThread: {},
+    queuedNextMessageByThread: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
   } as any;
@@ -503,5 +505,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
 
     expect(state.threadsById['scratch-2'].status).toBe('completed');
     expect(state.threadsById['scratch-2'].cost).toBe(0.5);
+    expect(state.threadsById['scratch-2'].completedAt).toBeDefined();
+    expect(state.threadsById['scratch-2'].updatedAt).toBeDefined();
   });
 });

@@ -48,6 +48,12 @@ const wsLog = createClientLogger('ws-handlers');
 
 type Get = () => ThreadState;
 type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<ThreadState>)) => void;
+const TERMINAL_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
+
+function terminalTimestamps(status: ThreadStatus, now = new Date().toISOString()) {
+  if (!TERMINAL_STATUSES.has(status)) return {};
+  return { completedAt: now, updatedAt: now };
+}
 
 // ── Sidebar update helper ─────────────────────────────────────
 //
@@ -470,6 +476,7 @@ export function handleWSStatus(
   // single partial state update for atomic application below.
   const { found: foundInSidebar, patch: sidebarPatch } = patchSidebarThread(get, threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
+    const statusTimestamps = terminalTimestamps(newStatus);
     wsLog.debug('status transition', {
       threadId,
       from: t.status,
@@ -486,6 +493,7 @@ export function handleWSStatus(
     return {
       ...t,
       status: newStatus,
+      ...statusTimestamps,
       ...(data.stage ? { stage: data.stage as any } : {}),
       ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
     };
@@ -524,6 +532,7 @@ export function handleWSStatus(
     return {
       ...t,
       status: newStatus,
+      ...terminalTimestamps(newStatus),
       waitingReason: undefined,
       pendingPermission: undefined,
       ...(newStatus === 'stopped' || newStatus === 'interrupted' ? { resultInfo: undefined } : {}),
@@ -631,11 +640,13 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     // Use server status as authoritative if xstate transition didn't change state
     // (e.g., actor was in stale state that didn't accept the event)
     const nextStatus = newStatus !== t.status ? newStatus : serverStatus;
+    const statusTimestamps = terminalTimestamps(nextStatus);
     resultStatus = nextStatus;
     if (
       nextStatus === t.status &&
       (data.cost === undefined || data.cost === t.cost) &&
-      (!data.stage || data.stage === t.stage)
+      (!data.stage || data.stage === t.stage) &&
+      Object.keys(statusTimestamps).length === 0
     ) {
       return t;
     }
@@ -643,6 +654,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
       ...t,
       status: nextStatus,
       cost: data.cost ?? t.cost,
+      ...statusTimestamps,
       ...(data.stage ? { stage: data.stage } : {}),
     };
   });
@@ -673,6 +685,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
       ...t,
       status: finalStatus,
       cost: data.cost ?? t.cost,
+      ...terminalTimestamps(finalStatus),
       waitingReason: undefined,
       pendingPermission: undefined,
       resultInfo: {
@@ -796,8 +809,26 @@ export function handleWSQueueUpdate(
             const { [threadId]: _, ...rest } = state.queuedCountByThread;
             return rest;
           })();
+    const updatedMessageMap =
+      data.queuedCount > 0 && data.nextMessage
+        ? { ...state.queuedNextMessageByThread, [threadId]: data.nextMessage }
+        : (() => {
+            const { [threadId]: _, ...rest } = state.queuedNextMessageByThread;
+            return rest;
+          })();
+    const cachedQueue = state.queuedMessagesByThread[threadId];
+    const shouldKeepCachedQueue =
+      data.queuedCount > 0 && (!data.nextMessage || cachedQueue?.[0]?.content === data.nextMessage);
+    const updatedQueueMap = shouldKeepCachedQueue
+      ? state.queuedMessagesByThread
+      : (() => {
+          const { [threadId]: _, ...rest } = state.queuedMessagesByThread;
+          return rest;
+        })();
     return {
       queuedCountByThread: updatedMap,
+      queuedMessagesByThread: updatedQueueMap,
+      queuedNextMessageByThread: updatedMessageMap,
       ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
         ...t,
         queuedCount: data.queuedCount,

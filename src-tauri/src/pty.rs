@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 type TerminalId = String;
 
@@ -31,8 +31,17 @@ struct PtyDataPayload {
     data: String,
 }
 
+fn require_main_window(window: &WebviewWindow) -> Result<(), String> {
+    if window.label() == "main" {
+        Ok(())
+    } else {
+        Err("pty commands are only available from main".to_string())
+    }
+}
+
 #[tauri::command]
 pub fn pty_spawn(
+    window: WebviewWindow,
     app: AppHandle,
     state: State<'_, PtyManager>,
     id: String,
@@ -40,6 +49,8 @@ pub fn pty_spawn(
     rows: u16,
     cols: u16,
 ) -> Result<(), String> {
+    require_main_window(&window)?;
+
     // Check if terminal already exists (idempotency)
     {
         let instances = state.instances.lock().map_err(|e| e.to_string())?;
@@ -109,7 +120,14 @@ pub fn pty_spawn(
 }
 
 #[tauri::command]
-pub fn pty_write(state: State<'_, PtyManager>, id: String, data: String) -> Result<(), String> {
+pub fn pty_write(
+    window: WebviewWindow,
+    state: State<'_, PtyManager>,
+    id: String,
+    data: String,
+) -> Result<(), String> {
+    require_main_window(&window)?;
+
     let mut instances = state.instances.lock().map_err(|e| e.to_string())?;
     let instance = instances.get_mut(&id).ok_or("Terminal not found")?;
     instance
@@ -122,11 +140,14 @@ pub fn pty_write(state: State<'_, PtyManager>, id: String, data: String) -> Resu
 
 #[tauri::command]
 pub fn pty_resize(
+    window: WebviewWindow,
     state: State<'_, PtyManager>,
     id: String,
     rows: u16,
     cols: u16,
 ) -> Result<(), String> {
+    require_main_window(&window)?;
+
     let instances = state.instances.lock().map_err(|e| e.to_string())?;
     let instance = instances.get(&id).ok_or("Terminal not found")?;
     instance
@@ -142,7 +163,13 @@ pub fn pty_resize(
 }
 
 #[tauri::command]
-pub fn pty_kill(state: State<'_, PtyManager>, id: String) -> Result<(), String> {
+pub fn pty_kill(
+    window: WebviewWindow,
+    state: State<'_, PtyManager>,
+    id: String,
+) -> Result<(), String> {
+    require_main_window(&window)?;
+
     let mut instances = state.instances.lock().map_err(|e| e.to_string())?;
     if let Some(mut instance) = instances.remove(&id) {
         let _ = instance.child.kill();

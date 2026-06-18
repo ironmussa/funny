@@ -3,16 +3,26 @@ mod pty;
 use tauri::Emitter;
 use tauri::Manager;
 use tauri::WebviewUrl;
+use tauri::WebviewWindow;
 use tauri::WebviewWindowBuilder;
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::ShellExt;
 
 struct ServerProcess(std::sync::Mutex<Option<CommandChild>>);
+
+fn require_window(window: &WebviewWindow, allowed_label: &str) -> Result<(), String> {
+    if window.label() == allowed_label {
+        Ok(())
+    } else {
+        Err(format!("command is only available from {allowed_label}"))
+    }
+}
 
 /// Opens the single preview browser window. If it already exists, focuses it.
 /// The window loads index.html with a flag so the frontend renders the preview UI.
 #[tauri::command]
-async fn open_preview(app: tauri::AppHandle) -> Result<(), String> {
+async fn open_preview(window: WebviewWindow, app: tauri::AppHandle) -> Result<(), String> {
+    require_window(&window, "main")?;
     let label = "preview-browser";
 
     // If window already exists, focus it
@@ -39,7 +49,8 @@ async fn open_preview(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Closes the preview browser window.
 #[tauri::command]
-async fn close_preview(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_preview(window: WebviewWindow, app: tauri::AppHandle) -> Result<(), String> {
+    require_window(&window, "main")?;
     if let Some(window) = app.get_webview_window("preview-browser") {
         window.close().map_err(|e| format!("{e}"))?;
     }
@@ -60,7 +71,12 @@ const ANNOTATOR_SCRIPT: &str = include_str!("../injected/annotator.js");
 /// Reuses the existing window when present; reload the target URL if the
 /// caller passed a different one.
 #[tauri::command]
-async fn open_annotator(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn open_annotator(
+    window: WebviewWindow,
+    app: tauri::AppHandle,
+    url: String,
+) -> Result<(), String> {
+    require_window(&window, "main")?;
     let parsed: url::Url = url
         .parse()
         .map_err(|e| format!("invalid annotator url: {e}"))?;
@@ -98,7 +114,8 @@ async fn open_annotator(app: tauri::AppHandle, url: String) -> Result<(), String
 
 /// Closes the annotator window if open.
 #[tauri::command]
-async fn close_annotator(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_annotator(window: WebviewWindow, app: tauri::AppHandle) -> Result<(), String> {
+    require_window(&window, "main")?;
     if let Some(window) = app.get_webview_window("annotator") {
         window.close().map_err(|e| format!("{e}"))?;
     }
@@ -117,10 +134,12 @@ struct AnnotatorCapture {
 /// close the annotator window so focus returns to funny automatically.
 #[tauri::command]
 async fn annotator_send(
+    window: WebviewWindow,
     app: tauri::AppHandle,
     markdown: String,
     url: String,
 ) -> Result<(), String> {
+    require_window(&window, "annotator")?;
     app.emit("annotator:capture", AnnotatorCapture { markdown, url })
         .map_err(|e| format!("{e}"))?;
 
@@ -158,9 +177,7 @@ pub fn run() {
                 .sidecar("funny-server")
                 .expect("failed to create sidecar command");
 
-            let (_rx, child) = sidecar
-                .spawn()
-                .expect("failed to spawn server sidecar");
+            let (_rx, child) = sidecar.spawn().expect("failed to spawn server sidecar");
 
             // Store the child process so we can kill it on exit
             app.manage(ServerProcess(std::sync::Mutex::new(Some(child))));

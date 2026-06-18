@@ -1,0 +1,6 @@
+{
+  "identifier": "annotator",
+  "description": "Minimal capability for the external annotator window",
+  "windows": ["annotator"],
+  "permissions": ["core:default"]
+}

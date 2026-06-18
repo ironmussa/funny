@@ -188,6 +188,8 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const userHasScrolledUp = useRef(false);
     const smoothScrollPending = useRef(false);
     const scrollingToBottomRef = useRef(false);
+    const pinToBottomRafRef = useRef<number | null>(null);
+    const pinToBottomFollowupRafRef = useRef<number | null>(null);
     const scrolledThreadRef = useRef<string | null>(null);
     const prevOldestIdRef = useRef<string | null>(null);
     const prevScrollHeightRef = useRef(0);
@@ -224,6 +226,52 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const promptPinSpacerHeightRef = useRef(0);
     promptPinSpacerHeightRef.current = promptPinSpacerHeight;
 
+    const pinToBottomNow = useCallback((syncVirtualizer = true) => {
+      const viewport = scrollViewportRef.current;
+      if (!viewport) return false;
+      if (syncVirtualizer) {
+        messageListRef.current?.scrollToBottom();
+      }
+      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      if (Math.abs(viewport.scrollTop - maxScrollTop) > 1) {
+        viewport.scrollTop = maxScrollTop;
+      }
+      return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 80;
+    }, []);
+
+    const schedulePinToBottom = useCallback(
+      (finishScroll = false, syncVirtualizer = true) => {
+        if (pinToBottomRafRef.current != null) return;
+        pinToBottomRafRef.current = requestAnimationFrame(() => {
+          pinToBottomRafRef.current = null;
+          pinToBottomNow(syncVirtualizer);
+          if (pinToBottomFollowupRafRef.current != null) return;
+          pinToBottomFollowupRafRef.current = requestAnimationFrame(() => {
+            pinToBottomFollowupRafRef.current = null;
+            const isAtBottom = pinToBottomNow(syncVirtualizer);
+            if (finishScroll && isAtBottom) {
+              scrollingToBottomRef.current = false;
+              userHasScrolledUp.current = false;
+            }
+          });
+        });
+      },
+      [pinToBottomNow],
+    );
+
+    useEffect(() => {
+      return () => {
+        if (pinToBottomRafRef.current != null) {
+          cancelAnimationFrame(pinToBottomRafRef.current);
+          pinToBottomRafRef.current = null;
+        }
+        if (pinToBottomFollowupRafRef.current != null) {
+          cancelAnimationFrame(pinToBottomFollowupRafRef.current);
+          pinToBottomFollowupRafRef.current = null;
+        }
+      };
+    }, []);
+
     // ── Lightbox fallback ────────────────────────────────────────────
     const noopLightbox = useCallback(
       (_images: { src: string; alt: string }[], _index: number) => {},
@@ -253,14 +301,9 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       pinnedPromptIdRef.current = null;
       scrolledThreadRef.current = null;
       setPromptPinSpacerHeight(0);
-      const rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          viewport.scrollTop = viewport.scrollHeight;
-        });
-      });
-      return () => cancelAnimationFrame(rafId);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [threadId]);
+      scrollingToBottomRef.current = true;
+      schedulePinToBottom(true);
+    }, [threadId, schedulePinToBottom]);
 
     // ── Scroll fingerprint — triggers sticky-bottom logic ────────────
     const threadData = { messages, status } as any;
@@ -395,13 +438,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         if (viewport) {
           userHasScrolledUp.current = false;
           scrollingToBottomRef.current = true;
-          requestAnimationFrame(() => {
-            viewport.scrollTop = viewport.scrollHeight;
-            requestAnimationFrame(() => {
-              viewport.scrollTop = viewport.scrollHeight;
-              scrollingToBottomRef.current = false;
-            });
-          });
+          schedulePinToBottom(true);
         }
       } else if (hasNewUserMessage) {
         // In full mode, ThreadView handles prompt pinning externally.
@@ -410,42 +447,61 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         if (viewport) {
           userHasScrolledUp.current = false;
           scrollingToBottomRef.current = true;
-          requestAnimationFrame(() => {
-            viewport.scrollTop = viewport.scrollHeight;
-            requestAnimationFrame(() => {
-              viewport.scrollTop = viewport.scrollHeight;
-              scrollingToBottomRef.current = false;
-            });
-          });
+          schedulePinToBottom(true);
         }
       } else if (needsAttention) {
         const viewport = scrollViewportRef.current;
         if (viewport) {
           userHasScrolledUp.current = false;
           requestAnimationFrame(() => {
+            messageListRef.current?.scrollToBottom();
             viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
           });
         }
       } else if (!userHasScrolledUp.current && !loadingMore) {
+        // Stay pinned to the bottom. `userHasScrolledUp` is owned by the scroll
+        // handler (same 80px threshold), so it's the single source of truth for
+        // "did the user scroll away" — do NOT re-derive it here from the current
+        // (already-grown) scrollHeight. Doing so misfired when content grew by
+        // >80px in one render (e.g. codex/ACP appending a whole reasoning block),
+        // flipping the flag and killing sticky-bottom even though the user never
+        // moved.
         const viewport = scrollViewportRef.current;
         if (viewport) {
-          const { scrollTop, scrollHeight, clientHeight } = viewport;
-          const actuallyAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-          if (!actuallyAtBottom) {
-            userHasScrolledUp.current = true;
-          } else {
-            requestAnimationFrame(() => {
-              viewport.scrollTop = viewport.scrollHeight;
-              requestAnimationFrame(() => {
-                if (!userHasScrolledUp.current) {
-                  viewport.scrollTop = viewport.scrollHeight;
-                }
-              });
-            });
-          }
+          scrollingToBottomRef.current = true;
+          schedulePinToBottom(true);
         }
       }
-    }, [threadId, waitingReason, lastUserMessageId, loadingMore, scrollFingerprint]);
+    }, [
+      threadId,
+      waitingReason,
+      lastUserMessageId,
+      loadingMore,
+      scrollFingerprint,
+      schedulePinToBottom,
+    ]);
+
+    // ── Content-growth sticky bottom (height-driven) ─────────────────
+    // The fingerprint effect above only fires on message-level changes
+    // (id / content length / tool-call COUNT / status). Content that grows the
+    // height WITHOUT moving any of those — reasoning & tool output streamed into
+    // an existing tool call (the common case for codex/ACP providers), or a card
+    // expanding — would otherwise leave the view stranded above the bottom even
+    // while the user is pinned there. Observe the content stack directly and keep
+    // it pinned for any height change, trusting `userHasScrolledUp` (owned by the
+    // scroll handler) as the single source of truth for user intent.
+    useEffect(() => {
+      const content = contentStackRef.current;
+      if (!content) return;
+      const ro = new ResizeObserver(() => {
+        if (userHasScrolledUp.current || loadingMore) return;
+        if (!compact && promptPinSpacerHeightRef.current > 0) return;
+        scrollingToBottomRef.current = true;
+        schedulePinToBottom(true, false);
+      });
+      ro.observe(content);
+      return () => ro.disconnect();
+    }, [threadId, loadingMore, compact, schedulePinToBottom]);
 
     // ── Pagination scroll preservation ───────────────────────────────
     const firstMessageId = selectFirstMessage({ messages } as any)?.id ?? null;
@@ -537,16 +593,9 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       userHasScrolledUp.current = false;
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
-      viewport.scrollTop = viewport.scrollHeight;
-
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!scrollingToBottomRef.current) return;
-          viewport.scrollTop = viewport.scrollHeight;
-          scrollingToBottomRef.current = false;
-        });
-      });
-    }, [compact]);
+      pinToBottomNow();
+      schedulePinToBottom(true);
+    }, [compact, pinToBottomNow, schedulePinToBottom]);
 
     // ── Imperative handle ────────────────────────────────────────────
     useImperativeHandle(

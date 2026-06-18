@@ -9,6 +9,7 @@ describe('analyzeMarkdown', () => {
     expect(result.plainText).toBe('bold and italic with code');
     expect(result.codeBlockCount).toBe(0);
     expect(result.codeBlockLines).toBe(0);
+    expect(result.inlineCodeCount).toBe(1);
   });
 
   test('tracks fenced code blocks separately from prose', () => {
@@ -35,6 +36,18 @@ describe('analyzeMarkdown', () => {
 
     expect(result.plainText).toContain('Title');
     expect(result.extraHeightPx).toBeGreaterThan(200);
+    expect(result.imageCount).toBe(1);
+    expect(result.tableRowCount).toBe(2);
+  });
+
+  test('tracks paragraphs and list items for virtualization estimates', () => {
+    const markdown = ['First paragraph', '', '- one', '- two', '', 'Second paragraph'].join('\n');
+    const result = analyzeMarkdown(markdown);
+
+    expect(result.paragraphCount).toBe(3);
+    expect(result.listItemCount).toBe(2);
+    expect(result.proseLineCount).toBe(4);
+    expect(result.extraHeightPx).toBeGreaterThan(0);
   });
 
   test('returns cached result for identical input', () => {

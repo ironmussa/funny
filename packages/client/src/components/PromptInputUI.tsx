@@ -1063,7 +1063,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               </span>
             </div>
 
-            {queueLoading ? (
+            {queueLoading && queuedMessagesProp.length === 0 ? (
               <div className="border-border/60 bg-background/60 text-muted-foreground flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
                 <Loader2 className="icon-xs animate-spin" />
                 {t('prompt.loadingQueuedMessages', 'Loading queued messages...')}
@@ -1073,6 +1073,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                 {queuedMessagesProp.map((message, index) => {
                   const isEditing = editingQueuedMessageId === message.id;
                   const isBusy = queueActionMessageId === message.id;
+                  const isPreviewOnly = message.id.startsWith('preview-queued-message:');
 
                   return (
                     <div
@@ -1156,7 +1157,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                                   variant="ghost"
                                   size="icon-xs"
                                   onClick={() => handleQueueEditStart(message)}
-                                  disabled={isBusy}
+                                  disabled={isBusy || isPreviewOnly}
                                   aria-label={t('prompt.editQueuedMessage', 'Edit')}
                                   className="text-muted-foreground hover:text-foreground"
                                 >
@@ -1175,7 +1176,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                                   variant="ghost"
                                   size="icon-xs"
                                   onClick={() => handleQueueDelete(message.id)}
-                                  disabled={isBusy}
+                                  disabled={isBusy || isPreviewOnly}
                                   aria-label={t('prompt.deleteQueuedMessage', 'Delete')}
                                   className="text-destructive hover:text-destructive"
                                 >

@@ -149,6 +149,12 @@ beforeEach(() => {
     selectedThreadId: null,
     activeThread: null,
   });
+  useThreadStore.setState({
+    threadDataById: {},
+    queuedCountByThread: {},
+    queuedMessagesByThread: {},
+    queuedNextMessageByThread: {},
+  } as any);
   vi.clearAllMocks();
 });
 
@@ -416,5 +422,106 @@ describe('PromptInput', () => {
       expect(screen.getByText('cola persistida 1')).toBeInTheDocument();
       expect(screen.getByText('cola persistida 2')).toBeInTheDocument();
     });
+  });
+
+  test('shows queued message preview while queue details are still loading', async () => {
+    vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
+
+    renderWithProviders(
+      <PromptInput
+        onSubmit={vi.fn()}
+        queuedCount={1}
+        queuedNextMessage="mensaje pendiente despues del refresh"
+      />,
+      {
+        threadId: 'thread-a',
+      },
+    );
+
+    expect(screen.getByText('mensaje pendiente despues del refresh')).toBeInTheDocument();
+    expect(screen.queryByText('Loading queued messages...')).toBeNull();
+    expect(screen.getByTestId('queue-edit-preview-queued-message:thread-a')).toBeDisabled();
+    expect(screen.getByTestId('queue-delete-preview-queued-message:thread-a')).toBeDisabled();
+  });
+
+  test('uses cached queued messages before refetching after a thread switch', async () => {
+    useThreadStore.setState({
+      queuedCountByThread: { 'thread-a': 1 },
+      queuedMessagesByThread: {
+        'thread-a': [
+          {
+            id: 'qa1',
+            threadId: 'thread-a',
+            content: 'cola cacheada al volver',
+            sortOrder: 0,
+            createdAt: '',
+          },
+        ],
+      },
+    } as any);
+    vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
+
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={0} />, {
+      threadId: 'thread-a',
+    });
+
+    expect(screen.getByText('cola cacheada al volver')).toBeInTheDocument();
+    expect(screen.queryByText('Loading queued messages...')).toBeNull();
+  });
+
+  test("regression: powerline uses the thread's own project, not the global selection", async () => {
+    // In the live-columns grid each column renders its own PromptInput for a
+    // different thread while the sidebar's global selectedProjectId points
+    // elsewhere. The powerline must show the THREAD's project — otherwise
+    // effectiveProject resolves to the (wrong/missing) global selection and the
+    // bar collapses to a gray branch-only segment with no project name.
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Alpha',
+          path: '/tmp/alpha',
+          color: '#ff0000',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 0,
+        },
+        {
+          id: 'p2',
+          name: 'Beta',
+          path: '/tmp/beta',
+          color: '#00ff00',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 1,
+        },
+      ],
+      // Global selection points at Beta…
+      selectedProjectId: 'p2',
+      selectedThreadId: null,
+      activeThread: null,
+    } as any);
+
+    // …but the column's thread belongs to Alpha.
+    useThreadStore.setState({
+      threadDataById: {
+        'thread-alpha': {
+          id: 'thread-alpha',
+          projectId: 'p1',
+          mode: 'local',
+          branch: 'master',
+          status: 'idle',
+          messages: [],
+        },
+      },
+    } as any);
+
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-alpha' });
+
+    // Powerline shows Alpha (thread's project), never Beta (global selection).
+    await waitFor(() => {
+      expect(screen.getByText('Alpha')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Beta')).toBeNull();
   });
 });

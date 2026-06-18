@@ -301,6 +301,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   setupProgressByThread: {},
   contextUsageByThread: {},
   queuedCountByThread: {},
+  queuedMessagesByThread: {},
+  queuedNextMessageByThread: {},
 
   loadScratchThreads: async () => {
     const result = await api.listScratchThreads(100);
@@ -515,8 +517,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // (e.g. fresh tab) so the ring re-appears before the next WS event fires.
       const storedContextUsage = get().contextUsageByThread[threadId] ?? loadContextUsage(threadId);
 
-      // Restore cached queued count so the queue widget survives thread switches
+      // Restore cached/server queued state so the queue widget survives thread switches
       const storedQueuedCount = get().queuedCountByThread[threadId];
+      const queuedCount = storedQueuedCount ?? thread.queuedCount ?? 0;
+      const queuedNextMessage =
+        get().queuedNextMessageByThread[threadId] ?? thread.queuedNextMessage ?? undefined;
 
       const hydrated: ThreadWithMessages = {
         ...thread,
@@ -529,7 +534,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         pendingPermission,
         setupProgress: storedSetupProgress,
         contextUsage: storedContextUsage,
-        queuedCount: storedQueuedCount,
+        queuedCount,
+        queuedNextMessage,
         compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
       };
       // Same rationale as the instant-swap above: hydrating the full thread
@@ -538,7 +544,21 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // doesn't block; the zustand state still updates synchronously, so the
       // eviction and flushWSBuffer below see the repointed activeThread.
       startTransition(() => {
-        set((state) => mutations.setThreadData(state, threadId, hydrated));
+        set((state) => {
+          const queuePatch =
+            queuedCount > 0
+              ? {
+                  queuedCountByThread: { ...state.queuedCountByThread, [threadId]: queuedCount },
+                  queuedNextMessageByThread: queuedNextMessage
+                    ? { ...state.queuedNextMessageByThread, [threadId]: queuedNextMessage }
+                    : state.queuedNextMessageByThread,
+                }
+              : {};
+          return {
+            ...queuePatch,
+            ...mutations.setThreadData(state, threadId, hydrated),
+          };
+        });
       });
 
       // Deferred eviction for the `keepStale` path: we skipped it above so the

@@ -4,7 +4,7 @@ import type { ThreadState } from './thread-state';
 import type { AgentResultInfo, CompactionEvent, ThreadWithMessages } from './thread-types';
 
 const PERMISSION_DENY_PATTERN =
-  /permission|hasn't been granted|not in the allowed tools|hook error:.*approval|denied this tool|Blocked by hook/i;
+  /requested permissions? to (?:use|edit)|is a sensitive file|hasn't been granted|hasn't granted|not in the allowed tools|hook error:.*(?:approval|permission)|denied this tool|Blocked by hook/i;
 
 export function deriveResultInfo(thread: Thread): AgentResultInfo | undefined {
   if (thread.status !== 'completed' && thread.status !== 'failed') return undefined;

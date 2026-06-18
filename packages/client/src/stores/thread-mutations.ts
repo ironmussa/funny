@@ -20,13 +20,42 @@ import type { ThreadWithMessages } from './thread-types';
 
 // ── Internal: build a new threadsById with one entry replaced/added ─────
 
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'stopped', 'interrupted']);
+const ACTIVE_STATUSES = new Set(['setting_up', 'pending', 'running', 'waiting']);
+
+function timeValue(value: string | undefined): number {
+  if (!value) return 0;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function reconcileIncomingThread(existing: Thread | undefined, incoming: Thread): Thread {
+  if (!existing) return incoming;
+
+  // WS result/status events are the freshest signal that a run ended. A project
+  // list request that started earlier can resolve later with the old active row
+  // and make Activity show a permanent spinner again. Keep the terminal local
+  // row unless the incoming active row proves it is newer, e.g. a follow-up run
+  // started in another tab.
+  if (
+    TERMINAL_STATUSES.has(existing.status) &&
+    ACTIVE_STATUSES.has(incoming.status) &&
+    timeValue(incoming.updatedAt) <= timeValue(existing.updatedAt)
+  ) {
+    return existing;
+  }
+
+  return incoming;
+}
+
 function withThreadUpserted(
   threadsById: Record<string, Thread>,
   thread: Thread,
 ): Record<string, Thread> {
+  const merged = reconcileIncomingThread(threadsById[thread.id], thread);
   // Re-apply any pending optimistic board write so a stale server snapshot
   // can't revert a just-archived / just-moved card (see thread-optimistic-guard).
-  const reconciled = reconcileBoardWrite(thread);
+  const reconciled = reconcileBoardWrite(merged);
   const prev = threadsById[reconciled.id];
   if (prev === reconciled) return threadsById;
   return { ...threadsById, [reconciled.id]: reconciled };
@@ -40,8 +69,9 @@ function withThreadsUpserted(
   const next = { ...threadsById };
   let changed = false;
   for (const t of threads) {
+    const merged = reconcileIncomingThread(next[t.id], t);
     // Re-apply any pending optimistic board write before merging the server row.
-    const reconciled = reconcileBoardWrite(t);
+    const reconciled = reconcileBoardWrite(merged);
     if (next[reconciled.id] !== reconciled) {
       next[reconciled.id] = reconciled;
       changed = true;

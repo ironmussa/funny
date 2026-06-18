@@ -34,6 +34,7 @@ const queueLog = createClientLogger('PromptInputQueue');
 
 // Stable empty default so threads without an init payload don't churn the editor.
 const EMPTY_SLASH_COMMANDS: string[] = [];
+const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = [];
 
 export type SubmitOpts = {
   provider?: string;
@@ -80,6 +81,7 @@ interface UsePromptInputStateArgs {
   loading: boolean;
   running: boolean;
   queuedCountProp: number;
+  queuedNextMessageProp?: string;
   isNewThread: boolean;
   propProjectId?: string;
   initialPromptProp?: string;
@@ -99,6 +101,7 @@ export function usePromptInputState({
   loading,
   running,
   queuedCountProp,
+  queuedNextMessageProp,
   isNewThread,
   propProjectId,
   initialPromptProp,
@@ -124,14 +127,35 @@ export function usePromptInputState({
       : 0,
   );
   const queuedCount = storeQueuedCount > 0 ? storeQueuedCount : queuedCountProp;
+  const cachedQueuedMessages = useThreadStore((s) =>
+    effectiveThreadId
+      ? (s.queuedMessagesByThread[effectiveThreadId] ?? EMPTY_QUEUED_MESSAGES)
+      : EMPTY_QUEUED_MESSAGES,
+  );
+  const storeQueuedNextMessage = useThreadStore((s) =>
+    effectiveThreadId
+      ? (s.queuedNextMessageByThread[effectiveThreadId] ??
+        s.threadDataById[effectiveThreadId]?.queuedNextMessage)
+      : undefined,
+  );
+  const queuedNextMessage = storeQueuedNextMessage ?? queuedNextMessageProp;
 
   // ── Project defaults ──
   const projects = useProjectStore((s) => s.projects);
   const selectedProjectIdForDefaults = useProjectStore((s) => s.selectedProjectId);
-  const effectiveProject =
-    propProjectId || selectedProjectIdForDefaults
-      ? projects.find((p) => p.id === (propProjectId || selectedProjectIdForDefaults))
-      : undefined;
+  // For an existing thread, the project is the thread's OWN project — not the
+  // globally-selected one. This matters in the live-columns grid, where each
+  // column renders its own PromptInput for a different thread (and possibly a
+  // different project) while the global selection points elsewhere. Falling
+  // back to the global selection there left `effectiveProject` undefined, so
+  // the powerline lost its project segment and rendered a gray branch-only bar.
+  // New threads still resolve from the selected/prop project.
+  const threadProjectId = useThreadSelector((t) => t?.projectId);
+  const resolvedProjectId =
+    (!isNewThread && threadProjectId) || propProjectId || selectedProjectIdForDefaults;
+  const effectiveProject = resolvedProjectId
+    ? projects.find((p) => p.id === resolvedProjectId)
+    : undefined;
   const defaultProvider = effectiveProject?.defaultProvider ?? DEFAULT_PROVIDER;
   const defaultModel = effectiveProject?.defaultModel ?? DEFAULT_MODEL;
   const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? DEFAULT_PERMISSION_MODE;
@@ -233,6 +257,24 @@ export function usePromptInputState({
   // ── Queue state ──
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
+  const previewQueuedMessages =
+    effectiveThreadId && queuedCount > 0 && queuedNextMessage
+      ? [
+          {
+            id: `preview-queued-message:${effectiveThreadId}`,
+            threadId: effectiveThreadId,
+            content: queuedNextMessage,
+            sortOrder: 0,
+            createdAt: '',
+          } satisfies QueuedMessage,
+        ]
+      : [];
+  const renderedQueuedMessages =
+    queuedMessages.length > 0
+      ? queuedMessages
+      : cachedQueuedMessages.length > 0
+        ? cachedQueuedMessages
+        : previewQueuedMessages;
 
   // ── Dictation ──
   const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);
@@ -319,7 +361,11 @@ export function usePromptInputState({
   }, [isNewThread, activeThreadLastEffort]);
 
   // ── Fetch branches ──
-  const effectiveProjectId = propProjectId || useProjectStore.getState().selectedProjectId;
+  // Mirror effectiveProject's resolution: an existing thread uses its own
+  // project, so projectPath (the editor cwd for @-file completion) points at
+  // the right repo even in the live-columns grid. fetchBranches is gated on
+  // isNewThread below, where resolvedProjectId collapses to the selected one.
+  const effectiveProjectId = resolvedProjectId;
   const projectDefaultBranch = effectiveProjectId
     ? projects.find((p) => p.id === effectiveProjectId)?.defaultBranch
     : undefined;
@@ -437,7 +483,11 @@ export function usePromptInputState({
   }, [selectedProjectId, projects]);
 
   // ── Queue fetching ──
-  const lastQueueFetchRef = useRef<{ threadId: string; queuedCount: number } | null>(null);
+  const lastQueueFetchRef = useRef<{
+    threadId: string;
+    queuedCount: number;
+    queuedNextMessage?: string;
+  } | null>(null);
   // Stable ref for effectiveThreadId — used by queue handlers and draft persistence
   // to avoid recreating callbacks on every thread switch.
   const threadIdRef = useRef(effectiveThreadId);
@@ -469,13 +519,20 @@ export function usePromptInputState({
       return;
     }
 
-    // Skip if we already fired a fetch for this exact threadId + queuedCount
+    if (queuedNextMessage) {
+      setQueuedMessages((prev) =>
+        prev.length > 0 && prev[0]?.content !== queuedNextMessage ? [] : prev,
+      );
+    }
+
+    // Skip if we already fired a fetch for this exact threadId + queue snapshot
     // (prevents StrictMode double-fire from issuing duplicate requests)
-    const key = { threadId: effectiveThreadId, queuedCount };
+    const key = { threadId: effectiveThreadId, queuedCount, queuedNextMessage };
     if (
       lastFetch &&
       lastFetch.threadId === key.threadId &&
-      lastFetch.queuedCount === key.queuedCount
+      lastFetch.queuedCount === key.queuedCount &&
+      lastFetch.queuedNextMessage === key.queuedNextMessage
     ) {
       queueLog.debug('queue effect: skipped (dedup)', {
         threadId: effectiveThreadId,
@@ -502,6 +559,32 @@ export function usePromptInputState({
           messageCount: String(result.value.length),
         });
         setQueuedMessages(result.value);
+        lastQueueFetchRef.current = {
+          threadId: effectiveThreadId,
+          queuedCount,
+          queuedNextMessage: result.value[0]?.content,
+        };
+        useThreadStore.setState((state) => {
+          const updatedQueueMap =
+            result.value.length > 0
+              ? { ...state.queuedMessagesByThread, [effectiveThreadId]: result.value }
+              : (() => {
+                  const { [effectiveThreadId]: _, ...rest } = state.queuedMessagesByThread;
+                  return rest;
+                })();
+          const nextMessage = result.value[0]?.content;
+          const updatedNextMap =
+            nextMessage && result.value.length > 0
+              ? { ...state.queuedNextMessageByThread, [effectiveThreadId]: nextMessage }
+              : (() => {
+                  const { [effectiveThreadId]: _, ...rest } = state.queuedNextMessageByThread;
+                  return rest;
+                })();
+          return {
+            queuedMessagesByThread: updatedQueueMap,
+            queuedNextMessageByThread: updatedNextMap,
+          };
+        });
       } else {
         queueLog.warn('queue effect: fetch failed', {
           threadId: effectiveThreadId,
@@ -515,7 +598,7 @@ export function usePromptInputState({
     return () => {
       cancelled = true;
     };
-  }, [effectiveThreadId, queuedCount]);
+  }, [effectiveThreadId, queuedCount, queuedNextMessage]);
 
   // ── Queue handlers ──
   const handleQueueEditSave = useCallback(
@@ -525,6 +608,16 @@ export function usePromptInputState({
       const result = await api.updateQueuedMessage(tid, messageId, content);
       if (result.isOk()) {
         setQueuedMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, content } : m)));
+        useThreadStore.setState((state) => {
+          const current = state.queuedMessagesByThread[tid] ?? [];
+          const next = current.map((m) => (m.id === messageId ? { ...m, content } : m));
+          return {
+            queuedMessagesByThread: { ...state.queuedMessagesByThread, [tid]: next },
+            queuedNextMessageByThread: next[0]?.content
+              ? { ...state.queuedNextMessageByThread, [tid]: next[0].content }
+              : state.queuedNextMessageByThread,
+          };
+        });
       } else {
         toastError(result.error);
       }
@@ -554,8 +647,29 @@ export function usePromptInputState({
                   const { [tid]: _, ...rest } = state.queuedCountByThread;
                   return rest;
                 })();
+          const filtered = (state.queuedMessagesByThread[tid] ?? []).filter(
+            (m) => m.id !== messageId,
+          );
+          const nextContent = filtered[0]?.content;
           return {
             queuedCountByThread: updatedMap,
+            queuedMessagesByThread:
+              newCount > 0
+                ? {
+                    ...state.queuedMessagesByThread,
+                    [tid]: filtered,
+                  }
+                : (() => {
+                    const { [tid]: _, ...rest } = state.queuedMessagesByThread;
+                    return rest;
+                  })(),
+            queuedNextMessageByThread:
+              newCount > 0 && nextContent
+                ? { ...state.queuedNextMessageByThread, [tid]: nextContent }
+                : (() => {
+                    const { [tid]: _, ...rest } = state.queuedNextMessageByThread;
+                    return rest;
+                  })(),
             ...mutations.applyThreadDataPatch(state, tid, (t) => ({
               ...t,
               queuedCount: newCount,
@@ -720,7 +834,7 @@ export function usePromptInputState({
 
     // Queue
     queuedCount,
-    queuedMessages,
+    queuedMessages: renderedQueuedMessages,
     queueLoading,
     handleQueueEditSave,
     handleQueueDelete,

@@ -61,6 +61,8 @@ function emptyState(overrides: Partial<ThreadState> = {}): ThreadState {
     setupProgressByThread: {},
     contextUsageByThread: {},
     queuedCountByThread: {},
+    queuedMessagesByThread: {},
+    queuedNextMessageByThread: {},
     ...overrides,
   } as ThreadState;
 }
@@ -124,6 +126,55 @@ describe('thread-mutations — project buckets', () => {
     // The card stays archived instead of bouncing back to its old column.
     expect(patch.threadsById!.t1.archived).toBe(true);
     expect(patch.threadIdsByProject!.p1).toEqual(['t1']);
+  });
+
+  test('replaceProjectThreads does not revive a locally completed thread from a stale running page', () => {
+    const completed = makeThread('t1', {
+      status: 'completed',
+      completedAt: '2026-01-01T00:01:00.000Z',
+      updatedAt: '2026-01-01T00:01:00.000Z',
+    });
+    const state = emptyState({
+      ...seedThreads({ p1: [completed] }),
+      threadTotalByProject: { p1: 1 },
+    });
+
+    const stalePage = [
+      makeThread('t1', {
+        status: 'running',
+        completedAt: undefined,
+        updatedAt: '2026-01-01T00:00:59.000Z',
+      }),
+    ];
+
+    const patch = replaceProjectThreads(state, 'p1', stalePage, 1);
+
+    expect(patch.threadsById!.t1.status).toBe('completed');
+    expect(patch.threadsById!.t1.completedAt).toBe('2026-01-01T00:01:00.000Z');
+  });
+
+  test('replaceProjectThreads accepts a newer running row after a completed thread', () => {
+    const completed = makeThread('t1', {
+      status: 'completed',
+      completedAt: '2026-01-01T00:01:00.000Z',
+      updatedAt: '2026-01-01T00:01:00.000Z',
+    });
+    const state = emptyState({
+      ...seedThreads({ p1: [completed] }),
+      threadTotalByProject: { p1: 1 },
+    });
+
+    const followUpPage = [
+      makeThread('t1', {
+        status: 'running',
+        completedAt: undefined,
+        updatedAt: '2026-01-01T00:02:00.000Z',
+      }),
+    ];
+
+    const patch = replaceProjectThreads(state, 'p1', followUpPage, 1);
+
+    expect(patch.threadsById!.t1.status).toBe('running');
   });
 
   test('appendProjectThreads skips duplicate ids and updates total only when empty', () => {

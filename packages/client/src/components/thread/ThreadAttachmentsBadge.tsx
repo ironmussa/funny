@@ -2,10 +2,11 @@ import { Paperclip } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SkillChip } from '@/components/ui/chip';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
-import { cleanThreadTitle } from '@/lib/thread-title';
+import { cleanThreadTitle, parseLeadingSlashCommand } from '@/lib/thread-title';
 import { cn } from '@/lib/utils';
 
 interface ThreadAttachmentsBadgeProps {
@@ -96,7 +97,15 @@ export function ThreadTitle({
   stopBadgePropagation,
 }: ThreadTitleProps) {
   const { displayTitle, attachedFiles } = useMemo(() => cleanThreadTitle(title), [title]);
-  const titleClass = cn(multiline ? 'flex-1' : 'min-w-0 flex-1 truncate', className);
+  const { command, rest } = useMemo(() => parseLeadingSlashCommand(displayTitle), [displayTitle]);
+  const titleClass = cn(
+    'first-letter:uppercase',
+    multiline ? 'flex-1' : 'min-w-0 flex-1 truncate',
+    className,
+  );
+  // When the title is a `/slash-command`, render it as a chip (matching the
+  // main thread) and treat the remainder as the plain title text.
+  const text = command ? rest : displayTitle;
 
   return (
     <div
@@ -106,11 +115,19 @@ export function ThreadTitle({
         containerClassName,
       )}
     >
-      {search !== undefined ? (
-        <HighlightText text={displayTitle} query={search} className={titleClass} />
-      ) : (
-        <span className={titleClass}>{displayTitle}</span>
+      {command && (
+        <SkillChip
+          name={command}
+          className="mx-0 shrink-0"
+          data-testid="thread-title-slash-command"
+        />
       )}
+      {text &&
+        (search !== undefined ? (
+          <HighlightText text={text} query={search} className={titleClass} />
+        ) : (
+          <span className={titleClass}>{text}</span>
+        ))}
       <ThreadAttachmentsBadge
         files={attachedFiles}
         className={multiline ? 'mt-0.5' : undefined}

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 
-import { cleanThreadTitle } from '@/lib/thread-title';
+import { cleanThreadTitle, parseLeadingSlashCommand } from '@/lib/thread-title';
 
 describe('cleanThreadTitle', () => {
   test('strips a leading <referenced-files> block', () => {
@@ -32,5 +32,49 @@ describe('cleanThreadTitle', () => {
     const { displayTitle, attachedFiles } = cleanThreadTitle('Hello world');
     expect(displayTitle).toBe('Hello world');
     expect(attachedFiles).toEqual([]);
+  });
+});
+
+describe('parseLeadingSlashCommand', () => {
+  test('extracts a command that is the entire title', () => {
+    expect(parseLeadingSlashCommand('/security-audit')).toEqual({
+      command: 'security-audit',
+      rest: '',
+    });
+  });
+
+  test('extracts a command and the trailing text', () => {
+    expect(parseLeadingSlashCommand('/security-audit check the auth layer')).toEqual({
+      command: 'security-audit',
+      rest: 'check the auth layer',
+    });
+  });
+
+  test('supports namespaced commands', () => {
+    expect(parseLeadingSlashCommand('/skill-creator:skill-creator make a thing')).toEqual({
+      command: 'skill-creator:skill-creator',
+      rest: 'make a thing',
+    });
+  });
+
+  test('does not treat a file path as a command', () => {
+    expect(parseLeadingSlashCommand('/home/user/file.ts is broken')).toEqual({
+      command: null,
+      rest: '/home/user/file.ts is broken',
+    });
+  });
+
+  test('returns no command for plain prose', () => {
+    expect(parseLeadingSlashCommand('fix the bug')).toEqual({
+      command: null,
+      rest: 'fix the bug',
+    });
+  });
+
+  test('only matches a slash at the very start', () => {
+    expect(parseLeadingSlashCommand('please run /security-audit')).toEqual({
+      command: null,
+      rest: 'please run /security-audit',
+    });
   });
 });

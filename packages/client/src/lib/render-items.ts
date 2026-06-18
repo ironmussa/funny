@@ -73,6 +73,53 @@ export function getItemKey(item: RenderItem): string {
   return '';
 }
 
+export type UserMessageRenderItem = Extract<RenderItem, { type: 'message' }>;
+
+/** Build an id -> grouped-item-index map for imperative scroll/search targets. */
+export function buildRenderItemIdIndexMap(items: RenderItem[]): Map<string, number> {
+  const map = new Map<string, number>();
+
+  const addToolItem = (item: ToolItem, index: number) => {
+    if (item.type === 'toolcall') {
+      map.set(item.tc.id, index);
+      return;
+    }
+    for (const call of item.calls) {
+      map.set(call.id, index);
+    }
+  };
+
+  items.forEach((item, index) => {
+    if (item.type === 'message') {
+      map.set(item.msg.id, index);
+    } else if (item.type === 'toolcall' || item.type === 'toolcall-group') {
+      addToolItem(item, index);
+    } else if (item.type === 'toolcall-run') {
+      for (const toolItem of item.items) addToolItem(toolItem, index);
+    } else if (item.type === 'thread-event') {
+      map.set(item.event.id, index);
+    } else if (item.type === 'workflow-event-group') {
+      for (const event of item.events) map.set(event.id, index);
+    }
+  });
+
+  return map;
+}
+
+/** Find the nearest user-message section owner before a grouped-item index. */
+export function findNearestPrecedingUserMessageItem(
+  items: RenderItem[],
+  startIndex: number,
+): UserMessageRenderItem | null {
+  for (let i = Math.min(startIndex - 1, items.length - 1); i >= 0; i--) {
+    const item = items[i];
+    if (item.type === 'message' && item.msg.role === 'user') {
+      return item;
+    }
+  }
+  return null;
+}
+
 export function buildGroupedRenderItems(
   messages: any[],
   threadEvents?: ThreadEvent[],

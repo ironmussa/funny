@@ -286,7 +286,9 @@ export function AutomationInboxView() {
                           {itemProject && (
                             <span className="font-medium">{itemProject.name} · </span>
                           )}
-                          {cleanThreadTitle(thread.title).displayTitle}
+                          <span className="inline-block align-bottom first-letter:uppercase">
+                            {cleanThreadTitle(thread.title).displayTitle}
+                          </span>
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

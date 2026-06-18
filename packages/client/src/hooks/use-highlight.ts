@@ -250,51 +250,289 @@ function escapeHtml(str: string): string {
 
 const SHELL_LANGS = new Set(['bash', 'shell', 'sh', 'zsh']);
 
-/**
- * hljs's bash grammar leaves CLI invocations (flags, numbers, paths) untokenized,
- * so commands like `python -m foo --flag 30` render as a single flat color.
- * After hljs, walk the HTML and wrap shell argument shapes outside existing spans.
- */
-function augmentShellHighlight(html: string): string {
-  const augment = (text: string): string =>
-    text
-      .replace(
-        /(^|\s)(--?[A-Za-z][\w-]*)/g,
-        (_, lead, flag) => `${lead}<span class="hljs-attr">${flag}</span>`,
-      )
-      .replace(
-        /(^|[\s=])(\d+(?:\.\d+)?)(?=\b)/g,
-        (_, lead, num) => `${lead}<span class="hljs-number">${num}</span>`,
-      );
+const SHELL_COMMANDS_WITH_SUBCOMMANDS = new Set([
+  'aws',
+  'az',
+  'bun',
+  'bunx',
+  'cargo',
+  'deno',
+  'docker',
+  'docker-compose',
+  'gcloud',
+  'gh',
+  'git',
+  'go',
+  'helm',
+  'kubectl',
+  'make',
+  'modal',
+  'npm',
+  'npx',
+  'nx',
+  'pip',
+  'pip3',
+  'pipx',
+  'pnpm',
+  'poetry',
+  'python',
+  'python3',
+  'railway',
+  'rustup',
+  'supabase',
+  'terraform',
+  'turbo',
+  'uv',
+  'uvx',
+  'vercel',
+  'vitest',
+  'yarn',
+]);
 
-  let result = '';
+const SHELL_TOKEN_RE = /(\s+|&amp;&amp;|\|\||&gt;&gt;?|&lt;&lt;?|[|;()])|([^\s|;()]+)/g;
+const SHELL_REDIRECT_RE = /^(?:&gt;&gt;?|&lt;&lt;?)$/;
+const SHELL_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)(=(.*))$/;
+const SHELL_FLAG_RE = /^(--?[A-Za-z][\w-]*)(=(.*))?$/;
+const SHELL_VARIABLE_RE = /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]+\})$/;
+const SHELL_NUMBER_RE = /^[+-]?\d+(?:\.\d+)?(?:[kKmMgGtTpP])?$/;
+const SHELL_BARE_WORD_RE = /^[A-Za-z][\w@+.-]*$/;
+const SHELL_URL_RE = /^(?:https?|ssh|git):\/\/\S+$/;
+const SHELL_PATH_RE =
+  /^(?:~?\/|\.{1,2}\/|[A-Za-z0-9_@%+=:,.-]+\/|[A-Za-z0-9_@%+=:,-]+\.[A-Za-z0-9]{1,8}(?:[?#].*)?$)/;
+
+interface ShellHighlightContext {
+  expectCommand: boolean;
+  currentCommand: string | null;
+  subcommandCount: number;
+  acceptingSubcommands: boolean;
+}
+
+type ShellTokenKind =
+  | 'space'
+  | 'separator'
+  | 'redirect'
+  | 'assignment'
+  | 'flag'
+  | 'variable'
+  | 'number'
+  | 'url'
+  | 'path'
+  | 'string'
+  | 'command'
+  | 'subcommand'
+  | 'word';
+
+function createShellHighlightContext(): ShellHighlightContext {
+  return {
+    expectCommand: true,
+    currentCommand: null,
+    subcommandCount: 0,
+    acceptingSubcommands: false,
+  };
+}
+
+function resetShellCommandContext(ctx: ShellHighlightContext) {
+  ctx.expectCommand = true;
+  ctx.currentCommand = null;
+  ctx.subcommandCount = 0;
+  ctx.acceptingSubcommands = false;
+}
+
+function wrapShellToken(token: string, className: string): string {
+  return `<span class="${className}">${token}</span>`;
+}
+
+function normalizeShellCommand(token: string): string {
+  const unquoted = token.replace(/^&quot;|&quot;$/g, '').replace(/^['"]|['"]$/g, '');
+  const parts = unquoted.split('/');
+  return (parts[parts.length - 1] || unquoted).toLowerCase();
+}
+
+function isShellSeparator(token: string): boolean {
+  return (
+    token === '&amp;&amp;' ||
+    token === '||' ||
+    token === '|' ||
+    token === ';' ||
+    token === '(' ||
+    token === ')'
+  );
+}
+
+function isShellString(token: string): boolean {
+  return (
+    (token.startsWith('&quot;') && token.endsWith('&quot;')) ||
+    (token.startsWith('"') && token.endsWith('"')) ||
+    (token.startsWith("'") && token.endsWith("'"))
+  );
+}
+
+function isShellPath(token: string): boolean {
+  return SHELL_PATH_RE.test(token);
+}
+
+function canHighlightSubcommand(token: string, ctx: ShellHighlightContext): boolean {
+  return (
+    ctx.acceptingSubcommands &&
+    ctx.subcommandCount < 3 &&
+    !!ctx.currentCommand &&
+    SHELL_COMMANDS_WITH_SUBCOMMANDS.has(ctx.currentCommand) &&
+    SHELL_BARE_WORD_RE.test(token) &&
+    !isShellPath(token)
+  );
+}
+
+function getShellTokenKind(token: string, ctx: ShellHighlightContext): ShellTokenKind {
+  if (/^\s+$/.test(token)) return 'space';
+  if (isShellSeparator(token)) return 'separator';
+  if (SHELL_REDIRECT_RE.test(token)) return 'redirect';
+  if (SHELL_ASSIGNMENT_RE.test(token)) return 'assignment';
+  if (ctx.expectCommand) return 'command';
+  if (SHELL_FLAG_RE.test(token)) return 'flag';
+  if (SHELL_VARIABLE_RE.test(token)) return 'variable';
+  if (SHELL_NUMBER_RE.test(token)) return 'number';
+  if (SHELL_URL_RE.test(token)) return 'url';
+  if (isShellPath(token)) return 'path';
+  if (isShellString(token)) return 'string';
+  if (canHighlightSubcommand(token, ctx)) return 'subcommand';
+  return 'word';
+}
+
+function renderShellValue(value: string): string {
+  if (!value) return '';
+  if (SHELL_VARIABLE_RE.test(value)) return wrapShellToken(value, 'hljs-variable');
+  if (SHELL_NUMBER_RE.test(value)) return wrapShellToken(value, 'hljs-number');
+  if (SHELL_URL_RE.test(value) || isShellPath(value) || isShellString(value)) {
+    return wrapShellToken(value, 'hljs-string');
+  }
+  return wrapShellToken(value, 'hljs-string');
+}
+
+function renderShellToken(token: string, kind: ShellTokenKind): string {
+  switch (kind) {
+    case 'separator':
+    case 'redirect':
+      return wrapShellToken(token, 'hljs-operator');
+    case 'assignment': {
+      const match = token.match(SHELL_ASSIGNMENT_RE);
+      if (!match) return token;
+      return `${wrapShellToken(match[1], 'hljs-variable')}=${renderShellValue(match[3] ?? '')}`;
+    }
+    case 'flag': {
+      const match = token.match(SHELL_FLAG_RE);
+      if (!match) return wrapShellToken(token, 'hljs-attr');
+      if (match[2] == null) return wrapShellToken(token, 'hljs-attr');
+      return `${wrapShellToken(match[1], 'hljs-attr')}=${renderShellValue(match[3] ?? '')}`;
+    }
+    case 'variable':
+      return wrapShellToken(token, 'hljs-variable');
+    case 'number':
+      return wrapShellToken(token, 'hljs-number');
+    case 'url':
+    case 'path':
+    case 'string':
+      return wrapShellToken(token, 'hljs-string');
+    case 'command':
+      return wrapShellToken(token, 'hljs-title function_');
+    case 'subcommand':
+      return wrapShellToken(token, 'hljs-built_in');
+    case 'space':
+    case 'word':
+      return token;
+  }
+}
+
+function advanceShellContext(token: string, kind: ShellTokenKind, ctx: ShellHighlightContext) {
+  if (kind === 'space') {
+    if (token.includes('\n')) resetShellCommandContext(ctx);
+    return;
+  }
+  if (kind === 'separator') {
+    resetShellCommandContext(ctx);
+    return;
+  }
+  if (kind === 'redirect') {
+    ctx.acceptingSubcommands = false;
+    return;
+  }
+  if (kind === 'assignment' && ctx.expectCommand) return;
+  if (kind === 'command') {
+    ctx.expectCommand = false;
+    ctx.currentCommand = normalizeShellCommand(token);
+    ctx.subcommandCount = 0;
+    ctx.acceptingSubcommands = true;
+    return;
+  }
+  if (kind === 'subcommand') {
+    ctx.subcommandCount += 1;
+    return;
+  }
+  ctx.acceptingSubcommands = false;
+}
+
+function augmentShellText(text: string, ctx: ShellHighlightContext): string {
+  return text.replace(SHELL_TOKEN_RE, (token) => {
+    const kind = getShellTokenKind(token, ctx);
+    const rendered = renderShellToken(token, kind);
+    advanceShellContext(token, kind, ctx);
+    return rendered;
+  });
+}
+
+function advanceShellContextForHtml(html: string, ctx: ShellHighlightContext) {
+  const text = html.replace(/<[^>]+>/g, '');
+  text.replace(SHELL_TOKEN_RE, (token) => {
+    const kind = getShellTokenKind(token, ctx);
+    advanceShellContext(token, kind, ctx);
+    return token;
+  });
+}
+
+function readSpanBlock(html: string, start: number): { raw: string; end: number } {
   let depth = 0;
-  let buffer = '';
-  let i = 0;
+  let i = start;
   while (i < html.length) {
     if (html.startsWith('<span', i)) {
-      if (depth === 0) {
-        result += augment(buffer);
-        buffer = '';
-      }
-      const end = html.indexOf('>', i);
-      const tag = end === -1 ? html.slice(i) : html.slice(i, end + 1);
-      result += tag;
-      i += tag.length;
       depth++;
+      const tagEnd = html.indexOf('>', i);
+      i = tagEnd === -1 ? html.length : tagEnd + 1;
     } else if (html.startsWith('</span>', i)) {
-      result += '</span>';
+      depth--;
       i += 7;
-      depth = Math.max(0, depth - 1);
-    } else if (depth === 0) {
-      buffer += html[i];
-      i++;
+      if (depth === 0) return { raw: html.slice(start, i), end: i };
     } else {
-      result += html[i];
       i++;
     }
   }
-  result += augment(buffer);
+  return { raw: html.slice(start), end: html.length };
+}
+
+/**
+ * hljs's bash grammar leaves CLI invocations (commands, flags, paths, and env
+ * assignments) mostly untokenized, so real-world command snippets render as a
+ * single flat color. Walk the HTML and add shell-specific spans without touching
+ * tokens that hljs already highlighted.
+ */
+function augmentShellHighlight(html: string): string {
+  const ctx = createShellHighlightContext();
+  let result = '';
+  let i = 0;
+
+  while (i < html.length) {
+    if (html.startsWith('<span', i)) {
+      const span = readSpanBlock(html, i);
+      result += span.raw;
+      advanceShellContextForHtml(span.raw, ctx);
+      i = span.end;
+      continue;
+    }
+
+    const nextSpan = html.indexOf('<span', i);
+    const end = nextSpan === -1 ? html.length : nextSpan;
+    result += augmentShellText(html.slice(i, end), ctx);
+    i = end;
+  }
+
   return result;
 }
 

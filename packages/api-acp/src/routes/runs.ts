@@ -19,6 +19,7 @@ import * as registry from '../utils/run-registry.js';
 import type { RunResult, RunUsage, ToolCallInfo } from '../utils/run-registry.js';
 
 const DEBUG = !!process.env.API_ACP_DEBUG;
+const allowBypassPermissions = process.env.API_ACP_ALLOW_BYPASS_PERMISSIONS === '1';
 function dbg(msg: string) {
   if (DEBUG) log.debug(msg);
 }
@@ -316,8 +317,9 @@ async function handleNonStreaming(
         maxTurns: maxTurns ?? (hasTools ? 1 : 50),
         executable: 'node',
         systemPrompt: systemPrompt || undefined,
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
+        ...(allowBypassPermissions
+          ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true }
+          : {}),
         abortController,
         ...(hasTools ? { tools: [] } : {}),
       },
@@ -427,8 +429,12 @@ function handleStreaming(
             maxTurns: maxTurns ?? (hasTools ? 1 : 50),
             executable: 'node',
             systemPrompt: systemPrompt || undefined,
-            permissionMode: 'bypassPermissions',
-            allowDangerouslySkipPermissions: true,
+            ...(allowBypassPermissions
+              ? {
+                  permissionMode: 'bypassPermissions' as const,
+                  allowDangerouslySkipPermissions: true,
+                }
+              : {}),
             abortController,
             ...(hasTools ? { tools: [] } : {}),
           },

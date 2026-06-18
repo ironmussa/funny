@@ -93,6 +93,7 @@ const quirksSchema = z
     stripFirstMessageBanner: bannerRegexSchema.optional(),
     permissionModel: z.enum(['gated', 'auto-allow']).optional(),
     filterMcpByCapability: z.boolean().optional(),
+    splitGluedAgentMessages: z.boolean().optional(),
   })
   .strict();
 

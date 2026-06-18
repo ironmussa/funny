@@ -223,6 +223,61 @@ describe('CodexACPProcess.translateUpdate', () => {
     expect(m0.message.id).toBe(m1.message.id);
     expect(m1.message.content[0]).toMatchObject({ type: 'text', text: 'foo bar' });
   });
+
+  // Regression: codex emits several distinct status messages within one turn
+  // as separate chunks with no tool call between them. The accumulator used to
+  // concatenate them with no separator, producing run-ons like
+  // `…esperando el render.Aviso: al montar…`. They must be split with a blank
+  // line at the glue point (terminal punctuation + uppercase, no whitespace).
+  test('splitGluedAgentMessages inserts a blank line between glued status messages', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'agent_message_chunk',
+      content: {
+        type: 'text',
+        text: 'Después de esta primera vez queda cacheada; sigo esperando el render.',
+      },
+    });
+    translate(proc, {
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: 'Aviso: al montar el Volume, Modal no vio el marker previo.' },
+    });
+
+    const last = messages[messages.length - 1];
+    if (last.type !== 'assistant') throw new Error('unreachable');
+    const block = last.message.content[0];
+    if (block.type !== 'text') throw new Error('unreachable');
+    expect(block.text).toBe(
+      'Después de esta primera vez queda cacheada; sigo esperando el render.\n\n' +
+        'Aviso: al montar el Volume, Modal no vio el marker previo.',
+    );
+    expect(block.text).not.toContain('render.Aviso');
+  });
+
+  // The split must NOT fire on real token streaming, where the model's own
+  // spacing is preserved across delta boundaries (leading space on the next
+  // chunk, or a lowercase continuation).
+  test('splitGluedAgentMessages leaves genuine streamed deltas untouched', () => {
+    const { proc, messages } = makeProcess();
+
+    // Sentence boundary WITH the model's own leading space → no split.
+    translate(proc, {
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: 'Listo.' },
+    });
+    translate(proc, {
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: ' Ahora sigo.' },
+    });
+
+    const last = messages[messages.length - 1];
+    if (last.type !== 'assistant') throw new Error('unreachable');
+    const block = last.message.content[0];
+    if (block.type !== 'text') throw new Error('unreachable');
+    expect(block.text).toBe('Listo. Ahora sigo.');
+    expect(block.text).not.toContain('\n');
+  });
 });
 
 /**
@@ -268,7 +323,7 @@ describe('CodexACPProcess.applyModelSelection', () => {
     expect(calls[0]).toMatchObject({
       sessionId: 'sess-1',
       configId: 'model',
-      value: { value: 'gpt-5.5' },
+      value: 'gpt-5.5',
     });
   });
 

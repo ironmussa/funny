@@ -457,7 +457,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         await conn.setSessionConfigOption({
           sessionId: this.activeSessionId,
           configId,
-          value: { value: requestedModel },
+          value: requestedModel,
         });
         this.dlog.info('model selected', {
           via: 'setSessionConfigOption',
@@ -819,6 +819,21 @@ export class GenericACPProcess extends BaseAgentProcess {
         this.flushPendingThought();
         const content = update.content;
         if (content.type === 'text' && content.text) {
+          // codex emits several distinct status messages within one turn as
+          // separate chunks with no tool call between them; concatenating with
+          // no separator produces run-ons (`…render.Aviso…`). Re-insert the
+          // dropped boundary ONLY at the exact glue signature: accumulated text
+          // ends with terminal punctuation and the incoming chunk starts with an
+          // uppercase letter, with no whitespace at the junction. Real token
+          // streaming keeps the model's own spacing, so a single streamed
+          // message never matches and is never split.
+          if (
+            this.manifest.quirks.splitGluedAgentMessages &&
+            /[.!?:]$/.test(this.accumulatedText) &&
+            /^\p{Lu}/u.test(content.text)
+          ) {
+            this.accumulatedText += '\n\n';
+          }
           this.accumulatedText += content.text;
           // pi prefixes its agent message with a banner — strip it (data regex
           // from the manifest) so the user never sees the boilerplate. The

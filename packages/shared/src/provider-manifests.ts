@@ -157,7 +157,12 @@ export const codexManifest: ProviderManifest = {
   ],
   attachmentLimits: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
   auth: { mode: 'provider-key', providerKeyId: 'openai' },
-  quirks: { bufferPreambleAsThink: true, planRender: 'text', permissionModel: 'gated' },
+  quirks: {
+    bufferPreambleAsThink: true,
+    planRender: 'text',
+    permissionModel: 'gated',
+    splitGluedAgentMessages: true,
+  },
 };
 
 export const geminiManifest: ProviderManifest = {

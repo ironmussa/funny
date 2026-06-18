@@ -58,6 +58,17 @@ export interface QuirkFlags {
   permissionModel?: 'gated' | 'auto-allow';
   /** Drop MCP servers the agent didn't advertise capability for (http/sse). (pi, cursor, opencode) */
   filterMcpByCapability?: boolean;
+  /**
+   * Repair "glued" agent-message chunks. Some agents (codex) emit several
+   * distinct status messages within one turn as separate `agent_message_chunk`
+   * events with no tool call between them; the accumulator concatenates them
+   * with no separator, producing run-ons like `…render.Aviso…`. When set, a
+   * `\n\n` is inserted at the junction ONLY when the accumulated text ends with
+   * terminal punctuation AND the incoming chunk starts with an uppercase letter
+   * with no whitespace at the boundary — the exact signature of a dropped
+   * separator. Real token streaming keeps the model's own spacing, so this
+   * never splits a single streamed message. (codex) */
+  splitGluedAgentMessages?: boolean;
 }
 
 // ─── Menu selectors (closed enums in core, not free-form) ────────────────────

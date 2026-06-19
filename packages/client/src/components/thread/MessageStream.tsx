@@ -285,6 +285,20 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       !!initInfo,
     ].join(':');
 
+    const pinViewportToBottom = useCallback((viewport: HTMLDivElement) => {
+      scrollingToBottomRef.current = true;
+      viewport.scrollTop = viewport.scrollHeight;
+      requestAnimationFrame(() => {
+        viewport.scrollTop = viewport.scrollHeight;
+        requestAnimationFrame(() => {
+          if (!userHasScrolledUp.current) {
+            viewport.scrollTop = viewport.scrollHeight;
+          }
+          scrollingToBottomRef.current = false;
+        });
+      });
+    }, []);
+
     // ── Scroll event handler ─────────────────────────────────────────
     useEffect(() => {
       const viewport = scrollViewportRef.current;
@@ -394,14 +408,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         const viewport = scrollViewportRef.current;
         if (viewport) {
           userHasScrolledUp.current = false;
-          scrollingToBottomRef.current = true;
-          requestAnimationFrame(() => {
-            viewport.scrollTop = viewport.scrollHeight;
-            requestAnimationFrame(() => {
-              viewport.scrollTop = viewport.scrollHeight;
-              scrollingToBottomRef.current = false;
-            });
-          });
+          pinViewportToBottom(viewport);
         }
       } else if (hasNewUserMessage) {
         // In full mode, ThreadView handles prompt pinning externally.
@@ -409,14 +416,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         const viewport = scrollViewportRef.current;
         if (viewport) {
           userHasScrolledUp.current = false;
-          scrollingToBottomRef.current = true;
-          requestAnimationFrame(() => {
-            viewport.scrollTop = viewport.scrollHeight;
-            requestAnimationFrame(() => {
-              viewport.scrollTop = viewport.scrollHeight;
-              scrollingToBottomRef.current = false;
-            });
-          });
+          pinViewportToBottom(viewport);
         }
       } else if (needsAttention) {
         const viewport = scrollViewportRef.current;
@@ -429,23 +429,17 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       } else if (!userHasScrolledUp.current && !loadingMore) {
         const viewport = scrollViewportRef.current;
         if (viewport) {
-          const { scrollTop, scrollHeight, clientHeight } = viewport;
-          const actuallyAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-          if (!actuallyAtBottom) {
-            userHasScrolledUp.current = true;
-          } else {
-            requestAnimationFrame(() => {
-              viewport.scrollTop = viewport.scrollHeight;
-              requestAnimationFrame(() => {
-                if (!userHasScrolledUp.current) {
-                  viewport.scrollTop = viewport.scrollHeight;
-                }
-              });
-            });
-          }
+          pinViewportToBottom(viewport);
         }
       }
-    }, [threadId, waitingReason, lastUserMessageId, loadingMore, scrollFingerprint]);
+    }, [
+      threadId,
+      waitingReason,
+      lastUserMessageId,
+      loadingMore,
+      scrollFingerprint,
+      pinViewportToBottom,
+    ]);
 
     // ── Pagination scroll preservation ───────────────────────────────
     const firstMessageId = selectFirstMessage({ messages } as any)?.id ?? null;
@@ -520,8 +514,14 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       const delta = phantomHeight - prevPhantom;
       if (delta === 0) return;
       const viewport = scrollViewportRef.current;
-      if (viewport) viewport.scrollTop += delta;
-    }, [phantomHeight, firstMessageId]);
+      if (!viewport) return;
+
+      if (!userHasScrolledUp.current && !loadingMore) {
+        pinViewportToBottom(viewport);
+      } else {
+        viewport.scrollTop += delta;
+      }
+    }, [phantomHeight, firstMessageId, loadingMore, pinViewportToBottom]);
 
     // ── scrollToBottom callback ───────────────────────────────────────
     const scrollToBottom = useCallback(() => {

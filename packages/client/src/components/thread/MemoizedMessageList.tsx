@@ -618,6 +618,7 @@ export const MemoizedMessageList = memo(
                 name={tc.name}
                 input={tc.input}
                 output={tc.output}
+                author={tc.author}
                 timestamp={tc.timestamp}
                 planText={tc._planText}
                 childToolCalls={tc._childToolCalls}
@@ -656,6 +657,7 @@ export const MemoizedMessageList = memo(
                     name={ti.name}
                     input={call.input}
                     output={call.output}
+                    author={call.author}
                     childToolCalls={call._childToolCalls}
                     hideLabel
                     onRespond={

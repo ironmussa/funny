@@ -94,7 +94,7 @@ export function HighlightText({
     }
 
     return result;
-  }, [text, query, indices, normalizedText]);
+  }, [text, query, indices, ranges, normalizedText]);
 
   if (!query.trim() && !(ranges && ranges.length > 0) && !(indices && indices.length > 0)) {
     return <span className={className}>{text}</span>;

@@ -184,7 +184,10 @@ export function ShareThreadButton({
         data-testid="share-thread-dialog"
       >
         <DialogHeader className="min-w-0 px-6 pt-6 pb-0">
-          <DialogTitle className="min-w-0 break-words" style={{ overflowWrap: 'anywhere' }}>
+          <DialogTitle
+            className="min-w-0 leading-snug break-words"
+            style={{ overflowWrap: 'anywhere' }}
+          >
             {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
           </DialogTitle>
         </DialogHeader>

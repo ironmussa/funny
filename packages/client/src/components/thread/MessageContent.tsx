@@ -9,11 +9,17 @@ import {
   baseMarkdownComponents,
   markdownProseClassName,
 } from '@/lib/markdown-components';
+import { getMarkdownFileLinkPath, resolveMarkdownFilePath } from '@/lib/markdown-file-links';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore, editorLabels } from '@/stores/settings-store';
 
-// Regex to match file paths like /foo/bar.ts, C:\foo\bar.ts, or file_path:line_number patterns
-const FILE_PATH_RE = /(?:[A-Za-z]:[\\/]|\/)[^\s:*?"<>|,()]+(?::\d+)?/g;
+function getActiveFileBasePath(): string | null {
+  const { activeThread, projects, selectedProjectId } = useAppStore.getState();
+  const projectId = activeThread?.projectId ?? selectedProjectId;
+  const projectPath = projectId ? projects.find((p) => p.id === projectId)?.path : null;
+  return activeThread?.worktreePath || projectPath || null;
+}
 
 // Stable markdown component overrides — hoisted to module scope so ReactMarkdown
 // sees the same component identity across renders (avoids unmount/remount of <a>).
@@ -23,12 +29,13 @@ const markdownComponents = {
   a: ({ href, children }: any) => {
     const text = String(children);
     const isWebUrl = href && /^https?:\/\//.test(href);
-    const fileMatch = !isWebUrl && text.match(FILE_PATH_RE);
-    if (fileMatch) {
+    const filePath = !isWebUrl ? getMarkdownFileLinkPath(href, text) : null;
+    if (filePath) {
       const { defaultEditor, useInternalEditor } = useSettingsStore.getState();
-      const uri = toEditorUriWithLine(fileMatch[0], defaultEditor);
+      const resolvedPath = resolveMarkdownFilePath(filePath, getActiveFileBasePath());
+      const uri = toEditorUriWithLine(resolvedPath, defaultEditor);
       const label = useInternalEditor ? 'internal editor' : editorLabels[defaultEditor];
-      const tooltipText = `Open in ${label}: ${text}`;
+      const tooltipText = `Open in ${label}: ${resolvedPath}`;
       return (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -38,7 +45,8 @@ const markdownComponents = {
               </a>
             ) : (
               <button
-                onClick={() => openFileInEditor(fileMatch[0], defaultEditor)}
+                type="button"
+                onClick={() => openFileInEditor(resolvedPath, defaultEditor)}
                 className="inline cursor-pointer hover:underline"
               >
                 {children}

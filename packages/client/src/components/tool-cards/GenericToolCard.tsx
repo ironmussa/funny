@@ -1,5 +1,5 @@
 import { Check, ChevronRight, ListTodo, Wrench } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MessageContent } from '@/components/thread/MessageContent';
@@ -7,6 +7,7 @@ import { TodoList } from '@/components/tool-cards/TodoList';
 import { getEditorLabel, openFileInEditor, toEditorUri } from '@/components/tool-cards/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, type Editor } from '@/stores/settings-store';
@@ -164,9 +165,7 @@ export function GenericToolCard({
                           {value}
                         </a>
                       ) : (
-                        <pre className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-                          {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                        </pre>
+                        <ToolValue value={value} />
                       )}
                     </div>
                   </div>
@@ -207,6 +206,51 @@ export function GenericToolCard({
         </ScrollArea>
       )}
     </div>
+  );
+}
+
+function formatToolValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function ToolValue({ value }: { value: unknown }) {
+  const isJson = typeof value !== 'string';
+  const text = useMemo(() => formatToolValue(value), [value]);
+  const [highlighted, setHighlighted] = useState<{ text: string; html: string } | null>(null);
+
+  useEffect(() => {
+    if (!isJson) return;
+
+    let cancelled = false;
+    ensureLanguage('json').then((ok) => {
+      if (cancelled || !ok) return;
+      setHighlighted({ text, html: highlightCode(text, 'json') });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isJson, text]);
+
+  if (isJson && highlighted?.text === text) {
+    return (
+      <pre className="code-viewer hljs text-foreground/80 m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
+        <code
+          className="hljs language-json"
+          dangerouslySetInnerHTML={{ __html: highlighted.html }}
+        />
+      </pre>
+    );
+  }
+
+  return (
+    <pre className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
+      {text}
+    </pre>
   );
 }
 

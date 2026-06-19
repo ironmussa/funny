@@ -9,7 +9,9 @@ import { ReviewChangesTabContent } from '../ReviewChangesTab';
 import { useReviewPaneContext } from '../ReviewPaneStateContext';
 import { StashTab } from '../StashTab';
 
-/** Dockview panel: Changes — the bulk of ReviewPane (file tree + commit draft). */
+/** Dockview panel: Changes — the bulk of ReviewPane (file tree + commit draft).
+ * The ensure-loaded refresh lives in useDiffData (keyed on context + git-status
+ * snapshot); this panel is purely presentational. */
 export function ChangesPanel() {
   const { t } = useTranslation();
   const ctx = useReviewPaneContext();
@@ -43,7 +45,7 @@ export function ChangesPanel() {
           testIdPrefix: 'review-file-filter',
         }}
         toolbar={{
-          refresh: ctx.refresh,
+          refresh: ctx.refreshAll,
           loading: ctx.loading,
           handlePull: ctx.handlePull,
           handleFetchOrigin: ctx.handleFetchOrigin,

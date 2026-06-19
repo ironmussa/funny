@@ -21,15 +21,15 @@ function ToggleGroup({
   VariantProps<typeof toggleVariants> & {
     ref?: React.Ref<React.ComponentRef<typeof ToggleGroupPrimitive.Root>>;
   }) {
+  const contextValue = React.useMemo(() => ({ variant, size }), [variant, size]);
+
   return (
     <ToggleGroupPrimitive.Root
       ref={ref}
       className={cn('flex items-center justify-center gap-1', className)}
       {...props}
     >
-      <ToggleGroupContext.Provider value={{ variant, size }}>
-        {children}
-      </ToggleGroupContext.Provider>
+      <ToggleGroupContext.Provider value={contextValue}>{children}</ToggleGroupContext.Provider>
     </ToggleGroupPrimitive.Root>
   );
 }

@@ -1,5 +1,12 @@
 import type { FileDiffSummary } from '@funny/shared';
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 
 import type { ConfirmDialogState } from '@/components/review-pane/ReviewDialogs';
 import { useCommitDraft } from '@/hooks/use-commit-draft';
@@ -137,6 +144,9 @@ export function useReviewState(args: UseReviewStateArgs) {
     submoduleExpansions,
     setSelectedFile,
     setCheckedFiles,
+    dirtyFileCount: gitStatus?.dirtyFileCount,
+    linesAdded: gitStatus?.linesAdded,
+    linesDeleted: gitStatus?.linesDeleted,
   });
   const {
     diffCache,
@@ -289,8 +299,34 @@ export function useReviewState(args: UseReviewStateArgs) {
     justCompletedWorkflowRef,
   ]);
 
+  // Track the last-seen context + branch so the reset effect can tell a real
+  // branch SWITCH (checkout) apart from the initial async hydration of the
+  // branch name. `undefined` sentinel means "not seen yet".
+  const prevGitContextKeyRef = useRef<string | null | undefined>(undefined);
+  const prevCurrentBranchRef = useRef<string | undefined>(undefined);
+
   // ── Reset on context change (thread/project switch or branch checkout) ──
   useEffect(() => {
+    const contextChanged = gitContextKey !== prevGitContextKeyRef.current;
+    const branchChanged = currentBranch !== prevCurrentBranchRef.current;
+    // `currentBranch` comes from `branchByProject`, which hydrates asynchronously
+    // AFTER mount (undefined → "main"). That first resolution is NOT a real
+    // checkout — the worktree was always on that branch, we just learned its
+    // name — so the destructive reset below would clear a freshly-loaded summary
+    // and re-fire a refresh that races the mount refresh, leaving the Changes tab
+    // stuck on "No changes" until a manual refresh. Skip it. A genuine checkout
+    // goes value→value within the same context and still resets.
+    const isInitialBranchHydration =
+      !contextChanged &&
+      branchChanged &&
+      prevCurrentBranchRef.current === undefined &&
+      currentBranch !== undefined;
+
+    prevGitContextKeyRef.current = gitContextKey;
+    prevCurrentBranchRef.current = currentBranch;
+
+    if (isInitialBranchHydration) return;
+
     abortRef.current?.abort();
     abortGenerate();
 

@@ -101,6 +101,8 @@ export function ThreadIdleStarter({ activeThread }: Props) {
             ? t('thread.sendFailed')
             : t('thread.sendFailedGeneric', { error: err.message }),
         );
+      } else if (result.value.handledLocally === 'shell_escape') {
+        useThreadStore.getState().rollbackOptimisticMessage(activeThread.id);
       }
       setSending(false);
     },

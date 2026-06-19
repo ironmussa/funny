@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import {
   CommandDialog,
   CommandEmpty,
@@ -63,9 +64,16 @@ export function ThreadPickerDialog({
                 onSelect={() => commit(thread.id)}
               >
                 <Icon className={cn('size-3.5 shrink-0', className)} />
-                <span className="truncate first-letter:uppercase">
-                  {thread.title || t('common.untitled', 'Untitled')}
-                </span>
+                {thread.title ? (
+                  <ThreadTitle
+                    as="span"
+                    title={thread.title}
+                    className="text-sm"
+                    containerClassName="min-w-0 flex-1"
+                  />
+                ) : (
+                  <span className="truncate">{t('common.untitled', 'Untitled')}</span>
+                )}
                 {inGrid && (
                   <span className="text-muted-foreground ml-auto shrink-0 text-[10px]">
                     {t('live.inGrid', 'in grid')}

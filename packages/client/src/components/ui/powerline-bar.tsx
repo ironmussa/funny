@@ -20,7 +20,7 @@ function useThemeVariant(): PowerlineVariant {
     if (raw === 'chips') setVariant('chips');
     else if (raw === 'plain') setVariant('plain');
     else setVariant('arrow');
-  });
+  }, []);
   return variant;
 }
 

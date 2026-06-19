@@ -2,8 +2,10 @@ import { FileCode, FilePlus, FileWarning, FileX } from 'lucide-react';
 import { type ReactNode, createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
+import { useThreadById } from '@/lib/thread-selectors';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -59,6 +61,7 @@ type ReviewPaneContextValue = ReturnType<typeof useReviewState> & {
   reviewSubTab: ReviewSubTab;
   setReviewPaneOpen: (open: boolean) => void;
   setReviewSubTab: (tab: ReviewSubTab) => void;
+  refreshAll: () => Promise<void>;
   // Local UI state
   confirmDialog: ConfirmDialogState | null;
   setConfirmDialog: React.Dispatch<React.SetStateAction<ConfirmDialogState | null>>;
@@ -111,12 +114,18 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
   const worktreePath = useThreadWorktreePath();
   const threadProjectId = useThreadProjectId();
   const projectsForPath = useProjectStore((s) => s.projects);
-  const basePath = useMemo(() => {
-    if (worktreePath) return worktreePath;
-    const pid = threadProjectId ?? selectedProjectId;
-    if (!pid) return '';
-    return projectsForPath.find((p) => p.id === pid)?.path ?? '';
-  }, [worktreePath, threadProjectId, selectedProjectId, projectsForPath]);
+  const lightThread = useThreadById(selectedThreadId ?? undefined);
+  const basePath = useMemo(
+    () =>
+      resolveBasePath({
+        worktreePath,
+        lightThread,
+        threadProjectId,
+        selectedProjectId,
+        projects: projectsForPath,
+      }),
+    [worktreePath, lightThread, threadProjectId, selectedProjectId, projectsForPath],
+  );
 
   const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
   const baseBranch = useThreadSelector((t) => t?.baseBranch);
@@ -175,6 +184,18 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
     setConfirmDialog,
   });
 
+  const refreshAll = useCallback(async () => {
+    const gitStore = useGitStatusStore.getState();
+    if (effectiveThreadId) {
+      void gitStore.fetchForThread(effectiveThreadId, true);
+      if (threadProjectId) void gitStore.fetchForProject(threadProjectId, true);
+    } else if (projectModeId) {
+      void gitStore.fetchProjectStatus(projectModeId, true);
+      void gitStore.fetchForProject(projectModeId, true);
+    }
+    await review.refresh();
+  }, [effectiveThreadId, projectModeId, threadProjectId, review.refresh]);
+
   // Sync the active sub-tab with the URL query param. Kept here rather than in
   // a hook so that dockview tab clicks (which call this) and URL navigation
   // share one source of truth.
@@ -213,6 +234,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       reviewSubTab,
       setReviewPaneOpen,
       setReviewSubTab,
+      refreshAll,
       confirmDialog,
       setConfirmDialog,
       viewerReadOnly,
@@ -236,6 +258,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       reviewSubTab,
       setReviewPaneOpen,
       setReviewSubTab,
+      refreshAll,
       confirmDialog,
       viewerReadOnly,
     ],

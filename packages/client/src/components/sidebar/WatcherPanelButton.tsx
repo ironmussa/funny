@@ -159,9 +159,9 @@ function JobRow({
 
   const isRunning = job.status === 'running';
 
-  // Open the job's output in the existing bottom terminal panel: tail -f while
-  // running, the captured log once finished. Opened in the current scope so it
-  // surfaces immediately; fall back to the job's thread project if no scope.
+  // Open the job's captured output in the existing bottom terminal panel.
+  // Opened in the current scope so it surfaces immediately; fall back to the
+  // job's thread project if no scope.
   const openLog = () => {
     const projectId = scopeId ?? findThreadById(job.threadId)?.projectId ?? null;
     if (!projectId) return;

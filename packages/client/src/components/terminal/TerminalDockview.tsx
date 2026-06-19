@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { isTauri } from '@/components/terminal/xterm-utils';
 import {
   CommandTabContent,
+  JobLogTabContent,
   TauriTerminalTabContent,
   TerminalSearchOverlay,
   WebTerminalTabContent,
@@ -29,6 +30,7 @@ import {
   type TerminalTab,
 } from '@/stores/terminal-store';
 import { useThreadWorktreePath } from '@/stores/thread-context';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { type BottomTabSpec } from '../DockviewLayout';
 
@@ -45,7 +47,15 @@ import { type BottomTabSpec } from '../DockviewLayout';
  *  it hides a split terminal that is actually visible in its own group. The
  *  `active` prop here is still used to scope the Ctrl+F search overlay to the
  *  store's single active tab so a key press doesn't open N overlays. */
-function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean }) {
+function TerminalTabBody({
+  tab,
+  active,
+  repaintKey,
+}: {
+  tab: TerminalTab;
+  active: boolean;
+  repaintKey: string;
+}) {
   const panelVisibleByProject = useTerminalStore((s) => s.panelVisibleByProject);
   const panelVisible = tab.projectId ? (panelVisibleByProject[tab.projectId] ?? true) : true;
 
@@ -77,7 +87,10 @@ function TerminalTabBody({ tab, active }: { tab: TerminalTab; active: boolean })
           label={tab.label}
           initialCommand={tab.initialCommand}
           scratchThreadId={tab.scratchThreadId}
+          repaintKey={repaintKey}
         />
+      ) : tab.type === 'job-log' && tab.jobId ? (
+        <JobLogTabContent tabId={tab.id} jobId={tab.jobId} active={true} />
       ) : tab.commandId ? (
         <CommandTabContent
           commandId={tab.commandId}
@@ -273,20 +286,31 @@ export function useTerminalDockview(): {
   const setActiveTab = useTerminalStore((s) => s.setActiveTab);
   const removeTab = useTerminalStore((s) => s.removeTab);
   const reorderTabs = useTerminalStore((s) => s.reorderTabs);
+  const activeThreadId = useThreadStore((s) => s.activeThread?.id ?? null);
 
   const visibleTabs = useMemo(
     () => tabs.filter((tab) => tab.projectId === selectedProjectId),
     [tabs, selectedProjectId],
   );
 
+  const bottomPaneOpen = selectedProjectId
+    ? (panelVisibleByProject[selectedProjectId] ?? false) && visibleTabs.length > 0
+    : false;
+
+  const repaintKey = `${selectedProjectId ?? 'none'}:${activeThreadId ?? 'none'}:${
+    activeTabId ?? 'none'
+  }:${bottomPaneOpen ? 'open' : 'closed'}`;
+
   const bottomTabs = useMemo<BottomTabSpec[]>(
     () =>
       visibleTabs.map((tab) => ({
         id: tab.id,
         title: tab.label,
-        content: <TerminalTabBody tab={tab} active={tab.id === activeTabId} />,
+        content: (
+          <TerminalTabBody tab={tab} active={tab.id === activeTabId} repaintKey={repaintKey} />
+        ),
       })),
-    [visibleTabs, activeTabId],
+    [visibleTabs, activeTabId, repaintKey],
   );
 
   const effectiveActiveTabId = useMemo(() => {
@@ -329,10 +353,6 @@ export function useTerminalDockview(): {
     },
     [selectedProjectId, visibleTabs, reorderTabs],
   );
-
-  const bottomPaneOpen = selectedProjectId
-    ? (panelVisibleByProject[selectedProjectId] ?? false) && visibleTabs.length > 0
-    : false;
 
   return {
     bottomTabs,

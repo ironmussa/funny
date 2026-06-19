@@ -31,6 +31,10 @@ jobRoutes.get('/', async (c) => {
   return c.json(rows);
 });
 
+// GET /api/jobs/:id/log — proxied to the user's runner, which owns the local
+// captured logfile. The runner still validates job ownership before reading.
+jobRoutes.get('/:id/log', proxyToRunner);
+
 // POST /api/jobs/:id/cancel — proxied to the user's runner, which signals the
 // detached process group and marks the job cancelled.
 jobRoutes.post('/:id/cancel', proxyToRunner);

@@ -21,12 +21,14 @@ export interface TerminalTab {
   projectId: string;
   /** If set, this tab is a server-managed command (not a Tauri PTY) */
   commandId?: string;
+  /** If set, this tab renders a background job's captured logfile */
+  jobId?: string;
   /** Port number for preview window feature */
   port?: number;
   /** Timestamp when the tab was created */
   createdAt?: number;
-  /** Type of terminal: 'pty' for interactive shell, 'command' for non-interactive */
-  type?: 'pty' | 'command';
+  /** Type of terminal: PTY, server-managed command, or captured job log */
+  type?: 'pty' | 'command' | 'job-log';
   /** Shell override for this terminal (e.g. 'git-bash', 'powershell') */
   shell?: TerminalShell;
   /** Error message if the PTY failed to spawn */

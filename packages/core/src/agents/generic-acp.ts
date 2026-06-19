@@ -36,7 +36,7 @@ import {
   inferACPToolName,
   parseACPPreambleTitle,
 } from './acp-tool-input.js';
-import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
+import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
@@ -69,6 +69,12 @@ export class GenericACPProcess extends BaseAgentProcess {
    * be applied via `setSessionConfigOption`.
    */
   private modelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
+  /**
+   * The agent's "thought level" / reasoning-effort select config option,
+   * captured from the newSession response. pi-acp exposes this as
+   * `category: 'thought_level'` with values like low/medium/high/xhigh.
+   */
+  private thoughtLevelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
   /** True once a model-selection fallback has been surfaced to the user this process. */
   private modelFallbackNotified = false;
 
@@ -140,7 +146,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   async kill(): Promise<void> {
     await super.kill();
     if (this.childProcess && !this.childProcess.killed) {
-      this.childProcess.kill('SIGTERM');
+      killProcessTree(this.childProcess);
     }
   }
 
@@ -188,6 +194,9 @@ export class GenericACPProcess extends BaseAgentProcess {
       env: { ...process.env, ...this.options.env },
       signal: this.abortController.signal,
       shell: process.platform === 'win32',
+      // Lead our own process group (POSIX) so kill() can reap the whole tree,
+      // including MCP servers the agent spawns as grandchildren.
+      detached: process.platform !== 'win32',
     });
 
     this.childProcess = child;
@@ -308,7 +317,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           mcpServers: mcpServerList,
         });
         this.activeSessionId = sessionResponse.sessionId;
-        this.captureModelConfigOption(sessionResponse.configOptions);
+        this.captureSessionConfigOptions(sessionResponse.configOptions);
       }
 
       this.emitInit(
@@ -319,6 +328,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       );
 
       await this.applyModelSelection(connection);
+      await this.applyThoughtLevelSelection(connection);
       await this.applySessionMode(connection, isResume);
 
       // Run initial prompt inline so a setup error surfaces as a failed turn.
@@ -343,7 +353,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       }
     } finally {
       if (this.childProcess && !this.childProcess.killed) {
-        this.childProcess.kill('SIGTERM');
+        killProcessTree(this.childProcess);
       }
       this.connection = null;
       this.finalize();
@@ -508,20 +518,74 @@ export class GenericACPProcess extends BaseAgentProcess {
     for (const opt of configOptions) {
       const o = opt as Record<string, unknown> | null;
       if (!o || o.category !== 'model' || o.type !== 'select') continue;
-      const valueIds = new Set<string>();
-      const collect = (entries: unknown): void => {
-        if (!Array.isArray(entries)) return;
-        for (const e of entries) {
-          const entry = e as Record<string, unknown> | null;
-          if (!entry) continue;
-          if (typeof entry.value === 'string') valueIds.add(entry.value);
-          // Grouped options nest their selectable values under `options`.
-          if (Array.isArray(entry.options)) collect(entry.options);
-        }
-      };
-      collect(o.options);
+      const valueIds = this.collectSelectValueIds(o.options);
       this.modelConfigOption = { configId: String(o.id), valueIds };
       return;
+    }
+  }
+
+  private captureThoughtLevelConfigOption(configOptions: unknown): void {
+    this.thoughtLevelConfigOption = null;
+    if (!Array.isArray(configOptions)) return;
+    for (const opt of configOptions) {
+      const o = opt as Record<string, unknown> | null;
+      if (!o || o.category !== 'thought_level' || o.type !== 'select') continue;
+      const valueIds = this.collectSelectValueIds(o.options);
+      this.thoughtLevelConfigOption = { configId: String(o.id), valueIds };
+      return;
+    }
+  }
+
+  private captureSessionConfigOptions(configOptions: unknown): void {
+    this.captureModelConfigOption(configOptions);
+    this.captureThoughtLevelConfigOption(configOptions);
+  }
+
+  private collectSelectValueIds(options: unknown): Set<string> {
+    const valueIds = new Set<string>();
+    const collect = (entries: unknown): void => {
+      if (!Array.isArray(entries)) return;
+      for (const e of entries) {
+        const entry = e as Record<string, unknown> | null;
+        if (!entry) continue;
+        if (typeof entry.value === 'string') valueIds.add(entry.value);
+        if (Array.isArray(entry.options)) collect(entry.options);
+      }
+    };
+    collect(options);
+    return valueIds;
+  }
+
+  private async applyThoughtLevelSelection(connection: ACPConnection): Promise<void> {
+    if (!this.activeSessionId || !this.options.effort) return;
+    const conn = connection as any;
+    if (typeof conn.setSessionConfigOption !== 'function' || !this.thoughtLevelConfigOption) return;
+
+    const requestedEffort = this.options.effort === 'max' ? 'xhigh' : this.options.effort;
+    const { configId, valueIds } = this.thoughtLevelConfigOption;
+    if (valueIds.size > 0 && !valueIds.has(requestedEffort)) {
+      this.dlog.warn('thought level not offered by agent — using provider default', {
+        requestedEffort,
+        available: [...valueIds],
+      });
+      return;
+    }
+
+    try {
+      await conn.setSessionConfigOption({
+        sessionId: this.activeSessionId,
+        configId,
+        value: requestedEffort,
+      });
+      this.dlog.info('thought level selected', {
+        via: 'setSessionConfigOption',
+        configId,
+        effort: requestedEffort,
+      });
+    } catch (e) {
+      this.emitErrorToolCall(
+        `**${this.manifest.label}:** unable to set thought level "${requestedEffort}" — ${this.extractErrorMessage(e)}`,
+      );
     }
   }
 
@@ -1063,7 +1127,23 @@ export class GenericACPProcess extends BaseAgentProcess {
         return;
       }
 
-      // Ignore other update types (available_commands_update, current_mode_update, etc.)
+      // Built-in / dynamic slash commands the ACP agent advertises. Surface them
+      // through the same `commands_changed` channel the Claude SDK uses, so the
+      // send-boundary guard and the composer autocomplete see this provider's
+      // commands instead of nothing. (Previously dropped on the floor.)
+      case 'available_commands_update': {
+        const commands = (((update as any).availableCommands ?? []) as Array<{ name?: string }>)
+          .map((c) => c.name)
+          .filter((n): n is string => typeof n === 'string' && n.length > 0);
+        this.emitMessage({
+          type: 'commands_changed',
+          commands,
+          sessionId: this.activeSessionId ?? '',
+        } as CLIMessage);
+        return;
+      }
+
+      // Ignore other update types (current_mode_update, etc.)
       default:
         return;
     }

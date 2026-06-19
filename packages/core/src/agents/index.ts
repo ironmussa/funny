@@ -21,6 +21,7 @@ export {
   DEFAULT_RESUME_PREFIX,
   type StartAgentOptions,
   type OrchestratorEvents,
+  type IdleReapPolicy,
 } from './orchestrator.js';
 export {
   defaultProcessFactory,

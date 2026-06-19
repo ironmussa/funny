@@ -10,6 +10,7 @@ import {
   buildEffectivePrompt,
   DEFAULT_RESUME_PREFIX,
   extractSlashCommandName,
+  type IdleReapPolicy,
   isPureSlashCommand,
 } from '../agents/orchestrator.js';
 import type { CLIMessage } from '../agents/types.js';
@@ -124,10 +125,14 @@ function baseOpts(overrides?: Record<string, any>) {
 // ── Tests ───────────────────────────────────────────────────────
 
 describe('isPureSlashCommand', () => {
-  test.each(['/compact', '/clear', '/compact keep the API-design notes', '  /compact  '])(
-    'detects %j as a slash command',
-    (p) => expect(isPureSlashCommand(p)).toBe(true),
-  );
+  test.each([
+    '/compact',
+    '/clear',
+    '/compact keep the API-design notes',
+    '  /compact  ',
+    '/opsx:apply',
+    '/skill-creator:skill-creator make a thing',
+  ])('detects %j as a slash command', (p) => expect(isPureSlashCommand(p)).toBe(true));
 
   test.each([
     'please /compact this',
@@ -135,6 +140,7 @@ describe('isPureSlashCommand', () => {
     '/home/user/file.ts',
     '//comment',
     '/123abc',
+    '/opsx:/apply',
     'compact',
     '',
   ])('does NOT treat %j as a slash command', (p) => expect(isPureSlashCommand(p)).toBe(false));
@@ -146,11 +152,13 @@ describe('extractSlashCommandName', () => {
     ['/compact keep the API-design notes', 'compact'],
     ['  /context  ', 'context'],
     ['/model opus', 'model'],
+    ['/opsx:apply', 'opsx:apply'],
+    ['/skill-creator:skill-creator make a thing', 'skill-creator:skill-creator'],
   ])('extracts the command name from %j', (input, expected) =>
     expect(extractSlashCommandName(input)).toBe(expected),
   );
 
-  test.each(['please /compact', '/home/user/file.ts', '/123', '', 'compact'])(
+  test.each(['please /compact', '/home/user/file.ts', '/123', '/opsx:/apply', '', 'compact'])(
     'returns null for %j',
     (p) => expect(extractSlashCommandName(p)).toBeNull(),
   );
@@ -683,6 +691,91 @@ describe('AgentOrchestrator', () => {
 
       // Gemini has no default tools (managed by ACP)
       expect(factory.lastProcess.options.allowedTools).toEqual([]);
+    });
+  });
+
+  // ── Idle reaping ───────────────────────────────────────────────
+
+  describe('idle reaping', () => {
+    const POLICY: IdleReapPolicy = { defaultIdleMs: 10_000, claudeIdleMs: 0 };
+    const result = () => ({ type: 'result', subtype: 'success' }) as unknown as CLIMessage;
+
+    test('3.1 reaps an idle, turn-terminal non-claude agent past the window', async () => {
+      await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
+      factory.lastProcess.simulateMessage(result());
+
+      expect(orchestrator.getIdleCandidates(Date.now() + 10_001, POLICY)).toContain('t1');
+
+      const proc = factory.lastProcess;
+      await orchestrator.reapIdleAgent('t1');
+      expect(proc.exited).toBe(true);
+      expect(orchestrator.isRunning('t1')).toBe(false);
+    });
+
+    test('3.2 never reaps a mid-turn agent (no terminal result)', async () => {
+      await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
+      factory.lastProcess.simulateMessage({ type: 'assistant' } as unknown as CLIMessage);
+
+      expect(orchestrator.getIdleCandidates(Date.now() + 1_000_000, POLICY)).toEqual([]);
+    });
+
+    test('3.3 never reaps an agent awaiting a permission decision (no result)', async () => {
+      await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
+      // Turn paused on a permission prompt → no result emitted, so not terminal.
+      expect(orchestrator.getIdleCandidates(Date.now() + 1_000_000, POLICY)).toEqual([]);
+    });
+
+    test('3.4 claude with a disabled window is not reaped; codex is', async () => {
+      await orchestrator.startAgent(baseOpts({ threadId: 'tc', provider: 'claude' }));
+      const pc = factory.lastProcess;
+      pc.simulateMessage(result());
+
+      await orchestrator.startAgent(
+        baseOpts({ threadId: 'tx', provider: 'codex', model: 'gpt-5.5' }),
+      );
+      const px = factory.lastProcess;
+      px.simulateMessage(result());
+
+      const candidates = orchestrator.getIdleCandidates(Date.now() + 10_001, POLICY);
+      expect(candidates).toContain('tx');
+      expect(candidates).not.toContain('tc');
+    });
+
+    test('3.5 adopted process is seeded as active and not reaped immediately', async () => {
+      const proc = new MockProcess(baseOpts({ provider: 'codex' }) as any);
+      orchestrator.adoptProcess('t-adopt', proc);
+      proc.simulateMessage(result());
+
+      // Checked 1s later against a 10-min window → still fresh, not a candidate.
+      expect(
+        orchestrator.getIdleCandidates(Date.now() + 1_000, {
+          defaultIdleMs: 600_000,
+          claudeIdleMs: 0,
+        }),
+      ).toEqual([]);
+    });
+
+    test('3.6 reap is non-destructive and distinguishable from a stop', async () => {
+      const events: Array<[string, unknown[]]> = [];
+      orchestrator.on('agent:reaped', (...a) => events.push(['reaped', a]));
+      orchestrator.on('agent:stopped', (...a) => events.push(['stopped', a]));
+      orchestrator.on('agent:session-cleared', (...a) => events.push(['cleared', a]));
+
+      await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
+      factory.lastProcess.simulateMessage(result());
+
+      await orchestrator.reapIdleAgent('t1');
+
+      const kinds = events.map((e) => e[0]);
+      expect(kinds).toContain('reaped');
+      expect(kinds).not.toContain('stopped');
+      expect(kinds).not.toContain('cleared');
+
+      // Payload is (threadId, provider, idleMs).
+      const reaped = events.find((e) => e[0] === 'reaped')!;
+      expect(reaped[1][0]).toBe('t1');
+      expect(reaped[1][1]).toBe('codex');
+      expect(typeof reaped[1][2]).toBe('number');
     });
   });
 });

@@ -19,6 +19,7 @@ import { AgentEventRouter } from './agent-event-router.js';
 import { AgentLifecycleManager } from './agent-lifecycle.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import { AgentStateTracker } from './agent-state.js';
+import { IdleReaper } from './idle-reaper.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 
 // ── AgentRunner facade ────────────────────────────────────────
@@ -27,12 +28,14 @@ export class AgentRunner {
   private lifecycle: AgentLifecycleManager;
   private eventRouter: AgentEventRouter;
   private state: AgentStateTracker;
+  private idleReaper?: IdleReaper;
 
   constructor(
     threadManager: IThreadManager,
     wsBroker: IWSBroker,
     processFactory: IAgentProcessFactory,
     getProject?: ProjectLookup,
+    enableIdleReaper = false,
   ) {
     const orchestrator = new AgentOrchestrator(processFactory);
     const state = new AgentStateTracker();
@@ -60,6 +63,18 @@ export class AgentRunner {
       this.lifecycle.getRunSpans(),
       this.lifecycle.endRunSpan.bind(this.lifecycle),
     );
+
+    // The idle reaper runs only for the long-lived default runner, not for
+    // ephemeral instances (tests). It drives the orchestrator's reap API.
+    if (enableIdleReaper) {
+      this.idleReaper = new IdleReaper(orchestrator);
+      this.idleReaper.start();
+    }
+  }
+
+  /** Stop the idle reaper ticker (hot reload / shutdown). No-op if disabled. */
+  stopIdleReaper(): void {
+    this.idleReaper?.stop();
   }
 
   async startAgent(
@@ -130,7 +145,13 @@ import { createRemoteThreadManager } from './remote-thread-manager.js';
 import { wsBroker } from './ws-broker.js';
 
 const threadManager: IThreadManager = createRemoteThreadManager();
-const defaultRunner = new AgentRunner(threadManager, wsBroker, defaultProcessFactory);
+const defaultRunner = new AgentRunner(
+  threadManager,
+  wsBroker,
+  defaultProcessFactory,
+  undefined,
+  true, // enable the idle reaper on the long-lived default runner
+);
 
 export const startAgent = defaultRunner.startAgent.bind(defaultRunner);
 export const stopAgent = defaultRunner.stopAgent.bind(defaultRunner);
@@ -152,6 +173,9 @@ import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 shutdownManager.register(
   'agent-runner',
   async (mode) => {
+    // Stop the sweep ticker so a reload doesn't leave a second one running
+    // (start() also dedupes via a global handle as a backstop).
+    defaultRunner.stopIdleReaper();
     if (mode === 'hotReload') {
       const surviving = extractActiveAgents();
       if (surviving.size > 0) {

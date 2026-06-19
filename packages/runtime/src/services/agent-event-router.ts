@@ -145,6 +145,14 @@ export class AgentEventRouter {
         });
       });
     });
+
+    this.orchestrator.on('agent:reaped', (threadId: string, provider: string, idleMs: number) => {
+      // Non-destructive: an idle agent's process tree was freed. Log + meter
+      // only — do NOT transition thread status (contrast with agent:stopped).
+      // The thread stays completed/waiting and resumes on the next message.
+      log.info('Agent reaped (idle)', { namespace: 'agent', threadId, provider, idleMs });
+      metric('agent.idle_reaped', 1, { type: 'sum', attributes: { provider } });
+    });
   }
 
   // ── Event bus subscription ─────────────────────────────────────

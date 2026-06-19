@@ -15,6 +15,7 @@
  * (e.g., killing a child process).
  */
 
+import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 
@@ -30,6 +31,70 @@ export type ResultSubtype =
   | 'error_max_turns'
   | 'error_during_execution'
   | 'error_max_budget_usd';
+
+/**
+ * Terminate a child process AND its entire descendant tree.
+ *
+ * ACP agents (and DeepAgent) spawn MCP servers as their own children, so
+ * signaling only the immediate child (`child.kill()`) leaves those
+ * grandchildren orphaned and resident — the dominant memory leak this guards
+ * against. To reap the whole tree we rely on the child being spawned in its own
+ * process group (`detached: true` on POSIX) and signal the group via the
+ * negative pid; on Windows we use `taskkill /T`.
+ *
+ * SIGTERM is sent immediately; a SIGKILL escalation is scheduled after
+ * `graceMs` for anything that ignored the term. The grace timer is unref'd so
+ * it never keeps the runner alive.
+ */
+export function killProcessTree(child: ChildProcess, graceMs = 3000): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+
+  if (process.platform === 'win32') {
+    try {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    } catch {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+    return;
+  }
+
+  // POSIX: the child leads its own process group (spawned detached), so a
+  // negative pid signals the agent and every descendant it spawned.
+  const signalGroup = (sig: NodeJS.Signals): boolean => {
+    try {
+      process.kill(-pid, sig);
+      return true;
+    } catch {
+      // ESRCH → group already gone; EPERM → not a group leader (spawned
+      // without `detached`). Either way, fall back to the immediate pid.
+      return false;
+    }
+  };
+
+  if (!signalGroup('SIGTERM')) {
+    try {
+      child.kill('SIGTERM');
+    } catch {
+      /* already gone */
+    }
+  }
+
+  const timer = setTimeout(() => {
+    if (!signalGroup('SIGKILL')) {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+  }, graceMs);
+  timer.unref?.();
+}
 
 export abstract class BaseAgentProcess extends EventEmitter {
   protected abortController = new AbortController();

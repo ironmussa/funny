@@ -8,7 +8,6 @@
 import {
   push,
   pull,
-  fetchRemote,
   getRemoteUrl,
   invalidateStatusCache,
   listGitHubOrgs,
@@ -19,6 +18,7 @@ import { Hono } from 'hono';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
+import { gitRuntimeService } from '../../services/git-runtime-service.js';
 import {
   pushChanges as gitServicePush,
   pushBranchToOrigin as gitServicePushBranch,
@@ -188,12 +188,11 @@ remoteRoutes.post('/project/:projectId/fetch', async (c) => {
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveIdentity(userId);
-  const result = await fetchRemote(cwdResult.value, identity);
+  const result = await gitRuntimeService.fetchProject(projectId, {
+    cwd: cwdResult.value,
+    identity,
+  });
   if (result.isErr()) return resultToResponse(c, result);
-  // Fetch refreshed the origin tracking ref — drop the stale cwd-keyed summary
-  // so unpulledCommitCount is recomputed against the new ref immediately.
-  invalidateStatusCache(cwdResult.value);
-  _gitStatusCache.delete(projectId);
   return c.json({ ok: true });
 });
 
@@ -259,9 +258,10 @@ remoteRoutes.post('/:threadId/fetch', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveIdentity(userId);
-  const result = await fetchRemote(cwdResult.value, identity);
+  const result = await gitRuntimeService.fetchThread(threadId, {
+    cwd: cwdResult.value,
+    identity,
+  });
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateStatusCache(cwdResult.value);
-  await invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
 });

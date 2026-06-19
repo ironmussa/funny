@@ -1,7 +1,20 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
 import type { GitHubIssue, PRReactionSummary } from '@funny/shared';
 
+import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
+import {
+  cacheKey,
+  cooldownRemainingSec,
+  getEntry,
+  inCooldown,
+  isFresh,
+  isRateLimited,
+  responseFromEntry,
+  setCooldownFrom,
+  setEntry,
+  touchEntry,
+} from './github-cache.js';
 
 export const GITHUB_API = 'https://api.github.com';
 export const DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -22,21 +35,104 @@ export function parseGithubOwnerRepo(remoteUrl: string): { owner: string; repo: 
   return null;
 }
 
-/** Make an authenticated request to the GitHub API. */
+/**
+ * Make an authenticated request to the GitHub API.
+ *
+ * GET requests are transparently served through the in-memory cache in
+ * {@link file://./github-cache.ts}: a short fresh-TTL window, ETag conditional
+ * re-validation (304s are free against the primary rate limit), and a
+ * `Retry-After`-honoring cooldown when GitHub rate-limits us. Callers always
+ * receive a normal {@link Response} — cache hits are reconstructed bodies.
+ * Non-GET requests (merge, etc.) always go straight to the network.
+ */
 export async function githubApiFetch(
   path: string,
   token: string,
   init?: RequestInit,
 ): Promise<Response> {
-  return fetch(`${GITHUB_API}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...init?.headers,
-    },
-  });
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const baseHeaders = new Headers(init?.headers);
+  if (!baseHeaders.has('Accept')) baseHeaders.set('Accept', 'application/vnd.github+json');
+  baseHeaders.set('Authorization', `Bearer ${token}`);
+  baseHeaders.set('X-GitHub-Api-Version', '2022-11-28');
+
+  // Writes are never cached and must not be short-circuited by a cooldown.
+  if (method !== 'GET') {
+    return fetch(`${GITHUB_API}${path}`, { ...init, headers: baseHeaders });
+  }
+
+  const now = Date.now();
+  const key = cacheKey(token, path, baseHeaders.get('Accept') ?? '');
+  const cached = getEntry(key);
+
+  // 1. Fresh window — serve cached with zero network cost.
+  if (cached && isFresh(cached, now)) {
+    return responseFromEntry(cached);
+  }
+
+  // 2. Cooldown after a rate-limit hit — avoid GitHub entirely.
+  if (inCooldown(token, now)) {
+    if (cached) return responseFromEntry(cached);
+    return new Response(
+      JSON.stringify({
+        message: 'GitHub rate limit — backing off',
+        retryAfter: cooldownRemainingSec(token, now),
+      }),
+      {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(cooldownRemainingSec(token, now)),
+        },
+      },
+    );
+  }
+
+  // 3. Conditional re-validation when we have a prior ETag.
+  const headers = new Headers(baseHeaders);
+  if (cached?.etag) headers.set('If-None-Match', cached.etag);
+
+  let res: Response;
+  try {
+    res = await fetch(`${GITHUB_API}${path}`, { ...init, headers });
+  } catch (err) {
+    // Network blip — prefer stale data over a hard failure.
+    if (cached) return responseFromEntry(cached);
+    throw err;
+  }
+
+  // 4. Not modified — refresh the freshness stamp and serve cache.
+  if (res.status === 304 && cached) {
+    touchEntry(cached, now);
+    return responseFromEntry(cached);
+  }
+
+  // 5. Rate limited — start a cooldown; serve stale if we have it.
+  if (isRateLimited(res)) {
+    setCooldownFrom(token, res, now);
+    if (cached) return responseFromEntry(cached);
+    return res;
+  }
+
+  // 6. Fresh 200 — cache the body and hand back a re-readable response.
+  if (res.ok) {
+    const bodyText = await res.text();
+    setEntry(key, {
+      etag: res.headers.get('ETag'),
+      link: res.headers.get('Link'),
+      bodyText,
+      storedAt: now,
+    });
+    const out = new Headers(res.headers);
+    out.set('X-Funny-Cache', 'miss');
+    return new Response(bodyText, { status: res.status, headers: out });
+  }
+
+  // Other errors pass through untouched.
+  if (res.status >= 500) {
+    log.warn('github upstream error', { namespace: 'github-cache', status: res.status, path });
+  }
+  return res;
 }
 
 /** Run a GitHub GraphQL query. Returns parsed `data` or throws. */

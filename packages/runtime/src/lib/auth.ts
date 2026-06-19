@@ -153,7 +153,10 @@ export const auth = betterAuth({
       roles: { owner, admin: adminRole, member, viewer },
       schema: {
         organization: {
-          fields: {
+          // Custom columns on the organization model. In better-auth >= 1.6 the
+          // `fields` key only renames known fields; custom columns must go under
+          // `additionalFields` (typed as Record<string, DBFieldAttribute>).
+          additionalFields: {
             anthropicApiKey: {
               type: 'string',
               required: false,

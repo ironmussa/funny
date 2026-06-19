@@ -25,7 +25,12 @@ import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 import { useProfileStore } from '@/stores/profile-store';
 
-import { getQuestions, useCurrentProjectPath, type Question } from './utils';
+import {
+  getQuestions,
+  useCurrentProjectPath,
+  useCurrentThreadProviderModel,
+  type Question,
+} from './utils';
 
 const cardLog = createClientLogger('AskUserQuestion');
 
@@ -150,6 +155,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   const otherEditorRef = useRef<PromptEditorHandle>(null);
   const otherEditorContainerRef = useRef<HTMLDivElement>(null);
   const cwd = useCurrentProjectPath();
+  const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
   const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);
@@ -198,22 +204,31 @@ export const AskQuestionCard = memo(function AskQuestionCard({
 
   const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
     if (skillsCacheRef.current) return skillsCacheRef.current;
-    const result = await api.listSkills(cwd);
+    const result = await api.listAgentResources({
+      projectPath: cwd,
+      provider: threadProvider,
+      model: threadModel,
+      phase: 'composer',
+    });
     if (result.isOk()) {
-      const allSkills = result.value.skills ?? [];
       const deduped = new Map<string, Skill>();
-      for (const skill of allSkills) {
+      for (const r of result.value.resources) {
+        if (r.kind !== 'skill' && r.kind !== 'slash-command') continue;
+        const skill: Skill = {
+          name: r.name,
+          description: r.description ?? '',
+          source: r.origin,
+          scope: r.scope,
+        };
         const existing = deduped.get(skill.name);
-        if (!existing || skill.scope === 'project') {
-          deduped.set(skill.name, skill);
-        }
+        if (!existing || skill.scope === 'project') deduped.set(skill.name, skill);
       }
       skillsCacheRef.current = Array.from(deduped.values());
     } else {
       skillsCacheRef.current = [];
     }
     return skillsCacheRef.current;
-  }, [cwd]);
+  }, [cwd, threadProvider, threadModel]);
 
   // Reset skills cache when project path changes
   useEffect(() => {

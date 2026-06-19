@@ -543,7 +543,8 @@
     "terminalShellDesc": "Shell utilizado para o terminal integrado",
     "shellDefault": "Padrão (sistema)",
     "saved": "Configurações salvas",
-    "projectSaved": "Configurações do projeto salvas"
+    "projectSaved": "Configurações do projeto salvas",
+    "agentResources": "Recursos do agente"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -620,6 +621,7 @@
     "question": "Pergunta",
     "thinking": "Pensando",
     "providerError": "Erro do Provedor",
+    "background": "Segundo plano",
     "tool": "Ferramenta",
     "done": "pronto",
     "questions": "pergunta",
@@ -1286,5 +1288,10 @@
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Falha ao criar o projeto. O servidor pode estar com problemas."
     }
+  },
+  "agentResources": {
+    "subtitle": "Skills, comandos e servidores MCP por provedor.",
+    "empty": "Nenhum recurso para este provedor.",
+    "incompatible": "Incompatíveis (apenas auditoria)"
   }
 }

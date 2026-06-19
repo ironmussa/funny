@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => ({
   remoteGetAgentTemplate: vi.fn(),
   findPermissionRule: vi.fn(),
   runSensitivePathBypass: vi.fn(),
+  syncClaudeProjectAssets: vi.fn(),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -70,6 +71,10 @@ vi.mock('../../lib/telemetry.js', () => ({
 
 vi.mock('node:fs', () => ({
   mkdirSync: (...args: unknown[]) => mocks.mkdirSync(...args),
+}));
+
+vi.mock('@funny/core/ports', () => ({
+  syncClaudeProjectAssets: (...args: unknown[]) => mocks.syncClaudeProjectAssets(...args),
 }));
 
 vi.mock('../../services/agent-startup/recover-context.js', () => ({
@@ -345,6 +350,25 @@ describe('AgentLifecycleManager', () => {
   });
 
   describe('startAgent — cwd resolution failures', () => {
+    test('syncs project Claude assets before starting a worktree thread', async () => {
+      seedProjectThread({
+        mode: 'worktree',
+        worktreePath: '/tmp/repo/.worktrees/feature',
+      });
+      mocks.resolveThreadCwd.mockReturnValue(ok('/tmp/repo/.worktrees/feature'));
+
+      const manager = createManager();
+      await manager.startAgent('thread-1', 'hello', '/tmp/repo');
+
+      expect(mocks.syncClaudeProjectAssets).toHaveBeenCalledWith(
+        '/tmp/repo',
+        '/tmp/repo/.worktrees/feature',
+      );
+      expect(mocks.orchestrator.startAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: '/tmp/repo/.worktrees/feature' }),
+      );
+    });
+
     test('marks thread failed and emits error when cwd cannot be resolved', async () => {
       seedProjectThread({ mode: 'worktree', worktreePath: null });
       mocks.resolveThreadCwd.mockReturnValue(

@@ -1,3 +1,7 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 import { okAsync } from 'neverthrow';
 import { vi, describe, test, expect, beforeEach } from 'vitest';
 
@@ -28,7 +32,7 @@ import { runHookCommand } from '../git/commit.js';
 import { execute, executeShell } from '../git/process.js';
 import { getWorktreeBase } from '../git/worktree.js';
 import { readProjectConfig } from '../ports/config-reader.js';
-import { setupWorktree } from '../ports/index.js';
+import { setupWorktree, syncClaudeProjectAssets } from '../ports/index.js';
 import { allocatePorts } from '../ports/port-allocator.js';
 
 const mockExecute = execute as ReturnType<typeof vi.fn>;
@@ -172,5 +176,45 @@ describe('setupWorktree', () => {
     const error = result._unsafeUnwrapErr();
     expect(error.type).toBe('INTERNAL');
     expect(error.message).toContain('Worktree setup failed');
+  });
+});
+
+describe('syncClaudeProjectAssets', () => {
+  test('copies project Claude commands and skills into a worktree', () => {
+    const root = mkdtempSync(join(tmpdir(), 'funny-claude-assets-'));
+    const projectPath = join(root, 'project');
+    const worktreePath = join(root, 'worktree');
+
+    try {
+      mkdirSync(join(projectPath, '.claude', 'commands', 'opsx'), { recursive: true });
+      mkdirSync(join(projectPath, '.claude', 'skills', 'review'), { recursive: true });
+      writeFileSync(join(projectPath, '.claude', 'commands', 'opsx', 'apply.md'), 'apply');
+      writeFileSync(join(projectPath, '.claude', 'skills', 'review', 'SKILL.md'), 'review');
+
+      syncClaudeProjectAssets(projectPath, worktreePath);
+
+      expect(
+        readFileSync(join(worktreePath, '.claude', 'commands', 'opsx', 'apply.md'), 'utf8'),
+      ).toBe('apply');
+      expect(
+        readFileSync(join(worktreePath, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8'),
+      ).toBe('review');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('does nothing when the project has no Claude assets', () => {
+    const root = mkdtempSync(join(tmpdir(), 'funny-claude-assets-empty-'));
+    const projectPath = join(root, 'project');
+    const worktreePath = join(root, 'worktree');
+
+    try {
+      syncClaudeProjectAssets(projectPath, worktreePath);
+
+      expect(existsSync(join(worktreePath, '.claude'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

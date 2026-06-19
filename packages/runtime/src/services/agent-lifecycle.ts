@@ -14,6 +14,7 @@
 import { mkdirSync } from 'node:fs';
 
 import type { AgentOrchestrator } from '@funny/core/agents';
+import { syncClaudeProjectAssets } from '@funny/core/ports';
 import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
@@ -230,6 +231,20 @@ export class AgentLifecycleManager {
       cwd = cwdResult.value;
     }
 
+    if (thread?.mode === 'worktree' && project?.path && cwd !== project.path) {
+      try {
+        syncClaudeProjectAssets(project.path, cwd);
+      } catch (err) {
+        log.warn('Failed to sync Claude project assets into worktree', {
+          namespace: 'agent',
+          threadId,
+          projectPath: project.path,
+          worktreePath: cwd,
+          error: (err as Error).message,
+        });
+      }
+    }
+
     // Ensure the scratch directory exists on disk before the agent starts.
     if (thread?.isScratch) {
       try {
@@ -254,7 +269,7 @@ export class AgentLifecycleManager {
     // Load project MCP servers when none were explicitly provided.
     // For scratch threads there is no project — skip MCP project context.
     if (!mcpServers && project?.path) {
-      mcpServers = await loadProjectMcpServers(threadId, project.path);
+      mcpServers = await loadProjectMcpServers(threadId, project.path, provider);
     }
 
     // Resolve agent template (Deep Agent only)

@@ -454,33 +454,47 @@ export function usePromptInputState({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNewThread, selectedProjectId, activeThreadBaseBranch]);
 
-  // ── Skills ──
+  // ── Skills (provider-scoped) ──
+  // Keyed by project + provider + model: switching to Codex must NOT keep
+  // serving the Claude `.claude` skills cached for the previous provider.
   const skillsCacheRef = useRef<Skill[] | null>(null);
   useEffect(() => {
     skillsCacheRef.current = null;
-  }, [selectedProjectId]);
+  }, [selectedProjectId, currentProvider, currentModel]);
 
   const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
     if (skillsCacheRef.current) return skillsCacheRef.current;
     const path = selectedProjectId
       ? projects.find((p) => p.id === selectedProjectId)?.path
       : undefined;
-    const result = await api.listSkills(path);
+    // Provider-scoped: the resolver returns Claude skills/commands only for
+    // Claude; other providers get nothing here (their built-in commands arrive
+    // via `sdkSlashCommands`).
+    const result = await api.listAgentResources({
+      projectPath: path,
+      provider: currentProvider,
+      model: currentModel,
+      phase: 'composer',
+    });
     if (result.isOk()) {
-      const allSkills = result.value.skills ?? [];
       const deduped = new Map<string, Skill>();
-      for (const skill of allSkills) {
+      for (const r of result.value.resources) {
+        if (r.kind !== 'skill' && r.kind !== 'slash-command') continue;
+        const skill: Skill = {
+          name: r.name,
+          description: r.description ?? '',
+          source: r.origin,
+          scope: r.scope,
+        };
         const existing = deduped.get(skill.name);
-        if (!existing || skill.scope === 'project') {
-          deduped.set(skill.name, skill);
-        }
+        if (!existing || skill.scope === 'project') deduped.set(skill.name, skill);
       }
       skillsCacheRef.current = Array.from(deduped.values());
     } else {
       skillsCacheRef.current = [];
     }
     return skillsCacheRef.current;
-  }, [selectedProjectId, projects]);
+  }, [selectedProjectId, projects, currentProvider, currentModel]);
 
   // ── Queue fetching ──
   const lastQueueFetchRef = useRef<{
@@ -882,6 +896,10 @@ export function usePromptInputState({
     handleCheckoutPreflight,
     loadSkillsForEditor,
     sdkSlashCommands,
+    // Provider that owns the slash menu: the active thread's provider when
+    // viewing one, else the composer's selected provider. Gates Claude-specific
+    // built-in command labels so a Codex/GPT thread isn't shown Claude wording.
+    slashCommandProvider: activeThreadProvider ?? currentProvider,
 
     // Misc
     threadCwd,

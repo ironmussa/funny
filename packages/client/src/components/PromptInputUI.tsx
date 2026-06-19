@@ -411,6 +411,8 @@ export interface PromptInputUIProps {
   loadSkills?: () => Promise<Skill[]>;
   /** SDK-reported slash commands for the active thread (names without leading slash) */
   sdkSlashCommands?: string[];
+  /** Effective provider for the slash menu (gates Claude-specific built-in labels) */
+  commandProvider?: string;
   /** Imperative ref — writes setPrompt into it so the parent can restore text */
   setPromptRef?: React.RefObject<((text: string) => void) | null>;
   editorRef?: React.RefObject<PromptEditorHandle | null>;
@@ -493,6 +495,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   editorCwd,
   loadSkills,
   sdkSlashCommands,
+  commandProvider,
   setPromptRef,
   editorRef: externalEditorRef,
   editorContainerRef: externalEditorContainerRef,
@@ -1310,6 +1313,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               cwd={editorCwd}
               loadSkills={loadSkills}
               sdkSlashCommands={sdkSlashCommands}
+              commandProvider={commandProvider}
               containerRef={promptBoxRef}
             />
           </div>

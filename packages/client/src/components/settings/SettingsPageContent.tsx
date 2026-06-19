@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AgentResourcesSettings } from '@/components/AgentResourcesSettings';
 import { ArchivedThreadsSettings } from '@/components/ArchivedThreadsSettings';
 import { AutomationSettings } from '@/components/AutomationSettings';
 import { GeneralSettings } from '@/components/GeneralSettings';
@@ -35,6 +36,8 @@ export function SettingsPageContent({ page, label }: Props) {
   switch (page) {
     case 'general':
       return <GeneralSettings />;
+    case 'agent-resources':
+      return <AgentResourcesSettings />;
     case 'mcp-server':
       return <McpServerSettings />;
     case 'skills':

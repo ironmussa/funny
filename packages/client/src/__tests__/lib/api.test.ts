@@ -332,4 +332,37 @@ describe('API Client', () => {
       expect(body.body).toBe('Detailed description of changes');
     });
   });
+
+  describe('Agent Resources', () => {
+    test('listAgentResources encodes provider, model, phase, and projectPath', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ provider: 'codex', resources: [], hidden: [] }),
+      );
+
+      const result = await api.listAgentResources({
+        projectPath: '/tmp/p',
+        provider: 'codex',
+        model: 'gpt-5.5',
+        phase: 'composer',
+      });
+      expect(result.isOk()).toBe(true);
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/skills/resources?');
+      expect(url).toContain('provider=codex');
+      expect(url).toContain('model=gpt-5.5');
+      expect(url).toContain('phase=composer');
+      expect(url).toContain('projectPath=%2Ftmp%2Fp');
+    });
+
+    test('listAgentResources omits the query string when no options given', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ provider: 'claude', resources: [], hidden: [] }),
+      );
+
+      await api.listAgentResources({});
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/skills/resources');
+      expect(url).not.toContain('?');
+    });
+  });
 });

@@ -133,7 +133,7 @@ describe('MCP list + toggle integration', () => {
     if (!listAfterDisable.isOk()) return;
     expect(listAfterDisable.value.find((s) => s.name === 'codegraph')?.disabled).toBe(true);
 
-    const loaded = await loadProjectMcpServers(THREAD_ID, PROJECT);
+    const loaded = await loadProjectMcpServers(THREAD_ID, PROJECT, 'claude');
     expect(loaded).toBeUndefined();
   });
 
@@ -169,7 +169,7 @@ describe('MCP list + toggle integration', () => {
     const codegraph = listEnabled.value.find((s) => s.name === 'codegraph');
     expect(codegraph?.disabled).not.toBe(true);
 
-    const loaded = await loadProjectMcpServers(THREAD_ID, PROJECT);
+    const loaded = await loadProjectMcpServers(THREAD_ID, PROJECT, 'claude');
     expect(loaded).toEqual({
       codegraph: {
         type: 'stdio',

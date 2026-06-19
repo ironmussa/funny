@@ -32,6 +32,7 @@ import { startAgent } from '../agent-runner.js';
 import { listPermissionRules } from '../permission-rules-client.js';
 import { launchContainer } from '../podman-service.js';
 import { getServices } from '../service-registry.js';
+import { scratchPathFor } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
@@ -42,6 +43,11 @@ import {
   slugifyTitle,
   stripReferencedFilesBlock,
 } from './helpers.js';
+import {
+  executeShellEscape,
+  extractShellEscapeCommand,
+  formatShellEscapeOutput,
+} from './shell-escape.js';
 
 /**
  * Pre-merge "always allow" permission rules into the agent's allowedTools so
@@ -264,6 +270,56 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
   // Strip any leading `<referenced-files>` XML block so titles, slugs, and
   // forwarded prompts don't show raw markup when files were attached inline.
   const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
+  const shellCommand = extractShellEscapeCommand(params.prompt);
+  if (shellCommand !== null) {
+    if (!shellCommand) {
+      throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
+    }
+
+    const branchResult = await getCurrentBranch(projectPath);
+    const thread = {
+      id: threadId,
+      projectId: params.projectId,
+      userId: params.userId,
+      title: titleSource,
+      mode: 'local' as const,
+      runtime: 'local' as const,
+      provider: resolvedProvider,
+      permissionMode: resolvedPermissionMode,
+      model: resolvedModel,
+      source: params.source || 'web',
+      status: 'completed' as const,
+      branch: branchResult.isOk() ? branchResult.value : undefined,
+      baseBranch: resolvedBaseBranch || (branchResult.isOk() ? branchResult.value : undefined),
+      worktreePath: undefined as string | undefined,
+      parentThreadId: params.parentThreadId,
+      designId: params.designId,
+      agentTemplateId: params.agentTemplateId,
+      templateVariables: params.templateVariables
+        ? JSON.stringify(params.templateVariables)
+        : undefined,
+      fileCheckpointingEnabled: 0,
+      cost: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await createCompletedShellEscapeThread({
+      thread,
+      threadId,
+      projectId: params.projectId,
+      userId: params.userId,
+      cwd: projectPath,
+      command: shellCommand,
+      prompt: params.prompt,
+      images: params.images,
+      model: resolvedModel,
+      permissionMode: resolvedPermissionMode,
+      effort: params.effort,
+    });
+
+    return thread;
+  }
 
   // ── Worktree mode (new worktree) ──────────────────────────────
   if (params.mode === 'worktree' && !params.worktreePath) {
@@ -675,6 +731,35 @@ async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
     updatedAt: new Date().toISOString(),
   };
 
+  const shellCommand = extractShellEscapeCommand(params.prompt);
+  if (shellCommand !== null) {
+    if (!shellCommand) {
+      throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
+    }
+
+    const cwd = scratchPathFor(params.userId, threadId);
+    const completedThread = {
+      ...thread,
+      status: 'completed' as const,
+      fileCheckpointingEnabled: 0,
+    };
+    await createCompletedShellEscapeThread({
+      thread: completedThread,
+      threadId,
+      projectId: '',
+      userId: params.userId,
+      cwd,
+      command: shellCommand,
+      prompt: params.prompt,
+      images: params.images,
+      model: resolvedModel,
+      permissionMode: resolvedPermissionMode,
+      effort: params.effort,
+    });
+
+    return completedThread;
+  }
+
   await tm.createThread(thread as any);
 
   // Persist the user message ourselves so we can pass skipMessageInsert
@@ -719,4 +804,78 @@ async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
   );
 
   return thread;
+}
+
+async function createCompletedShellEscapeThread(args: {
+  thread: Record<string, any>;
+  threadId: string;
+  projectId: string;
+  userId: string;
+  cwd: string;
+  command: string;
+  prompt: string;
+  images?: ImageAttachment[];
+  model: AgentModel;
+  permissionMode: PermissionMode;
+  effort?: string;
+}) {
+  await tm.createThread(args.thread as any);
+
+  const userMessageId = await tm.insertMessage({
+    threadId: args.threadId,
+    role: 'user',
+    content: args.prompt,
+    images: args.images?.length ? JSON.stringify(args.images) : null,
+    model: args.model,
+    permissionMode: args.permissionMode,
+    effort: args.effort ?? null,
+  });
+  const assistantMessageId = await tm.insertMessage({
+    threadId: args.threadId,
+    role: 'assistant',
+    content: '',
+  });
+  const toolInput = { command: args.command };
+  const toolCallId = await tm.insertToolCall({
+    messageId: assistantMessageId,
+    name: 'Bash',
+    input: JSON.stringify(toolInput),
+    author: 'shell',
+  });
+
+  threadEventBus.emit('thread:created', {
+    threadId: args.threadId,
+    projectId: args.projectId,
+    userId: args.userId,
+    cwd: args.cwd,
+    worktreePath: null,
+    stage: 'in_progress' as const,
+    status: 'completed',
+  });
+
+  const result = await executeShellEscape(args.command, args.cwd);
+  const output = formatShellEscapeOutput(result);
+  await tm.updateToolCallOutput(toolCallId, output);
+
+  wsBroker.emitToUser(args.userId, {
+    type: 'agent:message',
+    threadId: args.threadId,
+    data: { messageId: userMessageId, role: 'user', content: args.prompt },
+  } as WSEvent);
+  wsBroker.emitToUser(args.userId, {
+    type: 'agent:tool_call',
+    threadId: args.threadId,
+    data: {
+      toolCallId,
+      messageId: assistantMessageId,
+      name: 'Bash',
+      input: toolInput,
+      author: 'shell',
+    },
+  } as WSEvent);
+  wsBroker.emitToUser(args.userId, {
+    type: 'agent:tool_output',
+    threadId: args.threadId,
+    data: { toolCallId, output },
+  } as WSEvent);
 }

@@ -175,7 +175,7 @@ export const threadsApi = {
     },
     images?: ImageAttachment[],
   ) =>
-    request<{ ok: boolean }>(`/threads/${threadId}/message`, {
+    request<{ ok: boolean; handledLocally?: 'shell_escape' }>(`/threads/${threadId}/message`, {
       method: 'POST',
       body: JSON.stringify({
         content,

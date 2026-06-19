@@ -13,6 +13,7 @@ export interface ToolCallItem {
   name: string;
   input: string | Record<string, unknown>;
   output?: string;
+  author?: string;
 }
 
 export interface ToolCallGroupProps {
@@ -50,7 +51,9 @@ export const ToolCallGroup = memo(function ToolCallGroup({
 }: ToolCallGroupProps) {
   const { t } = useTranslation();
   const tick = useMinuteTick(); // re-render every 60s so timeAgo stays fresh (memo blocks parent ticks)
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(
+    name === 'Bash' && calls.some((call) => call.author === 'shell'),
+  );
   const isTodo = isTodoToolName(name);
   const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
   const displayTime = useMemo(

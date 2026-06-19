@@ -49,16 +49,18 @@ function detectOutputLang(command: string): string | null {
 export function BashCard({
   parsed,
   output,
+  author,
   hideLabel,
   displayTime,
 }: {
   parsed: Record<string, unknown>;
   output?: string;
+  author?: string;
   hideLabel?: boolean;
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(author === 'shell');
   const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
   // Security M6: `createAnsiConverter` enforces escapeXML regardless of caller.
   const ansiConverter = useMemo(
@@ -74,26 +76,34 @@ export function BashCard({
     () => (command && output && !hasAnsi ? detectOutputLang(command) : null),
     [command, output, hasAnsi],
   );
-  const [highlightedCommand, setHighlightedCommand] = useState<string | null>(null);
-  const [highlightedOutput, setHighlightedOutput] = useState<string | null>(null);
+  const [highlightedCommand, setHighlightedCommand] = useState<{
+    command: string;
+    html: string;
+  } | null>(null);
+  const [highlightedOutput, setHighlightedOutput] = useState<{
+    output: string;
+    lang: string;
+    html: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (expanded && command) {
-      ensureLanguage('bash').then(() => {
-        setHighlightedCommand(highlightCode(command, 'bash'));
-      });
-    }
+    if (!expanded || !command) return;
+    let cancelled = false;
+    ensureLanguage('bash').then((ok) => {
+      if (cancelled || !ok) return;
+      setHighlightedCommand({ command, html: highlightCode(command, 'bash') });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [expanded, command]);
 
   useEffect(() => {
-    if (!expanded || !output || !outputLang) {
-      setHighlightedOutput(null);
-      return;
-    }
+    if (!expanded || !output || !outputLang) return;
     let cancelled = false;
     ensureLanguage(outputLang).then((ok) => {
       if (cancelled || !ok) return;
-      setHighlightedOutput(highlightCode(output, outputLang));
+      setHighlightedOutput({ output, lang: outputLang, html: highlightCode(output, outputLang) });
     });
     return () => {
       cancelled = true;
@@ -103,6 +113,8 @@ export function BashCard({
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
+        type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
         className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
       >
@@ -140,11 +152,11 @@ export function BashCard({
                 {t('tools.input')}
               </div>
               <div className="border-border/40 bg-background/80 overflow-x-auto rounded border px-2.5 py-1.5 font-mono text-xs">
-                {highlightedCommand ? (
+                {highlightedCommand?.command === command ? (
                   <pre className="code-viewer hljs text-foreground m-0 leading-relaxed break-all whitespace-pre-wrap">
                     <code
                       className="hljs language-bash"
-                      dangerouslySetInnerHTML={{ __html: highlightedCommand }}
+                      dangerouslySetInnerHTML={{ __html: highlightedCommand.html }}
                     />
                   </pre>
                 ) : (
@@ -161,11 +173,11 @@ export function BashCard({
               </div>
               {output ? (
                 <div className="border-border/40 bg-background/80 rounded border px-2.5 py-1.5">
-                  {highlightedOutput ? (
+                  {highlightedOutput?.output === output && highlightedOutput.lang === outputLang ? (
                     <pre className="code-viewer text-muted-foreground m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                       <code
                         className="hljs"
-                        dangerouslySetInnerHTML={{ __html: highlightedOutput }}
+                        dangerouslySetInnerHTML={{ __html: highlightedOutput.html }}
                       />
                     </pre>
                   ) : htmlOutput ? (

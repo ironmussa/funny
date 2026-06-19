@@ -1,6 +1,10 @@
 import { describe, test, expect } from 'vitest';
 
-import { cleanThreadTitle, parseLeadingSlashCommand } from '@/lib/thread-title';
+import {
+  cleanThreadTitle,
+  parseLeadingPromptCommand,
+  parseLeadingSlashCommand,
+} from '@/lib/thread-title';
 
 describe('cleanThreadTitle', () => {
   test('strips a leading <referenced-files> block', () => {
@@ -75,6 +79,40 @@ describe('parseLeadingSlashCommand', () => {
     expect(parseLeadingSlashCommand('please run /security-audit')).toEqual({
       command: null,
       rest: 'please run /security-audit',
+    });
+  });
+});
+
+describe('parseLeadingPromptCommand', () => {
+  test('extracts a leading slash command', () => {
+    expect(parseLeadingPromptCommand('/security-audit check the auth layer')).toEqual({
+      kind: 'slash',
+      command: 'security-audit',
+      rest: 'check the auth layer',
+    });
+  });
+
+  test('extracts a leading exclamation command line', () => {
+    expect(parseLeadingPromptCommand('! bun test --filter auth')).toEqual({
+      kind: 'shell',
+      command: 'bun test --filter auth',
+      rest: '',
+    });
+  });
+
+  test('supports exclamation commands without a separating space', () => {
+    expect(parseLeadingPromptCommand('!npm run build')).toEqual({
+      kind: 'shell',
+      command: 'npm run build',
+      rest: '',
+    });
+  });
+
+  test('does not treat punctuation-only exclamation as a command', () => {
+    expect(parseLeadingPromptCommand('!')).toEqual({
+      kind: null,
+      command: null,
+      rest: '!',
     });
   });
 });

@@ -2,11 +2,11 @@ import { Paperclip } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SkillChip } from '@/components/ui/chip';
+import { CommandLineChip, SkillChip } from '@/components/ui/chip';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
-import { cleanThreadTitle, parseLeadingSlashCommand } from '@/lib/thread-title';
+import { cleanThreadTitle, parseLeadingPromptCommand } from '@/lib/thread-title';
 import { cn } from '@/lib/utils';
 
 interface ThreadAttachmentsBadgeProps {
@@ -68,6 +68,8 @@ export function ThreadAttachmentsBadge({
 interface ThreadTitleProps {
   /** Raw thread title (may include a `<referenced-files>` XML block) */
   title: string;
+  /** Root element. Use `span` when rendering inside text-only parents like h1/p. */
+  as?: 'div' | 'span';
   /** Search query to highlight inside the cleaned title */
   search?: string;
   /** Classes for the title text element */
@@ -89,6 +91,7 @@ interface ThreadTitleProps {
  */
 export function ThreadTitle({
   title,
+  as: Root = 'div',
   search,
   className,
   containerClassName,
@@ -97,32 +100,40 @@ export function ThreadTitle({
   stopBadgePropagation,
 }: ThreadTitleProps) {
   const { displayTitle, attachedFiles } = useMemo(() => cleanThreadTitle(title), [title]);
-  const { command, rest } = useMemo(() => parseLeadingSlashCommand(displayTitle), [displayTitle]);
+  const leadingCommand = useMemo(() => parseLeadingPromptCommand(displayTitle), [displayTitle]);
   const titleClass = cn(
     'first-letter:uppercase',
     multiline ? 'flex-1' : 'min-w-0 flex-1 truncate',
     className,
   );
-  // When the title is a `/slash-command`, render it as a chip (matching the
-  // main thread) and treat the remainder as the plain title text.
-  const text = command ? rest : displayTitle;
+  // Render leading `/slash-command` and `!command` titles as chips matching the
+  // main thread message, then treat any remainder as plain title text.
+  const text = leadingCommand.kind === 'slash' ? leadingCommand.rest : displayTitle;
 
   return (
-    <div
+    <Root
       className={cn(
         'flex min-w-0 gap-1.5',
         multiline ? 'items-start' : 'items-center',
         containerClassName,
       )}
     >
-      {command && (
+      {leadingCommand.kind === 'slash' && leadingCommand.command && (
         <SkillChip
-          name={command}
+          name={leadingCommand.command}
           className="mx-0 shrink-0"
           data-testid="thread-title-slash-command"
         />
       )}
-      {text &&
+      {leadingCommand.kind === 'shell' && leadingCommand.command && (
+        <CommandLineChip
+          command={leadingCommand.command}
+          className="mx-0 min-w-0"
+          data-testid="thread-title-command-line"
+        />
+      )}
+      {leadingCommand.kind !== 'shell' &&
+        text &&
         (search !== undefined ? (
           <HighlightText text={text} query={search} className={titleClass} />
         ) : (
@@ -134,6 +145,6 @@ export function ThreadTitle({
         stopPropagation={stopBadgePropagation}
         data-testid={badgeTestId}
       />
-    </div>
+    </Root>
   );
 }

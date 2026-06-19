@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   tm: {
     createThread: vi.fn(async () => undefined),
     insertMessage: vi.fn(async () => 'msg-1'),
+    insertToolCall: vi.fn(async () => 'tc-shell'),
+    updateToolCallOutput: vi.fn(async () => undefined),
     updateThread: vi.fn(async () => undefined),
   },
   projects: {
@@ -25,6 +27,15 @@ const mocks = vi.hoisted(() => ({
   launchContainer: vi.fn(),
   safeFetchUserUrl: vi.fn(),
   listPermissionRules: vi.fn(async () => []),
+  executeShellEscape: vi.fn(async (command: string) => ({
+    command,
+    stdout: 'hello',
+    stderr: '',
+    exitCode: 0,
+    signal: null,
+    timedOut: false,
+    outputTruncated: false,
+  })),
 }));
 
 vi.mock('../../services/ws-broker.js', () => ({
@@ -68,6 +79,15 @@ vi.mock('../../utils/file-mentions.js', () => ({
   augmentPromptWithSymbols: vi.fn(async (content: string) => content),
   stripInlineReferencedContent: vi.fn((content: string) => content),
 }));
+
+vi.mock('../../services/thread-service/shell-escape.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../services/thread-service/shell-escape.js')>();
+  return {
+    ...actual,
+    executeShellEscape: mocks.executeShellEscape,
+  };
+});
 
 vi.mock('@funny/core/git', () => ({
   getCurrentBranch: mocks.getCurrentBranch,
@@ -273,6 +293,93 @@ describe('createAndStartThread', () => {
       undefined,
       undefined,
     );
+  });
+
+  test('executes initial ! commands locally without starting the agent', async () => {
+    mocks.tm.insertMessage
+      .mockResolvedValueOnce('msg-user-shell')
+      .mockResolvedValueOnce('msg-assistant-shell');
+
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      prompt: '!printf "hello"',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.status).toBe('completed');
+    }
+    expect(mocks.startAgent).not.toHaveBeenCalled();
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'fixed-thread-id',
+        projectId: 'p-1',
+        status: 'completed',
+        mode: 'local',
+        branch: 'main',
+      }),
+    );
+    expect(mocks.tm.insertMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        threadId: 'fixed-thread-id',
+        role: 'user',
+        content: '!printf "hello"',
+      }),
+    );
+    expect(mocks.tm.insertMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        threadId: 'fixed-thread-id',
+        role: 'assistant',
+        content: '',
+      }),
+    );
+    expect(mocks.tm.insertToolCall).toHaveBeenCalledWith({
+      messageId: 'msg-assistant-shell',
+      name: 'Bash',
+      input: JSON.stringify({ command: 'printf "hello"' }),
+      author: 'shell',
+    });
+    expect(mocks.tm.updateToolCallOutput).toHaveBeenCalledWith(
+      'tc-shell',
+      expect.stringContaining('hello'),
+    );
+    expect(mocks.threadEventBus.emit).toHaveBeenCalledWith(
+      'thread:created',
+      expect.objectContaining({
+        threadId: 'fixed-thread-id',
+        cwd: '/projects/my-app',
+        status: 'completed',
+      }),
+    );
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'agent:tool_output',
+        threadId: 'fixed-thread-id',
+        data: expect.objectContaining({
+          toolCallId: 'tc-shell',
+          output: expect.stringContaining('hello'),
+        }),
+      }),
+    );
+  });
+
+  test('rejects initial bare ! shell escapes', async () => {
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      prompt: '!',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(mocks.tm.createThread).not.toHaveBeenCalled();
+    expect(mocks.startAgent).not.toHaveBeenCalled();
   });
 
   test('creates scratch thread without project lookup and skips duplicate message insert', async () => {

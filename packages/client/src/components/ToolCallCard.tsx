@@ -20,6 +20,7 @@ interface ToolCallCardProps {
   name: string;
   input: string | Record<string, unknown>;
   output?: string;
+  author?: string;
   onRespond?: (answer: string) => void;
   /** When true, hides the tool label (used inside ToolCallGroup to avoid redundancy) */
   hideLabel?: boolean;
@@ -36,6 +37,7 @@ export const ToolCallCard = memo(
     name,
     input,
     output,
+    author,
     onRespond,
     hideLabel,
     planText,
@@ -62,6 +64,7 @@ export const ToolCallCard = memo(
       name,
       parsed,
       output,
+      author,
       onRespond,
       hideLabel,
       planText,
@@ -73,6 +76,7 @@ export const ToolCallCard = memo(
           name={childTc.name}
           input={childTc.input}
           output={childTc.output}
+          author={childTc.author}
         />
       ),
     });
@@ -100,6 +104,7 @@ export const ToolCallCard = memo(
       prev.name === next.name &&
       prev.input === next.input &&
       prev.output === next.output &&
+      prev.author === next.author &&
       prev.hideLabel === next.hideLabel &&
       !!prev.onRespond === !!next.onRespond &&
       prev.planText === next.planText &&

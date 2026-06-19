@@ -74,6 +74,24 @@ describe('UserMessageCard', () => {
     expect(screen.getAllByText('a.ts').length).toBeGreaterThan(0);
   });
 
+  test('renders leading exclamation commands as command-line chips', () => {
+    renderWithProviders(
+      <UserMessageCard content={'! bun test --filter auth\nReview output'} data-testid="msg-cmd" />,
+    );
+
+    const commandChip = screen.getByTestId('user-message-command-line');
+    expect(commandChip).toHaveTextContent('>');
+    expect(commandChip).toHaveTextContent('bun test --filter auth');
+    expect(screen.getByText(/Review output/)).toBeInTheDocument();
+  });
+
+  test('does not render inline punctuation exclamation as a command chip', () => {
+    renderWithProviders(<UserMessageCard content="Careful! run tests" data-testid="msg-bang" />);
+
+    expect(screen.queryByTestId('user-message-command-line')).not.toBeInTheDocument();
+    expect(screen.getByText('Careful! run tests')).toBeInTheDocument();
+  });
+
   test('renders URLs as theme-aware links', () => {
     const url = 'https://example.com/path';
     renderWithProviders(<UserMessageCard content={`Check ${url} please`} data-testid="msg-url" />);

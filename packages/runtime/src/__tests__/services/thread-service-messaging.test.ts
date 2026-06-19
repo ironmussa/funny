@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     updateThread: vi.fn(async () => undefined),
     getThreadMessages: vi.fn(),
     insertMessage: vi.fn(async () => 'msg-new'),
+    insertToolCall: vi.fn(async () => 'tc-shell'),
     updateMessage: vi.fn(async () => undefined),
     findLastUnansweredInteractiveToolCall: vi.fn(async () => undefined),
     updateToolCallOutput: vi.fn(async () => undefined),
@@ -307,6 +308,132 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.projects.resolveProjectPath).not.toHaveBeenCalled();
     expect(mocks.projects.getProject).not.toHaveBeenCalled();
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sendMessage — shell escape', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projects.getProject.mockResolvedValue({
+      followUpMode: 'interrupt',
+      path: process.cwd(),
+    });
+    mocks.tm.getThreadMessages.mockResolvedValue({ messages: [], hasMore: false });
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-shell',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+    mocks.tm.insertMessage
+      .mockResolvedValueOnce('msg-user-shell')
+      .mockResolvedValueOnce('msg-assistant-shell');
+  });
+
+  test('executes ! commands locally and emits persisted messages without starting the agent', async () => {
+    const result = await sendMessage({
+      threadId: 't-shell',
+      userId: 'u-1',
+      content: '!printf "hello shell"',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ ok: true, handledLocally: 'shell_escape' });
+    }
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(2);
+    expect(mocks.tm.insertMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        threadId: 't-shell',
+        role: 'user',
+        content: '!printf "hello shell"',
+      }),
+    );
+    expect(mocks.tm.insertMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        threadId: 't-shell',
+        role: 'assistant',
+        content: '',
+      }),
+    );
+    expect(mocks.tm.insertToolCall).toHaveBeenCalledWith({
+      messageId: 'msg-assistant-shell',
+      name: 'Bash',
+      input: JSON.stringify({ command: 'printf "hello shell"' }),
+      author: 'shell',
+    });
+    expect(mocks.tm.updateToolCallOutput).toHaveBeenCalledWith(
+      'tc-shell',
+      expect.stringContaining('hello shell'),
+    );
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'agent:message',
+        threadId: 't-shell',
+        data: expect.objectContaining({
+          messageId: 'msg-user-shell',
+          role: 'user',
+          content: '!printf "hello shell"',
+        }),
+      }),
+    );
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'agent:tool_call',
+        threadId: 't-shell',
+        data: expect.objectContaining({
+          toolCallId: 'tc-shell',
+          messageId: 'msg-assistant-shell',
+          name: 'Bash',
+          input: { command: 'printf "hello shell"' },
+          author: 'shell',
+        }),
+      }),
+    );
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+      'u-1',
+      expect.objectContaining({
+        type: 'agent:tool_output',
+        threadId: 't-shell',
+        data: expect.objectContaining({
+          toolCallId: 'tc-shell',
+          output: expect.stringContaining('hello shell'),
+        }),
+      }),
+    );
+  });
+
+  test('rejects bare ! shell escapes', async () => {
+    const result = await sendMessage({ threadId: 't-shell', userId: 'u-1', content: '!' });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
+  });
+
+  test('rejects shell escapes from non-owners even when they can steer the thread', async () => {
+    const result = await sendMessage({
+      threadId: 't-shell',
+      userId: 'u-2',
+      content: '!pwd',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(403);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
   });
 });
 

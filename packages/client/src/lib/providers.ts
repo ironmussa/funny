@@ -128,7 +128,7 @@ export const EFFORT_LEVELS: EffortConfig[] = [
 ];
 
 /** Providers that support effort/reasoning level configuration. */
-const PROVIDERS_WITH_EFFORT = new Set(['claude', 'codex']);
+const PROVIDERS_WITH_EFFORT = new Set(['claude', 'codex', 'pi']);
 
 // Claude models that support effort beyond low/medium/high.
 // Keys are the friendly model names from `@funny/shared` models registry.

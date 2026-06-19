@@ -5,31 +5,25 @@
  * @domain layer: infrastructure
  */
 
-import {
-  fetchRemote,
-  getPRForBranch,
-  git,
-  invalidateStatusCache,
-  type BranchPRInfo,
-  type GitIdentityOptions,
-} from '@funny/core/git';
+import { getPRForBranch, git, type BranchPRInfo, type GitIdentityOptions } from '@funny/core/git';
 import { ok } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { startSpan } from '../../lib/telemetry.js';
-import * as tm from '../../services/thread-manager.js';
+import {
+  FETCH_THROTTLE_MS,
+  GIT_STATUS_CACHE_TTL_MS,
+  gitRuntimeService,
+  gitStatusCache,
+} from '../../services/git-runtime-service.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import { requireProject } from '../../utils/route-helpers.js';
 
 // computeBranchKey is imported from utils/git-status-helpers.ts
 
 // In-memory cache for bulk git status to avoid spawning excessive git processes.
-export const _gitStatusCache = new Map<string, { data: any; ts: number }>();
-export const GIT_STATUS_CACHE_TTL_MS = 2_000; // 2 seconds
-
-// Throttled fetch: track last fetch time per project so we don't hammer the remote.
-export const _lastFetchTs = new Map<string, number>();
-export const FETCH_THROTTLE_MS = 30_000; // 30 seconds
+export { GIT_STATUS_CACHE_TTL_MS, FETCH_THROTTLE_MS };
+export const _gitStatusCache = gitStatusCache;
 
 // Per-branch PR info cache. `gh pr list` averages ~320ms per call and is the
 // dominant cost in /api/git/:threadId/status. Cache result so the synchronous
@@ -124,13 +118,12 @@ export function emitPRUpdateForThread(opts: {
 
 /** Invalidate cached git status for a project after mutating git operations. */
 export async function invalidateGitStatusCache(threadId: string) {
-  const thread = await tm.getThread(threadId);
-  if (thread) _gitStatusCache.delete(thread.projectId);
+  await gitRuntimeService.invalidateThreadStatus(threadId);
 }
 
 /** Invalidate cached git status by project ID directly. Exported for use by event handlers. */
 export function invalidateGitStatusCacheByProject(projectId: string) {
-  _gitStatusCache.delete(projectId);
+  gitRuntimeService.invalidateProjectStatus(projectId);
 }
 
 /**
@@ -152,38 +145,13 @@ export function scheduleBackgroundFetch(
   attrs?: Record<string, string | number | boolean>,
   onFetched?: () => void | Promise<void>,
 ): boolean {
-  const lastFetch = _lastFetchTs.get(projectId) ?? 0;
-  if (Date.now() - lastFetch <= FETCH_THROTTLE_MS) return false;
-  _lastFetchTs.set(projectId, Date.now());
-
-  const span = startSpan('git.fetch_remote', {
-    attributes: { projectId, background: true, ...(attrs ?? {}) },
+  return gitRuntimeService.scheduleBackgroundFetch({
+    projectId,
+    projectPath,
+    identity,
+    attrs,
+    onFetched,
   });
-  fetchRemote(projectPath, identity).match(
-    () => {
-      span.end('ok');
-      _gitStatusCache.delete(projectId);
-      // The fetch advanced origin refs; drop the cwd-keyed summary too so the
-      // broadcast recompute below sees the new `unpulledCommitCount`.
-      invalidateStatusCache(projectPath);
-      void Promise.resolve(onFetched?.()).catch((err) => {
-        log.warn('Background fetch onFetched callback failed', {
-          namespace: 'git-service',
-          projectId,
-          error: String(err),
-        });
-      });
-    },
-    (error) => {
-      span.end('error', error.message);
-      log.warn('Background git fetch failed', {
-        namespace: 'git-service',
-        projectId,
-        error: error.message,
-      });
-    },
-  );
-  return true;
 }
 
 /** Count unpushed commits on a branch vs its remote tracking branch. */

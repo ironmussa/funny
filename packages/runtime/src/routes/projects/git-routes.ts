@@ -1,5 +1,4 @@
 import {
-  fetchRemote,
   getCurrentBranch,
   getDefaultBranch,
   git,
@@ -10,6 +9,7 @@ import {
 import { Hono } from 'hono';
 
 import { requestSpan } from '../../middleware/tracing.js';
+import { gitRuntimeService } from '../../services/git-runtime-service.js';
 import { resolveIdentity } from '../../services/git-service.js';
 import * as tm from '../../services/thread-manager.js';
 import { wsBroker } from '../../services/ws-broker.js';
@@ -30,7 +30,12 @@ projectGitRoutes.get('/:id/branches', async (c) => {
   // Fire-and-forget: fetch remote refs in the background so the response is
   // instant (uses locally cached branch data).
   const identity = userId ? await resolveIdentity(userId) : undefined;
-  void fetchRemote(project.path, identity);
+  gitRuntimeService.scheduleBackgroundFetch({
+    projectId: project.id,
+    projectPath: project.path,
+    identity,
+    attrs: { route: 'project.branches' },
+  });
   const [branchesResult, defaultBranchResult, currentBranchResult] = await Promise.all([
     (async () => {
       const span = requestSpan(c, 'git.branches_detailed', { projectId: project.id });

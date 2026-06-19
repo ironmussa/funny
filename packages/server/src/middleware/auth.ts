@@ -361,7 +361,7 @@ export function requirePermission(resource: string, action: string) {
       const hasPermission = await _auth.api.hasPermission({
         headers: c.req.raw.headers,
         body: {
-          permission: {
+          permissions: {
             [resource]: [action],
           },
         },

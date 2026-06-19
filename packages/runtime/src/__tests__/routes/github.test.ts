@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
+import { _resetGithubCache } from '../../routes/github/github-cache.js';
 import { fetchRepoIssues } from '../../routes/github/helpers.js';
 import { prRoutes } from '../../routes/github/prs.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -61,6 +62,12 @@ describe('GitHub Routes', () => {
   });
 
   describe('fetchRepoIssues', () => {
+    // githubApiFetch caches successful GETs in module state, so several tests
+    // here share a token+path. Clear it between tests to avoid cross-test bleed.
+    beforeEach(() => {
+      _resetGithubCache();
+    });
+
     afterEach(() => {
       vi.unstubAllGlobals();
     });

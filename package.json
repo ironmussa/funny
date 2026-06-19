@@ -68,7 +68,8 @@
     "fitness:size": "bun scripts/fitness/check-file-size.ts",
     "fitness:growth": "bun scripts/fitness/check-file-growth.ts",
     "typecheck": "bun scripts/fitness/check-typecheck.ts",
-    "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh"
+    "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.26.0",
@@ -91,6 +92,7 @@
     "neverthrow": "^8.2.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
+    "react-doctor": "^0.5.6",
     "secretlint": "^13.0.2",
     "tailwindcss-animate": "^1.0.7",
     "vitepress": "^2.0.0-alpha.17"

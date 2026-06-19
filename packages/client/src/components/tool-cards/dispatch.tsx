@@ -16,6 +16,7 @@ interface Args {
   name: string;
   parsed: Record<string, any>;
   output?: string;
+  author?: string;
   onRespond?: (answer: string) => void;
   hideLabel?: boolean;
   planText?: string;
@@ -37,6 +38,7 @@ export function dispatchToolCard({
   name,
   parsed,
   output,
+  author,
   onRespond,
   hideLabel,
   planText,
@@ -61,7 +63,13 @@ export function dispatchToolCard({
     );
   if (name === 'Bash')
     return (
-      <BashCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
+      <BashCard
+        parsed={parsed}
+        output={output}
+        author={author}
+        hideLabel={hideLabel}
+        displayTime={displayTime}
+      />
     );
   if (name === 'Read')
     return (

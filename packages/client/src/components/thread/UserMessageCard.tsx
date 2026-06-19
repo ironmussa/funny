@@ -4,7 +4,7 @@ import { useState, useRef, useLayoutEffect, useCallback, useMemo, type ReactNode
 import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
-import { FileChip, SkillChip } from '@/components/ui/chip';
+import { CommandLineChip, FileChip, SkillChip } from '@/components/ui/chip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,14 +74,25 @@ function UserMessageSkillChip({ name }: { name: string }) {
   return <SkillChip name={name} variant="inverse" data-testid="user-message-slash-command" />;
 }
 
+/** Renders a command-line chip for `!` commands (inverse variant for dark card). */
+function UserMessageCommandLineChip({ command }: { command: string }) {
+  return (
+    <CommandLineChip command={command} variant="inverse" data-testid="user-message-command-line" />
+  );
+}
+
 /**
- * Splits text on @path mentions and /slash-command prefixes, replacing them
- * with inline file / skill chips.
+ * Splits text on @path mentions, /slash-command prefixes, and leading
+ * !command lines, replacing them with inline chips.
  * Returns an array of ReactNode (strings and chip elements).
  */
 function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>): ReactNode[] {
-  // Build combined regex: slash commands (at start) + @path mentions
+  // Build combined regex: leading command lines + slash commands + @path mentions
   const regexParts: string[] = [];
+
+  // Command line: !cmd at the start of the message or line. The command consumes
+  // that line, because this prefix is used to send shell commands.
+  regexParts.push('(?<=^|\\n)!\\s*([^\\n]+)');
 
   // Slash command: /name at start of text or after whitespace, not adjacent to
   // any path-continuation char (so /home/user/... isn't mistaken for a command,
@@ -89,8 +100,8 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
   // Match /word characters, colons, dots, hyphens (e.g. /skill-creator:skill-creator)
   regexParts.push('(?<=^|\\s)\\/([\\w:.-]+)(?![\\w/:.-])');
 
-  // @path mentions — always present as group 2, even if empty (use a never-matching
-  // pattern so URL stays as group 3 regardless of fileMap size).
+  // @path mentions — always present as group 3, even if empty (use a never-matching
+  // pattern so URL stays as group 4 regardless of fileMap size).
   if (fileMap.size > 0) {
     const escapedPaths = Array.from(fileMap.keys())
       .sort((a, b) => b.length - a.length)
@@ -114,19 +125,28 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
     }
 
     if (match[1] !== undefined) {
-      // Slash command match (group 1)
-      parts.push(<UserMessageSkillChip key={`slash-${match.index}`} name={match[1]} />);
+      // Command-line match (group 1)
+      parts.push(
+        <UserMessageCommandLineChip
+          key={`command-line-${match.index}`}
+          command={match[1].trim()}
+        />,
+      );
       lastIndex = match.index + match[0].length;
     } else if (match[2] !== undefined) {
-      // @path mention match (group 2)
-      const item = fileMap.get(match[2]);
+      // Slash command match (group 2)
+      parts.push(<UserMessageSkillChip key={`slash-${match.index}`} name={match[2]} />);
+      lastIndex = match.index + match[0].length;
+    } else if (match[3] !== undefined) {
+      // @path mention match (group 3)
+      const item = fileMap.get(match[3]);
       if (item) {
         parts.push(<ReferencedFileChip key={`chip-${match.index}`} item={item} />);
       }
       lastIndex = match.index + match[0].length;
-    } else if (match[3] !== undefined) {
-      // URL match (group 3) — strip trailing punctuation so ")", ".", "," etc. stay as text
-      let url = match[3];
+    } else if (match[4] !== undefined) {
+      // URL match (group 4) — strip trailing punctuation so ")", ".", "," etc. stay as text
+      let url = match[4];
       let trailing = '';
       const trailingMatch = url.match(/[)\]}.,;:!?'"]+$/);
       if (trailingMatch) {

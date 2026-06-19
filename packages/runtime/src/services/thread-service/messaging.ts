@@ -42,6 +42,11 @@ import { resolveThreadCwd } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
 import { ThreadServiceError, emitThreadUpdated } from './helpers.js';
+import {
+  executeShellEscape,
+  extractShellEscapeCommand,
+  formatShellEscapeOutput,
+} from './shell-escape.js';
 
 function toThreadServiceError(err: unknown): ThreadServiceError {
   return err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500);
@@ -97,6 +102,7 @@ export interface SendMessageResult {
   queued?: boolean;
   queuedCount?: number;
   queuedMessageId?: string;
+  handledLocally?: 'shell_escape';
 }
 
 export function sendMessage(
@@ -149,6 +155,11 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   );
   if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
   const cwd = cwdResult.value;
+
+  const shellCommand = extractShellEscapeCommand(params.content);
+  if (shellCommand !== null) {
+    return handleShellEscapeMessage(params, thread, cwd, shellCommand);
+  }
 
   const effectiveProvider = (params.provider ||
     thread.provider ||
@@ -401,6 +412,89 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   });
 
   return { ok: true };
+}
+
+async function handleShellEscapeMessage(
+  params: SendMessageParams,
+  thread: Record<string, any>,
+  cwd: string,
+  command: string,
+): Promise<SendMessageResult> {
+  if (!command) {
+    throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
+  }
+  if (thread.userId && params.userId && thread.userId !== params.userId) {
+    throw new ThreadServiceError('Only the thread owner can run shell escapes.', 403);
+  }
+
+  const userMessageId = await tm.insertMessage({
+    threadId: params.threadId,
+    role: 'user',
+    content: params.content,
+    images: params.images?.length ? JSON.stringify(params.images) : null,
+    model: params.model ?? thread.model ?? null,
+    permissionMode: params.permissionMode ?? thread.permissionMode ?? null,
+    effort: params.effort ?? null,
+  });
+
+  const assistantMessageId = await tm.insertMessage({
+    threadId: params.threadId,
+    role: 'assistant',
+    content: '',
+  });
+  const toolInput = { command };
+  const toolCallId = await tm.insertToolCall({
+    messageId: assistantMessageId,
+    name: 'Bash',
+    input: JSON.stringify(toolInput),
+    author: 'shell',
+  });
+
+  const result = await executeShellEscape(command, cwd);
+  const output = formatShellEscapeOutput(result);
+  await tm.updateToolCallOutput(toolCallId, output);
+
+  const emitMessage = (data: { messageId: string; role: string; content: string }) => {
+    const event = { type: 'agent:message' as const, threadId: params.threadId, data };
+    if (thread.userId) wsBroker.emitToUser(thread.userId, event as WSEvent);
+    else wsBroker.emit(event as WSEvent);
+  };
+  const emitTool = (
+    event:
+      | {
+          type: 'agent:tool_call';
+          data: {
+            toolCallId: string;
+            messageId: string;
+            name: string;
+            input: typeof toolInput;
+            author: string;
+          };
+        }
+      | { type: 'agent:tool_output'; data: { toolCallId: string; output: string } },
+  ) => {
+    const wsEvent = { ...event, threadId: params.threadId } as WSEvent;
+    if (thread.userId) wsBroker.emitToUser(thread.userId, wsEvent);
+    else wsBroker.emit(wsEvent);
+  };
+
+  emitMessage({ messageId: userMessageId, role: 'user', content: params.content });
+  emitTool({
+    type: 'agent:tool_call',
+    data: {
+      toolCallId,
+      messageId: assistantMessageId,
+      name: 'Bash',
+      input: toolInput,
+      author: 'shell',
+    },
+  });
+  emitTool({
+    type: 'agent:tool_output',
+    data: { toolCallId, output },
+  });
+
+  return { ok: true, handledLocally: 'shell_escape' };
 }
 
 // ── Stop Thread ─────────────────────────────────────────────────

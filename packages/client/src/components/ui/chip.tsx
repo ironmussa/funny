@@ -64,6 +64,34 @@ export function SkillChip({
   );
 }
 
+interface CommandLineChipProps {
+  command: string;
+  variant?: ChipVariant;
+  className?: string;
+  'data-testid'?: string;
+}
+
+/** Chip for command-line prompts sent with `!` (rendered with a shell `>` marker). */
+export function CommandLineChip({
+  command,
+  variant,
+  className,
+  'data-testid': testId = 'command-line-chip',
+}: CommandLineChipProps) {
+  return (
+    <span
+      data-testid={testId}
+      title={command}
+      className={cn(CHIP_BASE, CHIP_VARIANTS[variant ?? 'default'], 'max-w-full', className)}
+    >
+      <span aria-hidden="true" className="shrink-0 font-semibold">
+        &gt;
+      </span>
+      <span className="min-w-0 truncate">{command}</span>
+    </span>
+  );
+}
+
 interface FileChipProps {
   /** Display label (e.g. file basename). */
   name: string;

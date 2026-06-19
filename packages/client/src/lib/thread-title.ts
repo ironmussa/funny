@@ -61,7 +61,32 @@ export function parseLeadingSlashCommand(title: string): {
   command: string | null;
   rest: string;
 } {
-  const match = /^\/([\w:.-]+)(?=\s|$)/.exec(title);
-  if (!match) return { command: null, rest: title };
-  return { command: match[1], rest: title.slice(match[0].length).trimStart() };
+  const parsed = parseLeadingPromptCommand(title);
+  if (parsed.kind !== 'slash') return { command: null, rest: title };
+  return { command: parsed.command, rest: parsed.rest };
+}
+
+export type LeadingPromptCommandKind = 'slash' | 'shell' | null;
+
+/**
+ * Detect leading command-like prefixes in a thread title.
+ *
+ * `/name rest` is a slash/skill command. `! command` is a command-line prompt
+ * and consumes the rest of the title as the shell command.
+ */
+export function parseLeadingPromptCommand(title: string): {
+  kind: LeadingPromptCommandKind;
+  command: string | null;
+  rest: string;
+} {
+  const shellMatch = /^!\s*(\S.*)$/.exec(title);
+  if (shellMatch) return { kind: 'shell', command: shellMatch[1].trim(), rest: '' };
+
+  const slashMatch = /^\/([\w:.-]+)(?=\s|$)/.exec(title);
+  if (!slashMatch) return { kind: null, command: null, rest: title };
+  return {
+    kind: 'slash',
+    command: slashMatch[1],
+    rest: title.slice(slashMatch[0].length).trimStart(),
+  };
 }

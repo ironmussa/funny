@@ -380,3 +380,25 @@ describe('CodexACPProcess.applyModelSelection', () => {
     ).toContain('gpt-5.4');
   });
 });
+
+describe('available_commands_update capture', () => {
+  test('emits commands_changed with the advertised command names', () => {
+    const { proc, messages } = makeProcess();
+    (proc as unknown as { activeSessionId?: string }).activeSessionId = 'sess-9';
+
+    translate(proc, {
+      sessionUpdate: 'available_commands_update',
+      availableCommands: [
+        { name: 'init', description: 'Initialize' },
+        { name: 'review', description: 'Review the diff' },
+        { name: '', description: 'ignored — empty name' },
+      ],
+    });
+
+    const changed = messages.find((m) => m.type === 'commands_changed');
+    expect(changed).toBeDefined();
+    if (changed?.type !== 'commands_changed') throw new Error('unreachable');
+    expect(changed.commands).toEqual(['init', 'review']);
+    expect(changed.sessionId).toBe('sess-9');
+  });
+});

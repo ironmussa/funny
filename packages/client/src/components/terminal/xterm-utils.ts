@@ -121,6 +121,16 @@ export function flushPausedRender(terminal: import('@xterm/xterm').Terminal): vo
   }
 }
 
+export function repaintVisibleTerminal(
+  terminal: import('@xterm/xterm').Terminal,
+  container: HTMLElement | null,
+): void {
+  if (container?.offsetParent != null) {
+    flushPausedRender(terminal);
+  }
+  terminal.refresh(0, terminal.rows - 1);
+}
+
 export const searchAddonRegistry = new Map<string, import('@xterm/addon-search').SearchAddon>();
 export const terminalRegistry = new Map<string, import('@xterm/xterm').Terminal>();
 

@@ -24,6 +24,7 @@ import {
   getTerminalTheme,
   getXtermModules,
   isTauri,
+  repaintVisibleTerminal,
   searchAddonRegistry,
   terminalRegistry,
   useThemeSync,
@@ -53,6 +54,7 @@ import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { getActiveWS } from '@/hooks/use-ws';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
+import { jobsApi } from '@/lib/api/jobs';
 import { cn } from '@/lib/utils';
 import {
   renderPhaseFromState,
@@ -226,6 +228,7 @@ export function WebTerminalTabContent({
   label,
   initialCommand,
   scratchThreadId,
+  repaintKey,
 }: {
   id: string;
   cwd: string;
@@ -237,6 +240,7 @@ export function WebTerminalTabContent({
   label?: string;
   initialCommand?: string;
   scratchThreadId?: string;
+  repaintKey?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
@@ -386,8 +390,7 @@ export function WebTerminalTabContent({
       requestAnimationFrame(() => {
         repaintScheduled = false;
         if (cancelled) return;
-        if (containerRef.current?.offsetParent != null) flushPausedRender(terminal);
-        terminal.refresh(0, terminal.rows - 1);
+        repaintVisibleTerminal(terminal, containerRef.current);
       });
     };
 
@@ -584,6 +587,9 @@ export function WebTerminalTabContent({
       // Wait for the panel expand animation (200ms) to finish, then fit.
       // This ensures we measure the final container size, not a mid-animation value.
       const timer = setTimeout(() => {
+        const el = containerRef.current;
+        if (!el || el.offsetParent === null || el.clientHeight <= 0) return;
+
         // Re-sync xterm theme with current CSS variables
         terminal.options.theme = getTerminalTheme();
         fitAddon.fit();
@@ -596,7 +602,7 @@ export function WebTerminalTabContent({
             ws.emit('pty:resize', { id, cols: dims.cols, rows: dims.rows });
           }
         }
-        terminal.refresh(0, terminal.rows - 1);
+        repaintVisibleTerminal(terminal, el);
         // Only focus if no modal dialog is open (see aria-hidden note above)
         if (shouldFocus && !document.querySelector('[role="dialog"][data-state="open"]')) {
           terminal.focus();
@@ -604,7 +610,7 @@ export function WebTerminalTabContent({
       }, 220);
       return () => clearTimeout(timer);
     }
-  }, [active, panelVisible, id]);
+  }, [active, panelVisible, repaintKey, id]);
 
   useEffect(() => {
     prevActiveRef.current = active;
@@ -808,6 +814,97 @@ export function CommandTabContent({
           </Tooltip>
         </div>
       )}
+      <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-1">
+        <pre
+          className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap text-[#fafafa]"
+          dangerouslySetInnerHTML={{ __html: htmlOutput }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Background job log tab — polls captured logfile chunks by byte offset. */
+export function JobLogTabContent({
+  tabId,
+  jobId,
+  active,
+}: {
+  tabId: string;
+  jobId: string;
+  active: boolean;
+}) {
+  const [output, setOutput] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const offsetRef = useRef(0);
+  const doneRef = useRef(false);
+  const readingRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const ansiConverter = useMemo(
+    () =>
+      createAnsiConverter({
+        fg: getCssVar('--foreground'),
+        bg: getCssVar('--background'),
+        newline: true,
+      }),
+    [],
+  );
+
+  const htmlOutput = useMemo(() => {
+    if (error) return ansiConverter.toHtml(error);
+    return output ? ansiConverter.toHtml(output) : 'Waiting for output...';
+  }, [ansiConverter, error, output]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const readOnce = async () => {
+      if (readingRef.current || doneRef.current) return;
+      readingRef.current = true;
+      await jobsApi.readLog(jobId, offsetRef.current).match(
+        (chunk) => {
+          if (cancelled) return;
+          if (chunk.output) setOutput((prev) => prev + chunk.output);
+          offsetRef.current = chunk.offset;
+          setError(null);
+
+          if (chunk.status !== 'running' && chunk.offset >= chunk.size) {
+            doneRef.current = true;
+            useTerminalStore.getState().markExited(tabId);
+          }
+        },
+        (err) => {
+          if (cancelled) return;
+          doneRef.current = true;
+          setError(err.friendlyMessage ?? err.message);
+          useTerminalStore.getState().markExited(tabId);
+        },
+      );
+      readingRef.current = false;
+    };
+
+    void readOnce();
+    const timer = window.setInterval(() => void readOnce(), 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [jobId, tabId]);
+
+  useEffect(() => {
+    if (active && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [output, active]);
+
+  return (
+    <div
+      className={cn(
+        'absolute inset-0 flex flex-col bg-background',
+        active ? 'z-10' : 'z-0 invisible pointer-events-none',
+      )}
+    >
       <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-1">
         <pre
           className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap text-[#fafafa]"
@@ -1485,6 +1582,13 @@ export function TerminalPanel() {
                   label={tab.label}
                   initialCommand={tab.initialCommand}
                   scratchThreadId={tab.scratchThreadId}
+                />
+              ) : tab.type === 'job-log' && tab.jobId ? (
+                <JobLogTabContent
+                  key={tab.id}
+                  tabId={tab.id}
+                  jobId={tab.jobId}
+                  active={tab.id === effectiveActiveTabId}
                 />
               ) : tab.commandId ? (
                 <CommandTabContent

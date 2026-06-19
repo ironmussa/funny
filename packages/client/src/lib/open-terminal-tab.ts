@@ -24,7 +24,7 @@ function buildTab(args: {
   cwd: string;
   shell: TerminalShell;
   scratchThreadId?: string;
-  /** Command auto-run once the PTY shell is ready (e.g. `tail -f <log>`). */
+  /** Command auto-run once the PTY shell is ready. */
   initialCommand?: string;
   /** Override the auto-generated "<shell> N" label. */
   label?: string;
@@ -50,36 +50,27 @@ function buildTab(args: {
   };
 }
 
-/** Shell-quote a path for safe interpolation into a single-quoted argument. */
-function singleQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
 /**
  * Open the existing bottom terminal panel on a tab that shows a background
- * job's output: live-follow (`tail -f`) while running, the captured log
- * (`cat`) once finished. Opened in the CURRENT terminal scope so it surfaces
+ * job's output. Opened in the CURRENT terminal scope so it surfaces
  * immediately regardless of which project the job belongs to.
  */
 export function openJobLogTerminal(args: {
-  job: Pick<Job, 'id' | 'logPath' | 'status' | 'label' | 'cwd'>;
+  job: Pick<Job, 'id' | 'status' | 'label' | 'cwd'>;
   /** Current terminal scope (so the tab shows in the visible panel). */
   projectId: string;
-  shell?: TerminalShell;
 }): void {
   const { addTab } = useTerminalStore.getState();
-  const log = singleQuote(args.job.logPath);
-  // -F (vs -f) retries if the logfile isn't created yet / rotates.
-  const initialCommand = args.job.status === 'running' ? `tail -n +1 -F ${log}` : `cat ${log}`;
-  addTab(
-    buildTab({
-      projectId: args.projectId,
-      cwd: args.job.cwd ?? '~',
-      shell: args.shell ?? 'default',
-      initialCommand,
-      label: `job: ${args.job.label || args.job.id.slice(0, 8)}`,
-    }),
-  );
+  addTab({
+    id: crypto.randomUUID(),
+    label: `job: ${args.job.label || args.job.id.slice(0, 8)}`,
+    cwd: args.job.cwd ?? '~',
+    alive: args.job.status === 'running',
+    projectId: args.projectId,
+    type: 'job-log',
+    jobId: args.job.id,
+    createdAt: Date.now(),
+  });
 }
 
 interface OpenProjectTerminalArgs {

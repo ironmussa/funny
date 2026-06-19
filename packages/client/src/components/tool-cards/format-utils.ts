@@ -142,6 +142,12 @@ export function getSummary(
     }
     case 'ProviderError':
       return (parsed.error as string) ?? null;
+    case 'Background':
+      return (
+        (parsed.label as string) ??
+        (parsed.command as string) ??
+        (parsed.jobId ? `job ${String(parsed.jobId)}` : null)
+      );
     default:
       // For Gemini ACP tool calls, the description field contains the
       // human-readable title from the ACP protocol (e.g. file path or search query)
@@ -168,6 +174,7 @@ export function getToolLabel(name: string, t: (key: string) => string): string {
     AskUserQuestion: t('tools.question'),
     Think: t('tools.thinking'),
     ProviderError: t('tools.providerError'),
+    Background: t('tools.background'),
     Tool: t('tools.tool'),
   };
   return labels[name] ?? name;

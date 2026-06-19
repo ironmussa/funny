@@ -21,22 +21,25 @@
 
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { open, stat } from 'fs/promises';
 import { join } from 'path';
 
-import type { Job, JobStatus, WSEvent } from '@funny/shared';
+import type { Job, JobLogChunk, JobStatus, WSEvent } from '@funny/shared';
+import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_PROVIDER } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
-import { isAgentRunning } from './agent-runner.js';
+import { isAgentRunning, startAgent } from './agent-runner.js';
 import { createOrReschedule } from './agent-watcher-manager.js';
 import { buildLogTail } from './job-log-tail.js';
 import { getServices } from './service-registry.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
-import { sendMessage } from './thread-service/messaging.js';
+import { resolveThreadCwd } from './thread-context.js';
 import { wsBroker } from './ws-broker.js';
 
 const HEARTBEAT_MS = 5_000;
+const MAX_LOG_READ_BYTES = 128 * 1024;
 const NS = 'agent-job';
 
 let scanner: ReturnType<typeof setInterval> | null = null;
@@ -178,20 +181,93 @@ async function onTerminal(job: Job, status: JobStatus, exitCode: number | null):
   emit(job.userId, status === 'killed' ? 'job:killed' : 'job:exited', finished);
   log.info('Job finished', { namespace: NS, jobId: job.id, status, exitCode });
 
-  // Wake the agent with the verdict + log tail. Idle-gated like watcher wakes.
-  const result = await sendMessage({
-    threadId: job.threadId,
-    userId: job.userId,
-    content: renderCompletion(finished),
-    forceQueue: isAgentRunning(job.threadId),
-  });
-  if (result.isErr()) {
-    log.error('Job wake failed to deliver', {
+  const completion = renderCompletion(finished);
+  await persistCompletionToolCard(finished, completion);
+
+  // Wake an idle agent with the verdict + log tail without persisting a user
+  // message. If a turn is already running, the visible tool card is enough; do
+  // not enqueue a synthetic "user" follow-up that will later render as user text.
+  if (isAgentRunning(job.threadId)) return;
+  await wakeAgentWithCompletion(finished, completion).catch((err) => {
+    log.error('Job wake failed to start agent', {
       namespace: NS,
       jobId: job.id,
-      error: result.error.message,
+      error: (err as Error).message,
     });
-  }
+  });
+}
+
+async function persistCompletionToolCard(job: Job, output: string): Promise<void> {
+  const messageId = await getServices().threads.insertMessage({
+    threadId: job.threadId,
+    role: 'assistant',
+    content: '',
+    author: 'background',
+  });
+  const input = renderCompletionToolInput(job);
+  const toolCallId = await getServices().threads.insertToolCall({
+    messageId,
+    name: 'Background',
+    input: JSON.stringify(input),
+    author: 'background',
+  });
+  await getServices().threads.updateToolCallOutput(toolCallId, output);
+
+  emitTool(job.userId, job.threadId, {
+    type: 'agent:tool_call',
+    data: { toolCallId, messageId, name: 'Background', input, author: 'background' },
+  });
+  emitTool(job.userId, job.threadId, {
+    type: 'agent:tool_output',
+    data: { toolCallId, output },
+  });
+}
+
+function emitTool(
+  userId: string,
+  threadId: string,
+  event:
+    | {
+        type: 'agent:tool_call';
+        data: {
+          toolCallId: string;
+          messageId: string;
+          name: string;
+          input: Record<string, unknown>;
+          author: string;
+        };
+      }
+    | { type: 'agent:tool_output'; data: { toolCallId: string; output: string } },
+): void {
+  wsBroker.emitToUser(userId, { ...event, threadId } as WSEvent);
+}
+
+async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> {
+  const thread = await getServices().threads.getThread(job.threadId);
+  if (!thread) throw new Error('Thread not found');
+
+  const project = thread.projectId
+    ? await getServices().projects.getProject(thread.projectId)
+    : null;
+  const cwdResult = resolveThreadCwd(
+    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
+    project ? { path: project.path } : null,
+  );
+  if (cwdResult.isErr()) throw new Error(cwdResult.error.message);
+
+  await startAgent(
+    job.threadId,
+    prompt,
+    cwdResult.value,
+    thread.model || DEFAULT_MODEL,
+    thread.permissionMode || DEFAULT_PERMISSION_MODE,
+    undefined,
+    undefined,
+    undefined,
+    thread.provider || DEFAULT_PROVIDER,
+    undefined,
+    true,
+  );
 }
 
 function tailLog(logPath: string, maxLines = 50): string {
@@ -213,6 +289,17 @@ function renderCompletion(job: Job): string {
     `Last output:\n${tailLog(job.logPath)}\n\n` +
     `Re-check and continue, or conclude.`
   );
+}
+
+function renderCompletionToolInput(job: Job): Record<string, unknown> {
+  return {
+    jobId: job.id,
+    label: job.label,
+    command: job.command,
+    cwd: job.cwd,
+    status: job.status,
+    exitCode: job.exitCode,
+  };
 }
 
 // ── Cancel / list ────────────────────────────────────────────────
@@ -237,6 +324,51 @@ export async function cancelJob(jobId: string, userId: string): Promise<boolean>
 
 export function listJobsForUser(userId: string): Promise<Job[]> {
   return getServices().jobs.listJobsByUser(userId) as Promise<Job[]>;
+}
+
+export async function readJobLog(
+  jobId: string,
+  userId: string,
+  offset = 0,
+): Promise<JobLogChunk | null> {
+  const job = (await getServices().jobs.getJob(jobId)) as Job | undefined;
+  if (!job || job.userId !== userId) return null;
+
+  const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+  let size = 0;
+  let output = '';
+  let nextOffset = safeOffset;
+
+  try {
+    const stats = await stat(job.logPath);
+    size = stats.size;
+    const readOffset = Math.min(safeOffset, size);
+    const bytesToRead = Math.min(MAX_LOG_READ_BYTES, size - readOffset);
+
+    if (bytesToRead > 0) {
+      const handle = await open(job.logPath, 'r');
+      try {
+        const buffer = Buffer.alloc(bytesToRead);
+        const { bytesRead } = await handle.read(buffer, 0, bytesToRead, readOffset);
+        output = buffer.subarray(0, bytesRead).toString('utf8');
+        nextOffset = readOffset + bytesRead;
+      } finally {
+        await handle.close();
+      }
+    } else {
+      nextOffset = readOffset;
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+
+  return {
+    output,
+    offset: Math.min(nextOffset, size),
+    size,
+    status: job.status,
+    exitCode: job.exitCode,
+  };
 }
 
 export async function removeThreadJobs(threadId: string): Promise<void> {

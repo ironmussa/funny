@@ -166,6 +166,13 @@ describe('getSummary', () => {
     expect(getSummary('AskUserQuestion', { questions }, t)).toBe('1 tools.questions');
   });
 
+  test('returns label or command for Background', () => {
+    expect(getSummary('Background', { label: 'typecheck', command: 'bun run typecheck' }, t)).toBe(
+      'typecheck',
+    );
+    expect(getSummary('Background', { command: 'bun run typecheck' }, t)).toBe('bun run typecheck');
+  });
+
   test('returns plural question count for multiple questions', () => {
     const questions = [
       { question: 'Q1?', header: 'H', options: [], multiSelect: false },
@@ -184,6 +191,7 @@ describe('getToolLabel', () => {
     expect(getToolLabel('Read', t)).toBe('tools.readFile');
     expect(getToolLabel('Bash', t)).toBe('tools.runCommand');
     expect(getToolLabel('TodoWrite', t)).toBe('tools.todos');
+    expect(getToolLabel('Background', t)).toBe('tools.background');
   });
 
   test('returns tool name for unknown tools', () => {

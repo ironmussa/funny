@@ -26,7 +26,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
 import { toACPMcpServers } from './acp-mcp.js';
 import { inferACPToolName, buildACPToolInput, extractACPToolOutput } from './acp-tool-input.js';
-import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
+import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import type { CLIMessage } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
@@ -69,7 +69,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
   async kill(): Promise<void> {
     await super.kill();
     if (this.childProcess && !this.childProcess.killed) {
-      this.childProcess.kill('SIGTERM');
+      killProcessTree(this.childProcess);
     }
   }
 
@@ -184,6 +184,8 @@ export class DeepAgentProcess extends BaseAgentProcess {
       env: spawnEnv,
       signal: this.abortController.signal,
       shell: process.platform === 'win32',
+      // Lead our own process group (POSIX) so kill() reaps the whole tree.
+      detached: process.platform !== 'win32',
     });
 
     this.childProcess = child;
@@ -384,7 +386,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       }
     } finally {
       if (this.childProcess && !this.childProcess.killed) {
-        this.childProcess.kill('SIGTERM');
+        killProcessTree(this.childProcess);
       }
       this.finalize();
     }

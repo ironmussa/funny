@@ -100,6 +100,12 @@ export interface OrchestratorEvents {
   'agent:unexpected-exit': (threadId: string, code: number | null) => void;
   /** Emitted when a session resume fails and the session ID is discarded. */
   'agent:session-cleared': (threadId: string) => void;
+  /**
+   * Emitted when an idle agent is reaped (process tree terminated to free
+   * memory). NON-destructive: the thread keeps its status and sessionId and
+   * resumes on the next message. `idleMs` is how long it had been idle.
+   */
+  'agent:reaped': (threadId: string, provider: string, idleMs: number) => void;
 }
 
 /**
@@ -167,10 +173,11 @@ export const DEFAULT_RESUME_PREFIX =
  * slash-command follow-ups so they're sent verbatim.
  *
  * Guards against absolute paths (`/home/user/...`): the first token must be a
- * lone `/word` (letters, digits, `-`, `_`) with no further slash.
+ * slash command name (letters, digits, `-`, `_`) with optional Claude namespace
+ * segments separated by `:`, and no further slash.
  */
 export function isPureSlashCommand(prompt: string): boolean {
-  return /^\/[a-zA-Z][\w-]*(?:\s|$)/.test(prompt.trimStart());
+  return /^\/[a-zA-Z][\w-]*(?::[a-zA-Z][\w-]*)*(?:\s|$)/.test(prompt.trimStart());
 }
 
 /**
@@ -180,7 +187,7 @@ export function isPureSlashCommand(prompt: string): boolean {
  * command against the SDK-reported list before forwarding.
  */
 export function extractSlashCommandName(prompt: string): string | null {
-  const m = /^\/([a-zA-Z][\w-]*)(?:\s|$)/.exec(prompt.trimStart());
+  const m = /^\/([a-zA-Z][\w-]*(?::[a-zA-Z][\w-]*)*)(?:\s|$)/.exec(prompt.trimStart());
   return m ? m[1] : null;
 }
 
@@ -201,6 +208,16 @@ export function buildEffectivePrompt(
 
 // ── Orchestrator ──────────────────────────────────────────────────
 
+/**
+ * Idle windows (ms) for {@link AgentOrchestrator.getIdleCandidates}. `claude`
+ * uses `claudeIdleMs`; every other provider uses `defaultIdleMs`. `0` (or less)
+ * disables reaping for that class.
+ */
+export interface IdleReapPolicy {
+  defaultIdleMs: number;
+  claudeIdleMs: number;
+}
+
 export class AgentOrchestrator extends EventEmitter {
   private activeAgents = new Map<string, IAgentProcess>();
   private resultReceived = new Set<string>();
@@ -213,6 +230,14 @@ export class AgentOrchestrator extends EventEmitter {
    * the live agent can't reflect, so we kill + respawn instead.
    */
   private lastOptions = new Map<string, ProcessOptionsSnapshot>();
+
+  /**
+   * Wall-clock ms of the most recent agent activity per thread — refreshed on
+   * start/adopt, on every emitted message, and on `sendPrompt`/`steerPrompt`
+   * reuse. A mid-turn process emits messages continuously, so its timestamp
+   * stays fresh and it is structurally ineligible for idle reaping.
+   */
+  private lastActivityAt = new Map<string, number>();
 
   constructor(private processFactory: IAgentProcessFactory) {
     super();
@@ -312,6 +337,7 @@ export class AgentOrchestrator extends EventEmitter {
       try {
         await existing!.steerPrompt!(prompt, images);
         this.lastOptions.set(threadId, nextSnapshot);
+        this.lastActivityAt.set(threadId, Date.now());
         this.emit('agent:started', threadId);
         return;
       } catch (e) {
@@ -328,6 +354,7 @@ export class AgentOrchestrator extends EventEmitter {
       try {
         await existing!.sendPrompt(prompt, images);
         this.lastOptions.set(threadId, nextSnapshot);
+        this.lastActivityAt.set(threadId, Date.now());
         this.emit('agent:started', threadId);
         return;
       } catch (e) {
@@ -454,11 +481,76 @@ export class AgentOrchestrator extends EventEmitter {
       this.activeAgents.delete(threadId);
     }
     this.lastOptions.delete(threadId);
+    this.lastActivityAt.delete(threadId);
     this.emit('agent:stopped', threadId);
   }
 
   isRunning(threadId: string): boolean {
     return this.activeAgents.has(threadId);
+  }
+
+  /**
+   * Select threads whose live agent process is idle enough to reap.
+   *
+   * A candidate must be quiescent and turn-terminal: `resultReceived` is the
+   * gate — it is set only when the current turn produces a `result` and stays
+   * true while the process idles awaiting a follow-up. A mid-turn process (no
+   * result yet) and a process paused on a permission prompt (no result yet)
+   * are both excluded automatically.
+   *
+   * Provider policy is binary, mirroring the cold-path resume rule: `claude`
+   * uses `claudeIdleMs`, every other provider uses `defaultIdleMs`. A window of
+   * `0` (or less) disables reaping for that class. Pure over current state —
+   * `nowMs` is injected so callers (and tests) control the clock.
+   */
+  getIdleCandidates(nowMs: number, policy: IdleReapPolicy): string[] {
+    const out: string[] = [];
+    for (const [threadId, proc] of this.activeAgents) {
+      if (proc.exited) continue;
+      if (!this.resultReceived.has(threadId)) continue; // mid-turn or awaiting permission
+      const provider = this.lastOptions.get(threadId)?.provider ?? '';
+      const idleMs = provider === 'claude' ? policy.claudeIdleMs : policy.defaultIdleMs;
+      if (idleMs <= 0) continue; // disabled for this class
+      const last = this.lastActivityAt.get(threadId);
+      if (last === undefined) continue;
+      if (nowMs - last > idleMs) out.push(threadId);
+    }
+    return out;
+  }
+
+  /**
+   * Reap an idle agent: terminate its process tree and drop in-memory state.
+   *
+   * Distinct from {@link stopAgent} — reaping is NON-destructive: it does NOT
+   * mark the thread manually stopped, does NOT clear the persisted sessionId,
+   * and does NOT change thread status. The next user message resumes the thread
+   * through the existing resume / cold-path flow. Emits `agent:reaped` so the
+   * runtime can log/meter it without treating it as a stop.
+   */
+  async reapIdleAgent(threadId: string): Promise<void> {
+    const proc = this.activeAgents.get(threadId);
+    if (!proc) return;
+    const provider = this.lastOptions.get(threadId)?.provider ?? '';
+    const last = this.lastActivityAt.get(threadId);
+    const idleMs = last !== undefined ? Date.now() - last : 0;
+
+    try {
+      await proc.kill();
+    } catch (e) {
+      dlog.error('Error reaping idle agent', { threadId, error: String(e).slice(0, 200) });
+    }
+
+    // Only remove if THIS proc is still the active one (the exit handler may
+    // race us). resultReceived is true here, so the exit handler will not
+    // emit agent:unexpected-exit.
+    if (this.activeAgents.get(threadId) === proc) {
+      this.activeAgents.delete(threadId);
+      this.lastOptions.delete(threadId);
+    }
+    this.lastActivityAt.delete(threadId);
+    this.resultReceived.delete(threadId);
+
+    this.emit('agent:reaped', threadId, provider, idleMs);
   }
 
   /**
@@ -470,6 +562,7 @@ export class AgentOrchestrator extends EventEmitter {
     this.resultReceived.delete(threadId);
     this.manuallyStopped.delete(threadId);
     this.lastOptions.delete(threadId);
+    this.lastActivityAt.delete(threadId);
   }
 
   /**
@@ -488,6 +581,7 @@ export class AgentOrchestrator extends EventEmitter {
     this.resultReceived.clear();
     this.manuallyStopped.clear();
     this.lastOptions.clear();
+    this.lastActivityAt.clear();
     return agents;
   }
 
@@ -530,8 +624,12 @@ export class AgentOrchestrator extends EventEmitter {
   private wireProcessHandlers(proc: IAgentProcess, threadId: string): void {
     this.activeAgents.set(threadId, proc);
     this.resultReceived.delete(threadId);
+    // Seed activity on start/adopt so a freshly wired (or adopted-after-restart)
+    // process is never reaped on the next sweep.
+    this.lastActivityAt.set(threadId, Date.now());
 
     proc.on('message', (msg: CLIMessage) => {
+      this.lastActivityAt.set(threadId, Date.now());
       dlog.debug('wireProcessHandlers message', {
         threadId,
         type: msg.type,
@@ -571,6 +669,7 @@ export class AgentOrchestrator extends EventEmitter {
       if (this.activeAgents.get(threadId) === proc) {
         this.activeAgents.delete(threadId);
         this.lastOptions.delete(threadId);
+        this.lastActivityAt.delete(threadId);
       }
 
       if (this.manuallyStopped.has(threadId)) {
@@ -603,12 +702,14 @@ export class AgentOrchestrator extends EventEmitter {
   ): void {
     this.activeAgents.set(threadId, proc);
     this.resultReceived.delete(threadId);
+    this.lastActivityAt.set(threadId, Date.now());
 
     let gotMessage = false;
     let immediateError = false;
 
     proc.on('message', (msg: CLIMessage) => {
       gotMessage = true;
+      this.lastActivityAt.set(threadId, Date.now());
       dlog.debug('wireResumeHandlers message', {
         threadId,
         type: msg.type,
@@ -680,6 +781,7 @@ export class AgentOrchestrator extends EventEmitter {
       if (this.activeAgents.get(threadId) === proc) {
         this.activeAgents.delete(threadId);
         this.lastOptions.delete(threadId);
+        this.lastActivityAt.delete(threadId);
       }
 
       if (this.manuallyStopped.has(threadId)) {

@@ -547,7 +547,8 @@
     "terminalShellDesc": "Shell used for the integrated terminal",
     "shellDefault": "Default (system)",
     "saved": "Settings saved",
-    "projectSaved": "Project settings saved"
+    "projectSaved": "Project settings saved",
+    "agentResources": "Agent Resources"
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -624,6 +625,7 @@
     "question": "Question",
     "thinking": "Thinking",
     "providerError": "Provider Error",
+    "background": "Background",
     "tool": "Tool",
     "done": "done",
     "questions": "question",
@@ -1299,5 +1301,10 @@
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Failed to create the project. The server may be experiencing issues."
     }
+  },
+  "agentResources": {
+    "subtitle": "Skills, slash commands, and MCP servers scoped to each provider.",
+    "empty": "No resources available for this provider.",
+    "incompatible": "Incompatible (shown for audit only)"
   }
 }

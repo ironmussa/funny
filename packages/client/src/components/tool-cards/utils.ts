@@ -1,7 +1,11 @@
 import { useMemo } from 'react';
 
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadProjectId, useThreadWorktreePath } from '@/stores/thread-context';
+import {
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 
 export * from './format-utils';
 
@@ -16,6 +20,17 @@ export function useCurrentProjectPath(): string | undefined {
     () => worktreePath || projects.find((p) => p.id === projectId)?.path,
     [projects, projectId, worktreePath],
   );
+}
+
+/**
+ * Hook returning the active thread's effective provider/model — used by tool
+ * cards so their slash-command loaders resolve provider-scoped Agent Resources
+ * (e.g. no Claude `.claude` skills when the thread runs on Codex).
+ */
+export function useCurrentThreadProviderModel(): { provider?: string; model?: string } {
+  const provider = useThreadSelector((thr) => thr?.provider) ?? undefined;
+  const model = useThreadSelector((thr) => thr?.model) ?? undefined;
+  return useMemo(() => ({ provider, model }), [provider, model]);
 }
 
 /**

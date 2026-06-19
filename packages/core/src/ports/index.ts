@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { resolve } from 'path';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
+import { dirname, resolve } from 'path';
 
 import { internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
@@ -24,8 +24,11 @@ export interface SetupWorktreeResult {
   postCreateErrors: string[];
 }
 
+const CLAUDE_PROJECT_ASSET_DIRS = ['.claude/commands', '.claude/skills'] as const;
+
 /**
- * Full worktree setup: allocate ports, copy .env files, run postCreate commands.
+ * Full worktree setup: sync Claude assets, allocate ports, copy .env files,
+ * run postCreate commands.
  * Reads .funny.json from the project root. No-op if no config exists.
  */
 export function setupWorktree(
@@ -35,6 +38,8 @@ export function setupWorktree(
 ): ResultAsync<SetupWorktreeResult, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
+      syncClaudeProjectAssets(projectPath, worktreePath);
+
       const config = readProjectConfig(projectPath);
       const result: SetupWorktreeResult = { ports: [], postCreateErrors: [] };
 
@@ -86,6 +91,22 @@ export function setupWorktree(
 
 // Keep backward-compatible export
 export const allocateWorktreePorts = setupWorktree;
+
+export function syncClaudeProjectAssets(projectPath: string, worktreePath: string): void {
+  for (const relPath of CLAUDE_PROJECT_ASSET_DIRS) {
+    const source = resolve(projectPath, relPath);
+    if (!existsSync(source)) continue;
+
+    const destination = resolve(worktreePath, relPath);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(source, destination, {
+      recursive: true,
+      force: true,
+      errorOnExist: false,
+      dereference: false,
+    });
+  }
+}
 
 /**
  * Check which port-related env vars already exist in the source .env file.

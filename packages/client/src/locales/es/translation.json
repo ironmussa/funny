@@ -544,7 +544,8 @@
     "terminalShellDesc": "Shell utilizado para el terminal integrado",
     "shellDefault": "Predeterminado (sistema)",
     "saved": "Configuración guardada",
-    "projectSaved": "Configuración del proyecto guardada"
+    "projectSaved": "Configuración del proyecto guardada",
+    "agentResources": "Recursos del agente"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -621,6 +622,7 @@
     "question": "Pregunta",
     "thinking": "Pensando",
     "providerError": "Error del Proveedor",
+    "background": "Segundo plano",
     "tool": "Herramienta",
     "done": "listo",
     "questions": "pregunta",
@@ -1291,5 +1293,10 @@
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Error al crear el proyecto. El servidor puede estar experimentando problemas."
     }
+  },
+  "agentResources": {
+    "subtitle": "Skills, comandos y servidores MCP según el proveedor.",
+    "empty": "No hay recursos para este proveedor.",
+    "incompatible": "Incompatibles (solo para auditoría)"
   }
 }

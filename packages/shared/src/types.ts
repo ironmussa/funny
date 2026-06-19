@@ -156,6 +156,27 @@ export type {
   SkillRemoveRequest,
 } from './types/skills.js';
 
+export type {
+  AgentResourceKind,
+  ResourceOrigin,
+  CommandTier,
+  AgentResourceHiddenReason,
+  ResourcePhase,
+  AgentResource,
+  SkillSource,
+  CommandSource,
+  ProviderResourceDescriptor,
+  ResolveAgentResourcesInput,
+  AgentResourcesResult,
+} from './types/agent-resources.js';
+
+export {
+  DEFAULT_PROVIDER_RESOURCE_DESCRIPTOR,
+  PROVIDER_RESOURCE_DESCRIPTORS,
+  getProviderResourceDescriptor,
+  resourceUsableByProvider,
+} from './types/agent-resources.js';
+
 export type { PluginCommand, Plugin, PluginListResponse } from './types/plugins.js';
 
 export type { VisualizerContributes, VisualizerManifest } from './types/visualizer.js';
@@ -666,6 +687,14 @@ export interface Job {
   exitCode: number | null;
   startedAt: string;
   updatedAt: string;
+}
+
+export interface JobLogChunk {
+  output: string;
+  offset: number;
+  size: number;
+  status: JobStatus;
+  exitCode: number | null;
 }
 
 export interface WSJobData {

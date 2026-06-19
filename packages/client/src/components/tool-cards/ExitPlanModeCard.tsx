@@ -38,7 +38,7 @@ const LazyMarkdown = lazy(() =>
   })),
 );
 import { PlanReviewDialog, type PlanComment } from './PlanReviewDialog';
-import { useCurrentProjectPath } from './utils';
+import { useCurrentProjectPath, useCurrentThreadProviderModel } from './utils';
 
 const cardLog = createClientLogger('ExitPlanMode');
 
@@ -81,25 +81,38 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const editorRef = useRef<PromptEditorHandle>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const cwd = useCurrentProjectPath();
+  const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
 
-  // Skills loader for slash commands
+  // Provider-scoped skills/commands loader for slash commands
   const skillsCacheRef = useRef<Skill[] | null>(null);
   const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
     if (skillsCacheRef.current) return skillsCacheRef.current;
-    const result = await api.listSkills(cwd);
+    const result = await api.listAgentResources({
+      projectPath: cwd,
+      provider: threadProvider,
+      model: threadModel,
+      phase: 'composer',
+    });
     if (result.isOk()) {
-      const allSkills = result.value.skills ?? [];
       const deduped = new Map<string, Skill>();
-      for (const s of allSkills) deduped.set(s.name, s);
+      for (const r of result.value.resources) {
+        if (r.kind !== 'skill' && r.kind !== 'slash-command') continue;
+        deduped.set(r.name, {
+          name: r.name,
+          description: r.description ?? '',
+          source: r.origin,
+          scope: r.scope,
+        });
+      }
       skillsCacheRef.current = [...deduped.values()];
       return skillsCacheRef.current;
     }
     return [];
-  }, [cwd]);
+  }, [cwd, threadProvider, threadModel]);
 
   useEffect(() => {
     skillsCacheRef.current = null;
-  }, [cwd]);
+  }, [cwd, threadProvider, threadModel]);
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
   const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);

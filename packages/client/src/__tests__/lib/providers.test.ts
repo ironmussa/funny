@@ -190,6 +190,15 @@ describe('getEffortLevels', () => {
     ]);
   });
 
+  test('exposes pi-acp thinking levels through the shared effort picker', () => {
+    expect(getEffortLevels('default', 'pi').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+  });
+
   test('returns no effort levels for providers without effort support', () => {
     expect(getEffortLevels('gemini-2.5-pro', 'gemini')).toEqual([]);
   });

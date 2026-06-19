@@ -267,3 +267,82 @@ describe('GenericACPProcess empty-turn guard', () => {
     expect(texts.some((t) => t.includes('without producing any output'))).toBe(false);
   });
 });
+
+describe('PiACPProcess.applyThoughtLevelSelection', () => {
+  type Internal = {
+    activeSessionId: string | null;
+    captureThoughtLevelConfigOption: (c: unknown) => void;
+    applyThoughtLevelSelection: (c: unknown) => Promise<void>;
+  };
+
+  test('applies effort via the pi-acp thought_level config option', async () => {
+    const proc = new PiACPProcess({
+      prompt: 'x',
+      cwd: '/tmp/test',
+      model: 'default',
+      effort: 'high',
+    });
+    const internal = proc as unknown as Internal;
+    internal.activeSessionId = 'sess-1';
+    internal.captureThoughtLevelConfigOption([
+      {
+        id: 'thought_level',
+        category: 'thought_level',
+        type: 'select',
+        name: 'Thinking',
+        options: [
+          { value: 'off', name: 'Thinking: off' },
+          { value: 'minimal', name: 'Thinking: minimal' },
+          { value: 'low', name: 'Thinking: low' },
+          { value: 'medium', name: 'Thinking: medium' },
+          { value: 'high', name: 'Thinking: high' },
+          { value: 'xhigh', name: 'Thinking: xhigh' },
+        ],
+      },
+    ]);
+
+    const calls: Array<Record<string, unknown>> = [];
+    await internal.applyThoughtLevelSelection({
+      setSessionConfigOption: async (p: Record<string, unknown>) => {
+        calls.push(p);
+      },
+    });
+
+    expect(calls).toEqual([
+      {
+        sessionId: 'sess-1',
+        configId: 'thought_level',
+        value: 'high',
+      },
+    ]);
+  });
+
+  test('maps max effort to xhigh when the ACP agent has no max option', async () => {
+    const proc = new PiACPProcess({
+      prompt: 'x',
+      cwd: '/tmp/test',
+      model: 'default',
+      effort: 'max',
+    });
+    const internal = proc as unknown as Internal;
+    internal.activeSessionId = 'sess-1';
+    internal.captureThoughtLevelConfigOption([
+      {
+        id: 'thought_level',
+        category: 'thought_level',
+        type: 'select',
+        name: 'Thinking',
+        options: [{ value: 'xhigh', name: 'Thinking: xhigh' }],
+      },
+    ]);
+
+    const calls: Array<Record<string, unknown>> = [];
+    await internal.applyThoughtLevelSelection({
+      setSessionConfigOption: async (p: Record<string, unknown>) => {
+        calls.push(p);
+      },
+    });
+
+    expect(calls[0]).toMatchObject({ configId: 'thought_level', value: 'xhigh' });
+  });
+});

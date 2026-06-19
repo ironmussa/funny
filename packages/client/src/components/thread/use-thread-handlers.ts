@@ -205,5 +205,9 @@ function handleSendResult(
     }
     applyQueuedCount(threadId, (result.value as any).queuedCount);
     toast.success(t('thread.messageQueued'));
+    return;
+  }
+  if (result.value?.handledLocally === 'shell_escape' && options.rollbackOnQueue) {
+    useThreadStore.getState().rollbackOptimisticMessage(threadId);
   }
 }

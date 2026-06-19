@@ -38,6 +38,7 @@ import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -1105,9 +1106,14 @@ export const ProjectHeader = memo(function ProjectHeader({
                               startEditingTitle();
                             }
                           }}
-                          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text truncate text-sm font-medium first-letter:uppercase"
+                          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text"
                         >
-                          {activeThreadTitle}
+                          <ThreadTitle
+                            as="span"
+                            title={activeThreadTitle ?? ''}
+                            className="text-sm font-medium"
+                            containerClassName="max-w-full"
+                          />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>{t('thread.renameTitle', 'Click to rename')}</TooltipContent>

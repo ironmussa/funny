@@ -3,6 +3,7 @@ import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +17,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
-import { cleanThreadTitle } from '@/lib/thread-title';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
@@ -286,9 +286,12 @@ export function AutomationInboxView() {
                           {itemProject && (
                             <span className="font-medium">{itemProject.name} · </span>
                           )}
-                          <span className="inline-block align-bottom first-letter:uppercase">
-                            {cleanThreadTitle(thread.title).displayTitle}
-                          </span>
+                          <ThreadTitle
+                            as="span"
+                            title={thread.title}
+                            className="text-xs"
+                            containerClassName="inline-flex max-w-full align-bottom"
+                          />
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

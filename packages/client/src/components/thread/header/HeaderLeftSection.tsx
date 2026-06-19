@@ -3,6 +3,7 @@ import { startTransition, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -120,12 +121,24 @@ function TitleEditor({
               startEditingTitle();
             }
           }}
-          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text truncate text-sm font-medium"
+          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text"
         >
-          {activeThreadTitle}
+          <ThreadTitle
+            as="span"
+            title={activeThreadTitle ?? ''}
+            className="text-sm font-medium"
+            containerClassName="max-w-full"
+          />
         </span>
       </TooltipTrigger>
-      <TooltipContent className="max-w-xl wrap-break-word">{activeThreadTitle}</TooltipContent>
+      <TooltipContent className="max-w-xl wrap-break-word">
+        <ThreadTitle
+          as="span"
+          title={activeThreadTitle ?? ''}
+          className="text-xs"
+          containerClassName="max-w-full"
+        />
+      </TooltipContent>
     </Tooltip>
   );
 }

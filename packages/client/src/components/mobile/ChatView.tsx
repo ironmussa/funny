@@ -7,6 +7,7 @@ import { PromptInput } from '@/components/PromptInput';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
@@ -142,8 +143,17 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
           <ArrowLeft className="icon-lg" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-base font-semibold first-letter:uppercase">
-            {activeThread?.title ?? t('thread.loading', 'Loading...')}
+          <h1 className="text-base font-semibold">
+            {activeThread ? (
+              <ThreadTitle
+                as="span"
+                title={activeThread.title}
+                className="text-base font-semibold"
+                containerClassName="max-w-full"
+              />
+            ) : (
+              t('thread.loading', 'Loading...')
+            )}
           </h1>
         </div>
         {activeThread && <StatusBadge status={activeThread.status} />}

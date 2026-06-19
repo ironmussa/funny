@@ -107,6 +107,11 @@ interface PromptEditorProps {
   /** SDK-reported slash commands for the active thread (names without leading
    *  slash), merged into the / autocomplete alongside skills. */
   sdkSlashCommands?: string[];
+  /** Effective provider for the slash menu. Claude-specific built-in command
+   *  descriptions are only applied when this is `'claude'` — other providers
+   *  (e.g. Codex, which has its own /init, /compact, /review) must not be
+   *  labelled with Claude's wording. */
+  commandProvider?: string;
   className?: string;
   /** Ref to the outer container — suggestion popup will match its width */
   containerRef?: React.RefObject<HTMLElement | null>;
@@ -380,6 +385,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     cwd,
     loadSkills,
     sdkSlashCommands,
+    commandProvider,
     className,
     containerRef,
   },
@@ -409,6 +415,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   loadSkillsRef.current = loadSkills;
   const sdkSlashCommandsRef = useRef(sdkSlashCommands);
   sdkSlashCommandsRef.current = sdkSlashCommands;
+  const commandProviderRef = useRef(commandProvider);
+  commandProviderRef.current = commandProvider;
 
   // Refs for suggestion state accessed inside closures captured at editor creation time
   const suggestionItemsRef = useRef(suggestionItems);
@@ -619,18 +627,24 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           seen.add(name);
           ordered.push({ name, description });
         };
-        // 1) Curated built-ins the SDK actually reports for this session.
-        for (const name of sdkCommands) {
-          if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name]);
+        // The curated descriptions are Claude Code's wording. Other providers
+        // (e.g. Codex) report their OWN /init, /compact, /review — don't dress
+        // those up with Claude text. Falls back to a neutral label instead.
+        const isClaude = commandProviderRef.current === 'claude';
+        const builtinDesc = (name: string): string | undefined =>
+          isClaude ? BUILTIN_SLASH_DESCRIPTIONS[name] : undefined;
+
+        // 1) Curated built-ins the SDK reports for this session (Claude only).
+        if (isClaude) {
+          for (const name of sdkCommands) {
+            if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name]);
+          }
         }
         // 2) Skills — they carry their own descriptions.
         for (const s of skills) add(s.name, s.description);
         // 3) Remaining SDK-reported commands (plugin / dynamically-loaded).
         for (const name of sdkCommands) {
-          add(
-            name,
-            skillByName.get(name) ?? BUILTIN_SLASH_DESCRIPTIONS[name] ?? BUILTIN_SLASH_FALLBACK,
-          );
+          add(name, skillByName.get(name) ?? builtinDesc(name) ?? BUILTIN_SLASH_FALLBACK);
         }
 
         const matched: SuggestionItem[] = [];

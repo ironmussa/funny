@@ -4,7 +4,7 @@
 // `@funny/shared` so the host client, the server (extension discovery /
 // `GET /api/extensions`), and third-party plugin authors all share one
 // definition. The React-bound half (`VisualizerProps`, `VisualizerPlugin`
-// with its `Component`) lives in `@funny/host` — `react` is not resolvable
+// with its `Component`) lives in `@funny/plugin-sdk` — `react` is not resolvable
 // from this package, and the over-the-wire manifest is JSON, so the component
 // binding deliberately does not belong here.
 

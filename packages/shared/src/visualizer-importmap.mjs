@@ -2,7 +2,7 @@
 //
 // Single source of truth for the import map that lets dynamically-loaded
 // visualizer plugins (ESM, full-trust) resolve the bare specifiers `react`,
-// `react/jsx-runtime`, and `@funny/host` to the *host's own* module instances
+// `react/jsx-runtime`, and `@funny/plugin-sdk` to the *host's own* module instances
 // — so a plugin never bundles a second copy of React (which would break hooks
 // with "Invalid hook call").
 //
@@ -24,6 +24,7 @@ export const VISUALIZER_IMPORT_MAP = {
     react: '/vendor/funny-react.mjs',
     'react/jsx-runtime': '/vendor/funny-react-jsx-runtime.mjs',
     'react-dom': '/vendor/funny-react-dom.mjs',
+    '@funny/plugin-sdk': '/vendor/funny-plugin-sdk.mjs',
     '@funny/host': '/vendor/funny-host.mjs',
   },
 };

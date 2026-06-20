@@ -8,7 +8,7 @@ import { getBuildInfo } from '../../scripts/build-info';
 
 /**
  * Inject the visualizer import map into index.html so dynamically-loaded
- * visualizer plugins resolve `react` / `@funny/host` to the host's instances.
+ * visualizer plugins resolve `react` / `@funny/plugin-sdk` to the host's instances.
  * The inner text must be byte-identical to what the server hashes for CSP
  * (`script-src 'sha256-…'`), so both use `VISUALIZER_IMPORT_MAP_JSON` verbatim.
  */

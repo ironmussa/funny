@@ -41,7 +41,7 @@ import { installVisualizerHostGlobals } from '@/visualizers/host-runtime';
 
 // Visualizer plugin system, before any render:
 //  1. Expose the host's React + SDK on globalThis so dynamically-imported
-//     plugins resolve `react` / `@funny/host` via the import map to the host's
+//     plugins resolve `react` / `@funny/plugin-sdk` via the import map to the host's
 //     own instances (shared React, no "Invalid hook call").
 //  2. Register the built-in visualizers (Mermaid).
 installVisualizerHostGlobals();

@@ -24,7 +24,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/noto-sans": "^5.2.10",
     "@fontsource/noto-sans-mono": "^5.2.10",
-    "@funny/host": "workspace:*",
+    "@funny/plugin-sdk": "workspace:*",
     "@funny/shared": "workspace:*",
     "@iconify-json/vscode-icons": "^1.2.58",
     "@iconify/react": "^6.0.2",

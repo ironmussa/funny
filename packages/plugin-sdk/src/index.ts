@@ -1,15 +1,15 @@
-import type { VisualizerContributes, VisualizerManifest } from '@funny/shared';
+import type { VisualizerManifest } from '@funny/shared';
 /**
- * `@funny/host` — the public host SDK for funny visualizer plugins.
+ * `@funny/plugin-sdk` — the public SDK for funny plugins.
  *
  * This is the **stable, frozen contract** third-party authors compile against.
  * A visualizer plugin:
- *   - declares `react` and `@funny/host` as `peerDependencies`,
+ *   - declares `react` and `@funny/plugin-sdk` as `peerDependencies`,
  *   - builds to ESM that imports those as bare specifiers,
  *   - default-exports a {@link VisualizerPlugin}.
  *
  * At runtime inside the funny host, an import map (see
- * `@funny/shared/visualizer-importmap`) rewrites `react` and `@funny/host` to
+ * `@funny/shared/visualizer-importmap`) rewrites `react` and `@funny/plugin-sdk` to
  * the host's own module instances, so the plugin shares the host's single React
  * tree (full-trust model) and never bundles a second React.
  *
@@ -44,19 +44,23 @@ export interface VisualizerPlugin extends VisualizerManifest {
   Component: ComponentType<VisualizerProps>;
 }
 
-/** The host hooks exposed to plugins at runtime. */
-export interface FunnyHostApi {
+/** The plugin SDK hooks exposed by the host at runtime. */
+export interface FunnyPluginSdkApi {
   /** Host's resolved color scheme, collapsed to light/dark. */
   useFunnyTheme(): 'light' | 'dark';
   /** Host's active prose font size in pixels (respects Settings > Appearance). */
   useFunnyFontSize(): number;
 }
 
-function hostApi(): FunnyHostApi {
-  const api = (globalThis as { __FUNNY_HOST__?: FunnyHostApi }).__FUNNY_HOST__;
+/** @deprecated Use FunnyPluginSdkApi. */
+export type FunnyHostApi = FunnyPluginSdkApi;
+
+function pluginSdkApi(): FunnyPluginSdkApi {
+  const g = globalThis as unknown as Record<string, FunnyPluginSdkApi | undefined>;
+  const api = g['__FUNNY_PLUGIN_SDK__'] ?? g['__FUNNY_HOST__'];
   if (!api) {
     throw new Error(
-      '@funny/host was used outside the funny host runtime. Visualizer plugins ' +
+      '@funny/plugin-sdk was used outside the funny host runtime. Visualizer plugins ' +
         'only run when loaded by funny (the host installs the runtime globals).',
     );
   }
@@ -65,10 +69,10 @@ function hostApi(): FunnyHostApi {
 
 /** React hook: the host's resolved theme (`'light'` | `'dark'`). */
 export function useFunnyTheme(): 'light' | 'dark' {
-  return hostApi().useFunnyTheme();
+  return pluginSdkApi().useFunnyTheme();
 }
 
 /** React hook: the host's active prose font size in pixels. */
 export function useFunnyFontSize(): number {
-  return hostApi().useFunnyFontSize();
+  return pluginSdkApi().useFunnyFontSize();
 }

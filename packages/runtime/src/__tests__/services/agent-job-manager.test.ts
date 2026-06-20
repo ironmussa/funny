@@ -6,7 +6,10 @@ import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
 
 // Mock the heavy service deps so importing the manager is cheap; deriveStatus
 // itself only touches fs + process.kill, none of these.
-vi.mock('../../services/agent-runner.js', () => ({ isAgentRunning: () => false }));
+vi.mock('../../services/agent-runner-control.js', () => ({
+  isAgentRunning: () => false,
+  startAgent: vi.fn(async () => undefined),
+}));
 vi.mock('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
 vi.mock('../../services/service-registry.js', () => ({ getServices: () => ({ jobs: {} }) }));
 vi.mock('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));

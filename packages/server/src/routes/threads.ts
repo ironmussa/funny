@@ -23,6 +23,7 @@ import {
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
@@ -40,6 +41,7 @@ import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { relayToUser, relayToThreadViewers } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
+import { parseJsonBody } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
 // @funny/shared/primitives (ThreadStatus / ThreadStage). Inlined as
@@ -65,6 +67,37 @@ const THREAD_STAGE_VALUES = [
   'done',
   'archived',
 ] as const;
+
+const contentBodySchema = z
+  .object({
+    content: z.unknown().optional(),
+  })
+  .passthrough();
+
+const threadPatchBodySchema = z.record(z.string(), z.unknown());
+
+const threadValueBodySchema = z
+  .object({
+    value: z.unknown().optional(),
+    reason: z.unknown().optional(),
+  })
+  .passthrough();
+
+const threadWorkflowEventBodySchema = z
+  .object({
+    type: z.unknown().optional(),
+    data: z.unknown().optional(),
+  })
+  .passthrough();
+
+const threadCreateBodySchema = z.record(z.string(), z.unknown());
+
+const orchestratorWorkflowEventBodySchema = z
+  .object({
+    event: z.unknown().optional(),
+    data: z.unknown().optional(),
+  })
+  .passthrough();
 
 // Read at call time, not module load — the test harness sets this in a
 // per-file top-of-module assignment, but `routes/threads.ts` may have already
@@ -411,7 +444,9 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
     return c.json({ error: 'You do not have permission to comment on this thread' }, 403);
   }
 
-  const { content } = await c.req.json();
+  const parsed = await parseJsonBody(c, contentBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const { content } = parsed.value;
 
   if (!content || typeof content !== 'string' || !content.trim()) {
     return c.json({ error: 'content is required' }, 400);
@@ -452,7 +487,9 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, threadPatchBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
   const thread = c.get('thread');
 
@@ -544,12 +581,9 @@ threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
 threadRoutes.patch('/:id/status', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  let body: { value?: unknown; reason?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
-  }
+  const parsed = await parseJsonBody(c, threadValueBodySchema);
+  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
+  const body = parsed.value;
 
   if (typeof body.value !== 'string') {
     return c.json({ error: 'Missing required string field "value"' }, 400);
@@ -585,12 +619,9 @@ threadRoutes.patch('/:id/status', requireThreadOwner, async (c) => {
 threadRoutes.patch('/:id/stage', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  let body: { value?: unknown; reason?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
-  }
+  const parsed = await parseJsonBody(c, threadValueBodySchema);
+  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
+  const body = parsed.value;
 
   if (typeof body.value !== 'string') {
     return c.json({ error: 'Missing required string field "value"' }, 400);
@@ -645,12 +676,9 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
 
-  let body: { type?: unknown; data?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
-  }
+  const parsed = await parseJsonBody(c, threadWorkflowEventBodySchema);
+  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
+  const body = parsed.value;
 
   if (typeof body.type !== 'string' || !body.type) {
     return c.json({ error: 'Missing required string field "type"' }, 400);
@@ -692,7 +720,9 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
 /** Shared handler for creating threads on a runner and registering them locally. */
 async function createThreadOnRunner(c: any, runnerPath: string) {
   const userId = c.get('userId') as string;
-  const rawBody = await c.req.json();
+  const parsed = await parseJsonBody(c, threadCreateBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const rawBody = parsed.value;
   const isScratch = rawBody.isScratch === true;
 
   // Validate scratch invariants before any I/O.
@@ -764,12 +794,14 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
         projectId,
         runnerId: resolved.runnerId,
         userId,
-        title: body.title || threadData.title,
-        model: body.model,
-        mode: body.mode,
+        title: typeof body.title === 'string' && body.title ? body.title : threadData.title,
+        model: typeof body.model === 'string' ? body.model : undefined,
+        mode: typeof body.mode === 'string' ? body.mode : undefined,
         // Use runtime response data — the runtime generates the worktree
         // branch name, so body.branch is typically undefined for new threads.
-        branch: threadData.branch ?? body.branch,
+        branch:
+          threadData.branch ??
+          (typeof body.branch === 'string' && body.branch ? body.branch : undefined),
         isScratch,
       });
 
@@ -808,12 +840,11 @@ threadRoutes.post('/:id/orchestrator/workflow-event', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
-  const body = (await c.req.json().catch(() => null)) as {
-    event?: string;
-    data?: Record<string, unknown>;
-  } | null;
+  const parsed = await parseJsonBody(c, orchestratorWorkflowEventBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
-  const event = body?.event;
+  const event = body.event;
   if (typeof event !== 'string' || !event.startsWith('workflow:')) {
     return c.json({ error: 'event must be a string starting with "workflow:"' }, 400);
   }
@@ -821,7 +852,7 @@ threadRoutes.post('/:id/orchestrator/workflow-event', async (c) => {
   relayToUser(userId, {
     type: event,
     threadId,
-    data: { ...(body?.data ?? {}) },
+    data: { ...((body.data ?? {}) as Record<string, unknown>) },
   });
 
   return c.json({ ok: true });
@@ -1045,7 +1076,9 @@ threadRoutes.patch('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
 
-  const { content } = await c.req.json();
+  const parsed = await parseJsonBody(c, contentBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const { content } = parsed.value;
   if (!content || typeof content !== 'string') {
     return c.json({ error: 'content is required' }, 400);
   }

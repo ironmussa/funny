@@ -58,4 +58,25 @@ describe('socketio router', () => {
     });
     expect(ackCalls).toBe(1);
   });
+
+  test('registerSocketRpc skips invalid payloads', async () => {
+    const socket = createMockSocket();
+    let calls = 0;
+    registerSocketRpc(socket, 'demo:rpc', {
+      handler: async (_ctx, ack, data) => {
+        calls++;
+        ack({ payload: data });
+      },
+    });
+
+    await socket.triggerRpc('demo:rpc', [], () => {
+      calls++;
+    });
+    expect(calls).toBe(0);
+
+    await socket.triggerRpc('demo:rpc', { ok: true }, () => {
+      calls++;
+    });
+    expect(calls).toBe(2);
+  });
 });

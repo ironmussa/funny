@@ -22,7 +22,7 @@ vi.mock('../../db/index.js', () => ({
     delete: vi.fn(() => ({ where: vi.fn(() => ({ run: vi.fn() })) })),
   },
 }));
-vi.mock('../../services/agent-runner.js', () => ({
+vi.mock('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(),
   isAgentRunning: vi.fn(() => false),
 }));

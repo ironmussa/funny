@@ -1,10 +1,13 @@
-import { BROWSER_PTY_FORWARD_EVENTS } from '@funny/shared/socket-events';
+import {
+  BROWSER_PTY_FORWARD_EVENTS,
+  browserPtyForwardPayloadSchema,
+} from '@funny/shared/socket-events';
 import type { Socket } from 'socket.io';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { rateLimitMiddleware } from './middleware.js';
-import { registerSocketHandlers } from './router.js';
+import { registerSocketHandlersWithSchema } from './router.js';
 import { getIO } from './state.js';
 
 /**
@@ -12,11 +15,12 @@ import { getIO } from './state.js';
  * Forwards PTY commands to the appropriate runner.
  */
 export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
-  registerSocketHandlers(socket, {
+  registerSocketHandlersWithSchema(socket, {
     events: BROWSER_PTY_FORWARD_EVENTS,
+    payloadSchema: browserPtyForwardPayloadSchema,
     middleware: [rateLimitMiddleware()],
     handler: async ({ socket: sock, eventName }, payload) => {
-      const projectId = payload.projectId as string | undefined;
+      const projectId = payload.projectId;
 
       const forwardToRunner = async (runnerId: string | null) => {
         if (runnerId) {

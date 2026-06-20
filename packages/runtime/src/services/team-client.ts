@@ -42,6 +42,13 @@ import {
   type RunnerTask,
   type TunnelHttpResponse,
 } from '@funny/shared/runner-protocol';
+import {
+  parseCentralBrowserWs,
+  parseCentralCommand,
+  parseCentralPtyList,
+  parseDataResponse,
+  parseTunnelRequest,
+} from '@funny/shared/socket-events';
 import { nanoid } from 'nanoid';
 import { io, type Socket } from 'socket.io-client';
 
@@ -771,24 +778,38 @@ function connectSocket(): void {
   });
 
   // Handle tunnel requests with ack callback
-  socket.on('tunnel:request', async (data: any, ack: (response: any) => void) => {
-    const response = await handleTunnelRequest(data);
-    ack(response);
-  });
+  socket.on(
+    'tunnel:request',
+    async (data: unknown, ack?: (response: TunnelHttpResponse) => void) => {
+      if (typeof ack !== 'function') return;
+      const request = parseTunnelRequest(data);
+      if (!request) {
+        ack({
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ error: 'Invalid tunnel request payload' }),
+        });
+        return;
+      }
+      const response = await handleTunnelRequest(request);
+      ack(response);
+    },
+  );
 
   // Single persistent listener for server data responses (Security L2).
   // The server emits `data:response` with `{ requestId, response }`; we look
   // up the pending entry in `pendingDataRequests` and resolve it. This
   // replaces the previous pattern of registering a fresh `once()` listener
   // per in-flight request on a dynamic `data:response:<id>` event name.
-  socket.on('data:response', (msg: { requestId?: string; response?: any }) => {
-    if (!msg || typeof msg.requestId !== 'string') return;
+  socket.on('data:response', (data: unknown) => {
+    const msg = parseDataResponse(data);
+    if (!msg) return;
     const pending = pendingDataRequests.get(msg.requestId);
     if (!pending) return;
     pendingDataRequests.delete(msg.requestId);
     clearTimeout(pending.timer);
     const r = msg.response;
-    if (r?.success === false && r?.error) {
+    if (isSocketErrorResponse(r)) {
       pending.reject(new Error(r.error));
     } else {
       pending.resolve(r);
@@ -817,26 +838,26 @@ function connectSocket(): void {
   });
 
   // Handle browser WS messages forwarded through the central server
-  socket.on('central:browser_ws', (data: any) => {
-    if (data.userId && data.data) {
-      handleBrowserWSMessage(data.userId, data.data);
-    }
+  socket.on('central:browser_ws', (data: unknown) => {
+    const msg = parseCentralBrowserWs(data);
+    if (!msg) return;
+    handleBrowserWSMessage(msg.userId, msg.data);
   });
 
   // Ack-based RPC for pty:list. The browser asks the server for the list of
   // active PTY sessions; the server forwards via this event and waits for the
   // ack so the browser receives a single deterministic response (no orphaned
   // pty:sessions events that may or may not arrive).
-  socket.on('central:pty_list', async (data: any, ack?: (response: unknown) => void) => {
+  socket.on('central:pty_list', async (data: unknown, ack?: (response: unknown) => void) => {
     if (typeof ack !== 'function') return;
+    const msg = parseCentralPtyList(data);
+    if (!msg) {
+      ack({ sessions: [] });
+      return;
+    }
     try {
-      const userId = data?.userId;
-      if (typeof userId !== 'string' || !userId) {
-        ack({ sessions: [] });
-        return;
-      }
       const ptyManager = await import('./pty-manager.js');
-      const sessions = ptyManager.listActiveSessions(userId).map((s) => ({
+      const sessions = ptyManager.listActiveSessions(msg.userId).map((s) => ({
         ptyId: s.ptyId,
         cwd: s.cwd,
         projectId: s.projectId,
@@ -854,12 +875,13 @@ function connectSocket(): void {
   });
 
   // Handle task commands from central
-  socket.on('central:command', (data: any) => {
-    if (data.task) {
+  socket.on('central:command', (data: unknown) => {
+    const msg = parseCentralCommand(data);
+    if (msg?.task) {
       log.info('Received command from central', {
         namespace: 'runner',
-        taskId: data.task.taskId,
-        type: data.task.type,
+        taskId: msg.task.taskId,
+        type: msg.task.type,
       });
       // TODO: Execute task locally and report result
     }
@@ -1067,6 +1089,15 @@ const pendingDataRequests = new Map<
     timer: ReturnType<typeof setTimeout>;
   }
 >();
+
+function isSocketErrorResponse(value: unknown): value is { success: false; error: string } {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    (value as { success?: unknown }).success === false &&
+    typeof (value as { error?: unknown }).error === 'string'
+  );
+}
 
 /**
  * Send a data message to the server using event-based request/response.

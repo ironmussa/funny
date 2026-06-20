@@ -1,12 +1,20 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { browserSessionManager } from '../services/browser-session-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { parseJsonBody } from '../validation/request.js';
 
 const NS = 'browser-session';
 
 export const browserSessionRoutes = new Hono<HonoEnv>();
+
+const openBrowserSessionSchema = z.object({
+  sessionId: z.string().min(1, 'sessionId is required'),
+  url: z.string().min(1, 'url is required'),
+});
 
 /**
  * POST /api/browser-session
@@ -19,16 +27,9 @@ export const browserSessionRoutes = new Hono<HonoEnv>();
  */
 browserSessionRoutes.post('/', async (c) => {
   const userId = c.get('userId');
-  const body = (await c.req.json().catch(() => null)) as {
-    sessionId?: unknown;
-    url?: unknown;
-  } | null;
-
-  if (!body || typeof body.sessionId !== 'string' || typeof body.url !== 'string') {
-    return c.json({ error: 'sessionId and url required' }, 400);
-  }
-
-  const { sessionId, url } = body;
+  const parsed = await parseJsonBody(c, openBrowserSessionSchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { sessionId, url } = parsed.value;
 
   // Fire-and-forget: the spawn takes ~2s, return immediately and let the
   // client wait for the `browser-session:ready` WS event.

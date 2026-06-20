@@ -16,6 +16,8 @@
     "./provider-manifest": "./src/provider-manifest.ts",
     "./provider-manifests": "./src/provider-manifests.ts",
     "./provider-manifest-schema": "./src/provider-manifest-schema.ts",
+    "./json-validation": "./src/json-validation.ts",
+    "./funny-config-schema": "./src/funny-config-schema.ts",
     "./thread-machine": "./src/thread-machine.ts",
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",

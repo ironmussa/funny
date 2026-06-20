@@ -1,32 +1,9 @@
-import type { z, ZodTypeAny } from 'zod';
+import type { ZodTypeAny } from 'zod';
 
+import type { HarnessTool, HarnessToolDefinition, ToolExecutionContext } from './contracts.js';
 import { HarnessError } from './errors.js';
-import type { HarnessRuntime } from './runtime.js';
 
-export interface ToolExecutionContext {
-  cwd?: string;
-  runtime?: HarnessRuntime;
-  metadata?: Record<string, unknown>;
-}
-
-export interface HarnessToolDefinition<TSchema extends ZodTypeAny, TResult> {
-  name: string;
-  description: string;
-  inputSchema: TSchema;
-  handler: (input: z.infer<TSchema>, context: ToolExecutionContext) => TResult | Promise<TResult>;
-  metadata?: Record<string, unknown>;
-}
-
-export interface HarnessTool<TSchema extends ZodTypeAny = ZodTypeAny, TResult = unknown> {
-  readonly name: string;
-  readonly description: string;
-  readonly inputSchema: TSchema;
-  readonly handler: (
-    input: z.infer<TSchema>,
-    context: ToolExecutionContext,
-  ) => TResult | Promise<TResult>;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
+export type { HarnessTool, HarnessToolDefinition, ToolExecutionContext } from './contracts.js';
 
 export function defineTool<TSchema extends ZodTypeAny, TResult>(
   definition: HarnessToolDefinition<TSchema, TResult>,

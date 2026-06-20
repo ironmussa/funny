@@ -128,6 +128,22 @@ const DEFAULT_MSG_HEIGHT_PX = 140;
 // container mid-mount) can't blow the phantom spacer up or collapse it.
 const MIN_MSG_HEIGHT_PX = 24;
 const MAX_MSG_HEIGHT_PX = 2000;
+const STICKY_BOTTOM_THRESHOLD_PX = 80;
+
+function getDistanceFromBottom(
+  viewport: HTMLDivElement,
+  metrics: { scrollHeight: number; clientHeight: number } = viewport,
+) {
+  return Math.max(0, metrics.scrollHeight - viewport.scrollTop - metrics.clientHeight);
+}
+
+interface ThreadScrollPosition {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  atBottom: boolean;
+  userHasScrolledUp: boolean;
+}
 
 /* ── Component ────────────────────────────────────────────────────── */
 
@@ -185,15 +201,25 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
     // ── Scroll refs ──────────────────────────────────────────────────
     const scrollViewportRef = useRef<HTMLDivElement>(null);
+    const threadIdRef = useRef(threadId);
+    threadIdRef.current = threadId;
     const userHasScrolledUp = useRef(false);
     const smoothScrollPending = useRef(false);
     const scrollingToBottomRef = useRef(false);
     const scrolledThreadRef = useRef<string | null>(null);
     const prevOldestIdRef = useRef<string | null>(null);
     const prevScrollHeightRef = useRef(0);
+    const prevStickyMetricsRef = useRef<{ scrollHeight: number; clientHeight: number } | null>(
+      null,
+    );
+    const threadScrollPositionsRef = useRef<Map<string, ThreadScrollPosition> | null>(null);
+    if (threadScrollPositionsRef.current === null) {
+      threadScrollPositionsRef.current = new Map();
+    }
     const scrollDownRef = useRef<HTMLDivElement>(null);
     const contentStackRef = useRef<HTMLDivElement>(null);
     const messageListRef = useRef<MemoizedMessageListHandle>(null);
+    const handleViewportScrollRef = useRef<() => void>(() => {});
 
     // ── Phantom spacer for not-yet-loaded older messages ─────────────
     // Reserves scroll height above the loaded window so the scrollbar is sized
@@ -242,26 +268,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       lastUserMsgIdRef.current = last?.id ?? null;
     }, [messages]);
 
-    // ── Thread switch: scroll to bottom ──────────────────────────────
-    useLayoutEffect(() => {
-      const viewport = scrollViewportRef.current;
-      if (!viewport || !threadId) return;
-
-      userHasScrolledUp.current = false;
-      prevOldestIdRef.current = null;
-      prevScrollHeightRef.current = 0;
-      pinnedPromptIdRef.current = null;
-      scrolledThreadRef.current = null;
-      setPromptPinSpacerHeight(0);
-      const rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          viewport.scrollTop = viewport.scrollHeight;
-        });
-      });
-      return () => cancelAnimationFrame(rafId);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [threadId]);
-
     // ── Scroll fingerprint — triggers sticky-bottom logic ────────────
     const threadData = { messages, status } as any;
     const lastMessage = selectLastMessage(threadData);
@@ -274,7 +280,11 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       return null;
     }, [messages]);
     const prevLastUserMessageIdRef = useRef(lastUserMessageId);
+    const lastUserMessageIdForThreadSwitchRef = useRef(lastUserMessageId);
+    lastUserMessageIdForThreadSwitchRef.current = lastUserMessageId;
     const prevWaitingReasonRef = useRef(waitingReason);
+    const waitingReasonForThreadSwitchRef = useRef(waitingReason);
+    waitingReasonForThreadSwitchRef.current = waitingReason;
 
     const scrollFingerprint = [
       lastMessage?.id,
@@ -285,67 +295,176 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       !!initInfo,
     ].join(':');
 
-    const pinViewportToBottom = useCallback((viewport: HTMLDivElement) => {
-      scrollingToBottomRef.current = true;
-      viewport.scrollTop = viewport.scrollHeight;
-      requestAnimationFrame(() => {
-        viewport.scrollTop = viewport.scrollHeight;
-        requestAnimationFrame(() => {
-          if (!userHasScrolledUp.current) {
-            viewport.scrollTop = viewport.scrollHeight;
-          }
-          scrollingToBottomRef.current = false;
-        });
+    const updateStickyMetrics = useCallback((viewport: HTMLDivElement) => {
+      prevStickyMetricsRef.current = {
+        scrollHeight: viewport.scrollHeight,
+        clientHeight: viewport.clientHeight,
+      };
+    }, []);
+
+    const updateScrollDownButton = useCallback((viewport: HTMLDivElement, isAtBottom: boolean) => {
+      const hasOverflow = viewport.scrollHeight > viewport.clientHeight + 10;
+      const shouldShow = hasOverflow && !isAtBottom && !scrollingToBottomRef.current;
+      if (scrollDownRef.current) {
+        scrollDownRef.current.style.display = shouldShow ? '' : 'none';
+      }
+    }, []);
+
+    const saveThreadScrollPosition = useCallback((id: string, viewport: HTMLDivElement) => {
+      if (threadIdRef.current !== id) return;
+
+      const distanceFromBottom = getDistanceFromBottom(viewport);
+      const atBottom = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
+      threadScrollPositionsRef.current!.set(id, {
+        scrollTop: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+        clientHeight: viewport.clientHeight,
+        atBottom,
+        userHasScrolledUp: userHasScrolledUp.current,
       });
     }, []);
+
+    const applyThreadScrollPosition = useCallback(
+      (viewport: HTMLDivElement, id: string) => {
+        if (threadIdRef.current !== id) return;
+
+        const saved = threadScrollPositionsRef.current!.get(id);
+
+        if (!saved || saved.atBottom) {
+          scrollingToBottomRef.current = false;
+          userHasScrolledUp.current = false;
+          viewport.scrollTop = viewport.scrollHeight;
+          updateStickyMetrics(viewport);
+          saveThreadScrollPosition(id, viewport);
+          updateScrollDownButton(viewport, true);
+          return;
+        }
+
+        scrollingToBottomRef.current = false;
+        const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+        viewport.scrollTop = Math.min(saved.scrollTop, maxScrollTop);
+        userHasScrolledUp.current = saved.userHasScrolledUp;
+        updateStickyMetrics(viewport);
+        updateScrollDownButton(
+          viewport,
+          getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX,
+        );
+      },
+      [saveThreadScrollPosition, updateScrollDownButton, updateStickyMetrics],
+    );
+
+    const wasViewportPinnedBeforeLayoutChange = useCallback((viewport: HTMLDivElement) => {
+      const previousMetrics = prevStickyMetricsRef.current ?? viewport;
+      return getDistanceFromBottom(viewport, previousMetrics) <= STICKY_BOTTOM_THRESHOLD_PX;
+    }, []);
+
+    const pinViewportToBottom = useCallback(
+      (viewport: HTMLDivElement) => {
+        const targetThreadId = threadId;
+        scrollingToBottomRef.current = true;
+        viewport.scrollTop = viewport.scrollHeight;
+        updateStickyMetrics(viewport);
+        saveThreadScrollPosition(targetThreadId, viewport);
+        requestAnimationFrame(() => {
+          if (threadIdRef.current !== targetThreadId) return;
+          viewport.scrollTop = viewport.scrollHeight;
+          updateStickyMetrics(viewport);
+          saveThreadScrollPosition(targetThreadId, viewport);
+          requestAnimationFrame(() => {
+            if (threadIdRef.current !== targetThreadId) return;
+            if (!userHasScrolledUp.current) {
+              viewport.scrollTop = viewport.scrollHeight;
+              updateStickyMetrics(viewport);
+              saveThreadScrollPosition(targetThreadId, viewport);
+            }
+            scrollingToBottomRef.current = false;
+          });
+        });
+      },
+      [saveThreadScrollPosition, threadId, updateStickyMetrics],
+    );
+
+    // ── Thread switch: restore this thread's own scroll position ─────
+    useLayoutEffect(() => {
+      const viewport = scrollViewportRef.current;
+      if (!viewport || !threadId) return;
+
+      const saved = threadScrollPositionsRef.current!.get(threadId);
+      userHasScrolledUp.current = saved ? saved.userHasScrolledUp : false;
+      prevOldestIdRef.current = null;
+      prevScrollHeightRef.current = 0;
+      prevStickyMetricsRef.current = null;
+      pinnedPromptIdRef.current = null;
+      scrolledThreadRef.current = threadId;
+      prevLastUserMessageIdRef.current = lastUserMessageIdForThreadSwitchRef.current;
+      prevWaitingReasonRef.current = waitingReasonForThreadSwitchRef.current;
+      setPromptPinSpacerHeight(0);
+
+      let cancelled = false;
+      applyThreadScrollPosition(viewport, threadId);
+      const firstRafId = requestAnimationFrame(() => {
+        if (cancelled) return;
+        applyThreadScrollPosition(viewport, threadId);
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          applyThreadScrollPosition(viewport, threadId);
+        });
+      });
+
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(firstRafId);
+      };
+    }, [threadId, applyThreadScrollPosition]);
+
+    handleViewportScrollRef.current = () => {
+      const viewport = scrollViewportRef.current;
+      if (!viewport) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      const promptPinned = !compact && promptPinSpacerHeightRef.current > 0;
+      const isAtBottom = getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX;
+      prevStickyMetricsRef.current = { scrollHeight, clientHeight };
+
+      if (!scrollingToBottomRef.current) {
+        userHasScrolledUp.current = promptPinned || !isAtBottom;
+      } else if (isAtBottom) {
+        scrollingToBottomRef.current = false;
+        userHasScrolledUp.current = false;
+      }
+
+      saveThreadScrollPosition(threadId, viewport);
+      updateScrollDownButton(viewport, isAtBottom);
+
+      // Load older messages when scrolled near the top of the loaded window.
+      // The phantom spacer pushes real content down by its height, so the
+      // trigger zone shifts down with it.
+      if (
+        pagination &&
+        scrollTop < phantomHeightRef.current + 200 &&
+        hasMore &&
+        !loadingMore &&
+        !messageListRef.current?.hasHiddenItems()
+      ) {
+        messageListRef.current?.captureScrollAnchor();
+        pagination.load();
+      }
+
+      // At-bottom: sync visible message ID to last user message
+      if (!compact && isAtBottom && lastUserMsgIdRef.current && onVisibleMessageChange) {
+        onVisibleMessageChange(lastUserMsgIdRef.current);
+      }
+    };
 
     // ── Scroll event handler ─────────────────────────────────────────
     useEffect(() => {
       const viewport = scrollViewportRef.current;
       if (!viewport) return;
 
-      const handleScroll = () => {
-        const { scrollTop, scrollHeight, clientHeight } = viewport;
-        const hasOverflow = scrollHeight > clientHeight + 10;
-        const promptPinned = !compact && promptPinSpacerHeightRef.current > 0;
-        const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-
-        if (!scrollingToBottomRef.current) {
-          userHasScrolledUp.current = promptPinned || !isAtBottom;
-        } else if (isAtBottom) {
-          scrollingToBottomRef.current = false;
-          userHasScrolledUp.current = false;
-        }
-
-        // Update scroll-to-bottom button visibility via DOM
-        const shouldShow = hasOverflow && !isAtBottom && !scrollingToBottomRef.current;
-        if (scrollDownRef.current) {
-          scrollDownRef.current.style.display = shouldShow ? '' : 'none';
-        }
-
-        // Load older messages when scrolled near the top of the loaded window.
-        // The phantom spacer pushes real content down by its height, so the
-        // trigger zone shifts down with it.
-        if (
-          pagination &&
-          scrollTop < phantomHeightRef.current + 200 &&
-          hasMore &&
-          !loadingMore &&
-          !messageListRef.current?.hasHiddenItems()
-        ) {
-          messageListRef.current?.captureScrollAnchor();
-          pagination.load();
-        }
-
-        // At-bottom: sync visible message ID to last user message
-        if (!compact && isAtBottom && lastUserMsgIdRef.current && onVisibleMessageChange) {
-          onVisibleMessageChange(lastUserMsgIdRef.current);
-        }
-      };
-
+      const handleScroll = () => handleViewportScrollRef.current();
       viewport.addEventListener('scroll', handleScroll, { passive: true });
       return () => viewport.removeEventListener('scroll', handleScroll);
-    }, [threadId, hasMore, loadingMore, pagination, compact, onVisibleMessageChange]);
+    }, []);
 
     // ── IntersectionObserver for visible message tracking (non-compact) ──
     useEffect(() => {
@@ -407,8 +526,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       if (isNewThread) {
         const viewport = scrollViewportRef.current;
         if (viewport) {
-          userHasScrolledUp.current = false;
-          pinViewportToBottom(viewport);
+          applyThreadScrollPosition(viewport, threadId);
         }
       } else if (hasNewUserMessage) {
         // In full mode, ThreadView handles prompt pinning externally.
@@ -428,8 +546,10 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         }
       } else if (!userHasScrolledUp.current && !loadingMore) {
         const viewport = scrollViewportRef.current;
-        if (viewport) {
+        if (viewport && wasViewportPinnedBeforeLayoutChange(viewport)) {
           pinViewportToBottom(viewport);
+        } else if (viewport) {
+          updateStickyMetrics(viewport);
         }
       }
     }, [
@@ -439,6 +559,9 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       loadingMore,
       scrollFingerprint,
       pinViewportToBottom,
+      updateStickyMetrics,
+      wasViewportPinnedBeforeLayoutChange,
+      applyThreadScrollPosition,
     ]);
 
     // ── Pagination scroll preservation ───────────────────────────────
@@ -516,17 +639,30 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       const viewport = scrollViewportRef.current;
       if (!viewport) return;
 
-      if (!userHasScrolledUp.current && !loadingMore) {
+      if (
+        !userHasScrolledUp.current &&
+        !loadingMore &&
+        wasViewportPinnedBeforeLayoutChange(viewport)
+      ) {
         pinViewportToBottom(viewport);
       } else {
         viewport.scrollTop += delta;
+        updateStickyMetrics(viewport);
       }
-    }, [phantomHeight, firstMessageId, loadingMore, pinViewportToBottom]);
+    }, [
+      phantomHeight,
+      firstMessageId,
+      loadingMore,
+      pinViewportToBottom,
+      updateStickyMetrics,
+      wasViewportPinnedBeforeLayoutChange,
+    ]);
 
     // ── scrollToBottom callback ───────────────────────────────────────
     const scrollToBottom = useCallback(() => {
       const viewport = scrollViewportRef.current;
       if (!viewport) return;
+      const targetThreadId = threadId;
 
       if (!compact && promptPinSpacerHeightRef.current !== 0) {
         pinnedPromptIdRef.current = null;
@@ -538,15 +674,21 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
       viewport.scrollTop = viewport.scrollHeight;
+      updateStickyMetrics(viewport);
+      saveThreadScrollPosition(targetThreadId, viewport);
 
       requestAnimationFrame(() => {
+        if (threadIdRef.current !== targetThreadId) return;
         requestAnimationFrame(() => {
+          if (threadIdRef.current !== targetThreadId) return;
           if (!scrollingToBottomRef.current) return;
           viewport.scrollTop = viewport.scrollHeight;
+          updateStickyMetrics(viewport);
+          saveThreadScrollPosition(targetThreadId, viewport);
           scrollingToBottomRef.current = false;
         });
       });
-    }, [compact]);
+    }, [compact, saveThreadScrollPosition, threadId, updateStickyMetrics]);
 
     // ── Imperative handle ────────────────────────────────────────────
     useImperativeHandle(
@@ -814,6 +956,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           {/* Scroll to bottom button */}
           <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
             <button
+              type="button"
               onClick={scrollToBottom}
               data-testid="scroll-to-bottom"
               aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}

@@ -5,14 +5,15 @@ import type {
   PRConversation,
   PRIssueComment,
   PRReview,
-  PRReactionContent,
   PRCommentKind,
 } from '@funny/shared';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { parseJsonBody } from '../../validation/request.js';
 import {
   githubApiFetch,
   githubGraphQL,
@@ -23,6 +24,62 @@ import {
 } from './helpers.js';
 
 export const prThreadRoutes = new Hono<HonoEnv>();
+
+const prCommentBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    prNumber: z.number().optional(),
+    body: z.string().optional(),
+  })
+  .passthrough();
+
+const prReviewReplyBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    prNumber: z.number().optional(),
+    commentId: z.number().optional(),
+    body: z.string().optional(),
+  })
+  .passthrough();
+
+const prThreadResolveBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    threadNodeId: z.string().optional(),
+    resolve: z.boolean().optional(),
+  })
+  .passthrough();
+
+const prReactionContentSchema = z.enum([
+  '+1',
+  '-1',
+  'laugh',
+  'confused',
+  'heart',
+  'hooray',
+  'rocket',
+  'eyes',
+]);
+
+const prCommentKindSchema = z.enum(['issue', 'review']);
+
+const prReactionBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    kind: prCommentKindSchema.optional(),
+    commentId: z.number().optional(),
+    content: prReactionContentSchema.optional(),
+  })
+  .passthrough();
+
+const prPatchCommentBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    kind: prCommentKindSchema.optional(),
+    commentId: z.number().optional(),
+    body: z.string().optional(),
+  })
+  .passthrough();
 
 // ── GET /pr-threads — PR review comment threads ──────
 
@@ -231,7 +288,9 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
 
 prThreadRoutes.post('/pr-comment', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = (await c.req.json()) as { projectId?: string; prNumber?: number; body?: string };
+  const parsed = await parseJsonBody(c, prCommentBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const raw = parsed.value;
   if (!raw.projectId || !raw.prNumber || !raw.body) {
     return c.json({ error: 'projectId, prNumber and body are required' }, 400);
   }
@@ -276,12 +335,9 @@ prThreadRoutes.post('/pr-comment', async (c) => {
 
 prThreadRoutes.post('/pr-review-reply', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = (await c.req.json()) as {
-    projectId?: string;
-    prNumber?: number;
-    commentId?: number;
-    body?: string;
-  };
+  const parsed = await parseJsonBody(c, prReviewReplyBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const raw = parsed.value;
   if (!raw.projectId || !raw.prNumber || !raw.commentId || !raw.body) {
     return c.json({ error: 'projectId, prNumber, commentId and body are required' }, 400);
   }
@@ -324,11 +380,9 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
 
 prThreadRoutes.post('/pr-thread-resolve', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = (await c.req.json()) as {
-    projectId?: string;
-    threadNodeId?: string;
-    resolve?: boolean;
-  };
+  const parsed = await parseJsonBody(c, prThreadResolveBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const raw = parsed.value;
   if (!raw.projectId || !raw.threadNodeId || typeof raw.resolve !== 'boolean') {
     return c.json({ error: 'projectId, threadNodeId and resolve are required' }, 400);
   }
@@ -360,12 +414,9 @@ prThreadRoutes.post('/pr-thread-resolve', async (c) => {
 
 prThreadRoutes.post('/pr-reaction', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = (await c.req.json()) as {
-    projectId?: string;
-    kind?: PRCommentKind;
-    commentId?: number;
-    content?: PRReactionContent;
-  };
+  const parsed = await parseJsonBody(c, prReactionBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const raw = parsed.value;
   if (!raw.projectId || !raw.kind || !raw.commentId || !raw.content) {
     return c.json({ error: 'projectId, kind, commentId and content are required' }, 400);
   }
@@ -400,12 +451,9 @@ prThreadRoutes.post('/pr-reaction', async (c) => {
 
 prThreadRoutes.patch('/pr-comment', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = (await c.req.json()) as {
-    projectId?: string;
-    kind?: PRCommentKind;
-    commentId?: number;
-    body?: string;
-  };
+  const parsed = await parseJsonBody(c, prPatchCommentBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const raw = parsed.value;
   if (!raw.projectId || !raw.kind || !raw.commentId || !raw.body) {
     return c.json({ error: 'projectId, kind, commentId and body are required' }, 400);
   }

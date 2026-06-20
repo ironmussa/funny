@@ -7,20 +7,36 @@
  */
 
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import type { ServerEnv } from '../lib/types.js';
 import { getOverview, getTimeline } from '../services/analytics-service.js';
+import { parseQuery } from '../validation/request.js';
 
 export const analyticsRoutes = new Hono<ServerEnv>();
+
+const overviewQuerySchema = z.object({
+  projectId: z.string().optional(),
+  timeRange: z.string().optional(),
+  tz: z.coerce.number().default(0),
+});
+
+const timelineQuerySchema = overviewQuerySchema.extend({
+  groupBy: z.string().default('day'),
+});
 
 // GET /api/analytics/overview?projectId=xxx&timeRange=month&tz=300
 analyticsRoutes.get('/overview', async (c) => {
   const userId = c.get('userId') as string;
+  const parsed = parseQuery(c, overviewQuerySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const query = parsed.value;
+
   const result = await getOverview({
     userId,
-    projectId: c.req.query('projectId'),
-    timeRange: c.req.query('timeRange'),
-    offsetMinutes: parseInt(c.req.query('tz') || '0', 10) || 0,
+    projectId: query.projectId,
+    timeRange: query.timeRange,
+    offsetMinutes: query.tz || 0,
   });
   return c.json(result);
 });
@@ -28,12 +44,16 @@ analyticsRoutes.get('/overview', async (c) => {
 // GET /api/analytics/timeline?projectId=xxx&timeRange=month&groupBy=week&tz=300
 analyticsRoutes.get('/timeline', async (c) => {
   const userId = c.get('userId') as string;
+  const parsed = parseQuery(c, timelineQuerySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const query = parsed.value;
+
   const result = await getTimeline({
     userId,
-    projectId: c.req.query('projectId'),
-    timeRange: c.req.query('timeRange'),
-    groupBy: c.req.query('groupBy') || 'day',
-    offsetMinutes: parseInt(c.req.query('tz') || '0', 10) || 0,
+    projectId: query.projectId,
+    timeRange: query.timeRange,
+    groupBy: query.groupBy,
+    offsetMinutes: query.tz || 0,
   });
   return c.json(result);
 });

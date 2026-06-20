@@ -9,13 +9,42 @@ import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@fu
 import { eq, and, or, desc } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import { automations, automationRuns, threads } from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
+import { parseJsonBody } from '../validation/request.js';
 
 export const automationRoutes = new Hono<ServerEnv>();
+
+const createAutomationSchema = z.object({
+  projectId: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
+  name: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
+  prompt: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
+  schedule: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
+  model: z.string().optional(),
+  permissionMode: z.string().optional(),
+});
+
+const updateAutomationSchema = z
+  .object({
+    projectId: z.string().optional(),
+    name: z.string().optional(),
+    prompt: z.string().optional(),
+    schedule: z.string().optional(),
+    model: z.string().optional(),
+    permissionMode: z.string().optional(),
+    enabled: z.boolean().optional(),
+    maxRunHistory: z.number().optional(),
+    baseBranch: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const updateRunTriageSchema = z.object({
+  triageStatus: z.string().min(1, 'triageStatus is required'),
+});
 
 // ── Automation CRUD ──────────────────────────────────────────────
 
@@ -97,12 +126,10 @@ automationRoutes.get('/:id', async (c) => {
 
 // POST /api/automations
 automationRoutes.post('/', async (c) => {
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, createAutomationSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
   const userId = c.get('userId') as string;
-
-  if (!body.projectId || !body.name || !body.prompt || !body.schedule) {
-    return c.json({ error: 'Missing required fields: projectId, name, prompt, schedule' }, 400);
-  }
 
   const id = nanoid();
   const now = new Date().toISOString();
@@ -140,7 +167,9 @@ automationRoutes.patch('/:id', async (c) => {
     .where(and(eq(automations.id, id), eq(automations.userId, userId)));
   if (!rows[0]) return c.json({ error: 'Not found' }, 404);
 
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, updateAutomationSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
   const updates: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(body)) {
@@ -210,11 +239,9 @@ automationRoutes.patch('/runs/:runId/triage', async (c) => {
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
   const runId = c.req.param('runId');
-  const body = await c.req.json();
-
-  if (!body.triageStatus) {
-    return c.json({ error: 'triageStatus is required' }, 400);
-  }
+  const parsed = await parseJsonBody(c, updateRunTriageSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
   const owner = await db
     .select({ id: automationRuns.id })

@@ -8,6 +8,7 @@
 import { randomUUID } from 'crypto';
 
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
@@ -15,6 +16,7 @@ import { proxyToRunner } from '../middleware/proxy.js';
 import { pipelineApprovalStore } from '../services/pipeline-approval-store.js';
 import * as pipelineRepo from '../services/pipeline-repository.js';
 import { relayToUser } from '../services/ws-relay.js';
+import { parseJsonBody } from '../validation/request.js';
 
 export const pipelineRoutes = new Hono<ServerEnv>();
 
@@ -37,11 +39,10 @@ pipelineRoutes.post(
     const userId = c.get('userId') as string | undefined;
     if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
-    const body = (await c.req.json().catch(() => null)) as {
-      decision?: unknown;
-      text?: unknown;
-    } | null;
-    if (!body || (body.decision !== 'approve' && body.decision !== 'reject')) {
+    const parsed = await parseJsonBody(c, approvalRespondBodySchema);
+    if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
+    const body = parsed.value;
+    if (body.decision !== 'approve' && body.decision !== 'reject') {
       return c.json({ error: 'decision must be "approve" or "reject"' }, 400);
     }
     if (body.text !== undefined && (typeof body.text !== 'string' || body.text.length > 4000)) {
@@ -98,20 +99,79 @@ pipelineRoutes.get(
 
 const MAX_APPROVAL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
+const approvalRespondBodySchema = z.object({
+  decision: z.unknown().optional(),
+  text: z.unknown().optional(),
+});
+
+const approvalRequestBodySchema = z.object({
+  threadId: z.unknown().optional(),
+  gateId: z.unknown().optional(),
+  message: z.unknown().optional(),
+  workflowId: z.unknown().optional(),
+  captureResponse: z.unknown().optional(),
+  timeoutMs: z.unknown().optional(),
+});
+
+const progressBodySchema = z.object({
+  threadId: z.unknown().optional(),
+  pipelineId: z.unknown().optional(),
+  runId: z.unknown().optional(),
+  workflowId: z.unknown().optional(),
+  kind: z.unknown().optional(),
+  stage: z.unknown().optional(),
+  status: z.unknown().optional(),
+  error: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+});
+
+const pipelinePromptFields = {
+  reviewerPrompt: z.string().optional(),
+  correctorPrompt: z.string().optional(),
+  precommitFixerPrompt: z.string().optional(),
+  commitMessagePrompt: z.string().optional(),
+  testFixerPrompt: z.string().optional(),
+};
+
+const pipelineSettingsFields = {
+  reviewModel: z.string().optional(),
+  fixModel: z.string().optional(),
+  maxIterations: z.number().optional(),
+  precommitFixEnabled: z.boolean().optional(),
+  precommitFixModel: z.string().optional(),
+  precommitFixMaxIterations: z.number().optional(),
+  testEnabled: z.boolean().optional(),
+  testCommand: z.string().optional(),
+  testFixEnabled: z.boolean().optional(),
+  testFixModel: z.string().optional(),
+  testFixMaxIterations: z.number().optional(),
+  ...pipelinePromptFields,
+};
+
+const createPipelineBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    name: z.string().optional(),
+    ...pipelineSettingsFields,
+  })
+  .passthrough();
+
+const updatePipelineBodySchema = z
+  .object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional(),
+    ...pipelineSettingsFields,
+  })
+  .passthrough();
+
 // POST /api/pipelines/orchestrator/approvals/request — long-poll
 pipelineRoutes.post('/orchestrator/approvals/request', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
-  const body = (await c.req.json().catch(() => null)) as {
-    threadId?: unknown;
-    gateId?: unknown;
-    message?: unknown;
-    workflowId?: unknown;
-    captureResponse?: unknown;
-    timeoutMs?: unknown;
-  } | null;
-  if (!body) return c.json({ error: 'Invalid JSON body' }, 400);
+  const parsed = await parseJsonBody(c, approvalRequestBodySchema);
+  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
+  const body = parsed.value;
   if (typeof body.threadId !== 'string' || !body.threadId) {
     return c.json({ error: 'threadId is required' }, 400);
   }
@@ -208,18 +268,9 @@ pipelineRoutes.post('/orchestrator/progress', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
-  const body = (await c.req.json().catch(() => null)) as {
-    threadId?: unknown;
-    pipelineId?: unknown;
-    runId?: unknown;
-    workflowId?: unknown;
-    kind?: unknown;
-    stage?: unknown;
-    status?: unknown;
-    error?: unknown;
-    metadata?: unknown;
-  } | null;
-  if (!body) return c.json({ error: 'Invalid JSON body' }, 400);
+  const parsed = await parseJsonBody(c, progressBodySchema);
+  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
+  const body = parsed.value;
   if (typeof body.threadId !== 'string' || !body.threadId) {
     return c.json({ error: 'threadId is required' }, 400);
   }
@@ -301,7 +352,9 @@ pipelineRoutes.get('/:id', async (c) => {
 // POST /api/pipelines
 pipelineRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, createPipelineBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
   if (!body.projectId || !body.name) {
     return c.json({ error: 'projectId and name are required' }, 400);
@@ -337,7 +390,9 @@ pipelineRoutes.post('/', async (c) => {
 pipelineRoutes.patch('/:id', async (c) => {
   const userId = c.get('userId') as string;
   const { id } = c.req.param();
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, updatePipelineBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
   const existing = await pipelineRepo.getPipelineById(id, userId);
   if (!existing) return c.json({ error: 'Pipeline not found' }, 404);

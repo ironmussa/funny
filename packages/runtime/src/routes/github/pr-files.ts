@@ -1,12 +1,22 @@
 import { getRemoteUrl } from '@funny/core/git';
 import type { PRFile, PRCommit } from '@funny/shared';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { parseJsonBody } from '../../validation/request.js';
 import { GITHUB_API, githubApiFetch, parseGithubOwnerRepo, resolveGithubToken } from './helpers.js';
 
 export const prFileRoutes = new Hono<HonoEnv>();
+
+const prRevertFileBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    prNumber: z.union([z.number(), z.string()]).optional(),
+    filePath: z.string().optional(),
+  })
+  .passthrough();
 
 // ── PR Files (changed files in a pull request) ────────────────
 
@@ -267,11 +277,9 @@ prFileRoutes.get('/pr-file-content', async (c) => {
 
 prFileRoutes.post('/pr-revert-file', async (c) => {
   const userId = c.get('userId') as string;
-  const body = (await c.req.json()) as {
-    projectId?: string;
-    prNumber?: number;
-    filePath?: string;
-  };
+  const parsed = await parseJsonBody(c, prRevertFileBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
   const { projectId, prNumber, filePath } = body;
   if (!projectId || !prNumber || !filePath) {
     return c.json({ error: 'projectId, prNumber, and filePath are required' }, 400);
@@ -285,13 +293,13 @@ prFileRoutes.post('/pr-revert-file', async (c) => {
     return c.json({ error: 'Could not determine remote URL' }, 400);
   }
 
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) return c.json({ error: 'Not a GitHub project' }, 400);
+  const ownerRepo = parseGithubOwnerRepo(remoteResult.value);
+  if (!ownerRepo) return c.json({ error: 'Not a GitHub project' }, 400);
 
   const resolved = await resolveGithubToken(userId);
   if (!resolved) return c.json({ error: 'No GitHub token available' }, 401);
 
-  const { owner, repo } = parsed;
+  const { owner, repo } = ownerRepo;
   const { token } = resolved;
 
   try {

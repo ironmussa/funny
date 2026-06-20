@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { requireAdmin } from '../../middleware/auth.js';
@@ -15,6 +16,13 @@ import { requireProject, requireThread } from '../../utils/route-helpers.js';
 import { createCommandSchema, validate } from '../../validation/schemas.js';
 
 export const projectCommandsRoutes = new Hono<HonoEnv>();
+
+const startCommandBodySchema = z.object({
+  autoRestart: z.boolean().optional(),
+  maxRestarts: z.number().optional(),
+  restartWindowSec: z.number().optional(),
+  threadId: z.string().min(1).optional(),
+});
 
 // Security CR-6: every CRUD route below validates project ownership via
 // requireProject *before* touching startup-commands. Mutations also pass
@@ -109,20 +117,19 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
 
   let options: import('../../services/command-runner.js').RestartOptions | undefined;
   let threadId: string | undefined;
-  try {
-    const body = await c.req.json();
-    if (body?.autoRestart !== undefined) {
-      options = {
-        autoRestart: body.autoRestart,
-        maxRestarts: body.maxRestarts,
-        restartWindow: body.restartWindowSec ? body.restartWindowSec * 1000 : undefined,
-      };
-    }
-    if (typeof body?.threadId === 'string' && body.threadId.length > 0) {
-      threadId = body.threadId;
-    }
-  } catch {
-    // No body or invalid JSON — defaults will be used
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(startCommandBodySchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const body = parsed.value;
+  if (body.autoRestart !== undefined) {
+    options = {
+      autoRestart: body.autoRestart,
+      maxRestarts: body.maxRestarts,
+      restartWindow: body.restartWindowSec ? body.restartWindowSec * 1000 : undefined,
+    };
+  }
+  if (body.threadId) {
+    threadId = body.threadId;
   }
 
   let cwd = project.path;

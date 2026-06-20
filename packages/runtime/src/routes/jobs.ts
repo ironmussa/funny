@@ -7,18 +7,28 @@
  */
 
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { cancelJob, readJobLog } from '../services/agent-job-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { parseQuery } from '../validation/request.js';
 
 export const jobRoutes = new Hono<HonoEnv>();
+
+const jobLogQuerySchema = z.object({
+  offset: z.coerce.number().default(0),
+});
 
 // GET /api/jobs/:id/log — read a captured logfile chunk from this runner.
 jobRoutes.get('/:id/log', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const offset = Number(c.req.query('offset') ?? 0);
+  const parsed = parseQuery(c, jobLogQuerySchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { offset } = parsed.value;
+
   const chunk = await readJobLog(c.req.param('id'), userId, offset);
   if (!chunk) return c.json({ error: 'Not found' }, 404);
   return c.json(chunk);

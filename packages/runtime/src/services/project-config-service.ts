@@ -13,6 +13,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FunnyProjectConfig } from '@funny/shared';
+import { funnyProjectConfigSchema } from '@funny/shared/funny-config-schema';
+import { parseStoredJson } from '@funny/shared/json-validation';
 
 const CONFIG_FILENAME = '.funny.json';
 
@@ -20,11 +22,12 @@ const CONFIG_FILENAME = '.funny.json';
 export function getConfig(projectPath: string): FunnyProjectConfig {
   const filePath = join(projectPath, CONFIG_FILENAME);
   if (!existsSync(filePath)) return {};
-  try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as FunnyProjectConfig;
-  } catch {
-    return {};
-  }
+  const parsed = parseStoredJson(
+    funnyProjectConfigSchema,
+    readFileSync(filePath, 'utf-8'),
+    filePath,
+  );
+  return parsed.ok ? parsed.value : {};
 }
 
 /** Update `.funny.json` — merges with existing content to preserve unknown fields */
@@ -34,11 +37,12 @@ export function updateConfig(projectPath: string, config: FunnyProjectConfig): v
   // Read existing file to preserve unknown fields
   let existing: Record<string, unknown> = {};
   if (existsSync(filePath)) {
-    try {
-      existing = JSON.parse(readFileSync(filePath, 'utf-8'));
-    } catch {
-      // ignore parse errors, overwrite
-    }
+    const parsed = parseStoredJson(
+      funnyProjectConfigSchema,
+      readFileSync(filePath, 'utf-8'),
+      filePath,
+    );
+    if (parsed.ok) existing = parsed.value;
   }
 
   // Merge known fields

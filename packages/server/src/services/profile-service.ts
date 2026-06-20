@@ -8,8 +8,10 @@
  */
 
 import type { UserProfile } from '@funny/shared';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import { userProfiles } from '../db/schema.js';
@@ -17,14 +19,14 @@ import { encrypt, decrypt, isLegacyCiphertext, reencrypt } from '../lib/crypto.j
 
 // ── Helpers ──────────────────────────────────────────────────
 
+const providerKeysSchema = z.record(z.string(), z.string());
+const builtinProvidersSchema = z.array(z.string());
+
 /** Parse the provider_keys JSON column, returning {} on null/empty. */
 function parseProviderKeys(raw: string | null): Record<string, string> {
   if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
+  const parsed = parseStoredJson(providerKeysSchema, raw, 'user_profiles.provider_keys');
+  return parsed.ok ? parsed.value : {};
 }
 
 /** Build the providerKeys presence map (id → boolean) for the API response. */
@@ -243,12 +245,12 @@ export async function getBuiltinProviderSettings(userId: string): Promise<string
     .where(eq(userProfiles.userId, userId));
   const raw = rows[0]?.value;
   if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : null;
-  } catch {
-    return null;
-  }
+  const parsed = parseStoredJson(
+    builtinProvidersSchema,
+    raw,
+    'user_profiles.active_builtin_providers',
+  );
+  return parsed.ok ? parsed.value : null;
 }
 
 /**

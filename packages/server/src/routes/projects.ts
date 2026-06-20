@@ -11,7 +11,9 @@
 
 import { isAbsolute, resolve } from 'path';
 
+import { validateProjectPathLexical } from '@funny/core/git/path-validation';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
@@ -19,11 +21,55 @@ import * as pm from '../services/project-manager.js';
 import * as projectRepo from '../services/project-repository.js';
 import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import * as cmdRepo from '../services/startup-commands-repository.js';
+import { parseJsonBody } from '../validation/request.js';
 
 export const projectRoutes = new Hono<ServerEnv>();
 
 /** Roles a project admin may assign to a collaborator (owner = creator only). */
 const ASSIGNABLE_PROJECT_ROLES = new Set(['viewer', 'member', 'admin']);
+
+const createProjectBodySchema = z.object({
+  name: z.string().min(1, 'name and path are required'),
+  path: z.string().min(1, 'name and path are required'),
+});
+
+const updateProjectBodySchema = z.object({
+  name: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  color: z.string().nullable().optional(),
+  followUpMode: z.string().optional(),
+  defaultProvider: z.string().nullable().optional(),
+  defaultModel: z.string().nullable().optional(),
+  defaultMode: z.string().nullable().optional(),
+  defaultPermissionMode: z.string().nullable().optional(),
+  defaultBranch: z.string().nullable().optional(),
+  urls: z.array(z.string()).nullable().optional(),
+  systemPrompt: z.string().nullable().optional(),
+  launcherUrl: z.string().nullable().optional(),
+  defaultAgentTemplateId: z.string().nullable().optional(),
+  closed: z.boolean().optional(),
+  fastMode: z.boolean().optional(),
+});
+
+const reorderProjectsBodySchema = z.object({
+  projectIds: z.array(z.string().min(1)).min(1, 'projectIds must be a non-empty array'),
+});
+
+const addProjectMemberBodySchema = z.object({
+  userId: z.string().min(1, 'Missing required field: userId'),
+  role: z.string().optional(),
+});
+
+const localPathBodySchema = z.object({
+  localPath: z.string().min(1, 'Missing required field: localPath'),
+});
+
+const projectCommandBodySchema = z.object({
+  label: z.string().min(1, 'label and command are required'),
+  command: z.string().min(1, 'label and command are required'),
+  port: z.number().optional(),
+  portEnvVar: z.string().optional(),
+});
 
 // ── Project CRUD ─────────────────────────────────────────
 
@@ -109,6 +155,16 @@ projectRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
 
+  const parsed = await parseJsonBody(c, createProjectBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const { name, path } = parsed.value;
+
+  // Lexical project-root guards are host-independent and must apply before
+  // runner delegation. Filesystem containment still runs on the runner in
+  // team mode, where the path actually exists.
+  const lexical = validateProjectPathLexical(path);
+  if (lexical.isErr()) return c.json({ error: lexical.error.message }, 400);
+
   // Team/remote-runner mode: the project path lives on the runner's host, not
   // the server's. The server cannot validate it (its $HOME and filesystem are
   // unrelated — the git-repo and $HOME-containment checks would always fail).
@@ -119,13 +175,6 @@ projectRoutes.post('/', async (c) => {
   const runnerId = await findAnyRunnerForUser(userId);
   if (runnerId) {
     return proxyToRunner(c);
-  }
-
-  const raw = await c.req.json();
-  const { name, path } = raw as { name?: string; path?: string };
-
-  if (!name || !path) {
-    return c.json({ error: 'name and path are required' }, 400);
   }
 
   // Duplicate name check
@@ -165,8 +214,9 @@ projectRoutes.patch('/:id', async (c) => {
     }
   }
 
-  const raw = await c.req.json();
-  const result = await projectRepo.updateProject(id, raw);
+  const parsed = await parseJsonBody(c, updateProjectBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const result = await projectRepo.updateProject(id, parsed.value);
 
   if (result.isErr()) {
     const e = result.error;
@@ -202,12 +252,9 @@ projectRoutes.delete('/:id', async (c) => {
 /** PUT /api/projects/reorder — reorder projects */
 projectRoutes.put('/reorder', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = await c.req.json();
-  const { projectIds } = raw as { projectIds?: string[] };
-
-  if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
-    return c.json({ error: 'projectIds must be a non-empty array' }, 400);
-  }
+  const parsed = await parseJsonBody(c, reorderProjectsBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const { projectIds } = parsed.value;
 
   const result = await projectRepo.reorderProjects(userId, projectIds);
   if (result.isErr()) {
@@ -260,10 +307,9 @@ projectRoutes.post('/:id/members', async (c) => {
     return c.json({ error: 'Only project admins can add members' }, 403);
   }
 
-  const body = await c.req.json<{ userId: string; role?: string }>();
-  if (!body.userId) {
-    return c.json({ error: 'Missing required field: userId' }, 400);
-  }
+  const parsed = await parseJsonBody(c, addProjectMemberBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
   // Validate the role against the project-assignable set (unified-rbac-grants).
   // `owner` is the creator and is never assigned here.
@@ -296,10 +342,9 @@ projectRoutes.post('/:id/local-path', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.param('id');
 
-  const body = await c.req.json<{ localPath: string }>();
-  if (!body.localPath) {
-    return c.json({ error: 'Missing required field: localPath' }, 400);
-  }
+  const parsed = await parseJsonBody(c, localPathBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
   // Validate: must be an absolute path
   if (!isAbsolute(body.localPath)) {
@@ -364,10 +409,9 @@ projectRoutes.post('/:id/commands', async (c) => {
   if (!(await isProjectAdmin(projectId, userId))) {
     return c.json({ error: 'Only project admins can edit startup commands' }, 403);
   }
-  const { label, command } = await c.req.json<{ label: string; command: string }>();
-  if (!label || !command) {
-    return c.json({ error: 'label and command are required' }, 400);
-  }
+  const parsed = await parseJsonBody(c, projectCommandBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const { label, command } = parsed.value;
   const entry = await cmdRepo.createCommand({ projectId, label, command });
   return c.json(entry, 201);
 });
@@ -384,15 +428,9 @@ projectRoutes.put('/:id/commands/:cmdId', async (c) => {
   if (!(await isProjectAdmin(projectId, userId))) {
     return c.json({ error: 'Only project admins can edit startup commands' }, 403);
   }
-  const { label, command, port, portEnvVar } = await c.req.json<{
-    label: string;
-    command: string;
-    port?: number;
-    portEnvVar?: string;
-  }>();
-  if (!label || !command) {
-    return c.json({ error: 'label and command are required' }, 400);
-  }
+  const parsed = await parseJsonBody(c, projectCommandBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const { label, command, port, portEnvVar } = parsed.value;
   await cmdRepo.updateCommand(cmdId, projectId, { label, command, port, portEnvVar });
   return c.json({ ok: true });
 });

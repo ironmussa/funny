@@ -8,7 +8,7 @@
 import type { Browser, Page } from 'playwright';
 import { z } from 'zod';
 
-import type { ToolDef } from './types.js';
+import { defineTool, type ToolDef } from './types.js';
 
 export interface BrowserToolsContext {
   /** Base URL of the app to test (e.g., http://localhost:3000) */
@@ -52,8 +52,8 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
     }
   }
 
-  const tools: Record<string, ToolDef> = {
-    browser_navigate: {
+  const tools = {
+    browser_navigate: defineTool({
       description: 'Navigate the browser to a URL.',
       parameters: z.object({
         url: z.string().describe('The URL to navigate to'),
@@ -64,14 +64,13 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         const title = await p.title();
         return `Navigated to: ${p.url()}\nTitle: ${title}`;
       },
-    },
+    }),
 
-    browser_screenshot: {
+    browser_screenshot: defineTool({
       description: 'Take a screenshot of the current page. Returns base64 PNG.',
       parameters: z.object({
         fullPage: z
           .boolean()
-          .optional()
           .default(false)
           .describe('Whether to capture the full scrollable page'),
       }),
@@ -80,26 +79,22 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         const buf = await p.screenshot({ fullPage, type: 'png' });
         return `data:image/png;base64,${buf.toString('base64')}`;
       },
-    },
+    }),
 
-    browser_click: {
+    browser_click: defineTool({
       description: 'Click an element matching a CSS selector.',
       parameters: z.object({
         selector: z.string().describe('CSS selector of the element to click'),
-        timeout: z
-          .number()
-          .optional()
-          .default(5000)
-          .describe('Max time in ms to wait for the element'),
+        timeout: z.number().default(5000).describe('Max time in ms to wait for the element'),
       }),
       execute: async ({ selector, timeout }) => {
         const p = await ensurePage();
         await p.click(selector, { timeout });
         return `Clicked: ${selector}`;
       },
-    },
+    }),
 
-    browser_get_dom: {
+    browser_get_dom: defineTool({
       description: 'Get the HTML content of the current page or a specific element.',
       parameters: z.object({
         selector: z.string().optional().describe('CSS selector. Omit to get the full page body.'),
@@ -122,17 +117,17 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         }
         return html;
       },
-    },
+    }),
 
-    browser_console_errors: {
+    browser_console_errors: defineTool({
       description: 'Get all console errors captured since the browser was opened.',
       parameters: z.object({}),
       execute: async () => {
         await ensurePage(); // ensure listener is set up
         return consoleErrors.length ? consoleErrors.join('\n') : 'No console errors detected.';
       },
-    },
-  };
+    }),
+  } satisfies Record<string, ToolDef>;
 
   return { tools, dispose };
 }

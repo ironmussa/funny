@@ -20,6 +20,9 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { z } from 'zod';
+
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 
@@ -40,6 +43,13 @@ export interface RunnerCredentials {
   forwardedSecret?: string;
 }
 
+const runnerCredentialsSchema = z.object({
+  serverUrl: z.string().min(1),
+  runnerId: z.string().min(1),
+  token: z.string().min(1),
+  forwardedSecret: z.string().min(1).optional(),
+});
+
 function credentialsPath(dir: string): string {
   return join(dir, CREDENTIALS_FILE);
 }
@@ -56,30 +66,21 @@ export function loadRunnerCredentials(
   const path = credentialsPath(dir);
   if (!existsSync(path)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<RunnerCredentials>;
-    if (
-      typeof parsed.serverUrl !== 'string' ||
-      typeof parsed.runnerId !== 'string' ||
-      typeof parsed.token !== 'string' ||
-      parsed.token.length === 0
-    ) {
-      return null;
-    }
-    if (parsed.serverUrl !== serverUrl) {
+    const parsed = parseStoredJson(runnerCredentialsSchema, readFileSync(path, 'utf-8'), path);
+    if (!parsed.ok) return null;
+    const creds = parsed.value;
+    if (creds.serverUrl !== serverUrl) {
       log.info('Stored runner credentials belong to a different server — ignoring', {
         namespace: 'runner',
-        storedServer: parsed.serverUrl,
+        storedServer: creds.serverUrl,
       });
       return null;
     }
     return {
-      serverUrl: parsed.serverUrl,
-      runnerId: parsed.runnerId,
-      token: parsed.token,
-      forwardedSecret:
-        typeof parsed.forwardedSecret === 'string' && parsed.forwardedSecret.length > 0
-          ? parsed.forwardedSecret
-          : undefined,
+      serverUrl: creds.serverUrl,
+      runnerId: creds.runnerId,
+      token: creds.token,
+      forwardedSecret: creds.forwardedSecret,
     };
   } catch (err) {
     log.warn('Failed to read stored runner credentials', {

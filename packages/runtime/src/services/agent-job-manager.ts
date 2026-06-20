@@ -30,7 +30,7 @@ import { nanoid } from 'nanoid';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
-import { isAgentRunning, startAgent } from './agent-runner.js';
+import { isAgentRunning, startAgent } from './agent-runner-control.js';
 import { createOrReschedule } from './agent-watcher-manager.js';
 import { buildLogTail } from './job-log-tail.js';
 import { getServices } from './service-registry.js';

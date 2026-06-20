@@ -565,7 +565,7 @@ export class RuntimeProgressReporter implements ProgressReporter {
 
 /** Poll-based agent completion. */
 async function waitForAgentCompletionPoll(threadId: string, timeoutMs = 300_000): Promise<void> {
-  const { isAgentRunning } = await import('./agent-runner.js');
+  const { isAgentRunning } = await import('./agent-runner-control.js');
   const start = Date.now();
   const pollInterval = 1000;
 

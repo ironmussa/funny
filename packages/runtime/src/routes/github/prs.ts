@@ -10,9 +10,11 @@ import type {
   MergeableState,
 } from '@funny/shared';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { parseJsonBody } from '../../validation/request.js';
 import {
   GITHUB_API,
   githubApiFetch,
@@ -22,6 +24,14 @@ import {
 } from './helpers.js';
 
 export const prRoutes = new Hono<HonoEnv>();
+
+const prMergeBodySchema = z
+  .object({
+    projectId: z.string().optional(),
+    prNumber: z.union([z.number(), z.string()]).optional(),
+    method: z.unknown().optional(),
+  })
+  .passthrough();
 
 // ── Sorting + search helpers ────────────────────────────────
 
@@ -454,18 +464,16 @@ const MERGE_METHODS = new Set(['squash', 'merge', 'rebase']);
 
 prRoutes.post('/pr-merge', async (c) => {
   const userId = c.get('userId') as string;
-  const raw = (await c.req.json().catch(() => null)) as {
-    projectId?: string;
-    prNumber?: number;
-    method?: 'squash' | 'merge' | 'rebase';
-  } | null;
+  const parsed = await parseJsonBody(c, prMergeBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const raw = parsed.value;
 
   if (!raw?.projectId || !raw?.prNumber) {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
   const method = raw.method ?? 'squash';
-  if (!MERGE_METHODS.has(method)) {
+  if (typeof method !== 'string' || !MERGE_METHODS.has(method)) {
     return c.json({ error: 'Invalid merge method' }, 400);
   }
 

@@ -149,7 +149,7 @@ describe('socketio runner handlers', () => {
 
     await socket.trigger(RUNNER_AGENT_EVENT, {
       userId: 'user-1',
-      event: { type: 'agent:message', threadId: 'th-1' },
+      event: { type: 'agent:message' },
     });
 
     expect(relayToUser).toHaveBeenCalled();
@@ -205,6 +205,18 @@ describe('socketio runner handlers', () => {
     );
 
     expect(response).toEqual({ ok: false, error: 'Forbidden' });
+  });
+
+  test('runner:assign_project rejects invalid payloads before authorization', async () => {
+    const socket = createMockSocket({ data: { runnerUserId: 'user-1' } } as any);
+    setupRunnerControlHandlers(socket, 'runner-1');
+
+    let response: unknown;
+    await socket.triggerRpc('runner:assign_project', { projectId: 'p1' }, (res) => {
+      response = res;
+    });
+
+    expect(response).toEqual({ ok: false, error: 'Invalid payload' });
   });
 
   test('runner data handler emits data:response for requestId messages', async () => {

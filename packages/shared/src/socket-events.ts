@@ -2,7 +2,7 @@
  * Socket.IO event names and payload schemas shared between server, runtime,
  * and client. Keeps the wire contract in one place.
  */
-import { z } from 'zod';
+import { z, type ZodTypeAny } from 'zod';
 
 // ─── Browser → Server (fire-and-forget forwarders) ───────────────────────────
 
@@ -157,7 +157,144 @@ export type RunnerDataEvent = (typeof RUNNER_DATA_EVENTS)[number];
 
 // ─── Payload parsing ─────────────────────────────────────────────────────────
 
+const socketRequestIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const objectPayloadSchema = z.union([z.record(z.string(), z.unknown()), z.null(), z.undefined()]);
+
+export const socketObjectPayloadSchema = z.preprocess(
+  (data) => data ?? {},
+  z.object({}).catchall(z.unknown()),
+);
+
+export type SocketObjectPayload = z.infer<typeof socketObjectPayloadSchema>;
+
+export const browserPtyForwardPayloadSchema = z.preprocess(
+  (data) => data ?? {},
+  z
+    .object({
+      projectId: z.string().min(1).optional(),
+      id: z.string().min(1).optional(),
+    })
+    .catchall(z.unknown()),
+);
+
+export type BrowserPtyForwardPayload = z.infer<typeof browserPtyForwardPayloadSchema>;
+
+const advertisedModelEntrySchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  contextWindow: z.number().int().positive(),
+  i18nKey: z.string().min(1),
+});
+
+const advertisedProviderSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  models: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('static'),
+      defaultModel: z.string().min(1),
+      entries: z.array(advertisedModelEntrySchema).optional(),
+    }),
+    z.object({
+      kind: z.literal('dynamic'),
+      defaultModel: z.string().min(1),
+    }),
+  ]),
+  attachmentLimits: z.object({
+    inlineMaxBytes: z.number().int().nonnegative(),
+    uploadMaxBytes: z.number().int().nonnegative(),
+    hardMaxBytes: z.number().int().nonnegative(),
+  }),
+  auth: z.object({
+    mode: z.enum(['runner-preauth', 'provider-key']),
+    providerKeyId: z.string().min(1).optional(),
+  }),
+});
+
+export const runnerHeartbeatSchema = z.preprocess(
+  (data) => data ?? {},
+  z
+    .object({
+      activeThreadIds: z.array(z.string()).default([]),
+      providers: z.array(advertisedProviderSchema).optional(),
+      activeBuiltins: z.array(z.string()).optional(),
+      availableProviders: z.array(z.string()).optional(),
+    })
+    .passthrough(),
+);
+
+export type RunnerHeartbeatPayload = z.infer<typeof runnerHeartbeatSchema>;
+
+export const runnerPollTasksSchema = z.preprocess((data) => data ?? {}, z.object({}).passthrough());
+
+export type RunnerPollTasksPayload = z.infer<typeof runnerPollTasksSchema>;
+
+const runnerAssignProjectBodySchema = z
+  .object({
+    projectId: z.string().min(1),
+    localPath: z.string().min(1),
+  })
+  .passthrough();
+
+export const runnerAssignProjectSchema = z.preprocess((data) => {
+  if (data && typeof data === 'object' && !Array.isArray(data) && 'payload' in data) {
+    return (data as { payload?: unknown }).payload;
+  }
+  return data;
+}, runnerAssignProjectBodySchema);
+
+export type RunnerAssignProjectPayload = z.infer<typeof runnerAssignProjectSchema>;
+
+export const tunnelRequestSchema = z.object({
+  method: z.string().min(1),
+  path: z.string().min(1),
+  headers: z.record(z.string(), z.string()),
+  body: z.string().nullable(),
+});
+
+export type TunnelRequestPayload = z.infer<typeof tunnelRequestSchema>;
+
+export const dataResponseSchema = z.object({
+  requestId: socketRequestIdSchema,
+  response: z.unknown().optional(),
+});
+
+export type DataResponsePayload = z.infer<typeof dataResponseSchema>;
+
+export const centralBrowserWsSchema = z.object({
+  userId: z.string().min(1),
+  data: z.unknown(),
+});
+
+export type CentralBrowserWsPayload = z.infer<typeof centralBrowserWsSchema>;
+
+export const centralPtyListSchema = z.object({
+  userId: z.string().min(1),
+});
+
+export type CentralPtyListPayload = z.infer<typeof centralPtyListSchema>;
+
+export const centralCommandSchema = z
+  .object({
+    task: z
+      .object({
+        taskId: z.string().optional(),
+        type: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+export type CentralCommandPayload = z.infer<typeof centralCommandSchema>;
+
+export const runnerDataRequestSchema = z
+  .object({
+    _requestId: socketRequestIdSchema.optional(),
+  })
+  .catchall(z.unknown());
+
+export type RunnerDataRequestPayload = z.infer<typeof runnerDataRequestSchema>;
 
 /** Normalize browser/runner fire-and-forget payloads. Returns null when invalid. */
 export function parseObjectPayload(data: unknown): Record<string, unknown> | null {
@@ -169,12 +306,42 @@ export function parseObjectPayload(data: unknown): Record<string, unknown> | nul
   return (parsed.data ?? {}) as Record<string, unknown>;
 }
 
-export function parseRunnerAgentEvent(data: unknown): RunnerAgentEventPayload | null {
-  const parsed = runnerAgentEventSchema.safeParse(data);
+export function parseSocketPayload<TSchema extends ZodTypeAny>(
+  schema: TSchema,
+  data: unknown,
+): z.infer<TSchema> | null {
+  const parsed = schema.safeParse(data);
   return parsed.success ? parsed.data : null;
 }
 
+export function parseRunnerAgentEvent(data: unknown): RunnerAgentEventPayload | null {
+  return parseSocketPayload(runnerAgentEventSchema, data);
+}
+
 export function parseRunnerBrowserRelay(data: unknown): RunnerBrowserRelayPayload | null {
-  const parsed = runnerBrowserRelaySchema.safeParse(data);
-  return parsed.success ? parsed.data : null;
+  return parseSocketPayload(runnerBrowserRelaySchema, data);
+}
+
+export function parseTunnelRequest(data: unknown): TunnelRequestPayload | null {
+  return parseSocketPayload(tunnelRequestSchema, data);
+}
+
+export function parseDataResponse(data: unknown): DataResponsePayload | null {
+  return parseSocketPayload(dataResponseSchema, data);
+}
+
+export function parseCentralBrowserWs(data: unknown): CentralBrowserWsPayload | null {
+  return parseSocketPayload(centralBrowserWsSchema, data);
+}
+
+export function parseCentralPtyList(data: unknown): CentralPtyListPayload | null {
+  return parseSocketPayload(centralPtyListSchema, data);
+}
+
+export function parseCentralCommand(data: unknown): CentralCommandPayload | null {
+  return parseSocketPayload(centralCommandSchema, data);
+}
+
+export function parseRunnerDataRequest(data: unknown): RunnerDataRequestPayload | null {
+  return parseSocketPayload(runnerDataRequestSchema, data ?? {});
 }

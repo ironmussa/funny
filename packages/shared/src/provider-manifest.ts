@@ -15,13 +15,13 @@
  * manifest loader safe: the worst an external JSON manifest can do is point
  * funny at a binary already on the runner's PATH — it cannot define new logic.
  *
- * Imports here are TYPE-ONLY so this module stays a leaf: `models.ts` derives
- * its registry FROM the manifest set (runtime import), and would otherwise
- * form an import cycle.
+ * Imports here are from leaf contract modules so `models.ts` can derive its
+ * registry from the manifest set without coupling the manifest contract back
+ * to the model registry.
  */
 
-import type { AttachmentLimits, ModelDefinition, ProviderKeyConfig } from './models.js';
 import type { PermissionMode } from './primitives.js';
+import type { AttachmentLimits, ModelDefinition, ProviderKeyConfig } from './provider-types.js';
 
 // ─── Quirk flags (the complete minimal set — see Phase 0 audit) ──────────────
 

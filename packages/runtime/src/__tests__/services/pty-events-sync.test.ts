@@ -20,10 +20,12 @@ describe('PTY event sync between server and runtime', () => {
   const appSource = readFileSync(APP_PATH, 'utf-8');
 
   // Events the server forwards (shared wire contract)
-  const serverEvents = [...BROWSER_PTY_FORWARD_EVENTS];
+  const serverEvents: string[] = [...BROWSER_PTY_FORWARD_EVENTS];
 
   // Events the runtime handles (case 'pty:...' in the switch)
-  const runtimeEvents = [...appSource.matchAll(/case '(pty:[^']+)'/g)].map((m) => m[1]);
+  const runtimeEvents = [...appSource.matchAll(/case '(pty:[^']+)'/g)].flatMap((m) =>
+    m[1] ? [m[1]] : [],
+  );
 
   test('server PTY forward contract is non-empty', () => {
     expect(serverEvents.length).toBeGreaterThan(0);

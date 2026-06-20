@@ -9,6 +9,7 @@
     "nursery": "off"
   },
   "plugins": ["typescript", "react", "import", "oxc"],
+  "jsPlugins": ["eslint-plugin-zod"],
   "rules": {
     "react/react-in-jsx-scope": "off",
     "no-unused-vars": "warn",
@@ -25,6 +26,13 @@
     "no-new": "off",
     "react/iframe-missing-sandbox": "off",
     "no-unmodified-loop-condition": "off",
+    "zod/no-any-schema": "error",
+    "zod/no-coerce-boolean": "error",
+    "zod/no-duplicate-schema-methods": "error",
+    "zod/no-empty-custom-schema": "error",
+    "zod/no-optional-and-default-together": "error",
+    "zod/no-throw-in-refine": "error",
+    "zod/no-transform-in-record-key": "error",
     "max-lines": ["warn", { "max": 800, "skipBlankLines": true, "skipComments": true }],
     "max-lines-per-function": [
       "warn",

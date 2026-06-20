@@ -47,7 +47,7 @@ const spawnAgentAction = z
     output_format: z
       .object({
         type: z.literal('object'),
-        properties: z.record(z.string(), z.any()),
+        properties: z.record(z.string(), z.unknown()),
         required: z.array(z.string()).optional(),
       })
       .optional(),

@@ -34,7 +34,7 @@ import {
   stopAgent,
   isAgentRunning,
   getSupportedSlashCommands,
-} from '../agent-runner.js';
+} from '../agent-runner-control.js';
 import { cleanupExternalThread } from '../ingest-mapper.js';
 import { listPermissionRules } from '../permission-rules-client.js';
 import { getServices } from '../service-registry.js';

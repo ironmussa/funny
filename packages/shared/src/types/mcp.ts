@@ -1,9 +1,12 @@
+import type { AgentProvider } from '../primitives.js';
+
 // ─── MCP Servers ────────────────────────────────────────
 
 export type McpServerType = 'stdio' | 'http' | 'sse';
 
 export interface McpServer {
   name: string;
+  provider?: AgentProvider;
   type: McpServerType;
   command?: string;
   args?: string[];
@@ -24,6 +27,7 @@ export interface McpListResponse {
 
 export interface McpAddRequest {
   name: string;
+  provider?: AgentProvider;
   type: McpServerType;
   command?: string;
   args?: string[];
@@ -38,6 +42,7 @@ export interface McpAddRequest {
 
 export interface McpOAuthStartRequest {
   serverName: string;
+  provider?: AgentProvider;
   projectPath: string;
 }
 
@@ -47,6 +52,7 @@ export interface McpOAuthStartResponse {
 
 export interface McpRemoveRequest {
   name: string;
+  provider?: AgentProvider;
   projectPath: string;
   scope?: 'project' | 'user';
 }

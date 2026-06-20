@@ -17,7 +17,7 @@ describe('provider resource descriptors', () => {
     expect(d.mcp.supported).toBe(true);
   });
 
-  it('Codex carries its own filesystem skills (~/.codex/skills) but no custom commands (v1)', () => {
+  it('Codex carries its own filesystem skills (.codex/skills and .agents/skills) but no custom commands (v1)', () => {
     const d = PROVIDER_RESOURCE_DESCRIPTORS.codex;
     expect(d.skills).toEqual(['codex-global', 'codex-project']);
     expect(d.customCommands).toBe('none');

@@ -147,6 +147,38 @@ describe('listCodexSkillResources', () => {
     expect(listCodexSkillResources()).toEqual([]);
   });
 
+  test('also scans ~/.agents/skills for Codex user skills', () => {
+    existsSync.mockImplementation((p?: string) => {
+      const s = String(p);
+      if (s.endsWith('/.agents/skills')) return true;
+      if (s.endsWith('/react-doctor/SKILL.md')) return true;
+      return false;
+    });
+    readdirSync.mockImplementation((p?: string) => {
+      const s = String(p);
+      if (s.endsWith('/.agents/skills')) {
+        return [
+          { name: 'react-doctor', isDirectory: () => true, isSymbolicLink: () => false },
+        ] as any;
+      }
+      return [];
+    });
+    readFileSync.mockImplementation((p?: string) =>
+      String(p).endsWith('/react-doctor/SKILL.md')
+        ? '---\nname: react-doctor\ndescription: Scan React codebases\n---\n'
+        : '',
+    );
+
+    const resources = listCodexSkillResources();
+    expect(resources.find((r) => r.name === 'react-doctor')).toMatchObject({
+      kind: 'skill',
+      description: 'Scan React codebases',
+      origin: 'codex-global',
+      scope: 'global',
+      compatibleProviders: ['codex'],
+    });
+  });
+
   test('also scans {project}/.codex/skills (project-scoped Codex skills)', () => {
     existsSync.mockImplementation((p?: string) => {
       const s = String(p);
@@ -174,6 +206,37 @@ describe('listCodexSkillResources', () => {
     const proj = resources.find((r) => r.name === 'proj-skill');
     expect(proj).toMatchObject({
       kind: 'skill',
+      origin: 'codex-project',
+      scope: 'project',
+      compatibleProviders: ['codex'],
+    });
+  });
+
+  test('also scans {project}/.agents/skills (project-scoped Codex skills)', () => {
+    existsSync.mockImplementation((p?: string) => {
+      const s = String(p);
+      if (s === '/repo/.agents/skills') return true;
+      if (s.endsWith('/repo-skill/SKILL.md')) return true;
+      return false;
+    });
+    readdirSync.mockImplementation((p?: string) => {
+      if (p === '/repo/.agents/skills') {
+        return [
+          { name: 'repo-skill', isDirectory: () => true, isSymbolicLink: () => false },
+        ] as any;
+      }
+      return [];
+    });
+    readFileSync.mockImplementation((p?: string) =>
+      String(p).endsWith('/repo-skill/SKILL.md')
+        ? '---\nname: repo-skill\ndescription: Repo Codex skill\n---\n'
+        : '',
+    );
+
+    const resources = listCodexSkillResources('/repo');
+    expect(resources.find((r) => r.name === 'repo-skill')).toMatchObject({
+      kind: 'skill',
+      description: 'Repo Codex skill',
       origin: 'codex-project',
       scope: 'project',
       compatibleProviders: ['codex'],

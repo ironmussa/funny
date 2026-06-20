@@ -1,4 +1,4 @@
-import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
+import { DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { CircleDot, FolderOpen, GitFork } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -325,6 +325,7 @@ export function NewThreadInput({
         <AvailableMcpServers
           projectPath={projectPath || undefined}
           projectId={effectiveProjectId || undefined}
+          provider={project?.defaultProvider ?? DEFAULT_PROVIDER}
         />
       </div>
 

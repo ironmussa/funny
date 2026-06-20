@@ -26,7 +26,7 @@ export async function loadProjectMcpServers(
     const descriptor = getProviderResourceDescriptor(provider);
     if (!descriptor.mcp.supported) return undefined;
 
-    const serverListResult = await listMcpServers(mcpProjectPath);
+    const serverListResult = await listMcpServers(mcpProjectPath, provider);
     if (serverListResult.isErr()) {
       log.warn('Failed to list project MCP servers', {
         namespace: 'agent',

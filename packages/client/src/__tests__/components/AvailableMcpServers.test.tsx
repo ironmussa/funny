@@ -63,7 +63,7 @@ describe('AvailableMcpServers', () => {
     expect(screen.queryByTestId('available-mcp-disabled-one')).not.toBeInTheDocument();
     expect(screen.queryByTestId('available-mcp-needs-auth')).not.toBeInTheDocument();
     expect(screen.queryByTestId('available-mcp-broken')).not.toBeInTheDocument();
-    expect(mockListMcpServers).toHaveBeenCalledWith('/repo');
+    expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude');
   });
 
   test('isActiveMcpServer excludes disabled and unhealthy servers', () => {
@@ -95,5 +95,15 @@ describe('AvailableMcpServers', () => {
       'href',
       '/projects/proj-1/settings/mcp-server',
     );
+  });
+
+  test('loads servers for the selected provider', async () => {
+    mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
+
+    renderMcpList(<AvailableMcpServers projectPath="/repo" provider="codex" />);
+
+    await waitFor(() => {
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex');
+    });
   });
 });

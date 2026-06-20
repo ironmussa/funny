@@ -1,4 +1,4 @@
-import type { McpServer, McpServerType } from '@funny/shared';
+import type { AgentProvider, McpServer, McpServerType } from '@funny/shared';
 import {
   Trash2,
   Plus,
@@ -56,6 +56,11 @@ interface RecommendedServer {
   args?: string[];
 }
 
+const MCP_PROVIDER_OPTIONS: Array<{ value: AgentProvider; label: string }> = [
+  { value: 'claude', label: 'Claude Code' },
+  { value: 'codex', label: 'Codex' },
+];
+
 function isClaudeAiConnectorName(name: string): boolean {
   return name.startsWith('claude.ai') || name.startsWith('claude_ai_');
 }
@@ -91,6 +96,12 @@ function McpServerToggle({
   const { t } = useTranslation();
   const notToggleable = server.toggleable === false;
   const isClaudeAi = isClaudeAiConnectorName(server.name);
+  const tooltipKey =
+    server.provider === 'codex'
+      ? 'mcp.externalToggleTooltipCodex'
+      : isClaudeAi
+        ? 'mcp.externalToggleTooltipClaudeAi'
+        : 'mcp.externalToggleTooltipPlugin';
 
   const switchControl = (
     <Switch
@@ -114,9 +125,7 @@ function McpServerToggle({
         </span>
       </TooltipTrigger>
       <TooltipContent side="left" className="max-w-xs p-3 text-left">
-        <p className="leading-snug">
-          {t(isClaudeAi ? 'mcp.externalToggleTooltipClaudeAi' : 'mcp.externalToggleTooltipPlugin')}
-        </p>
+        <p className="leading-snug">{t(tooltipKey)}</p>
       </TooltipContent>
     </Tooltip>
   );
@@ -403,6 +412,7 @@ export function McpServerSettings() {
   const [togglingName, setTogglingName] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [confirmRemoveName, setConfirmRemoveName] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<AgentProvider>('claude');
 
   // Add form state
   const [addName, setAddName] = useState('');
@@ -425,22 +435,23 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setLoading(true);
     setError(null);
-    const result = await api.listMcpServers(projectPath);
+    const result = await api.listMcpServers(projectPath, selectedProvider);
     if (result.isOk()) {
       setServers(result.value.servers);
     } else {
       setError(result.error.message);
     }
     setLoading(false);
-  }, [projectPath]);
+  }, [projectPath, selectedProvider]);
 
   // Load servers when projectPath changes (track previous to avoid duplicate calls)
   const prevProjectPathRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!projectPath || projectPath === prevProjectPathRef.current) return;
-    prevProjectPathRef.current = projectPath;
+    const loadKey = projectPath ? `${projectPath}:${selectedProvider}` : null;
+    if (!projectPath || loadKey === prevProjectPathRef.current) return;
+    prevProjectPathRef.current = loadKey;
     loadServers();
-  }, [projectPath, loadServers]);
+  }, [projectPath, selectedProvider, loadServers]);
 
   // Load recommended servers once on mount
   const recommendedLoadedRef = useRef(false);
@@ -462,7 +473,7 @@ export function McpServerSettings() {
     const name = confirmRemoveName;
     setConfirmRemoveName(null);
     setRemovingName(name);
-    const result = await api.removeMcpServer(name, projectPath);
+    const result = await api.removeMcpServer(name, projectPath, selectedProvider);
     if (result.isErr()) {
       setError(result.error.message);
     } else {
@@ -474,7 +485,7 @@ export function McpServerSettings() {
   const handleToggle = async (name: string, disabled: boolean) => {
     if (!projectPath) return;
     setTogglingName(name);
-    const result = await api.toggleMcpServer(name, projectPath, disabled);
+    const result = await api.toggleMcpServer(name, projectPath, disabled, selectedProvider);
     if (result.isErr()) {
       setError(result.error.message);
     } else {
@@ -488,6 +499,7 @@ export function McpServerSettings() {
     setInstallingName(server.name);
     const result = await api.addMcpServer({
       name: server.name,
+      provider: selectedProvider,
       type: server.type,
       url: server.url,
       command: server.command,
@@ -508,6 +520,7 @@ export function McpServerSettings() {
     setError(null);
     const data: any = {
       name: addName,
+      provider: selectedProvider,
       type: addType,
       projectPath,
     };
@@ -536,7 +549,7 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setAuthenticatingName(server.name);
     setError(null);
-    const result = await api.startMcpOAuth(server.name, projectPath);
+    const result = await api.startMcpOAuth(server.name, projectPath, selectedProvider);
     if (result.isErr()) {
       setError(result.error.message);
       setAuthenticatingName(null);
@@ -588,7 +601,7 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setSettingTokenName(server.name);
     setError(null);
-    const result = await api.setMcpToken(server.name, projectPath, token);
+    const result = await api.setMcpToken(server.name, projectPath, token, selectedProvider);
     if (result.isErr()) {
       setError(result.error.message);
     } else {
@@ -625,19 +638,43 @@ export function McpServerSettings() {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="settings-section-header px-0 pb-0">{t('mcp.installedServers')}</h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-2"
-          >
-            {showAddForm ? (
-              <ChevronUp className="icon-xs mr-1" />
-            ) : (
-              <Plus className="icon-xs mr-1" />
-            )}
-            {showAddForm ? t('mcp.cancel') : t('mcp.addCustom')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedProvider}
+              onValueChange={(v) => {
+                setSelectedProvider(v as AgentProvider);
+                setShowAddForm(false);
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-[150px]"
+                aria-label={t('mcp.agentProvider')}
+                data-testid="mcp-provider-select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MCP_PROVIDER_OPTIONS.map((provider) => (
+                  <SelectItem key={provider.value} value={provider.value}>
+                    {provider.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="px-2"
+            >
+              {showAddForm ? (
+                <ChevronUp className="icon-xs mr-1" />
+              ) : (
+                <Plus className="icon-xs mr-1" />
+              )}
+              {showAddForm ? t('mcp.cancel') : t('mcp.addCustom')}
+            </Button>
+          </div>
         </div>
 
         {/* Add custom server form */}

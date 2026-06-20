@@ -347,8 +347,9 @@ const CODEX_ONLY: AgentResource['compatibleProviders'] = ['codex'];
 /**
  * Provider-general entry point used by the resolver: returns the filesystem
  * SKILLS owned by `provider`. Claude reuses its lock-file/plugin-aware path;
- * Codex scans ~/.codex/skills + {project}/.codex/skills. Providers with no
- * filesystem skill concept return [].
+ * Codex scans both Codex's legacy `.codex/skills` folders and the shared
+ * agent-skills folders (`.agents/skills`). Providers with no filesystem skill
+ * concept return [].
  */
 export function listSkillResourcesForProvider(
   provider: string,
@@ -419,12 +420,18 @@ function scanCodexSkillsTree(
   return out;
 }
 
-/** All Codex skills (model-invoked) from ~/.codex/skills and {project}/.codex/skills. */
+/**
+ * All Codex skills (model-invoked) from:
+ * - ~/.codex/skills and {project}/.codex/skills
+ * - ~/.agents/skills and {project}/.agents/skills
+ */
 export function listCodexSkillResources(projectPath?: string): AgentResource[] {
   const resources = scanCodexSkillsTree(CODEX_SKILLS_DIR, 'codex-global', 'global');
+  resources.push(...scanCodexSkillsTree(SKILLS_DIR, 'codex-global', 'global'));
   if (projectPath) {
     resources.push(
       ...scanCodexSkillsTree(join(projectPath, '.codex', 'skills'), 'codex-project', 'project'),
+      ...scanCodexSkillsTree(join(projectPath, '.agents', 'skills'), 'codex-project', 'project'),
     );
   }
   return resources;

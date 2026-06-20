@@ -30,7 +30,12 @@ vi.mock('../../utils/claude-binary.js', () => ({
 }));
 
 import { loadProjectMcpServers } from '../../services/agent-startup/load-mcp-servers.js';
-import { listMcpServers, toggleMcpServer } from '../../services/mcp-service.js';
+import {
+  listMcpServers,
+  parseCodexMcpGetOutput,
+  parseCodexMcpListOutput,
+  toggleMcpServer,
+} from '../../services/mcp-service.js';
 
 const PROJECT = '/tmp/funny-project';
 const THREAD_ID = 'thread-mcp-integration';
@@ -213,5 +218,86 @@ describe('MCP list + toggle integration', () => {
       command: 'npx',
       args: ['-y', 'mcp-supabase'],
     });
+  });
+
+  test('parseCodexMcpListOutput reads Codex table output without Claude servers', () => {
+    const servers = parseCodexMcpListOutput(
+      [
+        'Name    Url                         Bearer Token Env Var  Status   Auth ',
+        'linear  https://mcp.linear.app/mcp  -                     enabled  OAuth',
+      ].join('\n'),
+    );
+
+    expect(servers).toEqual([
+      expect.objectContaining({
+        name: 'linear',
+        provider: 'codex',
+        type: 'http',
+        url: 'https://mcp.linear.app/mcp',
+        status: 'ok',
+        source: 'user',
+        toggleable: false,
+      }),
+    ]);
+  });
+
+  test('parseCodexMcpGetOutput maps streamable_http to HTTP MCP config', () => {
+    const server = parseCodexMcpGetOutput(
+      'linear',
+      [
+        'linear',
+        '  enabled: true',
+        '  transport: streamable_http',
+        '  url: https://mcp.linear.app/mcp',
+        '  bearer_token_env_var: -',
+      ].join('\n'),
+    );
+
+    expect(server).toMatchObject({
+      name: 'linear',
+      provider: 'codex',
+      type: 'http',
+      url: 'https://mcp.linear.app/mcp',
+      status: 'ok',
+      source: 'user',
+      toggleable: false,
+    });
+  });
+
+  test('listMcpServers uses Codex CLI when provider is codex', async () => {
+    executeMock.mockImplementation(async (binary, args) => {
+      expect(binary).toBe('codex');
+      if (args[0] === 'mcp' && args[1] === 'list') {
+        return {
+          stdout:
+            'Name    Url                         Bearer Token Env Var  Status   Auth \nlinear  https://mcp.linear.app/mcp  -                     enabled  OAuth\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'mcp' && args[1] === 'get' && args[2] === 'linear') {
+        return {
+          stdout:
+            'linear\n  enabled: true\n  transport: streamable_http\n  url: https://mcp.linear.app/mcp\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`unexpected command: ${args.join(' ')}`);
+    });
+
+    const result = await listMcpServers(PROJECT, 'codex');
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value).toEqual([
+      expect.objectContaining({
+        name: 'linear',
+        provider: 'codex',
+        type: 'http',
+        url: 'https://mcp.linear.app/mcp',
+      }),
+    ]);
+    expect(fsMocks.readFile).not.toHaveBeenCalled();
   });
 });

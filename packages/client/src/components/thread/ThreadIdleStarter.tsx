@@ -121,7 +121,11 @@ export function ThreadIdleStarter({ activeThread }: Props) {
             initialPrompt={activeThread.initialPrompt}
             initialImages={initialImages}
           />
-          <AvailableMcpServers projectPath={projectPath} projectId={activeThread.projectId} />
+          <AvailableMcpServers
+            projectPath={projectPath}
+            projectId={activeThread.projectId}
+            provider={activeThread.provider}
+          />
         </div>
       </div>
     </div>

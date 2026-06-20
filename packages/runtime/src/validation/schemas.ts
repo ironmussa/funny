@@ -405,6 +405,7 @@ export const addSkillSchema = z.object({
 
 export const addMcpServerSchema = z.object({
   name: z.string().min(1),
+  provider: agentProviderSchema.optional(),
   type: z.enum(['stdio', 'http', 'sse']),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),

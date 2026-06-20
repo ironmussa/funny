@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 interface AvailableMcpServersProps {
   projectPath?: string;
   projectId?: string;
+  provider?: string;
   className?: string;
 }
 
@@ -32,12 +33,13 @@ export function isActiveMcpServer(server: McpServer): boolean {
 export function AvailableMcpServers({
   projectPath,
   projectId,
+  provider = 'claude',
   className,
 }: AvailableMcpServersProps) {
   const { t } = useTranslation();
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(false);
-  const prevPathRef = useRef<string | undefined>(undefined);
+  const prevLoadKeyRef = useRef<string | undefined>(undefined);
 
   const load = useCallback(async () => {
     if (!projectPath) {
@@ -45,16 +47,17 @@ export function AvailableMcpServers({
       return;
     }
     setLoading(true);
-    const result = await api.listMcpServers(projectPath);
+    const result = await api.listMcpServers(projectPath, provider);
     setServers(result.isOk() ? result.value.servers : []);
     setLoading(false);
-  }, [projectPath]);
+  }, [projectPath, provider]);
 
   useEffect(() => {
-    if (projectPath === prevPathRef.current) return;
-    prevPathRef.current = projectPath;
+    const loadKey = projectPath ? `${projectPath}:${provider}` : undefined;
+    if (loadKey === prevLoadKeyRef.current) return;
+    prevLoadKeyRef.current = loadKey;
     void load();
-  }, [projectPath, load]);
+  }, [projectPath, provider, load]);
 
   if (!projectPath) return null;
 

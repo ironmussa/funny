@@ -29,13 +29,14 @@ const app = new Hono<HonoEnv>();
 // List MCP servers for a project
 app.get('/servers', async (c) => {
   const projectPath = c.req.query('projectPath');
+  const provider = c.req.query('provider') ?? 'claude';
   if (!projectPath)
     return resultToResponse(c, err(badRequest('projectPath query parameter required')));
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await listMcpServers(projectPath);
+  const result = await listMcpServers(projectPath, provider);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ servers: result.value });
 });
@@ -58,6 +59,7 @@ app.post('/servers', async (c) => {
 app.delete('/servers/:name', async (c) => {
   const name = c.req.param('name');
   const projectPath = c.req.query('projectPath');
+  const provider = c.req.query('provider') ?? 'claude';
   const scope = c.req.query('scope') as 'project' | 'user' | undefined;
 
   if (!projectPath)
@@ -66,7 +68,7 @@ app.delete('/servers/:name', async (c) => {
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await removeMcpServer({ name, projectPath, scope });
+  const result = await removeMcpServer({ name, projectPath, provider, scope });
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
@@ -75,7 +77,7 @@ app.delete('/servers/:name', async (c) => {
 app.patch('/servers/:name/toggle', async (c) => {
   const name = c.req.param('name');
   const body = await c.req.json();
-  const { projectPath, disabled } = body;
+  const { projectPath, provider = 'claude', disabled } = body;
 
   if (!projectPath || typeof disabled !== 'boolean')
     return resultToResponse(c, err(badRequest('projectPath and disabled (boolean) are required')));
@@ -83,7 +85,7 @@ app.patch('/servers/:name/toggle', async (c) => {
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await toggleMcpServer({ name, projectPath, disabled });
+  const result = await toggleMcpServer({ name, projectPath, provider, disabled });
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
@@ -96,7 +98,7 @@ app.get('/recommended', (c) => {
 // Start OAuth flow for an MCP server
 app.post('/oauth/start', async (c) => {
   const body = await c.req.json();
-  const { serverName, projectPath } = body;
+  const { serverName, projectPath, provider = 'claude' } = body;
 
   if (!serverName || !projectPath) {
     return resultToResponse(c, err(badRequest('serverName and projectPath are required')));
@@ -105,7 +107,7 @@ app.post('/oauth/start', async (c) => {
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const serversResult = await listMcpServers(projectPath);
+  const serversResult = await listMcpServers(projectPath, provider);
   if (serversResult.isErr()) return resultToResponse(c, serversResult);
   const servers = serversResult.value;
 
@@ -146,7 +148,7 @@ app.post('/oauth/start', async (c) => {
 // Set a manual bearer token for an MCP server
 app.post('/oauth/token', async (c) => {
   const body = await c.req.json();
-  const { serverName, projectPath, token } = body;
+  const { serverName, projectPath, provider = 'claude', token } = body;
 
   if (!serverName || !projectPath || !token) {
     return resultToResponse(c, err(badRequest('serverName, projectPath, and token are required')));
@@ -155,7 +157,7 @@ app.post('/oauth/token', async (c) => {
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const serversResult = await listMcpServers(projectPath);
+  const serversResult = await listMcpServers(projectPath, provider);
   if (serversResult.isErr()) return resultToResponse(c, serversResult);
   const servers = serversResult.value;
 
@@ -164,10 +166,11 @@ app.post('/oauth/token', async (c) => {
   if (!server.url) return resultToResponse(c, err(badRequest(`Server "${serverName}" has no URL`)));
 
   // Remove and re-add with Authorization header (best-effort remove)
-  await removeMcpServer({ name: serverName, projectPath });
+  await removeMcpServer({ name: serverName, projectPath, provider });
 
   const addResult = await addMcpServer({
     name: serverName,
+    provider,
     type: 'http',
     url: server.url,
     headers: { Authorization: `Bearer ${token}` },

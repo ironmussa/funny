@@ -13,12 +13,16 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { execute, ProcessExecutionError } from '@funny/core/git';
-import type { McpServer, McpServerType } from '@funny/shared';
+import type { AgentProvider, McpServer, McpServerType } from '@funny/shared';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { getClaudeBinaryPath } from '../utils/claude-binary.js';
+
+function getCodexBinaryPath(): string {
+  return process.env.CODEX_BINARY_PATH || process.env.CODEX_BIN || 'codex';
+}
 
 /** Shape of per-project settings in ~/.claude.json */
 interface ClaudeProjectSettings {
@@ -123,7 +127,20 @@ async function readMcpJson(projectPath: string): Promise<
  * List MCP servers configured for a project.
  * Merges CLI output with config files to include disabled servers.
  */
-export function listMcpServers(projectPath: string): ResultAsync<McpServer[], DomainError> {
+export function listMcpServers(
+  projectPath: string,
+  provider: AgentProvider = 'claude',
+): ResultAsync<McpServer[], DomainError> {
+  if (provider === 'codex') return listCodexMcpServers(projectPath);
+  if (provider !== 'claude') {
+    return ResultAsync.fromPromise(Promise.resolve([] as McpServer[]), (error) =>
+      internal(String(error)),
+    );
+  }
+  return listClaudeMcpServers(projectPath);
+}
+
+function listClaudeMcpServers(projectPath: string): ResultAsync<McpServer[], DomainError> {
   const binary = getClaudeBinaryPath();
 
   return ResultAsync.fromPromise(
@@ -155,6 +172,7 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
         // Annotate active servers with source, disabled state, and config fields
         // (headers/env are not included in CLI text output, so merge from config)
         for (const server of activeServers) {
+          server.provider = 'claude';
           if (isExternallyManagedMcpServer(server.name)) {
             server.toggleable = false;
           }
@@ -179,7 +197,13 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
           const cfg = mcpJson[name];
           if (!cfg) continue;
           const type = (cfg.type?.toLowerCase() ?? 'stdio') as McpServerType;
-          const server: McpServer = { name, type, disabled: true, source: 'project' };
+          const server: McpServer = {
+            name,
+            provider: 'claude',
+            type,
+            disabled: true,
+            source: 'project',
+          };
           if (type === 'http' || type === 'sse') {
             server.url = cfg.url;
           } else {
@@ -197,7 +221,13 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
           const cfg = userServers[name];
           if (!cfg) continue;
           const type = (cfg.type?.toLowerCase() ?? 'stdio') as McpServerType;
-          const server: McpServer = { name, type, disabled: true, source: 'user' };
+          const server: McpServer = {
+            name,
+            provider: 'claude',
+            type,
+            disabled: true,
+            source: 'user',
+          };
           if (type === 'http' || type === 'sse') {
             server.url = cfg.url;
           } else {
@@ -219,6 +249,133 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
   );
 }
 
+function listCodexMcpServers(projectPath: string): ResultAsync<McpServer[], DomainError> {
+  const binary = getCodexBinaryPath();
+
+  return ResultAsync.fromPromise(
+    (async () => {
+      try {
+        const result = await execute(binary, ['mcp', 'list'], {
+          cwd: projectPath,
+          reject: false,
+          timeout: 15_000,
+        });
+
+        const output = result.stdout.trim();
+        if (!output || output.includes('No MCP servers configured')) return [];
+
+        const summaries = parseCodexMcpListOutput(output);
+        const detailed = await Promise.all(
+          summaries.map(async (server) => {
+            try {
+              const getResult = await execute(binary, ['mcp', 'get', server.name], {
+                cwd: projectPath,
+                reject: false,
+                timeout: 15_000,
+              });
+              if (!getResult.stdout.trim()) return server;
+              return { ...server, ...parseCodexMcpGetOutput(server.name, getResult.stdout) };
+            } catch {
+              return server;
+            }
+          }),
+        );
+
+        return detailed;
+      } catch (e) {
+        log.error('Failed to list Codex MCP servers', { namespace: 'mcp-service', error: e });
+        return [];
+      }
+    })(),
+    (error) => internal(String(error)),
+  );
+}
+
+function codexTransportToMcpType(transport: string | undefined): McpServerType {
+  const normalized = transport?.trim().toLowerCase();
+  if (normalized === 'streamable_http' || normalized === 'http') return 'http';
+  if (normalized === 'sse') return 'sse';
+  return 'stdio';
+}
+
+function splitCommand(value: string | undefined): { command?: string; args?: string[] } {
+  if (!value) return {};
+  const parts = value.split(/\s+/).filter(Boolean);
+  return { command: parts[0], args: parts.slice(1) };
+}
+
+function parseCodexArgs(value: string | undefined): string[] | undefined {
+  if (!value || value === '-') return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    // Fall through to whitespace parsing.
+  }
+  return value.split(/\s+/).filter(Boolean);
+}
+
+export function parseCodexMcpListOutput(output: string): McpServer[] {
+  const servers: McpServer[] = [];
+  const lines = output.split('\n').filter((l) => l.trim());
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('Name ')) continue;
+
+    const parts = trimmed.split(/\s{2,}/).map((p) => p.trim());
+    if (parts.length === 0) continue;
+
+    const name = parts[0];
+    const statusIndex = parts.findIndex((p) => p === 'enabled' || p === 'disabled');
+    const status = statusIndex >= 0 ? parts[statusIndex] : undefined;
+    const valueParts = statusIndex >= 0 ? parts.slice(1, statusIndex) : parts.slice(1);
+    const url = valueParts.find((p) => /^https?:\/\//.test(p));
+
+    servers.push({
+      name,
+      provider: 'codex',
+      type: url ? 'http' : 'stdio',
+      url,
+      disabled: status === 'disabled' ? true : undefined,
+      status: status === 'enabled' ? 'ok' : undefined,
+      source: 'user',
+      toggleable: false,
+    });
+  }
+
+  return servers;
+}
+
+export function parseCodexMcpGetOutput(name: string, output: string): McpServer {
+  const fields: Record<string, string> = {};
+  for (const line of output.split('\n')) {
+    const match = line.match(/^\s+([a-zA-Z_][a-zA-Z0-9_]*):\s*(.*)$/);
+    if (match) fields[match[1]] = match[2].trim();
+  }
+
+  const type = codexTransportToMcpType(fields.transport);
+  const server: McpServer = {
+    name,
+    provider: 'codex',
+    type,
+    disabled: fields.enabled === 'false' ? true : undefined,
+    status: fields.enabled === 'true' ? 'ok' : undefined,
+    source: 'user',
+    toggleable: false,
+  };
+
+  if (type === 'http' || type === 'sse') {
+    if (fields.url && fields.url !== '-') server.url = fields.url;
+  } else {
+    const commandParts = splitCommand(fields.command);
+    server.command = commandParts.command;
+    server.args = parseCodexArgs(fields.args) ?? commandParts.args;
+  }
+
+  return server;
+}
+
 /**
  * Toggle an MCP server enabled/disabled.
  * - Project (.mcp.json) servers: toggled via disabledMcpjsonServers in ~/.claude.json
@@ -227,8 +384,16 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
 export function toggleMcpServer(opts: {
   name: string;
   projectPath: string;
+  provider?: AgentProvider;
   disabled: boolean;
 }): ResultAsync<void, DomainError> {
+  if (opts.provider === 'codex') {
+    return ResultAsync.fromPromise(
+      Promise.reject(new Error('Codex MCP enable/disable is not supported yet')),
+      (error) => internal(String(error instanceof Error ? error.message : String(error))),
+    );
+  }
+
   return ResultAsync.fromPromise(
     (async () => {
       const config = await readClaudeConfig();
@@ -435,6 +600,7 @@ function applyStatus(server: McpServer, statusText: string): void {
  */
 export function addMcpServer(opts: {
   name: string;
+  provider?: AgentProvider;
   type: McpServerType;
   command?: string;
   args?: string[];
@@ -444,6 +610,8 @@ export function addMcpServer(opts: {
   scope?: 'project' | 'user';
   projectPath: string;
 }): ResultAsync<void, DomainError> {
+  if (opts.provider === 'codex') return addCodexMcpServer(opts);
+
   const binary = getClaudeBinaryPath();
   const cliArgs: string[] = ['mcp', 'add'];
 
@@ -498,14 +666,81 @@ export function addMcpServer(opts: {
   );
 }
 
+function addCodexMcpServer(opts: {
+  name: string;
+  type: McpServerType;
+  command?: string;
+  args?: string[];
+  url?: string;
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+  projectPath: string;
+}): ResultAsync<void, DomainError> {
+  if (opts.headers && Object.keys(opts.headers).length > 0) {
+    return ResultAsync.fromPromise(
+      Promise.reject(new Error('Codex MCP CLI does not support arbitrary HTTP headers')),
+      (error) => internal(String(error instanceof Error ? error.message : String(error))),
+    );
+  }
+
+  const binary = getCodexBinaryPath();
+  const cliArgs: string[] = ['mcp', 'add'];
+
+  if (opts.type === 'sse') {
+    return ResultAsync.fromPromise(
+      Promise.reject(new Error('Codex MCP CLI supports stdio and streamable HTTP servers only')),
+      (error) => internal(String(error instanceof Error ? error.message : String(error))),
+    );
+  }
+
+  if (opts.type === 'stdio' && opts.env) {
+    for (const [key, value] of Object.entries(opts.env)) {
+      cliArgs.push('--env', `${key}=${value}`);
+    }
+  }
+
+  if (opts.type === 'http') {
+    if (!opts.url) {
+      return ResultAsync.fromPromise(
+        Promise.reject(new Error('URL is required for Codex HTTP MCP servers')),
+        (error) => internal(String(error instanceof Error ? error.message : String(error))),
+      );
+    }
+    cliArgs.push('--url', opts.url, opts.name);
+  } else {
+    if (!opts.command) {
+      return ResultAsync.fromPromise(
+        Promise.reject(new Error('Command is required for Codex stdio MCP servers')),
+        (error) => internal(String(error instanceof Error ? error.message : String(error))),
+      );
+    }
+    cliArgs.push(opts.name, '--', opts.command, ...(opts.args ?? []));
+  }
+
+  log.info('Adding Codex MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
+
+  return ResultAsync.fromPromise(
+    execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 30_000 }).then(() => undefined),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    },
+  );
+}
+
 /**
  * Remove an MCP server using the Claude CLI.
  */
 export function removeMcpServer(opts: {
   name: string;
   projectPath: string;
+  provider?: AgentProvider;
   scope?: 'project' | 'user';
 }): ResultAsync<void, DomainError> {
+  if (opts.provider === 'codex') return removeCodexMcpServer(opts);
+
   const binary = getClaudeBinaryPath();
   const cliArgs: string[] = ['mcp', 'remove'];
 
@@ -516,6 +751,26 @@ export function removeMcpServer(opts: {
   cliArgs.push(opts.name);
 
   log.info('Removing MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
+
+  return ResultAsync.fromPromise(
+    execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 15_000 }).then(() => undefined),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    },
+  );
+}
+
+function removeCodexMcpServer(opts: {
+  name: string;
+  projectPath: string;
+}): ResultAsync<void, DomainError> {
+  const binary = getCodexBinaryPath();
+  const cliArgs: string[] = ['mcp', 'remove', opts.name];
+
+  log.info('Removing Codex MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
 
   return ResultAsync.fromPromise(
     execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 15_000 }).then(() => undefined),

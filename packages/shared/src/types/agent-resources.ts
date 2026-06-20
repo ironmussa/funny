@@ -25,8 +25,8 @@ export type ResourceOrigin =
   | 'claude-global' // ~/.claude/skills + ~/.agents lock file
   | 'claude-project' // {project}/.claude/{skills,commands}
   | 'claude-plugin' // ~/.claude/plugins
-  | 'codex-global' // ~/.codex/skills (incl. .system built-ins)
-  | 'codex-project' // {project}/.codex/skills
+  | 'codex-global' // ~/.codex/skills and ~/.agents/skills
+  | 'codex-project' // {project}/.codex/skills and {project}/.agents/skills
   | 'mcp-project' // {project}/.mcp.json
   | 'mcp-user' // ~/.claude.json
   | 'deepagent-template'
@@ -123,9 +123,10 @@ export const PROVIDER_RESOURCE_DESCRIPTORS: Record<KnownProvider, ProviderResour
     mcp: { supported: true, transports: ALL_TRANSPORTS },
   },
   codex: {
-    // Codex ships skills under ~/.codex/skills (incl. a `.system/` set) and reads
-    // project skills from {project}/.codex/skills. Custom commands still come from
-    // the live session (no filesystem custom-command location in v1).
+    // Codex ships skills under ~/.codex/skills (incl. a `.system/` set), reads
+    // agent-standard skills from ~/.agents/skills, and reads project skills from
+    // {project}/.codex/skills plus {project}/.agents/skills. Custom commands
+    // still come from the live session (no filesystem custom-command location in v1).
     skills: ['codex-global', 'codex-project'],
     builtinCommands: 'session',
     customCommands: 'none',

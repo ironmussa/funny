@@ -3,6 +3,7 @@
  *
  * The search is a list FILTER (not a Ctrl+F highlight): a commit is kept when the
  * query matches any information the commit carries —
+ *   - its full or short SHA (`hash` / `shortHash`),
  *   - its subject / title (`message`),
  *   - its body / description (`body`), or
  *   - any branch / tag ref decorating it (`refs[].name`).
@@ -16,6 +17,10 @@
 
 /** The minimal commit shape the filter needs. */
 export interface SearchableCommit {
+  /** Full commit SHA. */
+  hash?: string;
+  /** Short commit SHA. */
+  shortHash?: string;
   /** Commit subject / title. */
   message: string;
   /** Commit body / description (optional — empty when none). */
@@ -28,6 +33,8 @@ export interface SearchableCommit {
 export function commitMatchesQuery(commit: SearchableCommit, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
+  if (commit.hash?.toLowerCase().includes(q)) return true;
+  if (commit.shortHash?.toLowerCase().includes(q)) return true;
   if (commit.message.toLowerCase().includes(q)) return true;
   if (commit.body && commit.body.toLowerCase().includes(q)) return true;
   if (commit.refs?.some((r) => r.name.toLowerCase().includes(q))) return true;

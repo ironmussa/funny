@@ -15,6 +15,16 @@ describe('commitMatchesQuery', () => {
     expect(commitMatchesQuery(c({ message: 'fix login redirect' }), 'logout')).toBe(false);
   });
 
+  test('matches on the full or short commit SHA', () => {
+    const commit = c({
+      hash: '8a7c42d9fb3b544d6ddac03bbdd9a65536f6c05a',
+      shortHash: '8a7c42d',
+      message: 'fix history filter',
+    });
+    expect(commitMatchesQuery(commit, '8a7c42d')).toBe(true);
+    expect(commitMatchesQuery(commit, '03bbdd9')).toBe(true);
+  });
+
   test('matches on the commit body / description', () => {
     const commit = c({ message: 'chore', body: 'bumps undici to 8.3.0' });
     expect(commitMatchesQuery(commit, 'undici')).toBe(true);
@@ -28,6 +38,7 @@ describe('commitMatchesQuery', () => {
 
   test('is case-insensitive across all fields', () => {
     expect(commitMatchesQuery(c({ message: 'Fix LOGIN' }), 'login')).toBe(true);
+    expect(commitMatchesQuery(c({ message: 'x', hash: 'ABCDEF1234' }), 'abcdef')).toBe(true);
     expect(commitMatchesQuery(c({ message: 'x', body: 'Undici' }), 'undici')).toBe(true);
     expect(commitMatchesQuery(c({ message: 'x', refs: [{ name: 'Feat/X' }] }), 'feat/x')).toBe(
       true,

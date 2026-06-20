@@ -17,6 +17,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCommitActions } from '@/hooks/use-commit-actions';
 import { api } from '@/lib/api';
+import { copyCommitHashToClipboard } from '@/lib/commit-hash-copy';
 import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 import { shortRelativeDate } from '@/lib/thread-utils';
 
@@ -119,6 +120,20 @@ export function CommitDetailDialog({
     onSuccess: onClose,
   });
   const busy = (kind: 'checkout' | 'revert' | 'reset') => inProgress && pending?.kind === kind;
+
+  const handleCopyCommitHash = useCallback(() => {
+    if (!selectedCommit) return;
+    void copyCommitHashToClipboard(selectedCommit).then(
+      (shortHash) =>
+        toast.success(
+          t('history.hashCopied', {
+            hash: shortHash,
+            defaultValue: `Copied ${shortHash}`,
+          }),
+        ),
+      () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
+    );
+  }, [selectedCommit, t]);
 
   // Load commit files + body when selection changes
   useEffect(() => {
@@ -254,7 +269,21 @@ export function CommitDetailDialog({
             {selectedCommit && (
               <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
                 <GitCommit className="icon-xs shrink-0" />
-                <code className="text-primary shrink-0 font-mono">{selectedCommit.shortHash}</code>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleCopyCommitHash}
+                      className="text-primary shrink-0 cursor-pointer border-0 bg-transparent p-0 font-mono hover:underline"
+                      data-testid={`commit-detail-hash-${selectedCommit.shortHash}`}
+                    >
+                      <code>{selectedCommit.shortHash}</code>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {t('history.copyHash', 'Click to copy hash')}
+                  </TooltipContent>
+                </Tooltip>
                 <AuthorBadge
                   name={selectedCommit.author}
                   email={selectedCommit.authorEmail}

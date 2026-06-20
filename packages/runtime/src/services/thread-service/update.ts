@@ -21,7 +21,12 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
-import { startAgent, stopAgent, isAgentRunning, cleanupThreadState } from '../agent-runner.js';
+import {
+  startAgent,
+  stopAgent,
+  isAgentRunning,
+  cleanupThreadState,
+} from '../agent-runner-control.js';
 import { stopCommandsByCwd } from '../command-runner.js';
 import { stopContainer } from '../podman-service.js';
 import type { IProjectRepository } from '../server-interfaces.js';

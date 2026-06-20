@@ -28,7 +28,7 @@ import {
   type FileRef,
   type SymbolRef,
 } from '../../utils/file-mentions.js';
-import { startAgent } from '../agent-runner.js';
+import { startAgent } from '../agent-runner-control.js';
 import { listPermissionRules } from '../permission-rules-client.js';
 import { launchContainer } from '../podman-service.js';
 import { getServices } from '../service-registry.js';

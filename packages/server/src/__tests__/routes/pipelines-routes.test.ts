@@ -5,10 +5,19 @@ import { mock } from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
+import {
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
+} from '@funny/core/git/path-validation';
+
 mock.module('@funny/core/git', () => ({
   isGitRepoSync: () => true,
   isGitRepoRootSync: () => true,
   ensureWeaveConfigured: () => Promise.resolve(),
+  validateProjectPathLexical,
+  validateProjectRootContainment,
+  validateProjectRootPath,
 }));
 
 mock.module('../../services/ws-relay.js', () => ({
@@ -17,6 +26,8 @@ mock.module('../../services/ws-relay.js', () => ({
   removeRunnerClient: () => {},
   isRunnerConnected: () => false,
   relayToUser: () => {},
+  relayToThreadViewers: () => {},
+  evictUserFromThread: () => {},
   broadcast: () => {},
   sendToRunner: () => false,
   forwardBrowserMessageToRunner: () => {},
@@ -72,6 +83,18 @@ describe('Pipeline Routes (Integration)', () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: 'projectId and name are required' });
     });
+
+    test('returns 400 when optional fields have invalid types', async () => {
+      const res = await t.requestAs('user-1').post('/api/pipelines', {
+        projectId: 'p1',
+        name: 'Bad Pipeline',
+        maxIterations: '5',
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(typeof body.error).toBe('string');
+    });
   });
 
   describe('GET /api/pipelines/project/:projectId', () => {
@@ -114,6 +137,23 @@ describe('Pipeline Routes (Integration)', () => {
     test('returns 404 when pipeline is not found', async () => {
       const res = await t.requestAs('user-1').patch('/api/pipelines/missing', { name: 'Nope' });
       expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when update fields have invalid types', async () => {
+      seedPipeline(t.db as any, {
+        id: 'pipe-1',
+        projectId: 'p1',
+        userId: 'user-1',
+        name: 'Before',
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/pipelines/pipe-1', {
+        enabled: 'false',
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(typeof body.error).toBe('string');
     });
   });
 

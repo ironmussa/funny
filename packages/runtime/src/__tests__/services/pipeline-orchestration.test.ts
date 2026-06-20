@@ -141,7 +141,7 @@ vi.mock('../../services/project-manager.js', () => ({
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/agent-runner.js', () => ({
+vi.mock('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(),
   isAgentRunning: vi.fn(() => false),
 }));

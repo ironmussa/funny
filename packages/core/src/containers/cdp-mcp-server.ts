@@ -88,7 +88,6 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
         {
           fullPage: z
             .boolean()
-            .optional()
             .default(false)
             .describe('Whether to capture the full scrollable page'),
         },

@@ -190,17 +190,15 @@ export const createThreadSchema = z
      */
     projectId: z.string().min(1).nullable(),
     /** True for lightweight projectless threads. */
-    isScratch: z.boolean().optional().default(false),
-    title: z.string().max(500).optional().default(''),
+    isScratch: z.boolean().default(false),
+    title: z.string().max(500).default(''),
     mode: threadModeSchema,
-    runtime: threadRuntimeSchema.optional().default('local'),
-    provider: agentProviderSchema
-      .optional()
-      .default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
-    model: agentModelSchema.optional().default(DEFAULT_MODEL),
-    permissionMode: permissionModeSchema.optional().default(DEFAULT_PERMISSION_MODE),
+    runtime: threadRuntimeSchema.default('local'),
+    provider: agentProviderSchema.default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
+    model: agentModelSchema.default(DEFAULT_MODEL),
+    permissionMode: permissionModeSchema.default(DEFAULT_PERMISSION_MODE),
     effort: effortLevelSchema.optional(),
-    source: threadSourceSchema.optional().default('web'),
+    source: threadSourceSchema.default('web'),
     baseBranch: z.string().optional(),
     prompt: z.string().min(1, 'prompt is required').max(500_000),
     images: z.array(imageAttachmentSchema).max(10).optional(),
@@ -243,11 +241,11 @@ export const createIdleThreadSchema = z.object({
   projectId: z.string().min(1),
   title: z.string().min(1, 'title is required'),
   mode: threadModeSchema,
-  source: threadSourceSchema.optional().default('web'),
+  source: threadSourceSchema.default('web'),
   baseBranch: z.string().optional(),
   prompt: z.string().optional(),
   images: z.array(imageAttachmentSchema).optional(),
-  stage: z.enum(['backlog', 'planning']).optional().default('backlog'),
+  stage: z.enum(['backlog', 'planning']).default('backlog'),
   designId: z.string().optional(),
 });
 
@@ -272,6 +270,10 @@ export const updateQueuedMessageSchema = z.object({
   content: z.string().min(1, 'content is required'),
 });
 
+export const updateToolCallOutputSchema = z.object({
+  output: z.string().min(1, 'output is required'),
+});
+
 export const forkThreadSchema = z.object({
   messageId: z.string().min(1, 'messageId is required'),
   title: z.string().max(500).optional(),
@@ -288,6 +290,10 @@ export const updateThreadSchema = z.object({
   archived: z.boolean().optional(),
   pinned: z.boolean().optional(),
   stage: threadStageSchema.optional(),
+});
+
+export const convertToWorktreeSchema = z.object({
+  baseBranch: z.string().optional(),
 });
 
 /**
@@ -338,8 +344,8 @@ export const resolveConflictSchema = z.object({
 
 export const commitSchema = z.object({
   message: z.string().min(1, 'message is required').max(50_000),
-  amend: z.boolean().optional().default(false),
-  noVerify: z.boolean().optional().default(false),
+  amend: z.boolean().default(false),
+  noVerify: z.boolean().default(false),
 });
 
 export const createPRSchema = z.object({
@@ -349,7 +355,7 @@ export const createPRSchema = z.object({
 
 export const pullStrategySchema = z.enum(['ff-only', 'merge', 'rebase']);
 export const pullSchema = z.object({
-  strategy: pullStrategySchema.optional().default('ff-only'),
+  strategy: pullStrategySchema.default('ff-only'),
 });
 
 export const createCommandSchema = z.object({
@@ -369,7 +375,7 @@ export const hookTypeSchema = z.enum([
 ]);
 
 export const createHookSchema = z.object({
-  hookType: hookTypeSchema.optional().default('pre-commit'),
+  hookType: hookTypeSchema.default('pre-commit'),
   label: z.string().min(1, 'label is required'),
   command: z.string().min(1, 'command is required'),
 });
@@ -396,7 +402,7 @@ export const deleteWorktreeSchema = z.object({
   projectId: z.string().min(1),
   worktreePath: z.string().min(1),
   branchName: z.string().optional(),
-  deleteBranch: z.boolean().optional().default(false),
+  deleteBranch: z.boolean().default(false),
 });
 
 export const addSkillSchema = z.object({
@@ -422,8 +428,8 @@ export const mergeSchema = z.object({
   // `--exec=<cmd>` would be a flag-injection → RCE vector. The leading-`-`
   // refusal + character whitelist close it (Security ME-3).
   targetBranch: gitRefSchema.optional(),
-  push: z.boolean().optional().default(false),
-  cleanup: z.boolean().optional().default(false),
+  push: z.boolean().default(false),
+  cleanup: z.boolean().default(false),
 });
 
 const gitWorkflowActionSchema = z.enum([
@@ -440,15 +446,15 @@ const gitWorkflowActionSchema = z.enum([
 export const workflowSchema = z.object({
   action: gitWorkflowActionSchema,
   message: z.string().max(50_000).optional(),
-  filesToStage: z.array(z.string().max(1000)).max(1000).optional().default([]),
-  filesToUnstage: z.array(z.string().max(1000)).max(1000).optional().default([]),
-  amend: z.boolean().optional().default(false),
-  noVerify: z.boolean().optional().default(false),
+  filesToStage: z.array(z.string().max(1000)).max(1000).default([]),
+  filesToUnstage: z.array(z.string().max(1000)).max(1000).default([]),
+  amend: z.boolean().default(false),
+  noVerify: z.boolean().default(false),
   prTitle: z.string().max(500).optional(),
   prBody: z.string().max(100_000).optional(),
   // gitRefSchema: same flag-injection concern as mergeSchema.targetBranch.
   targetBranch: gitRefSchema.optional(),
-  cleanup: z.boolean().optional().default(true),
+  cleanup: z.boolean().default(true),
 });
 
 export const gitInitSchema = z.object({
@@ -513,12 +519,10 @@ export const createAutomationSchema = z.object({
   name: z.string().min(1, 'name is required').max(200),
   prompt: z.string().min(1, 'prompt is required').max(500_000),
   schedule: automationScheduleSchema,
-  provider: agentProviderSchema
-    .optional()
-    .default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
-  model: agentModelSchema.optional().default(DEFAULT_MODEL),
-  permissionMode: permissionModeSchema.optional().default(DEFAULT_PERMISSION_MODE),
-  mode: automationModeSchema.optional().default('default'),
+  provider: agentProviderSchema.default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
+  model: agentModelSchema.default(DEFAULT_MODEL),
+  permissionMode: permissionModeSchema.default(DEFAULT_PERMISSION_MODE),
+  mode: automationModeSchema.default('default'),
 });
 
 export const updateAutomationSchema = z.object({

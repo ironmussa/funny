@@ -9,6 +9,7 @@
 import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
@@ -22,9 +23,26 @@ import {
 import type { HonoEnv } from '../types/hono-env.js';
 import { requireProjectPath } from '../utils/path-scope.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { addMcpServerSchema, validate } from '../validation/schemas.js';
+import { parseJsonBody } from '../validation/request.js';
+import { addMcpServerSchema, agentProviderSchema, validate } from '../validation/schemas.js';
 
 const app = new Hono<HonoEnv>();
+
+const toggleMcpServerSchema = z.object({
+  projectPath: z.string().min(1, 'projectPath is required'),
+  provider: agentProviderSchema.default('claude'),
+  disabled: z.boolean(),
+});
+
+const mcpOAuthStartSchema = z.object({
+  serverName: z.string().min(1, 'serverName is required'),
+  projectPath: z.string().min(1, 'projectPath is required'),
+  provider: agentProviderSchema.default('claude'),
+});
+
+const mcpOAuthTokenSchema = mcpOAuthStartSchema.extend({
+  token: z.string().min(1, 'token is required'),
+});
 
 // List MCP servers for a project
 app.get('/servers', async (c) => {
@@ -76,11 +94,9 @@ app.delete('/servers/:name', async (c) => {
 // Toggle MCP server enabled/disabled
 app.patch('/servers/:name/toggle', async (c) => {
   const name = c.req.param('name');
-  const body = await c.req.json();
-  const { projectPath, provider = 'claude', disabled } = body;
-
-  if (!projectPath || typeof disabled !== 'boolean')
-    return resultToResponse(c, err(badRequest('projectPath and disabled (boolean) are required')));
+  const parsed = await parseJsonBody(c, toggleMcpServerSchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { projectPath, provider, disabled } = parsed.value;
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
@@ -97,12 +113,9 @@ app.get('/recommended', (c) => {
 
 // Start OAuth flow for an MCP server
 app.post('/oauth/start', async (c) => {
-  const body = await c.req.json();
-  const { serverName, projectPath, provider = 'claude' } = body;
-
-  if (!serverName || !projectPath) {
-    return resultToResponse(c, err(badRequest('serverName and projectPath are required')));
-  }
+  const parsed = await parseJsonBody(c, mcpOAuthStartSchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { serverName, projectPath, provider } = parsed.value;
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
@@ -147,12 +160,9 @@ app.post('/oauth/start', async (c) => {
 
 // Set a manual bearer token for an MCP server
 app.post('/oauth/token', async (c) => {
-  const body = await c.req.json();
-  const { serverName, projectPath, provider = 'claude', token } = body;
-
-  if (!serverName || !projectPath || !token) {
-    return resultToResponse(c, err(badRequest('serverName, projectPath, and token are required')));
-  }
+  const parsed = await parseJsonBody(c, mcpOAuthTokenSchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { serverName, projectPath, provider, token } = parsed.value;
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;

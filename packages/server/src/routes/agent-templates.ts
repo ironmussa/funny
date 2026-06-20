@@ -9,12 +9,33 @@ import { BUILTIN_AGENT_TEMPLATES } from '@funny/shared';
 import { eq, desc, sql, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import { agentTemplates, threads } from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
+import { parseJsonBody } from '../validation/request.js';
 
 export const agentTemplateRoutes = new Hono<ServerEnv>();
+
+const agentTemplateSchema = z.object({
+  name: z.string().min(1, 'Missing required field: name'),
+  description: z.string().nullable().optional(),
+  icon: z.string().nullable().optional(),
+  color: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+  systemPromptMode: z.string().optional(),
+  systemPrompt: z.string().nullable().optional(),
+  disallowedTools: z.unknown().optional(),
+  mcpServers: z.unknown().optional(),
+  builtinSkillsDisabled: z.unknown().optional(),
+  customSkillPaths: z.unknown().optional(),
+  agentName: z.string().nullable().optional(),
+  shared: z.boolean().optional(),
+  variables: z.unknown().optional(),
+});
+
+const updateAgentTemplateSchema = agentTemplateSchema.partial();
 
 // ── List all templates for the current user ─────────────────
 // GET /api/agent-templates
@@ -71,12 +92,10 @@ agentTemplateRoutes.get('/:id', async (c) => {
 // ── Create a new template ───────────────────────────────────
 // POST /api/agent-templates
 agentTemplateRoutes.post('/', async (c) => {
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, agentTemplateSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
   const userId = c.get('userId') as string;
-
-  if (!body.name) {
-    return c.json({ error: 'Missing required field: name' }, 400);
-  }
 
   const id = nanoid();
   const now = new Date().toISOString();
@@ -116,7 +135,9 @@ agentTemplateRoutes.patch('/:id', async (c) => {
   if (!rows[0]) return c.json({ error: 'Not found' }, 404);
   if (rows[0].userId !== userId) return c.json({ error: 'Forbidden' }, 403);
 
-  const body = await c.req.json();
+  const parsed = await parseJsonBody(c, updateAgentTemplateSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
   const updates: Record<string, unknown> = {};
 
   // Scalar fields

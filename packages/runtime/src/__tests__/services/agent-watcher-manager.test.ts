@@ -42,7 +42,7 @@ vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ watchers: fakeWatchers }),
 }));
 vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser } }));
-vi.mock('../../services/agent-runner.js', () => ({ isAgentRunning: () => false }));
+vi.mock('../../services/agent-runner-control.js', () => ({ isAgentRunning: () => false }));
 vi.mock('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
 vi.mock('../../services/shutdown-manager.js', () => ({
   shutdownManager: { register: vi.fn() },

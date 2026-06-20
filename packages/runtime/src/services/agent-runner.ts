@@ -18,6 +18,16 @@ import { log } from '../lib/logger.js';
 import { AgentEventRouter } from './agent-event-router.js';
 import { AgentLifecycleManager } from './agent-lifecycle.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
+import {
+  cleanupThreadState,
+  extractActiveAgents,
+  getSupportedSlashCommands,
+  isAgentRunning,
+  registerAgentRunnerControl,
+  startAgent,
+  stopAgent,
+  stopAllAgents,
+} from './agent-runner-control.js';
 import { AgentStateTracker } from './agent-state.js';
 import { IdleReaper } from './idle-reaper.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
@@ -153,14 +163,25 @@ const defaultRunner = new AgentRunner(
   true, // enable the idle reaper on the long-lived default runner
 );
 
-export const startAgent = defaultRunner.startAgent.bind(defaultRunner);
-export const stopAgent = defaultRunner.stopAgent.bind(defaultRunner);
-export const stopAllAgents = defaultRunner.stopAllAgents.bind(defaultRunner);
-export const isAgentRunning = defaultRunner.isAgentRunning.bind(defaultRunner);
-export const cleanupThreadState = defaultRunner.cleanupThreadState.bind(defaultRunner);
-export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaultRunner);
-export const getSupportedSlashCommands =
-  defaultRunner.getSupportedSlashCommands.bind(defaultRunner);
+registerAgentRunnerControl({
+  startAgent: defaultRunner.startAgent.bind(defaultRunner),
+  stopAgent: defaultRunner.stopAgent.bind(defaultRunner),
+  stopAllAgents: defaultRunner.stopAllAgents.bind(defaultRunner),
+  isAgentRunning: defaultRunner.isAgentRunning.bind(defaultRunner),
+  cleanupThreadState: defaultRunner.cleanupThreadState.bind(defaultRunner),
+  extractActiveAgents: defaultRunner.extractActiveAgents.bind(defaultRunner),
+  getSupportedSlashCommands: defaultRunner.getSupportedSlashCommands.bind(defaultRunner),
+});
+
+export {
+  startAgent,
+  stopAgent,
+  stopAllAgents,
+  isAgentRunning,
+  cleanupThreadState,
+  extractActiveAgents,
+  getSupportedSlashCommands,
+};
 
 // ── Bridge core debug logs to Winston/OTLP ──────────────────
 setLogSink((level, namespace, message, data) => {

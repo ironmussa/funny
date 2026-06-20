@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import {
   discoverExtensions,
@@ -9,6 +10,7 @@ import {
 } from '../lib/extensions.js';
 import type { ServerEnv } from '../lib/types.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { parseJsonBody } from '../validation/request.js';
 
 /**
  * `/api/extensions` — installed client extensions (visualizer plugins).
@@ -16,6 +18,13 @@ import { requireAdmin } from '../middleware/auth.js';
  * catch-all. Global to the server (not per-user) in v1.
  */
 export const extensionRoutes = new Hono<ServerEnv>();
+
+const installExtensionSchema = z.object({
+  path: z.string().optional(),
+  git: z.string().optional(),
+  ref: z.string().optional(),
+  subdir: z.string().optional(),
+});
 
 // Loader manifest — minimal shape the client dynamically imports + registers.
 extensionRoutes.get('/', (c) => {
@@ -35,23 +44,19 @@ extensionRoutes.get('/installed', (c) => {
 // dynamically imported into EVERY user's client, so a non-admin must not be able
 // to push code (or read arbitrary server-host directories via the `path` arg).
 extensionRoutes.post('/install', requireAdmin, async (c) => {
-  let body: { path?: unknown; git?: unknown; ref?: unknown; subdir?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'invalid JSON body' }, 400);
-  }
+  const parsed = await parseJsonBody(c, installExtensionSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
 
-  if (typeof body.git === 'string' && body.git.trim()) {
-    const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim() : undefined;
-    const subdir =
-      typeof body.subdir === 'string' && body.subdir.trim() ? body.subdir.trim() : undefined;
+  if (body.git?.trim()) {
+    const ref = body.ref?.trim() ? body.ref.trim() : undefined;
+    const subdir = body.subdir?.trim() ? body.subdir.trim() : undefined;
     const result = await installExtensionFromGit(body.git.trim(), { ref, subdir });
     if (!result.ok) return c.json({ error: result.error }, 400);
     return c.json({ extension: result.extension });
   }
 
-  if (typeof body.path === 'string' && body.path.trim()) {
+  if (body.path?.trim()) {
     const result = installExtensionFromPath(body.path.trim());
     if (!result.ok) return c.json({ error: result.error }, 400);
     return c.json({ extension: result.extension });

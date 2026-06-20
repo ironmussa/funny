@@ -40,7 +40,7 @@ import * as runnerManager from '../../services/runner-manager.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedTeamProject, seedProjectMember } from '../helpers/test-db.js';
 
-describe('Project Routes (Integration)', () => {
+describe.serial('Project Routes (Integration)', () => {
   let t: TestApp;
 
   beforeAll(async () => {

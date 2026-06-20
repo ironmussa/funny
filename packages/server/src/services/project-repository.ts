@@ -8,13 +8,11 @@
 
 import { resolve } from 'path';
 
+import { isGitRepoSync, isGitRepoRootSync, ensureWeaveConfigured } from '@funny/core/git';
 import {
-  isGitRepoSync,
-  isGitRepoRootSync,
-  ensureWeaveConfigured,
   validateProjectPathLexical,
   validateProjectRootContainment,
-} from '@funny/core/git';
+} from '@funny/core/git/path-validation';
 import type { Project, FollowUpMode } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';

@@ -44,8 +44,10 @@ import {
   rewindCodeSchema,
   sendMessageSchema,
   updateQueuedMessageSchema,
+  updateToolCallOutputSchema,
   approveToolSchema,
   uploadFileSchema,
+  convertToWorktreeSchema,
   validate,
 } from '../validation/schemas.js';
 
@@ -298,9 +300,11 @@ threadRoutes.post('/:id/convert-to-worktree', async (c) => {
   const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
-  const body = await c.req.json().catch(() => ({}));
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(convertToWorktreeSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await convertToWorktree(id, userId, body.baseBranch);
+  const result = await convertToWorktree(id, userId, parsed.value.baseBranch);
   if (result.isErr()) return handleServiceError(c, result.error);
   return c.json({ ok: true });
 });
@@ -336,13 +340,12 @@ threadRoutes.patch('/:id/tool-calls/:toolCallId', async (c) => {
   const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
-  const body = await c.req.json<{ output: string }>();
-  if (!body.output || typeof body.output !== 'string') {
-    return resultToResponse(c, err(badRequest('output is required')));
-  }
+  const raw = await c.req.json();
+  const parsed = validate(updateToolCallOutputSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
   try {
-    await tm.updateToolCallOutput(toolCallId, body.output);
+    await tm.updateToolCallOutput(toolCallId, parsed.value.output);
     return c.json({ ok: true });
   } catch (error) {
     return handleServiceError(c, error);

@@ -12,7 +12,7 @@ import { Cron } from 'croner';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
-import { startAgent } from './agent-runner.js';
+import { startAgent } from './agent-runner-control.js';
 import * as am from './automation-manager.js';
 import { getServices } from './service-registry.js';
 import * as tm from './thread-manager.js';

@@ -1,5 +1,10 @@
-import { parseObjectPayload } from '@funny/shared/socket-events';
+import {
+  parseSocketPayload,
+  socketObjectPayloadSchema,
+  type SocketObjectPayload,
+} from '@funny/shared/socket-events';
 import type { Socket } from 'socket.io';
+import type { z, ZodTypeAny } from 'zod';
 
 export interface SocketHandlerContext {
   socket: Socket;
@@ -17,7 +22,22 @@ export function registerSocketHandlers(
   spec: {
     events: readonly string[];
     middleware?: SocketEventMiddleware[];
-    handler: (ctx: SocketHandlerContext, payload: Record<string, unknown>) => void | Promise<void>;
+    handler: (ctx: SocketHandlerContext, payload: SocketObjectPayload) => void | Promise<void>;
+  },
+): void {
+  registerSocketHandlersWithSchema(socket, {
+    ...spec,
+    payloadSchema: socketObjectPayloadSchema,
+  });
+}
+
+export function registerSocketHandlersWithSchema<TSchema extends ZodTypeAny>(
+  socket: Socket,
+  spec: {
+    events: readonly string[];
+    payloadSchema: TSchema;
+    middleware?: SocketEventMiddleware[];
+    handler: (ctx: SocketHandlerContext, payload: z.infer<TSchema>) => void | Promise<void>;
   },
 ): void {
   const middleware = spec.middleware ?? [];
@@ -27,22 +47,27 @@ export function registerSocketHandlers(
       for (const mw of middleware) {
         if (!(await mw(ctx, data))) return;
       }
-      const payload = parseObjectPayload(data);
+      const payload = parseSocketPayload(spec.payloadSchema, data);
       if (payload === null) return;
       await spec.handler(ctx, payload);
     });
   }
 }
 
-export function registerSocketRpc<TResponse>(
+export function registerSocketRpc<
+  TResponse,
+  TSchema extends ZodTypeAny = typeof socketObjectPayloadSchema,
+>(
   socket: Socket,
   eventName: string,
   spec: {
+    payloadSchema?: TSchema;
+    invalidPayloadResponse?: TResponse;
     middleware?: SocketEventMiddleware[];
     handler: (
       ctx: SocketHandlerContext,
       ack: (response: TResponse) => void,
-      data: unknown,
+      data: z.infer<TSchema>,
     ) => void | Promise<void>;
   },
 ): void {
@@ -52,6 +77,12 @@ export function registerSocketRpc<TResponse>(
     for (const mw of spec.middleware ?? []) {
       if (!(await mw(ctx, data))) return;
     }
-    await spec.handler(ctx, ack, data);
+    const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
+    const payload = parseSocketPayload(schema, data);
+    if (payload === null) {
+      if (spec.invalidPayloadResponse !== undefined) ack(spec.invalidPayloadResponse);
+      return;
+    }
+    await spec.handler(ctx, ack, payload);
   });
 }

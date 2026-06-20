@@ -13,6 +13,7 @@
 import { mkdirSync } from 'node:fs';
 
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { getServices } from '../services/service-registry.js';
@@ -21,10 +22,22 @@ import { resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
+import { parseQuery, queryBoolean } from '../validation/request.js';
 
 const NS = 'text-search-route';
 
 const app = new Hono<HonoEnv>();
+
+const textSearchQuerySchema = z.object({
+  threadId: z.string().min(1, 'threadId is required'),
+  q: z.string().default(''),
+  caseSensitive: queryBoolean.default(false),
+  wholeWord: queryBoolean.default(false),
+  regex: queryBoolean.default(false),
+  include: z.string().optional(),
+  exclude: z.string().optional(),
+  maxResults: z.coerce.number().positive().optional(),
+});
 
 /**
  * GET /api/search/text?threadId=...&q=...&caseSensitive=&wholeWord=&regex=&include=&exclude=&maxResults=
@@ -38,10 +51,19 @@ app.get('/text', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
-  const threadId = c.req.query('threadId');
-  if (!threadId) return c.json({ error: 'threadId is required' }, 400);
+  const parsedQuery = parseQuery(c, textSearchQuerySchema);
+  if (parsedQuery.isErr()) return resultToResponse(c, parsedQuery);
+  const {
+    threadId,
+    q: query,
+    caseSensitive,
+    wholeWord,
+    regex,
+    include,
+    exclude,
+    maxResults,
+  } = parsedQuery.value;
 
-  const query = c.req.query('q') ?? '';
   if (!query.trim()) return c.json({ error: 'q is required' }, 400);
 
   const thread = await tm.getThread(threadId);
@@ -71,17 +93,13 @@ app.get('/text', async (c) => {
     }
   }
 
-  const maxResultsRaw = Number(c.req.query('maxResults'));
-  const maxResults =
-    Number.isFinite(maxResultsRaw) && maxResultsRaw > 0 ? maxResultsRaw : undefined;
-
   const result = await searchText(cwd, {
     query,
-    caseSensitive: c.req.query('caseSensitive') === 'true',
-    wholeWord: c.req.query('wholeWord') === 'true',
-    regex: c.req.query('regex') === 'true',
-    include: c.req.query('include') || undefined,
-    exclude: c.req.query('exclude') || undefined,
+    caseSensitive,
+    wholeWord,
+    regex,
+    include,
+    exclude,
     maxResults,
   });
 

@@ -21,6 +21,9 @@ import {
   opencodeModels,
   piModels,
 } from './provider-manifests.js';
+import type { AttachmentLimits, ModelDefinition, ProviderKeyConfig } from './provider-types.js';
+
+export type { AttachmentLimits, ModelDefinition, ProviderKeyConfig } from './provider-types.js';
 
 // ── Application defaults ────────────────────────────────────────
 // Change these values to update defaults across the entire codebase.
@@ -31,17 +34,6 @@ export const DEFAULT_FOLLOW_UP_MODE: FollowUpMode = 'queue';
 export const DEFAULT_PERMISSION_MODE: PermissionMode = 'autoEdit';
 
 // ── Model registry (single source of truth) ────────────────────
-
-export interface ModelDefinition {
-  /** Full model ID passed to the provider SDK / CLI. */
-  id: string;
-  /** Display label shown when no i18n translation is available. */
-  label: string;
-  /** Context window size in tokens. */
-  contextWindow: number;
-  /** i18n key under `thread.model.*` on the client. */
-  i18nKey: string;
-}
 
 /**
  * Attachment size limits used by the prompt input. Numbers reflect the
@@ -59,12 +51,6 @@ export interface ModelDefinition {
  * Per-provider defaults reflect the smallest provider in the family. A
  * specific model can tighten or relax via `ModelDefinition.attachmentLimits`.
  */
-export interface AttachmentLimits {
-  inlineMaxBytes: number;
-  uploadMaxBytes: number;
-  hardMaxBytes: number;
-}
-
 const claudeModels = {
   haiku: {
     id: 'claude-haiku-4-5-20251001',
@@ -348,21 +334,6 @@ const LLM_API_DEFAULT_TOOLS = ['bash', 'read', 'edit', 'glob', 'grep'];
 // ── Provider Key Registry ────────────────────────────────────
 // Central registry of per-user API keys. Adding a new provider here
 // automatically enables it in Settings UI and agent-runner env injection.
-
-export interface ProviderKeyConfig {
-  /** Canonical identifier stored in the provider_keys JSON column. */
-  id: string;
-  /** Human-readable label for the Settings UI. */
-  label: string;
-  /** URL where the user can obtain this key. */
-  helpUrl: string;
-  /** Description shown in the Settings UI. */
-  description: string;
-  /** Environment variable name to inject when launching agent subprocesses. */
-  envVar?: string;
-  /** Which agent providers require this key at runtime. */
-  requiredByProviders?: AgentProvider[];
-}
 
 export const PROVIDER_KEY_REGISTRY: ProviderKeyConfig[] = [
   {

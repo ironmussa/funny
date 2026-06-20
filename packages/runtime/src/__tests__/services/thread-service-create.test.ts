@@ -58,7 +58,7 @@ vi.mock('../../services/thread-event-bus.js', () => ({
   threadEventBus: mocks.threadEventBus,
 }));
 
-vi.mock('../../services/agent-runner.js', () => ({
+vi.mock('../../services/agent-runner-control.js', () => ({
   startAgent: mocks.startAgent,
 }));
 

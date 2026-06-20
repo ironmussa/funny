@@ -38,7 +38,7 @@ vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/agent-runner.js', () => ({
+vi.mock('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(async () => undefined),
   stopAgent: vi.fn(async () => undefined),
   isAgentRunning: vi.fn(() => false),
@@ -80,7 +80,7 @@ import {
   stopAgent,
   isAgentRunning,
   getSupportedSlashCommands,
-} from '../../services/agent-runner.js';
+} from '../../services/agent-runner-control.js';
 import { cleanupExternalThread } from '../../services/ingest-mapper.js';
 import {
   createPermissionRule,

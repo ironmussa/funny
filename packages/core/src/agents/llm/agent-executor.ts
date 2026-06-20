@@ -148,7 +148,7 @@ export interface StepInfo {
 // ToolDef interface lives in ./types.js to avoid an import cycle with
 // browser-tools (which needs the type but is consumed by this file).
 export type { ToolDef } from './types.js';
-import type { ToolDef } from './types.js';
+import { defineTool, type ToolDef } from './types.js';
 
 // ── Options ───────────────────────────────────────────────────
 
@@ -187,7 +187,7 @@ export class AgentExecutor {
     }
 
     // Build tool map and run-format definitions
-    const toolMap: Record<string, ToolDef> = tools;
+    const toolMap = tools;
     const runTools = Object.entries(tools).map(([name, def]) => ({
       type: 'function' as const,
       function: {
@@ -467,8 +467,8 @@ interface ToolsResult {
 function createTools(cwd: string, role: AgentRole, context: AgentContext): ToolsResult {
   let browserHandle: BrowserToolsHandle | null = null;
 
-  const baseTools: Record<string, ToolDef> = {
-    bash: {
+  const baseTools = {
+    bash: defineTool({
       description:
         'Run a shell command in the working directory. Returns stdout, stderr, and exit code.',
       parameters: z.object({
@@ -487,9 +487,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         parts.push(`exit_code: ${result.exitCode}`);
         return parts.join('\n');
       },
-    },
+    }),
 
-    read: {
+    read: defineTool({
       description: 'Read a file. Returns numbered lines.',
       parameters: z.object({
         path: z.string().describe('Relative file path to read'),
@@ -508,9 +508,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         const slice = lines.slice(start, start + count);
         return slice.map((line, i) => `${String(start + i + 1).padStart(6)}\t${line}`).join('\n');
       },
-    },
+    }),
 
-    edit: {
+    edit: defineTool({
       description: 'Edit a file by replacing an exact string match.',
       parameters: z.object({
         path: z.string().describe('Relative file path to edit'),
@@ -529,9 +529,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         writeFileSync(filePath, content.replace(old_text, new_text), 'utf-8');
         return `Successfully edited ${relPath}`;
       },
-    },
+    }),
 
-    glob: {
+    glob: defineTool({
       description: 'Find files matching a glob pattern.',
       parameters: z.object({
         pattern: z.string().describe('Glob pattern (e.g., "**/*.ts")'),
@@ -545,9 +545,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         }
         return matches.join('\n') || 'No files matched.';
       },
-    },
+    }),
 
-    grep: {
+    grep: defineTool({
       description:
         'Search file contents for a pattern. Returns matching lines with paths and line numbers.',
       parameters: z.object({
@@ -567,8 +567,8 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         const result = await executeShell(cmd, { cwd, timeout: 15_000, reject: false });
         return result.stdout || 'No matches.';
       },
-    },
-  };
+    }),
+  } satisfies Record<string, ToolDef>;
 
   // Merge browser tools if role requests them
   if (role.tools.includes('browser')) {

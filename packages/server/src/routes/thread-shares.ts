@@ -16,17 +16,24 @@ import {
 } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import { db, dbAll, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
 import { isProjectMember } from '../services/project-manager.js';
 import { evictUserFromThread, relayToUser } from '../services/ws-relay.js';
+import { parseJsonBody } from '../validation/request.js';
 import { requireThreadOwner } from './threads.js';
 
 const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
 
 export const shareRoutes = new Hono<ServerEnv>();
+
+const createThreadShareSchema = z.object({
+  userId: z.string().min(1, 'userId is required'),
+  level: z.unknown().optional(),
+});
 
 // GET /api/threads/shared-with-me — threads other users have shared TO the
 // caller. Backs the "Shared with me" nav bucket. Returns only the caller's own
@@ -44,13 +51,10 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   const ownerId = c.get('userId') as string;
   const thread = c.get('thread');
 
-  let body: { userId?: unknown; level?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
-  }
-  const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  const parsed = await parseJsonBody(c, createThreadShareSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
+  const targetUserId = body.userId.trim();
   if (!targetUserId) {
     return c.json({ error: 'userId is required' }, 400);
   }

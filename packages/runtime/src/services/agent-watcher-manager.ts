@@ -26,7 +26,7 @@ import type { Watcher, WatcherStatus, WSEvent } from '@funny/shared';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
-import { isAgentRunning } from './agent-runner.js';
+import { isAgentRunning } from './agent-runner-control.js';
 import { getServices } from './service-registry.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { sendMessage } from './thread-service/messaging.js';

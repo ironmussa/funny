@@ -1,10 +1,8 @@
-import { RUNNER_DATA_EVENTS } from '@funny/shared/socket-events';
+import { RUNNER_DATA_EVENTS, parseRunnerDataRequest } from '@funny/shared/socket-events';
 import type { Socket } from 'socket.io';
 
 import { log } from '../../lib/logger.js';
 import { isRateLimited } from '../socketio-rate-limit.js';
-
-const REQUEST_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
 /**
  * Data persistence handlers for a runner socket (shared `data:response` channel).
@@ -23,7 +21,15 @@ export function setupRunnerDataHandlers(
 
   for (const eventName of RUNNER_DATA_EVENTS) {
     socket.on(eventName, async (data: unknown, ack?: (response: unknown) => void) => {
-      const msg = (data ?? {}) as Record<string, unknown> & { _requestId?: string };
+      const msg = parseRunnerDataRequest(data);
+      if (!msg) {
+        log.warn('Invalid data event payload — dropping', {
+          namespace: 'socketio',
+          runnerId,
+          type: eventName,
+        });
+        return;
+      }
       const requestId = msg._requestId;
 
       if (isRateLimited(socket.id, 1_000, 10_000)) {
@@ -34,7 +40,7 @@ export function setupRunnerDataHandlers(
           requestId,
         });
         const errorResponse = { error: 'Rate limit exceeded', success: false };
-        if (requestId && typeof requestId === 'string' && REQUEST_ID_RE.test(requestId)) {
+        if (requestId) {
           emitDataResponse(requestId, errorResponse);
         } else if (ack) {
           ack(errorResponse);
@@ -42,10 +48,6 @@ export function setupRunnerDataHandlers(
         return;
       }
 
-      if (requestId && (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId))) {
-        log.warn('Invalid requestId format', { namespace: 'socketio', runnerId, type: eventName });
-        return;
-      }
       if (requestId && inFlightRequestIds.has(requestId)) {
         log.warn('Duplicate in-flight requestId — dropping', {
           namespace: 'socketio',

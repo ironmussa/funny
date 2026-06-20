@@ -177,4 +177,184 @@ describe('MessageStream sticky bottom', () => {
 
     expect(viewport.scrollTop).toBe(1300);
   });
+
+  test('does not force-scroll streamed content when the viewport is no longer pinned', () => {
+    let scrollHeight = 1000;
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="t1"
+        status="running"
+        messages={makeMessages('partial')}
+        onSend={() => {}}
+        isExternal
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 500;
+      viewport.dispatchEvent(new Event('scroll'));
+      vi.runOnlyPendingTimers();
+    });
+
+    viewport.scrollTop = 300;
+    scrollHeight = 1300;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="t1"
+        status="running"
+        messages={makeMessages('partial response with more streamed content')}
+        onSend={() => {}}
+        isExternal
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(300);
+  });
+
+  test('restores a bottom-pinned long thread after visiting a shorter thread', () => {
+    let scrollHeight = 2000;
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    expect(viewport.scrollTop).toBe(2000);
+
+    scrollHeight = 650;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="short"
+        status="idle"
+        messages={makeMessages('short thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 0;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    scrollHeight = 2000;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(2000);
+  });
+
+  test('restores independent non-bottom scroll positions per thread', () => {
+    let scrollHeight = 2000;
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 900;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    scrollHeight = 700;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="short"
+        status="idle"
+        messages={makeMessages('short thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 50;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    scrollHeight = 2000;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(900);
+
+    scrollHeight = 700;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="short"
+        status="idle"
+        messages={makeMessages('short thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(50);
+  });
 });

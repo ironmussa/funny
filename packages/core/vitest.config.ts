@@ -13,6 +13,8 @@ export default defineConfig({
       '@funny/shared/provider-manifest': path.join(shared, 'provider-manifest.ts'),
       '@funny/shared/provider-manifests': path.join(shared, 'provider-manifests.ts'),
       '@funny/shared/provider-manifest-schema': path.join(shared, 'provider-manifest-schema.ts'),
+      '@funny/shared/json-validation': path.join(shared, 'json-validation.ts'),
+      '@funny/shared/funny-config-schema': path.join(shared, 'funny-config-schema.ts'),
       '@funny/shared/runner-protocol': path.join(shared, 'runner-protocol.ts'),
       '@funny/shared/thread-machine': path.join(shared, 'thread-machine.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),

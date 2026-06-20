@@ -12,8 +12,8 @@
  * (non-ACP) catalogs remain in `models.ts`.
  */
 
-import type { ModelDefinition } from './models.js';
 import type { ProviderManifest } from './provider-manifest.js';
+import type { ModelDefinition } from './provider-types.js';
 
 const KB = 1024;
 const MB = 1024 * 1024;

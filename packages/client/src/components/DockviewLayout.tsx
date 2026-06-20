@@ -496,6 +496,46 @@ export function DockviewLayout({
     [],
   );
 
+  const getCurrentBottomHeight = useCallback((api: DockviewApi): number | null => {
+    const p = api.panels.find((panel) => isBottomPanelId(panel.id));
+    if (!p) return null;
+    const h = p.group.height;
+    return Number.isFinite(h) && h > 0 ? h : null;
+  }, []);
+
+  const collapseBottomPane = useCallback(
+    (api: DockviewApi) => {
+      const p = api.panels.find((panel) => isBottomPanelId(panel.id));
+      if (!p) return;
+      const currentHeight = getCurrentBottomHeight(api);
+      if (currentHeight) writeStoredSize(STORAGE_KEY_BOTTOM_HEIGHT, currentHeight);
+      p.group.api.setConstraints({
+        minimumHeight: 0,
+        maximumHeight: Number.MAX_SAFE_INTEGER,
+      });
+      p.api.setSize({ height: 0 });
+    },
+    [getCurrentBottomHeight],
+  );
+
+  const expandBottomPane = useCallback((api: DockviewApi) => {
+    const p = api.panels.find((panel) => isBottomPanelId(panel.id));
+    if (!p) return;
+    const nextHeight = readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT) ?? initialBottomHeightRef.current;
+    p.group.api.setConstraints({
+      minimumHeight: 100,
+      maximumHeight: Number.MAX_SAFE_INTEGER,
+    });
+    p.api.setSize({ height: nextHeight });
+  }, []);
+
+  const removeBottomPanels = useCallback((api: DockviewApi) => {
+    for (const p of api.panels.filter((x) => isBottomPanelId(x.id))) {
+      suppressCloseRef.current.add(p.id);
+      p.api.close();
+    }
+  }, []);
+
   /** Sync dockview's bottom panels to match `bottomTabs` exactly, doing
    *  incremental add/remove so existing tabs (and their xterm state) survive. */
   const syncBottomPanels = useCallback(
@@ -939,29 +979,26 @@ export function DockviewLayout({
   }, [rightTabsSig, rightPaneOpen, right, addRightPanels, removeRightPanels, getCurrentRightWidth]);
 
   // ── Bottom-pane effects ──
-  // Tracks the previous value of `bottomPaneOpen` so we only tear down restored
-  // panels on an explicit user-driven `true → false` transition. On initial
-  // mount the terminal store may transiently report `bottomPaneOpen=false`
-  // (while rehydrating from localStorage) — without this guard we would close
-  // panels that `fromJSON` just restored, destroying the user's saved split
-  // group structure (all tabs end up collapsed into a single group on reload).
-  const prevBottomPaneOpenRef = useRef<boolean | null>(null);
+  // Keep bottom panels mounted when the pane is hidden but still has tabs.
+  // Closing the panels destroys dockview's nested terminal layout, so hide
+  // terminal groups by collapsing their height and only remove them when the
+  // current terminal scope has no tabs to render.
+  // This must react to the prop because dockview owns the imperative panel tree.
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
     const hasBottom = api.panels.some((p) => isBottomPanelId(p.id));
-    const prev = prevBottomPaneOpenRef.current;
-    prevBottomPaneOpenRef.current = bottomPaneOpen;
+    const hasDesiredTabs = (bottomTabsRef.current?.length ?? 0) > 0;
     if (bottomPaneOpen && !hasBottom) {
       syncBottomPanels(api);
-    } else if (!bottomPaneOpen && hasBottom && prev === true) {
-      // Close all bottom panels without bouncing close events to the store.
-      for (const p of api.panels.filter((x) => isBottomPanelId(x.id))) {
-        suppressCloseRef.current.add(p.id);
-        p.api.close();
-      }
+    } else if (bottomPaneOpen && hasBottom) {
+      expandBottomPane(api);
+    } else if (!bottomPaneOpen && hasBottom && hasDesiredTabs) {
+      collapseBottomPane(api);
+    } else if (!bottomPaneOpen && hasBottom) {
+      removeBottomPanels(api);
     }
-  }, [bottomPaneOpen, syncBottomPanels]);
+  }, [bottomPaneOpen, collapseBottomPane, expandBottomPane, removeBottomPanels, syncBottomPanels]);
 
   // ── Popout / re-dock a bottom panel via a window event ──
   // The TerminalDockview's "Detach" button dispatches `dockview:popout-bottom`

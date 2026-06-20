@@ -128,7 +128,7 @@ unsafe package is skipped silently rather than breaking the others.
 
 A plugin is an **ESM package** that:
 
-1. lists `react` and `@funny/host` as **`peerDependencies`** (never bundle them),
+1. lists `react` and `@funny/plugin-sdk` as **`peerDependencies`** (never bundle them),
 2. **builds to ESM** importing those as bare specifiers,
 3. **default-exports** a `VisualizerPlugin`, and
 4. points `package.json` → **`funny.client`** at the built entry.
@@ -158,7 +158,7 @@ built-in).
 
 ### The contract
 
-The public author SDK is the **`@funny/host`** package. Keep your imports to it:
+The public author SDK is the **`@funny/plugin-sdk`** package. Keep your imports to it:
 
 ````ts
 import {
@@ -166,7 +166,7 @@ import {
   useFunnyFontSize,
   type VisualizerPlugin,
   type VisualizerProps,
-} from '@funny/host';
+} from '@funny/plugin-sdk';
 
 function CsvTable({ source, fill }: VisualizerProps) {
   const theme = useFunnyTheme(); // 'light' | 'dark'
@@ -186,6 +186,9 @@ const plugin: VisualizerPlugin = {
 
 export default plugin;
 ````
+
+`@funny/host` remains a runtime import-map alias for existing compiled plugins,
+but new plugin source should use `@funny/plugin-sdk`.
 
 `VisualizerProps`:
 
@@ -232,7 +235,7 @@ so a `binary` visualizer's `fences` (if any) still receive `source`.
   "version": "0.1.0",
   "type": "module",
   "funny": { "client": "dist/index.mjs" },
-  "peerDependencies": { "react": ">=19", "@funny/host": ">=1" },
+  "peerDependencies": { "react": ">=19", "@funny/plugin-sdk": ">=1" },
   "devDependencies": { "esbuild": "^0.25.0" }
 }
 ```
@@ -245,13 +248,13 @@ so a `binary` visualizer's `fences` (if any) still receive `source`.
 
 ### Build
 
-Externalize `react` and `@funny/host` so they resolve to the host's instances at
+Externalize `react` and `@funny/plugin-sdk` so they resolve to the host's instances at
 runtime (see below), and emit ESM:
 
 ```bash
 esbuild src/index.tsx \
   --bundle --format=esm --jsx=automatic \
-  --external:react --external:react/jsx-runtime --external:@funny/host \
+  --external:react --external:react/jsx-runtime --external:@funny/plugin-sdk \
   --outfile=dist/index.mjs
 ```
 
@@ -300,7 +303,7 @@ git push                 # to your GitHub repo
 Then anyone (an admin) installs it with `funny ext install github:you/my-funny-viz`.
 
 The template ([`visualizer-template`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-template))
-includes the build script, a `@funny/host` type shim so `tsc` works offline
+includes the build script, a `@funny/plugin-sdk` type shim so `tsc` works offline
 (the SDK isn't on npm — it's provided at runtime), and a CI workflow that fails
 if the committed `dist/` is stale.
 
@@ -320,11 +323,11 @@ tagging a release; tag releases (`#v1.0.0`) so installs can pin a version.
 GET /api/extensions  ──────────────▶  manifest [{ id, version, entryUrl }]
         │
 client boot:
-  1. installVisualizerHostGlobals()   ← exposes host React + @funny/host on globalThis
+  1. installVisualizerHostGlobals()   ← exposes host React + @funny/plugin-sdk on globalThis
   2. registerBuiltinVisualizers()     ← Mermaid
   3. loadInstalledVisualizers()       ← fetch manifest, import each entryUrl, register
         │
-  import(entryUrl)  ── resolves bare `react` / `@funny/host` via the page's ──▶ host instances
+  import(entryUrl)  ── resolves bare `react` / `@funny/plugin-sdk` via the page's ──▶ host instances
                        <script type="importmap"> to /vendor/*.mjs shims
 ```
 
@@ -335,7 +338,7 @@ Key pieces:
   preview consult it; nothing is hardcoded.
 - **Import map** ([`packages/shared/src/visualizer-importmap.mjs`](../packages/shared/src/visualizer-importmap.mjs))
   — a single source of truth injected into `index.html` that maps `react`,
-  `react/jsx-runtime`, `react-dom`, and `@funny/host` to tiny `/vendor/*.mjs`
+  `react/jsx-runtime`, `react-dom`, and `@funny/plugin-sdk` to tiny `/vendor/*.mjs`
   shims which re-export the host's own module instances. This is what makes
   "shared React"
   work. The server adds a matching CSP `script-src` hash so the inline import
@@ -362,10 +365,10 @@ default export (missing `id` / `Component`) is logged and skipped. Confirm
 `GET /api/extensions` lists it; if not, the package is malformed
 (`funny.client` missing, or its entry file doesn't exist).
 
-**`@funny/host was used outside the funny host runtime`.** The plugin ran before
+**`@funny/plugin-sdk was used outside the funny host runtime`.** The plugin ran before
 the host installed its globals, or outside funny entirely. Inside funny this
-should not happen; if you see it in your own tests, set up the host globals or
-mock `@funny/host`.
+should not happen; if you see it in your own tests, set up the plugin SDK globals or
+mock `@funny/plugin-sdk`.
 
 **Module blocked by CSP / wrong MIME.** Extension JS is served as
 `text/javascript` from the same origin (`script-src 'self'`). If you serve assets

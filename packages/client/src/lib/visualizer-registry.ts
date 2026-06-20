@@ -1,11 +1,11 @@
-import type { VisualizerPlugin, VisualizerProps } from '@funny/host';
+import type { VisualizerPlugin, VisualizerProps } from '@funny/plugin-sdk';
 
 import { createClientLogger } from '@/lib/client-logger';
 
-// The host↔plugin contract types live in `@funny/host` (the public author SDK)
+// The host↔plugin contract types live in `@funny/plugin-sdk` (the public author SDK)
 // so built-ins and third-party plugins share one definition. Re-exported here
 // for in-tree consumers that already depend on the registry.
-export type { VisualizerPlugin, VisualizerProps } from '@funny/host';
+export type { VisualizerPlugin, VisualizerProps } from '@funny/plugin-sdk';
 
 const log = createClientLogger('visualizers');
 

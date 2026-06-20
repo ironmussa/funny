@@ -357,7 +357,7 @@ Or manage them from **Settings → Extensions** in the UI. Plugins live on the s
 
 > **Full trust, no sandbox** — a plugin runs inside your authenticated session, like installing an npm package. Install only what you trust. Installing/removing is admin-only.
 
-Full guide — installing, managing, and **creating** plugins (the `@funny/host` SDK, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference extensions live in their own repo: [`ironmussa/funny-extensions`](https://github.com/ironmussa/funny-extensions) — e.g. [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml) (DBML → interactive ER diagram, React Flow — fully decoupled, bundles its own deps).
+Full guide — installing, managing, and **creating** plugins (the `@funny/plugin-sdk` package, the `VisualizerPlugin` contract, building to ESM, the shared-React import map): [`docs/visualizer-plugins.md`](docs/visualizer-plugins.md). Reference extensions live in their own repo: [`ironmussa/funny-extensions`](https://github.com/ironmussa/funny-extensions) — e.g. [`visualizer-dbml`](https://github.com/ironmussa/funny-extensions/tree/master/visualizer-dbml) (DBML → interactive ER diagram, React Flow — fully decoupled, bundles its own deps).
 
 ## Agent Providers
 

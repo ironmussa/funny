@@ -30,6 +30,7 @@ const PROJECTS = [
   'packages/runtime/tsconfig.json',
   'packages/server/tsconfig.json',
   'packages/shared/tsconfig.json',
+  'packages/harness/tsconfig.json',
   'packages/agent/tsconfig.json',
   'packages/sdk/tsconfig.json',
   'packages/orchestrator/tsconfig.json',

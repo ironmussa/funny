@@ -1,8 +1,8 @@
 {
-  "name": "@funny/host",
+  "name": "@funny/plugin-sdk",
   "version": "1.0.0",
   "private": true,
-  "description": "Public host SDK for funny visualizer plugins — the stable contract third-party authors compile against.",
+  "description": "Public plugin SDK for funny visualizer plugins — the stable contract third-party authors compile against.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

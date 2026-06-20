@@ -94,7 +94,7 @@
         "@fontsource/jetbrains-mono": "^5.2.8",
         "@fontsource/noto-sans": "^5.2.10",
         "@fontsource/noto-sans-mono": "^5.2.10",
-        "@funny/host": "workspace:*",
+        "@funny/plugin-sdk": "workspace:*",
         "@funny/shared": "workspace:*",
         "@iconify-json/vscode-icons": "^1.2.58",
         "@iconify/react": "^6.0.2",
@@ -249,17 +249,19 @@
         "typescript": "^6.0.3",
       },
     },
-    "packages/host": {
-      "name": "@funny/host",
-      "version": "1.0.0",
+    "packages/harness": {
+      "name": "@funny/harness",
+      "version": "0.1.0",
       "dependencies": {
-        "@funny/shared": "workspace:*",
+        "@funny/core": "workspace:*",
+        "@funny/pipelines": "workspace:*",
+        "zod": "^4.4.1",
       },
       "devDependencies": {
-        "@types/react": "^19.2.17",
-      },
-      "peerDependencies": {
-        "react": ">=19",
+        "@types/bun": "^1.3.8",
+        "@types/node": "^25.9.3",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.9",
       },
     },
     "packages/memory": {
@@ -320,6 +322,19 @@
         "@types/bun": "^1.3.8",
         "@types/mustache": "^4.2.6",
         "vitest": "^4.1.9",
+      },
+    },
+    "packages/plugin-sdk": {
+      "name": "@funny/plugin-sdk",
+      "version": "1.0.0",
+      "dependencies": {
+        "@funny/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.17",
+      },
+      "peerDependencies": {
+        "react": ">=19",
       },
     },
     "packages/reviewbot": {
@@ -723,7 +738,7 @@
 
     "@funny/evflow": ["@funny/evflow@workspace:packages/evflow"],
 
-    "@funny/host": ["@funny/host@workspace:packages/host"],
+    "@funny/harness": ["@funny/harness@workspace:packages/harness"],
 
     "@funny/memory": ["@funny/memory@workspace:packages/memory"],
 
@@ -732,6 +747,8 @@
     "@funny/orchestrator": ["@funny/orchestrator@workspace:packages/agent"],
 
     "@funny/pipelines": ["@funny/pipelines@workspace:packages/pipelines"],
+
+    "@funny/plugin-sdk": ["@funny/plugin-sdk@workspace:packages/plugin-sdk"],
 
     "@funny/reviewbot": ["@funny/reviewbot@workspace:packages/reviewbot"],
 

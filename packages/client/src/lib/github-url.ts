@@ -11,3 +11,12 @@ export function githubBrowseBaseUrl(remoteUrl: string | null | undefined): strin
 export function githubCommitUrl(browseBaseUrl: string, hash: string): string {
   return `${browseBaseUrl.replace(/\/$/, '')}/commit/${hash}`;
 }
+
+export function githubCommitUrlForRemoteCommit(
+  browseBaseUrl: string | null,
+  hash: string,
+  isLocalOnly: boolean,
+): string | null {
+  if (!browseBaseUrl || isLocalOnly) return null;
+  return githubCommitUrl(browseBaseUrl, hash);
+}

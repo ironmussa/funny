@@ -10,7 +10,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { githubCommitUrl } from '@/lib/github-url';
+import { githubCommitUrlForRemoteCommit } from '@/lib/github-url';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +36,10 @@ interface Props {
   onLoadMore: () => void;
 }
 
+// Keep SHA searches useful on paginated histories without pulling unbounded repo
+// history into the client while the user types.
+const FILTER_MAX_SCAN = 2000;
+
 /**
  * Search bar + virtualized commit list. Owns its own commit search state and
  * the load-more sentinel logic. Extracted from CommitHistoryTab so the parent
@@ -56,9 +60,10 @@ export function CommitListPanel({
   const { t } = useTranslation();
   const [commitSearch, setCommitSearch] = useState('');
   const [commitSearchCaseSensitive, setCommitSearchCaseSensitive] = useState(false);
+  const isSearching = commitSearch.trim().length > 0;
 
   const filteredEntries = useMemo(() => {
-    if (!commitSearch.trim()) return logEntries;
+    if (!isSearching) return logEntries;
     const matches = (e: LogEntry, q: string) =>
       e.message.includes(q) ||
       e.body.includes(q) ||
@@ -75,10 +80,10 @@ export function CommitListPanel({
         e.shortHash.toLowerCase().includes(q) ||
         e.hash.toLowerCase().includes(q),
     );
-  }, [logEntries, commitSearch, commitSearchCaseSensitive]);
+  }, [logEntries, commitSearch, commitSearchCaseSensitive, isSearching]);
 
   const commitScrollRef = useRef<HTMLDivElement>(null);
-  const showSentinel = hasMore && !commitSearch.trim();
+  const showSentinel = hasMore && !isSearching;
   const rowCount = filteredEntries.length + (showSentinel ? 1 : 0);
 
   const virtualizer = useVirtualizer({
@@ -99,6 +104,14 @@ export function CommitListPanel({
       onLoadMore();
     }
   }, [lastItem?.index, filteredEntries.length, showSentinel, onLoadMore]);
+
+  // Searches can match commits beyond the currently loaded page, especially
+  // when the user pastes a SHA. Page ahead in the background while filtered.
+  useEffect(() => {
+    if (!isSearching || !hasMore || logLoading) return;
+    if (logEntries.length >= FILTER_MAX_SCAN) return;
+    onLoadMore();
+  }, [isSearching, hasMore, logLoading, logEntries.length, onLoadMore]);
 
   return (
     <>
@@ -251,6 +264,8 @@ function CommitRow({
   onClick: () => void;
 }) {
   const { t } = useTranslation();
+  const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
+
   return (
     <div
       ref={measureRef}
@@ -338,11 +353,11 @@ function CommitRow({
               </TooltipContent>
             </Tooltip>
           </span>
-          {githubBrowseBaseUrl ? (
+          {githubUrl ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <a
-                  href={githubCommitUrl(githubBrowseBaseUrl, entry.hash)}
+                  href={githubUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}

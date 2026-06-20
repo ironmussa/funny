@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
+  ArrowUpCircle,
   Cloud,
   CloudCheck,
   GitBranch,
@@ -35,7 +36,7 @@ import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
 import { commitMatchesQuery } from '@/lib/git-history-search';
 import {
   githubBrowseBaseUrl as resolveGithubBrowseBaseUrl,
-  githubCommitUrl,
+  githubCommitUrlForRemoteCommit,
 } from '@/lib/github-url';
 import { graphLanePastel } from '@/lib/graph-colors';
 import { foldGraphRefs } from '@/lib/graph-refs';
@@ -88,9 +89,9 @@ interface CommitGraphTabProps {
  * Branch-graph view of git history. Separate from {@link CommitHistoryTab}
  * (the flat list) — this one renders a GitKraken-style lane graph on the left
  * of each commit using `git log --all --date-order` data (parents + refs).
- * Per-commit affordances mirror the History list: GitHub avatar, copy-hash, an
- * external link to the commit, and an unpushed marker. Click a commit to open
- * the shared {@link CommitDetailDialog}.
+ * Per-commit affordances mirror the History list: GitHub avatar, copy-hash,
+ * remote commit link when available, and an unpushed marker. Click a commit to
+ * open the shared {@link CommitDetailDialog}.
  */
 export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const { t } = useTranslation();
@@ -797,7 +798,17 @@ function GraphCommitRow({
     [entry.refs, entry.headBranch],
   );
 
-  const githubUrl = githubBrowseBaseUrl ? githubCommitUrl(githubBrowseBaseUrl, entry.hash) : null;
+  const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
+  const commitTime = useMemo(
+    () => (
+      <GraphCommitTime
+        relativeDate={entry.relativeDate}
+        unpushed={unpushed}
+        shortHash={entry.shortHash}
+      />
+    ),
+    [entry.relativeDate, entry.shortHash, unpushed],
+  );
 
   // When the row carries a branch/tag powerline, raise the node to the chip's
   // vertical center so the leader line is a straight horizontal that exits the
@@ -960,10 +971,10 @@ function GraphCommitRow({
             relative date rests here and the per-commit actions menu reveals on
             hover, so the two share one cell instead of each reserving width. */}
         <HoverTimeMenu
-          time={shortRelativeDate(entry.relativeDate)}
+          time={commitTime}
           timeClassName="text-muted-foreground text-[10px]"
           open={menuOpen}
-          className="min-w-9 self-center"
+          className="min-w-12 self-center"
         >
           <CommitActionsMenu
             hash={entry.hash}
@@ -979,5 +990,41 @@ function GraphCommitRow({
         </HoverTimeMenu>
       </div>
     </div>
+  );
+}
+
+export function GraphCommitTime({
+  relativeDate,
+  unpushed,
+  shortHash,
+}: {
+  relativeDate: string;
+  unpushed: boolean;
+  shortHash: string;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span>{shortRelativeDate(relativeDate)}</span>
+      {unpushed && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              aria-label={t('history.unpushed', 'Not pushed')}
+              className="inline-flex shrink-0"
+              data-testid={`graph-unpushed-${shortHash}`}
+            >
+              <ArrowUpCircle
+                className="icon-sm text-primary [&_path]:stroke-primary-foreground [&_circle]:fill-current"
+                data-testid={`graph-unpushed-icon-${shortHash}`}
+                strokeWidth={3}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('history.unpushed', 'Not pushed')}</TooltipContent>
+        </Tooltip>
+      )}
+    </span>
   );
 }

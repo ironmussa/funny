@@ -58,6 +58,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { threadsApi } from '@/lib/api/threads';
 import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
 import { getEffortLevels, parseUnifiedModel } from '@/lib/providers';
+import { getLeadingSlashCommand, resolveSlashCommandThreadMode } from '@/lib/thread-payload';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
@@ -593,9 +594,17 @@ export const PromptInputUI = memo(function PromptInputUI({
     const serialized = editorJSON
       ? serializeEditorContent(editorJSON)
       : { text: '', fileReferences: [], symbolReferences: [] };
+    const leadingSlashCommand = getLeadingSlashCommand(serialized.text);
+    const commandThreadMode =
+      isNewThread && !isScratch && leadingSlashCommand && loadSkills
+        ? resolveSlashCommandThreadMode(serialized.text, await loadSkills())
+        : undefined;
+    const effectiveThreadMode =
+      commandThreadMode ?? (createWorktree ? ('worktree' as const) : ('local' as const));
+    const effectiveCreateWorktree = effectiveThreadMode === 'worktree';
 
     // Checkout preflight for local mode
-    if (isNewThread && !createWorktree && onCheckoutPreflight && selectedBranch) {
+    if (isNewThread && !effectiveCreateWorktree && onCheckoutPreflight && selectedBranch) {
       const canProceed = await onCheckoutPreflight(selectedBranch);
       if (!canProceed) return;
     }
@@ -649,7 +658,7 @@ export const PromptInputUI = memo(function PromptInputUI({
         effort,
         ...(isNewThread
           ? {
-              threadMode: createWorktree ? 'worktree' : 'local',
+              threadMode: effectiveThreadMode,
               runtime,
               baseBranch: selectedBranch || undefined,
               sendToBacklog,
@@ -683,7 +692,9 @@ export const PromptInputUI = memo(function PromptInputUI({
     attachedTextFiles,
     t,
     isNewThread,
+    isScratch,
     createWorktree,
+    loadSkills,
     onCheckoutPreflight,
     selectedBranch,
     onSubmit,

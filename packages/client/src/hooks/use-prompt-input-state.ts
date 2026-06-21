@@ -485,6 +485,7 @@ export function usePromptInputState({
           description: r.description ?? '',
           source: r.origin,
           scope: r.scope,
+          threadMode: r.threadMode,
         };
         const existing = deduped.get(skill.name);
         if (!existing || skill.scope === 'project') deduped.set(skill.name, skill);

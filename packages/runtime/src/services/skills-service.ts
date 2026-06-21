@@ -134,7 +134,15 @@ export function listProjectSkills(projectPath: string): Skill[] {
  * Parse YAML frontmatter from a command .md file (commands/*.md in plugins).
  * These have `description:` but not necessarily `name:`.
  */
-function parseCommandFrontmatter(mdPath: string): { description?: string } {
+function parseThreadMode(value: string | undefined): 'local' | 'worktree' | undefined {
+  const normalized = value?.trim().replace(/^['"]|['"]$/g, '');
+  return normalized === 'local' || normalized === 'worktree' ? normalized : undefined;
+}
+
+function parseCommandFrontmatter(mdPath: string): {
+  description?: string;
+  threadMode?: 'local' | 'worktree';
+} {
   if (!existsSync(mdPath)) return {};
 
   try {
@@ -144,8 +152,10 @@ function parseCommandFrontmatter(mdPath: string): { description?: string } {
 
     const fm = fmMatch[1];
     const descMatch = fm.match(/^description:\s*(.+)$/m);
+    const threadModeMatch = fm.match(/^(?:thread-mode|threadMode):\s*(.+)$/m);
     return {
       description: descMatch ? descMatch[1].trim() : undefined,
+      threadMode: parseThreadMode(threadModeMatch?.[1]),
     };
   } catch {
     return {};
@@ -176,6 +186,7 @@ function listCommandFiles(commandsDir: string, prefix = ''): Skill[] {
       description: fm.description || '',
       source: 'project',
       scope: 'project',
+      threadMode: fm.threadMode,
     });
   }
 
@@ -293,6 +304,7 @@ export function listPluginCommands(): Skill[] {
               installedAt: install.installedAt,
               updatedAt: install.lastUpdated,
               scope: 'global',
+              threadMode: fm.threadMode,
             });
           }
         } catch {
@@ -498,6 +510,7 @@ function skillToResource(
     sourceUrl: s.sourceUrl,
     installedAt: s.installedAt,
     updatedAt: s.updatedAt,
+    threadMode: kind === 'slash-command' ? s.threadMode : undefined,
   };
 }
 
@@ -549,6 +562,7 @@ function scanPluginResources(): AgentResource[] {
               scope: 'global',
               installedAt: install.installedAt,
               updatedAt: install.lastUpdated,
+              threadMode: fm.threadMode,
             });
           }
         } catch {

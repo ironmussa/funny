@@ -6,7 +6,7 @@ import { processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { getNativeGit } from './native.js';
-import { gitRead } from './process.js';
+import { execute, gitRead } from './process.js';
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -66,6 +66,42 @@ export interface GitGraphLogEntry extends GitLogEntry {
   headBranch: string | null;
 }
 
+export interface GitRebaseReflogStep {
+  hash: string;
+  shortHash: string;
+  selector: string;
+  timestamp: string | null;
+  action: 'start' | 'finish' | 'pick' | 'continue' | 'abort' | 'other';
+  message: string;
+  subject: string;
+}
+
+export interface GitRebaseCommitPair {
+  originalHash: string;
+  originalShortHash: string;
+  rebasedHash: string;
+  rebasedShortHash: string;
+  subject: string;
+}
+
+export interface GitRebaseReflogEvent {
+  id: string;
+  kind: 'rebase';
+  label: string;
+  branch: string | null;
+  onto: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  startHash: string | null;
+  startShortHash: string | null;
+  finishHash: string | null;
+  finishShortHash: string | null;
+  completed: boolean;
+  steps: GitRebaseReflogStep[];
+  commitHashes: string[];
+  commitPairs: GitRebaseCommitPair[];
+}
+
 export interface CommitFileEntry {
   path: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
@@ -80,6 +116,8 @@ const STATUS_MAP: Record<string, CommitFileEntry['status']> = {
   R: 'renamed',
   C: 'copied',
 };
+
+const REBASE_REFLOG_RE = /^(.*?rebase.*?)\s+\(([^)]+)\):\s*(.*)$/i;
 
 // ─── Public API ─────────────────────────────────────────
 
@@ -169,7 +207,10 @@ export function getLog(
  * e.g. `HEAD -> refs/heads/main, refs/remotes/origin/main, refs/remotes/origin/HEAD, tag: refs/tags/v1.0`
  *   → `{ refs: [{name:'main',kind:'local'}, {name:'origin/main',kind:'remote'}, {name:'v1.0',kind:'tag'}], headBranch: 'main' }`
  */
-function parseRefs(decoration: string): { refs: GraphRef[]; headBranch: string | null } {
+function parseRefs(decoration: string): {
+  refs: GraphRef[];
+  headBranch: string | null;
+} {
   const trimmed = decoration.trim();
   if (!trimmed) return { refs: [], headBranch: null };
   const refs: GraphRef[] = [];
@@ -186,7 +227,10 @@ function parseRefs(decoration: string): { refs: GraphRef[]; headBranch: string |
       // Detached HEAD: no branch to highlight, keep the literal chip.
       refs.push({ name: 'HEAD', kind: 'local' });
     } else if (token.startsWith('tag: ')) {
-      refs.push({ name: token.slice('tag: refs/tags/'.length).trim(), kind: 'tag' });
+      refs.push({
+        name: token.slice('tag: refs/tags/'.length).trim(),
+        kind: 'tag',
+      });
     } else if (token.startsWith('refs/remotes/')) {
       const name = token.slice('refs/remotes/'.length).trim();
       // Remote default-branch pointer (e.g. `origin/HEAD`) — redundant, drop it.
@@ -279,6 +323,326 @@ export function getGraphLog(
     })(),
     (error) => processError(String(error), 1, ''),
   );
+}
+
+/**
+ * Return rebase operations captured by the local reflog. Reflog is intentionally
+ * kept separate from the commit graph: it records local ref movement and expires
+ * over time, while the graph records durable commit topology.
+ */
+export function getRebaseReflogEvents(
+  cwd: string,
+  opts: { limit?: number } = {},
+): ResultAsync<GitRebaseReflogEvent[], DomainError> {
+  const { limit = 200 } = opts;
+  const FIELD_SEP = '\x1f';
+  const RECORD_SEP = '\x1e';
+  const format = `%H%x1F%h%x1F%gd%x1F%gs%x1E`;
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitRead(
+        ['log', '-g', '--date=iso-strict', `--format=${format}`, '-n', String(limit)],
+        { cwd, reject: false },
+      );
+      if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+      const steps = result.stdout
+        .split(RECORD_SEP)
+        .map((record) => record.trim())
+        .filter(Boolean)
+        .map((record) => {
+          const [hash, shortHash, selector, subject] = record.split(FIELD_SEP);
+          return parseRebaseReflogStep({ hash, shortHash, selector, subject });
+        })
+        .filter((step): step is GitRebaseReflogStep => step !== null);
+      const events = groupRebaseReflogSteps(steps);
+      return enrichRebaseEventsWithCommitPairs(cwd, events, limit * 5);
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+function parseRebaseReflogStep(raw: {
+  hash: string;
+  shortHash: string;
+  selector: string;
+  subject: string;
+}): GitRebaseReflogStep | null {
+  const match = REBASE_REFLOG_RE.exec(raw.subject);
+  if (!match) return null;
+  const action = normalizeRebaseAction(match[2]);
+  return {
+    hash: raw.hash,
+    shortHash: raw.shortHash,
+    selector: raw.selector,
+    timestamp: parseReflogTimestamp(raw.selector),
+    action,
+    message: match[3].trim(),
+    subject: raw.subject,
+  };
+}
+
+function normalizeRebaseAction(action: string): GitRebaseReflogStep['action'] {
+  const normalized = action.trim().toLowerCase();
+  if (
+    normalized === 'start' ||
+    normalized === 'finish' ||
+    normalized === 'pick' ||
+    normalized === 'continue' ||
+    normalized === 'abort'
+  ) {
+    return normalized;
+  }
+  return 'other';
+}
+
+function parseReflogTimestamp(selector: string): string | null {
+  return selector.match(/@\{(.+)\}$/)?.[1] ?? null;
+}
+
+function groupRebaseReflogSteps(stepsNewestFirst: GitRebaseReflogStep[]): GitRebaseReflogEvent[] {
+  const events: GitRebaseReflogEvent[] = [];
+  let active: GitRebaseReflogStep[] = [];
+
+  for (const step of [...stepsNewestFirst].reverse()) {
+    if (step.action === 'start') {
+      if (active.length > 0) events.push(buildRebaseEvent(active));
+      active = [step];
+      continue;
+    }
+
+    if (active.length === 0) {
+      active = [step];
+    } else {
+      active.push(step);
+    }
+
+    if (step.action === 'finish' || step.action === 'abort') {
+      events.push(buildRebaseEvent(active));
+      active = [];
+    }
+  }
+
+  if (active.length > 0) events.push(buildRebaseEvent(active));
+  return events.reverse();
+}
+
+function buildRebaseEvent(steps: GitRebaseReflogStep[]): GitRebaseReflogEvent {
+  const start = steps.find((step) => step.action === 'start') ?? null;
+  const finish =
+    [...steps].reverse().find((step) => step.action === 'finish' || step.action === 'abort') ??
+    null;
+  const uniqueCommitHashes = [
+    ...new Set(steps.filter((s) => s.action !== 'start').map((s) => s.hash)),
+  ];
+  const id = `${start?.selector ?? steps[0]?.selector ?? 'rebase'}..${finish?.selector ?? steps.at(-1)?.selector ?? 'open'}`;
+  return {
+    id,
+    kind: 'rebase',
+    label: rebaseLabelFor(steps),
+    branch: finish ? branchFromFinishMessage(finish.message) : null,
+    onto: start ? ontoFromStartMessage(start.message) : null,
+    startedAt: start?.timestamp ?? steps[0]?.timestamp ?? null,
+    finishedAt: finish?.timestamp ?? null,
+    startHash: start?.hash ?? null,
+    startShortHash: start?.shortHash ?? null,
+    finishHash: finish?.hash ?? null,
+    finishShortHash: finish?.shortHash ?? null,
+    completed: finish?.action === 'finish',
+    steps,
+    commitHashes: uniqueCommitHashes,
+    commitPairs: [],
+  };
+}
+
+interface PatchCandidate {
+  hash: string;
+  shortHash: string;
+  subject: string;
+}
+
+async function enrichRebaseEventsWithCommitPairs(
+  cwd: string,
+  events: GitRebaseReflogEvent[],
+  candidateLimit: number,
+): Promise<GitRebaseReflogEvent[]> {
+  if (events.length === 0) return events;
+
+  const eventHashes = new Set(events.flatMap((event) => event.commitHashes));
+  const replayedSubjects = new Set(
+    events.flatMap((event) =>
+      event.steps
+        .filter((step) => step.action === 'pick' || step.action === 'continue')
+        .map((step) => normalizeSubject(step.message)),
+    ),
+  );
+  const candidates = await getRebasePatchCandidates(cwd, Math.max(candidateLimit, 500));
+  const relevantCandidates = candidates.filter(
+    (candidate) =>
+      eventHashes.has(candidate.hash) || replayedSubjects.has(normalizeSubject(candidate.subject)),
+  );
+  const candidateByHash = new Map(
+    relevantCandidates.map((candidate) => [candidate.hash, candidate]),
+  );
+  const hashesToFingerprint = new Set<string>([
+    ...relevantCandidates.map((candidate) => candidate.hash),
+    ...eventHashes,
+  ]);
+  const patchIdsByHash = await getStablePatchIds(cwd, [...hashesToFingerprint]);
+  const candidatesByPatchId = new Map<string, PatchCandidate[]>();
+  const candidatesBySubject = new Map<string, PatchCandidate[]>();
+  for (const candidate of relevantCandidates) {
+    const subjectKey = normalizeSubject(candidate.subject);
+    const subjectMatches = candidatesBySubject.get(subjectKey);
+    if (subjectMatches) subjectMatches.push(candidate);
+    else candidatesBySubject.set(subjectKey, [candidate]);
+
+    const patchId = patchIdsByHash.get(candidate.hash);
+    if (!patchId) continue;
+    const existing = candidatesByPatchId.get(patchId);
+    if (existing) existing.push(candidate);
+    else candidatesByPatchId.set(patchId, [candidate]);
+  }
+
+  return events.map((event) => ({
+    ...event,
+    commitPairs: inferCommitPairsForEvent(
+      event,
+      patchIdsByHash,
+      candidatesByPatchId,
+      candidatesBySubject,
+      candidateByHash,
+    ),
+  }));
+}
+
+async function getRebasePatchCandidates(cwd: string, limit: number): Promise<PatchCandidate[]> {
+  const FIELD_SEP = '\x1f';
+  const result = await gitRead(
+    ['log', '--all', '--reflog', `--format=%H${FIELD_SEP}%h${FIELD_SEP}%s`, '-n', String(limit)],
+    { cwd, reject: false },
+  );
+  if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+  const byHash = new Map<string, PatchCandidate>();
+  for (const line of result.stdout.split('\n')) {
+    const [hash, shortHash, subject] = line.split(FIELD_SEP);
+    if (!hash || byHash.has(hash)) continue;
+    byHash.set(hash, { hash, shortHash, subject });
+  }
+  return [...byHash.values()];
+}
+
+async function getStablePatchIds(cwd: string, hashes: string[]): Promise<Map<string, string>> {
+  if (hashes.length === 0) return new Map();
+  const result = await gitRead(['show', '--pretty=format:commit %H', '--patch', ...hashes], {
+    cwd,
+    reject: false,
+    maxOutputBytes: 20 * 1024 * 1024,
+  });
+  if (result.exitCode !== 0 || !result.stdout.trim()) return new Map();
+  const patchIdResult = await execute('git', ['patch-id', '--stable'], {
+    cwd,
+    stdin: result.stdout,
+    reject: false,
+    maxOutputBytes: 5 * 1024 * 1024,
+  });
+  if (patchIdResult.exitCode !== 0 || !patchIdResult.stdout.trim()) return new Map();
+
+  const byHash = new Map<string, string>();
+  for (const line of patchIdResult.stdout.split('\n')) {
+    const [patchId, hash] = line.trim().split(/\s+/);
+    if (patchId && hash) byHash.set(hash, patchId);
+  }
+  return byHash;
+}
+
+function inferCommitPairsForEvent(
+  event: GitRebaseReflogEvent,
+  patchIdsByHash: Map<string, string>,
+  candidatesByPatchId: Map<string, PatchCandidate[]>,
+  candidatesBySubject: Map<string, PatchCandidate[]>,
+  candidateByHash: Map<string, PatchCandidate>,
+): GitRebaseCommitPair[] {
+  const rewrittenHashes = new Set(event.commitHashes);
+  const replayedSteps = event.steps.filter(
+    (step) => step.action === 'pick' || step.action === 'continue',
+  );
+  const replayed =
+    replayedSteps.length > 0
+      ? replayedSteps
+      : event.commitHashes.map((hash) => ({
+          hash,
+          shortHash: candidateByHash.get(hash)?.shortHash ?? hash.slice(0, 7),
+          message: candidateByHash.get(hash)?.subject ?? '',
+        }));
+  const pairs: GitRebaseCommitPair[] = [];
+  const seen = new Set<string>();
+
+  for (const step of replayed) {
+    const patchId = patchIdsByHash.get(step.hash);
+    const original =
+      (patchId
+        ? selectOriginalCandidate(
+            candidatesByPatchId.get(patchId) ?? [],
+            step.hash,
+            step.message,
+            rewrittenHashes,
+          )
+        : null) ??
+      selectOriginalCandidate(
+        candidatesBySubject.get(normalizeSubject(step.message)) ?? [],
+        step.hash,
+        step.message,
+        rewrittenHashes,
+      );
+    if (!original) continue;
+    const key = `${original.hash}->${step.hash}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({
+      originalHash: original.hash,
+      originalShortHash: original.shortHash,
+      rebasedHash: step.hash,
+      rebasedShortHash: step.shortHash,
+      subject: step.message || original.subject,
+    });
+  }
+
+  return pairs;
+}
+
+function selectOriginalCandidate(
+  candidates: PatchCandidate[],
+  rebasedHash: string,
+  subject: string,
+  rewrittenHashes: Set<string>,
+): PatchCandidate | null {
+  const pool = candidates.filter(
+    (candidate) => candidate.hash !== rebasedHash && !rewrittenHashes.has(candidate.hash),
+  );
+  if (pool.length === 0) return null;
+  return (
+    pool.find((candidate) => normalizeSubject(candidate.subject) === normalizeSubject(subject)) ??
+    pool[0]
+  );
+}
+
+function normalizeSubject(subject: string): string {
+  return subject.trim().replace(/\s+/g, ' ');
+}
+
+function rebaseLabelFor(steps: GitRebaseReflogStep[]): string {
+  const subject =
+    steps.find((step) => step.subject.toLowerCase().includes('rebase'))?.subject ?? '';
+  return subject.split('(')[0]?.trim() || 'rebase';
+}
+
+function branchFromFinishMessage(message: string): string | null {
+  const ref = message.match(/returning to refs\/heads\/(.+)$/)?.[1];
+  return ref ?? null;
+}
+
+function ontoFromStartMessage(message: string): string | null {
+  return message.match(/^checkout (.+)$/)?.[1] ?? null;
 }
 
 async function fetchEmailMap(

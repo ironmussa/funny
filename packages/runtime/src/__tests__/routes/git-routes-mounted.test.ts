@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   isWorkflowActive: vi.fn(),
   getLog: vi.fn(),
   getGraphLog: vi.fn(),
+  getRebaseReflogEvents: vi.fn(),
   getUnpushedHashes: vi.fn(),
   getUnpulledHashes: vi.fn(),
   stashList: vi.fn(),
@@ -84,6 +85,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
     deriveGitSyncState: vi.fn(() => 'synced'),
     getLog: mocks.getLog,
     getGraphLog: mocks.getGraphLog,
+    getRebaseReflogEvents: mocks.getRebaseReflogEvents,
     getUnpushedHashes: mocks.getUnpushedHashes,
     getUnpulledHashes: mocks.getUnpulledHashes,
     stashList: mocks.stashList,
@@ -214,6 +216,27 @@ describe('gitRoutes (mounted)', () => {
         },
       ]),
     );
+    mocks.getRebaseReflogEvents.mockReturnValue(
+      okAsync([
+        {
+          id: 'HEAD@{1}..HEAD@{0}',
+          kind: 'rebase',
+          label: 'rebase',
+          branch: 'feature',
+          onto: 'main',
+          startedAt: '2026-06-20T19:51:20-06:00',
+          finishedAt: '2026-06-20T20:17:55-06:00',
+          startHash: 'aaa111',
+          startShortHash: 'aaa111',
+          finishHash: 'def222',
+          finishShortHash: 'def',
+          completed: true,
+          steps: [],
+          commitHashes: ['def222'],
+          commitPairs: [],
+        },
+      ]),
+    );
     mocks.getUnpushedHashes.mockReturnValue(okAsync(new Set(['def222'])));
     mocks.getUnpulledHashes.mockReturnValue(okAsync(new Set()));
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
@@ -235,7 +258,11 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('scratch guard returns 400 for scratch threads (threadId query)', async () => {
-    mocks.getThread.mockResolvedValue({ id: 't-scratch', isScratch: true, userId: 'user-1' });
+    mocks.getThread.mockResolvedValue({
+      id: 't-scratch',
+      isScratch: true,
+      userId: 'user-1',
+    });
     const app = makeApp();
 
     const res = await app.request('/api/git/project/p1/stage?threadId=t-scratch', {
@@ -265,7 +292,11 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('POST /api/git/project/:projectId/stage rejects foreign project', async () => {
-    mocks.getProject.mockResolvedValue({ id: 'p1', userId: 'other-user', path: '/tmp/repo' });
+    mocks.getProject.mockResolvedValue({
+      id: 'p1',
+      userId: 'other-user',
+      path: '/tmp/repo',
+    });
     const app = makeApp();
 
     const res = await app.request('/api/git/project/p1/stage', {
@@ -310,7 +341,10 @@ describe('gitRoutes (mounted)', () => {
 
     const res = await app.request('/api/git/t1/diff');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ files: [], summary: { additions: 0, deletions: 0 } });
+    expect(await res.json()).toEqual({
+      files: [],
+      summary: { additions: 0, deletions: 0 },
+    });
     expect(mocks.getDiff).toHaveBeenCalledWith('/wt/thread');
   });
 
@@ -376,7 +410,11 @@ describe('gitRoutes (mounted)', () => {
     const res = await app.request('/api/git/project/p1/commit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'feat: tests', amend: false, noVerify: true }),
+      body: JSON.stringify({
+        message: 'feat: tests',
+        amend: false,
+        noVerify: true,
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -403,7 +441,9 @@ describe('gitRoutes (mounted)', () => {
   test('POST /api/git/project/:projectId/push pushes to remote', async () => {
     const app = makeApp();
 
-    const res = await app.request('/api/git/project/p1/push', { method: 'POST' });
+    const res = await app.request('/api/git/project/p1/push', {
+      method: 'POST',
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, output: 'pushed to origin' });
     expect(mocks.push).toHaveBeenCalledWith('/tmp/repo', undefined);
@@ -419,14 +459,19 @@ describe('gitRoutes (mounted)', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, output: 'already up to date' });
+    expect(await res.json()).toEqual({
+      ok: true,
+      output: 'already up to date',
+    });
     expect(mocks.pull).toHaveBeenCalledWith('/tmp/repo', 'rebase', undefined);
   });
 
   test('POST /api/git/project/:projectId/fetch fetches remote refs', async () => {
     const app = makeApp();
 
-    const res = await app.request('/api/git/project/p1/fetch', { method: 'POST' });
+    const res = await app.request('/api/git/project/p1/fetch', {
+      method: 'POST',
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(mocks.fetchRemote).toHaveBeenCalledWith('/tmp/repo', undefined);
@@ -437,7 +482,9 @@ describe('gitRoutes (mounted)', () => {
 
     const res = await app.request('/api/git/project/p1/remote-url');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ remoteUrl: 'https://github.com/org/repo.git' });
+    expect(await res.json()).toEqual({
+      remoteUrl: 'https://github.com/org/repo.git',
+    });
   });
 
   test('GET /api/git/project/:projectId/gh-orgs returns empty without GitHub token', async () => {
@@ -543,7 +590,9 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('POST /api/git/project/:projectId/publish creates GitHub repo', async () => {
-    vi.mocked(resolveIdentity).mockResolvedValueOnce({ githubToken: 'ghp_publish' });
+    vi.mocked(resolveIdentity).mockResolvedValueOnce({
+      githubToken: 'ghp_publish',
+    });
     const app = makeApp();
 
     const res = await app.request('/api/git/project/p1/publish', {
@@ -565,13 +614,17 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('GET /api/git/project/:projectId/gh-orgs lists orgs when token present', async () => {
-    vi.mocked(resolveIdentity).mockResolvedValueOnce({ githubToken: 'ghp_orgs' });
+    vi.mocked(resolveIdentity).mockResolvedValueOnce({
+      githubToken: 'ghp_orgs',
+    });
     const app = makeApp();
 
     const res = await app.request('/api/git/project/p1/gh-orgs');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ orgs: [{ login: 'acme' }] });
-    expect(mocks.listGitHubOrgs).toHaveBeenCalledWith('/tmp/repo', { GH_TOKEN: 'ghp_orgs' });
+    expect(mocks.listGitHubOrgs).toHaveBeenCalledWith('/tmp/repo', {
+      GH_TOKEN: 'ghp_orgs',
+    });
   });
 
   test('POST /api/git/:threadId/merge returns error when merge fails', async () => {
@@ -590,7 +643,11 @@ describe('gitRoutes (mounted)', () => {
     const res = await app.request('/api/git/t1/merge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetBranch: 'main', push: false, cleanup: false }),
+      body: JSON.stringify({
+        targetBranch: 'main',
+        push: false,
+        cleanup: false,
+      }),
     });
 
     expect(res.status).toBe(400);
@@ -683,7 +740,10 @@ describe('gitRoutes (mounted)', () => {
     const res = await app.request('/api/git/t1/pr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Add tests', body: 'Coverage for git workflow' }),
+      body: JSON.stringify({
+        title: 'Add tests',
+        body: 'Coverage for git workflow',
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -715,7 +775,11 @@ describe('gitRoutes (mounted)', () => {
     const res = await app.request('/api/git/t1/merge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetBranch: 'main', push: true, cleanup: false }),
+      body: JSON.stringify({
+        targetBranch: 'main',
+        push: true,
+        cleanup: false,
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -934,14 +998,37 @@ describe('gitRoutes (mounted)', () => {
     ]);
     expect(body.unpushedHashes).toEqual([]);
     expect(body.unpulledHashes).toEqual([]);
-    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', { limit: 2, skip: 0, all: true });
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', {
+      limit: 2,
+      skip: 0,
+      all: true,
+    });
   });
 
   test('GET /api/git/project/:projectId/graph-log?all=false opts out of all refs', async () => {
     const app = makeApp();
 
     await app.request('/api/git/project/p1/graph-log?all=false');
-    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', { limit: 51, skip: 0, all: false });
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', {
+      limit: 51,
+      skip: 0,
+      all: false,
+    });
+  });
+
+  test('GET /api/git/project/:projectId/reflog-events returns rebase events', async () => {
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/reflog-events');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events[0]).toMatchObject({
+      kind: 'rebase',
+      branch: 'feature',
+      onto: 'main',
+      finishHash: 'def222',
+    });
+    expect(mocks.getRebaseReflogEvents).toHaveBeenCalledWith('/tmp/repo');
   });
 
   test('GET /api/git/:threadId/graph-log uses thread cwd and defaults to all refs', async () => {
@@ -957,7 +1044,28 @@ describe('gitRoutes (mounted)', () => {
 
     const res = await app.request('/api/git/t1/graph-log');
     expect(res.status).toBe(200);
-    expect(mocks.getGraphLog).toHaveBeenCalledWith('/wt/thread', { limit: 51, skip: 0, all: true });
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/wt/thread', {
+      limit: 51,
+      skip: 0,
+      all: true,
+    });
+  });
+
+  test('GET /api/git/:threadId/reflog-events uses thread cwd', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+      baseBranch: 'main',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t1/reflog-events');
+    expect(res.status).toBe(200);
+    expect((await res.json()).events).toHaveLength(1);
+    expect(mocks.getRebaseReflogEvents).toHaveBeenCalledWith('/wt/thread');
   });
 
   test('GET /api/git/:threadId/graph-log returns error when git log fails', async () => {
@@ -982,16 +1090,23 @@ describe('gitRoutes (mounted)', () => {
 
     const res = await app.request('/api/git/project/p1/stash/list');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ entries: [{ index: 0, message: 'wip' }] });
+    expect(await res.json()).toEqual({
+      entries: [{ index: 0, message: 'wip' }],
+    });
     expect(mocks.stashList).toHaveBeenCalledWith('/tmp/repo');
   });
 
   test('POST /api/git/project/:projectId/stash saves working tree', async () => {
     const app = makeApp();
 
-    const res = await app.request('/api/git/project/p1/stash', { method: 'POST' });
+    const res = await app.request('/api/git/project/p1/stash', {
+      method: 'POST',
+    });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, output: 'Saved working directory' });
+    expect(await res.json()).toEqual({
+      ok: true,
+      output: 'Saved working directory',
+    });
     expect(mocks.stash).toHaveBeenCalledWith('/tmp/repo');
   });
 
@@ -1024,7 +1139,10 @@ describe('gitRoutes (mounted)', () => {
 
     const res = await app.request('/api/git/t1/stash', { method: 'POST' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, output: 'thread stash saved' });
+    expect(await res.json()).toEqual({
+      ok: true,
+      output: 'thread stash saved',
+    });
     expect(mocks.gitServiceStash).toHaveBeenCalledWith('t1', 'user-1', '/wt/thread');
   });
 
@@ -1054,7 +1172,9 @@ describe('gitRoutes (mounted)', () => {
     });
     const app = makeApp();
 
-    const res = await app.request('/api/git/t1/stash/drop/0', { method: 'POST' });
+    const res = await app.request('/api/git/t1/stash/drop/0', {
+      method: 'POST',
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, output: 'dropped stash@{0}' });
     expect(mocks.gitServiceDropStash).toHaveBeenCalledWith('t1', 'user-1', '/wt/thread', 0);
@@ -1072,7 +1192,9 @@ describe('gitRoutes (mounted)', () => {
 
     const res = await app.request('/api/git/t1/stash/list');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ entries: [{ index: 0, message: 'wip' }] });
+    expect(await res.json()).toEqual({
+      entries: [{ index: 0, message: 'wip' }],
+    });
     expect(mocks.stashList).toHaveBeenCalledWith('/wt/thread');
   });
 

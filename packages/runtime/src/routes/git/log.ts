@@ -8,6 +8,7 @@
 import {
   getLog,
   getGraphLog,
+  getRebaseReflogEvents,
   getUnpushedHashes,
   getCommitBody,
   getCommitFiles,
@@ -63,7 +64,12 @@ export function buildLogPayload<E extends { hash: string }>(
   unpushedSet: Set<string>,
   unpulledSet: Set<string>,
   limit: number,
-): { entries: E[]; hasMore: boolean; unpushedHashes: string[]; unpulledHashes: string[] } {
+): {
+  entries: E[];
+  hasMore: boolean;
+  unpushedHashes: string[];
+  unpulledHashes: string[];
+} {
   const hasMore = entries.length > limit;
   const trimmed = hasMore ? entries.slice(0, limit) : entries;
   const unpushedHashes = trimmed.filter((e) => unpushedSet.has(e.hash)).map((e) => e.hash);
@@ -183,6 +189,20 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
 });
 
+// GET /api/git/project/:projectId/reflog-events — local rebase operation markers
+logRoutes.get('/project/:projectId/reflog-events', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const projectId = c.req.param('projectId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await fetchLogSpanned(c, 'git.reflog_events', { projectId }, () =>
+    getRebaseReflogEvents(cwdResult.value),
+  );
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ events: result.value });
+});
+
 // GET /api/git/project/:projectId/commit/:hash/files
 logRoutes.get('/project/:projectId/commit/:hash/files', async (c) => {
   const userId = c.get('userId') as string;
@@ -212,7 +232,11 @@ logRoutes.get('/project/:projectId/commit/:hash/diff', async (c) => {
   const result = await fetchLogSpanned(
     c,
     'git.commit_diff',
-    { projectId: c.req.param('projectId'), hash: c.req.param('hash'), path: filePath },
+    {
+      projectId: c.req.param('projectId'),
+      hash: c.req.param('hash'),
+      path: filePath,
+    },
     () => getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath),
   );
   if (result.isErr()) return resultToResponse(c, result);
@@ -288,6 +312,24 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
 });
 
+// GET /api/git/:threadId/reflog-events — local rebase operation markers
+logRoutes.get('/:threadId/reflog-events', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const threadId = c.req.param('threadId');
+  const steer = steerFromContext(c);
+  const threadResult = await requireThread(threadId, userId, orgId, steer);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await fetchLogSpanned(c, 'git.reflog_events', { threadId }, () =>
+    getRebaseReflogEvents(cwdResult.value),
+  );
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ events: result.value });
+});
+
 // GET /api/git/:threadId/commit/:hash/files
 logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
   const userId = c.get('userId') as string;
@@ -327,7 +369,11 @@ logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
   const result = await fetchLogSpanned(
     c,
     'git.commit_diff',
-    { threadId: c.req.param('threadId'), hash: c.req.param('hash'), path: filePath },
+    {
+      threadId: c.req.param('threadId'),
+      hash: c.req.param('hash'),
+      path: filePath,
+    },
     () => getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath),
   );
   if (result.isErr()) return resultToResponse(c, result);

@@ -42,15 +42,27 @@ import {
   githubCommitUrlForRemoteCommit,
 } from '@/lib/github-url';
 import { graphLanePastel } from '@/lib/graph-colors';
-import { foldGraphRefs, inferUnpulledHashesFromGraphEntries } from '@/lib/graph-refs';
+import {
+  foldGraphRefs,
+  graphNodeForkedFromRefLabels,
+  graphNodeParentLabels,
+  graphNodeParentRefLabels,
+  type GraphNodeParentLabel,
+  inferUnpulledHashesFromGraphEntries,
+} from '@/lib/graph-refs';
 import {
   indexRebaseEventsByHash,
   inferRebaseCopyLinks,
-  rebaseEventScopeLabel,
   type RebaseCopyLink,
 } from '@/lib/rebase-events';
-import { rebaseCopyLinkRailX, roundedRebaseCopyLinkPath } from '@/lib/rebase-link-path';
+import {
+  rebaseCopyLinkRailLane,
+  rebaseCopyLinkRailX,
+  rebaseCopyLinkUsesOuterRail,
+  roundedRebaseCopyLinkPath,
+} from '@/lib/rebase-link-path';
 import { metric } from '@/lib/telemetry';
+import { middleTruncate } from '@/lib/text-truncate';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useThreadProjectId } from '@/stores/thread-context';
@@ -85,7 +97,8 @@ const PAGE_SIZE = 80;
 const TITLE_PX = 10.5;
 const META_PX = 10;
 const MAX_GUTTER_LANES = 12;
-const REBASE_LINK_RAIL_WIDTH = 32;
+const REBASE_LINK_RAIL_WIDTH = LANE_WIDTH;
+const PARENT_BRANCH_LABEL_MAX_CHARS = 40;
 // Upper bound on how many commits the active-filter background pager will pull
 // in, so filtering a huge repo can't page the entire history into memory.
 const FILTER_MAX_SCAN = 2000;
@@ -344,6 +357,15 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     () => (isFiltering ? [] : inferRebaseCopyLinks(rebaseEvents, displayEntries)),
     [displayEntries, isFiltering, rebaseEvents],
   );
+  const rebaseParentRefLabelByHash = useMemo(
+    () => graphNodeParentRefLabels(rebaseCopyLinks, displayEntries),
+    [displayEntries, rebaseCopyLinks],
+  );
+  const forkedFromRefLabelByHash = useMemo(
+    () => (isFiltering ? new Map<string, string>() : graphNodeForkedFromRefLabels(displayEntries)),
+    [displayEntries, isFiltering],
+  );
+  const parentLabelByHash = useMemo(() => graphNodeParentLabels(displayEntries), [displayEntries]);
 
   const layout = useMemo(() => {
     // While filtering, the surviving commits are no longer contiguous in topo
@@ -368,7 +390,23 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   }, [displayEntries, isFiltering]);
   const laneCount = Math.min(layout.laneCount, MAX_GUTTER_LANES);
   const laneGutterWidth = laneCount * LANE_WIDTH;
-  const rebaseRailWidth = rebaseCopyLinks.length > 0 ? REBASE_LINK_RAIL_WIDTH : 0;
+  const rebaseRailWidth = useMemo(() => {
+    if (rebaseCopyLinks.length === 0) return 0;
+    const laneByHash = new Map<string, number>();
+    for (let index = 0; index < displayEntries.length; index += 1) {
+      const row = layout.rows[index];
+      if (row) laneByHash.set(displayEntries[index].hash, row.commitLane);
+    }
+    for (const link of rebaseCopyLinks) {
+      const targetLane = laneByHash.get(link.targetHash);
+      if (targetLane === undefined) continue;
+      const sourceLane = laneByHash.get(link.sourceHash) ?? null;
+      if (rebaseCopyLinkUsesOuterRail({ sourceLane, targetLane, laneCount })) {
+        return REBASE_LINK_RAIL_WIDTH;
+      }
+    }
+    return 0;
+  }, [displayEntries, laneCount, layout.rows, rebaseCopyLinks]);
   const gutterWidth = laneGutterWidth + rebaseRailWidth;
 
   // Working-tree status drives the WIP "Uncommitted changes" node above the list
@@ -497,7 +535,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
               links={rebaseCopyLinks}
               entries={displayEntries}
               layoutRows={layout.rows}
-              laneGutterWidth={laneGutterWidth}
               gutterWidth={gutterWidth}
               rowHeightFor={rowHeightFor}
             />
@@ -544,6 +581,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   onAfterAction={refreshLog}
                   rebaseEvents={rebaseEventsByHash.get(entry.hash) ?? []}
                   onSelectRebaseEvent={setSelectedRebaseEvent}
+                  forkedFromRefLabel={
+                    forkedFromRefLabelByHash.get(entry.hash) ??
+                    rebaseParentRefLabelByHash.get(entry.hash) ??
+                    null
+                  }
+                  parentLabel={parentLabelByHash.get(entry.hash) ?? null}
                   unpushed={unpushed.has(entry.hash)}
                   unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
@@ -584,14 +627,12 @@ function RebaseCopyLinksOverlay({
   links,
   entries,
   layoutRows,
-  laneGutterWidth,
   gutterWidth,
   rowHeightFor,
 }: {
   links: RebaseCopyLink[];
   entries: GraphEntry[];
   layoutRows: GraphRow[];
-  laneGutterWidth: number;
   gutterWidth: number;
   rowHeightFor: (entry: GraphEntry) => number;
 }) {
@@ -623,25 +664,32 @@ function RebaseCopyLinksOverlay({
 
   const visibleLinks: Array<{
     link: RebaseCopyLink;
-    source: { top: number; nodeY: number; lane: number } | null;
+    source: { top: number; nodeY: number; lane: number };
     target: { top: number; nodeY: number; lane: number };
   }> = [];
   for (const link of links) {
     const source = rowsByHash.get(link.sourceHash);
     const target = rowsByHash.get(link.targetHash);
-    if (target) visibleLinks.push({ link, source: source ?? null, target });
+    if (source && target) visibleLinks.push({ link, source, target });
   }
   if (visibleLinks.length === 0) return null;
 
-  const railX = rebaseCopyLinkRailX({
-    laneGutterWidth,
+  const maxRailLane = visibleLinks.reduce((maxLane, { source, target }) => {
+    const railLane = rebaseCopyLinkRailLane({
+      sourceLane: source.lane,
+      targetLane: target.lane,
+    });
+    return Math.max(maxLane, railLane);
+  }, 0);
+  const maxRailX = rebaseCopyLinkRailX({
+    laneGutterWidth: maxRailLane * LANE_WIDTH,
     railWidth: REBASE_LINK_RAIL_WIDTH,
   });
-  const width = Math.max(gutterWidth + 12, LANE_WIDTH * 4);
+  const width = Math.max(gutterWidth + 12, maxRailX + 12, LANE_WIDTH * 4);
 
   return (
     <svg
-      className="pointer-events-none absolute top-0 left-0"
+      className="pointer-events-none absolute top-0 left-0 z-20"
       style={{ width, height: nextTop, overflow: 'visible' }}
       width={width}
       height={nextTop}
@@ -662,23 +710,20 @@ function RebaseCopyLinksOverlay({
         </marker>
       </defs>
       {visibleLinks.map(({ link, source, target }) => {
+        const railLane = rebaseCopyLinkRailLane({
+          sourceLane: source.lane,
+          targetLane: target.lane,
+        });
+        const railX = rebaseCopyLinkRailX({
+          laneGutterWidth: railLane * LANE_WIDTH,
+          railWidth: REBASE_LINK_RAIL_WIDTH,
+        });
         const y2 = target.top + target.nodeY;
-        const x1 = source ? rebaseLinkNodeEdgeX(source.lane) : railX;
-        const y1 = source ? source.top + source.nodeY : y2;
+        const x1 = rebaseLinkNodeEdgeX(source.lane);
+        const y1 = source.top + source.nodeY;
         const x2 = rebaseLinkNodeEdgeX(target.lane);
         return (
           <g key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}>
-            {!source && (
-              <circle
-                cx={railX}
-                cy={y2}
-                r="3.5"
-                fill="var(--background)"
-                stroke="var(--terminal-yellow)"
-                strokeWidth={1.4}
-                opacity={0.9}
-              />
-            )}
             <path
               d={roundedRebaseCopyLinkPath({
                 sourceX: x1,
@@ -878,6 +923,8 @@ function GraphCommitRow({
   onAfterAction,
   rebaseEvents,
   onSelectRebaseEvent,
+  forkedFromRefLabel,
+  parentLabel,
   unpushed,
   unpulled,
   connectToWip,
@@ -898,6 +945,8 @@ function GraphCommitRow({
   onAfterAction: () => void;
   rebaseEvents: GitRebaseReflogEventDTO[];
   onSelectRebaseEvent: (event: GitRebaseReflogEventDTO) => void;
+  forkedFromRefLabel: string | null;
+  parentLabel: GraphNodeParentLabel | null;
   unpushed: boolean;
   unpulled: boolean;
   /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
@@ -995,7 +1044,6 @@ function GraphCommitRow({
       }),
     [foldedRefs, lanePastel, t],
   );
-
   // Local-only branch tips on this commit — `local` folded refs with no synced
   // remote (i.e. the ones rendered with the `Monitor` glyph). These are exactly
   // the branches that have something unpushed, so they drive the menu's "Push …
@@ -1011,15 +1059,8 @@ function GraphCommitRow({
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const commitTime = useMemo(
-    () => (
-      <GraphCommitTime
-        relativeDate={entry.relativeDate}
-        unpushed={unpushed}
-        unpulled={unpulled}
-        shortHash={entry.shortHash}
-      />
-    ),
-    [entry.relativeDate, entry.shortHash, unpulled, unpushed],
+    () => <GraphCommitTime relativeDate={entry.relativeDate} />,
+    [entry.relativeDate],
   );
 
   // When the row carries a branch/tag powerline, raise the node to the chip's
@@ -1131,13 +1172,42 @@ function GraphCommitRow({
                     />
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    {entry.author}
-                    {unpushed && (
-                      <span className="text-muted-foreground">
-                        {' · '}
-                        {t('history.unpushed', 'Not pushed')}
+                    <div className="flex flex-col gap-0.5">
+                      <span>
+                        {t('graph.nodeAuthor', {
+                          author: entry.author,
+                          defaultValue: `Author: ${entry.author}`,
+                        })}
                       </span>
-                    )}
+                      {forkedFromRefLabel ? (
+                        <span>
+                          {t('graph.nodeBranchedFrom', {
+                            branch: forkedFromRefLabel,
+                            defaultValue: `Branched from: ${forkedFromRefLabel}`,
+                          })}
+                        </span>
+                      ) : null}
+                      {parentLabel ? (
+                        <>
+                          <span>
+                            {t('graph.nodeParent', {
+                              parent: parentLabel.commit,
+                              defaultValue: `Parent: ${parentLabel.commit}`,
+                            })}
+                          </span>
+                          {parentLabel.branchLabels.length > 0 ? (
+                            <ul className="list-disc space-y-0.5 pl-4">
+                              {parentLabel.branchLabels.map((branch) => (
+                                <li key={branch} title={branch}>
+                                  {middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {unpushed && <span>{t('history.unpushed', 'Not pushed')}</span>}
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -1176,13 +1246,12 @@ function GraphCommitRow({
               query={searchQuery}
               className="text-foreground min-w-0 flex-1 truncate text-xs leading-tight font-medium"
             />
-            {rebaseEvents.length > 0 && (
-              <RebaseEventMarker
-                event={rebaseEvents[0]}
-                count={rebaseEvents.length}
-                onSelect={onSelectRebaseEvent}
-              />
-            )}
+            <GraphCommitSyncMarkers
+              unpushed={unpushed}
+              unpulled={unpulled}
+              shortHash={entry.shortHash}
+              className="ml-auto"
+            />
           </div>
         </div>
         {/* Time ↔ kebab swap (same component as the sidebar thread rows): the
@@ -1201,6 +1270,8 @@ function GraphCommitRow({
             effectiveThreadId={effectiveThreadId}
             projectModeId={projectModeId}
             localBranches={pushableBranches}
+            rebaseEvents={rebaseEvents}
+            onSelectRebaseEvent={onSelectRebaseEvent}
             onAfterAction={onAfterAction}
             onOpenChange={setMenuOpen}
             triggerClassName="text-muted-foreground hover:text-foreground"
@@ -1208,54 +1279,6 @@ function GraphCommitRow({
         </HoverTimeMenu>
       </div>
     </div>
-  );
-}
-
-function RebaseEventMarker({
-  event,
-  count,
-  onSelect,
-}: {
-  event: GitRebaseReflogEventDTO;
-  count: number;
-  onSelect: (event: GitRebaseReflogEventDTO) => void;
-}) {
-  const { t } = useTranslation();
-  const label = t('graph.rebaseEvent', 'Rebase event');
-  const scopeLabel = rebaseEventScopeLabel(event);
-  const displayLabel = scopeLabel ?? label;
-  const accessibleLabel = scopeLabel ? `${label}: ${scopeLabel}` : label;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label={accessibleLabel}
-          className="border-sidebar-border bg-muted/60 text-muted-foreground hover:bg-accent hover:text-foreground inline-flex h-5 max-w-[180px] shrink-0 items-center gap-1 rounded border px-1.5 text-[10px] leading-none"
-          data-testid={`graph-rebase-event-${event.finishShortHash ?? event.startShortHash ?? 'open'}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(event);
-          }}
-        >
-          <GitBranch className="icon-xs" />
-          <span className="min-w-0 truncate">
-            {count > 1 ? `${displayLabel} +${count - 1}` : displayLabel}
-          </span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        {event.completed
-          ? t('graph.rebaseCompletedTooltip', {
-              branch: event.branch ?? '',
-              onto: event.onto ?? '',
-              defaultValue: scopeLabel
-                ? `Rebased ${scopeLabel}`
-                : 'Rebase completed from local reflog',
-            })
-          : t('graph.rebaseIncompleteTooltip', 'Rebase event from local reflog')}
-      </TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -1361,22 +1384,26 @@ function RebaseEventDialog({
   );
 }
 
-export function GraphCommitTime({
-  relativeDate,
+export function GraphCommitTime({ relativeDate }: { relativeDate: string }) {
+  return <span>{shortRelativeDate(relativeDate)}</span>;
+}
+
+export function GraphCommitSyncMarkers({
   unpushed,
   unpulled = false,
   shortHash,
+  className,
 }: {
-  relativeDate: string;
   unpushed: boolean;
   unpulled?: boolean;
   shortHash: string;
+  className?: string;
 }) {
   const { t } = useTranslation();
+  if (!unpushed && !unpulled) return null;
 
   return (
-    <span className="inline-flex items-center gap-1">
-      <span>{shortRelativeDate(relativeDate)}</span>
+    <span className={cn('inline-flex shrink-0 items-center gap-1', className)}>
       {unpushed && (
         <Tooltip>
           <TooltipTrigger asChild>

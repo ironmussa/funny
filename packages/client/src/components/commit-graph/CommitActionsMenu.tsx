@@ -25,6 +25,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useCommitActions } from '@/hooks/use-commit-actions';
+import type { GitRebaseReflogEventDTO } from '@/lib/api/git';
+import { rebaseEventScopeLabel } from '@/lib/rebase-events';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -40,6 +42,8 @@ interface Props {
    * is not the tip of an unpushed local branch, in which case no push item shows.
    */
   localBranches?: string[];
+  rebaseEvents?: GitRebaseReflogEventDTO[];
+  onSelectRebaseEvent?: (event: GitRebaseReflogEventDTO) => void;
   /** Reload the graph log after a mutating action. */
   onAfterAction: () => void;
   /**
@@ -58,6 +62,7 @@ interface Props {
 /** Stable empty default for {@link Props.localBranches} — a literal `[]` default
  * would be a fresh reference each render and churn referential equality. */
 const NO_BRANCHES: string[] = [];
+const NO_REBASE_EVENTS: GitRebaseReflogEventDTO[] = [];
 
 /**
  * Three-dots (kebab) menu for a commit row in the graph — the app-standard
@@ -76,6 +81,8 @@ export function CommitActionsMenu({
   effectiveThreadId,
   projectModeId,
   localBranches = NO_BRANCHES,
+  rebaseEvents = NO_REBASE_EVENTS,
+  onSelectRebaseEvent,
   onAfterAction,
   onOpenChange,
   triggerClassName,
@@ -105,6 +112,16 @@ export function CommitActionsMenu({
         ),
       () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
     );
+  const primaryRebaseEvent = rebaseEvents[0] ?? null;
+  const rebaseScopeLabel = primaryRebaseEvent ? rebaseEventScopeLabel(primaryRebaseEvent) : null;
+  const rebaseMenuLabel = primaryRebaseEvent
+    ? rebaseEvents.length > 1
+      ? t('graph.viewRebaseDetailsCount', {
+          count: rebaseEvents.length,
+          defaultValue: `View rebase details (${rebaseEvents.length})`,
+        })
+      : t('graph.viewRebaseDetails', 'View rebase details')
+    : null;
 
   return (
     <>
@@ -131,7 +148,7 @@ export function CommitActionsMenu({
         <DropdownMenuContent
           align="end"
           side="bottom"
-          className="w-52"
+          className="w-64"
           onClick={(e) => e.stopPropagation()}
         >
           <DropdownMenuItem
@@ -156,6 +173,23 @@ export function CommitActionsMenu({
               <ExternalLink className="icon-sm" />
               {t('history.viewOnGithub', 'View on GitHub')}
             </DropdownMenuItem>
+          )}
+          {primaryRebaseEvent && onSelectRebaseEvent && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  onSelectRebaseEvent(primaryRebaseEvent);
+                  handleOpenChange(false);
+                }}
+                data-testid={`graph-commit-menu-rebase-details-${shortHash}`}
+              >
+                <GitBranch className="icon-sm" />
+                <span className="min-w-0 truncate">
+                  {rebaseScopeLabel ? `${rebaseMenuLabel}: ${rebaseScopeLabel}` : rebaseMenuLabel}
+                </span>
+              </DropdownMenuItem>
+            </>
           )}
           {hasGitContext && (
             <>

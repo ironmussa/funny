@@ -7,11 +7,25 @@
  * (creating flag, telemetry, error handling); this file is React-free.
  */
 
-import type { ImageAttachment } from '@funny/shared';
+import type { ImageAttachment, Skill } from '@funny/shared';
 
 import { deriveToolLists, type ToolPermission } from '@/stores/settings-store';
 
 export type ThreadKind = 'scratch' | 'idle' | 'normal';
+export type ThreadMode = 'local' | 'worktree';
+
+export function getLeadingSlashCommand(prompt: string): string | undefined {
+  return prompt.match(/^\s*\/([A-Za-z0-9_:-]+)(?:\s|$)/)?.[1];
+}
+
+export function resolveSlashCommandThreadMode(
+  prompt: string,
+  skills: Pick<Skill, 'name' | 'threadMode'>[],
+): ThreadMode | undefined {
+  const command = getLeadingSlashCommand(prompt);
+  if (!command) return undefined;
+  return skills.find((skill) => skill.name === command)?.threadMode;
+}
 
 export interface FileRef {
   path: string;

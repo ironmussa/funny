@@ -1,6 +1,11 @@
 import { describe, test, expect } from 'vitest';
 
-import { buildThreadPayload, type BuildInput } from '../thread-payload';
+import {
+  buildThreadPayload,
+  getLeadingSlashCommand,
+  resolveSlashCommandThreadMode,
+  type BuildInput,
+} from '../thread-payload';
 
 function baseInput(overrides: Partial<BuildInput> = {}): BuildInput {
   return {
@@ -165,5 +170,21 @@ describe('buildThreadPayload', () => {
       if (result.kind !== 'normal') throw new Error('expected normal');
       expect('designId' in result.payload).toBe(false);
     });
+  });
+});
+
+describe('slash command thread mode metadata', () => {
+  test('extracts a leading slash command name', () => {
+    expect(getLeadingSlashCommand('/fix-linear https://linear.app/x')).toBe('fix-linear');
+    expect(getLeadingSlashCommand('  /opsx:apply change-1')).toBe('opsx:apply');
+    expect(getLeadingSlashCommand('please /fix-linear later')).toBeUndefined();
+  });
+
+  test('resolves worktree mode from slash command metadata', () => {
+    expect(
+      resolveSlashCommandThreadMode('/fix-linear GOL-123', [
+        { name: 'fix-linear', threadMode: 'worktree' },
+      ]),
+    ).toBe('worktree');
   });
 });

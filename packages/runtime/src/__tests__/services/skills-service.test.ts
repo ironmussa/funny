@@ -75,7 +75,9 @@ describe('listProjectCommands', () => {
       return [];
     });
     readFileSync.mockImplementation((path?: string) => {
-      if (path?.endsWith('/apply.md')) return '---\ndescription: Apply change\n---\n';
+      if (path?.endsWith('/apply.md')) {
+        return '---\ndescription: Apply change\nthread-mode: worktree\n---\n';
+      }
       return '';
     });
 
@@ -85,12 +87,14 @@ describe('listProjectCommands', () => {
         description: 'Apply change',
         source: 'project',
         scope: 'project',
+        threadMode: 'worktree',
       },
       {
         name: 'plain',
         description: '',
         source: 'project',
         scope: 'project',
+        threadMode: undefined,
       },
     ]);
   });

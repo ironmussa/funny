@@ -62,6 +62,8 @@ export interface AgentResource {
   hiddenReason?: AgentResourceHiddenReason;
   /** Only for `kind === 'slash-command'`. */
   commandTier?: CommandTier;
+  /** Preferred thread mode when this slash command starts a new thread. */
+  threadMode?: 'local' | 'worktree';
   scope?: 'global' | 'project';
   sourceUrl?: string;
   installedAt?: string;

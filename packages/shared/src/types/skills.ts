@@ -4,6 +4,7 @@ export interface Skill {
   name: string;
   description: string;
   source: string;
+  threadMode?: 'local' | 'worktree';
   sourceUrl?: string;
   installedAt?: string;
   updatedAt?: string;

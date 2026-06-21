@@ -214,10 +214,57 @@ describe('inferRebaseCopyLinks', () => {
       ],
     );
 
-    expect(links.map((link) => [link.sourceHash, link.targetHash, link.subject])).toEqual([
-      ['old-one', 'new-one', 'feature one'],
-      ['old-two', 'new-two', 'feature two'],
+    expect(
+      links.map((link) => [
+        link.sourceHash,
+        link.sourceShortHash,
+        link.targetHash,
+        link.targetShortHash,
+        link.subject,
+        link.sourceVisible,
+      ]),
+    ).toEqual([
+      ['old-one', 'old1', 'new-one', 'new1', 'feature one', true],
+      ['old-two', 'old2', 'new-two', 'new2', 'feature two', true],
     ]);
+  });
+
+  test('keeps links when the original commit only exists in reflog', () => {
+    const event = {
+      id: 'rebase-1',
+      kind: 'rebase' as const,
+      label: 'rebase',
+      branch: 'master',
+      onto: 'origin/master',
+      startedAt: '2026-06-20T19:51:20-06:00',
+      finishedAt: '2026-06-20T20:17:55-06:00',
+      startHash: 'base-hash',
+      startShortHash: 'base',
+      finishHash: 'new-one',
+      finishShortHash: 'new1',
+      completed: true,
+      steps: [],
+      commitHashes: ['new-one'],
+      commitPairs: [
+        {
+          originalHash: 'old-one',
+          originalShortHash: 'old1',
+          rebasedHash: 'new-one',
+          rebasedShortHash: 'new1',
+          subject: 'feature one',
+        },
+      ],
+    };
+
+    const links = inferRebaseCopyLinks([event], [{ hash: 'new-one' }, { hash: 'base-hash' }]);
+
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({
+      sourceHash: 'old-one',
+      targetHash: 'new-one',
+      subject: 'feature one',
+      sourceVisible: false,
+    });
   });
 });
 

@@ -623,13 +623,13 @@ function RebaseCopyLinksOverlay({
 
   const visibleLinks: Array<{
     link: RebaseCopyLink;
-    source: { top: number; nodeY: number; lane: number };
+    source: { top: number; nodeY: number; lane: number } | null;
     target: { top: number; nodeY: number; lane: number };
   }> = [];
   for (const link of links) {
     const source = rowsByHash.get(link.sourceHash);
     const target = rowsByHash.get(link.targetHash);
-    if (source && target) visibleLinks.push({ link, source, target });
+    if (target) visibleLinks.push({ link, source: source ?? null, target });
   }
   if (visibleLinks.length === 0) return null;
 
@@ -662,29 +662,41 @@ function RebaseCopyLinksOverlay({
         </marker>
       </defs>
       {visibleLinks.map(({ link, source, target }) => {
-        const x1 = rebaseLinkNodeEdgeX(source.lane);
-        const y1 = source.top + source.nodeY;
-        const x2 = rebaseLinkNodeEdgeX(target.lane);
         const y2 = target.top + target.nodeY;
+        const x1 = source ? rebaseLinkNodeEdgeX(source.lane) : railX;
+        const y1 = source ? source.top + source.nodeY : y2;
+        const x2 = rebaseLinkNodeEdgeX(target.lane);
         return (
-          <path
-            key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}
-            d={roundedRebaseCopyLinkPath({
-              sourceX: x1,
-              sourceY: y1,
-              targetX: x2,
-              targetY: y2,
-              railX,
-            })}
-            fill="none"
-            stroke="var(--terminal-yellow)"
-            strokeWidth={1.4}
-            strokeDasharray="3 3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            markerEnd={`url(#${markerId})`}
-            opacity={0.9}
-          />
+          <g key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}>
+            {!source && (
+              <circle
+                cx={railX}
+                cy={y2}
+                r="3.5"
+                fill="var(--background)"
+                stroke="var(--terminal-yellow)"
+                strokeWidth={1.4}
+                opacity={0.9}
+              />
+            )}
+            <path
+              d={roundedRebaseCopyLinkPath({
+                sourceX: x1,
+                sourceY: y1,
+                targetX: x2,
+                targetY: y2,
+                railX,
+              })}
+              fill="none"
+              stroke="var(--terminal-yellow)"
+              strokeWidth={1.4}
+              strokeDasharray="3 3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              markerEnd={`url(#${markerId})`}
+              opacity={0.9}
+            />
+          </g>
         );
       })}
     </svg>

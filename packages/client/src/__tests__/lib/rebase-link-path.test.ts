@@ -27,4 +27,16 @@ describe('rebase-link-path', () => {
     expect(path).toBe('M 50 100 L 82 100 Q 90 100 90 92 L 90 28 Q 90 20 82 20 L 40 20');
     expect(path).not.toContain(' C ');
   });
+
+  test('routes reflog-only source links from the rail to the visible commit', () => {
+    const path = roundedRebaseCopyLinkPath({
+      sourceX: 90,
+      sourceY: 20,
+      targetX: 40,
+      targetY: 20,
+      railX: 90,
+    });
+
+    expect(path).toBe('M 90 20 L 90 20 L 90 20 L 40 20');
+  });
 });

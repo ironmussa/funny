@@ -10,9 +10,10 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getFileExtension } from '@/hooks/use-highlight';
-import { useRightPaneProjectId } from '@/hooks/use-right-pane-target';
+import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { useThreadById } from '@/lib/thread-selectors';
 import { getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
@@ -54,6 +55,8 @@ export function ProjectFilesPane() {
   const { t } = useTranslation();
   const designViewDesignId = useUIStore((s) => s.designViewDesignId);
   const selectedProjectId = useRightPaneProjectId();
+  const selectedThreadId = useRightPaneThreadId();
+  const lightThread = useThreadById(selectedThreadId);
   const projects = useProjectStore((s) => s.projects);
   const project = projects.find((p) => p.id === selectedProjectId);
   const activeThreadWorktreePath = useThreadWorktreePath();
@@ -62,8 +65,8 @@ export function ProjectFilesPane() {
     if (designViewDesignId && project?.path) {
       return `${project.path}/designs/${designViewDesignId}`;
     }
-    return activeThreadWorktreePath || project?.path;
-  }, [designViewDesignId, project?.path, activeThreadWorktreePath]);
+    return activeThreadWorktreePath || lightThread?.worktreePath || project?.path;
+  }, [designViewDesignId, project?.path, activeThreadWorktreePath, lightThread?.worktreePath]);
 
   const [files, setFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);

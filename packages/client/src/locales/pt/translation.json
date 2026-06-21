@@ -4,10 +4,10 @@
     "subtitle": "Agentes Claude Code em Paralelo"
   },
   "powerline": {
-    "tooltipLocalBranch": "Local — compartilha o diretório do projeto",
-    "tooltipBaseBranch": "Branch base",
-    "tooltipWorktree": "Worktree isolado",
-    "tooltipWorktreeWithPath": "Worktree isolado em {{path}}"
+    "tooltipLocalBranch": "Branch local: {{branch}}",
+    "tooltipBaseBranch": "Branch base: {{branch}}",
+    "tooltipWorktree": "Branch do worktree: {{branch}}",
+    "tooltipWorktreeWithPath": "Branch do worktree: {{branch}} — {{path}}"
   },
   "sidebar": {
     "projects": "Projetos",
@@ -979,6 +979,7 @@
     "attach": "Anexar arquivo",
     "stopAgent": "Parar agente",
     "loadingSkills": "Carregando skills...",
+    "loadingCommands": "Carregando comandos...",
     "backlog": "Backlog",
     "sendToBacklog": "Enviar para o backlog em vez de executar imediatamente",
     "loadingFiles": "Carregando arquivos...",

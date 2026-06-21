@@ -8,7 +8,18 @@ import { renderWithProviders } from '../helpers/render';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, values?: Record<string, string>) => {
+      const templates: Record<string, string> = {
+        'powerline.tooltipLocalBranch': 'Local branch: {{branch}}',
+        'powerline.tooltipBaseBranch': 'Base branch: {{branch}}',
+        'powerline.tooltipWorktree': 'Worktree branch: {{branch}}',
+        'powerline.tooltipWorktreeWithPath': 'Worktree branch: {{branch}} — {{path}}',
+      };
+      return Object.entries(values ?? {}).reduce(
+        (message, [name, value]) => message.replaceAll(`{{${name}}}`, value),
+        templates[key] ?? key,
+      );
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -104,5 +115,44 @@ describe('ThreadPowerline', () => {
 
     expect(screen.getByTestId('powerline-segment-branch')).toHaveTextContent('master');
     expect(screen.queryByTestId('powerline-segment-worktree-branch')).not.toBeInTheDocument();
+  });
+
+  test('local branch tooltip includes the full branch name', async () => {
+    const branch = 'goliiive/v2/argenisleon/gol-782-seclow-d4-s3-key-injection-via-typ';
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({ mode: 'local', baseBranch: branch })}
+        projectName="goliiive-v2"
+      />,
+    );
+
+    fireEvent.pointerMove(screen.getByTestId('powerline-segment-branch'), {
+      pointerType: 'mouse',
+    });
+
+    expect(await screen.findAllByText(`Local branch: ${branch}`)).not.toHaveLength(0);
+  });
+
+  test('worktree branch tooltip includes the full branch name', async () => {
+    const branch = 'goliiive-v2/argenisleon/gol-782-seclow-d4-s3-key-injection-via-typ';
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({
+          mode: 'worktree',
+          baseBranch: 'main',
+          branch,
+          worktreePath: '/home/user/.funny-worktrees/goliiive-v2-worktree',
+        })}
+        projectName="goliiive-v2"
+      />,
+    );
+
+    fireEvent.pointerMove(screen.getByTestId('powerline-segment-worktree-branch'), {
+      pointerType: 'mouse',
+    });
+
+    expect(
+      await screen.findAllByText(`Worktree branch: ${branch} — goliiive-v2-worktree`),
+    ).not.toHaveLength(0);
   });
 });

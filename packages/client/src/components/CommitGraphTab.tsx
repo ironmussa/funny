@@ -11,7 +11,7 @@ import {
   Search,
   Tag,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -20,6 +20,7 @@ import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
@@ -27,9 +28,10 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
-import type { GraphRefDTO } from '@/lib/api/git';
+import type { GitRebaseReflogEventDTO, GraphRefDTO } from '@/lib/api/git';
 import { authorAvatarUrl } from '@/lib/author-avatar';
 import { useCachedAvatar } from '@/lib/avatar-cache';
 import { createClientLogger } from '@/lib/client-logger';
@@ -41,12 +43,17 @@ import {
 } from '@/lib/github-url';
 import { graphLanePastel } from '@/lib/graph-colors';
 import { foldGraphRefs, inferUnpulledHashesFromGraphEntries } from '@/lib/graph-refs';
+import {
+  indexRebaseEventsByHash,
+  inferRebaseCopyLinks,
+  rebaseEventScopeLabel,
+  type RebaseCopyLink,
+} from '@/lib/rebase-events';
+import { rebaseCopyLinkRailX, roundedRebaseCopyLinkPath } from '@/lib/rebase-link-path';
 import { metric } from '@/lib/telemetry';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
-import { useProjectStore } from '@/stores/project-store';
 import { useThreadProjectId } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('commit-graph');
@@ -78,12 +85,21 @@ const PAGE_SIZE = 80;
 const TITLE_PX = 10.5;
 const META_PX = 10;
 const MAX_GUTTER_LANES = 12;
+const REBASE_LINK_RAIL_WIDTH = 32;
 // Upper bound on how many commits the active-filter background pager will pull
 // in, so filtering a huge repo can't page the entire history into memory.
 const FILTER_MAX_SCAN = 2000;
 
 interface CommitGraphTabProps {
   visible?: boolean;
+}
+
+function graphNodeX(lane: number): number {
+  return 12 + lane * LANE_WIDTH + LANE_WIDTH / 2;
+}
+
+function rebaseLinkNodeEdgeX(lane: number): number {
+  return graphNodeX(lane) + LANE_WIDTH / 2 + 2;
 }
 
 /**
@@ -112,8 +128,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     (e: GraphEntry) => (e.refs.length > 0 ? refsRowH : baseRowH),
     [baseRowH, refsRowH],
   );
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const effectiveThreadId = useThreadStore((s) => s.selectedThreadId) || undefined;
+  const selectedProjectId = useRightPaneProjectId();
+  const effectiveThreadId = useRightPaneThreadId() || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const threadProjectId = useThreadProjectId();
   const hasGitContext = !!(effectiveThreadId || projectModeId);
@@ -125,6 +141,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
   const [unpulled, setUnpulled] = useState<Set<string>>(new Set());
+  const [rebaseEvents, setRebaseEvents] = useState<GitRebaseReflogEventDTO[]>([]);
+  const [selectedRebaseEvent, setSelectedRebaseEvent] = useState<GitRebaseReflogEventDTO | null>(
+    null,
+  );
   const [githubAvatarBySha, setGithubAvatarBySha] = useState<Map<string, string>>(new Map());
   const avatarByEmail = useEmailAvatars(entries);
   const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
@@ -222,25 +242,46 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     setHasMore(false);
     setUnpushed(new Set());
     setUnpulled(new Set());
+    setRebaseEvents([]);
+    setSelectedRebaseEvent(null);
     // Drop the filter query — it belongs to the old context.
     setSearchQuery('');
     if (visible && hasGitContext) {
       loadedRef.current = true;
       loadLog(0, false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only on context change
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps -- intentionally only on context change
   }, [gitContextKey]);
 
   // Load on first reveal if the tab mounted while hidden.
   useEffect(() => {
     if (visible && hasGitContext && !loadedRef.current) {
       loadedRef.current = true;
+      // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- first reveal intentionally triggers the initial graph fetch once.
       loadLog(0, false);
     }
   }, [visible, hasGitContext, loadLog]);
 
+  useEffect(() => {
+    if (!visible || !hasGitContext) return;
+    const controller = new AbortController();
+    const request = effectiveThreadId
+      ? api.getReflogEvents(effectiveThreadId, controller.signal)
+      : api.projectReflogEvents(projectModeId!, controller.signal);
+    request.then((result) => {
+      if (controller.signal.aborted) return;
+      if (result.isOk()) {
+        setRebaseEvents(result.value.events);
+      } else if (result.error.message !== 'Request aborted') {
+        log.warn('reflog-events load failed', { error: result.error.message });
+        setRebaseEvents([]);
+      }
+    });
+    return () => controller.abort();
+  }, [visible, hasGitContext, effectiveThreadId, projectModeId]);
+
   // Resolve the GitHub browse base URL so commit hashes can deep-link.
-  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
+  const remoteCheckProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
   useEffect(() => {
     if (!remoteCheckProjectId) {
       setGithubBrowseBaseUrl(null);
@@ -263,7 +304,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
 
   // Walk the GitHub commit-author endpoint, anchored at the first uncovered SHA,
   // to fill in avatar URLs (same strategy as the History list).
-  const ghProjectId = projectModeId ?? threadProjectId ?? null;
+  const ghProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
   useEffect(() => {
     if (!ghProjectId || entries.length === 0) return;
     const firstMissing = entries.find(
@@ -298,6 +339,11 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     [entries, searchQuery, isFiltering],
   );
   const inferredUnpulled = useMemo(() => inferUnpulledHashesFromGraphEntries(entries), [entries]);
+  const rebaseEventsByHash = useMemo(() => indexRebaseEventsByHash(rebaseEvents), [rebaseEvents]);
+  const rebaseCopyLinks = useMemo(
+    () => (isFiltering ? [] : inferRebaseCopyLinks(rebaseEvents, displayEntries)),
+    [displayEntries, isFiltering, rebaseEvents],
+  );
 
   const layout = useMemo(() => {
     // While filtering, the surviving commits are no longer contiguous in topo
@@ -321,7 +367,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     );
   }, [displayEntries, isFiltering]);
   const laneCount = Math.min(layout.laneCount, MAX_GUTTER_LANES);
-  const gutterWidth = laneCount * LANE_WIDTH;
+  const laneGutterWidth = laneCount * LANE_WIDTH;
+  const rebaseRailWidth = rebaseCopyLinks.length > 0 ? REBASE_LINK_RAIL_WIDTH : 0;
+  const gutterWidth = laneGutterWidth + rebaseRailWidth;
 
   // Working-tree status drives the WIP "Uncommitted changes" node above the list
   // and the dashed stub that ties the HEAD row up to it. Lifted here (rather than
@@ -445,6 +493,14 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
               position: 'relative',
             }}
           >
+            <RebaseCopyLinksOverlay
+              links={rebaseCopyLinks}
+              entries={displayEntries}
+              layoutRows={layout.rows}
+              laneGutterWidth={laneGutterWidth}
+              gutterWidth={gutterWidth}
+              rowHeightFor={rowHeightFor}
+            />
             {virtualItems.map((virtualRow) => {
               if (virtualRow.index >= displayEntries.length) {
                 return (
@@ -486,6 +542,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   effectiveThreadId={effectiveThreadId}
                   projectModeId={projectModeId}
                   onAfterAction={refreshLog}
+                  rebaseEvents={rebaseEventsByHash.get(entry.hash) ?? []}
+                  onSelectRebaseEvent={setSelectedRebaseEvent}
                   unpushed={unpushed.has(entry.hash)}
                   unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
@@ -509,7 +567,127 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         onClose={() => setSelectedHash(null)}
         onAfterAction={refreshLog}
       />
+      <RebaseEventDialog event={selectedRebaseEvent} onClose={() => setSelectedRebaseEvent(null)} />
     </div>
+  );
+}
+
+function nodeYForRow(entry: Pick<GraphEntry, 'refs'>, rowHeight: number): number {
+  if (entry.refs.length === 0) return rowHeight / 2;
+  const chipLineH = META_PX + 5;
+  const titleLineH = Math.round(TITLE_PX * 1.5);
+  const refsContentH = chipLineH + 6 + titleLineH;
+  return (rowHeight - refsContentH) / 2 + chipLineH / 2;
+}
+
+function RebaseCopyLinksOverlay({
+  links,
+  entries,
+  layoutRows,
+  laneGutterWidth,
+  gutterWidth,
+  rowHeightFor,
+}: {
+  links: RebaseCopyLink[];
+  entries: GraphEntry[];
+  layoutRows: GraphRow[];
+  laneGutterWidth: number;
+  gutterWidth: number;
+  rowHeightFor: (entry: GraphEntry) => number;
+}) {
+  const markerId = useId();
+  if (links.length === 0) return null;
+
+  let nextTop = 0;
+  const rowsByHash = new Map<
+    string,
+    {
+      top: number;
+      nodeY: number;
+      lane: number;
+    }
+  >();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const row = layoutRows[index];
+    const height = rowHeightFor(entry);
+    if (row) {
+      rowsByHash.set(entry.hash, {
+        top: nextTop,
+        nodeY: nodeYForRow(entry, height),
+        lane: row.commitLane,
+      });
+    }
+    nextTop += height;
+  }
+
+  const visibleLinks: Array<{
+    link: RebaseCopyLink;
+    source: { top: number; nodeY: number; lane: number };
+    target: { top: number; nodeY: number; lane: number };
+  }> = [];
+  for (const link of links) {
+    const source = rowsByHash.get(link.sourceHash);
+    const target = rowsByHash.get(link.targetHash);
+    if (source && target) visibleLinks.push({ link, source, target });
+  }
+  if (visibleLinks.length === 0) return null;
+
+  const railX = rebaseCopyLinkRailX({
+    laneGutterWidth,
+    railWidth: REBASE_LINK_RAIL_WIDTH,
+  });
+  const width = Math.max(gutterWidth + 12, LANE_WIDTH * 4);
+
+  return (
+    <svg
+      className="pointer-events-none absolute top-0 left-0"
+      style={{ width, height: nextTop, overflow: 'visible' }}
+      width={width}
+      height={nextTop}
+      aria-hidden="true"
+      data-testid="graph-rebase-copy-links"
+    >
+      <defs>
+        <marker
+          id={markerId}
+          markerWidth="6"
+          markerHeight="6"
+          refX="5"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path d="M 0 0 L 6 3 L 0 6 z" fill="var(--terminal-yellow)" />
+        </marker>
+      </defs>
+      {visibleLinks.map(({ link, source, target }) => {
+        const x1 = rebaseLinkNodeEdgeX(source.lane);
+        const y1 = source.top + source.nodeY;
+        const x2 = rebaseLinkNodeEdgeX(target.lane);
+        const y2 = target.top + target.nodeY;
+        return (
+          <path
+            key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}
+            d={roundedRebaseCopyLinkPath({
+              sourceX: x1,
+              sourceY: y1,
+              targetX: x2,
+              targetY: y2,
+              railX,
+            })}
+            fill="none"
+            stroke="var(--terminal-yellow)"
+            strokeWidth={1.4}
+            strokeDasharray="3 3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            markerEnd={`url(#${markerId})`}
+            opacity={0.9}
+          />
+        );
+      })}
+    </svg>
   );
 }
 
@@ -686,6 +864,8 @@ function GraphCommitRow({
   effectiveThreadId,
   projectModeId,
   onAfterAction,
+  rebaseEvents,
+  onSelectRebaseEvent,
   unpushed,
   unpulled,
   connectToWip,
@@ -704,6 +884,8 @@ function GraphCommitRow({
   effectiveThreadId: string | undefined;
   projectModeId: string | null;
   onAfterAction: () => void;
+  rebaseEvents: GitRebaseReflogEventDTO[];
+  onSelectRebaseEvent: (event: GitRebaseReflogEventDTO) => void;
   unpushed: boolean;
   unpulled: boolean;
   /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
@@ -840,8 +1022,7 @@ function GraphCommitRow({
   const hasRefs = refSegments.length > 0;
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
-  const refsContentH = chipLineH + 6 + titleLineH;
-  const chipCenterY = (rowHeight - refsContentH) / 2 + chipLineH / 2;
+  const chipCenterY = nodeYForRow(entry, rowHeight);
   const nodeYFrac = hasRefs ? chipCenterY / rowHeight : 0.5;
 
   return (
@@ -983,6 +1164,13 @@ function GraphCommitRow({
               query={searchQuery}
               className="text-foreground min-w-0 flex-1 truncate text-xs leading-tight font-medium"
             />
+            {rebaseEvents.length > 0 && (
+              <RebaseEventMarker
+                event={rebaseEvents[0]}
+                count={rebaseEvents.length}
+                onSelect={onSelectRebaseEvent}
+              />
+            )}
           </div>
         </div>
         {/* Time ↔ kebab swap (same component as the sidebar thread rows): the
@@ -1008,6 +1196,156 @@ function GraphCommitRow({
         </HoverTimeMenu>
       </div>
     </div>
+  );
+}
+
+function RebaseEventMarker({
+  event,
+  count,
+  onSelect,
+}: {
+  event: GitRebaseReflogEventDTO;
+  count: number;
+  onSelect: (event: GitRebaseReflogEventDTO) => void;
+}) {
+  const { t } = useTranslation();
+  const label = t('graph.rebaseEvent', 'Rebase event');
+  const scopeLabel = rebaseEventScopeLabel(event);
+  const displayLabel = scopeLabel ?? label;
+  const accessibleLabel = scopeLabel ? `${label}: ${scopeLabel}` : label;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={accessibleLabel}
+          className="border-sidebar-border bg-muted/60 text-muted-foreground hover:bg-accent hover:text-foreground inline-flex h-5 max-w-[180px] shrink-0 items-center gap-1 rounded border px-1.5 text-[10px] leading-none"
+          data-testid={`graph-rebase-event-${event.finishShortHash ?? event.startShortHash ?? 'open'}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(event);
+          }}
+        >
+          <GitBranch className="icon-xs" />
+          <span className="min-w-0 truncate">
+            {count > 1 ? `${displayLabel} +${count - 1}` : displayLabel}
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {event.completed
+          ? t('graph.rebaseCompletedTooltip', {
+              branch: event.branch ?? '',
+              onto: event.onto ?? '',
+              defaultValue: scopeLabel
+                ? `Rebased ${scopeLabel}`
+                : 'Rebase completed from local reflog',
+            })
+          : t('graph.rebaseIncompleteTooltip', 'Rebase event from local reflog')}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function RebaseEventDialog({
+  event,
+  onClose,
+}: {
+  event: GitRebaseReflogEventDTO | null;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Dialog open={!!event} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-h-[80vh] max-w-2xl overflow-hidden p-0"
+        data-testid="rebase-event-dialog"
+      >
+        {event &&
+          (() => {
+            const commitPairs = event.commitPairs ?? [];
+            const replayedCount = commitPairs.length || event.commitHashes.length;
+            return (
+              <div className="flex max-h-[80vh] min-h-0 flex-col">
+                <div className="border-sidebar-border border-b px-4 py-3">
+                  <DialogTitle className="text-sm leading-tight font-semibold">
+                    {t('graph.rebaseDetailsTitle', 'Rebase details')}
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground mt-1 text-xs">
+                    {event.completed
+                      ? t('graph.rebaseDetailsDescription', {
+                          count: replayedCount,
+                          defaultValue: `${replayedCount} commits replayed from local reflog`,
+                        })
+                      : t(
+                          'graph.rebaseDetailsIncomplete',
+                          'Partial rebase details from local reflog',
+                        )}
+                  </DialogDescription>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-auto px-4 py-3 text-xs">
+                  <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2">
+                    <dt className="text-muted-foreground">{t('graph.rebaseBranch', 'Branch')}</dt>
+                    <dd className="font-mono">{event.branch ?? '-'}</dd>
+                    <dt className="text-muted-foreground">{t('graph.rebaseOnto', 'Onto')}</dt>
+                    <dd className="font-mono">{event.onto ?? '-'}</dd>
+                    <dt className="text-muted-foreground">{t('graph.rebaseStarted', 'Started')}</dt>
+                    <dd className="font-mono">{event.startedAt ?? '-'}</dd>
+                    <dt className="text-muted-foreground">
+                      {t('graph.rebaseFinished', 'Finished')}
+                    </dt>
+                    <dd className="font-mono">{event.finishedAt ?? '-'}</dd>
+                    <dt className="text-muted-foreground">{t('graph.rebaseBefore', 'Before')}</dt>
+                    <dd className="font-mono">{event.startShortHash ?? '-'}</dd>
+                    <dt className="text-muted-foreground">{t('graph.rebaseAfter', 'After')}</dt>
+                    <dd className="font-mono">{event.finishShortHash ?? '-'}</dd>
+                  </dl>
+
+                  {commitPairs.length > 0 && (
+                    <div className="border-sidebar-border mt-4 border-t pt-3">
+                      <div className="text-muted-foreground mb-2 text-[10px] font-medium uppercase">
+                        {t('graph.rebaseCommitPairs', 'Rewritten commits')}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {commitPairs.map((pair) => (
+                          <div
+                            key={`${pair.originalHash}:${pair.rebasedHash}`}
+                            className="bg-muted/40 grid grid-cols-[80px_16px_80px_minmax(0,1fr)] items-center gap-2 rounded px-2 py-1.5"
+                          >
+                            <span className="font-mono">{pair.originalShortHash}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="font-mono">{pair.rebasedShortHash}</span>
+                            <span className="truncate">{pair.subject}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-sidebar-border mt-4 border-t pt-3">
+                    <div className="text-muted-foreground mb-2 text-[10px] font-medium uppercase">
+                      {t('graph.rebaseSteps', 'Reflog steps')}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {event.steps.map((step) => (
+                        <div
+                          key={`${step.selector}:${step.action}:${step.hash}`}
+                          className="bg-muted/40 grid grid-cols-[72px_88px_minmax(0,1fr)] gap-2 rounded px-2 py-1.5"
+                        >
+                          <span className="font-mono">{step.shortHash}</span>
+                          <span className="text-muted-foreground">{step.action}</span>
+                          <span className="truncate">{step.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+      </DialogContent>
+    </Dialog>
   );
 }
 

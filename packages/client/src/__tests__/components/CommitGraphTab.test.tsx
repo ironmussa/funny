@@ -3,6 +3,11 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { GraphCommitTime } from '@/components/CommitGraphTab';
 import { inferUnpulledHashesFromGraphEntries } from '@/lib/graph-refs';
+import {
+  indexRebaseEventsByHash,
+  inferRebaseCopyLinks,
+  rebaseEventScopeLabel,
+} from '@/lib/rebase-events';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -103,5 +108,129 @@ describe('inferUnpulledHashesFromGraphEntries', () => {
     ]);
 
     expect([...inferred]).toEqual([]);
+  });
+});
+
+describe('indexRebaseEventsByHash', () => {
+  test('indexes replayed, start, and finish commits for graph decoration', () => {
+    const indexed = indexRebaseEventsByHash([
+      {
+        id: 'rebase-1',
+        kind: 'rebase',
+        label: 'rebase',
+        branch: 'feature',
+        onto: 'main',
+        startedAt: '2026-06-20T19:51:20-06:00',
+        finishedAt: '2026-06-20T20:17:55-06:00',
+        startHash: 'base-hash',
+        startShortHash: 'base',
+        finishHash: 'tip-hash',
+        finishShortHash: 'tip',
+        completed: true,
+        steps: [],
+        commitHashes: ['replayed-one', 'tip-hash'],
+        commitPairs: [
+          {
+            originalHash: 'original-one',
+            originalShortHash: 'orig1',
+            rebasedHash: 'replayed-one',
+            rebasedShortHash: 'new1',
+            subject: 'feature one',
+          },
+        ],
+      },
+    ]);
+
+    expect(indexed.get('base-hash')?.[0].id).toBe('rebase-1');
+    expect(indexed.get('original-one')?.[0].id).toBe('rebase-1');
+    expect(indexed.get('replayed-one')?.[0].id).toBe('rebase-1');
+    expect(indexed.get('tip-hash')?.[0].id).toBe('rebase-1');
+    expect(indexed.has('unrelated')).toBe(false);
+  });
+});
+
+describe('inferRebaseCopyLinks', () => {
+  test('uses server-provided original to replayed commit pairs', () => {
+    const event = {
+      id: 'rebase-1',
+      kind: 'rebase' as const,
+      label: 'rebase',
+      branch: 'feature',
+      onto: 'main',
+      startedAt: '2026-06-20T19:51:20-06:00',
+      finishedAt: '2026-06-20T20:17:55-06:00',
+      startHash: 'base-hash',
+      startShortHash: 'base',
+      finishHash: 'new-three',
+      finishShortHash: 'new3',
+      completed: true,
+      steps: [
+        {
+          hash: 'new-one',
+          shortHash: 'new1',
+          selector: 'HEAD@{1}',
+          timestamp: '2026-06-20T20:00:00-06:00',
+          action: 'pick' as const,
+          message: 'feature one',
+          subject: 'rebase (pick): feature one',
+        },
+        {
+          hash: 'new-two',
+          shortHash: 'new2',
+          selector: 'HEAD@{2}',
+          timestamp: '2026-06-20T20:01:00-06:00',
+          action: 'pick' as const,
+          message: 'feature two',
+          subject: 'rebase (pick): feature two',
+        },
+      ],
+      commitHashes: ['new-one', 'new-two', 'new-three'],
+      commitPairs: [
+        {
+          originalHash: 'old-one',
+          originalShortHash: 'old1',
+          rebasedHash: 'new-one',
+          rebasedShortHash: 'new1',
+          subject: 'feature one',
+        },
+        {
+          originalHash: 'old-two',
+          originalShortHash: 'old2',
+          rebasedHash: 'new-two',
+          rebasedShortHash: 'new2',
+          subject: 'feature two',
+        },
+      ],
+    };
+
+    const links = inferRebaseCopyLinks(
+      [event],
+      [
+        { hash: 'new-two' },
+        { hash: 'new-one' },
+        { hash: 'base-hash' },
+        { hash: 'old-two' },
+        { hash: 'old-one' },
+      ],
+    );
+
+    expect(links.map((link) => [link.sourceHash, link.targetHash, link.subject])).toEqual([
+      ['old-one', 'new-one', 'feature one'],
+      ['old-two', 'new-two', 'feature two'],
+    ]);
+  });
+});
+
+describe('rebaseEventScopeLabel', () => {
+  test('shows the branch and target when Git recorded both sides of the rebase', () => {
+    expect(rebaseEventScopeLabel({ branch: 'feature/auth', onto: 'main' })).toBe(
+      'feature/auth -> main',
+    );
+  });
+
+  test('falls back to the available side when reflog data is partial', () => {
+    expect(rebaseEventScopeLabel({ branch: 'feature/auth', onto: null })).toBe('feature/auth');
+    expect(rebaseEventScopeLabel({ branch: null, onto: 'main' })).toBe('onto main');
+    expect(rebaseEventScopeLabel({ branch: null, onto: null })).toBeNull();
   });
 });

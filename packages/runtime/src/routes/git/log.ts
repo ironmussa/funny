@@ -12,6 +12,7 @@ import {
   getCommitBody,
   getCommitFiles,
   getCommitFileDiff,
+  getUnpulledHashes,
 } from '@funny/core/git';
 import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
@@ -60,12 +61,14 @@ function parseLogPaging(c: Context<HonoEnv>): { limit: number; skip: number } {
 export function buildLogPayload<E extends { hash: string }>(
   entries: E[],
   unpushedSet: Set<string>,
+  unpulledSet: Set<string>,
   limit: number,
-): { entries: E[]; hasMore: boolean; unpushedHashes: string[] } {
+): { entries: E[]; hasMore: boolean; unpushedHashes: string[]; unpulledHashes: string[] } {
   const hasMore = entries.length > limit;
   const trimmed = hasMore ? entries.slice(0, limit) : entries;
   const unpushedHashes = trimmed.filter((e) => unpushedSet.has(e.hash)).map((e) => e.hash);
-  return { entries: trimmed, hasMore, unpushedHashes };
+  const unpulledHashes = trimmed.filter((e) => unpulledSet.has(e.hash)).map((e) => e.hash);
+  return { entries: trimmed, hasMore, unpushedHashes, unpulledHashes };
 }
 
 /** Run a Result-returning log fetch inside a request span, recording ok/error on the span. */
@@ -106,15 +109,39 @@ async function fetchUnpushedSpanned(
   return r.value;
 }
 
+/**
+ * Fetch the set of incoming commit hashes inside a request span. Like unpushed
+ * badges, this is accessory metadata and degrades to an empty set on failure.
+ */
+async function fetchUnpulledSpanned(
+  c: Context<HonoEnv>,
+  cwd: string,
+  attrs: Record<string, unknown>,
+): Promise<Set<string>> {
+  const span = requestSpan(c, 'git.unpulled_hashes', attrs);
+  const r = await getUnpulledHashes(cwd);
+  span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+  if (r.isErr()) {
+    log.warn('getUnpulledHashes failed; treating as no unpulled commits', {
+      namespace: 'git-log-route',
+      error: r.error.message,
+      ...attrs,
+    });
+    return new Set<string>();
+  }
+  return r.value;
+}
+
 /** Send the shared log response, or convert an upstream error into an HTTP response. */
 function respondWithLog<E extends { hash: string }>(
   c: Context<HonoEnv>,
   result: Result<E[], DomainError>,
   unpushedSet: Set<string>,
+  unpulledSet: Set<string>,
   limit: number,
 ) {
   if (result.isErr()) return resultToResponse(c, result);
-  return c.json(buildLogPayload(result.value, unpushedSet, limit));
+  return c.json(buildLogPayload(result.value, unpushedSet, unpulledSet, limit));
 }
 
 // ─── Project-scoped routes ──────────────────────────────
@@ -128,11 +155,12 @@ logRoutes.get('/project/:projectId/log', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const { limit, skip } = parseLogPaging(c);
-  const [result, unpushedSet] = await Promise.all([
+  const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.log', { projectId }, () => getLog(cwd, limit + 1, undefined, skip)),
     fetchUnpushedSpanned(c, cwd, { projectId }),
+    fetchUnpulledSpanned(c, cwd, { projectId }),
   ]);
-  return respondWithLog(c, result, unpushedSet, limit);
+  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
 });
 
 // GET /api/git/project/:projectId/graph-log — topology-aware log (parents + refs)
@@ -145,13 +173,14 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   const cwd = cwdResult.value;
   const { limit, skip } = parseLogPaging(c);
   const all = c.req.query('all') !== 'false';
-  const [result, unpushedSet] = await Promise.all([
+  const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { projectId }, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all }),
     ),
     fetchUnpushedSpanned(c, cwd, { projectId }),
+    fetchUnpulledSpanned(c, cwd, { projectId }),
   ]);
-  return respondWithLog(c, result, unpushedSet, limit);
+  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
 });
 
 // GET /api/git/project/:projectId/commit/:hash/files
@@ -225,11 +254,12 @@ logRoutes.get('/:threadId/log', async (c) => {
   const { limit, skip } = parseLogPaging(c);
   const all = c.req.query('all') === 'true';
   const baseBranch = all ? undefined : thread.baseBranch;
-  const [result, unpushedSet] = await Promise.all([
+  const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.log', { threadId }, () => getLog(cwd, limit + 1, baseBranch, skip)),
     fetchUnpushedSpanned(c, cwd, { threadId }),
+    fetchUnpulledSpanned(c, cwd, { threadId }),
   ]);
-  return respondWithLog(c, result, unpushedSet, limit);
+  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
 });
 
 // GET /api/git/:threadId/graph-log — topology-aware log (parents + refs)
@@ -248,13 +278,14 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const { limit, skip } = parseLogPaging(c);
   // Graph view defaults to all refs so divergent branches show; opt out with all=false.
   const all = c.req.query('all') !== 'false';
-  const [result, unpushedSet] = await Promise.all([
+  const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { threadId }, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all }),
     ),
     fetchUnpushedSpanned(c, cwd, { threadId }),
+    fetchUnpulledSpanned(c, cwd, { threadId }),
   ]);
-  return respondWithLog(c, result, unpushedSet, limit);
+  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
 });
 
 // GET /api/git/:threadId/commit/:hash/files

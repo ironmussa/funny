@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
+  ArrowDownCircle,
   ArrowUpCircle,
   Cloud,
   CloudCheck,
@@ -39,7 +40,7 @@ import {
   githubCommitUrlForRemoteCommit,
 } from '@/lib/github-url';
 import { graphLanePastel } from '@/lib/graph-colors';
-import { foldGraphRefs } from '@/lib/graph-refs';
+import { foldGraphRefs, inferUnpulledHashesFromGraphEntries } from '@/lib/graph-refs';
 import { metric } from '@/lib/telemetry';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -123,6 +124,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [allBranches, setAllBranches] = useState(true);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
+  const [unpulled, setUnpulled] = useState<Set<string>>(new Set());
   const [githubAvatarBySha, setGithubAvatarBySha] = useState<Map<string, string>>(new Map());
   const avatarByEmail = useEmailAvatars(entries);
   const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
@@ -160,7 +162,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       }
       let out: { entries: GraphEntry[]; hasMore: boolean } | null = null;
       if (result.isOk()) {
-        const { entries: next, hasMore: more, unpushedHashes } = result.value;
+        const { entries: next, hasMore: more, unpushedHashes, unpulledHashes = [] } = result.value;
         const merged = append ? [...entriesRef.current, ...next] : next;
         // Keep the synchronous mirror current so the next append builds on the
         // freshly-loaded page without waiting for a React re-render.
@@ -171,6 +173,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           if (!append) return new Set(unpushedHashes);
           const updated = new Set(prev);
           for (const h of unpushedHashes) updated.add(h);
+          return updated;
+        });
+        setUnpulled((prev) => {
+          if (!append) return new Set(unpulledHashes);
+          const updated = new Set(prev);
+          for (const h of unpulledHashes) updated.add(h);
           return updated;
         });
         metric('git.graph_log.loaded', performance.now() - started, {
@@ -213,6 +221,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     setEntries([]);
     setHasMore(false);
     setUnpushed(new Set());
+    setUnpulled(new Set());
     // Drop the filter query — it belongs to the old context.
     setSearchQuery('');
     if (visible && hasGitContext) {
@@ -288,6 +297,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     () => (isFiltering ? entries.filter((e) => commitMatchesQuery(e, searchQuery)) : entries),
     [entries, searchQuery, isFiltering],
   );
+  const inferredUnpulled = useMemo(() => inferUnpulledHashesFromGraphEntries(entries), [entries]);
 
   const layout = useMemo(() => {
     // While filtering, the surviving commits are no longer contiguous in topo
@@ -477,6 +487,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   projectModeId={projectModeId}
                   onAfterAction={refreshLog}
                   unpushed={unpushed.has(entry.hash)}
+                  unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
                   searchQuery={searchQuery}
                   transform={virtualRow.start}
@@ -676,6 +687,7 @@ function GraphCommitRow({
   projectModeId,
   onAfterAction,
   unpushed,
+  unpulled,
   connectToWip,
   searchQuery,
   transform,
@@ -693,6 +705,7 @@ function GraphCommitRow({
   projectModeId: string | null;
   onAfterAction: () => void;
   unpushed: boolean;
+  unpulled: boolean;
   /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
   connectToWip: boolean;
   /** Active filter query — highlights matching substrings in the title & refs. */
@@ -726,6 +739,10 @@ function GraphCommitRow({
   // `Monitor` (lives only on this machine), a lone remote-tracking branch shows
   // `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
+  const foldedRefs = useMemo(
+    () => foldGraphRefs(entry.refs, entry.headBranch),
+    [entry.refs, entry.headBranch],
+  );
   const refSegments = useMemo<PowerlineSegmentData[]>(
     () =>
       // All refs on a commit share its lane color — they decorate the SAME
@@ -734,7 +751,7 @@ function GraphCommitRow({
       // existed to edge-separate connected powerline chevrons; now that refs
       // render as separate chips, the gap does that.) The checked-out branch is
       // distinguished by weight (bold via `emphasis`), not color.
-      foldGraphRefs(entry.refs, entry.headBranch).map((r) => {
+      foldedRefs.map((r) => {
         const color = lanePastel;
         if (r.kind === 'tag') {
           return {
@@ -782,7 +799,7 @@ function GraphCommitRow({
               : r.name,
         };
       }),
-    [entry.refs, entry.headBranch, lanePastel, t],
+    [foldedRefs, lanePastel, t],
   );
 
   // Local-only branch tips on this commit — `local` folded refs with no synced
@@ -792,10 +809,10 @@ function GraphCommitRow({
   // The detached-HEAD pseudo-ref isn't a branch, so it's excluded.
   const pushableBranches = useMemo(
     () =>
-      foldGraphRefs(entry.refs, entry.headBranch)
+      foldedRefs
         .filter((r) => r.kind === 'local' && !r.syncedRemote && r.name !== 'HEAD')
         .map((r) => r.name),
-    [entry.refs, entry.headBranch],
+    [foldedRefs],
   );
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
@@ -804,10 +821,11 @@ function GraphCommitRow({
       <GraphCommitTime
         relativeDate={entry.relativeDate}
         unpushed={unpushed}
+        unpulled={unpulled}
         shortHash={entry.shortHash}
       />
     ),
-    [entry.relativeDate, entry.shortHash, unpushed],
+    [entry.relativeDate, entry.shortHash, unpulled, unpushed],
   );
 
   // When the row carries a branch/tag powerline, raise the node to the chip's
@@ -996,10 +1014,12 @@ function GraphCommitRow({
 export function GraphCommitTime({
   relativeDate,
   unpushed,
+  unpulled = false,
   shortHash,
 }: {
   relativeDate: string;
   unpushed: boolean;
+  unpulled?: boolean;
   shortHash: string;
 }) {
   const { t } = useTranslation();
@@ -1023,6 +1043,24 @@ export function GraphCommitTime({
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">{t('history.unpushed', 'Not pushed')}</TooltipContent>
+        </Tooltip>
+      )}
+      {unpulled && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              aria-label={t('history.unpulled', 'Not pulled')}
+              className="inline-flex shrink-0"
+              data-testid={`graph-unpulled-${shortHash}`}
+            >
+              <ArrowDownCircle
+                className="icon-sm text-primary [&_path]:stroke-primary-foreground [&_circle]:fill-current"
+                data-testid={`graph-unpulled-icon-${shortHash}`}
+                strokeWidth={3}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('history.unpulled', 'Not pulled')}</TooltipContent>
         </Tooltip>
       )}
     </span>

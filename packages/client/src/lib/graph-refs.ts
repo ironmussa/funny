@@ -26,6 +26,12 @@ export interface FoldedRef {
   syncedRemote?: string;
 }
 
+interface GraphReachabilityEntry {
+  hash: string;
+  parentHashes: string[];
+  refs: readonly GraphRefDTO[];
+}
+
 /** Branch portion of a remote ref — remote names never contain `/`. */
 const remoteBranchOf = (name: string) => name.slice(name.indexOf('/') + 1);
 
@@ -97,4 +103,43 @@ export function foldGraphRefs(
     }
   }
   return out;
+}
+
+export function inferUnpulledHashesFromGraphEntries(
+  entries: readonly GraphReachabilityEntry[],
+): Set<string> {
+  const byHash = new Map(entries.map((entry) => [entry.hash, entry]));
+  const remoteTips = new Set<string>();
+  const localTips = new Set<string>();
+
+  for (const entry of entries) {
+    for (const ref of entry.refs) {
+      if (ref.kind === 'remote') remoteTips.add(entry.hash);
+      if (ref.kind === 'local' && ref.name !== 'HEAD') localTips.add(entry.hash);
+    }
+  }
+
+  const reachableFrom = (tips: Set<string>) => {
+    const seen = new Set<string>();
+    const stack = [...tips];
+    while (stack.length > 0) {
+      const hash = stack.pop()!;
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      const entry = byHash.get(hash);
+      if (!entry) continue;
+      for (const parent of entry.parentHashes) {
+        if (byHash.has(parent)) stack.push(parent);
+      }
+    }
+    return seen;
+  };
+
+  const remoteReachable = reachableFrom(remoteTips);
+  const localReachable = reachableFrom(localTips);
+  const inferred = new Set<string>();
+  for (const hash of remoteReachable) {
+    if (!localReachable.has(hash)) inferred.add(hash);
+  }
+  return inferred;
 }

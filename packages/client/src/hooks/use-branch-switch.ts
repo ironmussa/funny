@@ -76,6 +76,7 @@ export function useBranchSwitch() {
         );
         return false;
       }
+      if (checkoutResult.value.worktreePath) return true;
       useProjectStore.getState().setBranch(projectId, targetBranch);
       useBranchPickerStore.getState().setCurrentBranch(targetBranch);
       // Force-refresh git status so ReviewPane shows origin info for the new branch
@@ -94,10 +95,12 @@ export function useBranchSwitch() {
       setLoading(false);
 
       if (result.isOk()) {
-        useProjectStore.getState().setBranch(dialogState.projectId, dialogState.targetBranch);
-        useBranchPickerStore.getState().setCurrentBranch(dialogState.targetBranch);
-        // Force-refresh git status so ReviewPane shows origin info for the new branch
-        useGitStatusStore.getState().fetchProjectStatus(dialogState.projectId, true);
+        if (!result.value.worktreePath) {
+          useProjectStore.getState().setBranch(dialogState.projectId, dialogState.targetBranch);
+          useBranchPickerStore.getState().setCurrentBranch(dialogState.targetBranch);
+          // Force-refresh git status so ReviewPane shows origin info for the new branch
+          useGitStatusStore.getState().fetchProjectStatus(dialogState.projectId, true);
+        }
         setDialogState(null);
         resolverRef.current?.(true);
         resolverRef.current = null;

@@ -6,6 +6,7 @@ import { executeSync } from '../git/process.js';
 import {
   checkWorktreePathInProject,
   createWorktree,
+  findWorktreeForBranch,
   listWorktrees,
   removeWorktree,
   removeBranch,
@@ -116,6 +117,29 @@ describe('worktree operations', () => {
           expect(wt.path).toBeTruthy();
           expect(typeof wt.isMain).toBe('boolean');
         }
+      }
+    });
+  });
+
+  describe('findWorktreeForBranch', () => {
+    test('returns the path for a branch checked out in a worktree', async () => {
+      const createResult = await createWorktree(repoPath, 'existing-branch');
+      expect(createResult.isOk()).toBe(true);
+
+      const result = await findWorktreeForBranch(repoPath, 'existing-branch');
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk() && createResult.isOk()) {
+        expect(result.value).toBe(createResult.value);
+      }
+    });
+
+    test('returns null when the branch is not checked out in a worktree', async () => {
+      const result = await findWorktreeForBranch(repoPath, 'missing-branch');
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toBeNull();
       }
     });
   });

@@ -93,6 +93,7 @@ export {
   getCommitFiles,
   getCommitFileDiff,
   getUnpushedHashes,
+  getUnpulledHashes,
   type GitLogEntry,
   type GitGraphLogEntry,
   type GraphRef,
@@ -114,6 +115,8 @@ export {
 
 export {
   createWorktree,
+  findWorktreeForBranch,
+  isRegisteredWorktreePath,
   listWorktrees,
   removeWorktree,
   removeBranch,

@@ -3,6 +3,7 @@ import {
   getDefaultBranch,
   git,
   invalidateStatusCache,
+  findWorktreeForBranch,
   listBranchesDetailed,
   stash,
 } from '@funny/core/git';
@@ -90,6 +91,17 @@ projectGitRoutes.get('/:id/checkout-preflight', async (c) => {
     return c.json({ canCheckout: true, currentBranch, hasDirtyFiles: false });
   }
 
+  const existingWorktree = await findWorktreeForBranch(project.path, targetBranch);
+  if (existingWorktree.isOk() && existingWorktree.value) {
+    return c.json({
+      canCheckout: true,
+      currentBranch,
+      hasDirtyFiles: false,
+      reason: 'existing_worktree',
+      worktreePath: existingWorktree.value,
+    });
+  }
+
   const statusResult = await git(['status', '--porcelain'], project.path);
   if (statusResult.isErr()) {
     return c.json({
@@ -142,6 +154,26 @@ projectGitRoutes.post('/:id/checkout', async (c) => {
   const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
   if (currentBranch === branch) {
     return c.json({ ok: true, currentBranch: branch });
+  }
+
+  const existingWorktree = await findWorktreeForBranch(project.path, branch);
+  if (existingWorktree.isOk() && existingWorktree.value) {
+    if (threadId) {
+      await tm.updateThread(threadId, { branch, worktreePath: existingWorktree.value });
+      const userId = c.get('userId');
+      if (userId) {
+        wsBroker.emitToUser(userId, {
+          type: 'thread:updated',
+          threadId,
+          data: { branch, worktreePath: existingWorktree.value },
+        });
+      }
+    }
+    return c.json({
+      ok: true,
+      currentBranch: branch,
+      worktreePath: existingWorktree.value,
+    });
   }
 
   if (strategy === 'stash') {

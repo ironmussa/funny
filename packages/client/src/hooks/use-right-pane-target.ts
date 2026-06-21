@@ -1,6 +1,6 @@
 import { effectiveThreadId, rightPaneProjectId } from '@/lib/grid-right-pane';
+import { useThreadById } from '@/lib/thread-selectors';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadProjectId } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -22,12 +22,21 @@ export function useRightPaneThreadId(): string | null {
 
 /**
  * The project the right pane should scope to. In the grid view this is the
- * grid-selected thread's project (read from thread context, which is bound to
- * the grid selection); otherwise the store's `selectedProjectId`.
+ * grid-selected thread's project; otherwise the store's `selectedProjectId`.
+ *
+ * Use the lightweight thread index instead of ThreadContext here. A freshly
+ * selected grid column can update before its heavy `threadDataById` payload is
+ * hydrated, but the sidebar/thread index already has the project id the Files
+ * pane and review state need.
  */
 export function useRightPaneProjectId(): string | null {
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
-  const threadProjectId = useThreadProjectId();
+  const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
+  const gridSelectedThread = useThreadById(gridSelectedThreadId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  return rightPaneProjectId(liveColumnsOpen, threadProjectId ?? null, selectedProjectId);
+  return rightPaneProjectId(
+    liveColumnsOpen,
+    gridSelectedThread?.projectId || null,
+    selectedProjectId,
+  );
 }

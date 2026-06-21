@@ -27,6 +27,7 @@ import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
 import { effectiveThreadId, isRightPaneVisible } from '@/lib/grid-right-pane';
+import { useThreadById } from '@/lib/thread-selectors';
 import { canDoGitOps } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
@@ -153,11 +154,12 @@ export function App() {
   // thread. Outside the grid, nothing changes. See `grid-thread-actions`.
   const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
   const effectiveId = effectiveThreadId(liveColumnsOpen, gridSelectedThreadId, activeThreadId);
+  const gridSelectedThread = useThreadById(gridSelectedThreadId);
   const activeThreadCanShowGit = useThreadStore((s) =>
     canDoGitOps(
       liveColumnsOpen
         ? gridSelectedThreadId
-          ? (s.threadDataById[gridSelectedThreadId] ?? null)
+          ? (s.threadDataById[gridSelectedThreadId] ?? gridSelectedThread ?? null)
           : null
         : s.activeThread,
     ),

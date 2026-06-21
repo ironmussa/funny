@@ -9,6 +9,7 @@ import { CreatePRDialog, type PRDraft } from '@/components/commit-history/Create
 import { PublishRepoDialog } from '@/components/PublishRepoDialog';
 import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api, type PullStrategy } from '@/lib/api';
 import { githubBrowseBaseUrl as resolveGithubBrowseBaseUrl } from '@/lib/github-url';
 import { toastError } from '@/lib/toast-error';
@@ -16,7 +17,6 @@ import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadProjectId, useThreadSelector, useThreadStatus } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 
 interface LogEntry {
   hash: string;
@@ -37,8 +37,8 @@ interface CommitHistoryTabProps {
 
 export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const { t } = useTranslation();
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const effectiveThreadId = useThreadStore((s) => s.selectedThreadId) || undefined;
+  const selectedProjectId = useRightPaneProjectId();
+  const effectiveThreadId = useRightPaneThreadId() || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const hasGitContext = !!(effectiveThreadId || projectModeId);
 
@@ -93,7 +93,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
   const threadProjectId = useThreadProjectId();
   const projectBranch = useProjectStore((s) => {
-    const pid = projectModeId ?? threadProjectId;
+    const pid = projectModeId ?? selectedProjectId ?? threadProjectId;
     return pid ? s.branchByProject[pid] : undefined;
   });
   const isWorktreeMode = useThreadSelector((t) => t?.mode === 'worktree');
@@ -101,7 +101,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
   const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${effectiveBranch ?? ''}`;
 
-  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
+  const remoteCheckProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
   const projectPathForPublish = useProjectStore((s) => {
     if (!remoteCheckProjectId) return '';
     return s.projects.find((p) => p.id === remoteCheckProjectId)?.path ?? '';
@@ -206,12 +206,13 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       loadedRef.current = true;
       loadLog(0, false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only trigger on context change
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps -- intentionally only trigger on context change
   }, [gitContextKey, setSelectedHash]);
 
   useEffect(() => {
     if (visible && hasGitContext && !loadedRef.current) {
       loadedRef.current = true;
+      // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- first reveal intentionally triggers the initial history fetch once.
       loadLog(0, false);
     }
   }, [visible, hasGitContext, loadLog]);
@@ -221,6 +222,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
     const wasHidden = prevVisibleRef.current === false;
     prevVisibleRef.current = visible;
     if (visible && wasHidden && hasGitContext && loadedRef.current) {
+      // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- tab reveal intentionally refreshes the already-loaded history.
       loadLog(0, false);
     }
   }, [visible, hasGitContext, loadLog]);
@@ -233,7 +235,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   }, [gitContextKey]);
 
   // Walk GitHub commit author endpoint anchored at the first uncovered SHA.
-  const ghProjectId = projectModeId ?? threadProjectId ?? null;
+  const ghProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
   useEffect(() => {
     if (!ghProjectId || logEntries.length === 0) return;
     const firstMissing = logEntries.find(

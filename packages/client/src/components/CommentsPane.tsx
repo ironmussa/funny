@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { useRightPaneThreadId } from '@/hooks/use-right-pane-target';
+import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { canCommentShare } from '@/lib/thread-variant';
 import { useAuthStore } from '@/stores/auth-store';
@@ -22,13 +24,16 @@ import { useThreadSelector } from '@/stores/thread-context';
  */
 export function CommentsPane() {
   const { t } = useTranslation();
-  const threadId = useThreadSelector((th) => th?.id ?? null);
-  const ownerId = useThreadSelector((th) => th?.userId ?? null);
+  const threadId = useRightPaneThreadId();
+  const contextThread = useThreadSelector((th) => th);
+  const lightThread = useThreadById(threadId);
+  const thread = contextThread?.id === threadId ? contextThread : lightThread;
+  const ownerId = thread?.userId ?? null;
   const selfId = useAuthStore((s) => s.user?.id ?? null);
   const isOwner = !!selfId && ownerId === selfId;
   // A view-only sharee can READ comments but not post (server enforces 403). The
   // owner and comment/editor sharees can post.
-  const canComment = useThreadSelector((th) => canCommentShare(th, selfId));
+  const canComment = canCommentShare(thread, selfId);
 
   const comments = useCommentStore((s) => (threadId ? (s.byThread[threadId] ?? null) : null));
   const loading = useCommentStore((s) => (threadId ? !!s.loadingByThread[threadId] : false));

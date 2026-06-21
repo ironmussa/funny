@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { GraphCommitTime } from '@/components/CommitGraphTab';
+import { GraphCommitSyncMarkers, GraphCommitTime } from '@/components/CommitGraphTab';
 import { inferUnpulledHashesFromGraphEntries } from '@/lib/graph-refs';
 import {
   indexRebaseEventsByHash,
@@ -20,12 +20,19 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('GraphCommitTime', () => {
-  test('shows an unpushed arrow next to the commit date for local-only commits', () => {
-    renderWithProviders(
-      <GraphCommitTime relativeDate="13 minutes ago" unpushed shortHash="1111111" />,
-    );
+  test('shows the short commit date without sync markers', () => {
+    renderWithProviders(<GraphCommitTime relativeDate="13 minutes ago" />);
 
     expect(screen.getByText('13m')).toBeInTheDocument();
+    expect(screen.queryByTestId('graph-unpushed-1111111')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('graph-unpulled-1111111')).not.toBeInTheDocument();
+  });
+});
+
+describe('GraphCommitSyncMarkers', () => {
+  test('shows an unpushed arrow for local-only commits', () => {
+    renderWithProviders(<GraphCommitSyncMarkers unpushed shortHash="1111111" />);
+
     expect(screen.getByTestId('graph-unpushed-1111111')).toBeInTheDocument();
     expect(screen.getByTestId('graph-unpushed-icon-1111111')).toHaveClass('lucide-circle-arrow-up');
     expect(screen.getByTestId('graph-unpushed-icon-1111111')).toHaveClass('icon-sm');
@@ -37,27 +44,19 @@ describe('GraphCommitTime', () => {
     );
   });
 
-  test('does not show an unpushed arrow for remote commits', () => {
-    renderWithProviders(
-      <GraphCommitTime relativeDate="13 minutes ago" unpushed={false} shortHash="1111111" />,
+  test('does not render when the commit has no sync markers', () => {
+    const { container } = renderWithProviders(
+      <GraphCommitSyncMarkers unpushed={false} shortHash="1111111" />,
     );
 
-    expect(screen.getByText('13m')).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
     expect(screen.queryByTestId('graph-unpushed-1111111')).not.toBeInTheDocument();
     expect(screen.queryByTestId('graph-unpulled-1111111')).not.toBeInTheDocument();
   });
 
-  test('shows an unpulled arrow next to the commit date for remote-only commits', () => {
-    renderWithProviders(
-      <GraphCommitTime
-        relativeDate="13 minutes ago"
-        unpushed={false}
-        unpulled
-        shortHash="2222222"
-      />,
-    );
+  test('shows an unpulled arrow for remote-only commits', () => {
+    renderWithProviders(<GraphCommitSyncMarkers unpushed={false} unpulled shortHash="2222222" />);
 
-    expect(screen.getByText('13m')).toBeInTheDocument();
     expect(screen.getByTestId('graph-unpulled-2222222')).toBeInTheDocument();
     expect(screen.getByTestId('graph-unpulled-icon-2222222')).toHaveClass(
       'lucide-circle-arrow-down',
@@ -221,15 +220,14 @@ describe('inferRebaseCopyLinks', () => {
         link.targetHash,
         link.targetShortHash,
         link.subject,
-        link.sourceVisible,
       ]),
     ).toEqual([
-      ['old-one', 'old1', 'new-one', 'new1', 'feature one', true],
-      ['old-two', 'old2', 'new-two', 'new2', 'feature two', true],
+      ['old-one', 'old1', 'new-one', 'new1', 'feature one'],
+      ['old-two', 'old2', 'new-two', 'new2', 'feature two'],
     ]);
   });
 
-  test('keeps links when the original commit only exists in reflog', () => {
+  test('drops links unless both original and rebased commits are visible', () => {
     const event = {
       id: 'rebase-1',
       kind: 'rebase' as const,
@@ -256,15 +254,17 @@ describe('inferRebaseCopyLinks', () => {
       ],
     };
 
-    const links = inferRebaseCopyLinks([event], [{ hash: 'new-one' }, { hash: 'base-hash' }]);
+    const missingOriginal = inferRebaseCopyLinks(
+      [event],
+      [{ hash: 'new-one' }, { hash: 'base-hash' }],
+    );
+    const missingTarget = inferRebaseCopyLinks(
+      [event],
+      [{ hash: 'old-one' }, { hash: 'base-hash' }],
+    );
 
-    expect(links).toHaveLength(1);
-    expect(links[0]).toMatchObject({
-      sourceHash: 'old-one',
-      targetHash: 'new-one',
-      subject: 'feature one',
-      sourceVisible: false,
-    });
+    expect(missingOriginal).toEqual([]);
+    expect(missingTarget).toEqual([]);
   });
 });
 

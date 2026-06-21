@@ -32,6 +32,24 @@ interface GraphReachabilityEntry {
   refs: readonly GraphRefDTO[];
 }
 
+interface GraphNodeParentRefEntry {
+  hash: string;
+  shortHash?: string;
+  refs: readonly RawGraphRef[];
+  headBranch: string | null;
+  parentHashes?: readonly string[];
+}
+
+interface GraphNodeParentRefLink {
+  sourceHash: string;
+  sourceShortHash?: string;
+  targetHash: string;
+  event?: {
+    branch: string | null;
+    onto: string | null;
+  };
+}
+
 /** Branch portion of a remote ref — remote names never contain `/`. */
 const remoteBranchOf = (name: string) => name.slice(name.indexOf('/') + 1);
 
@@ -103,6 +121,179 @@ export function foldGraphRefs(
     }
   }
   return out;
+}
+
+export function graphNodeRefLabel(foldedRefs: readonly FoldedRef[]): string | null {
+  const labels = graphNodeRefLabels(foldedRefs);
+  return labels.length > 0 ? labels.join(', ') : null;
+}
+
+function graphNodeRefLabels(foldedRefs: readonly FoldedRef[]): string[] {
+  const localRefs: string[] = [];
+  const remoteRefs: string[] = [];
+
+  for (const ref of foldedRefs) {
+    if (ref.kind === 'local' && ref.name !== 'HEAD') localRefs.push(ref.name);
+    else if (ref.kind === 'remote') remoteRefs.push(ref.name);
+  }
+
+  if (localRefs.length > 0) return localRefs;
+  if (remoteRefs.length > 0) return remoteRefs;
+  return [];
+}
+
+function graphNodeBranchIdentities(foldedRefs: readonly FoldedRef[]): Set<string> {
+  const identities = new Set<string>();
+  for (const ref of foldedRefs) {
+    if (ref.kind === 'local' && ref.name !== 'HEAD') {
+      identities.add(ref.name);
+      if (ref.syncedRemote) identities.add(remoteBranchOf(ref.syncedRemote));
+    } else if (ref.kind === 'remote') {
+      identities.add(remoteBranchOf(ref.name));
+    }
+  }
+  return identities;
+}
+
+function hasSharedIdentity(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  for (const value of a) {
+    if (b.has(value)) return true;
+  }
+  return false;
+}
+
+function addUnique(map: Map<string, string[]>, hash: string, label: string) {
+  const existing = map.get(hash);
+  if (existing) {
+    if (!existing.includes(label)) existing.push(label);
+  } else {
+    map.set(hash, [label]);
+  }
+}
+
+function graphNodeBranchContextLabels(
+  entries: readonly GraphNodeParentRefEntry[],
+): Map<string, string[]> {
+  const entriesByHash = new Map(entries.map((entry) => [entry.hash, entry]));
+  const labelsByHash = new Map<string, string[]>();
+
+  for (const entry of entries) {
+    const labels = graphNodeRefLabels(foldGraphRefs(entry.refs, entry.headBranch));
+    if (labels.length === 0) continue;
+
+    const stack = [entry.hash];
+    const seen = new Set<string>();
+    while (stack.length > 0) {
+      const hash = stack.pop()!;
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      for (const label of labels) addUnique(labelsByHash, hash, label);
+
+      const current = entriesByHash.get(hash);
+      if (!current) continue;
+      for (const parentHash of current.parentHashes ?? []) {
+        if (entriesByHash.has(parentHash)) stack.push(parentHash);
+      }
+    }
+  }
+
+  return labelsByHash;
+}
+
+export function graphNodeForkedFromRefLabels(
+  entries: readonly GraphNodeParentRefEntry[],
+): Map<string, string> {
+  const entriesByHash = new Map(entries.map((entry) => [entry.hash, entry]));
+  const labels = new Map<string, string>();
+
+  for (const entry of entries) {
+    const ownIdentities = graphNodeBranchIdentities(foldGraphRefs(entry.refs, entry.headBranch));
+    const queue = [...(entry.parentHashes ?? [])];
+    const seen = new Set<string>();
+
+    while (queue.length > 0) {
+      const parentHash = queue.shift()!;
+      if (seen.has(parentHash)) continue;
+      seen.add(parentHash);
+
+      const parent = entriesByHash.get(parentHash);
+      if (!parent) continue;
+
+      const parentRefs = foldGraphRefs(parent.refs, parent.headBranch);
+      const parentLabel = graphNodeRefLabel(parentRefs);
+      if (parentLabel) {
+        const parentIdentities = graphNodeBranchIdentities(parentRefs);
+        if (!hasSharedIdentity(ownIdentities, parentIdentities)) {
+          labels.set(entry.hash, parentLabel);
+          break;
+        }
+      }
+
+      queue.push(...(parent.parentHashes ?? []));
+    }
+  }
+
+  return labels;
+}
+
+export interface GraphNodeParentLabel {
+  commit: string;
+  branchLabels: string[];
+}
+
+export function graphNodeParentLabels(
+  entries: readonly GraphNodeParentRefEntry[],
+): Map<string, GraphNodeParentLabel> {
+  const entriesByHash = new Map(entries.map((entry) => [entry.hash, entry]));
+  const branchContextByHash = graphNodeBranchContextLabels(entries);
+  const labels = new Map<string, GraphNodeParentLabel>();
+
+  for (const entry of entries) {
+    const parentHash = entry.parentHashes?.[0];
+    if (!parentHash) continue;
+
+    const parent = entriesByHash.get(parentHash);
+    if (!parent) {
+      labels.set(entry.hash, { commit: parentHash.slice(0, 7), branchLabels: [] });
+      continue;
+    }
+
+    const parentShortHash = parent.shortHash ?? parent.hash.slice(0, 7);
+    const parentRefLabels = graphNodeRefLabels(foldGraphRefs(parent.refs, parent.headBranch));
+    const parentBranchLabels =
+      parentRefLabels.length > 0 ? parentRefLabels : (branchContextByHash.get(parent.hash) ?? []);
+    labels.set(entry.hash, { commit: parentShortHash, branchLabels: parentBranchLabels });
+  }
+
+  return labels;
+}
+
+export function graphNodeParentRefLabels(
+  links: readonly GraphNodeParentRefLink[],
+  entries: readonly GraphNodeParentRefEntry[],
+): Map<string, string> {
+  const entriesByHash = new Map(entries.map((entry) => [entry.hash, entry]));
+  const labelsByTargetHash = new Map<string, string[]>();
+
+  for (const link of links) {
+    const sourceEntry = entriesByHash.get(link.sourceHash);
+    const sourceRefLabel = sourceEntry
+      ? graphNodeRefLabel(foldGraphRefs(sourceEntry.refs, sourceEntry.headBranch))
+      : null;
+    const label =
+      sourceRefLabel ??
+      link.event?.branch ??
+      link.event?.onto ??
+      link.sourceShortHash ??
+      link.sourceHash.slice(0, 7);
+    if (!label) continue;
+
+    addUnique(labelsByTargetHash, link.targetHash, label);
+  }
+
+  return new Map(
+    Array.from(labelsByTargetHash, ([targetHash, labels]) => [targetHash, labels.join(', ')]),
+  );
 }
 
 export function inferUnpulledHashesFromGraphEntries(

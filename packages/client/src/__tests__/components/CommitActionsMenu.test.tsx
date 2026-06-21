@@ -14,6 +14,24 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('CommitActionsMenu', () => {
+  const rebaseEvent = {
+    id: 'rebase-1',
+    kind: 'rebase' as const,
+    label: 'rebase',
+    branch: 'feature/auth',
+    onto: 'main',
+    startedAt: '2026-06-20T19:51:20-06:00',
+    finishedAt: '2026-06-20T20:17:55-06:00',
+    startHash: 'aaa111',
+    startShortHash: 'aaa111',
+    finishHash: '1111111111111111111111111111111111111111',
+    finishShortHash: '1111111',
+    completed: true,
+    steps: [],
+    commitHashes: ['1111111111111111111111111111111111111111'],
+    commitPairs: [],
+  };
+
   test('shows GitHub action when a remote commit URL is available', () => {
     renderWithProviders(
       <CommitActionsMenu
@@ -50,5 +68,32 @@ describe('CommitActionsMenu', () => {
     });
 
     expect(screen.queryByTestId('graph-commit-menu-github-1111111')).not.toBeInTheDocument();
+  });
+
+  test('shows rebase details action when the row has rebase metadata', () => {
+    const onSelectRebaseEvent = vi.fn();
+    renderWithProviders(
+      <CommitActionsMenu
+        hash="1111111111111111111111111111111111111111"
+        shortHash="1111111"
+        githubUrl={null}
+        projectModeId={null}
+        rebaseEvents={[rebaseEvent]}
+        onSelectRebaseEvent={onSelectRebaseEvent}
+        onAfterAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    const item = screen.getByTestId('graph-commit-menu-rebase-details-1111111');
+    expect(item).toHaveTextContent('View rebase details: feature/auth -> main');
+
+    fireEvent.click(item);
+
+    expect(onSelectRebaseEvent).toHaveBeenCalledWith(rebaseEvent);
   });
 });

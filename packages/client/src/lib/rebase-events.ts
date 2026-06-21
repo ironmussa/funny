@@ -11,7 +11,6 @@ export interface RebaseCopyLink {
   targetHash: string;
   targetShortHash: string;
   subject: string;
-  sourceVisible: boolean;
 }
 
 export function rebaseEventScopeLabel(event: Pick<GitRebaseReflogEventDTO, 'branch' | 'onto'>) {
@@ -50,7 +49,7 @@ export function inferRebaseCopyLinks(
   const seen = new Set<string>();
   for (const event of events) {
     for (const pair of event.commitPairs ?? []) {
-      if (!visibleHashes.has(pair.rebasedHash)) continue;
+      if (!visibleHashes.has(pair.originalHash) || !visibleHashes.has(pair.rebasedHash)) continue;
       const key = `${event.id}:${pair.originalHash}->${pair.rebasedHash}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -61,7 +60,6 @@ export function inferRebaseCopyLinks(
         targetHash: pair.rebasedHash,
         targetShortHash: pair.rebasedShortHash,
         subject: pair.subject,
-        sourceVisible: visibleHashes.has(pair.originalHash),
       });
     }
   }

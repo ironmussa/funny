@@ -12,6 +12,28 @@ export function rebaseCopyLinkRailX({
   return leftInset + laneGutterWidth + railWidth / 2;
 }
 
+export function rebaseCopyLinkRailLane({
+  sourceLane,
+  targetLane,
+}: {
+  sourceLane: number | null;
+  targetLane: number;
+}): number {
+  return Math.max(sourceLane ?? targetLane, targetLane) + 1;
+}
+
+export function rebaseCopyLinkUsesOuterRail({
+  sourceLane,
+  targetLane,
+  laneCount,
+}: {
+  sourceLane: number | null;
+  targetLane: number;
+  laneCount: number;
+}): boolean {
+  return rebaseCopyLinkRailLane({ sourceLane, targetLane }) >= laneCount;
+}
+
 export function roundedRebaseCopyLinkPath({
   sourceX,
   sourceY,

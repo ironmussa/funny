@@ -1,5 +1,5 @@
 import type { McpServer } from '@funny/shared';
-import { Loader2, Plug } from 'lucide-react';
+import { Loader2, Plug, ShieldAlert } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
+
+import { isVisibleMcpServer } from './available-mcp-servers-utils';
 
 interface AvailableMcpServersProps {
   projectPath?: string;
@@ -21,13 +23,6 @@ function mcpSettingsPath(projectId?: string): string {
   return projectId
     ? buildPath(`/projects/${projectId}/settings/mcp-server`)
     : buildPath('/settings/mcp-server');
-}
-
-/** Enabled servers the agent can actually use (matches user-facing "active" toggle). */
-export function isActiveMcpServer(server: McpServer): boolean {
-  if (server.disabled) return false;
-  if (server.status === 'needs_auth' || server.status === 'error') return false;
-  return true;
 }
 
 export function AvailableMcpServers({
@@ -61,7 +56,7 @@ export function AvailableMcpServers({
 
   if (!projectPath) return null;
 
-  const activeServers = servers.filter(isActiveMcpServer);
+  const visibleServers = servers.filter(isVisibleMcpServer);
 
   return (
     <div
@@ -82,24 +77,41 @@ export function AvailableMcpServers({
       </Link>
       {loading ? (
         <Loader2 className="size-3.5 animate-spin" data-testid="available-mcp-loading" />
-      ) : activeServers.length === 0 ? (
+      ) : visibleServers.length === 0 ? (
         <span className="text-muted-foreground/60" data-testid="available-mcp-empty">
           {t('newThread.noMcpServers')}
         </span>
       ) : (
-        activeServers.map((server) => (
-          <Tooltip key={server.name}>
-            <TooltipTrigger asChild>
-              <Badge variant="outline" size="xs" data-testid={`available-mcp-${server.name}`}>
-                {server.name}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs">
-              <p className="font-mono text-xs">{server.type}</p>
-              {server.source && <p className="text-muted-foreground">{server.source}</p>}
-            </TooltipContent>
-          </Tooltip>
-        ))
+        visibleServers.map((server) => {
+          const needsAuth = server.status === 'needs_auth';
+
+          return (
+            <Tooltip key={server.name}>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  size="xs"
+                  data-testid={`available-mcp-${server.name}`}
+                  aria-label={needsAuth ? `${server.name}: ${t('mcp.needsAuth')}` : server.name}
+                  className={cn(needsAuth && 'border-amber-500/40 bg-amber-500/10 text-amber-300')}
+                >
+                  {needsAuth && <ShieldAlert aria-hidden="true" />}
+                  {server.name}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="font-mono text-xs">{server.type}</p>
+                {server.source && <p className="text-muted-foreground">{server.source}</p>}
+                {needsAuth && (
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-amber-300">{t('mcp.needsAuth')}</p>
+                    <p className="text-muted-foreground">{t('mcp.authHint')}</p>
+                  </div>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })
       )}
     </div>
   );

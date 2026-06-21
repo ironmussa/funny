@@ -36,6 +36,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
 import { readFileMentionDragData } from '@/lib/file-mention-dnd';
 import { metric } from '@/lib/telemetry';
+import { middleTruncate } from '@/lib/text-truncate';
 import { cn } from '@/lib/utils';
 
 const SLASH_RESULTS_LIMIT = 50;
@@ -216,33 +217,6 @@ export function getSuggestionLoadingLabel(type: SuggestionPopupProps['type']) {
     return { key: 'prompt.loadingSymbols', fallback: 'Loading symbols...' };
   }
   return { key: 'prompt.loadingCommands', fallback: 'Loading commands...' };
-}
-
-/**
- * Truncate a file path in the middle so that the first directory and the
- * file name are always visible:  `frontend-v1/src/\u2026/venues-create-info.component.html`
- */
-function middleTruncate(path: string, maxLen = 60): string {
-  if (path.length <= maxLen) return path;
-  const sep = '/';
-  const parts = path.split(sep);
-  if (parts.length <= 2) return path;
-
-  // Always keep the file name (last part)
-  const fileName = parts[parts.length - 1];
-  // Budget for the prefix (everything before the ellipsis)
-  const prefixBudget = maxLen - fileName.length - 4; // 4 = "/\u2026/"
-  if (prefixBudget <= 0) return '\u2026' + sep + fileName;
-
-  // Build prefix from the left until we exceed the budget
-  let prefix = '';
-  for (let i = 0; i < parts.length - 1; i++) {
-    const candidate = prefix ? prefix + sep + parts[i] : parts[i];
-    if (candidate.length > prefixBudget) break;
-    prefix = candidate;
-  }
-
-  return (prefix ? prefix + sep : '') + '\u2026' + sep + fileName;
 }
 
 /** Icon for a symbol kind */

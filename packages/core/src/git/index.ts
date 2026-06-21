@@ -89,6 +89,7 @@ export {
 export {
   getLog,
   getGraphLog,
+  getRebaseReflogEvents,
   getCommitBody,
   getCommitFiles,
   getCommitFileDiff,
@@ -96,6 +97,9 @@ export {
   getUnpulledHashes,
   type GitLogEntry,
   type GitGraphLogEntry,
+  type GitRebaseCommitPair,
+  type GitRebaseReflogEvent,
+  type GitRebaseReflogStep,
   type GraphRef,
   type GraphRefKind,
   type CommitFileEntry,

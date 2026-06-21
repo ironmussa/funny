@@ -29,6 +29,42 @@ interface GitGraphLogEntryDTO extends GitLogEntryDTO {
   headBranch: string | null;
 }
 
+export interface GitRebaseReflogStepDTO {
+  hash: string;
+  shortHash: string;
+  selector: string;
+  timestamp: string | null;
+  action: 'start' | 'finish' | 'pick' | 'continue' | 'abort' | 'other';
+  message: string;
+  subject: string;
+}
+
+export interface GitRebaseCommitPairDTO {
+  originalHash: string;
+  originalShortHash: string;
+  rebasedHash: string;
+  rebasedShortHash: string;
+  subject: string;
+}
+
+export interface GitRebaseReflogEventDTO {
+  id: string;
+  kind: 'rebase';
+  label: string;
+  branch: string | null;
+  onto: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  startHash: string | null;
+  startShortHash: string | null;
+  finishHash: string | null;
+  finishShortHash: string | null;
+  completed: boolean;
+  steps: GitRebaseReflogStepDTO[];
+  commitHashes: string[];
+  commitPairs: GitRebaseCommitPairDTO[];
+}
+
 /** Shared envelope for every (flat or graph) log endpoint. */
 interface LogResponse<E extends GitLogEntryDTO> {
   entries: E[];
@@ -129,7 +165,9 @@ export const gitApi = {
       body: JSON.stringify({ hookIndex }),
     }),
   push: (threadId: string) =>
-    request<{ ok: boolean; output?: string }>(`/git/${threadId}/push`, { method: 'POST' }),
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/push`, {
+      method: 'POST',
+    }),
   createPR: (threadId: string, title: string, body: string) =>
     request<{ ok: boolean; url?: string }>(`/git/${threadId}/pr`, {
       method: 'POST',
@@ -170,6 +208,8 @@ export const gitApi = {
       `/git/${threadId}/graph-log?limit=${limit}&all=${all ? 'true' : 'false'}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
+  getReflogEvents: (threadId: string, signal?: AbortSignal) =>
+    request<{ events: GitRebaseReflogEventDTO[] }>(`/git/${threadId}/reflog-events`, { signal }),
   getCommitFiles: (threadId: string, hash: string) =>
     request<{
       files: Array<{
@@ -198,16 +238,17 @@ export const gitApi = {
       ...(files?.length ? { body: JSON.stringify({ files }) } : {}),
     }),
   stashPop: (threadId: string) =>
-    request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash/pop`, { method: 'POST' }),
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash/pop`, {
+      method: 'POST',
+    }),
   stashList: (threadId: string, signal?: AbortSignal) =>
-    request<{ entries: Array<{ index: string; message: string; relativeDate: string }> }>(
-      `/git/${threadId}/stash/list`,
-      { signal },
-    ),
+    request<{
+      entries: Array<{ index: string; message: string; relativeDate: string }>;
+    }>(`/git/${threadId}/stash/list`, { signal }),
   stashShow: (threadId: string, stashIndex: string) =>
-    request<{ files: Array<{ path: string; additions: number; deletions: number }> }>(
-      `/git/${threadId}/stash/show/${stashIndex}`,
-    ),
+    request<{
+      files: Array<{ path: string; additions: number; deletions: number }>;
+    }>(`/git/${threadId}/stash/show/${stashIndex}`),
   stashFileDiff: (threadId: string, stashIndex: string, filePath: string) =>
     request<{ diff: string }>(
       `/git/${threadId}/stash/${stashIndex}/diff?path=${encodeURIComponent(filePath)}`,
@@ -217,7 +258,9 @@ export const gitApi = {
       method: 'POST',
     }),
   resetSoft: (threadId: string) =>
-    request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, { method: 'POST' }),
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, {
+      method: 'POST',
+    }),
   checkoutCommit: (threadId: string, hash: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/checkout-commit`, {
       method: 'POST',
@@ -354,10 +397,17 @@ export const gitApi = {
       body: JSON.stringify({ url }),
     }),
   projectGetGhOrgs: (projectId: string, signal?: AbortSignal) =>
-    request<{ orgs: string[] }>(`/git/project/${projectId}/gh-orgs`, { signal }),
+    request<{ orgs: string[] }>(`/git/project/${projectId}/gh-orgs`, {
+      signal,
+    }),
   projectPublish: (
     projectId: string,
-    params: { name: string; description?: string; org?: string; private: boolean },
+    params: {
+      name: string;
+      description?: string;
+      org?: string;
+      private: boolean;
+    },
   ) =>
     request<{ ok: boolean; repoUrl: string }>(`/git/project/${projectId}/publish`, {
       method: 'POST',
@@ -371,7 +421,9 @@ export const gitApi = {
       body: JSON.stringify({ strategy }),
     }),
   projectFetchOrigin: (projectId: string) =>
-    request<{ ok: boolean }>(`/git/project/${projectId}/fetch`, { method: 'POST' }),
+    request<{ ok: boolean }>(`/git/project/${projectId}/fetch`, {
+      method: 'POST',
+    }),
   projectStash: (projectId: string, files?: string[]) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash`, {
       method: 'POST',
@@ -382,14 +434,13 @@ export const gitApi = {
       method: 'POST',
     }),
   projectStashList: (projectId: string, signal?: AbortSignal) =>
-    request<{ entries: Array<{ index: string; message: string; relativeDate: string }> }>(
-      `/git/project/${projectId}/stash/list`,
-      { signal },
-    ),
+    request<{
+      entries: Array<{ index: string; message: string; relativeDate: string }>;
+    }>(`/git/project/${projectId}/stash/list`, { signal }),
   projectStashShow: (projectId: string, stashIndex: string) =>
-    request<{ files: Array<{ path: string; additions: number; deletions: number }> }>(
-      `/git/project/${projectId}/stash/show/${stashIndex}`,
-    ),
+    request<{
+      files: Array<{ path: string; additions: number; deletions: number }>;
+    }>(`/git/project/${projectId}/stash/show/${stashIndex}`),
   projectStashFileDiff: (projectId: string, stashIndex: string, filePath: string) =>
     request<{ diff: string }>(
       `/git/project/${projectId}/stash/${stashIndex}/diff?path=${encodeURIComponent(filePath)}`,
@@ -443,6 +494,10 @@ export const gitApi = {
       `/git/project/${projectId}/graph-log?limit=${limit}&all=${all ? 'true' : 'false'}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
+  projectReflogEvents: (projectId: string, signal?: AbortSignal) =>
+    request<{ events: GitRebaseReflogEventDTO[] }>(`/git/project/${projectId}/reflog-events`, {
+      signal,
+    }),
   projectCommitFiles: (projectId: string, hash: string) =>
     request<{
       files: Array<{

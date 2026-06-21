@@ -355,6 +355,7 @@ app.get('/api/git/:id/diff', requireThreadSteer, proxyToRunner);
 app.get('/api/git/:id/diff/*', requireThreadSteer, proxyToRunner);
 app.get('/api/git/:id/log', requireThreadSteer, proxyToRunner);
 app.get('/api/git/:id/graph-log', requireThreadSteer, proxyToRunner);
+app.get('/api/git/:id/reflog-events', requireThreadSteer, proxyToRunner);
 app.get('/api/git/:id/commit/*', requireThreadSteer, proxyToRunner);
 
 // Everything else thread-scoped under /api/git stays OWNER-ONLY.

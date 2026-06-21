@@ -130,7 +130,11 @@ describe('thread-access middleware', () => {
     const app = makeApp(OWNER);
     const res = await app.request('/owner/t1');
     const body = await res.json();
-    expect(body.thread).toMatchObject({ id: 't1', userId: OWNER, projectId: 'p1' });
+    expect(body.thread).toMatchObject({
+      id: 't1',
+      userId: OWNER,
+      projectId: 'p1',
+    });
   });
 });
 
@@ -162,6 +166,7 @@ describe('git-route gate (server wiring)', () => {
     app.get('/api/git/:id/diff/*', requireThreadSteer, proxied);
     app.get('/api/git/:id/log', requireThreadSteer, proxied);
     app.get('/api/git/:id/graph-log', requireThreadSteer, proxied);
+    app.get('/api/git/:id/reflog-events', requireThreadSteer, proxied);
     app.get('/api/git/:id/commit/*', requireThreadSteer, proxied);
     app.all('/api/git/:id/*', requireThreadOwner, proxied);
     return app;
@@ -169,28 +174,45 @@ describe('git-route gate (server wiring)', () => {
 
   test('owner reaches the proxy on read and write git routes', async () => {
     expect((await makeGitApp(OWNER).request('/api/git/t1/diff')).status).toBe(200);
-    expect((await makeGitApp(OWNER).request('/api/git/t1/commit', { method: 'POST' })).status).toBe(
-      200,
-    );
+    expect(
+      (
+        await makeGitApp(OWNER).request('/api/git/t1/commit', {
+          method: 'POST',
+        })
+      ).status,
+    ).toBe(200);
   });
 
   test('steer sharee reaches read-only git but NOT writes', async () => {
     expect((await makeGitApp(STEERER).request('/api/git/t1/status')).status).toBe(200);
     expect((await makeGitApp(STEERER).request('/api/git/t1/diff')).status).toBe(200);
     expect((await makeGitApp(STEERER).request('/api/git/t1/log')).status).toBe(200);
+    expect((await makeGitApp(STEERER).request('/api/git/t1/reflog-events')).status).toBe(200);
     // Writes stay owner-only → 404.
     expect(
-      (await makeGitApp(STEERER).request('/api/git/t1/commit', { method: 'POST' })).status,
+      (
+        await makeGitApp(STEERER).request('/api/git/t1/commit', {
+          method: 'POST',
+        })
+      ).status,
     ).toBe(404);
     expect(
-      (await makeGitApp(STEERER).request('/api/git/t1/stage', { method: 'POST' })).status,
+      (
+        await makeGitApp(STEERER).request('/api/git/t1/stage', {
+          method: 'POST',
+        })
+      ).status,
     ).toBe(404);
   });
 
   test('view-only sharee is 404 on git reads AND writes', async () => {
     expect((await makeGitApp(SHAREE).request('/api/git/t1/diff')).status).toBe(404);
     expect(
-      (await makeGitApp(SHAREE).request('/api/git/t1/commit', { method: 'POST' })).status,
+      (
+        await makeGitApp(SHAREE).request('/api/git/t1/commit', {
+          method: 'POST',
+        })
+      ).status,
     ).toBe(404);
   });
 

@@ -4,10 +4,10 @@
     "subtitle": "Parallel Claude Code Agents"
   },
   "powerline": {
-    "tooltipLocalBranch": "Local — shares the project directory",
-    "tooltipBaseBranch": "Base branch",
-    "tooltipWorktree": "Isolated worktree",
-    "tooltipWorktreeWithPath": "Isolated worktree at {{path}}"
+    "tooltipLocalBranch": "Local branch: {{branch}}",
+    "tooltipBaseBranch": "Base branch: {{branch}}",
+    "tooltipWorktree": "Worktree branch: {{branch}}",
+    "tooltipWorktreeWithPath": "Worktree branch: {{branch}} — {{path}}"
   },
   "sidebar": {
     "projects": "Projects",
@@ -990,6 +990,7 @@
     "attach": "Attach file",
     "stopAgent": "Stop agent",
     "loadingSkills": "Loading skills...",
+    "loadingCommands": "Loading commands...",
     "searchWorktrees": "Search worktrees...",
     "noWorktreesMatch": "No worktrees match",
     "backlog": "Backlog",

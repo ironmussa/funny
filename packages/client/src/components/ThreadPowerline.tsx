@@ -111,8 +111,11 @@ export function ThreadPowerline({
     }
     if (isWorktree && worktreeBranchLabel) {
       const worktreeTooltip = worktreePathShort
-        ? t('powerline.tooltipWorktreeWithPath', { path: worktreePathShort })
-        : t('powerline.tooltipWorktree');
+        ? t('powerline.tooltipWorktreeWithPath', {
+            branch: worktreeBranchLabel,
+            path: worktreePathShort,
+          })
+        : t('powerline.tooltipWorktree', { branch: worktreeBranchLabel });
       segs.push({
         key: 'worktree-branch',
         icon: Folder,

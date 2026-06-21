@@ -134,6 +134,65 @@ interface SuggestionItem {
   symbolEndLine?: number;
 }
 
+interface SlashSuggestionOptions {
+  skills: readonly Pick<Skill, 'name' | 'description'>[];
+  sdkCommands: readonly string[];
+  query: string;
+  commandProvider?: string;
+  limit?: number;
+}
+
+export function buildSlashSuggestionItems({
+  skills,
+  sdkCommands,
+  query,
+  commandProvider,
+  limit = SLASH_RESULTS_LIMIT,
+}: SlashSuggestionOptions): SuggestionItem[] {
+  const skillByName = new Map(skills.map((s) => [s.name, s.description] as const));
+
+  // Build one ordered, de-duped candidate list so the SDK's built-in commands
+  // (e.g. /compact) aren't crowded past the result cap by the long skills list.
+  // Order: curated built-ins -> skills -> any other SDK-reported command.
+  const ordered: { name: string; description: string }[] = [];
+  const seen = new Set<string>();
+  const add = (name: string, description: string) => {
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    ordered.push({ name, description });
+  };
+  // The curated descriptions are Claude Code's wording. Other providers
+  // report their own /init, /compact, /review; use a neutral label there.
+  const isClaude = commandProvider === 'claude';
+  const builtinDesc = (name: string): string | undefined =>
+    isClaude ? BUILTIN_SLASH_DESCRIPTIONS[name] : undefined;
+
+  if (isClaude) {
+    for (const name of sdkCommands) {
+      if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name]);
+    }
+  }
+  for (const s of skills) add(s.name, s.description);
+  for (const name of sdkCommands) {
+    add(name, skillByName.get(name) ?? builtinDesc(name) ?? BUILTIN_SLASH_FALLBACK);
+  }
+
+  const q = query.toLowerCase();
+  const matched: SuggestionItem[] = [];
+  for (let i = 0; i < ordered.length && matched.length < limit; i++) {
+    const o = ordered[i];
+    if (o.name.toLowerCase().includes(q)) {
+      matched.push({
+        id: o.name,
+        label: o.name,
+        description: o.description,
+        type: 'slash' as const,
+      });
+    }
+  }
+  return matched;
+}
+
 interface SuggestionPopupProps {
   items: SuggestionItem[];
   selectedIndex: number;
@@ -147,6 +206,16 @@ interface SuggestionPopupProps {
   query?: string;
   /** Ref to a container element — the popup will match its width and left edge */
   containerRef?: React.RefObject<HTMLElement | null>;
+}
+
+export function getSuggestionLoadingLabel(type: SuggestionPopupProps['type']) {
+  if (type === 'file') {
+    return { key: 'prompt.loadingFiles', fallback: 'Loading files...' };
+  }
+  if (type === 'symbol') {
+    return { key: 'prompt.loadingSymbols', fallback: 'Loading symbols...' };
+  }
+  return { key: 'prompt.loadingCommands', fallback: 'Loading commands...' };
 }
 
 /**
@@ -245,6 +314,7 @@ function SuggestionPopup({
   }, [selectedIndex]);
 
   if (loading && items.length === 0) {
+    const loadingLabel = getSuggestionLoadingLabel(type);
     return createPortal(
       <div
         data-suggestion-popup
@@ -256,11 +326,7 @@ function SuggestionPopup({
       >
         <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
-          {type === 'file'
-            ? t('prompt.loadingFiles', 'Loading files\u2026')
-            : type === 'symbol'
-              ? t('prompt.loadingSymbols', 'Loading symbols\u2026')
-              : t('prompt.loadingSkills', 'Loading skills\u2026')}
+          {t(loadingLabel.key, loadingLabel.fallback)}
         </div>
       </div>,
       document.body,
@@ -408,6 +474,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const fileTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Cached skills
   const skillsCacheRef = useRef<Skill[] | null>(null);
+  const slashSkillsLoadingRef = useRef<Promise<Skill[]> | null>(null);
   // Keep cwd/loadSkills refs current for async callbacks
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
@@ -423,6 +490,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   suggestionItemsRef.current = suggestionItems;
   const suggestionTypeRef = useRef(suggestionType);
   suggestionTypeRef.current = suggestionType;
+  const suggestionQueryRef = useRef(suggestionQuery);
+  suggestionQueryRef.current = suggestionQuery;
 
   // Track the trigger position so we can read the full query (@ to next space/EOL)
   // regardless of caret position
@@ -595,70 +664,64 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   );
 
   // ── Slash command suggestion config ──
+  const applySlashSuggestionItems = useCallback((items: SuggestionItem[]) => {
+    setSuggestionItems((prev) => {
+      const changed =
+        prev.length !== items.length || prev.some((item, i) => item.id !== items[i]?.id);
+      if (changed) setSuggestionIndex(0);
+      return items;
+    });
+  }, []);
+
+  const ensureSlashSkillsLoaded = useCallback(() => {
+    if (skillsCacheRef.current || slashSkillsLoadingRef.current) return;
+    queueMicrotask(() => setSuggestionLoading(true));
+    const loadPromise = (async () => {
+      const fn = loadSkillsRef.current;
+      return fn ? await fn() : [];
+    })();
+    slashSkillsLoadingRef.current = loadPromise;
+    void loadPromise
+      .then((skills) => {
+        skillsCacheRef.current = skills;
+        if (suggestionTypeRef.current !== 'slash') return;
+        applySlashSuggestionItems(
+          buildSlashSuggestionItems({
+            skills,
+            sdkCommands: sdkSlashCommandsRef.current ?? [],
+            query: suggestionQueryRef.current,
+            commandProvider: commandProviderRef.current,
+          }),
+        );
+      })
+      .catch(() => {
+        skillsCacheRef.current = [];
+      })
+      .finally(() => {
+        slashSkillsLoadingRef.current = null;
+        if (suggestionTypeRef.current === 'slash') setSuggestionLoading(false);
+      });
+  }, [applySlashSuggestionItems]);
+
   const slashSuggestion = useCallback(
     () => ({
       char: '/',
       allowSpaces: false,
       allowedPrefixes: [' ', '\n'],
-      items: async ({ query }: { query: string }) => {
+      items: ({ query }: { query: string }) => {
         const fullQuery = getFullQuery(query);
         // Defer state updates out of TipTap's render cycle
         queueMicrotask(() => setSuggestionQuery(fullQuery));
-        if (!skillsCacheRef.current) {
-          queueMicrotask(() => setSuggestionLoading(true));
-          const fn = loadSkillsRef.current;
-          skillsCacheRef.current = fn ? await fn() : [];
-          setSuggestionLoading(false);
-        }
+        ensureSlashSkillsLoaded();
+        const t0 = performance.now();
         const skills = skillsCacheRef.current ?? [];
         const sdkCommands = sdkSlashCommandsRef.current ?? [];
-        const q = fullQuery.toLowerCase();
-        const t0 = performance.now();
-        const skillByName = new Map(skills.map((s) => [s.name, s.description] as const));
-
-        // Build one ordered, de-duped candidate list so the SDK's built-in
-        // commands (e.g. /compact) aren't crowded past the result cap by the
-        // long skills list — the SDK reports built-ins at the TAIL of its array.
-        // Order: curated built-ins → skills → any other SDK-reported command.
-        const ordered: { name: string; description: string }[] = [];
-        const seen = new Set<string>();
-        const add = (name: string, description: string) => {
-          if (seen.has(name)) return;
-          seen.add(name);
-          ordered.push({ name, description });
-        };
-        // The curated descriptions are Claude Code's wording. Other providers
-        // (e.g. Codex) report their OWN /init, /compact, /review — don't dress
-        // those up with Claude text. Falls back to a neutral label instead.
-        const isClaude = commandProviderRef.current === 'claude';
-        const builtinDesc = (name: string): string | undefined =>
-          isClaude ? BUILTIN_SLASH_DESCRIPTIONS[name] : undefined;
-
-        // 1) Curated built-ins the SDK reports for this session (Claude only).
-        if (isClaude) {
-          for (const name of sdkCommands) {
-            if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name]);
-          }
-        }
-        // 2) Skills — they carry their own descriptions.
-        for (const s of skills) add(s.name, s.description);
-        // 3) Remaining SDK-reported commands (plugin / dynamically-loaded).
-        for (const name of sdkCommands) {
-          add(name, skillByName.get(name) ?? builtinDesc(name) ?? BUILTIN_SLASH_FALLBACK);
-        }
-
-        const matched: SuggestionItem[] = [];
-        for (let i = 0; i < ordered.length && matched.length < SLASH_RESULTS_LIMIT; i++) {
-          const o = ordered[i];
-          if (o.name.toLowerCase().includes(q)) {
-            matched.push({
-              id: o.name,
-              label: o.name,
-              description: o.description,
-              type: 'slash' as const,
-            });
-          }
-        }
+        const matched = buildSlashSuggestionItems({
+          skills,
+          sdkCommands,
+          query: fullQuery,
+          commandProvider: commandProviderRef.current,
+        });
         metric('palette.slash.filter_ms', performance.now() - t0, {
           type: 'gauge',
           attributes: {
@@ -752,8 +815,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [ensureSlashSkillsLoaded, getFullQuery],
   );
 
   // ── Symbol suggestion config (# trigger) ──

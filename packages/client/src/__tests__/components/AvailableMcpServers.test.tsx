@@ -23,7 +23,8 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-import { AvailableMcpServers, isActiveMcpServer } from '@/components/AvailableMcpServers';
+import { isActiveMcpServer, isVisibleMcpServer } from '@/components/available-mcp-servers-utils';
+import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 
 function renderMcpList(ui: React.ReactElement) {
   return render(
@@ -43,7 +44,7 @@ describe('AvailableMcpServers', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  test('lists active MCP servers for the project', async () => {
+  test('lists usable and auth-blocked MCP servers for the project', async () => {
     mockListMcpServers.mockReturnValue(
       okAsync({
         servers: [
@@ -60,8 +61,11 @@ describe('AvailableMcpServers', () => {
     await waitFor(() => {
       expect(screen.getByTestId('available-mcp-github')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('available-mcp-needs-auth')).toHaveAttribute(
+      'aria-label',
+      'needs-auth: mcp.needsAuth',
+    );
     expect(screen.queryByTestId('available-mcp-disabled-one')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('available-mcp-needs-auth')).not.toBeInTheDocument();
     expect(screen.queryByTestId('available-mcp-broken')).not.toBeInTheDocument();
     expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude');
   });
@@ -73,7 +77,14 @@ describe('AvailableMcpServers', () => {
     expect(isActiveMcpServer({ name: 'd', type: 'stdio', status: 'error' })).toBe(false);
   });
 
-  test('shows empty state when no active servers', async () => {
+  test('isVisibleMcpServer includes auth-blocked servers', () => {
+    expect(isVisibleMcpServer({ name: 'a', type: 'stdio', status: 'ok' })).toBe(true);
+    expect(isVisibleMcpServer({ name: 'b', type: 'stdio', disabled: true })).toBe(false);
+    expect(isVisibleMcpServer({ name: 'c', type: 'stdio', status: 'needs_auth' })).toBe(true);
+    expect(isVisibleMcpServer({ name: 'd', type: 'stdio', status: 'error' })).toBe(false);
+  });
+
+  test('shows empty state when no visible servers', async () => {
     mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
 
     renderMcpList(<AvailableMcpServers projectPath="/repo" />);

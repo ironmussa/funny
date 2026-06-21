@@ -10,6 +10,7 @@ import { rmSync } from 'node:fs';
 
 import {
   createWorktree,
+  findWorktreeForBranch,
   removeWorktree,
   removeBranch,
   getCurrentBranch,
@@ -256,7 +257,7 @@ async function autoStartIdleThread(
     })();
   } else {
     // Worktree already exists or local mode: start agent directly
-    const cwd = thread.worktreePath || projectPath;
+    let cwd = thread.worktreePath || projectPath;
 
     // Check if local mode needs branch checkout (synchronous, no setting_up UI)
     const needsCheckout =
@@ -266,30 +267,40 @@ async function autoStartIdleThread(
       thread.baseBranch !== thread.branch;
 
     if (needsCheckout) {
-      const fetchResult = await git(['fetch', 'origin', thread.baseBranch!], projectPath);
-      if (fetchResult.isErr()) {
-        log.warn('Failed to fetch branch for idle thread checkout (non-fatal)', {
-          namespace: 'agent',
-          threadId,
-          error: fetchResult.error.message,
+      const existingWorktree = await findWorktreeForBranch(projectPath, thread.baseBranch!);
+      if (existingWorktree.isOk() && existingWorktree.value) {
+        cwd = existingWorktree.value;
+        await tm.updateThread(threadId, { branch: thread.baseBranch, worktreePath: cwd });
+        emitThreadUpdated(thread.userId, threadId, {
+          branch: thread.baseBranch,
+          worktreePath: cwd,
         });
+      } else {
+        const fetchResult = await git(['fetch', 'origin', thread.baseBranch!], projectPath);
+        if (fetchResult.isErr()) {
+          log.warn('Failed to fetch branch for idle thread checkout (non-fatal)', {
+            namespace: 'agent',
+            threadId,
+            error: fetchResult.error.message,
+          });
+        }
+        const checkoutResult = await git(['checkout', thread.baseBranch!], projectPath);
+        if (checkoutResult.isErr()) {
+          log.error('Failed to checkout branch for idle thread', {
+            namespace: 'agent',
+            threadId,
+            error: checkoutResult.error.message,
+          });
+          await tm.updateThread(threadId, {
+            status: 'failed',
+            completedAt: new Date().toISOString(),
+          });
+          emitAgentFailed(thread.userId, threadId);
+          return;
+        }
+        await tm.updateThread(threadId, { branch: thread.baseBranch });
+        // Fall through to normal agent start below
       }
-      const checkoutResult = await git(['checkout', thread.baseBranch!], projectPath);
-      if (checkoutResult.isErr()) {
-        log.error('Failed to checkout branch for idle thread', {
-          namespace: 'agent',
-          threadId,
-          error: checkoutResult.error.message,
-        });
-        await tm.updateThread(threadId, {
-          status: 'failed',
-          completedAt: new Date().toISOString(),
-        });
-        emitAgentFailed(thread.userId, threadId);
-        return;
-      }
-      await tm.updateThread(threadId, { branch: thread.baseBranch });
-      // Fall through to normal agent start below
     }
 
     const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });

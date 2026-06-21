@@ -256,6 +256,42 @@ export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], 
   });
 }
 
+export function findWorktreeForBranch(
+  projectPath: string,
+  branchName: string,
+): ResultAsync<string | null, DomainError> {
+  return listWorktrees(projectPath).map((worktrees) => {
+    const match = worktrees.find((worktree) => worktree.branch === branchName);
+    return match?.path ?? null;
+  });
+}
+
+export function isRegisteredWorktreePath(
+  projectPath: string,
+  worktreePath: string,
+): ResultAsync<boolean, DomainError> {
+  if (
+    typeof worktreePath !== 'string' ||
+    worktreePath.length === 0 ||
+    worktreePath.startsWith('-')
+  ) {
+    return ResultAsync.fromSafePromise(Promise.resolve(false));
+  }
+
+  const normalizeForCompare = (path: string): string => {
+    try {
+      return normalize(realpathSync(path));
+    } catch {
+      return normalize(resolve(path));
+    }
+  };
+
+  const target = normalizeForCompare(worktreePath);
+  return listWorktrees(projectPath).map((worktrees) =>
+    worktrees.some((worktree) => normalizeForCompare(worktree.path) === target),
+  );
+}
+
 /**
  * Security CR-3: verify that `worktreePath` is inside the project's worktree
  * base (`getWorktreeBasePath(projectPath)`) before any destructive operation.

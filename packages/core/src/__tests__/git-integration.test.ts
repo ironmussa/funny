@@ -20,6 +20,7 @@ import {
   getSingleFileDiff,
   getStatusSummary,
   getUnpushedHashes,
+  getUnpulledHashes,
   invalidateStatusCache,
   mergeBranch,
   revertFiles,
@@ -502,6 +503,38 @@ describe('integration: branch & merge workflows', () => {
       for (const entry of logResult.value) {
         expect(unpushedSet.has(entry.hash)).toBe(true);
       }
+    }
+  });
+
+  test('getUnpulledHashes returns commits present on remote refs but not local branches', async () => {
+    const branch = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repoPath,
+    }).stdout.trim();
+    const remotePath = resolve(TMP, 'remote.git');
+    const remoteClonePath = resolve(TMP, 'remote-clone');
+
+    executeSync('git', ['init', '--bare', remotePath]);
+    executeSync('git', ['remote', 'add', 'origin', remotePath], { cwd: repoPath });
+    executeSync('git', ['push', '-u', 'origin', branch], { cwd: repoPath });
+    executeSync('git', ['symbolic-ref', 'HEAD', `refs/heads/${branch}`], { cwd: remotePath });
+
+    executeSync('git', ['clone', remotePath, remoteClonePath]);
+    executeSync('git', ['config', 'user.email', 'remote@test.com'], { cwd: remoteClonePath });
+    executeSync('git', ['config', 'user.name', 'Remote'], { cwd: remoteClonePath });
+    writeFileSync(resolve(remoteClonePath, 'remote-only.txt'), 'remote');
+    executeSync('git', ['add', '.'], { cwd: remoteClonePath });
+    executeSync('git', ['commit', '-m', 'remote only commit'], { cwd: remoteClonePath });
+    const remoteOnlyHash = executeSync('git', ['rev-parse', 'HEAD'], {
+      cwd: remoteClonePath,
+    }).stdout.trim();
+    executeSync('git', ['push', 'origin', branch], { cwd: remoteClonePath });
+
+    executeSync('git', ['fetch', 'origin'], { cwd: repoPath });
+
+    const unpulledResult = await getUnpulledHashes(repoPath);
+    expect(unpulledResult.isOk()).toBe(true);
+    if (unpulledResult.isOk()) {
+      expect(unpulledResult.value.has(remoteOnlyHash)).toBe(true);
     }
   });
 });

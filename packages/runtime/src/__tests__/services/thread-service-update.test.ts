@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   startAgent: vi.fn(async () => undefined),
   cleanupThreadState: vi.fn(),
   createWorktree: vi.fn(),
+  findWorktreeForBranch: vi.fn(),
   setupWorktree: vi.fn(),
   removeWorktree: vi.fn(),
   removeBranch: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock('../../services/agent-runner-control.js', () => ({
 
 vi.mock('@funny/core/git', () => ({
   createWorktree: mocks.createWorktree,
+  findWorktreeForBranch: mocks.findWorktreeForBranch,
   removeWorktree: mocks.removeWorktree,
   removeBranch: mocks.removeBranch,
   getCurrentBranch: mocks.getCurrentBranch,
@@ -279,6 +281,7 @@ describe('updateThread — auto-start idle thread', () => {
     mocks.projects.resolveProjectPath.mockResolvedValue(ok('/repo'));
     mocks.getCurrentBranch.mockResolvedValue(ok('main'));
     mocks.createWorktree.mockResolvedValue(ok('/repo/.worktrees/t-1'));
+    mocks.findWorktreeForBranch.mockResolvedValue(ok(null));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
     mocks.git.mockResolvedValue(ok(undefined));
     mocks.tm.getThreadMessages.mockResolvedValue({
@@ -368,6 +371,46 @@ describe('updateThread — auto-start idle thread', () => {
         true,
       );
     });
+  });
+
+  test('uses existing registered worktree when idle local thread starts on checked-out base branch', async () => {
+    mocks.tm.getThread.mockImplementation(async () => ({
+      ...baseThread,
+      status: 'idle',
+      initialPrompt: 'Fix develop',
+      stage: 'backlog',
+      mode: 'local',
+      branch: 'main',
+      baseBranch: 'develop',
+      worktreePath: null,
+    }));
+    mocks.findWorktreeForBranch.mockResolvedValueOnce(ok('/repo-worktrees/develop'));
+
+    const result = await updateThread({
+      threadId: 't-1',
+      userId: 'u-1',
+      stage: 'in_progress',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.git).not.toHaveBeenCalledWith(['checkout', 'develop'], expect.anything());
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith('t-1', {
+      branch: 'develop',
+      worktreePath: '/repo-worktrees/develop',
+    });
+    expect(mocks.startAgent).toHaveBeenCalledWith(
+      't-1',
+      'Fix develop',
+      '/repo-worktrees/develop',
+      expect.any(String),
+      expect.any(String),
+      undefined,
+      undefined,
+      undefined,
+      expect.any(String),
+      undefined,
+      true,
+    );
   });
 });
 

@@ -23,7 +23,8 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   setupWorktree: vi.fn(),
   git: vi.fn(),
-  checkWorktreePathInProject: vi.fn(() => null),
+  findWorktreeForBranch: vi.fn(),
+  isRegisteredWorktreePath: vi.fn(),
   launchContainer: vi.fn(),
   safeFetchUserUrl: vi.fn(),
   listPermissionRules: vi.fn(async () => []),
@@ -93,7 +94,8 @@ vi.mock('@funny/core/git', () => ({
   getCurrentBranch: mocks.getCurrentBranch,
   createWorktree: mocks.createWorktree,
   git: mocks.git,
-  checkWorktreePathInProject: mocks.checkWorktreePathInProject,
+  findWorktreeForBranch: mocks.findWorktreeForBranch,
+  isRegisteredWorktreePath: mocks.isRegisteredWorktreePath,
 }));
 
 vi.mock('@funny/core/ports', () => ({
@@ -120,6 +122,8 @@ describe('createIdleThread', () => {
     mocks.projects.getProject.mockResolvedValue(baseProject);
     mocks.projects.resolveProjectPath.mockResolvedValue(ok('/projects/my-app'));
     mocks.getCurrentBranch.mockResolvedValue(ok('main'));
+    mocks.findWorktreeForBranch.mockResolvedValue(ok(null));
+    mocks.isRegisteredWorktreePath.mockResolvedValue(ok(true));
   });
 
   test('returns 404 when project is missing', async () => {
@@ -564,8 +568,8 @@ describe('createAndStartThread', () => {
     );
   });
 
-  test('rejects client-supplied worktreePath outside project scope', async () => {
-    mocks.checkWorktreePathInProject.mockReturnValueOnce({ message: 'path outside project' });
+  test('rejects client-supplied worktreePath not registered for the project', async () => {
+    mocks.isRegisteredWorktreePath.mockResolvedValueOnce(ok(false));
 
     const result = await createAndStartThread({
       projectId: 'p-1',
@@ -578,7 +582,7 @@ describe('createAndStartThread', () => {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.statusCode).toBe(400);
-      expect(result.error.message).toContain('path outside project');
+      expect(result.error.message).toContain('not registered');
     }
   });
 
@@ -605,6 +609,84 @@ describe('createAndStartThread', () => {
       'fixed-thread-id',
       'Continue work',
       '/projects/my-app/.worktrees/existing',
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      undefined,
+      undefined,
+      'claude',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  test('accepts an externally registered worktreePath outside the managed worktree base', async () => {
+    mocks.getCurrentBranch.mockResolvedValueOnce(ok('feature/external'));
+    mocks.isRegisteredWorktreePath.mockResolvedValueOnce(ok(true));
+
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'worktree',
+      worktreePath: '/tmp/external-my-app-worktree',
+      prompt: 'Continue external worktree',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.isRegisteredWorktreePath).toHaveBeenCalledWith(
+      '/projects/my-app',
+      '/tmp/external-my-app-worktree',
+    );
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreePath: '/tmp/external-my-app-worktree',
+        branch: 'feature/external',
+        status: 'pending',
+      }),
+    );
+    expect(mocks.startAgent).toHaveBeenCalledWith(
+      'fixed-thread-id',
+      'Continue external worktree',
+      '/tmp/external-my-app-worktree',
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      undefined,
+      undefined,
+      'claude',
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  test('uses registered worktree for baseBranch instead of checking out inside supplied worktree', async () => {
+    mocks.getCurrentBranch.mockResolvedValueOnce(ok('feature/current'));
+    mocks.findWorktreeForBranch.mockResolvedValueOnce(ok('/tmp/existing-develop-worktree'));
+
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'worktree',
+      worktreePath: '/tmp/current-worktree',
+      baseBranch: 'develop',
+      prompt: 'Continue develop',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.git).not.toHaveBeenCalledWith(['checkout', 'develop'], expect.anything());
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreePath: '/tmp/existing-develop-worktree',
+        branch: 'develop',
+        status: 'pending',
+      }),
+    );
+    expect(mocks.startAgent).toHaveBeenCalledWith(
+      'fixed-thread-id',
+      'Continue develop',
+      '/tmp/existing-develop-worktree',
       expect.anything(),
       expect.anything(),
       undefined,

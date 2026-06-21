@@ -327,6 +327,24 @@ export function getUnpushedHashes(cwd: string): ResultAsync<Set<string>, DomainE
 }
 
 /**
+ * Get the set of commit hashes that exist on remote-tracking refs but not on
+ * any local branch. Useful for marking commits that need to be pulled.
+ */
+export function getUnpulledHashes(cwd: string): ResultAsync<Set<string>, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitRead(['rev-list', '--remotes', '--not', '--branches'], {
+        cwd,
+        reject: false,
+      });
+      if (result.exitCode !== 0 || !result.stdout.trim()) return new Set<string>();
+      return new Set(result.stdout.trim().split('\n'));
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
  * Get the full commit message body (everything after the subject line) for a single commit.
  */
 export function getCommitBody(cwd: string, hash: string): ResultAsync<string, DomainError> {

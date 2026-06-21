@@ -67,6 +67,7 @@ export const projectsApi = {
       reason?: string;
       hasDirtyFiles?: boolean;
       dirtyFileCount?: number;
+      worktreePath?: string;
     }>(`/projects/${projectId}/checkout-preflight?branch=${encodeURIComponent(branch)}`),
   checkout: (
     projectId: string,
@@ -75,10 +76,13 @@ export const projectsApi = {
     create = false,
     threadId?: string,
   ) =>
-    request<{ ok: boolean; currentBranch: string }>(`/projects/${projectId}/checkout`, {
-      method: 'POST',
-      body: JSON.stringify({ branch, strategy, create, threadId }),
-    }),
+    request<{ ok: boolean; currentBranch: string; worktreePath?: string }>(
+      `/projects/${projectId}/checkout`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ branch, strategy, create, threadId }),
+      },
+    ),
 
   // Startup Commands
   listCommands: (projectId: string) => request<StartupCommand[]>(`/projects/${projectId}/commands`),

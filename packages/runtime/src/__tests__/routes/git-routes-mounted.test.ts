@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   getLog: vi.fn(),
   getGraphLog: vi.fn(),
   getUnpushedHashes: vi.fn(),
+  getUnpulledHashes: vi.fn(),
   stashList: vi.fn(),
   stash: vi.fn(),
   stashShow: vi.fn(),
@@ -84,10 +85,12 @@ vi.mock('@funny/core/git', async (importOriginal) => {
     getLog: mocks.getLog,
     getGraphLog: mocks.getGraphLog,
     getUnpushedHashes: mocks.getUnpushedHashes,
+    getUnpulledHashes: mocks.getUnpulledHashes,
     stashList: mocks.stashList,
     stash: mocks.stash,
     stashShow: mocks.stashShow,
     stashFileDiff: mocks.stashFileDiff,
+    findWorktreeForBranch: vi.fn(() => okAsync(null)),
   };
 });
 
@@ -212,6 +215,7 @@ describe('gitRoutes (mounted)', () => {
       ]),
     );
     mocks.getUnpushedHashes.mockReturnValue(okAsync(new Set(['def222'])));
+    mocks.getUnpulledHashes.mockReturnValue(okAsync(new Set()));
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
     mocks.stash.mockReturnValue(okAsync('Saved working directory'));
     mocks.stashShow.mockReturnValue(okAsync([{ path: 'src/a.ts', status: 'modified' }]));
@@ -810,6 +814,7 @@ describe('gitRoutes (mounted)', () => {
       entries: [{ hash: 'abc111', message: 'init', author: 'a', date: '2026-01-01' }],
       hasMore: true,
       unpushedHashes: [],
+      unpulledHashes: [],
     });
     expect(mocks.getLog).toHaveBeenCalledWith('/wt/thread', 2, 'develop', 0);
   });
@@ -855,9 +860,11 @@ describe('gitRoutes (mounted)', () => {
       entries: [{ hash: 'abc111', message: 'init', author: 'a', date: '2026-01-01' }],
       hasMore: true,
       unpushedHashes: [],
+      unpulledHashes: [],
     });
     expect(mocks.getLog).toHaveBeenCalledWith('/tmp/repo', 2, undefined, 0);
     expect(mocks.getUnpushedHashes).toHaveBeenCalledWith('/tmp/repo');
+    expect(mocks.getUnpulledHashes).toHaveBeenCalledWith('/tmp/repo');
   });
 
   test('GET /api/git/project/:projectId/log projects unpushed hashes within the window', async () => {
@@ -874,8 +881,19 @@ describe('gitRoutes (mounted)', () => {
       ],
       hasMore: false,
       unpushedHashes: ['def222'],
+      unpulledHashes: [],
     });
     expect(mocks.getLog).toHaveBeenCalledWith('/tmp/repo', 51, undefined, 0);
+  });
+
+  test('GET /api/git/project/:projectId/log projects unpulled hashes within the window', async () => {
+    mocks.getUnpulledHashes.mockReturnValueOnce(okAsync(new Set(['abc111'])));
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/log');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.unpulledHashes).toEqual(['abc111']);
   });
 
   test('GET /api/git/project/:projectId/log degrades to empty unpushedHashes when lookup fails', async () => {
@@ -890,6 +908,7 @@ describe('gitRoutes (mounted)', () => {
     expect(body.entries.length).toBe(2);
     expect(body.hasMore).toBe(false);
     expect(body.unpushedHashes).toEqual([]);
+    expect(body.unpulledHashes).toEqual([]);
   });
 
   test('GET /api/git/project/:projectId/graph-log returns topology + defaults to all refs', async () => {
@@ -914,6 +933,7 @@ describe('gitRoutes (mounted)', () => {
       },
     ]);
     expect(body.unpushedHashes).toEqual([]);
+    expect(body.unpulledHashes).toEqual([]);
     expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', { limit: 2, skip: 0, all: true });
   });
 

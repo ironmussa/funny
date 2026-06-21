@@ -39,14 +39,14 @@ describe('buildLogPayload', () => {
   test('trims the look-ahead entry and reports hasMore when over-read', () => {
     // limit=2 but 3 entries returned (the +1 look-ahead) → hasMore, 2 entries.
     const entries = [entry('a'), entry('b'), entry('c')];
-    const payload = buildLogPayload(entries, new Set(), 2);
+    const payload = buildLogPayload(entries, new Set(), new Set(), 2);
     expect(payload.hasMore).toBe(true);
     expect(payload.entries.map((e) => e.hash)).toEqual(['a', 'b']);
   });
 
   test('hasMore is false when the result fits within the limit', () => {
     const entries = [entry('a'), entry('b')];
-    const payload = buildLogPayload(entries, new Set(), 5);
+    const payload = buildLogPayload(entries, new Set(), new Set(), 5);
     expect(payload.hasMore).toBe(false);
     expect(payload.entries).toHaveLength(2);
   });
@@ -55,20 +55,28 @@ describe('buildLogPayload', () => {
     // 'c' is unpushed but gets trimmed off as the look-ahead entry, so it must
     // not appear in unpushedHashes — only 'a' (within the window) survives.
     const entries = [entry('a'), entry('b'), entry('c')];
-    const payload = buildLogPayload(entries, new Set(['a', 'c']), 2);
+    const payload = buildLogPayload(entries, new Set(['a', 'c']), new Set(), 2);
     expect(payload.unpushedHashes).toEqual(['a']);
   });
 
+  test('projects only unpulled hashes that fall within the returned window', () => {
+    const entries = [entry('a'), entry('b'), entry('c')];
+    const payload = buildLogPayload(entries, new Set(), new Set(['b', 'c']), 2);
+    expect(payload.unpulledHashes).toEqual(['b']);
+  });
+
   test('returns an empty unpushed list when the set is empty', () => {
-    const payload = buildLogPayload([entry('a')], new Set(), 50);
+    const payload = buildLogPayload([entry('a')], new Set(), new Set(), 50);
     expect(payload.unpushedHashes).toEqual([]);
+    expect(payload.unpulledHashes).toEqual([]);
   });
 
   test('handles an empty log', () => {
-    expect(buildLogPayload([], new Set(['x']), 50)).toEqual({
+    expect(buildLogPayload([], new Set(['x']), new Set(['x']), 50)).toEqual({
       entries: [],
       hasMore: false,
       unpushedHashes: [],
+      unpulledHashes: [],
     });
   });
 });

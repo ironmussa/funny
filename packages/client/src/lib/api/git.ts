@@ -34,6 +34,7 @@ interface LogResponse<E extends GitLogEntryDTO> {
   entries: E[];
   hasMore: boolean;
   unpushedHashes: string[];
+  unpulledHashes?: string[];
 }
 
 export const gitApi = {

@@ -6,7 +6,13 @@
  * @domain emits: thread:created
  */
 
-import { createWorktree, getCurrentBranch, git } from '@funny/core/git';
+import {
+  createWorktree,
+  findWorktreeForBranch,
+  getCurrentBranch,
+  git,
+  isRegisteredWorktreePath,
+} from '@funny/core/git';
 import { setupWorktree } from '@funny/core/ports';
 import type {
   WSEvent,
@@ -486,30 +492,51 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
   if (params.worktreePath) {
     // Security CR-4: client-supplied worktreePath becomes the cwd for
     // browse/file-index/text-search/agent-spawn. An attacker who supplies
-    // an absolute path outside the project's worktree base — `/etc`,
-    // another user's HOME, etc. — would otherwise pivot every downstream
-    // file/command op into that scope. Verify against the project's
-    // worktree base (`getWorktreeBasePath(projectPath)`) using realpath.
-    const { checkWorktreePathInProject } = await import('@funny/core/git');
-    const containmentErr = checkWorktreePathInProject(projectPath, params.worktreePath);
-    if (containmentErr) {
-      throw new ThreadServiceError(containmentErr.message, 400);
+    // an arbitrary path — `/etc`, another user's HOME, etc. — would
+    // otherwise pivot downstream file/command ops into that scope. Accept
+    // only paths registered by Git as worktrees for this project, including
+    // externally-created worktrees outside `.funny-worktrees`.
+    const registeredResult = await isRegisteredWorktreePath(projectPath, params.worktreePath);
+    if (registeredResult.isErr()) {
+      throw new ThreadServiceError(registeredResult.error.message, 400);
+    }
+    if (!registeredResult.value) {
+      throw new ThreadServiceError('worktreePath is not registered for this project', 400);
     }
     worktreePath = params.worktreePath;
     const branchResult = await getCurrentBranch(params.worktreePath);
-    if (branchResult.isOk()) threadBranch = branchResult.value;
+    if (branchResult.isOk()) {
+      threadBranch = branchResult.value;
+      needsBranchCheckout = !!(resolvedBaseBranch && resolvedBaseBranch !== threadBranch);
+      if (needsBranchCheckout) {
+        const existingWorktree = await findWorktreeForBranch(projectPath, resolvedBaseBranch!);
+        if (existingWorktree.isOk() && existingWorktree.value) {
+          worktreePath = existingWorktree.value;
+          needsBranchCheckout = false;
+        }
+        threadBranch = resolvedBaseBranch;
+      }
+    }
   } else {
     const branchResult = await getCurrentBranch(projectPath);
     if (branchResult.isOk()) {
       threadBranch = branchResult.value;
       needsBranchCheckout = !!(resolvedBaseBranch && resolvedBaseBranch !== threadBranch);
-      if (needsBranchCheckout) threadBranch = resolvedBaseBranch;
+      if (needsBranchCheckout) {
+        const existingWorktree = await findWorktreeForBranch(projectPath, resolvedBaseBranch!);
+        if (existingWorktree.isOk() && existingWorktree.value) {
+          worktreePath = existingWorktree.value;
+          needsBranchCheckout = false;
+        }
+        threadBranch = resolvedBaseBranch;
+      }
     }
   }
 
   // ── Local mode with branch checkout (synchronous, no setting_up UI) ──
-  if (needsBranchCheckout && !worktreePath) {
-    const fetchResult = await git(['fetch', 'origin', resolvedBaseBranch!], projectPath);
+  if (needsBranchCheckout) {
+    const checkoutCwd = worktreePath ?? projectPath;
+    const fetchResult = await git(['fetch', 'origin', resolvedBaseBranch!], checkoutCwd);
     if (fetchResult.isErr()) {
       log.warn('Failed to fetch branch before checkout (non-fatal)', {
         namespace: 'thread-service',
@@ -519,7 +546,7 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
       });
     }
 
-    const checkoutResult = await git(['checkout', resolvedBaseBranch!], projectPath);
+    const checkoutResult = await git(['checkout', resolvedBaseBranch!], checkoutCwd);
     if (checkoutResult.isErr()) {
       throw new ThreadServiceError(
         `Failed to checkout branch "${resolvedBaseBranch}": ${checkoutResult.error.message}`,

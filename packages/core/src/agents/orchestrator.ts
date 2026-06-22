@@ -221,7 +221,7 @@ export interface IdleReapPolicy {
 export class AgentOrchestrator extends EventEmitter {
   private activeAgents = new Map<string, IAgentProcess>();
   private resultReceived = new Set<string>();
-  private manuallyStopped = new Set<string>();
+  private manuallyStopped = new WeakSet<IAgentProcess>();
   /**
    * Last process options applied per thread, used to gate process reuse.
    * Reusing via `sendPrompt()` is only safe when the new request matches
@@ -324,7 +324,7 @@ export class AgentOrchestrator extends EventEmitter {
     const liveAndCompatible =
       existing &&
       !existing.exited &&
-      !this.manuallyStopped.has(threadId) &&
+      !this.manuallyStopped.has(existing) &&
       this.isCompatibleOptions(this.lastOptions.get(threadId), nextSnapshot);
 
     // Steer path: cancel the in-flight turn, then queue the new prompt on
@@ -369,7 +369,7 @@ export class AgentOrchestrator extends EventEmitter {
     // Kill existing process if still running
     if (existing && !existing.exited) {
       dlog.info('Stopping existing agent before restart', { threadId });
-      this.manuallyStopped.add(threadId);
+      this.manuallyStopped.add(existing);
       try {
         await existing.kill();
       } catch {
@@ -472,7 +472,7 @@ export class AgentOrchestrator extends EventEmitter {
   async stopAgent(threadId: string): Promise<void> {
     const proc = this.activeAgents.get(threadId);
     if (proc) {
-      this.manuallyStopped.add(threadId);
+      this.manuallyStopped.add(proc);
       try {
         await proc.kill();
       } catch (e) {
@@ -558,9 +558,10 @@ export class AgentOrchestrator extends EventEmitter {
    * Call when deleting/archiving a thread.
    */
   cleanupThread(threadId: string): void {
+    const proc = this.activeAgents.get(threadId);
+    if (proc) this.manuallyStopped.delete(proc);
     this.activeAgents.delete(threadId);
     this.resultReceived.delete(threadId);
-    this.manuallyStopped.delete(threadId);
     this.lastOptions.delete(threadId);
     this.lastActivityAt.delete(threadId);
   }
@@ -579,7 +580,6 @@ export class AgentOrchestrator extends EventEmitter {
     }
     this.activeAgents.clear();
     this.resultReceived.clear();
-    this.manuallyStopped.clear();
     this.lastOptions.clear();
     this.lastActivityAt.clear();
     return agents;
@@ -629,6 +629,14 @@ export class AgentOrchestrator extends EventEmitter {
     this.lastActivityAt.set(threadId, Date.now());
 
     proc.on('message', (msg: CLIMessage) => {
+      if (this.activeAgents.get(threadId) !== proc) {
+        dlog.debug('Ignoring message from stale process', { threadId, type: msg.type });
+        return;
+      }
+      if (this.manuallyStopped.has(proc)) {
+        dlog.debug('Suppressing message for manually stopped agent', { threadId, type: msg.type });
+        return;
+      }
       this.lastActivityAt.set(threadId, Date.now());
       dlog.debug('wireProcessHandlers message', {
         threadId,
@@ -636,18 +644,22 @@ export class AgentOrchestrator extends EventEmitter {
         subtype: (msg as any).subtype,
       });
       if (msg.type === 'result') {
-        if (this.manuallyStopped.has(threadId)) {
-          dlog.debug('Suppressing result for manually stopped agent', { threadId });
-          return;
-        }
         this.resultReceived.add(threadId);
       }
       this.emit('agent:message', threadId, msg);
     });
 
     proc.on('error', (err: Error) => {
+      if (this.activeAgents.get(threadId) !== proc) {
+        dlog.debug('Ignoring error from stale process', { threadId });
+        return;
+      }
+      if (this.manuallyStopped.has(proc)) {
+        dlog.debug('Suppressing error for manually stopped agent', { threadId });
+        return;
+      }
       dlog.error('Process error', { threadId, error: String(err).slice(0, 200) });
-      if (!this.resultReceived.has(threadId) && !this.manuallyStopped.has(threadId)) {
+      if (!this.resultReceived.has(threadId)) {
         this.emit('agent:error', threadId, err);
       }
     });
@@ -658,22 +670,31 @@ export class AgentOrchestrator extends EventEmitter {
     });
 
     proc.on('exit', (code: number | null) => {
+      const isActiveProcess = this.activeAgents.get(threadId) === proc;
+      const wasManuallyStopped = this.manuallyStopped.has(proc);
       dlog.info('Process exit', {
         threadId,
         code,
         hadResult: this.resultReceived.has(threadId),
-        manuallyStopped: this.manuallyStopped.has(threadId),
+        manuallyStopped: wasManuallyStopped,
+        staleProcess: !isActiveProcess,
       });
       // Only remove if THIS proc is still the active one — a newer process
       // may already have replaced it in the map (race during kill + restart).
-      if (this.activeAgents.get(threadId) === proc) {
+      if (isActiveProcess) {
         this.activeAgents.delete(threadId);
         this.lastOptions.delete(threadId);
         this.lastActivityAt.delete(threadId);
       }
 
-      if (this.manuallyStopped.has(threadId)) {
-        this.manuallyStopped.delete(threadId);
+      if (!isActiveProcess) {
+        this.manuallyStopped.delete(proc);
+        dlog.debug('Ignoring exit from stale process', { threadId, code });
+        return;
+      }
+
+      if (wasManuallyStopped) {
+        this.manuallyStopped.delete(proc);
         this.resultReceived.delete(threadId);
         return;
       }
@@ -708,6 +729,17 @@ export class AgentOrchestrator extends EventEmitter {
     let immediateError = false;
 
     proc.on('message', (msg: CLIMessage) => {
+      if (this.activeAgents.get(threadId) !== proc) {
+        dlog.debug('Ignoring resume message from stale process', { threadId, type: msg.type });
+        return;
+      }
+      if (this.manuallyStopped.has(proc)) {
+        dlog.debug('Suppressing resume message for manually stopped agent', {
+          threadId,
+          type: msg.type,
+        });
+        return;
+      }
       gotMessage = true;
       this.lastActivityAt.set(threadId, Date.now());
       dlog.debug('wireResumeHandlers message', {
@@ -717,8 +749,6 @@ export class AgentOrchestrator extends EventEmitter {
         firstMessage: !gotMessage,
       });
       if (msg.type === 'result') {
-        if (this.manuallyStopped.has(threadId)) return;
-
         // Detect immediate session failure: the CLI started, but produced an
         // error result with 0 turns — the session was recognised but the
         // working directory (or some other env) changed so it crashed right
@@ -752,6 +782,14 @@ export class AgentOrchestrator extends EventEmitter {
     });
 
     proc.on('error', (err: Error) => {
+      if (this.activeAgents.get(threadId) !== proc) {
+        dlog.debug('Ignoring resume error from stale process', { threadId });
+        return;
+      }
+      if (this.manuallyStopped.has(proc)) {
+        dlog.debug('Suppressing resume error for manually stopped agent', { threadId });
+        return;
+      }
       if (!gotMessage || immediateError) {
         dlog.warn('Resume error before any message (stale session?)', {
           threadId,
@@ -763,29 +801,39 @@ export class AgentOrchestrator extends EventEmitter {
         threadId,
         error: String(err).slice(0, 200),
       });
-      if (!this.resultReceived.has(threadId) && !this.manuallyStopped.has(threadId)) {
+      if (!this.resultReceived.has(threadId)) {
         this.emit('agent:error', threadId, err);
       }
     });
 
     proc.on('exit', (code: number | null) => {
+      const isActiveProcess = this.activeAgents.get(threadId) === proc;
+      const wasManuallyStopped = this.manuallyStopped.has(proc);
       dlog.info('Resume process exit', {
         threadId,
         code,
         gotMessage,
         immediateError,
         hadResult: this.resultReceived.has(threadId),
+        manuallyStopped: wasManuallyStopped,
+        staleProcess: !isActiveProcess,
       });
       // Only remove if THIS proc is still the active one — a newer process
       // may already have replaced it in the map (race during kill + restart).
-      if (this.activeAgents.get(threadId) === proc) {
+      if (isActiveProcess) {
         this.activeAgents.delete(threadId);
         this.lastOptions.delete(threadId);
         this.lastActivityAt.delete(threadId);
       }
 
-      if (this.manuallyStopped.has(threadId)) {
-        this.manuallyStopped.delete(threadId);
+      if (!isActiveProcess) {
+        this.manuallyStopped.delete(proc);
+        dlog.debug('Ignoring resume exit from stale process', { threadId, code });
+        return;
+      }
+
+      if (wasManuallyStopped) {
+        this.manuallyStopped.delete(proc);
         this.resultReceived.delete(threadId);
         return;
       }

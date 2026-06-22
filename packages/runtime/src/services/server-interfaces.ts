@@ -167,6 +167,7 @@ export interface IThreadRepository extends IThreadQuery, IMessageRepository, ITo
     hasMoreAfter?: boolean;
     total?: number;
     windowStart?: number;
+    leadingUserMessage?: any;
   }>;
   insertComment(data: {
     threadId: string;

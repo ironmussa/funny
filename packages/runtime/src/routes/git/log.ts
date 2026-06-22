@@ -14,6 +14,10 @@ import {
   getCommitFiles,
   getCommitFileDiff,
   getUnpulledHashes,
+  getPRForBranch,
+  type BranchPRInfo,
+  type GitGraphLogEntry,
+  type GraphRef,
 } from '@funny/core/git';
 import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
@@ -21,6 +25,7 @@ import { err, type Result, type ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
+import { resolveIdentity } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
@@ -150,6 +155,77 @@ function respondWithLog<E extends { hash: string }>(
   return c.json(buildLogPayload(result.value, unpushedSet, unpulledSet, limit));
 }
 
+type GraphRefPullRequest = NonNullable<GraphRef['pullRequest']>;
+
+function branchNameForGraphPRLookup(ref: GraphRef | string): string | null {
+  if (typeof ref === 'string') return null;
+  if (ref.kind === 'tag' || ref.name === 'HEAD') return null;
+  if (ref.kind === 'local') return ref.name;
+  const slashIndex = ref.name.indexOf('/');
+  return slashIndex >= 0 ? ref.name.slice(slashIndex + 1) : ref.name;
+}
+
+function toGraphRefPullRequest(pr: BranchPRInfo): GraphRefPullRequest {
+  return {
+    number: pr.prNumber,
+    url: pr.prUrl,
+    state: pr.prState,
+  };
+}
+
+async function enrichGraphRefsWithPullRequests(
+  c: Context<HonoEnv>,
+  cwd: string,
+  entries: GitGraphLogEntry[],
+  attrs: Record<string, unknown>,
+  ghEnv: Record<string, string> | undefined,
+): Promise<GitGraphLogEntry[]> {
+  const branches = new Set<string>();
+  for (const entry of entries) {
+    for (const ref of entry.refs) {
+      const branch = branchNameForGraphPRLookup(ref);
+      if (branch) branches.add(branch);
+    }
+  }
+  if (branches.size === 0) return entries;
+
+  const span = requestSpan(c, 'github.graph_log_pr_lookup', {
+    ...attrs,
+    branchCount: branches.size,
+  });
+
+  try {
+    const prEntries = await Promise.all(
+      Array.from(branches).map(
+        async (branch) => [branch, await getPRForBranch(cwd, branch, ghEnv)] as const,
+      ),
+    );
+    const prByBranch = new Map<string, GraphRefPullRequest>();
+    for (const [branch, pr] of prEntries) {
+      if (pr) prByBranch.set(branch, toGraphRefPullRequest(pr));
+    }
+    span.end('ok');
+    if (prByBranch.size === 0) return entries;
+
+    return entries.map((entry) => ({
+      ...entry,
+      refs: entry.refs.map((ref) => {
+        const branch = branchNameForGraphPRLookup(ref);
+        const pullRequest = branch ? prByBranch.get(branch) : undefined;
+        return pullRequest ? { ...ref, pullRequest } : ref;
+      }),
+    }));
+  } catch (error) {
+    span.end('error', String(error));
+    log.warn('graph-log PR lookup failed; returning refs without PR metadata', {
+      namespace: 'git-log-route',
+      error: String(error),
+      ...attrs,
+    });
+    return entries;
+  }
+}
+
 // ─── Project-scoped routes ──────────────────────────────
 
 // GET /api/git/project/:projectId/log
@@ -179,6 +255,8 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   const cwd = cwdResult.value;
   const { limit, skip } = parseLogPaging(c);
   const all = c.req.query('all') !== 'false';
+  const identity = await resolveIdentity(userId);
+  const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { projectId }, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all }),
@@ -186,7 +264,9 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
     fetchUnpushedSpanned(c, cwd, { projectId }),
     fetchUnpulledSpanned(c, cwd, { projectId }),
   ]);
-  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
+  if (result.isErr()) return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
+  const entries = await enrichGraphRefsWithPullRequests(c, cwd, result.value, { projectId }, ghEnv);
+  return c.json(buildLogPayload(entries, unpushedSet, unpulledSet, limit));
 });
 
 // GET /api/git/project/:projectId/reflog-events — local rebase operation markers
@@ -302,6 +382,8 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const { limit, skip } = parseLogPaging(c);
   // Graph view defaults to all refs so divergent branches show; opt out with all=false.
   const all = c.req.query('all') !== 'false';
+  const identity = await resolveIdentity(userId);
+  const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { threadId }, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all }),
@@ -309,7 +391,9 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
     fetchUnpushedSpanned(c, cwd, { threadId }),
     fetchUnpulledSpanned(c, cwd, { threadId }),
   ]);
-  return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
+  if (result.isErr()) return respondWithLog(c, result, unpushedSet, unpulledSet, limit);
+  const entries = await enrichGraphRefsWithPullRequests(c, cwd, result.value, { threadId }, ghEnv);
+  return c.json(buildLogPayload(entries, unpushedSet, unpulledSet, limit));
 });
 
 // GET /api/git/:threadId/reflog-events — local rebase operation markers

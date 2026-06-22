@@ -39,13 +39,17 @@ mock.module('../../services/ws-tunnel.js', () => ({
 }));
 
 const sendMailCalls: Array<Record<string, unknown>> = [];
+const createTransportCalls: Array<Record<string, unknown>> = [];
 
 mock.module('nodemailer', () => ({
-  createTransport: () => ({
-    sendMail: async (opts: Record<string, unknown>) => {
-      sendMailCalls.push(opts);
-    },
-  }),
+  createTransport: (opts: Record<string, unknown>) => {
+    createTransportCalls.push(opts);
+    return {
+      sendMail: async (opts: Record<string, unknown>) => {
+        sendMailCalls.push(opts);
+      },
+    };
+  },
 }));
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
@@ -62,6 +66,7 @@ describe('Settings & Profile Routes (Integration)', () => {
   beforeEach(() => {
     t.cleanup();
     sendMailCalls.length = 0;
+    createTransportCalls.length = 0;
   });
 
   // ── SMTP Settings (admin-only) ─────────────────────────
@@ -160,8 +165,12 @@ describe('Settings & Profile Routes (Integration)', () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.sentTo).toBe('noreply@example.com');
+      expect(createTransportCalls[0]?.disableFileAccess).toBe(true);
+      expect(createTransportCalls[0]?.disableUrlAccess).toBe(true);
       expect(sendMailCalls).toHaveLength(1);
       expect(sendMailCalls[0]?.subject).toBe('Funny SMTP Test');
+      expect(sendMailCalls[0]?.disableFileAccess).toBe(true);
+      expect(sendMailCalls[0]?.disableUrlAccess).toBe(true);
     });
 
     test('returns 403 for non-admin', async () => {

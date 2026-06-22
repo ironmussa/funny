@@ -111,6 +111,8 @@ settingsRoutes.post('/smtp/test', requireAdmin, async (c) => {
       host: smtpHost,
       port: Number(port || process.env.SMTP_PORT || '587'),
       secure: Number(port || process.env.SMTP_PORT || '587') === 465,
+      disableFileAccess: true,
+      disableUrlAccess: true,
       auth: {
         user: user || process.env.SMTP_USER || '',
         pass: decryptedPass || process.env.SMTP_PASS || '',
@@ -122,6 +124,8 @@ settingsRoutes.post('/smtp/test', requireAdmin, async (c) => {
       to: smtpFrom,
       subject: 'Funny SMTP Test',
       text: 'This is a test email from Funny to verify your SMTP settings are working correctly.',
+      disableFileAccess: true,
+      disableUrlAccess: true,
     });
 
     return c.json({ ok: true, sentTo: smtpFrom });

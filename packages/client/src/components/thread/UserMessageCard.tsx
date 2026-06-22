@@ -301,6 +301,7 @@ export function UserMessageCard({
   // inline so the user can see what was sent.
   const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
   const hasThreadActions = Boolean(onFork || onRewind || onForkAndRewind);
+  const hasFooterBadges = Boolean(model || permissionMode);
 
   return (
     <div
@@ -309,75 +310,88 @@ export function UserMessageCard({
         'relative group text-sm',
         'w-full rounded-lg py-2 bg-foreground text-background',
         'px-3',
-        // Reserve top-right space for the hover actions menu (w-6 + right-1.5 offset).
-        hasThreadActions && 'pr-9',
+        // Reserve top-right space for timestamp and/or hover actions.
+        timestamp && hasThreadActions ? 'pr-24' : timestamp ? 'pr-14' : hasThreadActions && 'pr-9',
         onClick && 'cursor-pointer',
         'shadow-md',
       )}
       onClick={onClick}
     >
-      {/* Fork / rewind menu — visible on hover */}
-      {hasThreadActions && (
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
-                  disabled={forkDisabled}
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    'absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded',
-                    'bg-background/10 text-background/70 transition-opacity hover:bg-background/20 hover:text-background',
-                    'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
-                    forkDisabled && 'cursor-not-allowed opacity-50',
-                  )}
-                  aria-label={t('thread.threadActions', 'Thread actions')}
-                >
-                  <MoreVertical className="icon-xs" />
-                </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              {t('thread.threadActions', 'Thread actions')}
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end" className="w-64" onClick={(e) => e.stopPropagation()}>
-            {onFork && (
-              <DropdownMenuItem
-                data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
-                disabled={forkDisabled}
-                onSelect={() => onFork()}
+      {(timestamp || hasThreadActions) && (
+        <div className="absolute top-1.5 right-1.5 z-10 flex h-6 items-center justify-end gap-1">
+          {/* Fork / rewind menu — visible on hover */}
+          {hasThreadActions && (
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
+                      disabled={forkDisabled}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded',
+                        'bg-background/10 text-background/70 transition-opacity hover:bg-background/20 hover:text-background',
+                        'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
+                        forkDisabled && 'cursor-not-allowed opacity-50',
+                      )}
+                      aria-label={t('thread.threadActions', 'Thread actions')}
+                    >
+                      <MoreVertical className="icon-xs" />
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  {t('thread.threadActions', 'Thread actions')}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent
+                align="end"
+                className="w-64"
+                onClick={(e) => e.stopPropagation()}
               >
-                <GitBranch className="icon-xs" />
-                {t('thread.forkConversationFromHere', 'Fork conversation from here')}
-              </DropdownMenuItem>
-            )}
-            {onRewind && (
-              <DropdownMenuItem
-                data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
-                disabled={forkDisabled || rewindDisabled}
-                title={rewindDisabled ? rewindDisabledReason : undefined}
-                onSelect={() => onRewind()}
-              >
-                <Undo2 className="icon-xs" />
-                {t('thread.rewindCodeToHere', 'Rewind code to here')}
-              </DropdownMenuItem>
-            )}
-            {onForkAndRewind && (
-              <DropdownMenuItem
-                data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
-                disabled={forkDisabled || rewindDisabled}
-                title={rewindDisabled ? rewindDisabledReason : undefined}
-                onSelect={() => onForkAndRewind()}
-              >
-                <RotateCcw className="icon-xs" />
-                {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {onFork && (
+                  <DropdownMenuItem
+                    data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
+                    disabled={forkDisabled}
+                    onSelect={() => onFork()}
+                  >
+                    <GitBranch className="icon-xs" />
+                    {t('thread.forkConversationFromHere', 'Fork conversation from here')}
+                  </DropdownMenuItem>
+                )}
+                {onRewind && (
+                  <DropdownMenuItem
+                    data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
+                    disabled={forkDisabled || rewindDisabled}
+                    title={rewindDisabled ? rewindDisabledReason : undefined}
+                    onSelect={() => onRewind()}
+                  >
+                    <Undo2 className="icon-xs" />
+                    {t('thread.rewindCodeToHere', 'Rewind code to here')}
+                  </DropdownMenuItem>
+                )}
+                {onForkAndRewind && (
+                  <DropdownMenuItem
+                    data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
+                    disabled={forkDisabled || rewindDisabled}
+                    title={rewindDisabled ? rewindDisabledReason : undefined}
+                    onSelect={() => onForkAndRewind()}
+                  >
+                    <RotateCcw className="icon-xs" />
+                    {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {timestamp && (
+            <span className="text-background/50 text-[10px] whitespace-nowrap">
+              {timeAgo(timestamp, t)}
+            </span>
+          )}
+        </div>
       )}
 
       {/* Image attachments */}
@@ -411,36 +425,35 @@ export function UserMessageCard({
       {/* Message content with inline file chips */}
       <UserMessageContent content={inlineContent.trim()} fileMap={fileMap} />
 
-      {/* Metadata: model + permission mode + timestamp */}
-      <div className="mt-1.5 flex items-center justify-between">
-        <div className="flex gap-1">
-          {model && (
-            <Badge
-              variant="outline"
-              className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
-            >
-              {resolveModelLabel(model, t)}
-              {effort && (
-                <>
-                  {' · '}
-                  {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
-                </>
-              )}
-            </Badge>
-          )}
-          {permissionMode && (
-            <Badge
-              variant="outline"
-              className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
-            >
-              {t(`prompt.${permissionMode}`)}
-            </Badge>
-          )}
+      {/* Metadata: model + permission mode */}
+      {hasFooterBadges && (
+        <div className="mt-1.5 flex items-center">
+          <div className="flex gap-1">
+            {model && (
+              <Badge
+                variant="outline"
+                className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
+              >
+                {resolveModelLabel(model, t)}
+                {effort && (
+                  <>
+                    {' · '}
+                    {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
+                  </>
+                )}
+              </Badge>
+            )}
+            {permissionMode && (
+              <Badge
+                variant="outline"
+                className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
+              >
+                {t(`prompt.${permissionMode}`)}
+              </Badge>
+            )}
+          </div>
         </div>
-        {timestamp && (
-          <span className="text-background/50 text-[10px]">{timeAgo(timestamp, t)}</span>
-        )}
-      </div>
+      )}
     </div>
   );
 }

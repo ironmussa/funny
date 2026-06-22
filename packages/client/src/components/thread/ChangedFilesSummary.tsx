@@ -23,6 +23,7 @@ export function ChangedFilesSummary({
   files,
   running = false,
   onReverted,
+  fallbackDiffs,
 }: {
   threadId: string;
   /** The files changed in this session (already resolved to working-tree diff stats). */
@@ -31,6 +32,8 @@ export function ChangedFilesSummary({
   running?: boolean;
   /** Called after a successful revert so the diff data can refetch. */
   onReverted?: () => void;
+  /** Per-session tool-call diffs used when the live working-tree diff is empty. */
+  fallbackDiffs?: Map<string, string>;
 }) {
   const { t } = useTranslation();
   const [reverting, setReverting] = useState(false);
@@ -58,18 +61,21 @@ export function ChangedFilesSummary({
       setLoadingDiff(filePath);
       const result = await api.getFileDiff(threadId, filePath, summary.staged);
       if (result.isOk()) {
-        setDiffCache((prev) => new Map(prev).set(filePath, result.value.diff));
+        const diff = result.value.diff || fallbackDiffs?.get(filePath) || '';
+        setDiffCache((prev) => new Map(prev).set(filePath, diff));
+      } else if (fallbackDiffs?.has(filePath)) {
+        setDiffCache((prev) => new Map(prev).set(filePath, fallbackDiffs.get(filePath)!));
       }
       setLoadingDiff((prev) => (prev === filePath ? null : prev));
     },
-    [threadId, diffCache, files],
+    [threadId, diffCache, files, fallbackDiffs],
   );
 
   useEffect(() => {
     if (expandedFile && !diffCache.has(expandedFile)) {
       loadDiffForFile(expandedFile);
     }
-  }, [expandedFile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [diffCache, expandedFile, loadDiffForFile]);
 
   const requestFullDiff = useCallback(
     async (
@@ -79,16 +85,19 @@ export function ChangedFilesSummary({
       const summary = files.find((s) => s.path === path);
       if (!summary) return null;
       const result = await api.getFileDiff(threadId, path, summary.staged, undefined, 'full');
-      if (result.isOk()) {
+      const diff = result.isOk()
+        ? result.value.diff || fallbackDiffs?.get(path)
+        : fallbackDiffs?.get(path);
+      if (diff) {
         return {
-          oldValue: parseDiffOld(result.value.diff),
-          newValue: parseDiffNew(result.value.diff),
-          rawDiff: result.value.diff,
+          oldValue: parseDiffOld(diff),
+          newValue: parseDiffNew(diff),
+          rawDiff: diff,
         };
       }
       return null;
     },
-    [threadId, files],
+    [threadId, files, fallbackDiffs],
   );
 
   if (files.length === 0) return null;

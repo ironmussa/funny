@@ -118,7 +118,9 @@ describe('UserMessageCard', () => {
     expect(screen.getByText(/sonnet-4.6/)).toBeInTheDocument();
     expect(screen.getByText('prompt.autoEdit')).toBeInTheDocument();
     expect(screen.getByText(/High/)).toBeInTheDocument();
-    expect(screen.getByText('time.now')).toBeInTheDocument();
+    const timestamp = screen.getByText('time.now');
+    expect(timestamp).toBeInTheDocument();
+    expect(timestamp.parentElement?.className).toContain('absolute top-1.5 right-1.5');
   });
 
   test('invokes fork handler from the actions menu', () => {

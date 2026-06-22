@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { useRef } from 'react';
 import { beforeEach, describe, test, expect, vi } from 'vitest';
 
@@ -74,6 +74,7 @@ const virtualizerMockState = vi.hoisted(() => ({
   scrollOffset: 0,
   lastOptions: undefined as any,
   measureCalls: 0,
+  scrollToIndexCalls: [] as { index: number; opts?: { align?: string } }[],
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -99,7 +100,9 @@ vi.mock('@tanstack/react-virtual', () => ({
       getVirtualItems: () => virtualItems,
       getTotalSize: () => count * 120,
       measureElement: () => {},
-      scrollToIndex: () => {},
+      scrollToIndex: (index: number, opts?: { align?: string }) => {
+        virtualizerMockState.scrollToIndexCalls.push({ index, opts });
+      },
       measure: () => {
         virtualizerMockState.measureCalls += 1;
       },
@@ -161,6 +164,7 @@ describe('MemoizedMessageList virtualization', () => {
     virtualizerMockState.scrollOffset = 0;
     virtualizerMockState.lastOptions = undefined;
     virtualizerMockState.measureCalls = 0;
+    virtualizerMockState.scrollToIndexCalls = [];
   });
 
   test('keeps mounted item rows bounded for a long loaded thread', async () => {
@@ -235,6 +239,22 @@ describe('MemoizedMessageList virtualization', () => {
     expect(
       viewport.querySelector<HTMLElement>('[data-virtual-row-key="a1"]')?.style.transform,
     ).not.toBe('translateY(0px)');
+  });
+
+  test('clicking a sticky user card scrolls to the original virtual row when it is not mounted', async () => {
+    virtualizerMockState.start = 1;
+    virtualizerMockState.visibleCount = 1;
+    virtualizerMockState.scrollOffset = 130;
+
+    const { getByTestId } = render(<Harness messages={makeMessages(4)} />);
+
+    await waitFor(() => expect(getByTestId('sticky-section-context')).toBeTruthy());
+
+    fireEvent.click(getByTestId('user-message-m0'));
+
+    expect(virtualizerMockState.scrollToIndexCalls).toEqual([
+      { index: 0, opts: { align: 'start' } },
+    ]);
   });
 
   test('does not use content-visibility placeholders for variable-height tool rows', async () => {

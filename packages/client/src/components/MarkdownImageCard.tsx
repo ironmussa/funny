@@ -1,11 +1,11 @@
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
+import { ImageLightbox } from '@/components/ImageLightbox';
 import { MediaLoadError } from '@/components/MediaLoadError';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBoxZoomPan } from '@/hooks/use-box-zoom-pan';
-import { useMediaPreviewStore } from '@/stores/media-preview-store';
 
 /** Inline box height — mirrors the Mermaid diagram card so the two read alike. */
 const IMAGE_CARD_HEIGHT = 360;
@@ -64,8 +64,8 @@ export interface MarkdownImageCardProps {
  * Chat image rendered with the same chrome as the inline Mermaid diagram: a
  * bordered card with a filename header and a hover toolbar (zoom %, zoom in/out,
  * 1:1 reset, expand). Pan/zoom happens inside the box; "expand" opens the
- * shared media lightbox for a full-screen view. On load failure it shows the
- * shared `MediaLoadError` instead of a broken-image glyph.
+ * shared thread image lightbox for a full-screen view. On load failure it shows
+ * the shared `MediaLoadError` instead of a broken-image glyph.
  */
 export function MarkdownImageCard({
   src,
@@ -74,9 +74,10 @@ export function MarkdownImageCard({
   title,
   onMediaError,
 }: MarkdownImageCardProps) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   // Retry cleanly when the resolved source changes (e.g. signed→proxied fallback).
-  useEffect(() => setFailed(false), [src]);
+  const failed = failedSrc === src;
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const pz = useBoxZoomPan();
 
   const name = useMemo(() => (originalSrc ? fileNameOf(originalSrc) : ''), [originalSrc]);
@@ -96,6 +97,11 @@ export function MarkdownImageCard({
       className="group border-border bg-card relative my-2 overflow-hidden rounded border"
       data-testid="markdown-image-card"
     >
+      <ImageLightbox
+        images={[{ src, alt: alt ?? (name || 'Image attachment') }]}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+      />
       {name && (
         <div
           className="text-muted-foreground/80 border-border truncate border-b px-3 py-1.5 text-xs"
@@ -116,23 +122,32 @@ export function MarkdownImageCard({
         onPointerUp={pz.onPointerUp}
         onPointerCancel={pz.onPointerUp}
       >
-        <img
-          src={src}
-          alt={alt ?? ''}
-          title={title}
-          loading="lazy"
-          draggable={false}
-          data-testid="markdown-image"
-          onError={() => {
-            if (!onMediaError()) setFailed(true);
+        <button
+          type="button"
+          onClick={() => {
+            if (!zoomed) setLightboxOpen(true);
           }}
-          className="max-h-full max-w-full object-contain"
+          aria-label="Open image preview"
+          className="max-h-full max-w-full border-0 bg-transparent p-0"
           style={{
             transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
             transformOrigin: 'center center',
             transition: pz.isDragging ? 'none' : 'transform 120ms',
           }}
-        />
+        >
+          <img
+            src={src}
+            alt={alt ?? ''}
+            title={title}
+            loading="lazy"
+            draggable={false}
+            data-testid="markdown-image"
+            onError={() => {
+              if (!onMediaError()) setFailedSrc(src);
+            }}
+            className="max-h-full max-w-full object-contain"
+          />
+        </button>
 
         <TooltipProvider>
           <div className="pointer-events-none absolute top-2 right-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -172,7 +187,7 @@ export function MarkdownImageCard({
                 <TooltipContent>Reset zoom</TooltipContent>
               </Tooltip>
               <ToolbarButton
-                onClick={() => originalSrc && useMediaPreviewStore.getState().open(originalSrc)}
+                onClick={() => setLightboxOpen(true)}
                 tip="Expand"
                 testId="markdown-image-expand"
               >

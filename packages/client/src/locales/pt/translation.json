@@ -156,6 +156,9 @@
       "deepagentGemini3pro": "Gemini 3 Pro",
       "opencodeDefault": "opencode (padrão configurado)"
     },
+    "prOpen": "PR #{{number}}",
+    "prMerged": "PR #{{number}} (mesclado)",
+    "prClosed": "PR #{{number}} (fechado)",
     "createdBy": "Criado por {{creator}}",
     "readyToLaunch": "Pronto para lançar",
     "send": "Enviar",

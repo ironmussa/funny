@@ -349,7 +349,18 @@ export async function getPRForBranch(
   try {
     const result = await execute(
       'gh',
-      ['pr', 'list', '--head', branch, '--json', 'number,url,state', '--limit', '1'],
+      [
+        'pr',
+        'list',
+        '--head',
+        branch,
+        '--state',
+        'all',
+        '--json',
+        'number,url,state',
+        '--limit',
+        '1',
+      ],
       { cwd, timeout: 10_000, reject: false, env },
     );
     if (result.exitCode !== 0 || !result.stdout.trim()) return null;

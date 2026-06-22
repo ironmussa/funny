@@ -141,6 +141,38 @@ function getValidated(hostname: string, policy: OutboundPolicy): string[] | null
   return entry.ips;
 }
 
+function normalizeHostname(parsed: URL): string {
+  const rawHost = parsed.hostname;
+  return rawHost.startsWith('[') && rawHost.endsWith(']') ? rawHost.slice(1, -1) : rawHost;
+}
+
+function formatIpForUrlHost(ip: string): string {
+  return isIP(ip) === 6 ? `[${ip}]` : ip;
+}
+
+function withPinnedHttpDestination(
+  rawUrl: string,
+  init: RequestInit | undefined,
+  policy: OutboundPolicy,
+): { url: string; init?: RequestInit } {
+  const parsed = new URL(rawUrl);
+  if (parsed.protocol !== 'http:') return { url: rawUrl, init };
+
+  const hostname = normalizeHostname(parsed);
+  if (isIP(hostname) !== 0) return { url: rawUrl, init };
+
+  const validatedIps = getValidated(hostname, policy);
+  const pinnedIp = validatedIps?.[0];
+  if (!pinnedIp || isIP(pinnedIp) === 0) return { url: rawUrl, init };
+
+  const pinnedUrl = new URL(rawUrl);
+  pinnedUrl.host = `${formatIpForUrlHost(pinnedIp)}${parsed.port ? `:${parsed.port}` : ''}`;
+
+  const headers = new Headers(init?.headers);
+  if (!headers.has('host')) headers.set('Host', parsed.host);
+  return { url: pinnedUrl.toString(), init: { ...init, headers } };
+}
+
 function isBlockedForPolicy(family: 4 | 6, ip: string, policy: OutboundPolicy): string | null {
   // Always-blocked ranges run first; they apply even in LAN-OK mode.
   if (family === 4 && isAlwaysBlockedV4(ip)) return 'cloud-metadata/link-local';
@@ -175,8 +207,7 @@ export async function assertSafeOutboundUrl(
   // them so `isIP` recognizes the address.
   const rawHost = parsed.hostname;
   if (!rawHost) throw new Error('URL has no hostname');
-  const hostname =
-    rawHost.startsWith('[') && rawHost.endsWith(']') ? rawHost.slice(1, -1) : rawHost;
+  const hostname = normalizeHostname(parsed);
 
   // Literal IP — check directly without DNS.
   const literalFamily = isIP(hostname);
@@ -239,8 +270,10 @@ export async function assertSafeOutboundUrl(
 /** Convenience wrapper: validate then fetch. Use for URLs that should ONLY
  * reach public destinations (LLM provider endpoints, MCP discovery, etc.). */
 export async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
-  await assertSafeOutboundUrl(url);
-  return fetch(url, init);
+  const policy: OutboundPolicy = {};
+  await assertSafeOutboundUrl(url, policy);
+  const pinned = withPinnedHttpDestination(url, init, policy);
+  return fetch(pinned.url, pinned.init);
 }
 
 /**
@@ -255,6 +288,8 @@ export async function safeFetch(url: string, init?: RequestInit): Promise<Respon
  */
 export async function safeFetchUserUrl(url: string, init?: RequestInit): Promise<Response> {
   const strict = process.env.FUNNY_STRICT_OUTBOUND_PRIVATE === '1';
-  await assertSafeOutboundUrl(url, { rejectPrivate: strict });
-  return fetch(url, init);
+  const policy: OutboundPolicy = { rejectPrivate: strict };
+  await assertSafeOutboundUrl(url, policy);
+  const pinned = withPinnedHttpDestination(url, init, policy);
+  return fetch(pinned.url, pinned.init);
 }

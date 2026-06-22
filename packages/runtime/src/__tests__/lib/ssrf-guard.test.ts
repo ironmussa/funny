@@ -11,7 +11,7 @@ vi.mock('dns/promises', () => ({
 
 import { lookup } from 'dns/promises';
 
-import { assertSafeOutboundUrl, safeFetchUserUrl } from '../../lib/ssrf-guard.js';
+import { assertSafeOutboundUrl, safeFetch, safeFetchUserUrl } from '../../lib/ssrf-guard.js';
 
 const mockLookup = lookup as unknown as ReturnType<typeof vi.fn>;
 
@@ -129,6 +129,15 @@ describe('assertSafeOutboundUrl with LAN-OK policy (rejectPrivate=false)', () =>
 });
 
 describe('safeFetchUserUrl (security HI-5)', () => {
+  beforeEach(() => {
+    mockLookup.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mockLookup.mockReset();
+  });
+
   test('blocks IMDS even though the helper allows RFC1918', async () => {
     // No `mockLookup` call — IMDS is checked against the literal IP, no DNS needed.
     await expect(safeFetchUserUrl('http://169.254.169.254/latest/meta-data/')).rejects.toThrow(
@@ -149,4 +158,51 @@ describe('safeFetchUserUrl (security HI-5)', () => {
   // We deliberately skip the success-case round trip — that would attempt a
   // real fetch against the destination. The guard's contract is "validate
   // then delegate to fetch", and the validation behaviour is covered above.
+});
+
+describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockLookup.mockReset();
+    fetchMock = vi.fn(async () => new Response('ok'));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mockLookup.mockReset();
+  });
+
+  test('rewrites HTTP hostnames to the validated literal IP and preserves Host', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+
+    await safeFetch('http://example.com:8080/path?q=1', { headers: { Accept: 'text/plain' } });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://93.184.216.34:8080/path?q=1');
+    const headers = new Headers(init.headers);
+    expect(headers.get('Host')).toBe('example.com:8080');
+    expect(headers.get('Accept')).toBe('text/plain');
+  });
+
+  test('keeps HTTPS hostnames intact to preserve SNI and certificate verification', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+
+    await safeFetch('https://example.com/path');
+
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/path', undefined);
+  });
+
+  test('applies the same HTTP pinning to LAN-OK user URLs', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '192.168.1.50', family: 4 }]);
+
+    await safeFetchUserUrl('http://launcher.example.test/start');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://192.168.1.50/start');
+    expect(new Headers(init.headers).get('Host')).toBe('launcher.example.test');
+  });
 });

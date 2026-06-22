@@ -235,7 +235,7 @@ export function PRSummaryCard({
               {detail.title}
             </span>
           ) : (
-            <span className="text-muted-foreground">PR #{prNumber}</span>
+            <span className="text-muted-foreground">Pull request</span>
           )}{' '}
           <PRBadge
             prNumber={prNumber}

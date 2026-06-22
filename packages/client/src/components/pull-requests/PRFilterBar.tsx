@@ -188,6 +188,9 @@ interface PRFilterBarProps {
   onStateChange: (next: PRStateFilter) => void;
   /** Hide the state dropdown (e.g. in branch-focus mode where state is forced). */
   showState?: boolean;
+  /** Include the default tab-level separator/padding when rendered as a standalone row. */
+  showBorder?: boolean;
+  className?: string;
 }
 
 export function PRFilterBar({
@@ -198,6 +201,8 @@ export function PRFilterBar({
   state,
   onStateChange,
   showState = true,
+  showBorder = true,
+  className,
 }: PRFilterBarProps) {
   const { t } = useTranslation();
 
@@ -236,7 +241,11 @@ export function PRFilterBar({
 
   return (
     <div
-      className="border-sidebar-border flex flex-wrap items-center gap-1.5 border-b px-2 py-1.5"
+      className={cn(
+        'flex flex-wrap items-center gap-1.5',
+        showBorder && 'border-sidebar-border border-b px-2 py-1.5',
+        className,
+      )}
       data-testid="prs-filter-bar"
     >
       {showState && (

@@ -29,6 +29,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react
 import { useTranslation } from 'react-i18next';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
+import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -700,15 +701,13 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin, onMerged }: Pinn
         <div className="flex items-start gap-2">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-baseline gap-1.5">
-              <a
-                href={pr.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground shrink-0 font-mono text-xs hover:underline"
+              <PRBadge
+                prNumber={pr.number}
+                prState={isMerged ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN'}
+                prUrl={pr.html_url}
+                size="xxs"
                 data-testid={`pinned-pr-link-${pr.number}`}
-              >
-                #{pr.number}
-              </a>
+              />
               <span className="text-sm font-semibold">{pr.title}</span>
             </div>
           </div>

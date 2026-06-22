@@ -12,7 +12,6 @@
     "core:webview:allow-webview-close",
     "core:webview:allow-internal-toggle-devtools",
     "shell:allow-open",
-    "shell:allow-execute",
     {
       "identifier": "shell:allow-spawn",
       "allow": [

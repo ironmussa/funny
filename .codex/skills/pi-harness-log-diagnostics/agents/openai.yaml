@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pi Harness Logs"
+  short_description: "Diagnose pi-harness runs from logs before touching code."
+  default_prompt: "Use pi-harness logs to diagnose the latest run and identify harness adjustments, inspecting application code only if a trace points to a concrete contract."

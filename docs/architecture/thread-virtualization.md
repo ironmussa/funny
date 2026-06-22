@@ -22,8 +22,9 @@ The message timeline has two layers of virtualization:
 - DOM virtualization: only the visible message/event/tool rows are mounted.
   This is owned by `MemoizedMessageList`.
 - Data-window virtualization: only a window of messages may be loaded from the
-  backend. `MessageStream` reserves estimated space for unloaded messages with
-  phantom spacers and asks the store to load older/newer pages.
+  backend. `MessageStream` keeps the scrollbar tied to the loaded window and
+  asks the store to load older/newer pages when the user reaches the real edges
+  of that window.
 
 ## Important files
 
@@ -32,7 +33,7 @@ The message timeline has two layers of virtualization:
   `MessageStream`.
 - `packages/client/src/components/thread/MessageStream.tsx`: owns the scroll
   viewport, sticky-bottom behavior, per-thread scroll restoration, pagination
-  triggers, and phantom spacer heights.
+  triggers, and loaded-window edge detection.
 - `packages/client/src/components/thread/MemoizedMessageList.tsx`: turns loaded
   thread data into virtual rows and renders only the rows returned by TanStack
   Virtual.
@@ -54,9 +55,9 @@ The message timeline has two layers of virtualization:
    `threadEvents`, `compactionEvents`, and pagination metadata into
    `MessageStream`.
 2. `MessageStream` renders the scroll viewport. Inside the viewport it renders:
-   top grow spacer, top phantom spacer, optional pagination indicator, optional
-   beginning marker, init info, `MemoizedMessageList`, status tail, optional
-   prompt-pin spacer, bottom phantom spacer, and sticky footer.
+   top grow spacer, optional pagination indicator, optional beginning marker,
+   init info, `MemoizedMessageList`, status tail, optional prompt-pin spacer,
+   and sticky footer.
 3. `MemoizedMessageList` calls `buildGroupedRenderItems(messages, threadEvents,
    compactionEvents)`.
 4. The grouped render items are converted to `virtualRows`. Most rows wrap one
@@ -164,8 +165,8 @@ markdown/tool-card layout and width-dependent text wrapping.
 ## Scroll margin
 
 The virtualized list is not the first child of the scroll viewport. It can be
-below the top grow spacer, phantom spacer, loading indicator, beginning marker,
-and init card. TanStack Virtual therefore needs a `scrollMargin`.
+below the top grow spacer, loading indicator, beginning marker, and init card.
+TanStack Virtual therefore needs a `scrollMargin`.
 
 `MemoizedMessageList` computes:
 
@@ -286,11 +287,12 @@ to the bottom.
 across animation frames. This is intentional: virtual rows, markdown, tool
 cards, and status tails can change height after the first commit.
 
-## Pagination and phantom spacers
+## Pagination Over Loaded Windows
 
-The store may load only a window of messages. `MessageStream` keeps the scrollbar
-representative of the full conversation by reserving estimated space for
-unloaded messages.
+The store may load only a window of messages. `MessageStream` does not reserve
+estimated visual space for unloaded history. The scrollbar represents real,
+currently loaded content; older/newer pages are loaded incrementally when the
+user reaches the loaded window's edges.
 
 Inputs from pagination:
 
@@ -302,40 +304,15 @@ Inputs from pagination:
 - `load`: load older messages.
 - `loadAfter`: load newer messages.
 
-Derived counts:
-
-```text
-unloadedBeforeCount = hasMore ? windowStart : 0
-unloadedAfterCount = hasMoreAfter
-  ? totalMessages - windowStart - loadedCount
-  : 0
-```
-
-`avgMsgHeightRef` starts at `140px`. Once loaded content is present, it becomes:
-
-```text
-listWrapper.offsetHeight / loadedCount
-```
-
-The value is clamped between `24px` and `2000px`. Top and bottom phantom heights
-are then:
-
-```text
-top = unloadedBeforeCount * avgMsgHeight
-bottom = unloadedAfterCount * avgMsgHeight
-```
-
-Note that `listWrapper.offsetHeight` includes virtualized render output, not raw
-message count semantics. Tool calls, event rows, grouped rows, and session
-summaries can skew the average. That is expected, but it is a source of
-scrollbar-size error when the loaded window is not representative of the
-unloaded region.
+`total` and `windowStart` remain pagination metadata. They do not produce spacer
+height in `MessageStream`.
 
 ### Loading older messages
 
 On scroll, older messages load when all of these are true:
 
-- `scrollTop < phantomHeight + 200`.
+- `scrollTop < 200`.
+- the current scroll event is upward, or `scrollTop <= 1`.
 - `hasMore`.
 - `!loadingMore`.
 - `!messageListRef.current?.hasHiddenItems()`.
@@ -358,25 +335,12 @@ Newer messages load when all of these are true:
 - `pagination.loadAfter` exists.
 - `hasMoreAfter`.
 - `!loadingMore`.
-- `scrollTop + clientHeight > scrollHeight - bottomPhantomHeight - 200`.
+- `scrollTop + clientHeight > scrollHeight - 200`.
 
 Newer pages append after the loaded window. There is no explicit captured anchor
 for this direction. Stability relies on normal sticky-bottom behavior and the
 fact that appending below the current read position should not shift content
 above.
-
-### Phantom resize anchoring
-
-When the top phantom changes height without a page commit, `MessageStream`
-adjusts `scrollTop` by the phantom delta so the content below stays visually
-anchored.
-
-When the first message id changes, the page commit is owned by
-`restoreScrollAnchor`, so phantom delta correction is skipped to avoid a double
-correction.
-
-If the viewport was bottom-pinned before the phantom resize, the code pins to
-bottom instead of adding the delta.
 
 ## Store pagination contract
 
@@ -443,14 +407,10 @@ showing stale rows even though parent state changed.
   loaded id changes.
 - Anchor row no longer exists: clear anchor instead of applying stale drift.
 - Anchor row exists but is not mounted: scroll to its index, then apply drift.
-- Top phantom height changes without page commit: adjust `scrollTop` by the
-  phantom delta.
-- Top phantom height changes during page commit: skip delta correction and let
-  anchor restoration own it.
 - Bottom pagination: appends should not move the current read position; if the
   user is bottom-pinned, sticky-bottom logic should keep them at the bottom.
-- `windowStart`, `totalMessages`, or `hasMoreAfter` are wrong: phantom heights
-  become wrong and scroll triggers fire too early/late.
+- `windowStart`, `totalMessages`, or `hasMoreAfter` are wrong: server-side
+  window metadata is wrong and navigation/search may request the wrong pages.
 - Deduped page response: `windowStart` must account for only truly new messages,
   not all returned rows.
 - Tool-call grouping: scrolling to any tool id in a group may land on the same
@@ -471,8 +431,7 @@ showing stale rows even though parent state changed.
    `hasMore`, and `hasMoreAfter`.
 3. Check whether mounted rows have stable `data-virtual-row-key` values and
    whether `data-index` matches the expected virtual row.
-4. Compare `rowVirtualizer.getTotalSize()` with visible container height and
-   phantom spacer heights.
+4. Compare `rowVirtualizer.getTotalSize()` with visible container height.
 5. Verify `listScrollMargin` if rows are translated too high or too low.
 6. For prepend jumps, verify `captureScrollAnchor` runs before the page load and
    `restoreScrollAnchor` runs after the first loaded message id changes.

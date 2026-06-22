@@ -13,8 +13,8 @@ tener presentes antes de tocar el codigo.
 
 - `packages/client/src/components/thread/MessageStream.tsx`
   - Es el scroller real.
-  - Maneja sticky-bottom, restauracion por thread, paginacion, phantoms y footer
-    sticky.
+  - Maneja sticky-bottom, restauracion por thread, paginacion por bordes de la
+    ventana cargada y footer sticky.
 - `packages/client/src/components/thread/MemoizedMessageList.tsx`
   - Es la lista virtualizada de filas cargadas.
   - Usa `@tanstack/react-virtual`.
@@ -41,9 +41,9 @@ la vez:
 1. El cliente carga una ventana de mensajes reales, normalmente 50.
 2. Dentro de esa ventana, `MemoizedMessageList` virtualiza solo las filas
    renderizables cargadas.
-3. Los mensajes no cargados se representan con spacers artificiales
-   (`phantomHeight` arriba y `bottomPhantomHeight` abajo) para que el scrollbar
-   parezca tener el tamano del historial completo.
+3. Los mensajes no cargados no se representan con altura estimada. El scrollbar
+   refleja la ventana cargada y la paginacion extiende esa ventana al llegar a
+   sus bordes reales.
 
 Por eso hay dos capas distintas:
 
@@ -108,7 +108,6 @@ El scroller es el `div` raiz de `MessageStream`:
 scroll viewport (overflow-y-auto, overflowAnchor none)
   grow spacer                  // empuja contenido al fondo en threads cortos
   contentStack
-    top phantom spacer         // mensajes antiguos no cargados
     loading older indicator
     beginning marker
     init info card
@@ -116,7 +115,6 @@ scroll viewport (overflow-y-auto, overflowAnchor none)
       MemoizedMessageList      // filas virtuales de mensajes cargados
     status tail                // running/waiting/result cards
     prompt pin spacer          // hoy practicamente inerte; ver edge cases
-    bottom phantom spacer      // mensajes nuevos no cargados si hasMoreAfter
   sticky bottom dock
     scroll-to-bottom button
     footer / PromptInput
@@ -349,42 +347,12 @@ En cada layout relevante:
 `pinViewportToBottom` hace `scrollTop = scrollHeight` ahora, luego en RAF, luego
 en otro RAF. Esto cubre cambios de altura tardios por render/medicion.
 
-## Phantoms de paginacion
+## Paginacion por ventanas cargadas
 
-`MessageStream` calcula cuantos mensajes reales faltan alrededor de la ventana:
-
-```text
-unloadedBeforeCount = hasMore ? windowStart : 0
-unloadedAfterCount = hasMoreAfter ? total - windowStart - loadedCount : 0
-```
-
-Luego estima altura promedio:
-
-```text
-avg = listWrapper.offsetHeight / loadedCount
-avg clamped to [24, 2000]
-```
-
-Y crea spacers:
-
-```text
-phantomHeight = unloadedBeforeCount * avg
-bottomPhantomHeight = unloadedAfterCount * avg
-```
-
-Al cambiar de thread se resetean `avgMsgHeightRef`, `phantomHeight` y
-`bottomPhantomHeight`.
-
-### Ajuste cuando cambia el phantom superior
-
-Si `phantomHeight` cambia pero no cambio el primer mensaje (`firstMessageId`),
-el contenido real se mueve. El codigo compensa:
-
-- Si estabas pinned al bottom, vuelve a hacer `pinViewportToBottom`.
-- Si no, suma `delta` a `scrollTop`.
-
-Si `firstMessageId` cambio, se asume que fue una pagina nueva y la correccion la
-hace `restoreScrollAnchor`; por eso se evita doble correccion.
+`MessageStream` no calcula altura visual para los mensajes no cargados. La
+ventana cargada es la unica geometria representada en el scrollbar, y
+`total/windowStart` quedan como metadatos para saber donde cae esa ventana en el
+historial completo.
 
 ## Paginacion hacia arriba
 
@@ -392,7 +360,8 @@ En `handleViewportScrollRef` se llama `pagination.load()` si:
 
 ```text
 pagination existe
-scrollTop < phantomHeight + 200
+scrollTop < 200
+el scroll actual va hacia arriba, o scrollTop <= 1
 hasMore
 !loadingMore
 !messageListRef.current?.hasHiddenItems()
@@ -428,12 +397,13 @@ hacia abajo con `loadAfter` si:
 pagination.loadAfter existe
 hasMoreAfter
 !loadingMore
-scrollTop + clientHeight > scrollHeight - bottomPhantomHeight - 200
+scrollTop + clientHeight > scrollHeight - 200
 ```
 
 `loadNewerMessages()` pide mensajes despues del timestamp del ultimo mensaje y
 los append-ea. No usa el mecanismo de scroll anchor; depende de estar cerca del
-bottom y de la contraccion de `bottomPhantomHeight`.
+bottom y de que appendear debajo no mueva el contenido que el usuario ya esta
+leyendo.
 
 ## Sticky section context
 
@@ -551,16 +521,16 @@ la fila no esta montada, llaman `expandToItem` y en un RAF vuelven a buscar.
 - Clickear el sticky intenta alinear la seccion real, pero si la fila real no
   esta montada o `listScrollMargin` esta viejo, puede no hacer nada o caer mal.
 
-### Paginacion antigua con phantom superior
+### Paginacion hacia arriba
 
-- El trigger usa `phantomHeight + 200`, no simplemente `200`, porque el phantom
-  empuja el contenido real hacia abajo.
+- El trigger usa `scrollTop < 200` sobre la ventana cargada real.
+- El trigger exige scroll hacia arriba, salvo cuando `scrollTop <= 1`.
 - Si `hasHiddenItems()` es true, no carga mas aunque estes cerca del top fisico;
   primero debe estar montada la primera fila virtual de la ventana cargada.
 - Si el anchor capturado desaparece por cambios de grouping/dedup/session
   summary, `restoreScrollAnchor` no puede preservar posicion.
 
-### Paginacion nueva con bottom phantom
+### Paginacion hacia abajo
 
 - `loadAfter` no usa anchor.
 - Si el usuario esta en una ventana media y busca/navega a algo despues de la
@@ -595,8 +565,8 @@ la fila no esta montada, llaman `expandToItem` y en un RAF vuelven a buscar.
 
 - En compact/mobile no se usa timeline visible ni prompt pin.
 - Mobile pasa paginacion mas limitada; puede no pasar `windowStart` ni
-  `hasMoreAfter`. Entonces `MessageStream` deriva `windowStart` como
-  `total - loadedCount` cuando `hasMore` es true.
+  `hasMoreAfter`. La ausencia de `windowStart` ya no cambia la geometria visual
+  del scroller; solo limita el contexto de metadata disponible.
 
 ### Prompt pin spacer
 
@@ -619,7 +589,6 @@ la fila no esta montada, llaman `expandToItem` y en un RAF vuelven a buscar.
 
 1. Confirmar si el bug es de:
    - ventana server/store (`messages`, `windowStart`, `hasMore`, `total`),
-   - phantoms (`phantomHeight`, `bottomPhantomHeight`),
    - TanStack Virtual (`virtualRows`, `getTotalSize`, `virtualItems`),
    - medicion (`heightCache`, `measureElement`),
    - restauracion (`scrollTop`, anchors, sticky bottom).
@@ -629,7 +598,6 @@ la fila no esta montada, llaman `expandToItem` y en un RAF vuelven a buscar.
    - `totalMessages`
    - `windowStart`
    - `hasMore` / `hasMoreAfter`
-   - `phantomHeight` / `bottomPhantomHeight`
    - `scrollTop`, `scrollHeight`, `clientHeight`
    - `userHasScrolledUp.current`
    - primer/ultimo `virtualItem.index`

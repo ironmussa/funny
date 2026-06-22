@@ -123,7 +123,7 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
           {loading ? (
             <span className="flex items-center gap-1">
               <GitBranch className="size-4 shrink-0" />
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 className="icon-base animate-spin" />
             </span>
           ) : (
             <BranchPicker

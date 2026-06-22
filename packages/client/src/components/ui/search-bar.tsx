@@ -179,7 +179,7 @@ export function SearchBar({
         data-testid={`${testIdPrefix}-input`}
       />
       <span aria-hidden={!loading} className="flex size-3.5 shrink-0 items-center justify-center">
-        {loading && <Loader2 className="text-muted-foreground size-3.5 animate-spin" />}
+        {loading && <Loader2 className="text-muted-foreground icon-sm animate-spin" />}
       </span>
       <span
         className="text-muted-foreground min-w-10 shrink-0 text-center text-xs tabular-nums"

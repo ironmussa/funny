@@ -294,7 +294,7 @@ export function PublishRepoDialog({
               disabled={publishing || !repoName.trim()}
               data-testid="publish-repo-submit"
             >
-              {publishing && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {publishing && <Loader2 className="icon-base mr-2 animate-spin" />}
               Publish repository
             </Button>
           ) : (
@@ -303,7 +303,7 @@ export function PublishRepoDialog({
               disabled={savingRemote || !remoteValid}
               data-testid="publish-remote-submit"
             >
-              {savingRemote && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {savingRemote && <Loader2 className="icon-base mr-2 animate-spin" />}
               Save remote
             </Button>
           )}

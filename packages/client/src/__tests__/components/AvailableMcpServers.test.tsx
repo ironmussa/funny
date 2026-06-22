@@ -94,6 +94,15 @@ describe('AvailableMcpServers', () => {
     });
   });
 
+  test('uses the compact loading spinner size', async () => {
+    mockListMcpServers.mockReturnValue(new Promise(() => {}));
+
+    renderMcpList(<AvailableMcpServers projectPath="/repo" />);
+
+    const spinner = await screen.findByTestId('available-mcp-loading');
+    expect(spinner).toHaveClass('icon-xs', 'animate-spin');
+  });
+
   test('title links to project MCP settings', async () => {
     mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
 

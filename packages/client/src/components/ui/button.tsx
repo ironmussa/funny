@@ -70,7 +70,7 @@ function Button({
         children
       ) : (
         <>
-          {loading && <Loader2 className="size-4 animate-spin" />}
+          {loading && <Loader2 className="icon-base animate-spin" />}
           {children}
         </>
       )}

@@ -186,7 +186,7 @@
     "reject": "Não faça isso",
     "waitingInputPlaceholder": "Digite instruções ou feedback...",
     "permissionRequired": "Permissão de ferramenta necessária",
-    "permissionMessage": "Claude quer usar {{tool}}. Deseja permitir?",
+    "permissionMessage": "O agente quer usar {{tool}}. Deseja permitir?",
     "approvePermission": "Permitir",
     "approveJustOnce": "Apenas desta vez",
     "alwaysAllow": "Permitir sempre neste projeto",

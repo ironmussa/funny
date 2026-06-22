@@ -189,7 +189,7 @@
     "reject": "Don't do that",
     "waitingInputPlaceholder": "Type instructions or feedback...",
     "permissionRequired": "Tool permission required",
-    "permissionMessage": "Claude wants to use {{tool}}. Would you like to allow it?",
+    "permissionMessage": "The agent wants to use {{tool}}. Would you like to allow it?",
     "approvePermission": "Allow",
     "approveJustOnce": "Just this once",
     "alwaysAllow": "Always allow in this project",

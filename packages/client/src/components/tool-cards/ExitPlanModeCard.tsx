@@ -1,4 +1,3 @@
-import type { Skill } from '@funny/shared';
 import {
   Check,
   Copy,
@@ -22,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
-import { api } from '@/lib/api';
+import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
@@ -83,36 +82,14 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const cwd = useCurrentProjectPath();
   const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
 
-  // Provider-scoped skills/commands loader for slash commands
-  const skillsCacheRef = useRef<Skill[] | null>(null);
-  const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
-    if (skillsCacheRef.current) return skillsCacheRef.current;
-    const result = await api.listAgentResources({
-      projectPath: cwd,
-      provider: threadProvider,
-      model: threadModel,
-      phase: 'composer',
-    });
-    if (result.isOk()) {
-      const deduped = new Map<string, Skill>();
-      for (const r of result.value.resources) {
-        if (r.kind !== 'skill' && r.kind !== 'slash-command') continue;
-        deduped.set(r.name, {
-          name: r.name,
-          description: r.description ?? '',
-          source: r.origin,
-          scope: r.scope,
-        });
-      }
-      skillsCacheRef.current = [...deduped.values()];
-      return skillsCacheRef.current;
-    }
-    return [];
-  }, [cwd, threadProvider, threadModel]);
-
-  useEffect(() => {
-    skillsCacheRef.current = null;
-  }, [cwd, threadProvider, threadModel]);
+  // Provider-scoped skills/commands for slash commands (single cache; lazy —
+  // these cards mount in bulk, so only fetch on the first `/`).
+  const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
+    projectPath: cwd,
+    provider: threadProvider,
+    model: threadModel,
+    mode: 'lazy',
+  });
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
   const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);
@@ -317,7 +294,9 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
                   onSubmit={handleSubmitInput}
                   onChange={handleEditorChange}
                   cwd={cwd}
-                  loadSkills={loadSkillsForEditor}
+                  slashSkills={slashSkills}
+                  slashSkillsLoading={slashSkillsLoading}
+                  onSlashOpen={ensureSlashSkills}
                   className="max-h-[120px] min-h-[20px] overflow-y-auto text-sm"
                 />
               </div>

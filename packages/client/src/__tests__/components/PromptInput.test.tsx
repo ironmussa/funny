@@ -29,6 +29,7 @@ vi.mock('@/lib/api', async () => {
         .mockReturnValue(okAsync({ branches: [], defaultBranch: 'main', currentBranch: 'main' })),
       listWorktrees: vi.fn().mockReturnValue(okAsync([])),
       listSkills: vi.fn().mockReturnValue(okAsync({ skills: [] })),
+      listAgentResources: vi.fn().mockReturnValue(okAsync({ resources: [] })),
       remoteUrl: vi.fn().mockReturnValue(okAsync({ url: '' })),
       browseFiles: vi.fn().mockReturnValue(okAsync({ entries: [] })),
       getProfile: vi.fn().mockReturnValue(okAsync({ hasAssemblyaiKey: false })),

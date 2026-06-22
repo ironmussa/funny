@@ -562,6 +562,28 @@ export async function handleDataMessageWithAck(
           if (orgId) {
             await projectRepo.addProjectToOrg(cpResult.value.id, orgId);
           }
+          // Assign the project to the creating runner here, on the same
+          // round-trip that persisted it. The runner also fires a separate
+          // `runner:assign_project` message, but that path can be lost (its
+          // ack is dropped under the data-channel request/response shim),
+          // which orphans the project — project-scoped routing (terminal/PTY
+          // via findRunnerForProject) then fails until the next runner
+          // restart. assignProject is idempotent (onConflictDoUpdate), so the
+          // redundant write is harmless.
+          try {
+            const rm = await import('./runner-manager.js');
+            await rm.assignProject(runnerId, {
+              projectId: cpResult.value.id,
+              localPath: cpResult.value.path,
+            });
+          } catch (e) {
+            log.warn('Failed to auto-assign created project to runner', {
+              namespace: 'data-handler',
+              runnerId,
+              projectId: cpResult.value.id,
+              error: (e as Error).message,
+            });
+          }
           return { type: 'data:create_project_response', project: cpResult.value };
         } else {
           return {

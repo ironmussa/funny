@@ -35,12 +35,29 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
                 data: { type: eventName, data: payload },
               });
           } else if (eventName === 'pty:spawn') {
+            // Runner resolved but its socket isn't registered (just dropped /
+            // reconnecting). Log so this stops being a silent failure.
+            log.warn('PTY spawn: resolved runner has no live socket', {
+              namespace: 'socketio',
+              userId,
+              projectId,
+              runnerId,
+            });
             sock.emit('pty:error', {
               ptyId: payload.id,
               error: 'No runner available to handle terminal request',
             });
           }
         } else if (eventName === 'pty:spawn') {
+          // No runner could be resolved for this project. The most common
+          // cause is an orphaned project (no runner_project_assignments row);
+          // findRunnerForProject now falls back to the user's online runner,
+          // so reaching here means the user genuinely has no connected runner.
+          log.warn('PTY spawn: no runner available for project', {
+            namespace: 'socketio',
+            userId,
+            projectId: projectId ?? null,
+          });
           sock.emit('pty:error', {
             ptyId: payload.id,
             error: 'No runner available to handle terminal request',

@@ -411,7 +411,30 @@ export async function findRunnerForProject(
     .from(runnerProjectAssignments)
     .where(eq(runnerProjectAssignments.projectId, projectId));
 
-  if (assignments.length === 0) return null;
+  if (assignments.length === 0) {
+    // Orphaned project: no `runner_project_assignments` row. This happens for
+    // projects created after the runner advertised its project list (the
+    // runner→server `runner:assign_project` round-trip is the only thing that
+    // writes the row, and when it is lost the project stays orphaned until the
+    // next runner restart re-runs assignLocalProjects). Without a fallback,
+    // project-scoped routing fails — most visibly the terminal, which dies
+    // with "No runner available to handle terminal request" even though the
+    // user's runner is online.
+    //
+    // Fall back to the owning user's online runner, using the project's stored
+    // path as the local cwd. Safe under runner isolation: we resolve ONLY the
+    // project owner's own runner (project.userId === userId + the per-user
+    // findAnyRunnerForUser lookup), never another tenant's.
+    if (!userId) return null;
+    const projectRepo = await import('./project-repository.js');
+    const project = await projectRepo.getProject(projectId);
+    if (!project || project.userId !== userId || !project.path) return null;
+    const fallbackRunnerId = await findAnyRunnerForUser(userId);
+    if (!fallbackRunnerId) return null;
+    const fallbackRunner = (await listRunners()).find((r) => r.runnerId === fallbackRunnerId);
+    if (!fallbackRunner) return null;
+    return { runner: fallbackRunner, localPath: project.path };
+  }
 
   let allowedRunnerIds: Set<string> | null = null;
   if (userId) {

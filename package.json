@@ -26,6 +26,9 @@
   "scripts": {
     "start": "bun ./bin/funny.js",
     "dev": "concurrently --kill-others -n server,runner,client,orch -c blue,green,yellow,magenta \"bun run dev:server\" \"bun run dev:runtime\" \"bun run dev:client\" \"bun run dev:orchestrator\"",
+    "portless:routes": "portless alias funny 5173 --force && portless alias api.funny 5002 --force && portless alias runner.funny 3003 --force",
+    "portless:list": "portless list",
+    "dev:portless": "bun run portless:routes && bun run dev",
     "dev:server": "cd packages/server && bun --env-file ../../.env --watch src/index.ts",
     "dev:runtime": "bun --env-file ../../.env --watch --cwd packages/runtime src/index.ts",
     "dev:client": "cd packages/client && npx vite",

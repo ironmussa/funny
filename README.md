@@ -404,6 +404,57 @@ bun run db:studio  # Open Drizzle Studio
 bun test
 ```
 
+### Named local domains (portless)
+
+When you run several apps locally it's easy to lose track of which one is on
+which port. [portless](https://github.com/vercel-labs/portless) puts a small
+local proxy in front of the dev servers so each gets a stable, named URL
+instead of a bare port:
+
+| URL | → port | service |
+| --- | --- | --- |
+| `http://funny.localhost` | 5173 | client |
+| `http://api.funny.localhost` | 5002 | server |
+| `http://runner.funny.localhost` | 3003 | runtime |
+
+We use portless in **static-alias + HTTP (`--no-tls`) mode**: the services keep
+their fixed ports (so the cross-service references — Vite → `:5002`,
+`RUNNER_PUBLIC_MEDIA_URL` → `:3003` — stay intact) and everything stays on HTTP
+(so the browser-reachable runner media URL doesn't trip mixed-content blocking).
+portless just maps a name onto each existing port.
+
+**One-time setup:**
+
+```bash
+# Install the CLI
+npm install -g portless
+
+# Start the HTTP proxy on port 80. Needs sudo once to bind :80.
+# Use `service install` instead of `proxy start` to persist across reboots.
+sudo portless proxy start --no-tls
+# sudo portless service install --no-tls   # auto-start on boot
+
+# Register the routes (persisted in portless state; idempotent)
+bun run portless:routes
+```
+
+The `.env` `CORS_ORIGIN` must include `http://funny.localhost` so the server and
+better-auth accept the new origin (already configured in the sample `.env`).
+
+**Daily use:**
+
+```bash
+bun run dev:portless   # registers routes, then runs the full dev stack
+bun run portless:list  # show active routes
+```
+
+Then open **http://funny.localhost**. To bypass portless and use raw ports,
+run `bun run dev` as usual, or prefix any command with `PORTLESS=0`.
+
+> Without sudo, portless falls back to port `1355`
+> (`http://funny.localhost:1355`). The named domain still disambiguates your
+> apps; only the clean `:80` URL requires the one-time sudo above.
+
 ## Architecture
 
 ### Monorepo Structure

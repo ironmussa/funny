@@ -14,6 +14,10 @@ const { api, toastSuccess, toastErrorFn, fetchForThread, fetchProjectStatus } = 
     projectResetHard: vi.fn(),
     cherryPick: vi.fn(),
     projectCherryPick: vi.fn(),
+    mergeCurrentBranchInto: vi.fn(),
+    projectMergeCurrentBranchInto: vi.fn(),
+    rebaseCurrentBranchOnto: vi.fn(),
+    projectRebaseCurrentBranchOnto: vi.fn(),
     pushBranch: vi.fn(),
     projectPushBranch: vi.fn(),
     createBranch: vi.fn(),
@@ -131,6 +135,37 @@ describe('useCommitActions', () => {
     expect(toastSuccess).toHaveBeenCalledTimes(1);
     expect(fetchForThread).toHaveBeenCalledWith('t1', true);
     expect(result.current.pending).toBeNull();
+  });
+
+  test('merge-current-into goes through the confirm flow and calls the thread branch API', async () => {
+    const onAfterAction = vi.fn();
+    const { result } = renderHook(() =>
+      useCommitActions({ effectiveThreadId: 't1', projectModeId: null, onAfterAction }),
+    );
+    act(() => result.current.request('merge-current-into', 'master'));
+    expect(result.current.pending).toEqual({ kind: 'merge-current-into', hash: 'master' });
+    await act(async () => {
+      await result.current.confirm();
+    });
+    expect(api.mergeCurrentBranchInto).toHaveBeenCalledWith('t1', 'master');
+    expect(api.projectMergeCurrentBranchInto).not.toHaveBeenCalled();
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(fetchForThread).toHaveBeenCalledWith('t1', true);
+    expect(onAfterAction).toHaveBeenCalledTimes(1);
+    expect(result.current.pending).toBeNull();
+  });
+
+  test('rebase-current-onto calls the project branch API in project context', async () => {
+    const onAfterAction = vi.fn();
+    const { result } = renderHook(() => useCommitActions({ projectModeId: 'p9', onAfterAction }));
+    act(() => result.current.request('rebase-current-onto', 'master'));
+    await act(async () => {
+      await result.current.confirm();
+    });
+    expect(api.projectRebaseCurrentBranchOnto).toHaveBeenCalledWith('p9', 'master');
+    expect(api.rebaseCurrentBranchOnto).not.toHaveBeenCalled();
+    expect(fetchProjectStatus).toHaveBeenCalledWith('p9', true);
+    expect(onAfterAction).toHaveBeenCalledTimes(1);
   });
 
   test('pushBranch runs immediately (no confirm) and calls the project push-branch API', async () => {

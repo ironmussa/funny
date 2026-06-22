@@ -96,4 +96,29 @@ describe('CommitActionsMenu', () => {
 
     expect(onSelectRebaseEvent).toHaveBeenCalledWith(rebaseEvent);
   });
+
+  test('shows merge and rebase actions for target branches', () => {
+    renderWithProviders(
+      <CommitActionsMenu
+        hash="1111111111111111111111111111111111111111"
+        shortHash="1111111"
+        githubUrl={null}
+        projectModeId="p1"
+        targetBranches={['master']}
+        onAfterAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(screen.getByTestId('graph-commit-menu-merge-current-into-master')).toHaveTextContent(
+      'Merge current branch into master',
+    );
+    expect(screen.getByTestId('graph-commit-menu-rebase-current-onto-master')).toHaveTextContent(
+      'Rebase current branch onto master',
+    );
+  });
 });

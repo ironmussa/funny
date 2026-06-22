@@ -5,7 +5,7 @@
  * @domain layer: infrastructure
  */
 
-import { internal } from '@funny/shared/errors';
+import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
@@ -13,6 +13,8 @@ import { requestSpan } from '../../middleware/tracing.js';
 import {
   merge as gitServiceMerge,
   createPullRequest as gitServiceCreatePR,
+  mergeCurrentBranchInto,
+  rebaseCurrentBranchOnto,
   validateFilePaths,
 } from '../../services/git-service.js';
 import { executeWorkflow, isWorkflowActive } from '../../services/git-workflow-service.js';
@@ -20,9 +22,21 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd } from '../../utils/route-helpers.js';
 import { validate, mergeSchema, createPRSchema, workflowSchema } from '../../validation/schemas.js';
-import { invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
+import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const workflowRoutes = new Hono<HonoEnv>();
+
+async function readRequiredTargetBranch(c: {
+  req: { json: () => Promise<unknown> };
+}): Promise<{ targetBranch: string } | Response> {
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(mergeSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c as any, parsed);
+  if (!parsed.value.targetBranch) {
+    return resultToResponse(c as any, err(badRequest('targetBranch is required')));
+  }
+  return { targetBranch: parsed.value.targetBranch };
+}
 
 // POST /api/git/:threadId/pr
 workflowRoutes.post('/:threadId/pr', async (c) => {
@@ -75,6 +89,72 @@ workflowRoutes.post('/:threadId/merge', async (c) => {
     push: parsed.value.push,
     cleanup: parsed.value.cleanup,
   });
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
+  }
+  await invalidateGitStatusCache(threadId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/merge-current-into
+workflowRoutes.post('/:threadId/merge-current-into', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(threadId, userId, orgId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const target = await readRequiredTargetBranch(c);
+  if (target instanceof Response) return target;
+
+  const span = requestSpan(c, 'git.merge_current_into', {
+    threadId,
+    targetBranch: target.targetBranch,
+  });
+  const result = await mergeCurrentBranchInto(
+    threadId,
+    userId,
+    cwdResult.value,
+    target.targetBranch,
+    { projectId: threadResult.value.projectId },
+  );
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
+  }
+  await invalidateGitStatusCache(threadId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/rebase-current-onto
+workflowRoutes.post('/:threadId/rebase-current-onto', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(threadId, userId, orgId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const target = await readRequiredTargetBranch(c);
+  if (target instanceof Response) return target;
+
+  const span = requestSpan(c, 'git.rebase_current_onto', {
+    threadId,
+    targetBranch: target.targetBranch,
+  });
+  const result = await rebaseCurrentBranchOnto(
+    threadId,
+    userId,
+    cwdResult.value,
+    target.targetBranch,
+    { projectId: threadResult.value.projectId },
+  );
   if (result.isErr()) {
     span.end('error', result.error.message);
     return resultToResponse(c, result);
@@ -166,4 +246,66 @@ workflowRoutes.post('/project/:projectId/workflow', async (c) => {
   } catch (e: any) {
     return resultToResponse(c, err(internal(e.message)));
   }
+});
+
+// POST /api/git/project/:projectId/merge-current-into
+workflowRoutes.post('/project/:projectId/merge-current-into', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const target = await readRequiredTargetBranch(c);
+  if (target instanceof Response) return target;
+
+  const span = requestSpan(c, 'git.project.merge_current_into', {
+    projectId,
+    targetBranch: target.targetBranch,
+  });
+  const result = await mergeCurrentBranchInto(
+    projectId,
+    userId,
+    cwdResult.value,
+    target.targetBranch,
+    { projectId },
+  );
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
+  }
+  _gitStatusCache.delete(projectId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/rebase-current-onto
+workflowRoutes.post('/project/:projectId/rebase-current-onto', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const target = await readRequiredTargetBranch(c);
+  if (target instanceof Response) return target;
+
+  const span = requestSpan(c, 'git.project.rebase_current_onto', {
+    projectId,
+    targetBranch: target.targetBranch,
+  });
+  const result = await rebaseCurrentBranchOnto(
+    projectId,
+    userId,
+    cwdResult.value,
+    target.targetBranch,
+    { projectId },
+  );
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
+  }
+  _gitStatusCache.delete(projectId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
 });

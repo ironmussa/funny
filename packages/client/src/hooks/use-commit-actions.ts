@@ -9,9 +9,12 @@ import { useGitStatusStore } from '@/stores/git-status-store';
 /** Commit operations offered from the graph context menu + detail dialog that
  * run behind a confirmation dialog (they mutate the working branch / history). */
 export type CommitActionKind = 'checkout' | 'revert' | 'reset' | 'cherry-pick';
+export type BranchCommitActionKind = 'merge-current-into' | 'rebase-current-onto';
+export type ConfirmedCommitActionKind = CommitActionKind | BranchCommitActionKind;
 
 export interface PendingCommitAction {
-  kind: CommitActionKind;
+  kind: ConfirmedCommitActionKind;
+  /** Commit hash for commit actions; target branch for branch actions. */
   hash: string;
 }
 
@@ -23,7 +26,7 @@ interface UseCommitActionsOptions {
   /** Called after any action completes (success or failure) to reload the log. */
   onAfterAction: () => void;
   /** Called once after a *successful* action — e.g. the detail dialog closes itself. */
-  onSuccess?: (kind: CommitActionKind) => void;
+  onSuccess?: (kind: ConfirmedCommitActionKind) => void;
 }
 
 /**
@@ -54,7 +57,7 @@ export function useCommitActions({
 
   /** Open the confirm dialog for a given action + commit. No-op without git context. */
   const request = useCallback(
-    (kind: CommitActionKind, hash: string) => {
+    (kind: ConfirmedCommitActionKind, hash: string) => {
       if (hasGitContext) setPending({ kind, hash });
     },
     [hasGitContext],
@@ -85,15 +88,31 @@ export function useCommitActions({
           return effectiveThreadId
             ? api.cherryPick(effectiveThreadId, hash)
             : api.projectCherryPick(projectModeId!, hash);
+        case 'merge-current-into':
+          return effectiveThreadId
+            ? api.mergeCurrentBranchInto(effectiveThreadId, hash)
+            : api.projectMergeCurrentBranchInto(projectModeId!, hash);
+        case 'rebase-current-onto':
+          return effectiveThreadId
+            ? api.rebaseCurrentBranchOnto(effectiveThreadId, hash)
+            : api.projectRebaseCurrentBranchOnto(projectModeId!, hash);
       }
     };
     const result = await run();
     if (result.isOk()) {
-      const successMsg: Record<CommitActionKind, string> = {
+      const successMsg: Record<ConfirmedCommitActionKind, string> = {
         checkout: t('history.checkoutSuccess', 'Switched to commit (detached HEAD)'),
         revert: t('history.revertSuccess', 'Commit reverted successfully'),
         reset: t('history.resetSuccess', 'Branch reset to this commit'),
         'cherry-pick': t('history.cherryPickSuccess', 'Commit cherry-picked onto current branch'),
+        'merge-current-into': t('history.mergeCurrentIntoSuccess', {
+          branch: hash,
+          defaultValue: `Merged current branch into ${hash}`,
+        }),
+        'rebase-current-onto': t('history.rebaseCurrentOntoSuccess', {
+          branch: hash,
+          defaultValue: `Rebased current branch onto ${hash}`,
+        }),
       };
       toast.success(successMsg[kind]);
       onSuccess?.(kind);

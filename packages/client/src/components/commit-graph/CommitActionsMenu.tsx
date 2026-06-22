@@ -5,6 +5,7 @@ import {
   ExternalLink,
   GitBranch,
   GitBranchPlus,
+  GitMerge,
   Hash,
   History,
   MoreVertical,
@@ -42,6 +43,8 @@ interface Props {
    * is not the tip of an unpushed local branch, in which case no push item shows.
    */
   localBranches?: string[];
+  /** Local branches at this commit that can be used as merge/rebase targets. */
+  targetBranches?: string[];
   rebaseEvents?: GitRebaseReflogEventDTO[];
   onSelectRebaseEvent?: (event: GitRebaseReflogEventDTO) => void;
   /** Reload the graph log after a mutating action. */
@@ -62,6 +65,7 @@ interface Props {
 /** Stable empty default for {@link Props.localBranches} — a literal `[]` default
  * would be a fresh reference each render and churn referential equality. */
 const NO_BRANCHES: string[] = [];
+const NO_TARGET_BRANCHES: string[] = [];
 const NO_REBASE_EVENTS: GitRebaseReflogEventDTO[] = [];
 
 /**
@@ -81,6 +85,7 @@ export function CommitActionsMenu({
   effectiveThreadId,
   projectModeId,
   localBranches = NO_BRANCHES,
+  targetBranches = NO_TARGET_BRANCHES,
   rebaseEvents = NO_REBASE_EVENTS,
   onSelectRebaseEvent,
   onAfterAction,
@@ -219,6 +224,32 @@ export function CommitActionsMenu({
                 <GitBranchPlus className="icon-sm" />
                 {t('graph.createBranchHere', 'Create branch from here')}
               </DropdownMenuItem>
+              {targetBranches.map((branch) => (
+                <DropdownMenuItem
+                  key={`merge-current-into:${branch}`}
+                  onClick={() => request('merge-current-into', branch)}
+                  data-testid={`graph-commit-menu-merge-current-into-${branch}`}
+                >
+                  <GitMerge className="icon-sm" />
+                  {t('graph.mergeCurrentIntoBranch', {
+                    branch,
+                    defaultValue: `Merge current branch into ${branch}`,
+                  })}
+                </DropdownMenuItem>
+              ))}
+              {targetBranches.map((branch) => (
+                <DropdownMenuItem
+                  key={`rebase-current-onto:${branch}`}
+                  onClick={() => request('rebase-current-onto', branch)}
+                  data-testid={`graph-commit-menu-rebase-current-onto-${branch}`}
+                >
+                  <GitBranch className="icon-sm" />
+                  {t('graph.rebaseCurrentOntoBranch', {
+                    branch,
+                    defaultValue: `Rebase current branch onto ${branch}`,
+                  })}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuItem
                 onClick={() => request('cherry-pick', hash)}
                 data-testid={`graph-commit-menu-cherry-pick-${shortHash}`}

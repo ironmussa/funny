@@ -7,6 +7,7 @@ import {
   graphNodeParentLabels,
   graphNodeParentRefLabels,
   graphNodeRefLabel,
+  summarizeGraphBranches,
 } from '@/lib/graph-refs';
 
 const local = (name: string): GraphRefDTO => ({ name, kind: 'local' });
@@ -326,5 +327,161 @@ describe('graphNodeParentRefLabels', () => {
     );
 
     expect(labels.get('new-commit')).toBe('video-integration');
+  });
+});
+
+describe('summarizeGraphBranches', () => {
+  it('marks a local and remote branch on the same tip as synced', () => {
+    expect(
+      summarizeGraphBranches([
+        {
+          hash: 'tip',
+          parentHashes: [],
+          refs: [local('main'), remote('origin/main')],
+          headBranch: 'main',
+        },
+      ]),
+    ).toEqual([
+      {
+        branch: 'main',
+        localRef: 'main',
+        remoteRef: 'origin/main',
+        localHash: 'tip',
+        remoteHash: 'tip',
+        isCurrent: true,
+        ahead: 0,
+        behind: 0,
+        state: 'synced',
+        primaryAction: 'none',
+      },
+    ]);
+  });
+
+  it('marks a local branch ahead of its remote when local reaches the remote tip', () => {
+    expect(
+      summarizeGraphBranches([
+        {
+          hash: 'local-tip',
+          parentHashes: ['remote-tip'],
+          refs: [local('feature')],
+          headBranch: 'feature',
+        },
+        {
+          hash: 'remote-tip',
+          parentHashes: [],
+          refs: [remote('origin/feature')],
+          headBranch: 'feature',
+        },
+      ])[0],
+    ).toMatchObject({
+      branch: 'feature',
+      ahead: 1,
+      behind: 0,
+      state: 'ahead',
+      primaryAction: 'push',
+    });
+  });
+
+  it('marks the current branch behind when the remote reaches the local tip', () => {
+    expect(
+      summarizeGraphBranches([
+        {
+          hash: 'remote-tip',
+          parentHashes: ['local-tip'],
+          refs: [remote('origin/feature')],
+          headBranch: 'feature',
+        },
+        {
+          hash: 'local-tip',
+          parentHashes: [],
+          refs: [local('feature')],
+          headBranch: 'feature',
+        },
+      ])[0],
+    ).toMatchObject({
+      branch: 'feature',
+      ahead: 0,
+      behind: 1,
+      state: 'behind',
+      primaryAction: 'pull',
+    });
+  });
+
+  it('marks a non-current behind branch as checkout before pull', () => {
+    expect(
+      summarizeGraphBranches([
+        {
+          hash: 'remote-tip',
+          parentHashes: ['local-tip'],
+          refs: [remote('origin/feature')],
+          headBranch: 'main',
+        },
+        {
+          hash: 'local-tip',
+          parentHashes: [],
+          refs: [local('feature')],
+          headBranch: 'main',
+        },
+      ])[0],
+    ).toMatchObject({
+      state: 'behind',
+      primaryAction: 'checkout',
+    });
+  });
+
+  it('marks diverged branches with both ahead and behind counts', () => {
+    expect(
+      summarizeGraphBranches([
+        {
+          hash: 'local-tip',
+          parentHashes: ['base'],
+          refs: [local('feature')],
+          headBranch: 'feature',
+        },
+        {
+          hash: 'remote-tip',
+          parentHashes: ['base'],
+          refs: [remote('origin/feature')],
+          headBranch: 'feature',
+        },
+        { hash: 'base', parentHashes: [], refs: [], headBranch: 'feature' },
+      ])[0],
+    ).toMatchObject({
+      branch: 'feature',
+      ahead: 1,
+      behind: 1,
+      state: 'diverged',
+      primaryAction: 'sync',
+    });
+  });
+
+  it('marks local-only and remote-only branches distinctly', () => {
+    expect(
+      summarizeGraphBranches([
+        {
+          hash: 'local-tip',
+          parentHashes: [],
+          refs: [local('draft')],
+          headBranch: 'main',
+        },
+        {
+          hash: 'remote-tip',
+          parentHashes: [],
+          refs: [remote('origin/review')],
+          headBranch: 'main',
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        branch: 'draft',
+        state: 'local-only',
+        primaryAction: 'publish',
+      }),
+      expect.objectContaining({
+        branch: 'review',
+        state: 'remote-only',
+        primaryAction: 'checkout',
+      }),
+    ]);
   });
 });

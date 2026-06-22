@@ -1,8 +1,17 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { GraphCommitSyncMarkers, GraphCommitTime } from '@/components/CommitGraphTab';
-import { inferUnpulledHashesFromGraphEntries } from '@/lib/graph-refs';
+import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
+import {
+  GraphCommitSyncMarkers,
+  GraphCommitTime,
+  renderedGraphLaneCount,
+} from '@/components/CommitGraphTab';
+import {
+  inferUnpulledHashesFromGraphEntries,
+  type FoldedRef,
+  type GraphBranchSummary,
+} from '@/lib/graph-refs';
 import {
   indexRebaseEventsByHash,
   inferRebaseCopyLinks,
@@ -63,6 +72,228 @@ describe('GraphCommitSyncMarkers', () => {
     );
     expect(screen.getByTestId('graph-unpulled-icon-2222222')).toHaveClass('icon-sm');
     expect(screen.queryByTestId('graph-unpushed-2222222')).not.toBeInTheDocument();
+  });
+});
+
+describe('renderedGraphLaneCount', () => {
+  test('reserves every computed lane instead of capping the graph gutter', () => {
+    expect(renderedGraphLaneCount(18)).toBe(18);
+    expect(renderedGraphLaneCount(0)).toBe(1);
+  });
+});
+
+describe('GraphRefChips', () => {
+  test('shows push status, action, and details on a local branch chip that is ahead', async () => {
+    const onPushBranch = vi.fn();
+    const onPullCurrentBranch = vi.fn();
+    const refs: FoldedRef[] = [{ kind: 'local', name: 'feat/video', isCurrent: true }];
+    const branch: GraphBranchSummary = {
+      branch: 'feat/video',
+      localRef: 'feat/video',
+      remoteRef: 'origin/feat/video',
+      localHash: 'local-tip',
+      remoteHash: 'remote-tip',
+      isCurrent: true,
+      ahead: 2,
+      behind: 0,
+      state: 'ahead',
+      primaryAction: 'push',
+    };
+
+    renderWithProviders(
+      <GraphRefChips
+        refs={refs}
+        branchSummaryByName={new Map([[branch.branch, branch]])}
+        actionInProgress={null}
+        color="#7cb9e8"
+        searchQuery=""
+        onPushBranch={onPushBranch}
+        onPullCurrentBranch={onPullCurrentBranch}
+      />,
+    );
+
+    expect(screen.getByTestId('graph-branch-status-feat/video')).toHaveTextContent('2');
+    expect(screen.getByTestId('graph-branch-status-feat/video')).not.toHaveTextContent('Push');
+    expect(screen.getByTestId('graph-branch-status-feat/video')).not.toHaveTextContent('↑');
+    expect(screen.getByTestId('graph-ref-chip-local:feat/video')).toHaveClass(
+      'hover:brightness-90',
+    );
+    expect(screen.getByTestId('graph-branch-info-feat/video').className).not.toContain(
+      'hover:bg-background/20',
+    );
+    expect(screen.getByTestId('graph-ref-chip-local:feat/video')).not.toContainElement(
+      screen.getByTestId('graph-branch-action-feat/video'),
+    );
+    expect(screen.getByTestId('graph-ref-chip-local:feat/video')).not.toContainElement(
+      screen.getByTestId('graph-branch-status-feat/video'),
+    );
+    expect(screen.getByTestId('graph-branch-action-feat/video')).toContainElement(
+      screen.getByTestId('graph-branch-status-feat/video'),
+    );
+    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass('bg-primary');
+    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass(
+      'text-primary-foreground',
+    );
+    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass('px-1.5');
+    expect(screen.getByTestId('graph-branch-action-feat/video').className).not.toContain(
+      'bg-sky-950',
+    );
+
+    fireEvent.click(screen.getByTestId('graph-branch-info-feat/video'));
+
+    expect(await screen.findByTestId('graph-branch-detail-feat/video')).toHaveTextContent(
+      'feat/video',
+    );
+    expect(screen.getByTestId('graph-branch-detail-feat/video')).toHaveTextContent(
+      'origin/feat/video',
+    );
+    expect(screen.getByTestId('graph-branch-detail-feat/video')).toHaveTextContent('Ahead 2');
+    expect(screen.getByTestId('graph-branch-action-icon-feat/video')).toHaveClass('lucide-upload');
+
+    fireEvent.click(screen.getByTestId('graph-branch-action-feat/video'));
+
+    expect(onPushBranch).toHaveBeenCalledWith('feat/video');
+    expect(onPullCurrentBranch).not.toHaveBeenCalled();
+  });
+
+  test('shows pull status, action, and details on the remote chip for the current behind branch', async () => {
+    const onPushBranch = vi.fn();
+    const onPullCurrentBranch = vi.fn();
+    const refs: FoldedRef[] = [{ kind: 'remote', name: 'origin/main', isCurrent: false }];
+    const branch: GraphBranchSummary = {
+      branch: 'main',
+      localRef: 'main',
+      remoteRef: 'origin/main',
+      localHash: 'local-tip',
+      remoteHash: 'remote-tip',
+      isCurrent: true,
+      ahead: 0,
+      behind: 3,
+      state: 'behind',
+      primaryAction: 'pull',
+    };
+
+    renderWithProviders(
+      <GraphRefChips
+        refs={refs}
+        branchSummaryByName={new Map([[branch.branch, branch]])}
+        actionInProgress={null}
+        color="#7cb9e8"
+        searchQuery=""
+        onPushBranch={onPushBranch}
+        onPullCurrentBranch={onPullCurrentBranch}
+      />,
+    );
+
+    expect(screen.getByTestId('graph-branch-info-origin/main')).toHaveTextContent('main');
+    expect(screen.getByTestId('graph-branch-info-origin/main')).not.toHaveTextContent(
+      'origin/main',
+    );
+    expect(screen.getByTestId('graph-branch-status-origin/main')).toHaveTextContent('3');
+    expect(screen.getByTestId('graph-branch-status-origin/main')).not.toHaveTextContent('Pull');
+    expect(screen.getByTestId('graph-branch-status-origin/main')).not.toHaveTextContent('↓');
+    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('bg-primary');
+    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('text-primary-foreground');
+    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('px-1.5');
+    expect(screen.getByTestId('graph-branch-action-main').className).not.toContain('bg-amber-950');
+
+    fireEvent.click(screen.getByTestId('graph-branch-info-origin/main'));
+
+    expect(await screen.findByTestId('graph-branch-detail-origin/main')).toHaveTextContent(
+      'origin/main',
+    );
+    expect(screen.getByTestId('graph-branch-detail-origin/main')).toHaveTextContent('Behind 3');
+    expect(screen.getByTestId('graph-branch-action-icon-main')).toHaveClass('lucide-download');
+
+    fireEvent.click(screen.getByTestId('graph-branch-action-main'));
+
+    expect(onPullCurrentBranch).toHaveBeenCalledWith('main');
+    expect(onPushBranch).not.toHaveBeenCalled();
+  });
+
+  test('does not show a redundant Origin status on remote-only branch chips', () => {
+    const refs: FoldedRef[] = [{ kind: 'remote', name: 'origin/feature', isCurrent: false }];
+    const branch: GraphBranchSummary = {
+      branch: 'feature',
+      remoteRef: 'origin/feature',
+      remoteHash: 'remote-tip',
+      isCurrent: false,
+      ahead: 0,
+      behind: 1,
+      state: 'remote-only',
+      primaryAction: 'checkout',
+    };
+
+    renderWithProviders(
+      <GraphRefChips
+        refs={refs}
+        branchSummaryByName={new Map([[branch.branch, branch]])}
+        actionInProgress={null}
+        color="#7cb9e8"
+        searchQuery=""
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('graph-ref-chip-remote:origin/feature')).toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-info-origin/feature')).toHaveTextContent('feature');
+    expect(screen.getByTestId('graph-branch-info-origin/feature')).not.toHaveTextContent(
+      'origin/feature',
+    );
+    expect(screen.queryByTestId('graph-branch-status-origin/feature')).not.toBeInTheDocument();
+  });
+
+  test('does not render redundant Local or Synced status chips', () => {
+    const refs: FoldedRef[] = [
+      { kind: 'local', name: 'main', isCurrent: true, syncedRemote: 'origin/main' },
+      { kind: 'local', name: 'draft', isCurrent: false },
+    ];
+    const syncedBranch: GraphBranchSummary = {
+      branch: 'main',
+      localRef: 'main',
+      remoteRef: 'origin/main',
+      localHash: 'main-tip',
+      remoteHash: 'main-tip',
+      isCurrent: true,
+      ahead: 0,
+      behind: 0,
+      state: 'synced',
+      primaryAction: 'none',
+    };
+    const localBranch: GraphBranchSummary = {
+      branch: 'draft',
+      localRef: 'draft',
+      localHash: 'draft-tip',
+      isCurrent: false,
+      ahead: 1,
+      behind: 0,
+      state: 'local-only',
+      primaryAction: 'publish',
+    };
+
+    renderWithProviders(
+      <GraphRefChips
+        refs={refs}
+        branchSummaryByName={
+          new Map([
+            [syncedBranch.branch, syncedBranch],
+            [localBranch.branch, localBranch],
+          ])
+        }
+        actionInProgress={null}
+        color="#7cb9e8"
+        searchQuery=""
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('graph-ref-chip-local:main')).toBeInTheDocument();
+    expect(screen.getByTestId('graph-ref-chip-local:draft')).toBeInTheDocument();
+    expect(screen.queryByTestId('graph-branch-status-main')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('graph-branch-status-draft')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('graph-branch-action-main')).not.toBeInTheDocument();
   });
 });
 

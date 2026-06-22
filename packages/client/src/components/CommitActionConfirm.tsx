@@ -57,6 +57,30 @@ export function CommitActionConfirm({ pending, onConfirm, onCancel }: Props) {
           confirmLabel: t('history.confirmCherryPickButton', 'Cherry-pick'),
           variant: 'default' as const,
         },
+        'merge-current-into': {
+          title: t('history.confirmMergeCurrentIntoTitle', {
+            branch: pending.hash,
+            defaultValue: `Merge into ${pending.hash}`,
+          }),
+          description: t('history.confirmMergeCurrentIntoDesc', {
+            branch: pending.hash,
+            defaultValue: `This will switch to ${pending.hash} and merge the current branch into it. Continue?`,
+          }),
+          confirmLabel: t('history.confirmMergeCurrentIntoButton', 'Merge'),
+          variant: 'default' as const,
+        },
+        'rebase-current-onto': {
+          title: t('history.confirmRebaseCurrentOntoTitle', {
+            branch: pending.hash,
+            defaultValue: `Rebase onto ${pending.hash}`,
+          }),
+          description: t('history.confirmRebaseCurrentOntoDesc', {
+            branch: pending.hash,
+            defaultValue: `This will replay the current branch on top of ${pending.hash}. If it conflicts, the working tree is left mid-rebase for you to resolve. Continue?`,
+          }),
+          confirmLabel: t('history.confirmRebaseCurrentOntoButton', 'Rebase'),
+          variant: 'default' as const,
+        },
       }[pending.kind]
     : null;
 

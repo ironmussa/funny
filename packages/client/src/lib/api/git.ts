@@ -298,6 +298,16 @@ export const gitApi = {
       method: 'POST',
       body: JSON.stringify({ branch }),
     }),
+  mergeCurrentBranchInto: (threadId: string, targetBranch: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/merge-current-into`, {
+      method: 'POST',
+      body: JSON.stringify({ targetBranch }),
+    }),
+  rebaseCurrentBranchOnto: (threadId: string, targetBranch: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/rebase-current-onto`, {
+      method: 'POST',
+      body: JSON.stringify({ targetBranch }),
+    }),
 
   // Project-scoped git (no thread — operates on the project's main directory)
   projectGitStatus: (projectId: string, signal?: AbortSignal) =>
@@ -490,6 +500,16 @@ export const gitApi = {
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/push-branch`, {
       method: 'POST',
       body: JSON.stringify({ branch }),
+    }),
+  projectMergeCurrentBranchInto: (projectId: string, targetBranch: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/merge-current-into`, {
+      method: 'POST',
+      body: JSON.stringify({ targetBranch }),
+    }),
+  projectRebaseCurrentBranchOnto: (projectId: string, targetBranch: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/rebase-current-onto`, {
+      method: 'POST',
+      body: JSON.stringify({ targetBranch }),
     }),
   projectGitLog: (projectId: string, limit = 50, skip = 0, signal?: AbortSignal) =>
     request<LogResponse<GitLogEntryDTO>>(

@@ -50,9 +50,12 @@ export interface ThreadWithMessages extends Thread {
   waitingReason?: WaitingReason;
   pendingPermission?: { toolName: string; toolInput?: string };
   hasMore?: boolean;
+  hasMoreAfter?: boolean;
   loadingMore?: boolean;
   /** Full message count for the thread — sizes the phantom scroll spacer. */
   totalMessages?: number;
+  /** Number of messages before the loaded window. */
+  windowStart?: number;
   contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
   setupProgress?: GitProgressStep[];

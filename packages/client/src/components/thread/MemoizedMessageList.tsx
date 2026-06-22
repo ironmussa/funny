@@ -1,8 +1,10 @@
 import type { FileDiffSummary, ThreadEvent } from '@funny/shared';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   useState,
   useRef,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useCallback,
   useMemo,
@@ -10,7 +12,6 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -23,8 +24,11 @@ import {
   ensurePretextLoaded,
 } from '@/hooks/use-pretext';
 import { analyzeMarkdown } from '@/lib/markdown-to-plaintext';
+import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import {
+  buildRenderItemIdIndexMap,
   buildGroupedRenderItems,
+  findNearestPrecedingUserMessageItem,
   getItemKey,
   type ToolItem,
   type RenderItem,
@@ -48,9 +52,16 @@ import { MessageContent, CopyButton } from './MessageContent';
 import { UserMessageCard } from './UserMessageCard';
 import { WorkflowEventGroup } from './WorkflowEventGroup';
 
-/* ── Windowed rendering constants ─────────────────────────────────── */
-const INITIAL_WINDOW = 30;
-const EXPAND_BATCH = 20;
+const VIRTUAL_ROW_GAP_PX = 16;
+const VIRTUAL_OVERSCAN = 8;
+const STICKY_SECTION_EPSILON_PX = 1;
+const USER_MESSAGE_ROW_PADDING_PX = 24;
+const USER_MESSAGE_CARD_VERTICAL_CHROME_PX = 38;
+const USER_MESSAGE_COLLAPSED_TEXT_PX = 48;
+const USER_MESSAGE_EXPAND_BUTTON_PX = 20;
+const USER_MESSAGE_ATTACHMENT_ROW_PX = 48;
+const USER_MESSAGE_FILE_CHIP_ROW_PX = 28;
+const USER_MESSAGE_MIN_ESTIMATE_PX = 112;
 
 export const EMPTY_MESSAGES: any[] = [];
 
@@ -61,32 +72,90 @@ interface FontConfig {
 }
 
 /**
- * Estimate item height. For assistant messages, uses pretext measurements when
- * available for much more accurate estimates than the flat 120px fallback.
+ * Estimate item height. Message rows use pretext measurements when available,
+ * then fall back to conservative estimates until ResizeObserver reports the
+ * real row height.
  * containerWidth = 0 means "use flat fallback" (pretext not ready or width unknown).
  */
+function estimatePlainTextHeight(text: string, containerWidth: number, fonts?: FontConfig): number {
+  const lineHeight = fonts?.proseLineHeight ?? 20;
+  if (!text) return lineHeight;
+
+  if (containerWidth > 100 && isPretextReady() && fonts) {
+    const prepared = getCachedPrepared(text, fonts.proseFont);
+    if (prepared) {
+      return layoutSync(prepared, containerWidth, fonts.proseLineHeight).height;
+    }
+  }
+
+  const approxCharPx = 7;
+  const textWidth = Math.max(120, containerWidth);
+  return text.split('\n').reduce((height, line) => {
+    const visualLines = Math.max(1, Math.ceil((line.length * approxCharPx) / textWidth));
+    return height + visualLines * lineHeight;
+  }, 0);
+}
+
+function estimateUserMessageHeight(msg: any, containerWidth: number, fonts?: FontConfig): number {
+  const { files, inlineContent } = parseReferencedFiles(msg.content ?? '');
+  const content = inlineContent.trim();
+  const cardTextWidth = Math.max(120, containerWidth - 24);
+  const fullTextHeight = estimatePlainTextHeight(content, cardTextWidth, fonts);
+  const textHeight = Math.min(fullTextHeight, USER_MESSAGE_COLLAPSED_TEXT_PX);
+  const expandButtonHeight =
+    fullTextHeight > USER_MESSAGE_COLLAPSED_TEXT_PX ? USER_MESSAGE_EXPAND_BUTTON_PX : 0;
+
+  const imageCount = msg.images?.length ?? 0;
+  const imagesPerRow = Math.max(1, Math.floor(cardTextWidth / 104));
+  const imageRows = imageCount > 0 ? Math.ceil(imageCount / imagesPerRow) : 0;
+  const imageHeight = imageRows * USER_MESSAGE_ATTACHMENT_ROW_PX;
+
+  const unmentionedFileCount = files.filter(
+    (file) => !inlineContent.includes(`@${file.path}`),
+  ).length;
+  const chipsPerRow = Math.max(1, Math.floor(cardTextWidth / 160));
+  const fileChipRows = unmentionedFileCount > 0 ? Math.ceil(unmentionedFileCount / chipsPerRow) : 0;
+  const fileChipHeight = fileChipRows * USER_MESSAGE_FILE_CHIP_ROW_PX;
+
+  return Math.max(
+    USER_MESSAGE_MIN_ESTIMATE_PX,
+    USER_MESSAGE_ROW_PADDING_PX +
+      USER_MESSAGE_CARD_VERTICAL_CHROME_PX +
+      imageHeight +
+      fileChipHeight +
+      textHeight +
+      expandButtonHeight,
+  );
+}
+
+function estimateAssistantMessageHeight(
+  item: Extract<RenderItem, { type: 'message' }>,
+  containerWidth: number,
+  fonts?: FontConfig,
+): number {
+  const content = item.msg.content?.trim();
+  if (content && containerWidth > 100 && isPretextReady() && fonts) {
+    const analysis = analyzeMarkdown(content);
+    const prepared = getCachedPrepared(analysis.plainText, fonts.proseFont);
+    if (prepared) {
+      // Effective text width: container minus avatar(32) + gap(8) + copyBtn(32) + gap(8) + padding(32)
+      const textWidth = containerWidth - 112;
+      const { height: proseHeight } = layoutSync(prepared, textWidth, fonts.proseLineHeight);
+      // Code blocks: monospace lines + padding per block
+      const codeHeight =
+        analysis.codeBlockLines * fonts.codeLineHeight + analysis.codeBlockCount * 16;
+      // Fixed chrome: timestamp(20px) + gap(8px)
+      const totalHeight = proseHeight + codeHeight + analysis.extraHeightPx + 28;
+      return Math.max(totalHeight, 60);
+    }
+  }
+  return 120;
+}
+
 function estimateItemHeight(item: RenderItem, containerWidth = 0, fonts?: FontConfig): number {
   if (item.type === 'message') {
-    if (item.msg.role === 'user') return 80;
-
-    // Try pretext-based measurement for assistant messages
-    const content = item.msg.content?.trim();
-    if (content && containerWidth > 100 && isPretextReady() && fonts) {
-      const analysis = analyzeMarkdown(content);
-      const prepared = getCachedPrepared(analysis.plainText, fonts.proseFont);
-      if (prepared) {
-        // Effective text width: container minus avatar(32) + gap(8) + copyBtn(32) + gap(8) + padding(32)
-        const textWidth = containerWidth - 112;
-        const { height: proseHeight } = layoutSync(prepared, textWidth, fonts.proseLineHeight);
-        // Code blocks: monospace lines + padding per block
-        const codeHeight =
-          analysis.codeBlockLines * fonts.codeLineHeight + analysis.codeBlockCount * 16;
-        // Fixed chrome: timestamp(20px) + gap(8px)
-        const totalHeight = proseHeight + codeHeight + analysis.extraHeightPx + 28;
-        return Math.max(totalHeight, 60);
-      }
-    }
-    return 120;
+    if (item.msg.role === 'user') return estimateUserMessageHeight(item.msg, containerWidth, fonts);
+    return estimateAssistantMessageHeight(item, containerWidth, fonts);
   }
   if (item.type === 'toolcall') return 44;
   if (item.type === 'toolcall-group') return 44;
@@ -95,6 +164,55 @@ function estimateItemHeight(item: RenderItem, containerWidth = 0, fonts?: FontCo
   if (item.type === 'compaction-event') return 32;
   if (item.type === 'workflow-event-group') return 32;
   return 60;
+}
+
+type MessageItem = Extract<RenderItem, { type: 'message' }>;
+
+type VirtualRow =
+  | {
+      type: 'item';
+      key: string;
+      item: RenderItem;
+      itemIndex: number;
+    }
+  | {
+      type: 'session-summary';
+      key: string;
+      userItem: MessageItem;
+      files: FileDiffSummary[];
+      isLastSection: boolean;
+    };
+
+type RenderUserMessageOptions = {
+  includeItemKey?: boolean;
+  includeUserObserver?: boolean;
+};
+
+function estimateVirtualRowHeight(
+  row: VirtualRow | undefined,
+  containerWidth: number,
+  fonts: FontConfig,
+) {
+  if (!row) return 60;
+  if (row.type === 'session-summary') return 72;
+  return estimateItemHeight(row.item, containerWidth, fonts);
+}
+
+function getObservedBlockSize(entry: ResizeObserverEntry | undefined) {
+  const size = entry?.borderBoxSize as
+    | ResizeObserverSize
+    | readonly ResizeObserverSize[]
+    | undefined;
+  if (!size) return undefined;
+  return 'blockSize' in size ? size.blockSize : size[0]?.blockSize;
+}
+
+function getElementBottomRelativeToContainer(element: HTMLElement, container: HTMLElement | null) {
+  if (!container) return undefined;
+  if (!container.contains(element)) return undefined;
+  const elementRect = element.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  return elementRect.bottom - containerRect.top;
 }
 
 export interface MemoizedMessageListHandle {
@@ -159,9 +277,7 @@ function messageListAreEqual(
   );
 }
 
-/** Memoized message list with windowed rendering — only mounts the last
- *  INITIAL_WINDOW items on first render, expanding progressively on scroll-up.
- *  Items are never un-mounted; contentVisibility:'auto' handles paint cost. */
+/** Memoized message list with true virtualization over loaded grouped items. */
 export const MemoizedMessageList = memo(
   forwardRef<
     MemoizedMessageListHandle,
@@ -235,10 +351,6 @@ export const MemoizedMessageList = memo(
       [globalFontSize],
     );
 
-    // Use a ref for threadStatus so renderToolItem's identity stays stable
-    // across non-waiting status changes (running→running, etc.)
-    const threadStatusRef = useRef(threadStatus);
-    threadStatusRef.current = threadStatus;
     const isWaiting = threadStatus === 'waiting';
 
     const groupedItems = useMemo(
@@ -246,149 +358,116 @@ export const MemoizedMessageList = memo(
       [messages, threadEvents, compactionEvents],
     );
 
-    /* ── Windowed rendering ──────────────────────────────────────────── */
+    /* ── Virtualized rendering ─────────────────────────────────────── */
 
-    // Ensure the render window is large enough to include the last user
-    // message — when tool calls expand the grouped-item count well beyond
-    // the raw message count, INITIAL_WINDOW (30) may not reach it.
-    const effectiveInitialWindow = useMemo(() => {
-      for (let i = groupedItems.length - 1; i >= 0; i--) {
-        const item = groupedItems[i];
-        if (item.type === 'message' && item.msg.role === 'user') {
-          const needed = groupedItems.length - i + 5; // +5 buffer
-          return Math.max(INITIAL_WINDOW, needed);
-        }
-      }
-      return INITIAL_WINDOW;
-    }, [groupedItems]);
-
-    const [renderCount, setRenderCount] = useState(INITIAL_WINDOW);
-
-    // Reset render window when switching threads (synchronous state reset
-    // during render — standard React derived-state-from-props pattern).
-    const prevThreadIdRef = useRef(threadId);
-    if (prevThreadIdRef.current !== threadId) {
-      prevThreadIdRef.current = threadId;
-      setRenderCount(INITIAL_WINDOW);
+    const heightCacheRef = useRef<Map<string, number> | null>(null);
+    if (heightCacheRef.current === null) {
+      heightCacheRef.current = new Map();
     }
-
-    // Bump renderCount when effectiveInitialWindow grows (e.g. after
-    // messages load asynchronously following a thread switch).
-    // Track that this expansion is window-init-driven so the
-    // windowStart useLayoutEffect can scroll to bottom instead of
-    // relying on a (non-existent) scroll anchor.
-    const initWindowBumpRef = useRef(false);
-    useEffect(() => {
-      setRenderCount((prev) => {
-        const next = Math.max(prev, effectiveInitialWindow);
-        if (next > prev) initWindowBumpRef.current = true;
-        return next;
-      });
-    }, [effectiveInitialWindow]);
-
-    const windowStart = Math.max(0, groupedItems.length - renderCount);
-    const visibleItems = groupedItems.slice(windowStart);
-    const hasHiddenItems = windowStart > 0;
-
-    // When windowed rendering hides items, the user message that "owns" the
-    // first visible section may be above the window.  Find it so the section
-    // grouping can still show a sticky header for context.
-    const hiddenSectionUserItem = useMemo(() => {
-      if (windowStart === 0) return null;
-      // Check if the first visible item is already a user message — no need
-      // to inject one in that case.
-      const firstVisible = visibleItems[0];
-      if (firstVisible?.type === 'message' && firstVisible.msg.role === 'user') return null;
-      // Walk backwards from windowStart to find the nearest user message.
-      for (let i = windowStart - 1; i >= 0; i--) {
-        const item = groupedItems[i];
-        if (item.type === 'message' && item.msg.role === 'user') {
-          return item as Extract<RenderItem, { type: 'message' }>;
-        }
-      }
-      return null;
-    }, [groupedItems, visibleItems, windowStart]);
-
-    // ID → index map for expandToItem (scroll-to-message support)
-    const itemIndexMap = useMemo(() => {
-      const map = new Map<string, number>();
-      groupedItems.forEach((item, index) => {
-        if (item.type === 'message') map.set(item.msg.id, index);
-        else if (item.type === 'toolcall') map.set(item.tc.id, index);
-        else if (item.type === 'toolcall-group')
-          item.calls.forEach((c: any) => map.set(c.id, index));
-        else if (item.type === 'toolcall-run') {
-          for (const ti of item.items) {
-            if (ti.type === 'toolcall') map.set(ti.tc.id, index);
-            else if (ti.type === 'toolcall-group')
-              ti.calls.forEach((c: any) => map.set(c.id, index));
-          }
-        } else if (item.type === 'thread-event') map.set(item.event.id, index);
-      });
-      return map;
-    }, [groupedItems]);
-
-    // ── Height cache: measured heights from ResizeObserver ──────────
-    // Used to produce accurate spacer heights instead of estimates.
-    const heightCacheRef = useRef(new Map<string, number>());
+    const heightCache = heightCacheRef.current;
+    const measuredRowBottomCacheRef = useRef<Map<string, number> | null>(null);
+    if (measuredRowBottomCacheRef.current === null) {
+      measuredRowBottomCacheRef.current = new Map();
+    }
+    const measuredRowBottomCache = measuredRowBottomCacheRef.current;
+    const [measuredContentBottom, setMeasuredContentBottom] = useState(0);
     const itemContainerRef = useRef<HTMLDivElement>(null);
+    const [listScrollMargin, setListScrollMargin] = useState(0);
 
-    // Clear cache on thread switch
-    const prevCacheThreadRef = useRef(threadId);
-    if (prevCacheThreadRef.current !== threadId) {
-      prevCacheThreadRef.current = threadId;
-      heightCacheRef.current.clear();
-    }
-
-    // ResizeObserver: record measured heights of rendered items
-    useEffect(() => {
+    const measureListScrollMargin = useCallback(() => {
+      const viewport = scrollRef.current;
       const container = itemContainerRef.current;
-      if (!container) return;
+      if (!viewport || !container) return 0;
 
-      const cache = heightCacheRef.current;
-      const ro = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const key = (entry.target as HTMLElement).dataset.itemKey;
-          if (key) {
-            const h =
-              entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
-            cache.set(key, h);
-          }
-        }
-      });
+      const viewportRect = viewport.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      return Math.max(0, Math.round(containerRect.top - viewportRect.top + viewport.scrollTop));
+    }, [scrollRef]);
 
-      // Observe all current items and watch for new ones
-      const observeAll = () => {
-        container.querySelectorAll<HTMLElement>('[data-item-key]').forEach((el) => ro.observe(el));
+    const updateListScrollMargin = useCallback(() => {
+      const next = measureListScrollMargin();
+      setListScrollMargin((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+    }, [measureListScrollMargin]);
+    const updateListScrollMarginEvent = useEffectEvent(updateListScrollMargin);
+
+    useLayoutEffect(() => {
+      updateListScrollMargin();
+    });
+
+    useEffect(() => {
+      const viewport = scrollRef.current;
+      const container = itemContainerRef.current;
+      const contentStack = container?.parentElement?.parentElement;
+      if (!viewport || !container) return;
+
+      let rafId: number | null = null;
+      const scheduleUpdate = () => {
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          updateListScrollMarginEvent();
+        });
       };
-      observeAll();
 
-      const mo = new MutationObserver(observeAll);
-      mo.observe(container, { childList: true, subtree: true });
+      const ro = new ResizeObserver(scheduleUpdate);
+      ro.observe(viewport);
+      ro.observe(container);
+      if (container.parentElement) ro.observe(container.parentElement);
+      if (contentStack) ro.observe(contentStack);
+
+      const mo = new MutationObserver(scheduleUpdate);
+      if (contentStack) {
+        mo.observe(contentStack, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+      }
+
+      viewport.addEventListener('scroll', scheduleUpdate, { passive: true });
+      scheduleUpdate();
 
       return () => {
+        if (rafId !== null) cancelAnimationFrame(rafId);
         ro.disconnect();
         mo.disconnect();
+        viewport.removeEventListener('scroll', scheduleUpdate);
       };
-    }, [threadId]);
+    }, [scrollRef]);
 
     // ── Container width for pretext estimation ───────────────────────
     const [containerWidth, setContainerWidth] = useState(0);
-    useEffect(() => {
+    useLayoutEffect(() => {
       const el = itemContainerRef.current;
       if (!el) return;
+      setContainerWidth(el.clientWidth);
       const ro = new ResizeObserver((entries) => {
         for (const entry of entries) {
           setContainerWidth(entry.contentRect.width);
         }
       });
       ro.observe(el);
-      setContainerWidth(el.clientWidth);
       return () => ro.disconnect();
     }, []);
 
+    const layoutKey = `${threadId}:${globalFontSize}:${Math.round(containerWidth)}`;
+    const prevLayoutKeyRef = useRef(layoutKey);
+    if (prevLayoutKeyRef.current !== layoutKey) {
+      prevLayoutKeyRef.current = layoutKey;
+      heightCache.clear();
+      measuredRowBottomCache.clear();
+      if (measuredContentBottom !== 0) setMeasuredContentBottom(0);
+    }
+
+    const rowBottomKey = `${threadId}:${Math.round(listScrollMargin)}`;
+    const prevRowBottomKeyRef = useRef(rowBottomKey);
+    if (prevRowBottomKeyRef.current !== rowBottomKey) {
+      prevRowBottomKeyRef.current = rowBottomKey;
+      measuredRowBottomCache.clear();
+      if (measuredContentBottom !== 0) setMeasuredContentBottom(0);
+    }
+
     // ── Pretext warm-up: prepare assistant message texts in background ──
-    const pretextReadyRef = useRef(false);
     useEffect(() => {
       let cancelled = false;
       const { proseFont } = fontConfig;
@@ -397,15 +476,17 @@ export const MemoizedMessageList = memo(
         if (cancelled) return;
         ensurePretextLoaded().then(() => {
           if (cancelled) return;
-          pretextReadyRef.current = true;
 
           const toPrepare: string[] = [];
           for (const item of groupedItems) {
-            if (item.type === 'message' && item.msg.role === 'assistant' && item.msg.content) {
-              const analysis = analyzeMarkdown(item.msg.content.trim());
-              if (analysis.plainText && !getCachedPrepared(analysis.plainText, proseFont)) {
-                toPrepare.push(analysis.plainText);
-              }
+            if (item.type !== 'message' || !item.msg.content) continue;
+
+            const text =
+              item.msg.role === 'user'
+                ? parseReferencedFiles(item.msg.content).inlineContent.trim()
+                : analyzeMarkdown(item.msg.content.trim()).plainText;
+            if (text && !getCachedPrepared(text, proseFont)) {
+              toPrepare.push(text);
             }
           }
 
@@ -434,6 +515,131 @@ export const MemoizedMessageList = memo(
       };
     }, [groupedItems, fontConfig]);
 
+    const virtualRows = useMemo<VirtualRow[]>(() => {
+      const rows: VirtualRow[] = [];
+      let currentUser: MessageItem | null = null;
+
+      const appendSessionSummary = () => {
+        if (!currentUser) return;
+        const files = sessionChanges?.get(currentUser.msg.id);
+        if (!files || files.length === 0) return;
+        rows.push({
+          type: 'session-summary',
+          key: `session-summary-${currentUser.msg.id}`,
+          userItem: currentUser,
+          files,
+          isLastSection: false,
+        });
+      };
+
+      groupedItems.forEach((item, itemIndex) => {
+        if (item.type === 'message' && item.msg.role === 'user') {
+          appendSessionSummary();
+          currentUser = item as MessageItem;
+        }
+        rows.push({
+          type: 'item',
+          key: getItemKey(item),
+          item,
+          itemIndex,
+        });
+      });
+      appendSessionSummary();
+
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        if (row.type === 'session-summary') {
+          rows[i] = { ...row, isLastSection: true };
+          break;
+        }
+      }
+
+      return rows;
+    }, [groupedItems, sessionChanges]);
+
+    const rowKeyIndexMap = useMemo(() => {
+      const map = new Map<string, number>();
+      virtualRows.forEach((row, index) => map.set(row.key, index));
+      return map;
+    }, [virtualRows]);
+
+    const itemIndexMap = useMemo(() => {
+      const groupedIdIndexMap = buildRenderItemIdIndexMap(groupedItems);
+      const groupedToVirtualIndex = new Map<number, number>();
+      virtualRows.forEach((row, virtualIndex) => {
+        if (row.type === 'item') groupedToVirtualIndex.set(row.itemIndex, virtualIndex);
+      });
+
+      const map = new Map<string, number>();
+      groupedIdIndexMap.forEach((groupedIndex, id) => {
+        const virtualIndex = groupedToVirtualIndex.get(groupedIndex);
+        if (virtualIndex !== undefined) map.set(id, virtualIndex);
+      });
+      return map;
+    }, [groupedItems, virtualRows]);
+
+    const rowVirtualizer = useVirtualizer({
+      count: virtualRows.length,
+      getScrollElement: () => scrollRef.current,
+      getItemKey: (index) => virtualRows[index]?.key ?? index,
+      estimateSize: (index) => {
+        const row = virtualRows[index];
+        return (
+          heightCache.get(row?.key ?? '') ??
+          estimateVirtualRowHeight(row, containerWidth, fontConfig)
+        );
+      },
+      gap: VIRTUAL_ROW_GAP_PX,
+      overscan: VIRTUAL_OVERSCAN,
+      scrollMargin: listScrollMargin,
+      measureElement: (element, entry) => {
+        const key = (element as HTMLElement).dataset.virtualRowKey;
+        const height =
+          getObservedBlockSize(entry) ?? (element as HTMLElement).getBoundingClientRect().height;
+        if (key && height > 0) {
+          heightCache.set(key, height);
+
+          const bottom = getElementBottomRelativeToContainer(
+            element as HTMLElement,
+            itemContainerRef.current,
+          );
+          if (bottom !== undefined && bottom > 0) {
+            measuredRowBottomCache.set(key, bottom);
+            let nextMeasuredBottom = 0;
+            measuredRowBottomCache.forEach((value) => {
+              nextMeasuredBottom = Math.max(nextMeasuredBottom, value);
+            });
+            setMeasuredContentBottom((prev) =>
+              Math.abs(prev - nextMeasuredBottom) > 1 ? nextMeasuredBottom : prev,
+            );
+          }
+        }
+        return height;
+      },
+    });
+
+    const measureRowsEvent = useEffectEvent(() => {
+      rowVirtualizer.measure();
+    });
+
+    useLayoutEffect(() => {
+      measureRowsEvent();
+
+      let secondRafId: number | null = null;
+      const firstRafId = requestAnimationFrame(() => {
+        measureRowsEvent();
+        secondRafId = requestAnimationFrame(measureRowsEvent);
+      });
+
+      return () => {
+        cancelAnimationFrame(firstRafId);
+        if (secondRafId !== null) cancelAnimationFrame(secondRafId);
+      };
+    }, [containerWidth, globalFontSize, listScrollMargin, threadId, virtualRows]);
+
+    const virtualItems = rowVirtualizer.getVirtualItems();
+    const virtualContentHeight = Math.max(rowVirtualizer.getTotalSize(), measuredContentBottom);
+
     // ── Scroll anchor: capture/restore for jank-free scroll preservation ──
     const scrollAnchorRef = useRef<{
       key: string;
@@ -446,12 +652,12 @@ export const MemoizedMessageList = memo(
       if (!viewport || !container) return;
 
       const vpRect = viewport.getBoundingClientRect();
-      const items = container.querySelectorAll<HTMLElement>('[data-item-key]');
-      for (const item of items) {
-        const rect = item.getBoundingClientRect();
+      const rows = container.querySelectorAll<HTMLElement>('[data-virtual-row-key]');
+      for (const row of rows) {
+        const rect = row.getBoundingClientRect();
         if (rect.bottom > vpRect.top) {
           scrollAnchorRef.current = {
-            key: item.dataset.itemKey!,
+            key: row.dataset.virtualRowKey!,
             offsetFromViewportTop: rect.top - vpRect.top,
           };
           return;
@@ -459,150 +665,76 @@ export const MemoizedMessageList = memo(
       }
     }, [scrollRef]);
 
-    // Stable ref so scroll listeners and rAF callbacks never hit a TDZ during HMR
-    const captureScrollAnchorRef = useRef(captureScrollAnchor);
-    captureScrollAnchorRef.current = captureScrollAnchor;
-
     const restoreScrollAnchor = useCallback(() => {
       const viewport = scrollRef.current;
       const container = itemContainerRef.current;
       const anchor = scrollAnchorRef.current;
       if (!viewport || !container || !anchor) return;
 
-      const el = container.querySelector<HTMLElement>(
-        `[data-item-key="${CSS.escape(anchor.key)}"]`,
-      );
-      if (el) {
+      const applyDrift = () => {
+        const el = container.querySelector<HTMLElement>(
+          `[data-virtual-row-key="${CSS.escape(anchor.key)}"]`,
+        );
+        if (!el) return false;
         const vpRect = viewport.getBoundingClientRect();
         const rect = el.getBoundingClientRect();
         const currentOffset = rect.top - vpRect.top;
         const drift = currentOffset - anchor.offsetFromViewportTop;
         viewport.scrollTop += drift;
+        return true;
+      };
+
+      if (applyDrift()) {
+        scrollAnchorRef.current = null;
+        return;
       }
-      scrollAnchorRef.current = null;
-    }, [scrollRef]);
 
-    // Spacer height for items above the render window
-    const spacerHeight = useMemo(() => {
-      let h = 0;
-      const cache = heightCacheRef.current;
-      for (let i = 0; i < windowStart; i++) {
-        const key = getItemKey(groupedItems[i]);
-        h += cache.get(key) ?? estimateItemHeight(groupedItems[i], containerWidth, fontConfig);
-        if (i < windowStart - 1) h += 16; // space-y-4 gap
+      const index = rowKeyIndexMap.get(anchor.key);
+      if (index === undefined) {
+        scrollAnchorRef.current = null;
+        return;
       }
-      return h;
-    }, [groupedItems, windowStart, containerWidth, fontConfig]);
+      rowVirtualizer.scrollToIndex(index, { align: 'start' });
+      requestAnimationFrame(() => {
+        applyDrift();
+        scrollAnchorRef.current = null;
+      });
+    }, [rowKeyIndexMap, rowVirtualizer, scrollRef]);
 
-    // Content-space offset of the item container's top. Non-zero when content
-    // sits above this list in the same scroll viewport — notably the phantom
-    // spacer MessageStream renders for not-yet-loaded older messages. The
-    // window-expansion checks below compare against absolute scrollTop, so they
-    // must add this offset or they'd never fire once a tall phantom pushes the
-    // list down. Measured lazily (only while items are still hidden).
-    const getContainerTop = useCallback(() => {
-      const viewport = scrollRef.current;
-      const container = itemContainerRef.current;
-      if (!viewport || !container) return 0;
-      const vpRect = viewport.getBoundingClientRect();
-      const cRect = container.getBoundingClientRect();
-      return cRect.top - vpRect.top + viewport.scrollTop;
-    }, [scrollRef]);
+    const stickyScrollOffset =
+      rowVirtualizer.scrollOffset ?? scrollRef.current?.scrollTop ?? listScrollMargin;
+    const firstVisibleVirtualItem =
+      virtualItems.find((virtualItem) => virtualItem.end > stickyScrollOffset) ?? virtualItems[0];
+    const firstVisibleRow = firstVisibleVirtualItem
+      ? virtualRows[firstVisibleVirtualItem.index]
+      : undefined;
+    const hiddenSectionUserItem = useMemo(() => {
+      if (!firstVisibleRow || !firstVisibleVirtualItem) return null;
+      if (firstVisibleRow.type === 'session-summary') return firstVisibleRow.userItem;
+      if (firstVisibleRow.item.type === 'message' && firstVisibleRow.item.msg.role === 'user') {
+        if (firstVisibleVirtualItem.start <= stickyScrollOffset + STICKY_SECTION_EPSILON_PX) {
+          return firstVisibleRow.item as MessageItem;
+        }
+        return null;
+      }
+      return findNearestPrecedingUserMessageItem(groupedItems, firstVisibleRow.itemIndex);
+    }, [firstVisibleRow, firstVisibleVirtualItem, groupedItems, stickyScrollOffset]);
 
-    // Refs so the scroll listener always reads fresh values without re-attaching
-    const spacerHeightRef = useRef(spacerHeight);
-    spacerHeightRef.current = spacerHeight;
-    const windowStartRef = useRef(windowStart);
-    windowStartRef.current = windowStart;
-    const groupedLenRef = useRef(groupedItems.length);
-    groupedLenRef.current = groupedItems.length;
-
-    // Expose helpers so parent can interact with the windowed list
     useImperativeHandle(
       ref,
       () => ({
         expandToItem: (id: string) => {
           const index = itemIndexMap.get(id);
           if (index !== undefined) {
-            const needed = groupedItems.length - index + 5;
-            if (needed > renderCount) {
-              flushSync(() => setRenderCount(Math.min(groupedItems.length, needed)));
-            }
+            rowVirtualizer.scrollToIndex(index, { align: 'center' });
           }
         },
-        hasHiddenItems: () => windowStartRef.current > 0,
+        hasHiddenItems: () => (rowVirtualizer.getVirtualItems()[0]?.index ?? 0) > 0,
         captureScrollAnchor,
         restoreScrollAnchor,
       }),
-      [itemIndexMap, renderCount, groupedItems.length, captureScrollAnchor, restoreScrollAnchor],
+      [itemIndexMap, rowVirtualizer, captureScrollAnchor, restoreScrollAnchor],
     );
-
-    // Scroll-based window expansion
-    useEffect(() => {
-      const scrollEl = scrollRef.current;
-      if (!scrollEl) return;
-
-      const onScroll = () => {
-        if (windowStartRef.current <= 0) return;
-        if (scrollEl.scrollTop < getContainerTop() + spacerHeightRef.current + 600) {
-          captureScrollAnchorRef.current();
-          setRenderCount((prev) => Math.min(groupedLenRef.current, prev + EXPAND_BATCH));
-        }
-      };
-
-      scrollEl.addEventListener('scroll', onScroll, { passive: true });
-      return () => scrollEl.removeEventListener('scroll', onScroll);
-    }, [scrollRef, getContainerTop]);
-
-    // After each expansion, restore the scroll anchor.
-    // If the expansion came from effectiveInitialWindow growth (no anchor
-    // was captured), scroll to bottom so the view stays pinned.
-    useLayoutEffect(() => {
-      if (initWindowBumpRef.current) {
-        initWindowBumpRef.current = false;
-        const viewport = scrollRef.current;
-        if (viewport) {
-          viewport.scrollTop = viewport.scrollHeight;
-        }
-      } else {
-        restoreScrollAnchor();
-      }
-    }, [windowStart, restoreScrollAnchor, scrollRef]);
-
-    useEffect(() => {
-      if (windowStart <= 0) return;
-      const scrollEl = scrollRef.current;
-      if (!scrollEl) return;
-
-      const rafId = requestAnimationFrame(() => {
-        if (scrollEl.scrollTop < getContainerTop() + spacerHeightRef.current + 600) {
-          captureScrollAnchorRef.current();
-          setRenderCount((prev) => Math.min(groupedLenRef.current, prev + EXPAND_BATCH));
-        }
-      });
-      return () => cancelAnimationFrame(rafId);
-    }, [windowStart, scrollRef, getContainerTop]);
-
-    // When the window finishes expanding (windowStart hits 0) the user may be
-    // parked at scrollTop≈0 — wheel-up at the top fires no scroll events and
-    // the rAF expansion cascade above adjusts scrollTop via drift that is often
-    // 0 (or clamped at 0), so the pagination check in MessageStream's scroll
-    // handler never re-runs. Re-dispatch a scroll event so "load older
-    // messages" triggers without requiring the user to scroll down and back up.
-    const prevWindowRef = useRef({ threadId, windowStart });
-    useEffect(() => {
-      const prev = prevWindowRef.current;
-      prevWindowRef.current = { threadId, windowStart };
-      if (prev.threadId !== threadId) return;
-      if (prev.windowStart <= 0 || windowStart !== 0) return;
-
-      const scrollEl = scrollRef.current;
-      if (!scrollEl) return;
-      const rafId = requestAnimationFrame(() => {
-        scrollEl.dispatchEvent(new Event('scroll'));
-      });
-      return () => cancelAnimationFrame(rafId);
-    }, [threadId, windowStart, scrollRef]);
 
     const renderToolItem = useCallback(
       (ti: ToolItem) => {
@@ -682,36 +814,6 @@ export const MemoizedMessageList = memo(
       [snapshotMap, isWaiting, onSend, onToolRespond],
     );
 
-    // Group items into sections: each section starts with a user message
-    type MessageItem = Extract<RenderItem, { type: 'message' }>;
-    const sections = useMemo(() => {
-      const result: { userItem: MessageItem | null; items: RenderItem[] }[] = [];
-      let current: { userItem: MessageItem | null; items: RenderItem[] } = {
-        userItem: null,
-        items: [],
-      };
-
-      for (const item of visibleItems) {
-        if (item.type === 'message' && item.msg.role === 'user') {
-          if (current.userItem || current.items.length > 0) {
-            result.push(current);
-          }
-          current = { userItem: item as MessageItem, items: [] };
-        } else {
-          current.items.push(item);
-        }
-      }
-      if (current.userItem || current.items.length > 0) {
-        result.push(current);
-      }
-
-      if (result.length > 0 && !result[0].userItem && hiddenSectionUserItem) {
-        result[0].userItem = hiddenSectionUserItem;
-      }
-
-      return result;
-    }, [visibleItems, hiddenSectionUserItem]);
-
     const renderNonUserItem = useCallback(
       (item: RenderItem) => {
         const key = getItemKey(item);
@@ -725,9 +827,8 @@ export const MemoizedMessageList = memo(
           // content (same msgId, content='…') — React re-renders the
           // subtree but the slot's c-v:auto skips the repaint, leaving the
           // user with a visible "task complete" indicator but no response
-          // text until a forced paint (tab switch, scroll, focus). Removed
-          // for messages; tool cards keep c-v:auto because their content
-          // size is fixed at creation.
+          // text until a forced paint (tab switch, scroll, focus). Removed for
+          // messages and variable-height tool rows.
           return (
             <div
               key={key}
@@ -753,31 +854,16 @@ export const MemoizedMessageList = memo(
         }
 
         if (item.type === 'toolcall' || item.type === 'toolcall-group') {
-          const toolName = item.type === 'toolcall' ? item.tc.name : item.name;
-          const isInteractive = toolName === 'AskUserQuestion' || toolName === 'ExitPlanMode';
           return (
-            <div
-              key={key}
-              data-item-key={key}
-              style={
-                isInteractive
-                  ? undefined
-                  : { contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }
-              }
-            >
+            <div key={key} data-item-key={key}>
               {renderToolItem(item)}
             </div>
           );
         }
 
         if (item.type === 'toolcall-run') {
-          const runH = 44 * item.items.length;
           return (
-            <div
-              key={key}
-              data-item-key={key}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: `auto ${runH}px` }}
-            >
+            <div key={key} data-item-key={key}>
               <div className="space-y-1">{item.items.map(renderToolItem)}</div>
             </div>
           );
@@ -821,17 +907,20 @@ export const MemoizedMessageList = memo(
 
         return null;
       },
-      [renderToolItem, t, containerWidth, fontConfig],
+      [renderToolItem, t],
     );
 
     const renderUserMessage = useCallback(
-      (item: Extract<RenderItem, { type: 'message' }>) => {
+      (
+        item: Extract<RenderItem, { type: 'message' }>,
+        { includeItemKey = true, includeUserObserver = true }: RenderUserMessageOptions = {},
+      ) => {
         const msg = item.msg;
         return (
           <div
-            className="sticky top-0 z-20 pt-3 pb-3"
-            data-user-msg={msg.id}
-            data-item-key={msg.id}
+            className="relative pt-3 pb-3"
+            {...(includeUserObserver ? { 'data-user-msg': msg.id } : {})}
+            {...(includeItemKey ? { 'data-item-key': msg.id } : {})}
           >
             <UserMessageCard
               data-testid={`user-message-${msg.id}`}
@@ -890,43 +979,77 @@ export const MemoizedMessageList = memo(
       ],
     );
 
+    const renderVirtualRowContent = useCallback(
+      (row: VirtualRow) => {
+        if (row.type === 'session-summary') {
+          return (
+            <div className="mt-3">
+              <ChangedFilesSummary
+                threadId={threadId}
+                files={row.files}
+                running={row.isLastSection && !!changeSummaryRunning}
+                onReverted={onSessionReverted}
+              />
+            </div>
+          );
+        }
+
+        const item = row.item;
+        if (item.type === 'message' && item.msg.role === 'user') {
+          return renderUserMessage(item as MessageItem);
+        }
+
+        return <>{renderNonUserItem(item)}</>;
+      },
+      [changeSummaryRunning, onSessionReverted, renderNonUserItem, renderUserMessage, threadId],
+    );
+
     return (
-      <div ref={itemContainerRef}>
-        {hasHiddenItems && <div style={{ height: spacerHeight }} aria-hidden="true" />}
-        {sections.map((section, sIdx) => {
-          const sectionKey = section.userItem ? getItemKey(section.userItem) : `preamble-${sIdx}`;
-
-          // Preamble section (items before first user message) — no sticky header
-          if (!section.userItem) {
-            return (
-              <div key={sectionKey} className="space-y-4">
-                {section.items.map(renderNonUserItem)}
-              </div>
-            );
-          }
-
-          // Changed files modified during this session (user turn → agent run),
-          // rendered at the end of the session so each one carries its own
-          // "what changed here" summary as the thread grows.
-          const sessionFiles = sessionChanges?.get(section.userItem.msg.id);
-          const isLastSection = sIdx === sections.length - 1;
+      <div
+        ref={itemContainerRef}
+        style={{
+          height: `${virtualContentHeight}px`,
+          position: 'relative',
+          width: '100%',
+          overflowAnchor: 'none',
+          isolation: 'isolate',
+        }}
+      >
+        {hiddenSectionUserItem ? (
+          <div
+            data-testid="sticky-section-context"
+            className="pointer-events-none sticky top-0 z-50 h-0"
+          >
+            <div className="pointer-events-auto relative z-50 pt-3 pb-3">
+              {renderUserMessage(hiddenSectionUserItem, {
+                includeItemKey: false,
+                includeUserObserver: false,
+              })}
+            </div>
+          </div>
+        ) : null}
+        {virtualItems.map((virtualItem) => {
+          const row = virtualRows[virtualItem.index];
+          if (!row) return null;
 
           return (
-            <div key={sectionKey} data-section-msg-id={section.userItem.msg.id}>
-              {renderUserMessage(section.userItem)}
-              {section.items.length > 0 && (
-                <div className="space-y-4">{section.items.map(renderNonUserItem)}</div>
-              )}
-              {sessionFiles && sessionFiles.length > 0 && (
-                <div className="mt-3">
-                  <ChangedFilesSummary
-                    threadId={threadId}
-                    files={sessionFiles}
-                    running={isLastSection && !!changeSummaryRunning}
-                    onReverted={onSessionReverted}
-                  />
-                </div>
-              )}
+            <div
+              key={virtualItem.key}
+              ref={rowVirtualizer.measureElement}
+              data-index={virtualItem.index}
+              data-virtual-row-key={row.key}
+              {...(row.type === 'item' &&
+              row.item.type === 'message' &&
+              row.item.msg.role === 'user'
+                ? { 'data-section-msg-id': row.item.msg.id }
+                : {})}
+              className="absolute top-0 left-0 z-0 w-full"
+              style={{
+                transform: `translateY(${virtualItem.start - listScrollMargin}px)`,
+                overflowAnchor: 'none',
+              }}
+            >
+              {renderVirtualRowContent(row)}
             </div>
           );
         })}

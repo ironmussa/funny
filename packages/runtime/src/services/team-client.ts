@@ -1322,10 +1322,12 @@ export function invalidateThreadCache(threadId: string): void {
 export async function remoteGetThreadWithMessages(
   threadId: string,
   messageLimit?: number,
+  opts: { messageProgress?: number } = {},
 ): Promise<any> {
   const response = await sendDataMessage('data:get_thread_with_messages', {
     threadId,
     ...(messageLimit !== undefined ? { messageLimit } : {}),
+    ...(opts.messageProgress !== undefined ? { messageProgress: opts.messageProgress } : {}),
   });
   return response?.thread ?? null;
 }
@@ -1339,15 +1341,26 @@ export async function remoteGetThreadMessages(opts: {
   threadId: string;
   cursor?: string;
   limit: number;
-}): Promise<{ messages: any[]; hasMore: boolean }> {
+  direction?: 'before' | 'after';
+}): Promise<{
+  messages: any[];
+  hasMore: boolean;
+  hasMoreAfter?: boolean;
+  total?: number;
+  windowStart?: number;
+}> {
   const response = await sendDataMessage('data:get_thread_messages', {
     threadId: opts.threadId,
     limit: opts.limit,
     ...(opts.cursor !== undefined ? { cursor: opts.cursor } : {}),
+    ...(opts.direction !== undefined ? { direction: opts.direction } : {}),
   });
   return {
     messages: Array.isArray(response?.messages) ? response.messages : [],
     hasMore: !!response?.hasMore,
+    hasMoreAfter: !!response?.hasMoreAfter,
+    total: typeof response?.total === 'number' ? response.total : undefined,
+    windowStart: typeof response?.windowStart === 'number' ? response.windowStart : undefined,
   };
 }
 

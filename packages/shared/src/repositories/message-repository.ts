@@ -28,6 +28,51 @@ export interface MessageRepositoryDeps {
   dbRun: typeof dbRunFn;
 }
 
+const INTERACTIVE_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
+const PERMISSION_PENDING_OUTPUT =
+  /(?:requested permissions? to (?:use|edit)|is a sensitive file|hasn't been granted|hasn't granted|not in the allowed tools list|hook error:.*(?:approval|permission)|denied this tool|Blocked by hook|Waiting for user approval)/i;
+
+async function findPendingWaitState(deps: MessageRepositoryDeps, threadId: string, status: string) {
+  if (status !== 'waiting') return {};
+
+  const { db, schema, dbAll } = deps;
+  const latestToolCalls = await dbAll(
+    db
+      .select({
+        id: schema.toolCalls.id,
+        name: schema.toolCalls.name,
+        input: schema.toolCalls.input,
+        output: schema.toolCalls.output,
+      })
+      .from(schema.toolCalls)
+      .innerJoin(schema.messages, eq(schema.toolCalls.messageId, schema.messages.id))
+      .where(eq(schema.messages.threadId, threadId))
+      .orderBy(desc(schema.messages.timestamp))
+      .limit(25),
+  );
+
+  const pendingInteractive = latestToolCalls.find(
+    (tc) => INTERACTIVE_TOOLS.has(tc.name) && !tc.output,
+  );
+  if (pendingInteractive?.name === 'AskUserQuestion') return { waitingReason: 'question' };
+  if (pendingInteractive?.name === 'ExitPlanMode') return { waitingReason: 'plan' };
+
+  const pendingPermission = latestToolCalls.find((tc) => {
+    if (INTERACTIVE_TOOLS.has(tc.name)) return false;
+    if (!tc.output) return true;
+    return PERMISSION_PENDING_OUTPUT.test(tc.output);
+  });
+  if (!pendingPermission) return {};
+
+  return {
+    waitingReason: 'permission',
+    pendingPermission: {
+      toolName: pendingPermission.name,
+      toolInput: pendingPermission.input,
+    },
+  };
+}
+
 export function createMessageRepository(deps: MessageRepositoryDeps) {
   const { db, schema, dbAll, dbGet, dbRun } = deps;
 
@@ -65,12 +110,18 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
    *  window in idle time via /messages, keeping the initial response small
    *  and the first paint fast. `lastUserMessage` is always included so the
    *  sticky prompt header can render immediately. */
-  async function getThreadWithMessages(id: string, messageLimit?: number) {
+  async function getThreadWithMessages(
+    id: string,
+    messageLimit?: number,
+    opts: { messageProgress?: number } = {},
+  ) {
     const thread = await dbGet(db.select().from(schema.threads).where(eq(schema.threads.id, id)));
     if (!thread) return null;
 
     let messages: (typeof schema.messages.$inferSelect)[];
     let hasMore = false;
+    let hasMoreAfter = false;
+    let windowStart = 0;
 
     // Total message count for the thread. Lets the client reserve scroll space
     // for not-yet-loaded older messages (phantom spacer) so the scrollbar is
@@ -82,17 +133,24 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     }
 
     if (messageLimit) {
+      const maxStart = Math.max(0, (total ?? 0) - messageLimit);
+      const progress =
+        typeof opts.messageProgress === 'number'
+          ? Math.min(1, Math.max(0, opts.messageProgress))
+          : 1;
+      windowStart = Math.round(maxStart * progress);
       const rows = await dbAll(
         db
           .select()
           .from(schema.messages)
           .where(eq(schema.messages.threadId, id))
-          .orderBy(desc(schema.messages.timestamp))
-          .limit(messageLimit + 1),
+          .orderBy(asc(schema.messages.timestamp))
+          .limit(messageLimit)
+          .offset(windowStart),
       );
-      hasMore = rows.length > messageLimit;
-      const collected = hasMore ? rows.slice(0, messageLimit) : rows;
-      messages = collected.reverse();
+      messages = rows;
+      hasMore = windowStart > 0;
+      hasMoreAfter = windowStart + rows.length < (total ?? rows.length);
     } else {
       messages = await dbAll(
         db
@@ -152,13 +210,16 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         ? (await enrichMessages([lastUserMessage], allToolCalls))[0]
         : enrichedMessages.find((m) => m.id === lastUserMessage!.id)
       : undefined;
+    const waitState = await findPendingWaitState(deps, id, thread.status);
 
     return {
       ...thread,
       messages: enrichedMessages,
       hasMore,
+      hasMoreAfter,
       // When fully loaded (no messageLimit) the loaded window IS the total.
       total: total ?? enrichedMessages.length,
+      windowStart,
       lastUserMessage: enrichedLastUser,
       initInfo: thread.initTools
         ? {
@@ -170,6 +231,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
               : undefined,
           }
         : undefined,
+      ...waitState,
     };
   }
 
@@ -193,12 +255,15 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     threadId: string;
     cursor?: string;
     limit: number;
+    direction?: 'before' | 'after';
   }): Promise<{
     messages: Awaited<ReturnType<typeof enrichMessages>>;
     hasMore: boolean;
+    hasMoreAfter: boolean;
     total: number;
+    windowStart: number;
   }> {
-    const { threadId, cursor, limit } = opts;
+    const { threadId, cursor, limit, direction = 'before' } = opts;
 
     const [rows, total] = await Promise.all([
       dbAll(
@@ -207,19 +272,49 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
           .from(schema.messages)
           .where(
             cursor
-              ? and(eq(schema.messages.threadId, threadId), lt(schema.messages.timestamp, cursor))
+              ? and(
+                  eq(schema.messages.threadId, threadId),
+                  direction === 'after'
+                    ? gt(schema.messages.timestamp, cursor)
+                    : lt(schema.messages.timestamp, cursor),
+                )
               : eq(schema.messages.threadId, threadId),
           )
-          .orderBy(desc(schema.messages.timestamp))
+          .orderBy(
+            direction === 'after'
+              ? asc(schema.messages.timestamp)
+              : desc(schema.messages.timestamp),
+          )
           .limit(limit + 1),
       ),
       countThreadMessages(threadId),
     ]);
 
     const hasMore = rows.length > limit;
-    const sliced = (hasMore ? rows.slice(0, limit) : rows).reverse();
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const sliced = direction === 'after' ? page : page.reverse();
+    const windowStart =
+      sliced.length > 0 ? await countMessagesBefore(threadId, sliced[0].timestamp) : 0;
 
-    return { messages: await enrichMessages(sliced), hasMore, total };
+    return {
+      messages: await enrichMessages(sliced),
+      hasMore: direction === 'after' ? windowStart > 0 : hasMore,
+      hasMoreAfter: direction === 'after' ? hasMore : windowStart + sliced.length < total,
+      total,
+      windowStart,
+    };
+  }
+
+  async function countMessagesBefore(threadId: string, timestamp: string): Promise<number> {
+    const row = await dbGet(
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.messages)
+        .where(
+          and(eq(schema.messages.threadId, threadId), lt(schema.messages.timestamp, timestamp)),
+        ),
+    );
+    return Number(row?.count ?? 0);
   }
 
   /** Insert a new message, returns the generated ID */

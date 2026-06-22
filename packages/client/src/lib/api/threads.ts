@@ -50,12 +50,27 @@ export const threadsApi = {
       `/threads/search/content?${params.toString()}`,
     );
   },
-  getThread: (id: string, messageLimit?: number, signal?: AbortSignal) => {
-    const params = messageLimit ? `?messageLimit=${messageLimit}` : '';
-    return request<ThreadWithMessages>(`/threads/${id}${params}`, { signal });
+  getThread: (
+    id: string,
+    messageLimit?: number,
+    signal?: AbortSignal,
+    opts: { messageProgress?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (messageLimit) params.set('messageLimit', String(messageLimit));
+    if (opts.messageProgress !== undefined) {
+      params.set('messageProgress', String(opts.messageProgress));
+    }
+    const qs = params.toString();
+    return request<ThreadWithMessages>(`/threads/${id}${qs ? `?${qs}` : ''}`, { signal });
   },
-  getThreadMessages: (threadId: string, cursor: string, limit = 50) => {
-    const params = new URLSearchParams({ cursor, limit: String(limit) });
+  getThreadMessages: (
+    threadId: string,
+    cursor: string,
+    limit = 50,
+    direction: 'before' | 'after' = 'before',
+  ) => {
+    const params = new URLSearchParams({ cursor, limit: String(limit), direction });
     return request<PaginatedMessages>(`/threads/${threadId}/messages?${params.toString()}`);
   },
   searchThreadMessages: (threadId: string, query: string, limit = 100, caseSensitive = false) => {

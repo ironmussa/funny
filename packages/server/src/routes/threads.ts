@@ -41,7 +41,7 @@ import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { relayToUser, relayToThreadViewers } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
-import { parseJsonBody } from '../validation/request.js';
+import { parseJsonBody, parseQuery } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
 // @funny/shared/primitives (ThreadStatus / ThreadStage). Inlined as
@@ -98,6 +98,11 @@ const orchestratorWorkflowEventBodySchema = z
     data: z.unknown().optional(),
   })
   .passthrough();
+
+const threadDetailQuerySchema = z.object({
+  messageLimit: z.coerce.number().int().min(1).max(200).optional(),
+  messageProgress: z.coerce.number().min(0).max(1).optional(),
+});
 
 // Read at call time, not module load — the test harness sets this in a
 // per-file top-of-module assignment, but `routes/threads.ts` may have already
@@ -307,13 +312,16 @@ threadRoutes.get('/archived', async (c) => {
 threadRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const limitParam = c.req.query('messageLimit');
-  const messageLimit = limitParam
-    ? Math.min(200, Math.max(1, parseInt(limitParam, 10)))
-    : undefined;
+  const parsedQuery = parseQuery(c, threadDetailQuerySchema);
+  if (parsedQuery.isErr()) return c.json({ error: parsedQuery.error.message }, 400);
+  const { messageLimit, messageProgress } = parsedQuery.value;
 
   const span = startSpan('GET /api/threads/:id', {
-    attributes: { 'thread.id': id, 'thread.message_limit': messageLimit ?? null },
+    attributes: {
+      'thread.id': id,
+      'thread.message_limit': messageLimit ?? null,
+      'thread.message_progress': messageProgress ?? null,
+    },
   });
   try {
     // Fetch thread+messages, queue count, and queue head in parallel.
@@ -335,7 +343,9 @@ threadRoutes.get('/:id', async (c) => {
       attributes: { 'thread.id': id },
     });
     const [result, queuedCount, queuedNext] = await Promise.all([
-      messageRepo.getThreadWithMessages(id, messageLimit).finally(() => fetchSpan.end('ok')),
+      messageRepo
+        .getThreadWithMessages(id, messageLimit, { messageProgress })
+        .finally(() => fetchSpan.end('ok')),
       messageQueueRepo.queueCount(id).finally(() => queueCountSpan.end('ok')),
       messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
     ]);
@@ -366,18 +376,20 @@ threadRoutes.get('/:id', async (c) => {
   }
 });
 
-// GET /api/threads/:id/messages?cursor=<ISO>&limit=50
+// GET /api/threads/:id/messages?cursor=<ISO>&limit=50&direction=before|after
 threadRoutes.get('/:id/messages', requireThreadView, async (c) => {
   const id = c.req.param('id');
 
   const cursor = c.req.query('cursor');
   const limitParam = c.req.query('limit');
   const limit = Math.min(200, Math.max(1, parseInt(limitParam || '50', 10)));
+  const direction = c.req.query('direction') === 'after' ? 'after' : 'before';
 
   const result = await messageRepo.getThreadMessages({
     threadId: id,
     cursor: cursor || undefined,
     limit,
+    direction,
   });
   return c.json(result);
 });

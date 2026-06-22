@@ -28,9 +28,13 @@ export function createRemoteThreadManager(): IThreadManager {
       return remoteUpdateThread(id, updates);
     },
 
-    async getThreadWithMessages(id: string) {
+    async getThreadWithMessages(
+      id: string,
+      messageLimit?: number,
+      opts?: { messageProgress?: number },
+    ) {
       const { remoteGetThreadWithMessages } = await import('./team-client.js');
-      return remoteGetThreadWithMessages(id);
+      return remoteGetThreadWithMessages(id, messageLimit, opts);
     },
 
     async insertMessage(data) {

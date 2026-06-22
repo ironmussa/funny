@@ -2,6 +2,7 @@ import type { ThreadEvent as DomainThreadEvent, ThreadWithMessages } from '@funn
 import { assign, fromPromise, setup } from 'xstate';
 
 import { api } from '@/lib/api';
+import { loadThreadScrollProgress } from '@/lib/thread-scroll-position';
 
 export interface ThreadDataSnapshot {
   thread: ThreadWithMessages;
@@ -28,8 +29,9 @@ export const threadDataMachine = setup({
   },
   actors: {
     fetcher: fromPromise<ThreadDataSnapshot, { threadId: string }>(async ({ input, signal }) => {
+      const messageProgress = loadThreadScrollProgress(input.threadId);
       const [threadResult, eventsResult] = await Promise.all([
-        api.getThread(input.threadId, 50, signal),
+        api.getThread(input.threadId, 50, signal, { messageProgress }),
         api.getThreadEvents(input.threadId, signal),
       ]);
       if (threadResult.isErr()) throw threadResult.error;

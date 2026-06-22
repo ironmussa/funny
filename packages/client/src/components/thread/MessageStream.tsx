@@ -1,6 +1,5 @@
-import type { ThreadEvent, WaitingReason } from '@funny/shared';
-import { ArrowDown, Clock } from 'lucide-react';
-import { m, useReducedMotion } from 'motion/react';
+import { ArrowDown } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
 import {
   useState,
   useRef,
@@ -15,117 +14,26 @@ import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { LoadingState } from '@/components/ui/loading-state';
+import { loadThreadScrollProgress, saveThreadScrollProgress } from '@/lib/thread-scroll-position';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { selectLastMessage, selectFirstMessage } from '@/stores/thread-selectors';
-import type { CompactionEvent, AgentInitInfo } from '@/stores/thread-store';
 
-import { D4CAnimation } from '../D4CAnimation';
-import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './AgentStatusCards';
 import { InitInfoCard } from './InitInfoCard';
 import {
   MemoizedMessageList,
   EMPTY_MESSAGES,
   type MemoizedMessageListHandle,
 } from './MemoizedMessageList';
-import { WaitingActions, PermissionApprovalCard, ProviderErrorCard } from './WaitingCards';
+import type { MessageStreamHandle, MessageStreamProps } from './message-stream-types';
+import { MessageStreamStatusTail } from './MessageStreamStatusTail';
 
-/* ── Types ────────────────────────────────────────────────────────── */
-
-export interface MessageStreamProps {
-  /** Thread ID — used for keying scroll state */
-  threadId: string;
-  /** Thread status */
-  status: string;
-  /** Messages array */
-  messages: any[];
-  /** Thread events for interleaving */
-  threadEvents?: ThreadEvent[];
-  /** Compaction events */
-  compactionEvents?: CompactionEvent[];
-  /** Agent init info card data */
-  initInfo?: AgentInitInfo;
-  /** Agent result info */
-  resultInfo?: { status: 'completed' | 'failed'; cost: number; duration: number; error?: string };
-  /** Waiting reason when status=waiting */
-  waitingReason?: WaitingReason;
-  /** Pending permission data */
-  pendingPermission?: { toolName: string; toolInput?: string };
-  /** Whether agent runs on an external provider */
-  isExternal?: boolean;
-  /** Send handler — called by status cards and tool card onRespond */
-  onSend: (prompt: string, opts: { model: string; mode: string }) => void;
-  /** Permission approval handler (alwaysAllow=true persists the decision) */
-  onPermissionApproval?: (toolName: string, approved: boolean, alwaysAllow?: boolean) => void;
-  /** Tool respond handler (AskUserQuestion / ExitPlanMode) — if omitted, respond buttons won't show */
-  onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;
-  /** Fork the thread starting from a specific user message — if omitted, the fork button is hidden */
-  onFork?: (messageId: string) => void;
-  /** Rewind code (and conversation) to a specific user message in place */
-  onRewind?: (messageId: string) => void;
-  /** Fork the conversation AND rewind code on the new fork */
-  onForkAndRewind?: (messageId: string) => void;
-  /** ID of the user message currently being forked (disables other fork buttons) */
-  forkingMessageId?: string | null;
-  /** When true, rewind menu items render disabled with `rewindDisabledReason` as tooltip */
-  rewindDisabled?: boolean;
-  rewindDisabledReason?: string;
-  /** Model and permission mode for passing to onSend from status cards */
-  model?: string;
-  permissionMode?: string;
-  /** Per-session changed files keyed by the session's user-message id — renders a
-   *  changed-files summary at the end of each session. */
-  sessionChanges?: Map<string, import('@funny/shared').FileDiffSummary[]>;
-  /** Called after a revert inside a session summary so diff data refetches. */
-  onSessionReverted?: () => void;
-
-  // ── Optional advanced features ──
-
-  /** Pagination support — when omitted, no pagination UI is shown */
-  pagination?: {
-    hasMore: boolean;
-    loadingMore: boolean;
-    load: () => void;
-    /** Full message count for the thread — sizes the phantom spacer that
-     *  reserves scroll height for older messages not yet loaded. */
-    total?: number;
-  };
-  /** Thread creation timestamp */
-  createdAt?: string;
-  /** Todo snapshot map */
-  snapshotMap?: Map<string, number>;
-  /** Known IDs set for skipping entrance animations */
-  knownIds?: Set<string>;
-  /** Lightbox opener callback */
-  onOpenLightbox?: (images: { src: string; alt: string }[], index: number) => void;
-  /** Visible message change callback (for timeline) */
-  onVisibleMessageChange?: (id: string) => void;
-  /** Compact mode for grid columns */
-  compact?: boolean;
-  /** Footer slot — PromptInput goes here */
-  footer?: React.ReactNode;
-  /** Override reduced motion preference */
-  prefersReducedMotion?: boolean | null;
-  /** CSS class for outermost container */
-  className?: string;
-}
-
-export interface MessageStreamHandle {
-  scrollToBottom: () => void;
-  scrollViewport: HTMLDivElement | null;
-  expandToItem: (id: string) => void;
-  hasHiddenItems: () => boolean;
-  captureScrollAnchor: () => void;
-  restoreScrollAnchor: () => void;
-}
+export type { MessageStreamHandle, MessageStreamProps } from './message-stream-types';
 
 const EMPTY_SNAPSHOT_MAP = new Map<string, number>();
 const EMPTY_KNOWN_IDS = new Set<string>();
 
-// Fallback per-message height before we've measured the real rendered content.
 const DEFAULT_MSG_HEIGHT_PX = 140;
-// Clamp the measured average to sane bounds so one freak message (or an empty
-// container mid-mount) can't blow the phantom spacer up or collapse it.
 const MIN_MSG_HEIGHT_PX = 24;
 const MAX_MSG_HEIGHT_PX = 2000;
 const STICKY_BOTTOM_THRESHOLD_PX = 80;
@@ -137,15 +45,17 @@ function getDistanceFromBottom(
   return Math.max(0, metrics.scrollHeight - viewport.scrollTop - metrics.clientHeight);
 }
 
-interface ThreadScrollPosition {
-  scrollTop: number;
-  scrollHeight: number;
-  clientHeight: number;
-  atBottom: boolean;
-  userHasScrolledUp: boolean;
+function getScrollProgress(viewport: HTMLDivElement) {
+  const scrollableRange = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  if (scrollableRange <= 0) return 1;
+  return Math.min(1, Math.max(0, viewport.scrollTop / scrollableRange));
 }
 
-/* ── Component ────────────────────────────────────────────────────── */
+type ThreadScrollPosition = {
+  scrollProgress: number;
+  atBottom: boolean;
+  userHasScrolledUp: boolean;
+};
 
 export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>(
   function MessageStream(props, ref) {
@@ -191,15 +101,17 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
     const isRunning = status === 'running';
     const hasMore = pagination?.hasMore ?? false;
+    const hasMoreAfter = pagination?.hasMoreAfter ?? false;
     const loadingMore = pagination?.loadingMore ?? false;
     const totalMessages = pagination?.total ?? 0;
     const loadedCount = messages?.length ?? 0;
-    // How many older messages exist on the server that we haven't loaded yet.
-    // Only meaningful while there's more to fetch — once hasMore is false the
-    // loaded window IS the whole conversation, so reserve nothing.
-    const unloadedCount = hasMore ? Math.max(0, totalMessages - loadedCount) : 0;
+    const windowStart =
+      pagination?.windowStart ?? (hasMore ? Math.max(0, totalMessages - loadedCount) : 0);
+    const unloadedBeforeCount = hasMore ? Math.max(0, windowStart) : 0;
+    const unloadedAfterCount = hasMoreAfter
+      ? Math.max(0, totalMessages - windowStart - loadedCount)
+      : 0;
 
-    // ── Scroll refs ──────────────────────────────────────────────────
     const scrollViewportRef = useRef<HTMLDivElement>(null);
     const threadIdRef = useRef(threadId);
     threadIdRef.current = threadId;
@@ -221,43 +133,35 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const messageListRef = useRef<MemoizedMessageListHandle>(null);
     const handleViewportScrollRef = useRef<() => void>(() => {});
 
-    // ── Phantom spacer for not-yet-loaded older messages ─────────────
-    // Reserves scroll height above the loaded window so the scrollbar is sized
-    // to the whole conversation, not just the loaded chunk. As pages load, the
-    // phantom shrinks while real content grows by ~the same amount, so total
-    // scroll height (and the thumb) stays stable instead of jumping.
     const listWrapperRef = useRef<HTMLDivElement>(null);
-    // Running estimate of pixels per loaded message; refined from measurements.
     const avgMsgHeightRef = useRef(DEFAULT_MSG_HEIGHT_PX);
     const [phantomHeight, setPhantomHeight] = useState(0);
+    const [bottomPhantomHeight, setBottomPhantomHeight] = useState(0);
     const phantomHeightRef = useRef(0);
     phantomHeightRef.current = phantomHeight;
+    const bottomPhantomHeightRef = useRef(0);
+    bottomPhantomHeightRef.current = bottomPhantomHeight;
     const prevPhantomAppliedRef = useRef(0);
     const prevThreadForPhantomRef = useRef(threadId);
-    // Reset the phantom synchronously when the thread changes (render-phase
-    // adjust-state-on-prop-change pattern) so a tall conversation's spacer never
-    // paints into the next thread before its own total/height is measured.
     if (prevThreadForPhantomRef.current !== threadId) {
       prevThreadForPhantomRef.current = threadId;
       avgMsgHeightRef.current = DEFAULT_MSG_HEIGHT_PX;
       prevPhantomAppliedRef.current = 0;
       if (phantomHeight !== 0) setPhantomHeight(0);
+      if (bottomPhantomHeight !== 0) setBottomPhantomHeight(0);
     }
 
-    // Prompt pinning (full mode only)
     const pinnedPromptIdRef = useRef<string | null>(null);
     const [promptPinSpacerHeight, setPromptPinSpacerHeight] = useState(0);
     const promptPinSpacerHeightRef = useRef(0);
     promptPinSpacerHeightRef.current = promptPinSpacerHeight;
 
-    // ── Lightbox fallback ────────────────────────────────────────────
     const noopLightbox = useCallback(
       (_images: { src: string; alt: string }[], _index: number) => {},
       [],
     );
     const effectiveOpenLightbox = onOpenLightbox ?? noopLightbox;
 
-    // ── Visible message tracking ref ─────────────────────────────────
     const lastUserMsgIdRef = useRef<string | null>(null);
     useEffect(() => {
       if (!messages?.length) {
@@ -268,7 +172,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       lastUserMsgIdRef.current = last?.id ?? null;
     }, [messages]);
 
-    // ── Scroll fingerprint — triggers sticky-bottom logic ────────────
     const threadData = { messages, status } as any;
     const lastMessage = selectLastMessage(threadData);
 
@@ -316,19 +219,27 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       const distanceFromBottom = getDistanceFromBottom(viewport);
       const atBottom = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
       threadScrollPositionsRef.current!.set(id, {
-        scrollTop: viewport.scrollTop,
-        scrollHeight: viewport.scrollHeight,
-        clientHeight: viewport.clientHeight,
+        scrollProgress: atBottom ? 1 : getScrollProgress(viewport),
         atBottom,
         userHasScrolledUp: userHasScrolledUp.current,
       });
+      saveThreadScrollProgress(id, atBottom ? 1 : getScrollProgress(viewport));
     }, []);
 
     const applyThreadScrollPosition = useCallback(
       (viewport: HTMLDivElement, id: string) => {
         if (threadIdRef.current !== id) return;
 
-        const saved = threadScrollPositionsRef.current!.get(id);
+        const storedProgress = loadThreadScrollProgress(id);
+        const saved =
+          threadScrollPositionsRef.current!.get(id) ??
+          (storedProgress !== undefined
+            ? {
+                scrollProgress: storedProgress,
+                atBottom: storedProgress >= 0.999,
+                userHasScrolledUp: storedProgress < 0.999,
+              }
+            : undefined);
 
         if (!saved || saved.atBottom) {
           scrollingToBottomRef.current = false;
@@ -342,7 +253,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
         scrollingToBottomRef.current = false;
         const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-        viewport.scrollTop = Math.min(saved.scrollTop, maxScrollTop);
+        viewport.scrollTop = saved.scrollProgress * maxScrollTop;
         userHasScrolledUp.current = saved.userHasScrolledUp;
         updateStickyMetrics(viewport);
         updateScrollDownButton(
@@ -384,7 +295,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       [saveThreadScrollPosition, threadId, updateStickyMetrics],
     );
 
-    // ── Thread switch: restore this thread's own scroll position ─────
     useLayoutEffect(() => {
       const viewport = scrollViewportRef.current;
       if (!viewport || !threadId) return;
@@ -450,13 +360,20 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         pagination.load();
       }
 
-      // At-bottom: sync visible message ID to last user message
+      if (
+        pagination?.loadAfter &&
+        hasMoreAfter &&
+        !loadingMore &&
+        scrollTop + clientHeight > scrollHeight - bottomPhantomHeightRef.current - 200
+      ) {
+        pagination.loadAfter();
+      }
+
       if (!compact && isAtBottom && lastUserMsgIdRef.current && onVisibleMessageChange) {
         onVisibleMessageChange(lastUserMsgIdRef.current);
       }
     };
 
-    // ── Scroll event handler ─────────────────────────────────────────
     useEffect(() => {
       const viewport = scrollViewportRef.current;
       if (!viewport) return;
@@ -466,7 +383,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       return () => viewport.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // ── IntersectionObserver for visible message tracking (non-compact) ──
     useEffect(() => {
       if (compact || !onVisibleMessageChange) return;
       const viewport = scrollViewportRef.current;
@@ -505,7 +421,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       };
     }, [threadId, compact, onVisibleMessageChange]);
 
-    // ── Sticky-bottom scroll logic ───────────────────────────────────
     useLayoutEffect(() => {
       const isNewThread = threadId != null && scrolledThreadRef.current !== threadId;
       if (isNewThread) {
@@ -529,8 +444,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           applyThreadScrollPosition(viewport, threadId);
         }
       } else if (hasNewUserMessage) {
-        // In full mode, ThreadView handles prompt pinning externally.
-        // Here we just ensure the user message is visible.
         const viewport = scrollViewportRef.current;
         if (viewport) {
           userHasScrolledUp.current = false;
@@ -564,7 +477,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       applyThreadScrollPosition,
     ]);
 
-    // ── Pagination scroll preservation ───────────────────────────────
     const firstMessageId = selectFirstMessage({ messages } as any)?.id ?? null;
     useLayoutEffect(() => {
       if (!pagination) return;
@@ -587,10 +499,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       }
     }, [firstMessageId, pagination]);
 
-    // ── Phantom spacer sizing ────────────────────────────────────────
-    // The MemoizedMessageList wrapper height already approximates the FULL
-    // loaded-content height (its internal spacer stands in for windowed-out
-    // items), so wrapperHeight / loadedCount is a good per-message estimate.
     const recomputePhantom = useCallback(() => {
       const wrapper = listWrapperRef.current;
       if (wrapper && loadedCount > 0) {
@@ -602,16 +510,18 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           );
         }
       }
-      const next = unloadedCount > 0 ? Math.round(unloadedCount * avgMsgHeightRef.current) : 0;
-      setPhantomHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev));
-    }, [loadedCount, unloadedCount]);
+      const nextTop =
+        unloadedBeforeCount > 0 ? Math.round(unloadedBeforeCount * avgMsgHeightRef.current) : 0;
+      const nextBottom =
+        unloadedAfterCount > 0 ? Math.round(unloadedAfterCount * avgMsgHeightRef.current) : 0;
+      setPhantomHeight((prev) => (Math.abs(prev - nextTop) > 1 ? nextTop : prev));
+      setBottomPhantomHeight((prev) => (Math.abs(prev - nextBottom) > 1 ? nextBottom : prev));
+    }, [loadedCount, unloadedAfterCount, unloadedBeforeCount]);
 
-    // Recompute when the loaded/unloaded counts change.
     useLayoutEffect(() => {
       recomputePhantom();
     }, [recomputePhantom]);
 
-    // Re-measure as the rendered list grows (items mount / heights settle).
     useEffect(() => {
       const wrapper = listWrapperRef.current;
       if (!wrapper) return;
@@ -658,7 +568,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       wasViewportPinnedBeforeLayoutChange,
     ]);
 
-    // ── scrollToBottom callback ───────────────────────────────────────
     const scrollToBottom = useCallback(() => {
       const viewport = scrollViewportRef.current;
       if (!viewport) return;
@@ -690,7 +599,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       });
     }, [compact, saveThreadScrollPosition, threadId, updateStickyMetrics]);
 
-    // ── Imperative handle ────────────────────────────────────────────
     useImperativeHandle(
       ref,
       () => ({
@@ -706,7 +614,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       [scrollToBottom],
     );
 
-    // ── Permission handlers ──────────────────────────────────────────
     const handlePermissionApprove = useCallback(() => {
       if (pendingPermission && onPermissionApproval) {
         onPermissionApproval(pendingPermission.toolName, true);
@@ -725,7 +632,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       }
     }, [pendingPermission, onPermissionApproval]);
 
-    // ── Render ───────────────────────────────────────────────────────
     return (
       <div
         className={cn(
@@ -733,7 +639,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           className,
         )}
         ref={scrollViewportRef}
-        style={{ contain: 'layout style', scrollbarGutter: compact ? undefined : 'stable' }}
+        style={{
+          contain: 'layout style',
+          scrollbarGutter: compact ? undefined : 'stable',
+          overscrollBehaviorY: 'contain',
+          overflowAnchor: 'none',
+        }}
       >
         {/* Spacer pushes content to bottom */}
         <div className="grow" aria-hidden="true" />
@@ -790,6 +701,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               phantom spacer's per-message estimate. */}
           <div ref={listWrapperRef}>
             <MemoizedMessageList
+              key={threadId}
               ref={messageListRef}
               messages={messages ?? EMPTY_MESSAGES}
               threadEvents={threadEvents}
@@ -815,139 +727,35 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             />
           </div>
 
-          {/* Running indicator */}
-          {isRunning && !isExternal && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm"
-            >
-              <D4CAnimation size={compact ? 'sm' : undefined} />
-              <span className="text-xs">{t('thread.agentWorking')}</span>
-            </m.div>
-          )}
-
-          {isRunning && isExternal && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm"
-            >
-              <div className="flex items-center gap-1">
-                <span className="bg-muted-foreground/60 inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_infinite] rounded-full" />
-                <span className="bg-muted-foreground/60 inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.2s_infinite] rounded-full" />
-                <span className="bg-muted-foreground/60 inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.4s_infinite] rounded-full" />
-              </div>
-              <span className="text-xs">
-                {t('thread.runningExternally', 'Running externally\u2026')}
-              </span>
-            </m.div>
-          )}
-
-          {/* Waiting: question */}
-          {status === 'waiting' && waitingReason === 'question' && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="text-status-warning/80 flex items-center gap-2 text-xs"
-            >
-              <Clock className="size-3.5 animate-pulse text-yellow-400" />
-              {t('thread.waitingForResponse')}
-            </m.div>
-          )}
-
-          {/* Waiting: permission */}
-          {status === 'waiting' && waitingReason === 'permission' && pendingPermission && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-            >
-              <PermissionApprovalCard
-                toolName={pendingPermission.toolName}
-                toolInput={pendingPermission.toolInput}
-                onApprove={handlePermissionApprove}
-                onAlwaysAllow={handlePermissionAlwaysAllow}
-                onDeny={handlePermissionDeny}
-              />
-            </m.div>
-          )}
-
-          {/* Waiting: provider error (rate limit / API error) */}
-          {status === 'waiting' && waitingReason === 'provider_error' && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-            >
-              <ProviderErrorCard onSend={(text) => onSend(text, { model, mode: permissionMode })} />
-            </m.div>
-          )}
-
-          {/* Waiting: no specific reason */}
-          {status === 'waiting' && !waitingReason && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-            >
-              <WaitingActions onSend={(text) => onSend(text, { model, mode: permissionMode })} />
-            </m.div>
-          )}
-
-          {/* Result card */}
-          {resultInfo && !isRunning && status !== 'stopped' && status !== 'interrupted' && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-            >
-              <AgentResultCard
-                status={resultInfo.status}
-                cost={resultInfo.cost}
-                duration={resultInfo.duration}
-                error={resultInfo.error}
-                onContinue={
-                  resultInfo.status === 'failed'
-                    ? () => onSend('Continue', { model, mode: permissionMode })
-                    : undefined
-                }
-              />
-            </m.div>
-          )}
-
-          {/* Interrupted card */}
-          {status === 'interrupted' && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-            >
-              <AgentInterruptedCard
-                onContinue={() => onSend('Continue', { model, mode: permissionMode })}
-              />
-            </m.div>
-          )}
-
-          {/* Stopped card */}
-          {status === 'stopped' && (
-            <m.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-            >
-              <AgentStoppedCard
-                onContinue={() => onSend('Continue', { model, mode: permissionMode })}
-              />
-            </m.div>
-          )}
+          <MessageStreamStatusTail
+            status={status}
+            waitingReason={waitingReason}
+            pendingPermission={pendingPermission}
+            isRunning={isRunning}
+            isExternal={isExternal}
+            compact={compact}
+            prefersReducedMotion={prefersReducedMotion}
+            resultInfo={resultInfo}
+            model={model}
+            permissionMode={permissionMode}
+            t={t}
+            onSend={onSend}
+            onPermissionApprove={handlePermissionApprove}
+            onPermissionAlwaysAllow={handlePermissionAlwaysAllow}
+            onPermissionDeny={handlePermissionDeny}
+          />
 
           {/* Prompt pin spacer (full mode only) */}
           {!compact && promptPinSpacerHeight > 0 && (
             <div aria-hidden="true" style={{ height: promptPinSpacerHeight }} />
+          )}
+
+          {bottomPhantomHeight > 0 && (
+            <div
+              aria-hidden="true"
+              data-testid="message-stream-bottom-phantom-spacer"
+              style={{ height: bottomPhantomHeight }}
+            />
           )}
         </div>
 

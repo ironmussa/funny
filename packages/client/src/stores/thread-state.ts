@@ -109,6 +109,7 @@ export interface ThreadState {
   ) => void;
   rollbackOptimisticMessage: (threadId: string) => void;
   loadOlderMessages: () => Promise<void>;
+  loadNewerMessages: () => Promise<void>;
   /**
    * Load older message pages for a thread until the given message id is
    * present in the loaded window (or there is nothing left to load).

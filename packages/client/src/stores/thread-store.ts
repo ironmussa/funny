@@ -133,9 +133,12 @@ export interface ThreadWithMessages extends Thread {
   waitingReason?: WaitingReason;
   pendingPermission?: { toolName: string; toolInput?: string };
   hasMore?: boolean;
+  hasMoreAfter?: boolean;
   loadingMore?: boolean;
   /** Full message count for the thread — sizes the phantom scroll spacer. */
   totalMessages?: number;
+  /** Number of messages before the loaded window. */
+  windowStart?: number;
   contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
   /** Setup progress steps for threads in setting_up status */
@@ -526,7 +529,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const hydrated: ThreadWithMessages = {
         ...thread,
         hasMore: thread.hasMore ?? false,
+        hasMoreAfter: thread.hasMoreAfter ?? false,
         totalMessages: thread.total ?? thread.messages?.length ?? 0,
+        windowStart: thread.windowStart ?? 0,
         threadEvents,
         initInfo: thread.initInfo || buffered || undefined,
         resultInfo,
@@ -852,7 +857,52 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           ...t,
           messages: [...newMessages, ...t.messages],
           hasMore,
+          hasMoreAfter: result.value.hasMoreAfter ?? t.hasMoreAfter,
           totalMessages: total ?? t.totalMessages,
+          windowStart:
+            result.value.windowStart ?? Math.max(0, (t.windowStart ?? 0) - newMessages.length),
+          loadingMore: false,
+        };
+      }),
+    );
+  },
+
+  loadNewerMessages: async () => {
+    const active = getActiveThread(get());
+    if (!active || !active.hasMoreAfter || active.loadingMore) return;
+
+    const newestMessage = active.messages.at(-1);
+    if (!newestMessage) return;
+    const threadId = active.id;
+
+    set((state) =>
+      mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: true })),
+    );
+
+    const result = await api.getThreadMessages(threadId, newestMessage.timestamp, 50, 'after');
+
+    const current = get().threadDataById[threadId];
+    if (!current) return;
+
+    if (result.isErr()) {
+      set((state) =>
+        mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: false })),
+      );
+      return;
+    }
+
+    const { messages: newerMessages, hasMoreAfter, total } = result.value;
+    set((state) =>
+      mutations.applyThreadDataPatch(state, threadId, (t) => {
+        const existingIds = new Set(t.messages.map((m) => m.id));
+        const newMessages = newerMessages.filter((m) => !existingIds.has(m.id));
+        return {
+          ...t,
+          messages: [...t.messages, ...newMessages],
+          hasMore: result.value.hasMore ?? t.hasMore,
+          hasMoreAfter: hasMoreAfter ?? false,
+          totalMessages: total ?? t.totalMessages,
+          windowStart: result.value.windowStart ?? t.windowStart,
           loadingMore: false,
         };
       }),
@@ -1001,8 +1051,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           compactionEvents:
             persistedCompaction.length > 0 ? persistedCompaction : current.compactionEvents,
           contextUsage: current.contextUsage,
-          waitingReason: isServerWaiting ? current.waitingReason : undefined,
-          pendingPermission: isServerWaiting ? current.pendingPermission : undefined,
+          waitingReason: isServerWaiting
+            ? (thread.waitingReason ?? current.waitingReason)
+            : undefined,
+          pendingPermission: isServerWaiting
+            ? (thread.pendingPermission ?? current.pendingPermission)
+            : undefined,
         };
       }),
     );

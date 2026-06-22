@@ -6,12 +6,12 @@ import {
   Loader2,
   ExternalLink,
   GitBranch,
-  GitPullRequest,
   Plus,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -227,19 +227,18 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
 
                       {/* Linked PR badge */}
                       {issue.linkedPR && (
-                        <a
-                          href={issue.linkedPR.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Badge
-                            variant="outline"
-                            className="h-4 gap-0.5 border-blue-500/30 px-1 text-[10px] text-blue-500 hover:bg-blue-500/10"
-                          >
-                            <GitPullRequest className="size-2.5" />#{issue.linkedPR.number}
-                          </Badge>
-                        </a>
+                        <PRBadge
+                          prNumber={issue.linkedPR.number}
+                          prState={
+                            issue.linkedPR.state === 'merged'
+                              ? 'MERGED'
+                              : issue.linkedPR.state === 'closed'
+                                ? 'CLOSED'
+                                : 'OPEN'
+                          }
+                          prUrl={issue.linkedPR.url}
+                          size="xxs"
+                        />
                       )}
 
                       <span className="text-muted-foreground text-xs">

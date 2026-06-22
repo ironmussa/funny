@@ -28,6 +28,7 @@ import {
 } from '@/stores/thread-context';
 
 import { PinnedPRCard } from './PinnedPRCard';
+import { PRBadge } from './PRBadge';
 import { PRDetailDialog } from './PRDetailDialog';
 
 const log = createClientLogger('pull-requests-tab');
@@ -236,12 +237,6 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
     fetchPRs(1, false);
   };
 
-  const getPRColor = (pr: GitHubPR) => {
-    if (pr.merged_at) return 'text-purple-500';
-    if (pr.state === 'closed') return 'text-red-500';
-    return 'text-green-500';
-  };
-
   const { currentBranchPRs, otherPRs } = useMemo(() => {
     if (!currentBranch) return { currentBranchPRs: [] as GitHubPR[], otherPRs: prs };
     const match: GitHubPR[] = [];
@@ -254,9 +249,10 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   }, [prs, currentBranch]);
 
   const renderPRRow = (pr: GitHubPR) => {
-    const color = getPRColor(pr);
+    const prState = pr.merged_at ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN';
     return (
       <button
+        type="button"
         key={pr.number}
         onClick={() => setSelectedPR(pr)}
         className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs transition-colors"
@@ -264,16 +260,13 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       >
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-baseline gap-1.5">
-            <a
-              href={pr.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className={cn('shrink-0 font-mono text-[10px] hover:underline', color)}
+            <PRBadge
+              prNumber={pr.number}
+              prState={prState}
+              prUrl={pr.html_url}
+              size="xxs"
               data-testid={`pr-number-link-${pr.number}`}
-            >
-              #{pr.number}
-            </a>
+            />
             <span className="leading-tight font-medium">{pr.title}</span>
           </div>
           {pr.labels.length > 0 && (
@@ -308,24 +301,6 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             )}
           </div>
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <a
-              href={pr.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent shrink-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-              data-testid={`pr-open-github-${pr.number}`}
-              aria-label={t('review.pullRequests.openOnGithub', 'Open on GitHub')}
-            >
-              <ExternalLink className="icon-xs" />
-            </a>
-          </TooltipTrigger>
-          <TooltipContent side="left">
-            {t('review.pullRequests.openOnGithub', 'Open on GitHub')}
-          </TooltipContent>
-        </Tooltip>
       </button>
     );
   };
@@ -342,7 +317,10 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="pull-requests-tab">
       {/* Toolbar */}
-      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
+      <div
+        className="border-sidebar-border flex items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5"
+        data-testid="prs-toolbar"
+      >
         {/* Refresh */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -372,6 +350,18 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             </span>
           </div>
         )}
+
+        <PRFilterBar
+          value={filters}
+          onChange={setFilters}
+          options={filterOptions}
+          optionsLoading={filterOptionsLoading}
+          state={state}
+          onStateChange={setState}
+          showState={!branchFocusMode}
+          showBorder={false}
+          className="min-w-max flex-nowrap"
+        />
 
         <div className="min-w-0 flex-1" />
 
@@ -422,17 +412,6 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           </Tooltip>
         )}
       </div>
-
-      {/* Filter + sort bar */}
-      <PRFilterBar
-        value={filters}
-        onChange={setFilters}
-        options={filterOptions}
-        optionsLoading={filterOptionsLoading}
-        state={state}
-        onStateChange={setState}
-        showState={!branchFocusMode}
-      />
 
       {/* Content */}
       {loading && prs.length === 0 ? (

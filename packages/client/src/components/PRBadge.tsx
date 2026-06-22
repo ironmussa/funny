@@ -1,4 +1,4 @@
-import { GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -6,49 +6,46 @@ import { cn } from '@/lib/utils';
 
 export interface PRBadgeProps {
   prNumber: number;
-  prState: 'OPEN' | 'MERGED' | 'CLOSED';
+  prState?: 'OPEN' | 'MERGED' | 'CLOSED';
   prUrl?: string;
   /** "sm" for large displays, "xs" for sidebar thread items, "xxs" for compact headers */
   size?: 'sm' | 'xs' | 'xxs';
+  showExternalIcon?: boolean;
   className?: string;
   'data-testid'?: string;
 }
 
-const CONFIG = {
-  MERGED: {
-    icon: GitMerge,
-    color: 'text-purple-500!',
-    label: 'merged',
+const SIZE_CLASS = {
+  sm: {
+    badge: 'h-6 px-2 text-sm',
+    icon: 'h-3.5 w-3.5',
   },
-  CLOSED: {
-    icon: GitPullRequestClosed,
-    color: 'text-red-500!',
-    label: 'closed',
+  xs: {
+    badge: 'h-5 px-1.5 text-xs',
+    icon: 'h-3 w-3',
   },
-  OPEN: {
-    icon: GitPullRequest,
-    color: 'text-green-500!',
-    label: 'open',
+  xxs: {
+    badge: 'h-4 px-1 text-[10px]',
+    icon: 'h-2.5 w-2.5',
   },
 } as const;
 
 /**
- * Standardized PR number badge with state-colored icon.
- * Renders identically in sidebar thread items and review pane header.
+ * Standardized PR number badge/link.
+ * State is exposed in the tooltip; color stays neutral so the badge reads
+ * consistently across graph rows, sidebars, dialogs, and PR lists.
  */
 export function PRBadge({
   prNumber,
-  prState,
+  prState = 'OPEN',
   prUrl,
   size = 'xs',
+  showExternalIcon = !!prUrl,
   className,
   ...props
 }: PRBadgeProps) {
   const { t } = useTranslation();
-  const { icon: Icon, color } = CONFIG[prState] ?? CONFIG.OPEN;
-
-  const textSize = size === 'xxs' ? 'text-[10px]' : size === 'xs' ? 'text-xs' : 'text-sm';
-  const iconSize = size === 'sm' ? 'h-3.5 w-3.5' : size === 'xs' ? 'icon-xs' : 'h-2.5 w-2.5';
+  const config = SIZE_CLASS[size];
 
   const tooltipLabel =
     prState === 'OPEN'
@@ -62,29 +59,37 @@ export function PRBadge({
             number: prNumber,
             defaultValue: `PR #${prNumber} (closed)`,
           });
+  const badgeClassName = cn(
+    'border-border/70 bg-background/90 text-foreground inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold hover:border-primary/60 hover:text-primary focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
+    config.badge,
+    !prUrl && 'hover:border-border/70 hover:text-foreground',
+    className,
+  );
+  const content = (
+    <>
+      <span>#{prNumber}</span>
+      {showExternalIcon ? <ExternalLink className={config.icon} aria-hidden="true" /> : null}
+    </>
+  );
 
   if (prUrl) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
+          <a
+            href={prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={(e) => {
-              e.preventDefault();
               e.stopPropagation();
-              window.open(prUrl, '_blank', 'noopener,noreferrer');
             }}
-            className={cn(
-              'flex shrink-0 items-center gap-0.5 font-mono hover:underline',
-              textSize,
-              color,
-              className,
-            )}
+            onKeyDown={(e) => e.stopPropagation()}
+            className={badgeClassName}
             data-testid={props['data-testid']}
+            aria-label={tooltipLabel}
           >
-            <Icon className={iconSize} />
-            <span>#{prNumber}</span>
-          </button>
+            {content}
+          </a>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">
           {tooltipLabel}
@@ -96,12 +101,8 @@ export function PRBadge({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          className={cn('flex shrink-0 items-center gap-0.5 font-mono', textSize, color, className)}
-          data-testid={props['data-testid']}
-        >
-          <Icon className={iconSize} />
-          <span>#{prNumber}</span>
+        <span className={badgeClassName} data-testid={props['data-testid']}>
+          {content}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">

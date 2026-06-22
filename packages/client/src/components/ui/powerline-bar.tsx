@@ -163,6 +163,18 @@ export function PowerlineBar({
   const renderLabel = (label: string) =>
     query?.trim() ? <HighlightText text={label} query={query} /> : label;
 
+  const renderSegmentLabel = (segment: PowerlineSegmentData) => (
+    <span
+      className={cn(
+        config.text,
+        'truncate font-medium whitespace-nowrap',
+        segment.emphasis && 'font-bold',
+      )}
+    >
+      {renderLabel(segment.label)}
+    </span>
+  );
+
   return (
     <TooltipProvider delayDuration={300}>
       <div
@@ -196,15 +208,7 @@ export function PowerlineBar({
                       {...interaction}
                     >
                       <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
-                      <span
-                        className={cn(
-                          config.text,
-                          'truncate font-medium whitespace-nowrap',
-                          segment.emphasis && 'font-bold',
-                        )}
-                      >
-                        {renderLabel(segment.label)}
-                      </span>
+                      {renderSegmentLabel(segment)}
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
@@ -236,15 +240,7 @@ export function PowerlineBar({
                     {...interaction}
                   >
                     <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
-                    <span
-                      className={cn(
-                        config.text,
-                        'truncate font-medium whitespace-nowrap',
-                        segment.emphasis && 'font-bold',
-                      )}
-                    >
-                      {renderLabel(segment.label)}
-                    </span>
+                    {renderSegmentLabel(segment)}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
@@ -286,15 +282,7 @@ export function PowerlineBar({
                     }}
                   >
                     <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
-                    <span
-                      className={cn(
-                        config.text,
-                        'truncate font-medium whitespace-nowrap',
-                        segment.emphasis && 'font-bold',
-                      )}
-                    >
-                      {renderLabel(segment.label)}
-                    </span>
+                    {renderSegmentLabel(segment)}
                   </div>
                 </div>
               </TooltipTrigger>

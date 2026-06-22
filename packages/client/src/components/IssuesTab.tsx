@@ -4,7 +4,6 @@ import {
   CircleDot,
   ExternalLink,
   GitBranch,
-  GitPullRequest,
   Loader2,
   MessageSquare,
   Plus,
@@ -13,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -277,19 +277,18 @@ export function IssuesTab({ visible }: IssuesTabProps) {
                       </Badge>
                     )}
                     {issue.linkedPR && (
-                      <a
-                        href={issue.linkedPR.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Badge
-                          variant="outline"
-                          className="h-3.5 gap-0.5 border-blue-500/30 px-1 text-[9px] leading-none text-blue-500 hover:bg-blue-500/10"
-                        >
-                          <GitPullRequest className="size-2.5" />#{issue.linkedPR.number}
-                        </Badge>
-                      </a>
+                      <PRBadge
+                        prNumber={issue.linkedPR.number}
+                        prState={
+                          issue.linkedPR.state === 'merged'
+                            ? 'MERGED'
+                            : issue.linkedPR.state === 'closed'
+                              ? 'CLOSED'
+                              : 'OPEN'
+                        }
+                        prUrl={issue.linkedPR.url}
+                        size="xxs"
+                      />
                     )}
                     <span className="text-muted-foreground text-[10px]">
                       {timeAgo(issue.created_at)}

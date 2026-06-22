@@ -37,7 +37,7 @@
     "vite": "^6.4.3"
   },
   "resolutions": {
-    "dompurify": "^3.4.7",
+    "dompurify": "^3.4.11",
     "picomatch": "^4.0.4",
     "postcss": "^8.5.15"
   }

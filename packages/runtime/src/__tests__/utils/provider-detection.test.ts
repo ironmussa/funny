@@ -64,7 +64,7 @@ describe('resolveProviderAvailability (model-picker-availability §1)', () => {
 
   // claude is available here (the SDK import is mocked to {} → sdkAvailable),
   // alongside the always-on non-ACP backends.
-  const ALWAYS = ['claude', 'deepagent', 'llm-api'];
+  const ALWAYS = ['claude', 'pi', 'deepagent', 'llm-api'];
 
   test('only providers whose resolved command is on PATH are available', async () => {
     const refs = [ref('codex', 'codex-acp'), ref('gemini', 'gemini')];

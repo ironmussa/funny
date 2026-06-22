@@ -35,9 +35,8 @@ export function registerSystemRoutes(app: Hono): void {
     return c.json({ shells: detectShells() });
   });
 
-  // Manifest-driven dynamic model discovery. One route serves every ACP
-  // provider whose manifest declares `models.kind: 'dynamic'` (pi / cursor /
-  // opencode); the `:provider` param keeps the existing per-provider URLs
+  // Dynamic model discovery. Pi uses its native SDK; dynamic ACP providers use
+  // manifest-driven ACP probing. The `:provider` param keeps existing URLs
   // (`/api/system/pi/models`, etc.) working unchanged. Static-catalog and
   // unknown providers get a 404.
   const MODELS_TTL_MS = 60_000;
@@ -45,7 +44,7 @@ export function registerSystemRoutes(app: Hono): void {
   app.get('/api/system/:provider/models', async (c) => {
     const provider = c.req.param('provider');
     const manifest = getManifest(provider);
-    if (!manifest || manifest.models.kind !== 'dynamic') {
+    if (provider !== 'pi' && (!manifest || manifest.models.kind !== 'dynamic')) {
       return c.json(
         {
           ok: false,
@@ -62,8 +61,9 @@ export function registerSystemRoutes(app: Hono): void {
       return c.json(cached.payload);
     }
 
-    const { discoverAcpModels } = await import('@funny/core/agents');
-    const result = await discoverAcpModels(manifest);
+    const { discoverAcpModels, discoverPiModels } = await import('@funny/core/agents');
+    const result =
+      provider === 'pi' ? await discoverPiModels() : await discoverAcpModels(manifest!);
     const payload = result.ok
       ? {
           ok: true as const,
@@ -79,13 +79,13 @@ export function registerSystemRoutes(app: Hono): void {
         };
     modelsCache.set(provider, { at: Date.now(), payload });
     if (!result.ok) {
-      log.warn('acp model discovery failed', {
+      log.warn('model discovery failed', {
         namespace: `${provider}-discover`,
         reason: result.reason,
         message: result.message,
       });
     } else {
-      log.info('acp model discovery ok', {
+      log.info('model discovery ok', {
         namespace: `${provider}-discover`,
         count: result.models.length,
       });

@@ -7,17 +7,17 @@
  *
  * Fork a thread at a specific user message. For Claude threads, uses the
  * Claude Agent SDK's native `forkSession()` to slice the SDK transcript at
- * the matching transcript message UUID. For ACP-based providers (codex,
- * gemini, pi, cursor, opencode), spawns the agent CLI briefly and calls ACP's
- * `unstable_forkSession()` if the capability is advertised. Otherwise the
- * fork is a "branch the visible conversation" with no native session
- * continuity. In all cases the prefix of DB messages and tool calls are
- * mirrored into a new (idle) thread.
+ * the matching transcript message UUID. For Pi, uses the Pi SDK session
+ * manager. For ACP-based providers (codex, gemini, cursor, opencode), spawns
+ * the agent CLI briefly and calls ACP's `unstable_forkSession()` if the
+ * capability is advertised. Otherwise the fork is a "branch the visible
+ * conversation" with no native session continuity. In all cases the prefix of
+ * DB messages and tool calls are mirrored into a new (idle) thread.
  */
 
 import { forkSession, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk';
-import { forkAcpSession } from '@funny/core/agents';
+import { forkAcpSession, forkPiSession } from '@funny/core/agents';
 import { KNOWN_ACP_PROVIDER_IDS, type KnownAcpProvider } from '@funny/shared/provider-manifests';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
@@ -107,7 +107,8 @@ async function forkThreadImpl(params: ForkThreadParams) {
 
   // Determine native session-fork strategy by provider.
   // - claude (or unset): use the Claude SDK's transcript-aware forkSession()
-  // - codex / gemini / pi: spawn the agent CLI briefly and call ACP unstable_forkSession()
+  // - pi: use Pi SDK session manager
+  // - codex / gemini / cursor / opencode: spawn the agent CLI briefly and call ACP unstable_forkSession()
   // - other providers: no native fork — copy DB messages with no sessionId
   let newSessionId: string | null = null;
   let forkedAtSdkUuid: string | undefined;
@@ -166,6 +167,25 @@ async function forkThreadImpl(params: ForkThreadParams) {
       });
       span.end('error', 'sdk_fork_failed');
       throw new ThreadServiceError('Failed to fork agent session', 500);
+    }
+  } else if (provider === 'pi') {
+    const result = await forkPiSession({
+      sessionId: source.sessionId,
+      cwd,
+      userMessageIndex: userMsgIndex,
+    });
+    if (result.ok) {
+      newSessionId = result.newSessionId;
+    } else {
+      log.warn('Pi SDK fork unavailable, falling back to DB-only branch copy', {
+        namespace: 'thread-fork',
+        threadId: source.id,
+        provider,
+        sessionId: source.sessionId,
+        reason: result.reason,
+        message: result.message,
+      });
+      metric('threads.fork_pi_fallback', 1, { type: 'sum' });
     }
   } else if (ACP_PROVIDERS.has(provider)) {
     const acpResult = await forkAcpSession({

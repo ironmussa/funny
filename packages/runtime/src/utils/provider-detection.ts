@@ -168,7 +168,7 @@ export interface ProviderSpawnRef {
  * - claude → existing SDK/CLI detection (no ACP manifest);
  * - each supplied ACP provider → its RESOLVED spawn command (env/npx precedence
  *   via resolveSpawnCommand) on PATH;
- * - deepagent / llm-api → available in v1 (key/config-based, not gated here).
+ * - pi / deepagent / llm-api → available in v1 (SDK/key/config-based, not gated here).
  *
  * `deps` is injectable for tests (no real PATH probing / env).
  */
@@ -188,7 +188,7 @@ export async function resolveProviderAvailability(
   if (detected.get('claude')?.available) available.push('claude');
 
   // non-ACP bundled backends — available in v1 (not gated by a CLI on PATH)
-  available.push('deepagent', 'llm-api');
+  available.push('pi', 'deepagent', 'llm-api');
 
   // active ACP providers (built-in + external) — resolved spawn command on PATH
   for (const p of acpProviders) {

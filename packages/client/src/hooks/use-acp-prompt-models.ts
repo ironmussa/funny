@@ -1,4 +1,4 @@
-import { DYNAMIC_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { DYNAMIC_MODEL_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,10 +17,10 @@ export interface ModelGroup {
   [key: string]: unknown;
 }
 
-const DYNAMIC_PROVIDERS = new Set<string>(DYNAMIC_ACP_PROVIDER_IDS);
+const DYNAMIC_PROVIDERS = new Set<string>(DYNAMIC_MODEL_PROVIDER_IDS);
 
 /**
- * Merges every dynamic-catalog ACP provider's runtime-discovered models into
+ * Merges every dynamic-catalog provider's runtime-discovered models into
  * the static unified model groups. Replaces the three near-identical
  * `use-{pi,cursor,opencode}-prompt-models` hooks: the provider list comes from
  * the manifest registry and the per-provider labels/i18n keys are derived
@@ -34,13 +34,13 @@ export function useAcpPromptModels(baseUnifiedModelGroups: ModelGroup[]): ModelG
 
   // Discover each dynamic provider once (the store de-dupes via its cache window).
   useEffect(() => {
-    for (const provider of DYNAMIC_ACP_PROVIDER_IDS) void fetchModels(provider);
+    for (const provider of DYNAMIC_MODEL_PROVIDER_IDS) void fetchModels(provider);
   }, [fetchModels]);
 
   // Warn once per (provider, reason, message) on discovery failure.
   const lastWarnedRef = useRef<Record<string, string>>({});
   useEffect(() => {
-    for (const provider of DYNAMIC_ACP_PROVIDER_IDS) {
+    for (const provider of DYNAMIC_MODEL_PROVIDER_IDS) {
       const st = byProvider[provider];
       if (!st || st.status !== 'error' || !st.message) continue;
       const key = `${st.reason ?? 'unknown'}|${st.message}`;

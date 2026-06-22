@@ -145,16 +145,16 @@ export class AgentLifecycleManager {
 
     // Cold-path session protection: if the thread has a persisted sessionId
     // but the agent process for it is gone (server restart, crash, manual
-    // stop, watcher reload), force context recovery instead of letting the
-    // next process attempt `session/load`. gemini-cli/codex/pi-coding-agent
-    // all stream conversation history back as fire-and-forget notifications
-    // that race with the loadSession response promise; the late notifications
+    // stop, watcher reload), force context recovery instead of letting ACP
+    // providers attempt `session/load`. Those providers can stream conversation
+    // history back as fire-and-forget notifications that race with the
+    // loadSession response promise; the late notifications
     // get translated as new session updates and duplicate every prior
     // assistant message and tool call in the DB. Rebuilding the prompt from
     // DB-side context (via `recoverThreadContext` below) gives the agent
     // equivalent continuity without triggering the replay race.
     //
-    // The Claude SDK resumes by sessionId without that race, so it is
+    // The Claude and Pi SDK integrations resume without that race, so they are
     // exempted — forcing recovery there invalidates the prompt cache on
     // every follow-up and regenerates ~25k tokens of cache_creation per turn.
     if (

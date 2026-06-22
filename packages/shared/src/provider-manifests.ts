@@ -108,18 +108,6 @@ export const opencodeModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
-// pi's first agent_message_chunk is prefixed with a banner; strip it in core.
-// Kept as a DATA string so the behavior is selectable, not hardcoded per call.
-// Some pi-acp/pi-mcp-adapter versions append a small source/dependency bullet
-// tree (for example `- index.ts`, `- npm:pi-mcp-adapter`, `  - index.ts`)
-// before the real assistant text. Strip that too, but only when the block names
-// the pi MCP adapter so we do not accidentally remove a real bullet-list answer.
-const PI_BANNER_REGEX =
-  '^pi v[\\d.]+\\s*\\n-{3,}\\s*\\n+' +
-  '(?:##[^\\n]*\\n(?:[-*][^\\n]*\\n)*\\n*)*' +
-  '(?:(?=(?:(?:[-*]|\\s+[-*])[^\\n]*\\n){0,8}[-*]\\s+npm:pi-mcp-adapter(?:\\n|$))' +
-  '(?:[-*]\\s+(?:[^\\n]*\\.tsx?|npm:pi-mcp-adapter[^\\n]*)\\n|\\s+[-*]\\s+[^\\n]*\\.tsx?\\s*)+\\n*)?';
-
 // ─── Manifests ───────────────────────────────────────────────────────────────
 
 export const codexManifest: ProviderManifest = {
@@ -205,33 +193,6 @@ export const geminiManifest: ProviderManifest = {
     planRender: 'text',
     synthToolUseFromOrphanUpdate: true,
     permissionModel: 'gated',
-  },
-};
-
-export const piManifest: ProviderManifest = {
-  id: 'pi',
-  label: 'Pi',
-  kind: 'acp',
-  spawn: {
-    command: 'pi-acp',
-    args: [],
-    binEnvVars: ['PI_ACP_BINARY_PATH', 'ACP_PI_BIN'],
-    npxSpec: { useEnvVar: 'PI_ACP_USE_NPX', pkg: ['-y', 'pi-acp'] },
-  },
-  models: { kind: 'dynamic', sentinel: piModels.default, defaultModel: 'default' },
-  setModel: { method: 'unstable_setSessionModel' },
-  modelVia: 'acp-method',
-  modeVia: 'none',
-  modeMap: { plan: null, ask: null, confirmEdit: null, auto: null, autoEdit: null },
-  forkCapabilityPaths: ['sessions.fork'],
-  builtinTools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
-  attachmentLimits: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
-  auth: { mode: 'runner-preauth' },
-  quirks: {
-    planRender: 'text',
-    stripFirstMessageBanner: PI_BANNER_REGEX,
-    permissionModel: 'auto-allow',
-    filterMcpByCapability: true,
   },
 };
 
@@ -331,7 +292,6 @@ export const opencodeManifest: ProviderManifest = {
 export const ACP_MANIFESTS = {
   codex: codexManifest,
   gemini: geminiManifest,
-  pi: piManifest,
   cursor: cursorManifest,
   opencode: opencodeManifest,
 } as const satisfies Record<string, ProviderManifest>;
@@ -346,6 +306,9 @@ export const KNOWN_ACP_PROVIDER_IDS = Object.keys(ACP_MANIFESTS) as KnownAcpProv
 export const DYNAMIC_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(
   (id) => ACP_MANIFESTS[id].models.kind === 'dynamic',
 );
+
+/** Providers with dynamic model discovery, including non-ACP SDK providers. */
+export const DYNAMIC_MODEL_PROVIDER_IDS = ['pi', ...DYNAMIC_ACP_PROVIDER_IDS] as const;
 
 /** Look up a manifest by provider id (any string; returns undefined if unknown). */
 export function getManifest(providerId: string): ProviderManifest | undefined {

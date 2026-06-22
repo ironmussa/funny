@@ -190,7 +190,7 @@ describe('getEffortLevels', () => {
     ]);
   });
 
-  test('exposes pi-acp thinking levels through the shared effort picker', () => {
+  test('exposes Pi thinking levels through the shared effort picker', () => {
     expect(getEffortLevels('default', 'pi').map((e) => e.value)).toEqual([
       'low',
       'medium',

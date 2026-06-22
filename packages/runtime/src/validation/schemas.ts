@@ -36,10 +36,10 @@ export const agentProviderSchema = z.string().min(1);
 export const claudeModelSchema = registryEnum('claude');
 export const codexModelSchema = registryEnum('codex');
 export const geminiModelSchema = registryEnum('gemini');
-// Pi's catalog is discovered at runtime from pi-acp (see pi-discover.ts), so
+// Pi's catalog is discovered at runtime from the Pi SDK (see pi-sdk.ts), so
 // the static registry only carries a `default` sentinel. Accept any non-empty
 // string here — `resolveModelId` already passes pi values through unchanged
-// and pi-acp itself rejects unknown model IDs at session time.
+// and the Pi SDK itself rejects unknown model IDs at session time.
 export const piModelSchema = z.string().min(1);
 // Cursor's catalog is dynamic too (see cursor-discover.ts) — same shape as pi.
 export const cursorModelSchema = z.string().min(1);
@@ -68,6 +68,7 @@ function validateProviderModel(
   const provider = data.provider;
   const model = data.model;
   if (!provider || !model) return;
+  if (provider === 'pi') return;
   // Providers with a dynamic catalog (manifest `models.kind: 'dynamic'`) accept
   // any non-empty string — their real ids are discovered at runtime.
   if (getManifest(provider)?.models.kind === 'dynamic') return;

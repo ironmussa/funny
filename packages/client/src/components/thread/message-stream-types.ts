@@ -7,6 +7,7 @@ export interface MessageStreamProps {
   threadId: string;
   status: string;
   messages: any[];
+  leadingUserMessage?: any;
   threadEvents?: ThreadEvent[];
   compactionEvents?: CompactionEvent[];
   initInfo?: AgentInitInfo;

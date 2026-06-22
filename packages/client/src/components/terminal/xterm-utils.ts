@@ -131,6 +131,16 @@ export function repaintVisibleTerminal(
   terminal.refresh(0, terminal.rows - 1);
 }
 
+export function writeAndRepaintTerminal(
+  terminal: import('@xterm/xterm').Terminal,
+  data: string | Uint8Array,
+  container: HTMLElement | null,
+): void {
+  terminal.write(data, () => {
+    repaintVisibleTerminal(terminal, container);
+  });
+}
+
 export const searchAddonRegistry = new Map<string, import('@xterm/addon-search').SearchAddon>();
 export const terminalRegistry = new Map<string, import('@xterm/xterm').Terminal>();
 

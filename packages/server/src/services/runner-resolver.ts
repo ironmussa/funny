@@ -30,8 +30,16 @@ export interface ResolvedRunner {
   httpUrl: string | null;
 }
 
-// In-memory cache: threadId → { runnerId, httpUrl }
-const threadRunnerCache = new Map<string, ResolvedRunner>();
+type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
+
+// In-memory cache scoped by userId + threadId. A thread id alone is not a
+// sufficient authorization boundary because cache hits bypass DB ownership
+// checks for speed.
+const threadRunnerCache = new Map<string, CachedThreadRunner>();
+
+function threadCacheKey(userId: string, threadId: string): string {
+  return `${userId}:${threadId}`;
+}
 
 /**
  * A runner is reachable if it has a live WebSocket OR a direct HTTP URL.
@@ -60,12 +68,14 @@ export async function resolveRunner(
   const threadId = extractThreadId(path);
 
   // Strategy 1: Thread cache (verify runner is still reachable)
-  if (threadId) {
-    const cached = threadRunnerCache.get(threadId);
+  if (threadId && userId) {
+    const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
     if (cached) {
-      if (isReachable(cached.runnerId, cached.httpUrl)) return cached;
+      if (isReachable(cached.runnerId, cached.httpUrl)) {
+        return { runnerId: cached.runnerId, httpUrl: cached.httpUrl };
+      }
       // Stale cache entry — runner unreachable, evict it
-      threadRunnerCache.delete(threadId);
+      threadRunnerCache.delete(threadCacheKey(userId, threadId));
     }
   }
 
@@ -85,7 +95,7 @@ export async function resolveRunner(
           runnerId: fromDb.runnerId,
           httpUrl,
         };
-        threadRunnerCache.set(threadId, resolved);
+        threadRunnerCache.set(threadCacheKey(userId, threadId), { ...resolved, threadId, userId });
         return resolved;
       }
     }
@@ -123,26 +133,31 @@ export async function resolveRunner(
  */
 export function cacheThreadRunner(
   threadId: string,
+  userId: string,
   runnerId: string,
   httpUrl: string | null,
 ): void {
-  threadRunnerCache.set(threadId, { runnerId, httpUrl });
+  threadRunnerCache.set(threadCacheKey(userId, threadId), { threadId, userId, runnerId, httpUrl });
 }
 
 /**
  * Remove a thread from the cache (called when threads are deleted).
  */
 export function uncacheThread(threadId: string): void {
-  threadRunnerCache.delete(threadId);
+  for (const [key, resolved] of threadRunnerCache) {
+    if (resolved.threadId === threadId) {
+      threadRunnerCache.delete(key);
+    }
+  }
 }
 
 /**
  * Evict all cache entries for a specific runner (called when runner disconnects).
  */
 export function evictRunnerFromCache(runnerId: string): void {
-  for (const [threadId, resolved] of threadRunnerCache) {
+  for (const [key, resolved] of threadRunnerCache) {
     if (resolved.runnerId === runnerId) {
-      threadRunnerCache.delete(threadId);
+      threadRunnerCache.delete(key);
     }
   }
 }

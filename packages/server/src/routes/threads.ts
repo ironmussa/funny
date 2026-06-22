@@ -817,7 +817,7 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
         isScratch,
       });
 
-      runnerResolver.cacheThreadRunner(threadId, resolved.runnerId, resolved.httpUrl);
+      runnerResolver.cacheThreadRunner(threadId, userId, resolved.runnerId, resolved.httpUrl);
     }
 
     return c.json(threadData, 201);
@@ -937,7 +937,7 @@ threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
         mode: newThread.mode,
         branch: newThread.branch ?? undefined,
       });
-      runnerResolver.cacheThreadRunner(newThreadId, resolved.runnerId, resolved.httpUrl);
+      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId, resolved.httpUrl);
     }
 
     return c.json(newThread, 201);
@@ -999,7 +999,7 @@ threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
         mode: newThread.mode,
         branch: newThread.branch ?? undefined,
       });
-      runnerResolver.cacheThreadRunner(newThreadId, resolved.runnerId, resolved.httpUrl);
+      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId, resolved.httpUrl);
     }
 
     return c.json(parsed, 201);

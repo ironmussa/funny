@@ -5,7 +5,7 @@ import { describe, test, expect, vi } from 'vitest';
 // (`if (!isTauri) getXtermModules()`). Flag Tauri before importing so the unit
 // under test loads without pulling in the WebGL/canvas bundle under jsdom.
 (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
-const { flushPausedRender, repaintVisibleTerminal } =
+const { flushPausedRender, repaintVisibleTerminal, writeAndRepaintTerminal } =
   await import('@/components/terminal/xterm-utils');
 
 /**
@@ -34,6 +34,7 @@ function makeFakeTerminal({
       ...terminal,
       rows: 24,
       refresh: vi.fn(),
+      write: vi.fn(),
     } as unknown as Terminal & { refresh: ReturnType<typeof vi.fn> },
     calls,
     renderService,
@@ -80,6 +81,29 @@ describe('repaintVisibleTerminal', () => {
     repaintVisibleTerminal(terminal, container);
 
     expect(calls).toEqual([]);
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
+  });
+});
+
+describe('writeAndRepaintTerminal', () => {
+  test('repaints only after xterm finishes processing the written chunk', () => {
+    const { terminal, calls } = makeFakeTerminal({ paused: true });
+    const container = document.createElement('div');
+    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(document.body);
+
+    let writeCallback: (() => void) | undefined;
+    vi.mocked(terminal.write).mockImplementation((_data, callback) => {
+      writeCallback = callback;
+    });
+
+    writeAndRepaintTerminal(terminal, 'restored output', container);
+
+    expect(terminal.write).toHaveBeenCalledWith('restored output', expect.any(Function));
+    expect(terminal.refresh).not.toHaveBeenCalled();
+
+    writeCallback?.();
+
+    expect(calls).toEqual([{ isIntersecting: true, intersectionRatio: 1 }]);
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
   });
 });

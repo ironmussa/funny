@@ -19,7 +19,6 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   attachWebglRenderer,
   createResizeScheduler,
-  flushPausedRender,
   getCssVar,
   getTerminalTheme,
   getXtermModules,
@@ -28,6 +27,7 @@ import {
   searchAddonRegistry,
   terminalRegistry,
   useThemeSync,
+  writeAndRepaintTerminal,
 } from '@/components/terminal/xterm-utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -145,11 +145,7 @@ export function TauriTerminalTabContent({
       if (!isMounted) return;
 
       const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {
-        terminal.write(event.payload.data);
-        // Same WebGL paused-render guard as the Web PTY path: when visible but
-        // stuck paused (stale IntersectionObserver after a tab switch), force
-        // the flush so live output paints immediately.
-        if (containerRef.current?.offsetParent != null) flushPausedRender(terminal);
+        writeAndRepaintTerminal(terminal, event.payload.data, containerRef.current);
         useTerminalStore.getState().markAlive(id);
       });
 
@@ -475,13 +471,10 @@ export function WebTerminalTabContent({
           send({ type: 'DATA_RECEIVED' });
           useTerminalStore.getState().markAlive(id);
         }
-        // terminal.write accepts both string and Uint8Array natively.
-        // Binary chunks from the runtime hot path arrive as Uint8Array.
-        terminal.write(data);
-        // Reflush the WebGL canvas after the write batch settles (see
-        // scheduleRepaint) so live output/echo paints without needing a tab
-        // switch to wake the renderer.
-        scheduleRepaint(terminal);
+        // terminal.write accepts both string and Uint8Array natively. Schedule
+        // repaint from the write callback so restored buffers paint after xterm
+        // has processed the chunk, not one frame too early.
+        terminal.write(data, () => scheduleRepaint(terminal));
         // Auto-execute initial command once the shell is ready (first output = prompt)
         if (!initialCommandSentRef.current && initialCommand) {
           initialCommandSentRef.current = true;

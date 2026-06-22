@@ -550,6 +550,7 @@ export interface DataGetThreadWithMessages {
   requestId: string;
   threadId: string;
   messageLimit?: number;
+  messageProgress?: number;
 }
 
 /** Runner → Server: get paginated messages for a thread.
@@ -560,6 +561,7 @@ export interface DataGetThreadMessages {
   threadId: string;
   cursor?: string;
   limit: number;
+  direction?: 'before' | 'after';
 }
 
 /** Runner → Server: get tool call by ID */
@@ -605,8 +607,11 @@ export interface DataGetThreadMessagesResponse {
   requestId: string;
   messages: Array<Record<string, any>>;
   hasMore: boolean;
+  hasMoreAfter?: boolean;
   /** Full message count for the thread (for the client's phantom scroll spacer). */
   total?: number;
+  /** Number of messages before the loaded window. */
+  windowStart?: number;
 }
 
 export interface DataGetToolCallResponse {

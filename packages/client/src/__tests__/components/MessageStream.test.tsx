@@ -1,5 +1,5 @@
 import { act, render } from '@testing-library/react';
-import { createRef, forwardRef, useImperativeHandle } from 'react';
+import { createRef, forwardRef, useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
@@ -38,12 +38,24 @@ vi.mock('motion/react', () => {
   };
 });
 
+const memoizedMessageListLifecycle = vi.hoisted(() => ({
+  mounts: 0,
+  unmounts: 0,
+}));
+
 vi.mock('@/components/thread/MemoizedMessageList', () => ({
   EMPTY_MESSAGES: [],
   MemoizedMessageList: forwardRef(function MockMemoizedMessageList(
     { messages }: { messages: any[] },
     ref,
   ) {
+    useEffect(() => {
+      memoizedMessageListLifecycle.mounts += 1;
+      return () => {
+        memoizedMessageListLifecycle.unmounts += 1;
+      };
+    }, []);
+
     useImperativeHandle(ref, () => ({
       expandToItem: () => {},
       hasHiddenItems: () => false,
@@ -127,11 +139,33 @@ describe('MessageStream sticky bottom', () => {
       return setTimeout(() => cb(performance.now()), 0) as unknown as number;
     });
     vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    window.localStorage.clear();
+    memoizedMessageListLifecycle.mounts = 0;
+    memoizedMessageListLifecycle.unmounts = 0;
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  test('isolates the thread scroller from browser anchoring and overscroll chaining', () => {
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.style.overflowAnchor).toBe('none');
+    expect(viewport.style.overscrollBehaviorY).toBe('contain');
   });
 
   test('keeps the viewport pinned when streamed message content grows', () => {
@@ -356,5 +390,93 @@ describe('MessageStream sticky bottom', () => {
     });
 
     expect(viewport.scrollTop).toBe(50);
+  });
+
+  test('remounts the virtualized list when switching threads', () => {
+    const { rerender } = render(
+      <MessageStream
+        threadId="thread-a"
+        status="idle"
+        messages={makeMessages('thread a')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    rerender(
+      <MessageStream
+        threadId="thread-b"
+        status="idle"
+        messages={makeMessages('thread b')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(memoizedMessageListLifecycle.mounts).toBe(2);
+    expect(memoizedMessageListLifecycle.unmounts).toBe(1);
+  });
+
+  test('restores a non-bottom thread by scroll level when content height changes', () => {
+    let scrollHeight = 2000;
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 750;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    scrollHeight = 700;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="short"
+        status="idle"
+        messages={makeMessages('short thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    scrollHeight = 2500;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread with more measured height')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(1000);
   });
 });

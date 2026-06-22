@@ -27,6 +27,7 @@ System design that should stay accurate as the product evolves.
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | [pipeline.md](./architecture/pipeline.md)                                     | Post-commit review/corrector pipeline and worktree isolation                                                  |
 | [process-execution-strategy.md](./architecture/process-execution-strategy.md) | Historical proposal for process execution (see `packages/core/src/git/process.ts` for current implementation) |
+| [thread-virtualization.md](./architecture/thread-virtualization.md)           | Message timeline virtualization, scroll anchoring, pagination phantoms, and edge cases                        |
 
 ## Design
 

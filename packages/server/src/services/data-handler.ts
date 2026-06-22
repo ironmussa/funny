@@ -416,6 +416,10 @@ export async function handleDataMessageWithAck(
         const thread = await messageRepo.getThreadWithMessages(
           data.threadId,
           typeof data.messageLimit === 'number' ? data.messageLimit : undefined,
+          {
+            messageProgress:
+              typeof data.messageProgress === 'number' ? data.messageProgress : undefined,
+          },
         );
         return { type: 'data:get_thread_with_messages_response', thread: thread ?? null };
       }
@@ -425,12 +429,15 @@ export async function handleDataMessageWithAck(
           threadId: data.threadId,
           cursor: typeof data.cursor === 'string' ? data.cursor : undefined,
           limit: typeof data.limit === 'number' ? data.limit : 50,
+          direction: data.direction === 'after' ? 'after' : 'before',
         });
         return {
           type: 'data:get_thread_messages_response',
           messages: result.messages,
           hasMore: result.hasMore,
+          hasMoreAfter: result.hasMoreAfter,
           total: result.total,
+          windowStart: result.windowStart,
         };
       }
       case 'data:get_tool_call': {

@@ -397,9 +397,12 @@ export interface Message {
 export interface ThreadWithMessages extends Thread {
   messages: (Message & { toolCalls?: ToolCall[] })[];
   hasMore?: boolean;
+  hasMoreAfter?: boolean;
   /** Full message count for the thread — sizes the phantom scroll spacer for
    *  older messages not yet loaded into the window. */
   total?: number;
+  /** Number of messages before the loaded window. */
+  windowStart?: number;
   initInfo?: { tools: string[]; cwd: string; model: string };
   /** Last user message — always included even when messages are paginated,
    *  so the UI can show the sticky prompt without loading all messages. */
@@ -408,13 +411,20 @@ export interface ThreadWithMessages extends Thread {
   queuedCount?: number;
   /** Preview/content of the next queued message. */
   queuedNextMessage?: string;
+  /** Waiting subtype reconstructed from persisted tool calls when status is waiting. */
+  waitingReason?: WaitingReason;
+  /** Pending tool approval reconstructed from persisted tool calls. */
+  pendingPermission?: { toolName: string; toolInput?: string };
 }
 
 export interface PaginatedMessages {
   messages: (Message & { toolCalls?: ToolCall[] })[];
   hasMore: boolean;
+  hasMoreAfter?: boolean;
   /** Full message count for the thread (phantom scroll spacer sizing). */
   total?: number;
+  /** Number of messages before the loaded window. */
+  windowStart?: number;
 }
 
 // ─── Tool Calls ──────────────────────────────────────────

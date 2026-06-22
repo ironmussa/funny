@@ -36,6 +36,8 @@ export interface IThreadQuery {
   updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
   getThreadWithMessages(
     id: string,
+    messageLimit?: number,
+    opts?: { messageProgress?: number },
   ):
     | { messages: any[]; [key: string]: any }
     | null
@@ -158,7 +160,14 @@ export interface IThreadRepository extends IThreadQuery, IMessageRepository, ITo
     threadId: string;
     cursor?: string;
     limit: number;
-  }): Promise<{ messages: any[]; hasMore: boolean }>;
+    direction?: 'before' | 'after';
+  }): Promise<{
+    messages: any[];
+    hasMore: boolean;
+    hasMoreAfter?: boolean;
+    total?: number;
+    windowStart?: number;
+  }>;
   insertComment(data: {
     threadId: string;
     userId: string;

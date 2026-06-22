@@ -483,6 +483,30 @@ describe('thread store actions', () => {
       const merged = useThreadStore.getState().activeThread!.messages;
       expect(merged.map((m) => m.id)).toEqual(['m1', 'optimistic-new']);
     });
+
+    test('recovers pending permission metadata from focus resync payload', async () => {
+      setActiveThread([]);
+
+      mockGetThread.mockReturnValue(
+        okAsync({
+          ...baseThread,
+          status: 'waiting',
+          waitingReason: 'permission',
+          pendingPermission: { toolName: 'Read', toolInput: '{"file_path":"/tmp/a.ts"}' },
+          messages: [],
+        }),
+      );
+
+      await useThreadStore.getState().refreshActiveThread();
+
+      const active = useThreadStore.getState().activeThread!;
+      expect(active.status).toBe('waiting');
+      expect(active.waitingReason).toBe('permission');
+      expect(active.pendingPermission).toEqual({
+        toolName: 'Read',
+        toolInput: '{"file_path":"/tmp/a.ts"}',
+      });
+    });
   });
 
   describe('loadThreadsForProject', () => {

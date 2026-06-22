@@ -72,6 +72,7 @@ export function ThreadConversation({
   const stableThreadEvents = useThreadEvents();
   const stableCompactionEvents = useCompactionEvents();
   const loadOlderMessages = useThreadStore((s) => s.loadOlderMessages);
+  const loadNewerMessages = useThreadStore((s) => s.loadNewerMessages);
   const refreshAfterRevert = useReviewPaneStore((s) => s.notifyDirty);
 
   // A sharee (viewing a thread they don't own) is read-only UNLESS their grant
@@ -91,7 +92,8 @@ export function ThreadConversation({
   });
 
   // Track which message/tool-call IDs existed when the thread was loaded.
-  const knownIdsRef = useRef<Set<string>>(new Set());
+  const knownIdsRef = useRef<Set<string> | null>(null);
+  if (knownIdsRef.current === null) knownIdsRef.current = new Set();
   const prevThreadIdRef = useRef<string | null>(null);
   if (activeThread && activeThread.id !== prevThreadIdRef.current) {
     prevThreadIdRef.current = activeThread.id;
@@ -106,11 +108,12 @@ export function ThreadConversation({
   }
 
   const snapshots = useTodoSnapshots();
-  const snapshotMapRef = useRef(new Map<string, number>());
+  const snapshotMapRef = useRef<Map<string, number> | null>(null);
+  if (snapshotMapRef.current === null) snapshotMapRef.current = new Map();
   const snapshotMap = useMemo(() => {
     const next = new Map<string, number>();
     snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    const prev = snapshotMapRef.current;
+    const prev = snapshotMapRef.current!;
     if (prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) {
       return prev;
     }
@@ -180,9 +183,12 @@ export function ThreadConversation({
           enablePagination
             ? {
                 hasMore: activeThread.hasMore ?? false,
+                hasMoreAfter: activeThread.hasMoreAfter ?? false,
                 loadingMore: activeThread.loadingMore ?? false,
                 load: loadOlderMessages,
+                loadAfter: loadNewerMessages,
                 total: activeThread.totalMessages ?? 0,
+                windowStart: activeThread.windowStart ?? 0,
               }
             : undefined
         }

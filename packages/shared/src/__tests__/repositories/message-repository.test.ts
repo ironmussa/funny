@@ -100,6 +100,55 @@ describe('getThreadWithMessages', () => {
     expect(msg!.toolCalls[0].name).toBe('Read');
   });
 
+  test('reconstructs pending permission state for waiting threads', async () => {
+    seedThread(deps.db, { id: 'waiting-permission', status: 'waiting' });
+    seedMessage(deps.db, {
+      id: 'assistant-permission',
+      threadId: 'waiting-permission',
+      role: 'assistant',
+      content: '',
+      timestamp: ts(1),
+    });
+    seedToolCall(deps.db, {
+      id: 'tc-permission',
+      messageId: 'assistant-permission',
+      name: 'Read',
+      input: '{"file_path":"/tmp/secret.txt"}',
+      output: "Codex requested permissions to use Read but the user hasn't been granted approval.",
+    });
+
+    const result = await repo.getThreadWithMessages('waiting-permission');
+
+    expect(result!.waitingReason).toBe('permission');
+    expect(result!.pendingPermission).toEqual({
+      toolName: 'Read',
+      toolInput: '{"file_path":"/tmp/secret.txt"}',
+    });
+  });
+
+  test('reconstructs interactive wait before permission fallback', async () => {
+    seedThread(deps.db, { id: 'waiting-question', status: 'waiting' });
+    seedMessage(deps.db, {
+      id: 'assistant-question',
+      threadId: 'waiting-question',
+      role: 'assistant',
+      content: '',
+      timestamp: ts(1),
+    });
+    seedToolCall(deps.db, {
+      id: 'tc-question',
+      messageId: 'assistant-question',
+      name: 'AskUserQuestion',
+      input: '{"question":"Continue?"}',
+      output: null,
+    });
+
+    const result = await repo.getThreadWithMessages('waiting-question');
+
+    expect(result!.waitingReason).toBe('question');
+    expect(result!.pendingPermission).toBeUndefined();
+  });
+
   test('respects messageLimit and sets hasMore', async () => {
     for (let i = 0; i < 5; i++) {
       await repo.insertMessage({ threadId: 't1', role: 'user', content: `msg-${i}` });
@@ -108,6 +157,24 @@ describe('getThreadWithMessages', () => {
     const result = await repo.getThreadWithMessages('t1', 3);
     expect(result!.messages).toHaveLength(3);
     expect(result!.hasMore).toBe(true);
+  });
+
+  test('can return an initial window near a saved scroll progress', async () => {
+    for (let i = 0; i < 10; i++) {
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 4, { messageProgress: 0.5 });
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['m3', 'm4', 'm5', 'm6']);
+    expect(result!.windowStart).toBe(3);
+    expect(result!.hasMore).toBe(true);
+    expect(result!.hasMoreAfter).toBe(true);
+    expect(result!.total).toBe(10);
   });
 
   test('hasMore is false when all messages fit in limit', async () => {
@@ -442,6 +509,30 @@ describe('getThreadMessages (pagination)', () => {
     const full = await repo.getThreadMessages({ threadId: 't1', limit: 50 });
     expect(full.hasMore).toBe(false);
     expect(full.total).toBe(5);
+  });
+
+  test('can page newer messages after the loaded window', async () => {
+    for (let i = 0; i < 6; i++) {
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadMessages({
+      threadId: 't1',
+      cursor: ts(2),
+      limit: 2,
+      direction: 'after',
+    });
+
+    expect(result.messages.map((m: any) => m.id)).toEqual(['m3', 'm4']);
+    expect(result.hasMore).toBe(true);
+    expect(result.hasMoreAfter).toBe(true);
+    expect(result.windowStart).toBe(3);
+    expect(result.total).toBe(6);
   });
 
   test('total counts only the requested thread (isolation)', async () => {

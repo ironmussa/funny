@@ -35,10 +35,15 @@ export const markAndListStaleThreads = (runnerId: string) =>
   getServices().threads.markAndListStaleThreads(runnerId);
 
 // ── Messages ────────────────────────────────────────────────
-export const getThreadWithMessages = (id: string) =>
-  getServices().threads.getThreadWithMessages(id);
-export const getThreadMessages = (opts: { threadId: string; cursor?: string; limit: number }) =>
-  getServices().threads.getThreadMessages(opts);
+export const getThreadWithMessages = (
+  ...args: Parameters<ReturnType<typeof getServices>['threads']['getThreadWithMessages']>
+) => getServices().threads.getThreadWithMessages(...args);
+export const getThreadMessages = (opts: {
+  threadId: string;
+  cursor?: string;
+  limit: number;
+  direction?: 'before' | 'after';
+}) => getServices().threads.getThreadMessages(opts);
 export const insertMessage = (data: {
   threadId: string;
   role: string;

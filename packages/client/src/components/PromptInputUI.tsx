@@ -156,7 +156,13 @@ export const ModelSelect = memo(function ModelSelect({
         {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
         <ChevronDown className="icon-xs opacity-50" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" size="xs" className="min-w-44">
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        collisionPadding={8}
+        size="xs"
+        className="min-w-44"
+      >
         {groups.map((group, idx) => (
           <DropdownMenuGroup key={group.provider}>
             {idx > 0 && <DropdownMenuSeparator />}
@@ -1382,7 +1388,7 @@ export const PromptInputUI = memo(function PromptInputUI({
           />
           {/* Bottom toolbar — single row */}
           <div className="px-2 py-2.5">
-            <div className="no-scrollbar flex h-9 items-center gap-1 overflow-x-auto">
+            <div className="no-scrollbar flex h-9 items-center gap-1 overflow-x-auto px-px">
               <ModelSelect
                 value={unifiedModel}
                 effort={effort}

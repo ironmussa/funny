@@ -105,4 +105,19 @@ describe('ChangedFilesSummary', () => {
     // The thread's shared diff dialog mounts (its toolbar is always present).
     await waitFor(() => expect(screen.getByTestId('diff-toggle-word-wrap')).toBeInTheDocument());
   });
+
+  test('uses the session fallback diff when the live diff is empty', async () => {
+    const files = [file('index.ts', 6, 2)];
+    const fallbackDiffs = new Map([
+      ['index.ts', '--- a/index.ts\n+++ b/index.ts\n@@ -1,1 +1,1 @@\n-old value\n+new value'],
+    ]);
+    renderWithProviders(
+      <ChangedFilesSummary threadId="t1" files={files} fallbackDiffs={fallbackDiffs} />,
+    );
+
+    fireEvent.click(screen.getByTestId('changed-files-open-index.ts'));
+
+    await waitFor(() => expect(screen.getByTestId('expanded-diff-viewer')).toBeInTheDocument());
+    expect(screen.queryByText('No diff available')).not.toBeInTheDocument();
+  });
 });

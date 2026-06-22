@@ -38,11 +38,23 @@ describe('MarkdownImageCard', () => {
     expect(screen.getByTestId('markdown-image-zoom').textContent).toBe('100%');
   });
 
-  test('Expand opens the shared lightbox with the original src', () => {
+  test('clicking the image opens the thread image lightbox', () => {
+    renderCard('https://x.test/y.png');
+    fireEvent.click(screen.getByTestId('markdown-image'));
+    expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
+    expect((screen.getByTestId('lightbox-image') as HTMLImageElement).src).toBe(
+      'https://x.test/y.png',
+    );
+    expect(useMediaPreviewStore.getState().isOpen).toBe(false);
+  });
+
+  test('Expand opens the thread image lightbox with the rendered src', () => {
     renderCard('https://x.test/y.png');
     fireEvent.click(screen.getByTestId('markdown-image-expand'));
-    const state = useMediaPreviewStore.getState();
-    expect(state.isOpen).toBe(true);
-    expect(state.filePath).toBe('https://x.test/y.png');
+    expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
+    expect((screen.getByTestId('lightbox-image') as HTMLImageElement).src).toBe(
+      'https://x.test/y.png',
+    );
+    expect(useMediaPreviewStore.getState().isOpen).toBe(false);
   });
 });

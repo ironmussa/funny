@@ -34,6 +34,7 @@ import {
   type RenderItem,
 } from '@/lib/render-items';
 import { timeAgo } from '@/lib/thread-utils';
+import { buildToolCallDiffFallbacks } from '@/lib/tool-call-diff-fallbacks';
 import {
   useSettingsStore,
   PROSE_FONT_SIZE_PX,
@@ -180,6 +181,7 @@ type VirtualRow =
       key: string;
       userItem: MessageItem;
       files: FileDiffSummary[];
+      fallbackDiffs: Map<string, string>;
       isLastSection: boolean;
     };
 
@@ -529,6 +531,7 @@ export const MemoizedMessageList = memo(
     const virtualRows = useMemo<VirtualRow[]>(() => {
       const rows: VirtualRow[] = [];
       let currentUser: MessageItem | null = null;
+      let currentSessionItems: RenderItem[] = [];
 
       const appendSessionSummary = () => {
         if (!currentUser) return;
@@ -539,6 +542,7 @@ export const MemoizedMessageList = memo(
           key: `session-summary-${currentUser.msg.id}`,
           userItem: currentUser,
           files,
+          fallbackDiffs: buildToolCallDiffFallbacks(currentSessionItems, files),
           isLastSection: false,
         });
       };
@@ -547,6 +551,9 @@ export const MemoizedMessageList = memo(
         if (item.type === 'message' && item.msg.role === 'user') {
           appendSessionSummary();
           currentUser = item as MessageItem;
+          currentSessionItems = [];
+        } else if (currentUser) {
+          currentSessionItems.push(item);
         }
         rows.push({
           type: 'item',
@@ -832,6 +839,47 @@ export const MemoizedMessageList = memo(
       [itemIndexMap, rowVirtualizer, captureScrollAnchor, restoreScrollAnchor],
     );
 
+    const scrollToUserMessagePosition = useCallback(
+      (msgId: string) => {
+        const viewport = scrollRef.current;
+        if (!viewport) return;
+
+        const scrollToMountedSection = () => {
+          const section = viewport.querySelector(`[data-section-msg-id="${msgId}"]`);
+          if (!section) return false;
+
+          const viewportRect = viewport.getBoundingClientRect();
+          const sectionRect = section.getBoundingClientRect();
+          // Bring the real card's top to the top of the viewport…
+          const desiredTop = viewport.scrollTop + (sectionRect.top - viewportRect.top);
+
+          // …but never scroll past the point where the real message content
+          // (everything except the sticky bottom prompt dock) still reaches the
+          // viewport bottom. Otherwise a short final section gets yanked all the
+          // way up, exposing the empty area above the pinned prompt input.
+          const content = itemContainerRef.current?.parentElement;
+          const maxUsefulTop = content
+            ? viewport.scrollTop + (content.getBoundingClientRect().bottom - viewportRect.bottom)
+            : desiredTop;
+
+          viewport.scrollTo({
+            top: Math.max(0, Math.min(desiredTop, maxUsefulTop)),
+            behavior: 'smooth',
+          });
+          return true;
+        };
+
+        if (scrollToMountedSection()) return;
+
+        const index = itemIndexMap.get(msgId);
+        if (index === undefined) return;
+
+        rowVirtualizer.scrollToIndex(index, { align: 'start' });
+        requestAnimationFrame(scrollToMountedSection);
+      },
+      [itemIndexMap, rowVirtualizer, scrollRef],
+    );
+
     const renderToolItem = useCallback(
       (ti: ToolItem) => {
         if (ti.type === 'toolcall') {
@@ -1035,32 +1083,7 @@ export const MemoizedMessageList = memo(
               permissionMode={msg.permissionMode}
               effort={msg.effort}
               timestamp={msg.timestamp}
-              onClick={() => {
-                const viewport = scrollRef.current;
-                const section = viewport?.querySelector(`[data-section-msg-id="${msg.id}"]`);
-                if (!viewport || !section) return;
-
-                const viewportRect = viewport.getBoundingClientRect();
-                const sectionRect = section.getBoundingClientRect();
-                // Bring the section's top to the top of the viewport…
-                const desiredTop = viewport.scrollTop + (sectionRect.top - viewportRect.top);
-
-                // …but never scroll past the point where the real message
-                // content (everything except the sticky bottom prompt dock)
-                // still reaches the viewport bottom. Otherwise a short final
-                // section gets yanked all the way up, exposing the empty area
-                // above the pinned prompt input.
-                const content = itemContainerRef.current?.parentElement;
-                const maxUsefulTop = content
-                  ? viewport.scrollTop +
-                    (content.getBoundingClientRect().bottom - viewportRect.bottom)
-                  : desiredTop;
-
-                viewport.scrollTo({
-                  top: Math.max(0, Math.min(desiredTop, maxUsefulTop)),
-                  behavior: 'smooth',
-                });
-              }}
+              onClick={() => scrollToUserMessagePosition(msg.id)}
               onImageClick={onOpenLightbox}
               onFork={onFork ? () => onFork(msg.id) : undefined}
               onRewind={onRewind ? () => onRewind(msg.id) : undefined}
@@ -1074,13 +1097,13 @@ export const MemoizedMessageList = memo(
       },
       [
         onOpenLightbox,
-        scrollRef,
         onFork,
         onRewind,
         onForkAndRewind,
         forkingMessageId,
         rewindDisabled,
         rewindDisabledReason,
+        scrollToUserMessagePosition,
       ],
     );
 
@@ -1094,6 +1117,7 @@ export const MemoizedMessageList = memo(
                 files={row.files}
                 running={row.isLastSection && !!changeSummaryRunning}
                 onReverted={onSessionReverted}
+                fallbackDiffs={row.fallbackDiffs}
               />
             </div>
           );

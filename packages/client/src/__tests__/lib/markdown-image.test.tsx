@@ -34,18 +34,24 @@ describe('markdown img', () => {
     expect((screen.getByTestId('markdown-image') as HTMLImageElement).src).toBe(
       'https://x.com/a.png',
     );
-    // External images also get the rich card; Expand opens the lightbox (zoom/pan)
-    // with the URL passed through unchanged.
+    // External images also get the rich card; Expand opens the same thread
+    // lightbox used by prompt image attachments.
     fireEvent.click(screen.getByTestId('markdown-image-expand'));
-    expect(useMediaPreviewStore.getState().filePath).toBe('https://x.com/a.png');
+    expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
+    expect((screen.getByTestId('lightbox-image') as HTMLImageElement).src).toBe(
+      'https://x.com/a.png',
+    );
+    expect(useMediaPreviewStore.getState().isOpen).toBe(false);
   });
 
-  test('the Expand control opens the media lightbox with the absolute path', () => {
+  test('the Expand control opens the thread lightbox with the resolved absolute path', () => {
     render(createElement(Img, { src: '/abs/diagram.png', alt: 'd' }));
     fireEvent.click(screen.getByTestId('markdown-image-expand'));
-    const state = useMediaPreviewStore.getState();
-    expect(state.isOpen).toBe(true);
-    expect(state.filePath).toBe('/abs/diagram.png');
+    expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
+    const url = new URL((screen.getByTestId('lightbox-image') as HTMLImageElement).src);
+    expect(url.pathname).toBe('/api/files/raw');
+    expect(url.searchParams.get('path')).toBe('/abs/diagram.png');
+    expect(useMediaPreviewStore.getState().isOpen).toBe(false);
   });
 
   test('a failed local image swaps the broken <img> for the media error widget', async () => {

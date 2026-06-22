@@ -303,11 +303,19 @@ export class GenericACPProcess extends BaseAgentProcess {
         this.activeSessionId = this.options.sessionId!;
         this.replayingHistory = true;
         try {
-          await connection.loadSession({
+          const loadResponse = await connection.loadSession({
             sessionId: this.options.sessionId!,
             cwd: this.options.cwd,
             mcpServers: mcpServerList,
           });
+          // `loadSession` returns the same `configOptions` as `newSession`
+          // (ACP 0.26+). Capture them here too, otherwise `applyModelSelection`
+          // has no model config option to set on resume and silently falls back
+          // to the provider default — losing the user's model choice on every
+          // follow-up message.
+          this.captureSessionConfigOptions(
+            (loadResponse as { configOptions?: unknown } | undefined)?.configOptions,
+          );
         } finally {
           this.replayingHistory = false;
         }

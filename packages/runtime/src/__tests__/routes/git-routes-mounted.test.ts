@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   isWorkflowActive: vi.fn(),
   getLog: vi.fn(),
   getGraphLog: vi.fn(),
+  getPRForBranch: vi.fn(),
   getRebaseReflogEvents: vi.fn(),
   getUnpushedHashes: vi.fn(),
   getUnpulledHashes: vi.fn(),
@@ -85,6 +86,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
     deriveGitSyncState: vi.fn(() => 'synced'),
     getLog: mocks.getLog,
     getGraphLog: mocks.getGraphLog,
+    getPRForBranch: mocks.getPRForBranch,
     getRebaseReflogEvents: mocks.getRebaseReflogEvents,
     getUnpushedHashes: mocks.getUnpushedHashes,
     getUnpulledHashes: mocks.getUnpulledHashes,
@@ -195,11 +197,13 @@ describe('gitRoutes (mounted)', () => {
           shortHash: 'abc',
           author: 'a',
           authorEmail: 'a@x',
+          committer: 'a',
+          committerEmail: 'a@x',
           relativeDate: '1d',
           message: 'init',
           body: '',
           parentHashes: [],
-          refs: ['main'],
+          refs: [{ name: 'main', kind: 'local' }],
           headBranch: 'main',
         },
         {
@@ -207,6 +211,8 @@ describe('gitRoutes (mounted)', () => {
           shortHash: 'def',
           author: 'b',
           authorEmail: 'b@x',
+          committer: 'b',
+          committerEmail: 'b@x',
           relativeDate: '2d',
           message: 'feat',
           body: '',
@@ -239,6 +245,7 @@ describe('gitRoutes (mounted)', () => {
     );
     mocks.getUnpushedHashes.mockReturnValue(okAsync(new Set(['def222'])));
     mocks.getUnpulledHashes.mockReturnValue(okAsync(new Set()));
+    mocks.getPRForBranch.mockResolvedValue(null);
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
     mocks.stash.mockReturnValue(okAsync('Saved working directory'));
     mocks.stashShow.mockReturnValue(okAsync([{ path: 'src/a.ts', status: 'modified' }]));
@@ -988,11 +995,13 @@ describe('gitRoutes (mounted)', () => {
         shortHash: 'abc',
         author: 'a',
         authorEmail: 'a@x',
+        committer: 'a',
+        committerEmail: 'a@x',
         relativeDate: '1d',
         message: 'init',
         body: '',
         parentHashes: [],
-        refs: ['main'],
+        refs: [{ name: 'main', kind: 'local' }],
         headBranch: 'main',
       },
     ]);
@@ -1002,6 +1011,69 @@ describe('gitRoutes (mounted)', () => {
       limit: 2,
       skip: 0,
       all: true,
+    });
+  });
+
+  test('GET /api/git/project/:projectId/graph-log annotates branch refs with PR metadata', async () => {
+    vi.mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
+    mocks.getGraphLog.mockReturnValueOnce(
+      okAsync([
+        {
+          hash: 'abc111',
+          shortHash: 'abc',
+          author: 'a',
+          authorEmail: 'a@x',
+          committer: 'a',
+          committerEmail: 'a@x',
+          relativeDate: '1d',
+          message: 'init',
+          body: '',
+          parentHashes: [],
+          refs: [
+            { name: 'feature/x', kind: 'local' },
+            { name: 'origin/feature/x', kind: 'remote' },
+            { name: 'v1.0', kind: 'tag' },
+            { name: 'HEAD', kind: 'local' },
+          ],
+          headBranch: 'feature/x',
+        },
+      ]),
+    );
+    mocks.getPRForBranch.mockResolvedValueOnce({
+      prNumber: 42,
+      prUrl: 'https://github.com/acme/repo/pull/42',
+      prState: 'OPEN',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/graph-log');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.entries[0].refs).toEqual([
+      {
+        name: 'feature/x',
+        kind: 'local',
+        pullRequest: {
+          number: 42,
+          url: 'https://github.com/acme/repo/pull/42',
+          state: 'OPEN',
+        },
+      },
+      {
+        name: 'origin/feature/x',
+        kind: 'remote',
+        pullRequest: {
+          number: 42,
+          url: 'https://github.com/acme/repo/pull/42',
+          state: 'OPEN',
+        },
+      },
+      { name: 'v1.0', kind: 'tag' },
+      { name: 'HEAD', kind: 'local' },
+    ]);
+    expect(mocks.getPRForBranch).toHaveBeenCalledTimes(1);
+    expect(mocks.getPRForBranch).toHaveBeenCalledWith('/tmp/repo', 'feature/x', {
+      GH_TOKEN: 'ghs_test',
     });
   });
 

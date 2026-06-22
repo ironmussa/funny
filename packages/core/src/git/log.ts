@@ -45,9 +45,17 @@ export interface GraphRef {
    */
   name: string;
   kind: GraphRefKind;
+  /** Pull request associated with this branch ref, when known. */
+  pullRequest?: {
+    number: number;
+    url: string;
+    state: 'OPEN' | 'MERGED' | 'CLOSED';
+  };
 }
 
 export interface GitGraphLogEntry extends GitLogEntry {
+  committer: string;
+  committerEmail: string;
   /** Parent commit hashes. 0 = root, 1 = normal, 2+ = merge commit. */
   parentHashes: string[];
   /**
@@ -266,13 +274,14 @@ export function getGraphLog(
   const { limit = 50, skip = 0, all = false } = opts;
   const FIELD_SEP = '\x1f';
   const RECORD_SEP = '\x1e';
-  // hash, shortHash, author, email, relDate, parents (space-sep), refs (%D), subject, body.
+  // hash, shortHash, author, author email, committer, committer email, relDate,
+  // parents (space-sep), refs (%D), subject, body.
   // relDate uses the COMMITTER date (%cr), not the author date (%ar): the rows
   // are sorted by `--date-order` (committer timestamp), so showing the committer
   // date keeps each row's displayed "Nm ago" monotonic with its position. With
   // %ar, a rebased/cherry-picked commit (author ≠ committer date) would read as
   // out of order relative to its neighbours.
-  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%cr%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
+  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%cn%x1F%ce%x1F%cr%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
   // `--decorate=full` keeps full ref paths in `%D` so parseRefs can classify
   // each ref as local/remote/tag without guessing from the `origin/` convention.
   const args = [
@@ -300,6 +309,8 @@ export function getGraphLog(
             shortHash,
             author,
             authorEmail,
+            committer,
+            committerEmail,
             relativeDate,
             parents = '',
             refs = '',
@@ -312,6 +323,8 @@ export function getGraphLog(
             shortHash,
             author,
             authorEmail,
+            committer,
+            committerEmail,
             relativeDate,
             message,
             body: body.trim(),

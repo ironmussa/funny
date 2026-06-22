@@ -100,6 +100,45 @@ describe('getGraphLog', () => {
     expect(merge!.headBranch).toBe('main');
   });
 
+  it('returns author and committer identities for rebased commits', async () => {
+    const repo = resolve(TMP, 'rebased');
+    mkdirSync(repo, { recursive: true });
+    git(repo, ['init']);
+    git(repo, ['config', 'user.email', 'rebaser@example.com']);
+    git(repo, ['config', 'user.name', 'Rebaser User']);
+    git(repo, ['branch', '-M', 'main']);
+    writeFileSync(resolve(repo, 'feature.txt'), 'feature work');
+    git(repo, ['add', '.']);
+    executeSync(
+      'git',
+      [
+        'commit',
+        '--author',
+        'Original Author <author@example.com>',
+        '-m',
+        'rebased feature',
+      ],
+      {
+        cwd: repo,
+        env: {
+          GIT_AUTHOR_DATE: '2026-01-01T00:00:00',
+          GIT_COMMITTER_DATE: '2026-01-02T00:00:00',
+        },
+      },
+    );
+
+    const result = await getGraphLog(repo, { all: true });
+    expect(result.isOk()).toBe(true);
+    const entry = result._unsafeUnwrap().find((e) => e.message === 'rebased feature');
+
+    expect(entry).toMatchObject({
+      author: 'Original Author',
+      authorEmail: 'author@example.com',
+      committer: 'Rebaser User',
+      committerEmail: 'rebaser@example.com',
+    });
+  });
+
   it('drops the redundant origin/HEAD pointer but keeps the remote branch chip', async () => {
     const repo = initMergeRepo();
     // Wire up a bare remote and push so `origin/main` + `origin/HEAD` decorate.

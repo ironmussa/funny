@@ -19,6 +19,7 @@ import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
+import { PRBadge } from '@/components/PRBadge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -79,6 +80,8 @@ interface GraphEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
+  committer: string;
+  committerEmail: string;
   relativeDate: string;
   message: string;
   body: string;
@@ -86,6 +89,14 @@ interface GraphEntry {
   refs: GraphRefDTO[];
   /** Checked-out branch, set only on the commit HEAD points at (else null). */
   headBranch: string | null;
+}
+
+function hasDistinctCommitterIdentity(entry: GraphEntry): boolean {
+  return (
+    !!entry.committer &&
+    (entry.committer !== entry.author ||
+      (!!entry.committerEmail && entry.committerEmail !== entry.authorEmail))
+  );
 }
 
 const PAGE_SIZE = 80;
@@ -119,7 +130,7 @@ function rebaseLinkNodeEdgeX(lane: number): number {
  * Branch-graph view of git history. Separate from {@link CommitHistoryTab}
  * (the flat list) — this one renders a GitKraken-style lane graph on the left
  * of each commit using `git log --all --date-order` data (parents + refs).
- * Per-commit affordances mirror the History list: GitHub avatar, copy-hash,
+ * Per-commit affordances mirror the History list: GitHub avatar(s), copy-hash,
  * remote commit link when available, and an unpushed marker. Click a commit to
  * open the shared {@link CommitDetailDialog}.
  */
@@ -575,6 +586,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   avatarUrl={
                     githubAvatarBySha.get(entry.hash) ?? avatarByEmail.get(entry.authorEmail)
                   }
+                  committerAvatarUrl={avatarByEmail.get(entry.committerEmail)}
                   githubBrowseBaseUrl={githubBrowseBaseUrl}
                   effectiveThreadId={effectiveThreadId}
                   projectModeId={projectModeId}
@@ -758,7 +770,13 @@ function useEmailAvatars(entries: GraphEntry[]): Map<string, string> {
     () => new Map(emailAvatarCache),
   );
   useEffect(() => {
-    const emails = [...new Set(entries.map((e) => e.authorEmail).filter(Boolean))];
+    const emails = [
+      ...new Set(
+        entries
+          .flatMap((e) => [e.authorEmail, e.committerEmail])
+          .filter((email): email is string => !!email),
+      ),
+    ];
     const missing = emails.filter((e) => !avatarByEmail.has(e));
     if (missing.length === 0) return;
     let cancelled = false;
@@ -917,6 +935,7 @@ function GraphCommitRow({
   gutterWidth,
   selected,
   avatarUrl,
+  committerAvatarUrl,
   githubBrowseBaseUrl,
   effectiveThreadId,
   projectModeId,
@@ -939,6 +958,7 @@ function GraphCommitRow({
   gutterWidth: number;
   selected: boolean;
   avatarUrl: string | undefined;
+  committerAvatarUrl: string | undefined;
   githubBrowseBaseUrl: string | null;
   effectiveThreadId: string | undefined;
   projectModeId: string | null;
@@ -964,6 +984,10 @@ function GraphCommitRow({
   // Serve the node avatar from the short-TTL blob cache so scrolling the
   // virtualized list doesn't re-hit GitHub for the same image (avoids 429s).
   const cachedAvatarUrl = useCachedAvatar(avatarUrl);
+  const hasDistinctCommitter = hasDistinctCommitterIdentity(entry);
+  const cachedCommitterAvatarUrl = useCachedAvatar(
+    hasDistinctCommitter ? committerAvatarUrl : undefined,
+  );
 
   // Render branch/tag refs with the same powerline component used across the
   // app (sidebar, kanban, …). The chip color derives from the commit's own
@@ -996,6 +1020,13 @@ function GraphCommitRow({
       // distinguished by weight (bold via `emphasis`), not color.
       foldedRefs.map((r) => {
         const color = lanePastel;
+        const pullRequestTooltip = r.pullRequest
+          ? t('graph.pullRequest', {
+              number: r.pullRequest.number,
+              state: r.pullRequest.state,
+              defaultValue: `PR #${r.pullRequest.number} (${r.pullRequest.state})`,
+            })
+          : null;
         if (r.kind === 'tag') {
           return {
             key: `tag:${r.name}`,
@@ -1011,10 +1042,12 @@ function GraphCommitRow({
             icon: Cloud,
             label: r.name,
             color,
-            tooltip: t('graph.remoteBranch', {
-              ref: r.name,
-              defaultValue: `${r.name} (remote branch)`,
-            }),
+            tooltip: pullRequestTooltip
+              ? `${r.name} · ${pullRequestTooltip}`
+              : t('graph.remoteBranch', {
+                  ref: r.name,
+                  defaultValue: `${r.name} (remote branch)`,
+                }),
           };
         }
         // Local branch. Folded-in remote → CloudCheck (synced); else a computer
@@ -1026,24 +1059,39 @@ function GraphCommitRow({
           label: r.name,
           color,
           emphasis: r.isCurrent,
-          tooltip: r.syncedRemote
-            ? t('graph.branchSynced', {
-                ref: r.name,
-                remote: r.syncedRemote,
-                defaultValue: r.isCurrent
-                  ? `${r.name} (current branch · in sync with ${r.syncedRemote})`
-                  : `${r.name} (in sync with ${r.syncedRemote})`,
-              })
-            : r.isCurrent
-              ? t('graph.currentBranch', {
+          tooltip: [
+            r.syncedRemote
+              ? t('graph.branchSynced', {
                   ref: r.name,
-                  defaultValue: `${r.name} (current branch)`,
+                  remote: r.syncedRemote,
+                  defaultValue: r.isCurrent
+                    ? `${r.name} (current branch · in sync with ${r.syncedRemote})`
+                    : `${r.name} (in sync with ${r.syncedRemote})`,
                 })
-              : r.name,
+              : r.isCurrent
+                ? t('graph.currentBranch', {
+                    ref: r.name,
+                    defaultValue: `${r.name} (current branch)`,
+                  })
+                : r.name,
+            pullRequestTooltip,
+          ]
+            .filter(Boolean)
+            .join(' · '),
         };
       }),
     [foldedRefs, lanePastel, t],
   );
+  const pullRequestLinks = useMemo(() => {
+    const seen = new Set<string>();
+    return foldedRefs.flatMap((r) => {
+      if (!r.pullRequest) return [];
+      const key = r.pullRequest.url || String(r.pullRequest.number);
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [r.pullRequest];
+    });
+  }, [foldedRefs]);
   // Local-only branch tips on this commit — `local` folded refs with no synced
   // remote (i.e. the ones rendered with the `Monitor` glyph). These are exactly
   // the branches that have something unpushed, so they drive the menu's "Push …
@@ -1139,14 +1187,15 @@ function GraphCommitRow({
         {/* Layout: graph | commit info, with branch/tag chips above the title. */}
         {graphRow &&
           (() => {
-            // Anchor the author tooltip to the avatar node itself, not the whole
+            // Anchor the identity tooltip to the avatar node itself, not the whole
             // gutter — otherwise the tooltip centers over the (possibly wide)
             // multi-lane gutter and reads as detached from the avatar. The node
             // sits at `commitLane`'s center; its diameter mirrors GraphGutter's
-            // avatar sizing so the trigger overlays the node precisely.
+            // avatar sizing so the trigger overlays it precisely.
             const nodeCenterX = graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
             const avatarDiameter =
               2 * Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
+            const nodeHitboxSize = hasDistinctCommitter ? avatarDiameter + 8 : avatarDiameter;
             return (
               <div style={{ width: gutterWidth }} className="relative shrink-0 self-stretch">
                 <GraphGutter
@@ -1155,6 +1204,8 @@ function GraphCommitRow({
                   height={rowHeight}
                   avatarUrl={cachedAvatarUrl}
                   authorName={entry.author}
+                  committerAvatarUrl={cachedCommitterAvatarUrl}
+                  committerName={hasDistinctCommitter ? entry.committer : undefined}
                   connectUp={connectToWip}
                   nodeYFrac={nodeYFrac}
                 />
@@ -1166,8 +1217,8 @@ function GraphCommitRow({
                       style={{
                         left: nodeCenterX,
                         top: nodeYFrac * rowHeight,
-                        width: avatarDiameter,
-                        height: avatarDiameter,
+                        width: nodeHitboxSize,
+                        height: nodeHitboxSize,
                       }}
                     />
                   </TooltipTrigger>
@@ -1179,6 +1230,14 @@ function GraphCommitRow({
                           defaultValue: `Author: ${entry.author}`,
                         })}
                       </span>
+                      {hasDistinctCommitter ? (
+                        <span>
+                          {t('graph.nodeCommitter', {
+                            committer: entry.committer,
+                            defaultValue: `Committed by: ${entry.committer}`,
+                          })}
+                        </span>
+                      ) : null}
                       {forkedFromRefLabel ? (
                         <span>
                           {t('graph.nodeBranchedFrom', {
@@ -1233,6 +1292,17 @@ function GraphCommitRow({
                 className="min-w-0 shrink"
                 query={searchQuery}
               />
+              {pullRequestLinks.map((pr) => (
+                <PRBadge
+                  key={pr.url}
+                  prNumber={pr.number}
+                  prState={pr.state}
+                  prUrl={pr.url}
+                  size="xxs"
+                  className="ml-1"
+                  data-testid={`graph-pr-badge-${pr.number}`}
+                />
+              ))}
             </div>
           )}
           {/* Same Tailwind classes as the History list (`CommitListPanel`) so the

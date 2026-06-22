@@ -24,6 +24,8 @@ export interface FoldedRef {
    * remote-tracking ref's name (e.g. `origin/main`). Undefined otherwise.
    */
   syncedRemote?: string;
+  /** Pull request associated with this branch ref, when known. */
+  pullRequest?: GraphRefDTO['pullRequest'];
 }
 
 interface GraphReachabilityEntry {
@@ -110,14 +112,20 @@ export function foldGraphRefs(
     if (r.kind === 'tag') {
       out.push({ kind: 'tag', name: r.name, isCurrent: false });
     } else if (r.kind === 'remote') {
-      out.push({ kind: 'remote', name: r.name, isCurrent: false });
+      const folded: FoldedRef = { kind: 'remote', name: r.name, isCurrent: false };
+      if (r.pullRequest) folded.pullRequest = r.pullRequest;
+      out.push(folded);
     } else {
-      out.push({
+      const syncedRemote = syncedRemoteFor.get(r.name);
+      const folded: FoldedRef = {
         kind: 'local',
         name: r.name,
         isCurrent: !!headBranch && r.name === headBranch,
-        syncedRemote: syncedRemoteFor.get(r.name)?.name,
-      });
+        syncedRemote: syncedRemote?.name,
+      };
+      const pullRequest = r.pullRequest ?? syncedRemote?.pullRequest;
+      if (pullRequest) folded.pullRequest = pullRequest;
+      out.push(folded);
     }
   }
   return out;

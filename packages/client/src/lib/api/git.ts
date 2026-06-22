@@ -20,10 +20,17 @@ export type GraphRefKind = 'local' | 'remote' | 'tag';
 export interface GraphRefDTO {
   name: string;
   kind: GraphRefKind;
+  pullRequest?: {
+    number: number;
+    url: string;
+    state: 'OPEN' | 'MERGED' | 'CLOSED';
+  };
 }
 
 /** A commit log entry enriched with branch-graph topology (`/graph-log` endpoints). */
 interface GitGraphLogEntryDTO extends GitLogEntryDTO {
+  committer: string;
+  committerEmail: string;
   parentHashes: string[];
   refs: GraphRefDTO[];
   headBranch: string | null;

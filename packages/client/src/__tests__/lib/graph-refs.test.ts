@@ -12,6 +12,11 @@ import {
 const local = (name: string): GraphRefDTO => ({ name, kind: 'local' });
 const remote = (name: string): GraphRefDTO => ({ name, kind: 'remote' });
 const tag = (name: string): GraphRefDTO => ({ name, kind: 'tag' });
+const pr = {
+  number: 42,
+  url: 'https://github.com/acme/repo/pull/42',
+  state: 'OPEN',
+} satisfies NonNullable<GraphRefDTO['pullRequest']>;
 
 describe('foldGraphRefs', () => {
   it('collapses a local branch and its in-sync remote into one local entry', () => {
@@ -38,6 +43,28 @@ describe('foldGraphRefs', () => {
         name: 'feat/cortes-editor',
         isCurrent: false,
         syncedRemote: 'origin/feat/cortes-editor',
+      },
+    ]);
+  });
+
+  it('preserves PR metadata when a local and remote ref fold together', () => {
+    const folded = foldGraphRefs(
+      [
+        local('feat/x'),
+        {
+          ...remote('origin/feat/x'),
+          pullRequest: pr,
+        },
+      ],
+      'feat/x',
+    );
+    expect(folded).toEqual([
+      {
+        kind: 'local',
+        name: 'feat/x',
+        isCurrent: true,
+        syncedRemote: 'origin/feat/x',
+        pullRequest: pr,
       },
     ]);
   });

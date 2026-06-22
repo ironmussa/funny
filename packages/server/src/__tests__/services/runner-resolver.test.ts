@@ -145,15 +145,25 @@ describe('resolveRunner — user isolation', () => {
 
 describe('resolveRunner — cache', () => {
   test('uses cached thread mapping when runner is still reachable', async () => {
-    cacheThreadRunner('t-shared', 'r-a', 'http://cached.local');
+    cacheThreadRunner('t-shared', 'user-a', 'r-a', 'http://cached.local');
 
     const resolved = await resolveRunner('/api/threads/t-shared/messages', {}, 'user-a');
     expect(resolved).toEqual({ runnerId: 'r-a', httpUrl: 'http://cached.local' });
   });
 
+  test('does not use another user’s cached thread mapping', async () => {
+    cacheThreadRunner('t-shared', 'user-a', 'r-a', 'http://cached.local');
+    wireRunner('r-b', 'user-b');
+
+    const resolved = await resolveRunner('/api/threads/t-shared/messages', {}, 'user-b');
+
+    expect(resolved?.runnerId).toBe('r-b');
+    expect(resolved?.runnerId).not.toBe('r-a');
+  });
+
   test('evicts stale cache when runner disconnects', async () => {
     wireRunner('r-a', 'user-a');
-    cacheThreadRunner('t-shared', 'r-a', null);
+    cacheThreadRunner('t-shared', 'user-a', 'r-a', null);
     removeRunnerClient('r-a');
 
     wireRunner('r-b', 'user-b');
@@ -163,9 +173,9 @@ describe('resolveRunner — cache', () => {
   });
 
   test('uncacheThread and evictRunnerFromCache clear entries', async () => {
-    cacheThreadRunner('t1', 'r-a', null);
-    cacheThreadRunner('t2', 'r-a', null);
-    cacheThreadRunner('t3', 'r-b', null);
+    cacheThreadRunner('t1', 'user-a', 'r-a', null);
+    cacheThreadRunner('t2', 'user-a', 'r-a', null);
+    cacheThreadRunner('t3', 'user-b', 'r-b', null);
 
     uncacheThread('t1');
     evictRunnerFromCache('r-a');

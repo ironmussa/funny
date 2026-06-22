@@ -234,6 +234,61 @@ describe('AgentOrchestrator', () => {
       expect(factory.lastProcess).not.toBe(first);
     });
 
+    test('does not let a stopped previous process suppress replacement results', async () => {
+      const results: CLIMessage[] = [];
+      orchestrator.on('agent:message', (_id, msg) => {
+        if (msg.type === 'result') results.push(msg);
+      });
+
+      await orchestrator.startAgent(baseOpts());
+      const first = factory.lastProcess;
+
+      await orchestrator.startAgent(baseOpts({ prompt: 'second' }));
+      const second = factory.lastProcess;
+
+      expect(second).not.toBe(first);
+
+      second.simulateMessage({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        duration_ms: 5000,
+        num_turns: 1,
+        total_cost_usd: 0.01,
+        session_id: 'sess-2',
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.session_id).toBe('sess-2');
+    });
+
+    test('ignores stale messages from a replaced process', async () => {
+      const results: CLIMessage[] = [];
+      orchestrator.on('agent:message', (_id, msg) => {
+        if (msg.type === 'result') results.push(msg);
+      });
+
+      await orchestrator.startAgent(baseOpts());
+      const first = factory.lastProcess;
+
+      await orchestrator.startAgent(baseOpts({ prompt: 'second' }));
+
+      // The old process can exit after the replacement is already active.
+      first.simulateExit(undefined as unknown as number | null);
+      first.simulateMessage({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        duration_ms: 5000,
+        num_turns: 1,
+        total_cost_usd: 0.01,
+        session_id: 'stale-sess',
+      });
+
+      expect(results).toHaveLength(0);
+      expect(orchestrator.isRunning('t1')).toBe(true);
+    });
+
     test('passes resolved model ID to process', async () => {
       await orchestrator.startAgent(baseOpts({ model: 'opus' }));
 

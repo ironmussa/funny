@@ -175,8 +175,45 @@ ingestAdapter.start();
 
 const app = new Hono();
 
-app.use('*', cors());
+const AGENT_HOST = process.env.AGENT_HOST ?? process.env.HOST ?? '127.0.0.1';
+const AGENT_HTTP_AUTH_TOKEN =
+  process.env.AGENT_HTTP_AUTH_TOKEN ?? process.env.FUNNY_AGENT_HTTP_AUTH_TOKEN;
+const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+const REQUIRE_AGENT_AUTH =
+  process.env.AGENT_REQUIRE_HTTP_AUTH === '1' || !LOCAL_HOSTS.has(AGENT_HOST.toLowerCase());
+const ALLOWED_ORIGINS = (
+  process.env.AGENT_CORS_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  '*',
+  cors({
+    origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : undefined),
+  }),
+);
 app.use('*', honoLogger());
+
+app.use('/sessions/*', async (c, next) => {
+  if (!AGENT_HTTP_AUTH_TOKEN) {
+    if (REQUIRE_AGENT_AUTH) {
+      return c.json(
+        { error: 'AGENT_HTTP_AUTH_TOKEN is required when binding to a non-local host' },
+        503,
+      );
+    }
+    await next();
+    return;
+  }
+
+  const auth = c.req.header('Authorization') ?? '';
+  if (auth !== `Bearer ${AGENT_HTTP_AUTH_TOKEN}`) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  await next();
+});
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok', service: 'agent' }));

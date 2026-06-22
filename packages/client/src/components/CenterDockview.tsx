@@ -431,7 +431,22 @@ export function CenterDockview({
       {isTabbedRight &&
         rightTabs?.map((tab) => {
           const host = hosts[rightPanelId(tab.id)];
-          return host ? createPortal(tab.content, host, tab.id) : null;
+          const active = (activeRightTab ?? rightTabs[0]?.id) === tab.id;
+          return host
+            ? createPortal(
+                <div
+                  className="h-full w-full"
+                  hidden={!active}
+                  aria-hidden={!active}
+                  data-review-tab-content={tab.id}
+                  data-testid={`review-tab-content-${tab.id}`}
+                >
+                  {tab.content}
+                </div>,
+                host,
+                tab.id,
+              )
+            : null;
         })}
     </>
   );

@@ -71,7 +71,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   private modelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
   /**
    * The agent's "thought level" / reasoning-effort select config option,
-   * captured from the newSession response. pi-acp exposes this as
+   * captured from the newSession response. Some ACP agents expose this as
    * `category: 'thought_level'` with values like low/medium/high/xhigh.
    */
   private thoughtLevelConfigOption: { configId: string; valueIds: Set<string> } | null = null;

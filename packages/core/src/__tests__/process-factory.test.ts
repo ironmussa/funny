@@ -99,6 +99,11 @@ describe('process-factory', () => {
     }
   });
 
+  test('creates a Pi SDK process when provider is "pi"', () => {
+    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'pi' });
+    expect(process.constructor.name).toBe('PiSDKProcess');
+  });
+
   test('creates an llm-api process when provider is "llm-api"', () => {
     try {
       const process = defaultProcessFactory.create({ ...baseOpts, provider: 'llm-api' });
@@ -187,6 +192,7 @@ describe('enable / disable built-in providers (lean-core live toggle)', () => {
 
   test('enable/disable ignore non-ACP-built-in ids', () => {
     expect(enableBuiltinProvider('claude')).toBe(false);
+    expect(enableBuiltinProvider('pi')).toBe(false);
     expect(disableBuiltinProvider('not-a-provider')).toBe(false);
   });
 

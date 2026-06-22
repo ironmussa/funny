@@ -6,7 +6,7 @@
  * 'spawn' / 'error' → initialize ACP connection → check `sessions.fork`
  * capability → call `unstable_forkSession`. We mock `child_process.spawn` and
  * `@agentclientprotocol/sdk` so the test exercises every branch without
- * shelling out to a real codex / gemini / pi / cursor binary.
+ * shelling out to a real codex / gemini / cursor binary.
  */
 
 import { EventEmitter } from 'events';
@@ -74,9 +74,6 @@ const PROVIDER_ENVS = [
   'CODEX_ACP_USE_NPX',
   'GEMINI_BINARY_PATH',
   'ACP_GEMINI_BIN',
-  'PI_ACP_BINARY_PATH',
-  'ACP_PI_BIN',
-  'PI_ACP_USE_NPX',
   'CURSOR_BINARY_PATH',
   'ACP_CURSOR_BIN',
   'CURSOR_ACP_USE_NPX',
@@ -142,7 +139,7 @@ describe('forkAcpSession', () => {
     mockForkSession.mockRejectedValueOnce(new Error('upstream blew up'));
 
     const res = await forkAcpSession({
-      provider: 'pi',
+      provider: 'cursor',
       sessionId: 'src-3',
       cwd: '/tmp/work',
     });
@@ -189,11 +186,6 @@ describe('forkAcpSession', () => {
   test('default gemini command is `gemini` with `--acp`', async () => {
     await forkAcpSession({ provider: 'gemini', sessionId: 's', cwd: '/tmp' });
     expect(spawnMock).toHaveBeenCalledWith('gemini', ['--acp'], expect.any(Object));
-  });
-
-  test('default pi command is `pi-acp` with no args', async () => {
-    await forkAcpSession({ provider: 'pi', sessionId: 's', cwd: '/tmp' });
-    expect(spawnMock).toHaveBeenCalledWith('pi-acp', [], expect.any(Object));
   });
 
   test('default cursor command is `cursor-agent acp`', async () => {
@@ -269,12 +261,6 @@ describe('forkAcpSession', () => {
       ['-y', 'cursor-agent', 'acp'],
       expect.any(Object),
     );
-  });
-
-  test('PI_ACP_USE_NPX=1 switches pi to npx invocation', async () => {
-    process.env.PI_ACP_USE_NPX = '1';
-    await forkAcpSession({ provider: 'pi', sessionId: 's', cwd: '/tmp' });
-    expect(spawnMock).toHaveBeenCalledWith('npx', ['-y', 'pi-acp'], expect.any(Object));
   });
 
   test('cwd and env are forwarded to spawn options', async () => {

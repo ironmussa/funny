@@ -30,8 +30,9 @@ describe('providerManifestSchema — round-trips the built-ins', () => {
     });
   }
 
-  test('all five built-ins are accepted', () => {
-    expect(Object.keys(ACP_MANIFESTS)).toHaveLength(5);
+  test('all four ACP built-ins are accepted', () => {
+    expect(Object.keys(ACP_MANIFESTS)).toHaveLength(4);
+    expect(Object.keys(ACP_MANIFESTS)).not.toContain('pi');
   });
 });
 
@@ -84,14 +85,14 @@ describe('parseFunnyProviderFile — declarative-only enforcement', () => {
   });
 
   test('rejects an over-long banner regex (ReDoS length cap)', () => {
-    const m = JSON.parse(JSON.stringify(ACP_MANIFESTS.pi));
+    const m = JSON.parse(JSON.stringify(ACP_MANIFESTS.opencode));
     m.quirks.stripFirstMessageBanner = 'a'.repeat(5000);
     const res = parseFunnyProviderFile(asFile(m));
     expect(res.ok).toBe(false);
   });
 
   test('rejects an invalid banner regex', () => {
-    const m = JSON.parse(JSON.stringify(ACP_MANIFESTS.pi));
+    const m = JSON.parse(JSON.stringify(ACP_MANIFESTS.opencode));
     m.quirks.stripFirstMessageBanner = '([unclosed';
     const res = parseFunnyProviderFile(asFile(m));
     expect(res.ok).toBe(false);

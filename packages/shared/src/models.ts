@@ -224,6 +224,7 @@ export const DEFAULT_MODEL: AgentModel = 'opus-4.8';
 const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
   claude: DEFAULT_MODEL,
   deepagent: 'minimax-m2.7',
+  pi: 'default',
   ...Object.fromEntries(
     Object.values(ACP_MANIFESTS).map((m) => [m.id, m.models.defaultModel as AgentModel]),
   ),
@@ -239,12 +240,13 @@ const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
 const KB = 1024;
 const MB = 1024 * 1024;
 
-// codex / gemini / pi / cursor / opencode ceilings come from their manifests.
+// codex / gemini / cursor / opencode ceilings come from their manifests.
 // Non-ACP providers route through multiple upstream providers — use the
 // smallest common ceiling so we never exceed the weakest backend.
 const PROVIDER_ATTACHMENT_LIMITS: Record<string, AttachmentLimits> = {
   claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  pi: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   'llm-api': { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   external: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   ...Object.fromEntries(Object.values(ACP_MANIFESTS).map((m) => [m.id, m.attachmentLimits])),
@@ -257,10 +259,11 @@ export interface ModelInfo {
   label: string;
 }
 
-// codex / gemini / pi / cursor / opencode labels come from their manifests.
+// codex / gemini / cursor / opencode labels come from their manifests.
 export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
   deepagent: 'Deep Agent',
+  pi: 'Pi',
   ...Object.fromEntries(Object.values(ACP_MANIFESTS).map((m) => [m.id, m.label])),
 };
 
@@ -275,6 +278,7 @@ export const KNOWN_PROVIDER_IDS: string[] = [
   'deepagent',
   'llm-api',
   'external',
+  'pi',
   ...Object.keys(ACP_MANIFESTS),
 ];
 
@@ -430,8 +434,8 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
   if (!def) {
     // Pi, Cursor and opencode expose their catalogs dynamically (see
     // *-discover.ts). The selected value may already be the wire-format model
-    // ID that pi-acp / cursor-agent's `unstable_setSessionModel` or opencode's
-    // `session/set_model` expects — pass it through instead of throwing.
+    // ID that the Pi SDK, cursor-agent's `unstable_setSessionModel`, or
+    // opencode's `session/set_model` expects — pass it through instead of throwing.
     if (provider === 'pi' || provider === 'cursor' || provider === 'opencode') {
       return model as string;
     }

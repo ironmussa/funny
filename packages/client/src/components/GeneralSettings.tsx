@@ -1,6 +1,6 @@
 import type { AgentProvider, ToolPermission } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE, DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
-import { DYNAMIC_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { DYNAMIC_MODEL_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { GitBranch, Monitor, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,7 +83,7 @@ export function GeneralSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on id only; using selectedProject object would loop
   }, [selectedProject?.id]);
 
-  // Dynamic ACP catalogs (pi / cursor / opencode) are discovered at runtime so
+  // Dynamic catalogs (pi / cursor / opencode) are discovered at runtime so
   // the Settings combobox lists what each agent actually advertises (e.g.
   // zai/glm-5.1) instead of just the `default` sentinel from the static
   // registry. One store keyed by provider; the dynamic set comes from the
@@ -91,7 +91,7 @@ export function GeneralSettings() {
   const acpByProvider = useAcpModelsStore((s) => s.byProvider);
   const fetchAcpModels = useAcpModelsStore((s) => s.fetch);
   useEffect(() => {
-    for (const provider of DYNAMIC_ACP_PROVIDER_IDS) void fetchAcpModels(provider);
+    for (const provider of DYNAMIC_MODEL_PROVIDER_IDS) void fetchAcpModels(provider);
   }, [fetchAcpModels]);
 
   const projectDefaultProvider = (selectedProject?.defaultProvider ||

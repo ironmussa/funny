@@ -48,6 +48,7 @@ const dlog = createDebugLogger('provider-extensions');
 const BUILTIN_PROVIDER_IDS = new Set<string>([
   ...KNOWN_ACP_PROVIDER_IDS,
   'claude',
+  'pi',
   'deepagent',
   'llm-api',
   'external',

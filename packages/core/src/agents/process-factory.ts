@@ -18,7 +18,7 @@ import { GeminiACPProcess } from './gemini-acp.js';
 import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from './interfaces.js';
 import { LLMApiProcess } from './llm/llm-api-process.js';
 import { OpenCodeACPProcess } from './opencode-acp.js';
-import { PiACPProcess } from './pi-acp.js';
+import { PiSDKProcess } from './pi-sdk.js';
 import { SDKClaudeProcess } from './sdk-claude.js';
 
 export type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
@@ -29,13 +29,13 @@ const ALWAYS_ON_PROVIDERS: ReadonlyArray<readonly [string, ProcessConstructor]> 
   ['claude', SDKClaudeProcess],
   ['deepagent', DeepAgentProcess],
   ['llm-api', LLMApiProcess],
+  ['pi', PiSDKProcess],
 ];
 
 // The gateable ACP built-ins, keyed by id.
 const ACP_BUILTIN_PROCESSES: Record<KnownAcpProvider, ProcessConstructor> = {
   codex: CodexACPProcess,
   gemini: GeminiACPProcess,
-  pi: PiACPProcess,
   cursor: CursorACPProcess,
   opencode: OpenCodeACPProcess,
 };

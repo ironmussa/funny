@@ -6,6 +6,8 @@ export { CodexACPProcess } from './codex-acp.js';
 export { GeminiACPProcess } from './gemini-acp.js';
 export { CursorACPProcess } from './cursor-acp.js';
 export { OpenCodeACPProcess } from './opencode-acp.js';
+export { PiSDKProcess, discoverPiModels } from './pi-sdk.js';
+export { createPiSessionManager, findPiSessionById, forkPiSession } from './pi-sdk-session.js';
 export { DeepAgentProcess } from './deepagent-process.js';
 export {
   inferACPToolName,
@@ -69,11 +71,6 @@ export {
   type DiscoverAcpModelsResult,
   type DiscoverAcpModelsOptions,
 } from './acp-discover.js';
-export {
-  discoverPiModels,
-  type DiscoveredPiModel,
-  type DiscoverPiModelsResult,
-} from './pi-discover.js';
 export {
   discoverCursorModels,
   type DiscoveredCursorModel,

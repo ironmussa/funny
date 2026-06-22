@@ -36,6 +36,33 @@ describe('buildSlashSuggestionItems', () => {
     ]);
   });
 
+  test('keeps provider skills distinct from executable slash commands', () => {
+    const items = buildSlashSuggestionItems({
+      skills: [
+        { name: 'openspec-propose', description: 'Create an OpenSpec proposal', kind: 'skill' },
+        { name: 'opsx:propose', description: 'Create an OpenSpec proposal', kind: 'slash-command' },
+      ],
+      sdkCommands: [],
+      query: 'propose',
+      commandProvider: 'codex',
+    });
+
+    expect(items).toEqual([
+      {
+        id: 'openspec-propose',
+        label: 'openspec-propose',
+        description: 'Create an OpenSpec proposal',
+        type: 'skill',
+      },
+      {
+        id: 'opsx:propose',
+        label: 'opsx:propose',
+        description: 'Create an OpenSpec proposal',
+        type: 'slash',
+      },
+    ]);
+  });
+
   test('uses a generic loading label for slash suggestions', () => {
     expect(getSuggestionLoadingLabel('slash')).toEqual({
       key: 'prompt.loadingCommands',

@@ -3,7 +3,6 @@ import type {
   GitStatusInfo,
   ImageAttachment,
   QueuedMessage,
-  Skill,
   Thread,
 } from '@funny/shared';
 import { getAttachmentLimits } from '@funny/shared/models';
@@ -63,7 +62,7 @@ import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
 import { ImageLightbox } from './ImageLightbox';
-import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
+import type { PromptEditorHandle, PromptSlashResource } from './prompt-editor/PromptEditor';
 import { PromptEditor } from './prompt-editor/PromptEditor';
 import { serializeEditorContent } from './prompt-editor/serialize';
 import { ContextUsageRing } from './thread/ContextUsageRing';
@@ -128,7 +127,8 @@ export const ModelSelect = memo(function ModelSelect({
   onEffortChange?: (v: string) => void;
   groups: ModelSelectGroup[];
 }) {
-  const selected = groups.flatMap((g) => g.models).find((m) => m.value === value);
+  const selectedGroup = groups.find((g) => g.models.some((m) => m.value === value));
+  const selected = selectedGroup?.models.find((m) => m.value === value);
   const { provider: selProvider, model: selModel } = parseUnifiedModel(value);
   const selEffortLabel = getEffortLevels(selModel, selProvider).find(
     (e) => e.value === effort,
@@ -148,6 +148,10 @@ export const ModelSelect = memo(function ModelSelect({
         tabIndex={-1}
         className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
       >
+        <span className="text-muted-foreground shrink-0">
+          {selectedGroup?.providerLabel ?? selProvider}
+        </span>
+        <span className="text-muted-foreground shrink-0">·</span>
         <span className="truncate">{selected?.label ?? selModel}</span>
         {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
         <ChevronDown className="icon-xs opacity-50" />
@@ -409,7 +413,12 @@ export interface PromptInputUIProps {
   // ── Editor ──
   placeholder?: string;
   editorCwd?: string;
-  loadSkills?: () => Promise<Skill[]>;
+  /** Resolves the slash skills for the submit path (leading slash-command thread mode). */
+  loadSkills?: () => Promise<PromptSlashResource[]>;
+  /** Resolved slash skills for the editor's `/` menu (single source of truth). */
+  slashSkills?: readonly PromptSlashResource[];
+  /** True while {@link slashSkills} is (re)loading. */
+  slashSkillsLoading?: boolean;
   /** SDK-reported slash commands for the active thread (names without leading slash) */
   sdkSlashCommands?: string[];
   /** Effective provider for the slash menu (gates Claude-specific built-in labels) */
@@ -495,6 +504,8 @@ export const PromptInputUI = memo(function PromptInputUI({
   placeholder,
   editorCwd,
   loadSkills,
+  slashSkills,
+  slashSkillsLoading,
   sdkSlashCommands,
   commandProvider,
   setPromptRef,
@@ -595,9 +606,10 @@ export const PromptInputUI = memo(function PromptInputUI({
       ? serializeEditorContent(editorJSON)
       : { text: '', fileReferences: [], symbolReferences: [] };
     const leadingSlashCommand = getLeadingSlashCommand(serialized.text);
+    const slashResources = leadingSlashCommand && loadSkills ? await loadSkills() : undefined;
     const commandThreadMode =
-      isNewThread && !isScratch && leadingSlashCommand && loadSkills
-        ? resolveSlashCommandThreadMode(serialized.text, await loadSkills())
+      isNewThread && !isScratch && leadingSlashCommand && slashResources
+        ? resolveSlashCommandThreadMode(serialized.text, slashResources)
         : undefined;
     const effectiveThreadMode =
       commandThreadMode ?? (createWorktree ? ('worktree' as const) : ('local' as const));
@@ -1322,7 +1334,8 @@ export const PromptInputUI = memo(function PromptInputUI({
               onPaste={handleEditorPaste}
               onFileMentionDrop={() => setIsDragging(false)}
               cwd={editorCwd}
-              loadSkills={loadSkills}
+              slashSkills={slashSkills}
+              slashSkillsLoading={slashSkillsLoading}
               sdkSlashCommands={sdkSlashCommands}
               commandProvider={commandProvider}
               containerRef={promptBoxRef}

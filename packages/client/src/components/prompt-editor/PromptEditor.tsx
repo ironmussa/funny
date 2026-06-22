@@ -1,4 +1,3 @@
-import type { Skill } from '@funny/shared';
 import Document from '@tiptap/extension-document';
 import HardBreak from '@tiptap/extension-hard-break';
 import History from '@tiptap/extension-history';
@@ -19,6 +18,7 @@ import {
   FileType,
   List,
   Variable,
+  Sparkles,
 } from 'lucide-react';
 import {
   forwardRef,
@@ -88,6 +88,14 @@ export interface PromptEditorHandle {
   endDictation(): void;
 }
 
+export interface PromptSlashResource {
+  name: string;
+  description?: string;
+  kind: 'skill' | 'slash-command';
+  scope?: 'global' | 'project';
+  threadMode?: 'local' | 'worktree';
+}
+
 interface PromptEditorProps {
   placeholder?: string;
   disabled?: boolean;
@@ -103,8 +111,16 @@ interface PromptEditorProps {
   onFileMentionDrop?: () => void;
   /** Effective cwd for file browsing */
   cwd?: string;
-  /** Callback to load skills on first / trigger */
-  loadSkills?: () => Promise<Skill[]>;
+  /** Resolved provider-scoped skills + custom slash commands for the `/` menu.
+   *  The editor does NOT cache these — it renders whatever is passed, so the
+   *  owner (via `useSlashSkills`) is the single source of truth. */
+  slashSkills?: readonly PromptSlashResource[];
+  /** True while {@link slashSkills} is being (re)loaded. Drives the `/` menu's
+   *  loading state when no skills are available yet. */
+  slashSkillsLoading?: boolean;
+  /** Called when the `/` menu opens. Lazy owners use this to trigger their
+   *  first fetch; eager owners can omit it. Safe to call repeatedly. */
+  onSlashOpen?: () => void;
   /** SDK-reported slash commands for the active thread (names without leading
    *  slash), merged into the / autocomplete alongside skills. */
   sdkSlashCommands?: string[];
@@ -126,7 +142,7 @@ interface SuggestionItem {
   path?: string;
   fileType?: 'file' | 'folder';
   description?: string;
-  type: 'file' | 'slash' | 'symbol';
+  type: 'file' | 'slash' | 'skill' | 'symbol';
   /** Symbol kind (function, class, etc.) — only for type='symbol' */
   symbolKind?: string;
   /** Line number in the file — only for type='symbol' */
@@ -136,7 +152,8 @@ interface SuggestionItem {
 }
 
 interface SlashSuggestionOptions {
-  skills: readonly Pick<Skill, 'name' | 'description'>[];
+  skills: readonly (Pick<PromptSlashResource, 'name' | 'description'> &
+    Partial<Pick<PromptSlashResource, 'kind'>>)[];
   sdkCommands: readonly string[];
   query: string;
   commandProvider?: string;
@@ -151,16 +168,17 @@ export function buildSlashSuggestionItems({
   limit = SLASH_RESULTS_LIMIT,
 }: SlashSuggestionOptions): SuggestionItem[] {
   const skillByName = new Map(skills.map((s) => [s.name, s.description] as const));
+  const sdkCommandNames = new Set(sdkCommands);
 
   // Build one ordered, de-duped candidate list so the SDK's built-in commands
   // (e.g. /compact) aren't crowded past the result cap by the long skills list.
-  // Order: curated built-ins -> skills -> any other SDK-reported command.
-  const ordered: { name: string; description: string }[] = [];
+  // Order: curated built-ins -> custom commands / skills -> any other SDK-reported command.
+  const ordered: { name: string; description: string; type: 'slash' | 'skill' }[] = [];
   const seen = new Set<string>();
-  const add = (name: string, description: string) => {
+  const add = (name: string, description: string, type: 'slash' | 'skill') => {
     if (!name || seen.has(name)) return;
     seen.add(name);
-    ordered.push({ name, description });
+    ordered.push({ name, description, type });
   };
   // The curated descriptions are Claude Code's wording. Other providers
   // report their own /init, /compact, /review; use a neutral label there.
@@ -170,12 +188,15 @@ export function buildSlashSuggestionItems({
 
   if (isClaude) {
     for (const name of sdkCommands) {
-      if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name]);
+      if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name], 'slash');
     }
   }
-  for (const s of skills) add(s.name, s.description);
+  for (const s of skills) {
+    const type = s.kind === 'skill' && !sdkCommandNames.has(s.name) ? 'skill' : 'slash';
+    add(s.name, s.description ?? (type === 'skill' ? 'Skill' : BUILTIN_SLASH_FALLBACK), type);
+  }
   for (const name of sdkCommands) {
-    add(name, skillByName.get(name) ?? builtinDesc(name) ?? BUILTIN_SLASH_FALLBACK);
+    add(name, skillByName.get(name) ?? builtinDesc(name) ?? BUILTIN_SLASH_FALLBACK, 'slash');
   }
 
   const q = query.toLowerCase();
@@ -187,7 +208,7 @@ export function buildSlashSuggestionItems({
         id: o.name,
         label: o.name,
         description: o.description,
-        type: 'slash' as const,
+        type: o.type,
       });
     }
   }
@@ -341,6 +362,7 @@ function SuggestionPopup({
     >
       {items.map((item, i) => (
         <button
+          type="button"
           key={`${item.type}:${item.id}`}
           data-testid={
             type === 'symbol'
@@ -370,6 +392,8 @@ function SuggestionPopup({
             ) : (
               <FileText className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
             )
+          ) : item.type === 'skill' ? (
+            <Sparkles className="icon-base text-muted-foreground mt-0.5 shrink-0" />
           ) : (
             <Zap className="icon-base text-muted-foreground mt-0.5 shrink-0" />
           )}
@@ -423,7 +447,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     onPaste,
     onFileMentionDrop,
     cwd,
-    loadSkills,
+    slashSkills,
+    slashSkillsLoading,
+    onSlashOpen,
     sdkSlashCommands,
     commandProvider,
     className,
@@ -446,14 +472,17 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // Debounce timer for file fetching
   const fileTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Cached skills
-  const skillsCacheRef = useRef<Skill[] | null>(null);
-  const slashSkillsLoadingRef = useRef<Promise<Skill[]> | null>(null);
-  // Keep cwd/loadSkills refs current for async callbacks
+  // Slash skills come from the owner (single source of truth) — mirror them
+  // into refs for synchronous reads inside the TipTap suggestion callbacks.
+  const slashSkillsRef = useRef<readonly PromptSlashResource[]>(slashSkills ?? []);
+  slashSkillsRef.current = slashSkills ?? [];
+  const slashSkillsLoadingRef = useRef(slashSkillsLoading);
+  slashSkillsLoadingRef.current = slashSkillsLoading;
+  const onSlashOpenRef = useRef(onSlashOpen);
+  onSlashOpenRef.current = onSlashOpen;
+  // Keep cwd ref current for async callbacks
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
-  const loadSkillsRef = useRef(loadSkills);
-  loadSkillsRef.current = loadSkills;
   const sdkSlashCommandsRef = useRef(sdkSlashCommands);
   sdkSlashCommandsRef.current = sdkSlashCommands;
   const commandProviderRef = useRef(commandProvider);
@@ -647,35 +676,29 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     });
   }, []);
 
-  const ensureSlashSkillsLoaded = useCallback(() => {
-    if (skillsCacheRef.current || slashSkillsLoadingRef.current) return;
-    queueMicrotask(() => setSuggestionLoading(true));
-    const loadPromise = (async () => {
-      const fn = loadSkillsRef.current;
-      return fn ? await fn() : [];
-    })();
-    slashSkillsLoadingRef.current = loadPromise;
-    void loadPromise
-      .then((skills) => {
-        skillsCacheRef.current = skills;
-        if (suggestionTypeRef.current !== 'slash') return;
-        applySlashSuggestionItems(
-          buildSlashSuggestionItems({
-            skills,
-            sdkCommands: sdkSlashCommandsRef.current ?? [],
-            query: suggestionQueryRef.current,
-            commandProvider: commandProviderRef.current,
-          }),
-        );
-      })
-      .catch(() => {
-        skillsCacheRef.current = [];
-      })
-      .finally(() => {
-        slashSkillsLoadingRef.current = null;
-        if (suggestionTypeRef.current === 'slash') setSuggestionLoading(false);
-      });
-  }, [applySlashSuggestionItems]);
+  // Rebuild the open `/` menu whenever the owner's resolved skills, the SDK
+  // commands, or the provider change — so a late eager-load, a lazy first
+  // fetch, or a model/provider switch is reflected without re-opening the menu.
+  // This replaces the editor's old internal skills cache.
+  useEffect(() => {
+    if (suggestionType !== 'slash') return;
+    setSuggestionLoading(Boolean(slashSkillsLoading) && (slashSkills?.length ?? 0) === 0);
+    applySlashSuggestionItems(
+      buildSlashSuggestionItems({
+        skills: slashSkills ?? [],
+        sdkCommands: sdkSlashCommands ?? [],
+        query: suggestionQueryRef.current,
+        commandProvider,
+      }),
+    );
+  }, [
+    suggestionType,
+    slashSkills,
+    slashSkillsLoading,
+    sdkSlashCommands,
+    commandProvider,
+    applySlashSuggestionItems,
+  ]);
 
   const slashSuggestion = useCallback(
     () => ({
@@ -686,9 +709,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         const fullQuery = getFullQuery(query);
         // Defer state updates out of TipTap's render cycle
         queueMicrotask(() => setSuggestionQuery(fullQuery));
-        ensureSlashSkillsLoaded();
+        // Lazy owners begin their fetch here; eager owners no-op. The reactive
+        // effect above rebuilds the menu once the resolved skills arrive.
+        onSlashOpenRef.current?.();
         const t0 = performance.now();
-        const skills = skillsCacheRef.current ?? [];
+        const skills = slashSkillsRef.current;
         const sdkCommands = sdkSlashCommandsRef.current ?? [];
         const matched = buildSlashSuggestionItems({
           skills,
@@ -789,7 +814,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    [ensureSlashSkillsLoaded, getFullQuery],
+    [getFullQuery],
   );
 
   // ── Symbol suggestion config (# trigger) ──

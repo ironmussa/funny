@@ -1,4 +1,4 @@
-import type { ImageAttachment, QueuedMessage, Skill } from '@funny/shared';
+import type { ImageAttachment, QueuedMessage } from '@funny/shared';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -14,6 +14,7 @@ import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
+import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -454,48 +455,22 @@ export function usePromptInputState({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNewThread, selectedProjectId, activeThreadBaseBranch]);
 
-  // ── Skills (provider-scoped) ──
-  // Keyed by project + provider + model: switching to Codex must NOT keep
-  // serving the Claude `.claude` skills cached for the previous provider.
-  const skillsCacheRef = useRef<Skill[] | null>(null);
-  useEffect(() => {
-    skillsCacheRef.current = null;
-  }, [selectedProjectId, currentProvider, currentModel]);
-
-  const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
-    if (skillsCacheRef.current) return skillsCacheRef.current;
-    const path = selectedProjectId
-      ? projects.find((p) => p.id === selectedProjectId)?.path
-      : undefined;
-    // Provider-scoped: the resolver returns Claude skills/commands only for
-    // Claude; other providers get nothing here (their built-in commands arrive
-    // via `sdkSlashCommands`).
-    const result = await api.listAgentResources({
-      projectPath: path,
-      provider: currentProvider,
-      model: currentModel,
-      phase: 'composer',
-    });
-    if (result.isOk()) {
-      const deduped = new Map<string, Skill>();
-      for (const r of result.value.resources) {
-        if (r.kind !== 'skill' && r.kind !== 'slash-command') continue;
-        const skill: Skill = {
-          name: r.name,
-          description: r.description ?? '',
-          source: r.origin,
-          scope: r.scope,
-          threadMode: r.threadMode,
-        };
-        const existing = deduped.get(skill.name);
-        if (!existing || skill.scope === 'project') deduped.set(skill.name, skill);
-      }
-      skillsCacheRef.current = Array.from(deduped.values());
-    } else {
-      skillsCacheRef.current = [];
-    }
-    return skillsCacheRef.current;
-  }, [selectedProjectId, projects, currentProvider, currentModel]);
+  // ── Skills (provider-scoped, single cache) ──
+  // The composer is always mounted, so load eagerly: the `/` menu is ready the
+  // instant it's opened, and switching project/provider/model auto-invalidates
+  // the cache. `useSlashSkills` is the ONE cache — the editor no longer keeps
+  // its own copy. `ensureSlashSkills` feeds both the editor and the submit path
+  // (which resolves a leading slash command's thread mode).
+  const composerProjectPath = useMemo(
+    () => (selectedProjectId ? projects.find((p) => p.id === selectedProjectId)?.path : undefined),
+    [selectedProjectId, projects],
+  );
+  const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
+    projectPath: composerProjectPath,
+    provider: currentProvider,
+    model: currentModel,
+    mode: 'eager',
+  });
 
   // ── Queue fetching ──
   const lastQueueFetchRef = useRef<{
@@ -895,7 +870,11 @@ export function usePromptInputState({
     handleEditorChange,
     handleEditorPaste,
     handleCheckoutPreflight,
-    loadSkillsForEditor,
+    // `ensureSlashSkills` resolves the (eagerly-loaded) list for the submit
+    // path; `slashSkills`/`slashSkillsLoading` feed the editor's `/` menu.
+    ensureSlashSkills,
+    slashSkills,
+    slashSkillsLoading,
     sdkSlashCommands,
     // Provider that owns the slash menu: the active thread's provider when
     // viewing one, else the composer's selected provider. Gates Claude-specific

@@ -9,7 +9,7 @@
  * DB-agnostic message repository. Accepts db + schema via dependency injection.
  */
 
-import { eq, and, gt, lt, asc, desc, inArray, sql } from 'drizzle-orm';
+import { eq, and, gt, lt, lte, asc, desc, inArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import type {
@@ -122,11 +122,12 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     let hasMore = false;
     let hasMoreAfter = false;
     let windowStart = 0;
+    let leadingUserMessage: typeof schema.messages.$inferSelect | undefined;
 
-    // Total message count for the thread. Lets the client reserve scroll space
-    // for not-yet-loaded older messages (phantom spacer) so the scrollbar is
-    // sized to the whole conversation, not just the loaded window. Only needed
-    // when paginating (messageLimit set); a full load already knows the total.
+    // Total message count for the thread. Paired with windowStart, this lets
+    // clients understand where the loaded window sits within the full history.
+    // Only needed when paginating (messageLimit set); a full load already knows
+    // the total.
     let total: number | undefined;
     if (messageLimit) {
       total = await countThreadMessages(id);
@@ -150,7 +151,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       );
       messages = rows;
       hasMore = windowStart > 0;
-      hasMoreAfter = windowStart + rows.length < (total ?? rows.length);
+      hasMoreAfter = windowStart + messages.length < (total ?? messages.length);
     } else {
       messages = await dbAll(
         db
@@ -159,6 +160,10 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
           .where(eq(schema.messages.threadId, id))
           .orderBy(asc(schema.messages.timestamp)),
       );
+    }
+
+    if (messageLimit && messages.length > 0 && messages[0].role !== 'user') {
+      leadingUserMessage = await findLeadingUserMessage(thread.id, messages[0]);
     }
 
     // Most-recent user message in the loaded window (messages is ASC here).
@@ -184,11 +189,14 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       lastUserMessage = lastUserRow ?? undefined;
     }
 
-    // Single batched tool-calls fetch covering messages + lastUserMessage.
+    // Single batched tool-calls fetch covering messages + context-only user messages.
     const toolCallIds = messages.map((m) => m.id);
     const lastUserOutsideWindow =
       lastUserMessage && !messages.some((m) => m.id === lastUserMessage!.id);
     if (lastUserOutsideWindow && lastUserMessage) toolCallIds.push(lastUserMessage.id);
+    const leadingUserOutsideWindow =
+      leadingUserMessage && !messages.some((m) => m.id === leadingUserMessage!.id);
+    if (leadingUserOutsideWindow && leadingUserMessage) toolCallIds.push(leadingUserMessage.id);
 
     const allToolCalls =
       toolCallIds.length > 0
@@ -210,6 +218,11 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         ? (await enrichMessages([lastUserMessage], allToolCalls))[0]
         : enrichedMessages.find((m) => m.id === lastUserMessage!.id)
       : undefined;
+    const enrichedLeadingUser = leadingUserMessage
+      ? leadingUserOutsideWindow
+        ? (await enrichMessages([leadingUserMessage], allToolCalls))[0]
+        : enrichedMessages.find((m) => m.id === leadingUserMessage!.id)
+      : undefined;
     const waitState = await findPendingWaitState(deps, id, thread.status);
 
     return {
@@ -221,6 +234,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       total: total ?? enrichedMessages.length,
       windowStart,
       lastUserMessage: enrichedLastUser,
+      leadingUserMessage: enrichedLeadingUser,
       initInfo: thread.initTools
         ? {
             tools: JSON.parse(thread.initTools) as string[],
@@ -236,7 +250,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
   }
 
   /** Count all messages belonging to a thread. Cheap COUNT(*) over the
-   *  threadId index — used to size the client's phantom scroll spacer. */
+   *  threadId index, used for paginated-window metadata. */
   async function countThreadMessages(threadId: string): Promise<number> {
     const row = await dbGet(
       db
@@ -249,8 +263,8 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
 
   /** Get paginated messages for a thread, older than cursor.
    *  Returns messages in ASC order (oldest first).
-   *  `total` is the full message count so the client can size the scrollbar
-   *  for messages it has not loaded yet. */
+   *  `total` is the full message count so the client can describe the loaded
+   *  window within the complete history. */
   async function getThreadMessages(opts: {
     threadId: string;
     cursor?: string;
@@ -262,6 +276,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     hasMoreAfter: boolean;
     total: number;
     windowStart: number;
+    leadingUserMessage?: Awaited<ReturnType<typeof enrichMessages>>[number];
   }> {
     const { threadId, cursor, limit, direction = 'before' } = opts;
 
@@ -295,13 +310,20 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     const sliced = direction === 'after' ? page : page.reverse();
     const windowStart =
       sliced.length > 0 ? await countMessagesBefore(threadId, sliced[0].timestamp) : 0;
+    const leadingUserMessage =
+      sliced.length > 0 && sliced[0].role !== 'user'
+        ? await findLeadingUserMessage(threadId, sliced[0])
+        : undefined;
 
     return {
       messages: await enrichMessages(sliced),
-      hasMore: direction === 'after' ? windowStart > 0 : hasMore,
+      hasMore: direction === 'after' || cursor ? windowStart > 0 : hasMore,
       hasMoreAfter: direction === 'after' ? hasMore : windowStart + sliced.length < total,
       total,
       windowStart,
+      leadingUserMessage: leadingUserMessage
+        ? (await enrichMessages([leadingUserMessage]))[0]
+        : undefined,
     };
   }
 
@@ -315,6 +337,32 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         ),
     );
     return Number(row?.count ?? 0);
+  }
+
+  async function findLeadingUserMessage(
+    threadId: string,
+    firstMessage: typeof schema.messages.$inferSelect,
+  ): Promise<typeof schema.messages.$inferSelect | undefined> {
+    if (firstMessage.role === 'user') {
+      return undefined;
+    }
+
+    const sectionUser = await dbGet(
+      db
+        .select()
+        .from(schema.messages)
+        .where(
+          and(
+            eq(schema.messages.threadId, threadId),
+            eq(schema.messages.role, 'user'),
+            lte(schema.messages.timestamp, firstMessage.timestamp),
+          ),
+        )
+        .orderBy(desc(schema.messages.timestamp))
+        .limit(1),
+    );
+
+    return sectionUser ?? undefined;
   }
 
   /** Insert a new message, returns the generated ID */

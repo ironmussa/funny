@@ -608,10 +608,12 @@ export interface DataGetThreadMessagesResponse {
   messages: Array<Record<string, any>>;
   hasMore: boolean;
   hasMoreAfter?: boolean;
-  /** Full message count for the thread (for the client's phantom scroll spacer). */
+  /** Full message count for the thread. */
   total?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
+  /** User message that owns the first loaded section when it sits before the window. */
+  leadingUserMessage?: Record<string, any>;
 }
 
 export interface DataGetToolCallResponse {

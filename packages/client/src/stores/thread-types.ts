@@ -52,7 +52,7 @@ export interface ThreadWithMessages extends Thread {
   hasMore?: boolean;
   hasMoreAfter?: boolean;
   loadingMore?: boolean;
-  /** Full message count for the thread — sizes the phantom scroll spacer. */
+  /** Full message count for the thread; paired with windowStart for pagination metadata. */
   totalMessages?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
@@ -60,6 +60,7 @@ export interface ThreadWithMessages extends Thread {
   compactionEvents?: CompactionEvent[];
   setupProgress?: GitProgressStep[];
   lastUserMessage?: Message & { toolCalls?: any[] };
+  leadingUserMessage?: Message & { toolCalls?: any[] };
   queuedCount?: number;
   queuedNextMessage?: string;
 }

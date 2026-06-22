@@ -1348,6 +1348,7 @@ export async function remoteGetThreadMessages(opts: {
   hasMoreAfter?: boolean;
   total?: number;
   windowStart?: number;
+  leadingUserMessage?: any;
 }> {
   const response = await sendDataMessage('data:get_thread_messages', {
     threadId: opts.threadId,
@@ -1361,6 +1362,7 @@ export async function remoteGetThreadMessages(opts: {
     hasMoreAfter: !!response?.hasMoreAfter,
     total: typeof response?.total === 'number' ? response.total : undefined,
     windowStart: typeof response?.windowStart === 'number' ? response.windowStart : undefined,
+    leadingUserMessage: response?.leadingUserMessage,
   };
 }
 

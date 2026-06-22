@@ -135,7 +135,7 @@ export interface ThreadWithMessages extends Thread {
   hasMore?: boolean;
   hasMoreAfter?: boolean;
   loadingMore?: boolean;
-  /** Full message count for the thread — sizes the phantom scroll spacer. */
+  /** Full message count for the thread; paired with windowStart for pagination metadata. */
   totalMessages?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
@@ -145,6 +145,8 @@ export interface ThreadWithMessages extends Thread {
   setupProgress?: import('@/components/GitProgressModal').GitProgressStep[];
   /** Last user message — always available even when messages are paginated */
   lastUserMessage?: import('@funny/shared').Message & { toolCalls?: any[] };
+  /** User message that owns the first loaded section when it sits before the loaded window. */
+  leadingUserMessage?: import('@funny/shared').Message & { toolCalls?: any[] };
   /** Number of messages currently queued for this thread */
   queuedCount?: number;
   /** Preview of the next queued message */
@@ -532,6 +534,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         hasMoreAfter: thread.hasMoreAfter ?? false,
         totalMessages: thread.total ?? thread.messages?.length ?? 0,
         windowStart: thread.windowStart ?? 0,
+        leadingUserMessage: thread.leadingUserMessage,
         threadEvents,
         initInfo: thread.initInfo || buffered || undefined,
         resultInfo,
@@ -847,20 +850,24 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       return;
     }
 
-    const { messages: olderMessages, hasMore, total } = result.value;
+    const { messages: olderMessages, hasMore, total, leadingUserMessage } = result.value;
     set((state) =>
       mutations.applyThreadDataPatch(state, threadId, (t) => {
         // Deduplicate in case of overlapping timestamps
         const existingIds = new Set(t.messages.map((m) => m.id));
         const newMessages = olderMessages.filter((m) => !existingIds.has(m.id));
+        const nextMessages = [...newMessages, ...t.messages];
+        const leadingUserAlreadyLoaded =
+          leadingUserMessage != null && nextMessages.some((m) => m.id === leadingUserMessage.id);
         return {
           ...t,
-          messages: [...newMessages, ...t.messages],
+          messages: nextMessages,
           hasMore,
           hasMoreAfter: result.value.hasMoreAfter ?? t.hasMoreAfter,
           totalMessages: total ?? t.totalMessages,
           windowStart:
             result.value.windowStart ?? Math.max(0, (t.windowStart ?? 0) - newMessages.length),
+          leadingUserMessage: leadingUserAlreadyLoaded ? undefined : leadingUserMessage,
           loadingMore: false,
         };
       }),
@@ -950,15 +957,19 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         return false;
       }
 
-      const { messages: olderMessages, hasMore } = result.value;
+      const { messages: olderMessages, hasMore, leadingUserMessage } = result.value;
       set((state) =>
         mutations.applyThreadDataPatch(state, threadId, (t) => {
           const existingIds = new Set(t.messages.map((m) => m.id));
           const newMessages = olderMessages.filter((m) => !existingIds.has(m.id));
+          const nextMessages = [...newMessages, ...t.messages];
+          const leadingUserAlreadyLoaded =
+            leadingUserMessage != null && nextMessages.some((m) => m.id === leadingUserMessage.id);
           return {
             ...t,
-            messages: [...newMessages, ...t.messages],
+            messages: nextMessages,
             hasMore,
+            leadingUserMessage: leadingUserAlreadyLoaded ? undefined : leadingUserMessage,
             loadingMore: false,
           };
         }),

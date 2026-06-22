@@ -438,6 +438,7 @@ export async function handleDataMessageWithAck(
           hasMoreAfter: result.hasMoreAfter,
           total: result.total,
           windowStart: result.windowStart,
+          leadingUserMessage: result.leadingUserMessage,
         };
       }
       case 'data:get_tool_call': {

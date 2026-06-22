@@ -398,8 +398,8 @@ export interface ThreadWithMessages extends Thread {
   messages: (Message & { toolCalls?: ToolCall[] })[];
   hasMore?: boolean;
   hasMoreAfter?: boolean;
-  /** Full message count for the thread — sizes the phantom scroll spacer for
-   *  older messages not yet loaded into the window. */
+  /** Full message count for the thread; paired with windowStart to describe
+   *  the loaded message window within the full history. */
   total?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
@@ -407,6 +407,10 @@ export interface ThreadWithMessages extends Thread {
   /** Last user message — always included even when messages are paginated,
    *  so the UI can show the sticky prompt without loading all messages. */
   lastUserMessage?: Message & { toolCalls?: ToolCall[] };
+  /** User message that owns the first loaded section when it sits before the
+   *  paginated window. Used as sticky section context without extending
+   *  `messages`. */
+  leadingUserMessage?: Message & { toolCalls?: ToolCall[] };
   /** Number of messages currently queued for this thread. */
   queuedCount?: number;
   /** Preview/content of the next queued message. */
@@ -421,10 +425,14 @@ export interface PaginatedMessages {
   messages: (Message & { toolCalls?: ToolCall[] })[];
   hasMore: boolean;
   hasMoreAfter?: boolean;
-  /** Full message count for the thread (phantom scroll spacer sizing). */
+  /** Full message count for the thread. */
   total?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
+  /** User message that owns the first loaded section when it sits before the
+   *  paginated window. Used as sticky section context without extending
+   *  `messages`. */
+  leadingUserMessage?: Message & { toolCalls?: ToolCall[] };
 }
 
 // ─── Tool Calls ──────────────────────────────────────────

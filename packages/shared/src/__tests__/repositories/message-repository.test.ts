@@ -269,7 +269,7 @@ describe('getThreadWithMessages', () => {
       seedMessage(deps.db, { id: `m${i}`, role: 'user', content: `m-${i}`, timestamp: ts(i) });
     }
 
-    // Windowed load reports the full total (for the phantom scroll spacer)…
+    // Windowed load reports the full total...
     const windowed = await repo.getThreadWithMessages('t1', 2);
     expect(windowed!.messages).toHaveLength(2);
     expect(windowed!.hasMore).toBe(true);
@@ -498,8 +498,8 @@ describe('getThreadMessages (pagination)', () => {
       seedMessage(deps.db, { id: `m${i}`, role: 'user', content: `msg-${i}`, timestamp: ts(i) });
     }
 
-    // Limited window still reports the full total so the client can size the
-    // phantom scroll spacer for the not-yet-loaded messages.
+    // Limited window still reports the full total so the client can describe
+    // where the loaded page sits in the full history.
     const limited = await repo.getThreadMessages({ threadId: 't1', limit: 2 });
     expect(limited.messages).toHaveLength(2);
     expect(limited.hasMore).toBe(true);
@@ -533,6 +533,43 @@ describe('getThreadMessages (pagination)', () => {
     expect(result.hasMoreAfter).toBe(true);
     expect(result.windowStart).toBe(3);
     expect(result.total).toBe(6);
+  });
+
+  test('returns the owning user message as leading context for older pages', async () => {
+    seedMessage(deps.db, { id: 'u0', role: 'user', content: 'first prompt', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'a1',
+      role: 'assistant',
+      content: 'first response',
+      timestamp: ts(1),
+    });
+    seedMessage(deps.db, {
+      id: 'a2',
+      role: 'assistant',
+      content: 'more first response',
+      timestamp: ts(2),
+    });
+    seedMessage(deps.db, { id: 'u3', role: 'user', content: 'second prompt', timestamp: ts(3) });
+    seedMessage(deps.db, {
+      id: 'a4',
+      role: 'assistant',
+      content: 'second response',
+      timestamp: ts(4),
+    });
+
+    const result = await repo.getThreadMessages({
+      threadId: 't1',
+      cursor: ts(4),
+      limit: 2,
+      direction: 'before',
+    });
+
+    expect(result.messages.map((m: any) => m.id)).toEqual(['a2', 'u3']);
+    expect(result.leadingUserMessage?.id).toBe('u0');
+    expect(result.windowStart).toBe(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.hasMoreAfter).toBe(true);
+    expect(result.total).toBe(5);
   });
 
   test('total counts only the requested thread (isolation)', async () => {

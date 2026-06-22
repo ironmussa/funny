@@ -12,8 +12,9 @@ import {
 } from './index.js';
 
 const port = parseInt(process.env.PORT ?? '3002', 10);
+const hostname = process.env.AGENT_HOST ?? process.env.HOST ?? '127.0.0.1';
 
-console.info(`[agent] Starting on port ${port}...`);
+console.info(`[agent] Starting on ${hostname}:${port}...`);
 
 // ── Graceful shutdown ────────────────────────────────────────────
 
@@ -37,5 +38,6 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 export default {
   port,
+  hostname,
   fetch: app.fetch,
 };

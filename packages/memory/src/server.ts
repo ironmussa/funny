@@ -22,14 +22,25 @@ import type { SearchFilters, StorageConfig, TimelineOptions } from './types.js';
 // ─── Config from env ───────────────────────────────────
 
 const PORT = Number(process.env.PP_PORT ?? 4020);
+const HOST = process.env.PP_HOST ?? '127.0.0.1';
 const DB_URL = process.env.PP_DB_URL ?? 'file:memory.db';
 const SYNC_URL = process.env.PP_SYNC_URL;
 const AUTH_TOKEN = process.env.PP_AUTH_TOKEN;
+const HTTP_AUTH_TOKEN = process.env.PP_HTTP_AUTH_TOKEN ?? process.env.PP_API_TOKEN;
 const PROJECT_ID = process.env.PP_PROJECT_ID ?? 'default';
 const PROJECT_NAME = process.env.PP_PROJECT_NAME ?? 'default';
 const LLM_URL = process.env.PP_LLM_URL;
 const LLM_MODEL = process.env.PP_LLM_MODEL ?? 'claude-haiku';
 const LLM_API_KEY = process.env.PP_LLM_API_KEY;
+const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+const REQUIRE_HTTP_AUTH =
+  process.env.PP_REQUIRE_HTTP_AUTH === '1' || !LOCAL_HOSTS.has(HOST.toLowerCase());
+const ALLOWED_ORIGINS = (
+  process.env.PP_CORS_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 function buildConfig(): StorageConfig {
   const config: StorageConfig = {
@@ -57,7 +68,31 @@ function getMemory(): PaisleyPark {
 
 const app = new Hono();
 
-app.use('*', cors());
+app.use(
+  '*',
+  cors({
+    origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : undefined),
+  }),
+);
+
+app.use('/v1/*', async (c, next) => {
+  if (!HTTP_AUTH_TOKEN) {
+    if (REQUIRE_HTTP_AUTH) {
+      return c.json(
+        { error: 'PP_HTTP_AUTH_TOKEN is required when binding to a non-local host' },
+        503,
+      );
+    }
+    await next();
+    return;
+  }
+
+  const auth = c.req.header('Authorization') ?? '';
+  if (auth !== `Bearer ${HTTP_AUTH_TOKEN}`) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  await next();
+});
 
 // ─── Health ────────────────────────────────────────────
 
@@ -287,15 +322,21 @@ app.post('/v1/gc', async (c) => {
 
 // ─── Start ─────────────────────────────────────────────
 
-log.info(`Paisley Park starting on port ${PORT}`, {
+log.info(`Paisley Park starting on ${HOST}:${PORT}`, {
   namespace: 'memory:server',
   projectId: PROJECT_ID,
   dbUrl: DB_URL,
   syncUrl: SYNC_URL ?? 'none',
   llm: LLM_URL ?? 'disabled',
+  httpAuth: HTTP_AUTH_TOKEN
+    ? 'enabled'
+    : REQUIRE_HTTP_AUTH
+      ? 'required-missing'
+      : 'disabled-localhost',
 });
 
 export default {
   port: PORT,
+  hostname: HOST,
   fetch: app.fetch,
 };

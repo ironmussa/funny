@@ -35,7 +35,7 @@ interface PRSummaryCardProps {
 
 export function CheckIcon({ check }: { check: CICheck }) {
   if (check.status !== 'completed') {
-    return <Loader2 className="size-3.5 shrink-0 animate-spin text-yellow-500" />;
+    return <Loader2 className="icon-sm shrink-0 animate-spin text-yellow-500" />;
   }
   switch (check.conclusion) {
     case 'success':
@@ -366,7 +366,7 @@ export function PRSummaryCard({
       {/* Loading skeleton when no detail yet */}
       {!detail && loadingDetail && (
         <div className="text-muted-foreground mt-1 flex items-center gap-2">
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="icon-sm animate-spin" />
           <span className="text-[11px]">Loading PR details…</span>
         </div>
       )}

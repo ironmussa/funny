@@ -97,7 +97,7 @@ export function WorktreeDeleteDialog({
         <div className="space-y-2">
           {statusLoading ? (
             <div className="text-muted-foreground flex items-center gap-2 py-2 text-xs">
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 className="icon-sm animate-spin" />
               {t('dialog.worktreeStatusLoading')}
             </div>
           ) : status ? (

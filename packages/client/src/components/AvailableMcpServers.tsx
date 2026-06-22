@@ -76,7 +76,7 @@ export function AvailableMcpServers({
         <span>{t('newThread.availableMcp')}</span>
       </Link>
       {loading ? (
-        <Loader2 className="size-3.5 animate-spin" data-testid="available-mcp-loading" />
+        <Loader2 className="icon-xs animate-spin" data-testid="available-mcp-loading" />
       ) : visibleServers.length === 0 ? (
         <span className="text-muted-foreground/60" data-testid="available-mcp-empty">
           {t('newThread.noMcpServers')}

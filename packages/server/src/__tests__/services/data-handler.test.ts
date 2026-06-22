@@ -74,6 +74,34 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
   });
 
+  test('create_project persists the project and assigns it to the creating runner', async () => {
+    // Regression: project-scoped routing (terminal/PTY via findRunnerForProject)
+    // needs a runner_project_assignments row. Creating the project must write
+    // that row on the same round-trip — relying only on the runner's separate
+    // runner:assign_project message orphaned projects whenever it was lost,
+    // which surfaced as "No runner available to handle terminal request".
+    seedRunner(db as any, { id: 'runner-1', userId: 'user-1', token: 'tok-cp' });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:create_project',
+      name: 'My New Project',
+      path: '/tmp/new-repo',
+      userId: 'user-1',
+    });
+
+    expect(res.type).toBe('data:create_project_response');
+    expect(res.error).toBeUndefined();
+    expect(res.project?.id).toBeTruthy();
+
+    const assignment = await db
+      .select()
+      .from(schema.runnerProjectAssignments)
+      .where(eq(schema.runnerProjectAssignments.projectId, res.project.id))
+      .get();
+    expect(assignment?.runnerId).toBe('runner-1');
+    expect(assignment?.localPath).toBe('/tmp/new-repo');
+  });
+
   test('insert_message persists and returns messageId', async () => {
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:insert_message',

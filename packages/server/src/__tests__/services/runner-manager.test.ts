@@ -245,6 +245,52 @@ describe('runner-manager service', () => {
 
       expect(await rm.findRunnerForProject('p1', 'user-2')).toBeNull();
     });
+
+    test('orphaned project (no assignment row) falls back to the owner online runner', async () => {
+      // Regression: a project created after the runner advertised its project
+      // list has no runner_project_assignments row. Without the fallback,
+      // findRunnerForProject returned null and the terminal failed with
+      // "No runner available to handle terminal request" even though the
+      // user's runner was online.
+      seedProject(t.db as any, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
+      seedRunner(t.db as any, {
+        id: 'r1',
+        userId: 'user-1',
+        status: 'online',
+        lastHeartbeatAt: new Date().toISOString(),
+      });
+
+      const resolved = await rm.findRunnerForProject('orphan', 'user-1');
+      expect(resolved?.runner.runnerId).toBe('r1');
+      // Uses the project's stored path as the local cwd.
+      expect(resolved?.localPath).toBe('/home/user/orphan');
+    });
+
+    test('orphaned project fallback never crosses tenants', async () => {
+      // The online runner belongs to user-2; user-1 owns the project. The
+      // fallback must NOT route user-1's terminal onto user-2's runner.
+      seedProject(t.db as any, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
+      seedRunner(t.db as any, {
+        id: 'r-other',
+        userId: 'user-2',
+        status: 'online',
+        lastHeartbeatAt: new Date().toISOString(),
+      });
+
+      expect(await rm.findRunnerForProject('orphan', 'user-1')).toBeNull();
+    });
+
+    test('orphaned project fallback returns null when the user has no online runner', async () => {
+      seedProject(t.db as any, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
+      seedRunner(t.db as any, {
+        id: 'r-stale',
+        userId: 'user-1',
+        status: 'online',
+        lastHeartbeatAt: '2020-01-01T00:00:00.000Z',
+      });
+
+      expect(await rm.findRunnerForProject('orphan', 'user-1')).toBeNull();
+    });
   });
 
   describe('runner tasks', () => {

@@ -68,6 +68,39 @@ describe('socketio browser handlers', () => {
     });
   });
 
+  test('pty:spawn on an owned project forwards to the runner (orphaned-project fallback)', async () => {
+    // Regression: pi-harness-style projects with no runner_project_assignments
+    // row used to make findRunnerForProject return null → "No runner available
+    // to handle terminal request". With the fallback it resolves the owner's
+    // online runner, so the spawn must forward, not error.
+    const capture = installMockIo();
+    const socket = createMockSocket();
+    setupBrowserPtyHandlers(socket, 'user-1');
+
+    await socket.trigger('pty:spawn', { projectId: 'owned', id: 'pty-1' });
+
+    expect(capture.centralBrowserWs).toHaveLength(1);
+    expect(capture.centralBrowserWs[0]?.payload).toMatchObject({
+      userId: 'user-1',
+      data: { type: 'pty:spawn' },
+    });
+    expect(socket.emitted).toHaveLength(0); // no pty:error
+  });
+
+  test('pty:spawn emits "No runner available" when no runner resolves', async () => {
+    spyOn(runnerManager, 'findRunnerForProject').mockResolvedValue(null);
+    installMockIo();
+    const socket = createMockSocket();
+    setupBrowserPtyHandlers(socket, 'user-1');
+
+    await socket.trigger('pty:spawn', { projectId: 'owned', id: 'pty-1' });
+
+    expect(socket.emitted[0]).toEqual({
+      event: 'pty:error',
+      data: { ptyId: 'pty-1', error: 'No runner available to handle terminal request' },
+    });
+  });
+
   test('blocks cross-tenant PTY requests for foreign projects', async () => {
     installMockIo();
     const socket = createMockSocket();

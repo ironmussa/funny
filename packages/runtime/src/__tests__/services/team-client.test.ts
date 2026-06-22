@@ -37,6 +37,7 @@ import {
   invalidateProjectCache,
   invalidateThreadCache,
   remoteGetThread,
+  remoteCreateProject,
   remoteSaveThreadEvent,
   remoteUpdateMessage,
   shutdownTeamMode,
@@ -55,6 +56,17 @@ function installSocket() {
                 type: 'data:get_thread_response',
                 thread: { id: payload.threadId, title: 'Cached' },
               }
+            : event === 'data:create_project'
+              ? {
+                  type: 'data:create_project_response',
+                  project: {
+                    id: 'created-project',
+                    name: payload.name,
+                    path: payload.path,
+                    userId: payload.userId,
+                    createdAt: '2026-06-21T00:00:00.000Z',
+                  },
+                }
             : { type: 'data:ack', success: true };
         queueMicrotask(() => {
           socketHandlers['data:response']?.({ requestId, response });
@@ -118,6 +130,27 @@ describe('team-client', () => {
         createdAt: new Date().toISOString(),
       } as any),
     ).resolves.toBeUndefined();
+  });
+
+  test('remoteCreateProject immediately assigns the new project to this runner', async () => {
+    await initTeamMode('http://127.0.0.1:3001');
+
+    const response = await remoteCreateProject('Created', '/tmp/created', 'user-1');
+
+    expect(response.project).toMatchObject({ id: 'created-project', path: '/tmp/created' });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:3001/api/runners/runner-test/projects',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: 'created-project',
+          localPath: '/tmp/created',
+        }),
+      }),
+    );
+    expect(getLocalProjects()).toEqual([
+      expect.objectContaining({ id: 'created-project', path: '/tmp/created' }),
+    ]);
   });
 
   test('remoteSaveThreadEvent does not throw when socket is disconnected', async () => {

@@ -1626,6 +1626,9 @@ export async function remoteCreateProject(
     userId,
     orgId: orgId ?? null,
   });
+  if (response?.project && !response.error) {
+    await assignProjectToRunner(response.project);
+  }
   return response;
 }
 

@@ -179,15 +179,22 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
 
   // Fast path: validate against runner-local project cache to avoid a
   // slow (and sometimes flaky) data-channel roundtrip on every spawn.
+  //
+  // A cache HIT authorizes immediately. A cache MISS is NOT authoritative:
+  // the cache is only warmed at startup (assignLocalProjects) and on the
+  // runner's own create path, so a project created through the server-side
+  // flow isn't in it yet. Denying on a miss surfaced as "Access denied:
+  // directory not in a registered project" for freshly-created projects even
+  // though the project exists on the server. So on a miss we fall through to
+  // the authoritative server list before denying.
   import('../services/team-client.js')
     .then(({ getLocalProjects }) => {
       const cached = getLocalProjects();
-      if (cached) {
-        if (!isCwdAllowed(cached)) return denyAccess();
+      if (cached && isCwdAllowed(cached)) {
         return doSpawn();
       }
 
-      // Cache not warm yet — fall back to server lookup.
+      // Cache miss (or not warm yet) — consult the authoritative server list.
       return getServices()
         .projects.listProjects(userId)
         .then((userProjects) => {

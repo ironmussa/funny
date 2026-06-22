@@ -2,14 +2,10 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
-  Cloud,
-  CloudCheck,
   GitBranch,
   GitCommit,
-  Monitor,
   RefreshCw,
   Search,
-  Tag,
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +13,7 @@ import { toast } from 'sonner';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
+import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
@@ -26,7 +23,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { LoadingState } from '@/components/ui/loading-state';
-import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
@@ -50,6 +46,8 @@ import {
   graphNodeParentRefLabels,
   type GraphNodeParentLabel,
   inferUnpulledHashesFromGraphEntries,
+  summarizeGraphBranches,
+  type GraphBranchSummary,
 } from '@/lib/graph-refs';
 import {
   indexRebaseEventsByHash,
@@ -66,6 +64,7 @@ import { metric } from '@/lib/telemetry';
 import { middleTruncate } from '@/lib/text-truncate';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadProjectId } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -107,7 +106,6 @@ const PAGE_SIZE = 80;
 // and `text-[10px]` is an absolute 10px.
 const TITLE_PX = 10.5;
 const META_PX = 10;
-const MAX_GUTTER_LANES = 12;
 const REBASE_LINK_RAIL_WIDTH = LANE_WIDTH;
 const PARENT_BRANCH_LABEL_MAX_CHARS = 40;
 // Upper bound on how many commits the active-filter background pager will pull
@@ -124,6 +122,10 @@ function graphNodeX(lane: number): number {
 
 function rebaseLinkNodeEdgeX(lane: number): number {
   return graphNodeX(lane) + LANE_WIDTH / 2 + 2;
+}
+
+export function renderedGraphLaneCount(layoutLaneCount: number): number {
+  return Math.max(layoutLaneCount, 1);
 }
 
 /**
@@ -165,6 +167,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
   const [unpulled, setUnpulled] = useState<Set<string>>(new Set());
+  const [branchActionInProgress, setBranchActionInProgress] = useState<string | null>(null);
   const [rebaseEvents, setRebaseEvents] = useState<GitRebaseReflogEventDTO[]>([]);
   const [selectedRebaseEvent, setSelectedRebaseEvent] = useState<GitRebaseReflogEventDTO | null>(
     null,
@@ -399,7 +402,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       })),
     );
   }, [displayEntries, isFiltering]);
-  const laneCount = Math.min(layout.laneCount, MAX_GUTTER_LANES);
+  const laneCount = renderedGraphLaneCount(layout.laneCount);
   const laneGutterWidth = laneCount * LANE_WIDTH;
   const rebaseRailWidth = useMemo(() => {
     if (rebaseCopyLinks.length === 0) return 0;
@@ -473,6 +476,85 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   }, []);
 
   const selectedCommit = entries.find((e) => e.hash === selectedHash);
+  const branchSummaries = useMemo(() => summarizeGraphBranches(entries), [entries]);
+  const branchSummaryByName = useMemo(
+    () => new Map(branchSummaries.map((branch) => [branch.branch, branch])),
+    [branchSummaries],
+  );
+
+  const refreshGitStatus = useCallback(() => {
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+  }, [effectiveThreadId, projectModeId]);
+
+  const pushBranch = useCallback(
+    async (branch: string) => {
+      if (!hasGitContext || branchActionInProgress) return;
+      setBranchActionInProgress(`push:${branch}`);
+      const result = effectiveThreadId
+        ? await api.pushBranch(effectiveThreadId, branch)
+        : await api.projectPushBranch(projectModeId!, branch);
+      if (result.isOk()) {
+        toast.success(
+          t('history.pushBranchSuccess', {
+            branch,
+            defaultValue: `Pushed ${branch} to origin`,
+          }),
+        );
+      } else {
+        toast.error(
+          t('review.pushFailed', {
+            message: result.error.message,
+            defaultValue: `Push failed: ${result.error.message}`,
+          }),
+        );
+      }
+      setBranchActionInProgress(null);
+      refreshGitStatus();
+      refreshLog();
+    },
+    [
+      hasGitContext,
+      branchActionInProgress,
+      effectiveThreadId,
+      projectModeId,
+      refreshGitStatus,
+      refreshLog,
+      t,
+    ],
+  );
+
+  const pullCurrentBranch = useCallback(
+    async (branch: string) => {
+      if (!hasGitContext || branchActionInProgress) return;
+      setBranchActionInProgress(`pull:${branch}`);
+      const result = effectiveThreadId
+        ? await api.pull(effectiveThreadId, 'ff-only')
+        : await api.projectPull(projectModeId!, 'ff-only');
+      if (result.isOk()) {
+        toast.success(t('review.pullSuccess', 'Pulled successfully'));
+      } else {
+        toast.error(
+          t('review.pullFailed', {
+            message: result.error.message,
+            defaultValue: `Pull failed: ${result.error.message}`,
+          }),
+        );
+      }
+      setBranchActionInProgress(null);
+      refreshGitStatus();
+      refreshLog();
+    },
+    [
+      hasGitContext,
+      branchActionInProgress,
+      effectiveThreadId,
+      projectModeId,
+      refreshGitStatus,
+      refreshLog,
+      t,
+    ],
+  );
 
   if (!hasGitContext) {
     return <EmptyState title={t('review.noProject', 'Select a project to view history')} />;
@@ -591,6 +673,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   effectiveThreadId={effectiveThreadId}
                   projectModeId={projectModeId}
                   onAfterAction={refreshLog}
+                  branchSummaryByName={branchSummaryByName}
+                  branchActionInProgress={branchActionInProgress}
+                  onPushBranch={pushBranch}
+                  onPullCurrentBranch={pullCurrentBranch}
                   rebaseEvents={rebaseEventsByHash.get(entry.hash) ?? []}
                   onSelectRebaseEvent={setSelectedRebaseEvent}
                   forkedFromRefLabel={
@@ -940,6 +1026,10 @@ function GraphCommitRow({
   effectiveThreadId,
   projectModeId,
   onAfterAction,
+  branchSummaryByName,
+  branchActionInProgress,
+  onPushBranch,
+  onPullCurrentBranch,
   rebaseEvents,
   onSelectRebaseEvent,
   forkedFromRefLabel,
@@ -963,6 +1053,10 @@ function GraphCommitRow({
   effectiveThreadId: string | undefined;
   projectModeId: string | null;
   onAfterAction: () => void;
+  branchSummaryByName: ReadonlyMap<string, GraphBranchSummary>;
+  branchActionInProgress: string | null;
+  onPushBranch: (branch: string) => void;
+  onPullCurrentBranch: (branch: string) => void;
   rebaseEvents: GitRebaseReflogEventDTO[];
   onSelectRebaseEvent: (event: GitRebaseReflogEventDTO) => void;
   forkedFromRefLabel: string | null;
@@ -1010,78 +1104,6 @@ function GraphCommitRow({
     () => foldGraphRefs(entry.refs, entry.headBranch),
     [entry.refs, entry.headBranch],
   );
-  const refSegments = useMemo<PowerlineSegmentData[]>(
-    () =>
-      // All refs on a commit share its lane color — they decorate the SAME
-      // commit on the SAME lane, so a uniform hue reads correctly as "these
-      // branches live here". (The old progressive per-chip darkening only
-      // existed to edge-separate connected powerline chevrons; now that refs
-      // render as separate chips, the gap does that.) The checked-out branch is
-      // distinguished by weight (bold via `emphasis`), not color.
-      foldedRefs.map((r) => {
-        const color = lanePastel;
-        const pullRequestTooltip = r.pullRequest
-          ? t('graph.pullRequest', {
-              number: r.pullRequest.number,
-              state: r.pullRequest.state,
-              defaultValue: `PR #${r.pullRequest.number} (${r.pullRequest.state})`,
-            })
-          : null;
-        if (r.kind === 'tag') {
-          return {
-            key: `tag:${r.name}`,
-            icon: Tag,
-            label: r.name,
-            color,
-            tooltip: r.name,
-          };
-        }
-        if (r.kind === 'remote') {
-          return {
-            key: `remote:${r.name}`,
-            icon: Cloud,
-            label: r.name,
-            color,
-            tooltip: pullRequestTooltip
-              ? `${r.name} · ${pullRequestTooltip}`
-              : t('graph.remoteBranch', {
-                  ref: r.name,
-                  defaultValue: `${r.name} (remote branch)`,
-                }),
-          };
-        }
-        // Local branch. Folded-in remote → CloudCheck (synced); else a computer
-        // icon (local-only, lives on this machine). One icon only, so the chip
-        // never shows two glyphs.
-        return {
-          key: `local:${r.name}`,
-          icon: r.syncedRemote ? CloudCheck : Monitor,
-          label: r.name,
-          color,
-          emphasis: r.isCurrent,
-          tooltip: [
-            r.syncedRemote
-              ? t('graph.branchSynced', {
-                  ref: r.name,
-                  remote: r.syncedRemote,
-                  defaultValue: r.isCurrent
-                    ? `${r.name} (current branch · in sync with ${r.syncedRemote})`
-                    : `${r.name} (in sync with ${r.syncedRemote})`,
-                })
-              : r.isCurrent
-                ? t('graph.currentBranch', {
-                    ref: r.name,
-                    defaultValue: `${r.name} (current branch)`,
-                  })
-                : r.name,
-            pullRequestTooltip,
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        };
-      }),
-    [foldedRefs, lanePastel, t],
-  );
   const pullRequestLinks = useMemo(() => {
     const seen = new Set<string>();
     return foldedRefs.flatMap((r) => {
@@ -1104,6 +1126,14 @@ function GraphCommitRow({
         .map((r) => r.name),
     [foldedRefs],
   );
+  const targetBranches = useMemo(
+    () =>
+      foldedRefs
+        .filter((r) => r.kind === 'local' && r.name !== 'HEAD')
+        .map((r) => r.name)
+        .filter((branch) => !branchSummaryByName.get(branch)?.isCurrent),
+    [branchSummaryByName, foldedRefs],
+  );
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const commitTime = useMemo(
@@ -1120,7 +1150,7 @@ function GraphCommitRow({
   // The chip line and title line get EXPLICIT heights below so this arithmetic
   // matches the rendered DOM exactly — otherwise line-height/padding rounding
   // leaves the leader line a couple px off the chip's true center.
-  const hasRefs = refSegments.length > 0;
+  const hasRefs = foldedRefs.length > 0;
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
   const chipCenterY = nodeYForRow(entry, rowHeight);
@@ -1275,7 +1305,7 @@ function GraphCommitRow({
         {/* Commit info: title line, optional branch/tag chips above it. */}
         <div className="flex min-w-0 flex-1 flex-col justify-center pl-1">
           {/* Branch/tag chips on their own line above the commit title. */}
-          {refSegments.length > 0 && (
+          {foldedRefs.length > 0 && (
             <div
               className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
               style={{ height: chipLineH }}
@@ -1285,12 +1315,14 @@ function GraphCommitRow({
                   chevrons, which read as one continuous path when two branch tips
                   share a commit. A folded local+remote pair is already ONE chip,
                   so distinct chips here always mean distinct branches/tags. */}
-              <PowerlineBar
-                segments={refSegments}
-                size="sm"
-                variant="chips"
-                className="min-w-0 shrink"
-                query={searchQuery}
+              <GraphRefChips
+                refs={foldedRefs}
+                branchSummaryByName={branchSummaryByName}
+                actionInProgress={branchActionInProgress}
+                color={lanePastel}
+                searchQuery={searchQuery}
+                onPushBranch={onPushBranch}
+                onPullCurrentBranch={onPullCurrentBranch}
               />
               {pullRequestLinks.map((pr) => (
                 <PRBadge
@@ -1340,6 +1372,7 @@ function GraphCommitRow({
             effectiveThreadId={effectiveThreadId}
             projectModeId={projectModeId}
             localBranches={pushableBranches}
+            targetBranches={targetBranches}
             rebaseEvents={rebaseEvents}
             onSelectRebaseEvent={onSelectRebaseEvent}
             onAfterAction={onAfterAction}

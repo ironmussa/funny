@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   publishRepo: vi.fn(),
   listGitHubOrgs: vi.fn(),
   gitServiceMerge: vi.fn(),
+  gitServiceMergeCurrentBranchInto: vi.fn(),
+  gitServiceRebaseCurrentBranchOnto: vi.fn(),
   gitServiceCreatePR: vi.fn(),
   executeWorkflow: vi.fn(),
   isWorkflowActive: vi.fn(),
@@ -121,6 +123,8 @@ vi.mock('../../services/git-service.js', async (importOriginal) => {
     pushChanges: mocks.gitServicePush,
     pullChanges: mocks.gitServicePull,
     merge: mocks.gitServiceMerge,
+    mergeCurrentBranchInto: mocks.gitServiceMergeCurrentBranchInto,
+    rebaseCurrentBranchOnto: mocks.gitServiceRebaseCurrentBranchOnto,
     createPullRequest: mocks.gitServiceCreatePR,
     stashChanges: mocks.gitServiceStash,
     popStash: mocks.gitServicePopStash,
@@ -181,6 +185,8 @@ describe('gitRoutes (mounted)', () => {
     mocks.publishRepo.mockReturnValue(okAsync('https://github.com/acme/new-repo.git'));
     mocks.listGitHubOrgs.mockReturnValue(okAsync([{ login: 'acme' }]));
     mocks.gitServiceMerge.mockReturnValue(okAsync('merged into main'));
+    mocks.gitServiceMergeCurrentBranchInto.mockReturnValue(okAsync('merged into master'));
+    mocks.gitServiceRebaseCurrentBranchOnto.mockReturnValue(okAsync('rebased onto master'));
     mocks.gitServiceCreatePR.mockReturnValue(okAsync('https://github.com/acme/repo/pull/42'));
     mocks.executeWorkflow.mockReturnValue({ workflowId: 'wf-test-1' });
     mocks.isWorkflowActive.mockReturnValue(false);
@@ -798,6 +804,125 @@ describe('gitRoutes (mounted)', () => {
       push: true,
       cleanup: false,
     });
+  });
+
+  test('POST /api/git/:threadId/merge-current-into merges the current branch into a target branch', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+      branch: 'feat/current',
+      baseBranch: 'master',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t1/merge-current-into', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetBranch: 'master' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, output: 'merged into master' });
+    expect(mocks.gitServiceMergeCurrentBranchInto).toHaveBeenCalledWith(
+      't1',
+      'user-1',
+      '/wt/thread',
+      'master',
+      { projectId: 'p1' },
+    );
+  });
+
+  test('POST /api/git/:threadId/rebase-current-onto rebases the current branch onto a target branch', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+      branch: 'feat/current',
+      baseBranch: 'master',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t1/rebase-current-onto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetBranch: 'master' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, output: 'rebased onto master' });
+    expect(mocks.gitServiceRebaseCurrentBranchOnto).toHaveBeenCalledWith(
+      't1',
+      'user-1',
+      '/wt/thread',
+      'master',
+      { projectId: 'p1' },
+    );
+  });
+
+  test('POST /api/git/:threadId/merge-current-into rejects a missing target branch', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't1',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      worktreePath: '/wt/thread',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t1/merge-current-into', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('targetBranch is required');
+    expect(mocks.gitServiceMergeCurrentBranchInto).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/git/project/:projectId/merge-current-into operates on the project cwd', async () => {
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/merge-current-into', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetBranch: 'master' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, output: 'merged into master' });
+    expect(mocks.gitServiceMergeCurrentBranchInto).toHaveBeenCalledWith(
+      'p1',
+      'user-1',
+      '/tmp/repo',
+      'master',
+      { projectId: 'p1' },
+    );
+  });
+
+  test('POST /api/git/project/:projectId/rebase-current-onto operates on the project cwd', async () => {
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/rebase-current-onto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetBranch: 'master' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, output: 'rebased onto master' });
+    expect(mocks.gitServiceRebaseCurrentBranchOnto).toHaveBeenCalledWith(
+      'p1',
+      'user-1',
+      '/tmp/repo',
+      'master',
+      { projectId: 'p1' },
+    );
   });
 
   test('POST /api/git/:threadId/workflow starts orchestrated workflow', async () => {

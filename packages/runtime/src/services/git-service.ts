@@ -16,6 +16,7 @@ import {
   pushBranch as gitPushBranch,
   pull as gitPull,
   mergeBranch as gitMerge,
+  getCurrentBranch,
   stash as gitStash,
   stashFiles as gitStashFiles,
   stashPop as gitStashPop,
@@ -379,6 +380,72 @@ export function cherryPickCommit(
       invalidateStatusCache(cwd);
       return output;
     });
+  });
+}
+
+export function rebaseCurrentBranchOnto(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  targetBranch: string,
+  options?: { emitEvent?: boolean; projectId?: string },
+): ResultAsync<string, DomainError> {
+  return getCurrentBranch(cwd).andThen((currentBranch) => {
+    if (!currentBranch || currentBranch === 'HEAD') {
+      return errAsync(badRequest('Rebase requires a checked-out branch'));
+    }
+    if (currentBranch === targetBranch) {
+      return errAsync(badRequest(`Already on ${targetBranch}`));
+    }
+
+    return git(['rebase', targetBranch], cwd).map(async (output) => {
+      if (options?.emitEvent !== false) {
+        threadEventBus.emit('git:changed', {
+          threadId,
+          userId,
+          projectId: options?.projectId ?? (await getProjectId(threadId)),
+          worktreePath: cwd,
+          cwd,
+          toolName: 'git-rebase',
+        });
+      }
+      invalidateStatusCache(cwd);
+      return output;
+    });
+  });
+}
+
+export function mergeCurrentBranchInto(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  targetBranch: string,
+  options?: { emitEvent?: boolean; projectId?: string },
+): ResultAsync<string, DomainError> {
+  return getCurrentBranch(cwd).andThen((currentBranch) => {
+    if (!currentBranch || currentBranch === 'HEAD') {
+      return errAsync(badRequest('Merge requires a checked-out branch'));
+    }
+    if (currentBranch === targetBranch) {
+      return errAsync(badRequest(`Already on ${targetBranch}`));
+    }
+
+    return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+      gitMerge(cwd, currentBranch, targetBranch, identity).map(async (output) => {
+        if (options?.emitEvent !== false) {
+          threadEventBus.emit('git:merged', {
+            threadId,
+            userId,
+            projectId: options?.projectId ?? (await getProjectId(threadId)),
+            sourceBranch: currentBranch,
+            targetBranch,
+            output,
+          });
+        }
+        invalidateStatusCache(cwd);
+        return output;
+      }),
+    );
   });
 }
 

@@ -32,6 +32,7 @@ interface GraphReachabilityEntry {
   hash: string;
   parentHashes: string[];
   refs: readonly GraphRefDTO[];
+  headBranch?: string | null;
 }
 
 interface GraphNodeParentRefEntry {
@@ -54,6 +55,29 @@ interface GraphNodeParentRefLink {
 
 /** Branch portion of a remote ref — remote names never contain `/`. */
 const remoteBranchOf = (name: string) => name.slice(name.indexOf('/') + 1);
+
+export type BranchSyncState =
+  | 'synced'
+  | 'ahead'
+  | 'behind'
+  | 'diverged'
+  | 'local-only'
+  | 'remote-only';
+
+export type BranchPrimaryAction = 'none' | 'push' | 'pull' | 'sync' | 'publish' | 'checkout';
+
+export interface GraphBranchSummary {
+  branch: string;
+  localRef?: string;
+  remoteRef?: string;
+  localHash?: string;
+  remoteHash?: string;
+  isCurrent: boolean;
+  ahead: number;
+  behind: number;
+  state: BranchSyncState;
+  primaryAction: BranchPrimaryAction;
+}
 
 /**
  * A ref as it may arrive over the wire. Current runners send a classified
@@ -341,4 +365,126 @@ export function inferUnpulledHashesFromGraphEntries(
     if (!localReachable.has(hash)) inferred.add(hash);
   }
   return inferred;
+}
+
+function collectReachableHashes(
+  startHash: string | undefined,
+  byHash: ReadonlyMap<string, GraphReachabilityEntry>,
+): Set<string> {
+  const seen = new Set<string>();
+  if (!startHash) return seen;
+  const stack = [startHash];
+  while (stack.length > 0) {
+    const hash = stack.pop()!;
+    if (seen.has(hash)) continue;
+    seen.add(hash);
+    const entry = byHash.get(hash);
+    if (!entry) continue;
+    for (const parent of entry.parentHashes) {
+      if (byHash.has(parent)) stack.push(parent);
+    }
+  }
+  return seen;
+}
+
+function countOnly(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
+  let count = 0;
+  for (const hash of left) {
+    if (!right.has(hash)) count += 1;
+  }
+  return count;
+}
+
+export function summarizeGraphBranches(
+  entries: readonly GraphReachabilityEntry[],
+): GraphBranchSummary[] {
+  const byHash = new Map(entries.map((entry) => [entry.hash, entry]));
+  const branches = new Map<string, GraphBranchSummary>();
+
+  const ensure = (branch: string): GraphBranchSummary => {
+    const existing = branches.get(branch);
+    if (existing) return existing;
+    const created: GraphBranchSummary = {
+      branch,
+      isCurrent: false,
+      ahead: 0,
+      behind: 0,
+      state: 'local-only',
+      primaryAction: 'publish',
+    };
+    branches.set(branch, created);
+    return created;
+  };
+
+  for (const entry of entries) {
+    for (const ref of entry.refs) {
+      if (ref.kind === 'tag' || ref.name === 'HEAD') continue;
+      if (ref.kind === 'local') {
+        const summary = ensure(ref.name);
+        summary.localRef = ref.name;
+        summary.localHash = entry.hash;
+        summary.isCurrent ||= entry.headBranch === ref.name;
+      } else if (ref.kind === 'remote') {
+        const branch = remoteBranchOf(ref.name);
+        const summary = ensure(branch);
+        if (!summary.remoteRef || ref.name.startsWith('origin/')) {
+          summary.remoteRef = ref.name;
+          summary.remoteHash = entry.hash;
+        }
+      }
+    }
+  }
+
+  for (const summary of branches.values()) {
+    if (summary.localHash && summary.remoteHash) {
+      if (summary.localHash === summary.remoteHash) {
+        summary.state = 'synced';
+        summary.primaryAction = 'none';
+        summary.ahead = 0;
+        summary.behind = 0;
+        continue;
+      }
+
+      const localReachable = collectReachableHashes(summary.localHash, byHash);
+      const remoteReachable = collectReachableHashes(summary.remoteHash, byHash);
+      summary.ahead = countOnly(localReachable, remoteReachable);
+      summary.behind = countOnly(remoteReachable, localReachable);
+
+      if (remoteReachable.has(summary.localHash)) {
+        summary.state = 'behind';
+        summary.primaryAction = summary.isCurrent ? 'pull' : 'checkout';
+      } else if (localReachable.has(summary.remoteHash)) {
+        summary.state = 'ahead';
+        summary.primaryAction = 'push';
+      } else {
+        summary.state = 'diverged';
+        summary.primaryAction = summary.isCurrent ? 'sync' : 'checkout';
+      }
+    } else if (summary.localHash) {
+      summary.state = 'local-only';
+      summary.primaryAction = 'publish';
+      summary.ahead = 0;
+      summary.behind = 0;
+    } else {
+      summary.state = 'remote-only';
+      summary.primaryAction = 'checkout';
+      summary.ahead = 0;
+      summary.behind = 0;
+    }
+  }
+
+  return [...branches.values()].sort((a, b) => {
+    if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
+    const rank: Record<BranchSyncState, number> = {
+      diverged: 0,
+      ahead: 1,
+      behind: 2,
+      'local-only': 3,
+      'remote-only': 4,
+      synced: 5,
+    };
+    const byState = rank[a.state] - rank[b.state];
+    if (byState !== 0) return byState;
+    return a.branch.localeCompare(b.branch);
+  });
 }

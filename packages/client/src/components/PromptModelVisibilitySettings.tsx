@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
-import { isPromptModelConfigurable } from '@/lib/providers';
+import { getConfigurablePromptModelGroups } from '@/lib/prompt-model-visibility';
 import { useSettingsStore } from '@/stores/settings-store';
 
 interface PromptModelVisibilitySettingsProps {
@@ -35,13 +35,7 @@ export function PromptModelVisibilitySettings({
 
   // Only keep providers that have at least one user-toggleable model.
   const configurableGroups = useMemo(
-    () =>
-      modelGroups
-        .map((group) => ({
-          ...group,
-          models: group.models.filter((model) => isPromptModelConfigurable(model.value)),
-        }))
-        .filter((group) => group.models.length > 0),
+    () => getConfigurablePromptModelGroups(modelGroups),
     [modelGroups],
   );
 

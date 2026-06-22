@@ -55,6 +55,16 @@ function terminalTimestamps(status: ThreadStatus, now = new Date().toISOString()
   return { completedAt: now, updatedAt: now };
 }
 
+function findTailUserMessageWithContent(
+  messages: NonNullable<ThreadState['activeThread']>['messages'],
+  content: string,
+): number {
+  const tailIdx = messages.length - 1;
+  if (tailIdx < 0) return -1;
+  const tail = messages[tailIdx];
+  return tail.role === 'user' && tail.content === content ? tailIdx : -1;
+}
+
 // ── Sidebar update helper ─────────────────────────────────────
 //
 // Threads live in a single `threadsById` index; project- vs scratch- buckets
@@ -293,6 +303,19 @@ export function handleWSMessage(
         timestamp: new Date().toISOString(),
         ...(data.author ? { author: data.author } : {}),
       };
+
+      if (data.role === 'user') {
+        const optimisticIdx = findTailUserMessageWithContent(t.messages, data.content);
+        if (optimisticIdx >= 0) {
+          const updated = [...t.messages];
+          updated[optimisticIdx] = { ...updated[optimisticIdx], ...newMsg };
+          return {
+            ...t,
+            lastUserMessage: updated[optimisticIdx],
+            messages: updated,
+          };
+        }
+      }
 
       const lastUserMessage =
         extraMessages.length > 0

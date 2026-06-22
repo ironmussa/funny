@@ -178,6 +178,46 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(mockInvalidate).toHaveBeenCalledWith(THREAD_ID);
   });
 
+  test('handleWSMessage reconciles a real user message with the optimistic tail', () => {
+    const userContent = 'please consolidate the PR identifiers';
+    const optimisticMessage = {
+      id: 'optimistic-user-id',
+      threadId: THREAD_ID,
+      role: 'user',
+      content: userContent,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      model: 'gpt-5.5',
+      permissionMode: 'autoEdit',
+    };
+    const state = makeState({
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [optimisticMessage],
+          lastUserMessage: optimisticMessage,
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSMessage(get, set, THREAD_ID, {
+      messageId: 'real-user-id',
+      role: 'user',
+      content: userContent,
+    });
+
+    const messages = state.threadDataById[THREAD_ID].messages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: 'real-user-id',
+      role: 'user',
+      content: userContent,
+      model: 'gpt-5.5',
+      permissionMode: 'autoEdit',
+    });
+    expect(state.threadDataById[THREAD_ID].lastUserMessage.id).toBe('real-user-id');
+  });
+
   test('handleWSToolCall invalidates when thread is active', () => {
     const { get, set } = makeGetSet(makeState());
     handleWSToolCall(get, set, THREAD_ID, { name: 'Bash', input: {} });

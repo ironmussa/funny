@@ -392,7 +392,7 @@ export const MemoizedMessageList = memo(
 
     useLayoutEffect(() => {
       updateListScrollMargin();
-    });
+    }, [updateListScrollMargin]);
 
     useEffect(() => {
       const viewport = scrollRef.current;
@@ -556,6 +556,10 @@ export const MemoizedMessageList = memo(
 
       return rows;
     }, [groupedItems, sessionChanges]);
+    const virtualRowsSignature = useMemo(
+      () => virtualRows.map((row) => row.key).join('\n'),
+      [virtualRows],
+    );
 
     const rowKeyIndexMap = useMemo(() => {
       const map = new Map<string, number>();
@@ -623,8 +627,6 @@ export const MemoizedMessageList = memo(
     });
 
     useLayoutEffect(() => {
-      measureRowsEvent();
-
       let secondRafId: number | null = null;
       const firstRafId = requestAnimationFrame(() => {
         measureRowsEvent();
@@ -635,10 +637,35 @@ export const MemoizedMessageList = memo(
         cancelAnimationFrame(firstRafId);
         if (secondRafId !== null) cancelAnimationFrame(secondRafId);
       };
-    }, [containerWidth, globalFontSize, listScrollMargin, threadId, virtualRows]);
+    }, [containerWidth, globalFontSize, listScrollMargin, threadId, virtualRowsSignature]);
 
     const virtualItems = rowVirtualizer.getVirtualItems();
-    const virtualContentHeight = Math.max(rowVirtualizer.getTotalSize(), measuredContentBottom);
+    const shouldUseVirtualFallback = virtualItems.length === 0 && virtualRows.length > 0;
+    const fallbackVirtualItems = useMemo(() => {
+      if (!shouldUseVirtualFallback) return [];
+      let offset = 0;
+      return virtualRows.map((row, index) => {
+        const size =
+          heightCache.get(row.key) ?? estimateVirtualRowHeight(row, containerWidth, fontConfig);
+        const item = {
+          key: row.key,
+          index,
+          start: offset,
+          size,
+          end: offset + size,
+          lane: 0,
+        };
+        offset = item.end + VIRTUAL_ROW_GAP_PX;
+        return item;
+      });
+    }, [containerWidth, fontConfig, heightCache, shouldUseVirtualFallback, virtualRows]);
+    const visibleVirtualItems = shouldUseVirtualFallback ? fallbackVirtualItems : virtualItems;
+    const fallbackContentHeight = fallbackVirtualItems.at(-1)?.end ?? 0;
+    const virtualContentHeight = Math.max(
+      rowVirtualizer.getTotalSize(),
+      measuredContentBottom,
+      fallbackContentHeight,
+    );
 
     // ── Scroll anchor: capture/restore for jank-free scroll preservation ──
     const scrollAnchorRef = useRef<{
@@ -704,7 +731,8 @@ export const MemoizedMessageList = memo(
     const stickyScrollOffset =
       rowVirtualizer.scrollOffset ?? scrollRef.current?.scrollTop ?? listScrollMargin;
     const firstVisibleVirtualItem =
-      virtualItems.find((virtualItem) => virtualItem.end > stickyScrollOffset) ?? virtualItems[0];
+      visibleVirtualItems.find((virtualItem) => virtualItem.end > stickyScrollOffset) ??
+      visibleVirtualItems[0];
     const firstVisibleRow = firstVisibleVirtualItem
       ? virtualRows[firstVisibleVirtualItem.index]
       : undefined;
@@ -1028,7 +1056,7 @@ export const MemoizedMessageList = memo(
             </div>
           </div>
         ) : null}
-        {virtualItems.map((virtualItem) => {
+        {visibleVirtualItems.map((virtualItem) => {
           const row = virtualRows[virtualItem.index];
           if (!row) return null;
 

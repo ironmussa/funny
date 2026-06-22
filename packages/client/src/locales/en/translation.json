@@ -159,6 +159,8 @@
       "opencodeDefault": "opencode (configured default)"
     },
     "prOpen": "PR #{{number}}",
+    "prMerged": "PR #{{number}} (merged)",
+    "prClosed": "PR #{{number}} (closed)",
     "createdBy": "Created by {{creator}}",
     "readyToLaunch": "Ready to Launch",
     "send": "Send",

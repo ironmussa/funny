@@ -30,10 +30,18 @@ const SIZE_CLASS = {
   },
 } as const;
 
+const STATE_CLASS = {
+  OPEN: 'border-emerald-300/70 bg-emerald-50 text-emerald-700 hover:border-emerald-400 hover:text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:border-emerald-300/60 dark:hover:text-emerald-100',
+  MERGED:
+    'border-violet-300/70 bg-violet-50 text-violet-700 hover:border-violet-400 hover:text-violet-800 dark:border-violet-400/35 dark:bg-violet-400/15 dark:text-violet-200 dark:hover:border-violet-300/60 dark:hover:text-violet-100',
+  CLOSED:
+    'border-rose-300/70 bg-rose-50 text-rose-700 hover:border-rose-400 hover:text-rose-800 dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-200 dark:hover:border-rose-300/60 dark:hover:text-rose-100',
+} as const;
+
 /**
  * Standardized PR number badge/link.
- * State is exposed in the tooltip; color stays neutral so the badge reads
- * consistently across graph rows, sidebars, dialogs, and PR lists.
+ * State is exposed in the tooltip and soft color so it reads consistently
+ * across graph rows, sidebars, dialogs, and PR lists.
  */
 export function PRBadge({
   prNumber,
@@ -60,9 +68,10 @@ export function PRBadge({
             defaultValue: `PR #${prNumber} (closed)`,
           });
   const badgeClassName = cn(
-    'border-border/70 bg-background/90 text-foreground inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold hover:border-primary/60 hover:text-primary focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
+    'inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
     config.badge,
-    !prUrl && 'hover:border-border/70 hover:text-foreground',
+    STATE_CLASS[prState],
+    !prUrl && 'cursor-default',
     className,
   );
   const content = (

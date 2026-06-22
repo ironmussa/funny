@@ -135,7 +135,7 @@
         "cmdk": "^1.1.1",
         "color": "^5.0.3",
         "dockview-react": "^6.5.0",
-        "dompurify": "^3.4.10",
+        "dompurify": "^3.4.11",
         "highlight.js": "^11.11.1",
         "i18next": "^26.3.1",
         "lucide-react": "^1.20.0",
@@ -373,7 +373,7 @@
         "hono": "^4.12.25",
         "nanoid": "^5.0.9",
         "neverthrow": "^8.2.0",
-        "nodemailer": "^9.0.0",
+        "nodemailer": "^9.0.1",
         "p-limit": "^7.3.0",
         "pg": "^8.20.0",
         "postgres": "^3.4.8",
@@ -441,7 +441,7 @@
         "kysely": "^0.29.2",
         "nanoid": "^5.0.9",
         "neverthrow": "^8.2.0",
-        "nodemailer": "^9.0.0",
+        "nodemailer": "^9.0.1",
         "pg": "^8.20.0",
         "socket.io": "4.8.3",
         "winston": "^3.19.0",
@@ -472,7 +472,7 @@
     },
   },
   "overrides": {
-    "dompurify": "^3.4.10",
+    "dompurify": "^3.4.11",
     "esbuild": ">=0.28.1",
     "uuid": "^11.1.1",
     "vitest": "^4.1.9",
@@ -2312,7 +2312,7 @@
 
     "dom-accessibility-api": ["dom-accessibility-api@0.6.3", "", {}, "sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w=="],
 
-    "dompurify": ["dompurify@3.4.10", "", { "optionalDependencies": { "@types/trusted-types": "^2.0.7" } }, "sha512-0xzNv0e7oYC6yyuOGZIABPM4qtg3QxLFniDNPP4ZP90wR8Yq3zgwpRbrNiT4N3IKqDbbYFEJLV+JWEs19aZ//w=="],
+    "dompurify": ["dompurify@3.4.11", "", { "optionalDependencies": { "@types/trusted-types": "^2.0.7" } }, "sha512-zhlUV12GsaRzMsf9q5M254YhA4+VuF0fG+QFqu6aYpoGlKtz+w8//jBcGVYBgQkR5GHjUomejY84AV+/uPbWdw=="],
 
     "dot-prop": ["dot-prop@10.1.0", "", { "dependencies": { "type-fest": "^5.0.0" } }, "sha512-MVUtAugQMOff5RnBy2d9N31iG0lNwg1qAoAOn7pOK5wf94WIaE3My2p3uwTQuvS2AcqchkcR3bHByjaM0mmi7Q=="],
 
@@ -2916,7 +2916,7 @@
 
     "node-releases": ["node-releases@2.0.47", "", {}, "sha512-Uzmd6LXpouKo8EUK68IjH4+E01w/hXyV3R3g/geCJo+rXLNfh1xucB+LOzYEOQPSiUK3h/xZf0cQGcSsmyL2Og=="],
 
-    "nodemailer": ["nodemailer@9.0.0", "", {}, "sha512-tbPTid7d/p9jAA8CRZ3iomvrMaST0o6NYuY7v6JQZHpPRZ61mLFSPKYd7342NtOFuej9/+L48SOIxwfu2uDvtw=="],
+    "nodemailer": ["nodemailer@9.0.1", "", {}, "sha512-Gwv8SQewT616ZM/URn0H54b8PWo/Wum7md3EW2aWy1lO27+WZCX+Xyak3J+NlmHUjDh5ME+uesJUDRbR3Ye8Bw=="],
 
     "normalize-package-data": ["normalize-package-data@8.0.0", "", { "dependencies": { "hosted-git-info": "^9.0.0", "semver": "^7.3.5", "validate-npm-package-license": "^3.0.4" } }, "sha512-RWk+PI433eESQ7ounYxIp67CYuVsS1uYSonX3kA6ps/3LWfjVQa/ptEg6Y3T6uAMq1mWpX9PQ+qx+QaHpsc7gQ=="],
 

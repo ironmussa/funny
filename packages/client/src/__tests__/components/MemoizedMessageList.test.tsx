@@ -135,12 +135,13 @@ function makeMessagesWithToolCalls(toolCalls: any[]) {
   ];
 }
 
-function Harness({ messages }: { messages: any[] }) {
+function Harness({ messages, leadingUserMessage }: { messages: any[]; leadingUserMessage?: any }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   return (
     <div ref={scrollRef} data-testid="viewport">
       <MemoizedMessageList
         messages={messages}
+        leadingUserMessage={leadingUserMessage}
         threadId="t1"
         knownIds={new Set()}
         prefersReducedMotion={true}
@@ -195,6 +196,45 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelectorAll('[data-testid="user-message-m0"]')).toHaveLength(2);
     expect(getByTestId('sticky-section-context').className).toContain('z-50');
     expect(viewport.querySelector('[data-virtual-row-key="m1"]')?.className).toContain('z-0');
+  });
+
+  test('uses leading user context when the owner row is outside the loaded window', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 2;
+
+    const messages = [
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: 'first response chunk',
+        timestamp: '2026-01-01T00:00:01.000Z',
+      },
+      {
+        id: 'a2',
+        role: 'assistant',
+        content: 'second response chunk',
+        timestamp: '2026-01-01T00:00:02.000Z',
+      },
+    ];
+    const leadingUserMessage = {
+      id: 'u0',
+      role: 'user',
+      content: 'prompt outside the loaded window',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    };
+
+    const { getByTestId } = render(
+      <Harness messages={messages} leadingUserMessage={leadingUserMessage} />,
+    );
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() => expect(getByTestId('sticky-section-context')).toBeTruthy());
+
+    expect(viewport.querySelectorAll('[data-testid="user-message-u0"]')).toHaveLength(1);
+    expect(viewport.querySelector('[data-item-key="u0"]')).toBeNull();
+    expect(
+      viewport.querySelector<HTMLElement>('[data-virtual-row-key="a1"]')?.style.transform,
+    ).not.toBe('translateY(0px)');
   });
 
   test('does not use content-visibility placeholders for variable-height tool rows', async () => {
@@ -267,6 +307,40 @@ describe('MemoizedMessageList virtualization', () => {
     });
 
     await waitFor(() => expect(virtualContainer.style.height).toBe('300px'));
+  });
+
+  test('caps list height at the measured bottom of the final row', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 2;
+
+    const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() => expect(viewport.querySelector('[data-virtual-row-key="m1"]')).toBeTruthy());
+
+    const row = viewport.querySelector<HTMLElement>('[data-virtual-row-key="m1"]')!;
+    const virtualContainer = row.parentElement as HTMLElement;
+    virtualContainer.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          top: 0,
+        }) as DOMRect,
+    );
+    row.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          bottom: 160,
+          height: 40,
+        }) as DOMRect,
+    );
+
+    act(() => {
+      virtualizerMockState.lastOptions.measureElement(row, {
+        borderBoxSize: [{ blockSize: 40 }],
+      } as unknown as ResizeObserverEntry);
+    });
+
+    await waitFor(() => expect(virtualContainer.style.height).toBe('160px'));
   });
 
   test('uses a conservative initial estimate for collapsed user message cards', async () => {

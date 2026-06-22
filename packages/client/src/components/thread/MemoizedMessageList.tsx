@@ -231,6 +231,7 @@ export interface MemoizedMessageListHandle {
 function messageListAreEqual(
   prev: {
     messages: any[];
+    leadingUserMessage?: any;
     threadEvents?: any[];
     compactionEvents?: any[];
     threadId: string;
@@ -256,6 +257,7 @@ function messageListAreEqual(
 ) {
   return (
     prev.messages === next.messages &&
+    prev.leadingUserMessage === next.leadingUserMessage &&
     prev.threadEvents === next.threadEvents &&
     prev.compactionEvents === next.compactionEvents &&
     prev.threadId === next.threadId &&
@@ -283,6 +285,7 @@ export const MemoizedMessageList = memo(
     MemoizedMessageListHandle,
     {
       messages: any[];
+      leadingUserMessage?: any;
       threadEvents?: ThreadEvent[];
       compactionEvents?: CompactionEvent[];
       threadId: string;
@@ -311,6 +314,7 @@ export const MemoizedMessageList = memo(
   >(function MemoizedMessageList(
     {
       messages,
+      leadingUserMessage,
       threadEvents,
       compactionEvents,
       threadId,
@@ -357,6 +361,11 @@ export const MemoizedMessageList = memo(
       () => buildGroupedRenderItems(messages, threadEvents, compactionEvents),
       [messages, threadEvents, compactionEvents],
     );
+    const leadingUserItem = useMemo<MessageItem | null>(() => {
+      if (!leadingUserMessage) return null;
+      if (messages.some((msg) => msg.id === leadingUserMessage.id)) return null;
+      return { type: 'message', msg: leadingUserMessage };
+    }, [leadingUserMessage, messages]);
 
     /* ── Virtualized rendering ─────────────────────────────────────── */
 
@@ -372,7 +381,9 @@ export const MemoizedMessageList = memo(
     const measuredRowBottomCache = measuredRowBottomCacheRef.current;
     const [measuredContentBottom, setMeasuredContentBottom] = useState(0);
     const itemContainerRef = useRef<HTMLDivElement>(null);
+    const stickySectionContentRef = useRef<HTMLDivElement>(null);
     const [listScrollMargin, setListScrollMargin] = useState(0);
+    const [measuredLeadingStickyHeight, setMeasuredLeadingStickyHeight] = useState(0);
 
     const measureListScrollMargin = useCallback(() => {
       const viewport = scrollRef.current;
@@ -560,6 +571,19 @@ export const MemoizedMessageList = memo(
       () => virtualRows.map((row) => row.key).join('\n'),
       [virtualRows],
     );
+    const shouldReserveLeadingStickySpace = Boolean(
+      leadingUserItem &&
+      virtualRows[0]?.type === 'item' &&
+      virtualRows[0].item.type === 'message' &&
+      virtualRows[0].item.msg.role !== 'user',
+    );
+    const estimatedLeadingStickySpacerHeight = useMemo(() => {
+      if (!leadingUserItem) return 0;
+      return estimateItemHeight(leadingUserItem, containerWidth, fontConfig) + VIRTUAL_ROW_GAP_PX;
+    }, [containerWidth, fontConfig, leadingUserItem]);
+    const leadingStickySpacerHeight = shouldReserveLeadingStickySpace
+      ? Math.max(measuredLeadingStickyHeight, estimatedLeadingStickySpacerHeight)
+      : 0;
 
     const rowKeyIndexMap = useMemo(() => {
       const map = new Map<string, number>();
@@ -661,11 +685,26 @@ export const MemoizedMessageList = memo(
     }, [containerWidth, fontConfig, heightCache, shouldUseVirtualFallback, virtualRows]);
     const visibleVirtualItems = shouldUseVirtualFallback ? fallbackVirtualItems : virtualItems;
     const fallbackContentHeight = fallbackVirtualItems.at(-1)?.end ?? 0;
-    const virtualContentHeight = Math.max(
-      rowVirtualizer.getTotalSize(),
-      measuredContentBottom,
-      fallbackContentHeight,
+    const lastRow = virtualRows.at(-1);
+    const lastVirtualItem = visibleVirtualItems.find(
+      (virtualItem) => virtualItem.index === virtualRows.length - 1,
     );
+    const measuredLastRowHeight = lastRow ? heightCache.get(lastRow.key) : undefined;
+    const measuredLastRowBottom =
+      lastVirtualItem && measuredLastRowHeight !== undefined
+        ? lastVirtualItem.start -
+          listScrollMargin +
+          leadingStickySpacerHeight +
+          measuredLastRowHeight
+        : undefined;
+    const virtualContentHeight =
+      measuredLastRowBottom !== undefined
+        ? Math.max(0, measuredLastRowBottom)
+        : Math.max(
+            rowVirtualizer.getTotalSize() + leadingStickySpacerHeight,
+            measuredContentBottom,
+            fallbackContentHeight + leadingStickySpacerHeight,
+          );
 
     // ── Scroll anchor: capture/restore for jank-free scroll preservation ──
     const scrollAnchorRef = useRef<{
@@ -745,8 +784,37 @@ export const MemoizedMessageList = memo(
         }
         return null;
       }
-      return findNearestPrecedingUserMessageItem(groupedItems, firstVisibleRow.itemIndex);
-    }, [firstVisibleRow, firstVisibleVirtualItem, groupedItems, stickyScrollOffset]);
+      return (
+        findNearestPrecedingUserMessageItem(groupedItems, firstVisibleRow.itemIndex) ??
+        leadingUserItem
+      );
+    }, [
+      firstVisibleRow,
+      firstVisibleVirtualItem,
+      groupedItems,
+      leadingUserItem,
+      stickyScrollOffset,
+    ]);
+
+    useLayoutEffect(() => {
+      if (!shouldReserveLeadingStickySpace) {
+        setMeasuredLeadingStickyHeight((prev) => (prev === 0 ? prev : 0));
+        return;
+      }
+
+      const el = stickySectionContentRef.current;
+      if (!el) return;
+
+      const measure = () => {
+        const next = el.getBoundingClientRect().height + VIRTUAL_ROW_GAP_PX;
+        setMeasuredLeadingStickyHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+      };
+
+      measure();
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, [shouldReserveLeadingStickySpace, hiddenSectionUserItem?.msg.id]);
 
     useImperativeHandle(
       ref,
@@ -902,7 +970,10 @@ export const MemoizedMessageList = memo(
             <div
               key={key}
               data-item-key={key}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: 'auto 32px',
+              }}
             >
               <WorkflowEventGroup events={item.events} />
             </div>
@@ -914,7 +985,10 @@ export const MemoizedMessageList = memo(
             <div
               key={key}
               data-item-key={key}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: 'auto 32px',
+              }}
             >
               <GitEventCard event={item.event} />
             </div>
@@ -926,7 +1000,10 @@ export const MemoizedMessageList = memo(
             <div
               key={key}
               data-item-key={key}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: 'auto 32px',
+              }}
             >
               <CompactionEventCard event={item.event} />
             </div>
@@ -1048,7 +1125,10 @@ export const MemoizedMessageList = memo(
             data-testid="sticky-section-context"
             className="pointer-events-none sticky top-0 z-50 h-0"
           >
-            <div className="pointer-events-auto relative z-50 pt-3 pb-3">
+            <div
+              ref={stickySectionContentRef}
+              className="pointer-events-auto relative z-50 pt-3 pb-3"
+            >
               {renderUserMessage(hiddenSectionUserItem, {
                 includeItemKey: false,
                 includeUserObserver: false,
@@ -1073,7 +1153,9 @@ export const MemoizedMessageList = memo(
                 : {})}
               className="absolute top-0 left-0 z-0 w-full"
               style={{
-                transform: `translateY(${virtualItem.start - listScrollMargin}px)`,
+                transform: `translateY(${
+                  virtualItem.start - listScrollMargin + leadingStickySpacerHeight
+                }px)`,
                 overflowAnchor: 'none',
               }}
             >

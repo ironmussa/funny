@@ -4,6 +4,7 @@ import {
   useState,
   useRef,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useCallback,
   useMemo,
@@ -33,9 +34,7 @@ export type { MessageStreamHandle, MessageStreamProps } from './message-stream-t
 const EMPTY_SNAPSHOT_MAP = new Map<string, number>();
 const EMPTY_KNOWN_IDS = new Set<string>();
 
-const DEFAULT_MSG_HEIGHT_PX = 140;
-const MIN_MSG_HEIGHT_PX = 24;
-const MAX_MSG_HEIGHT_PX = 2000;
+const LOAD_MORE_THRESHOLD_PX = 200;
 const STICKY_BOTTOM_THRESHOLD_PX = 80;
 
 function getDistanceFromBottom(
@@ -51,6 +50,10 @@ function getScrollProgress(viewport: HTMLDivElement) {
   return Math.min(1, Math.max(0, viewport.scrollTop / scrollableRange));
 }
 
+function clampProgress(progress: number) {
+  return Math.min(1, Math.max(0, progress));
+}
+
 type ThreadScrollPosition = {
   scrollProgress: number;
   atBottom: boolean;
@@ -63,6 +66,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       threadId,
       status,
       messages,
+      leadingUserMessage,
       threadEvents,
       compactionEvents,
       initInfo,
@@ -100,26 +104,24 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const prefersReducedMotion = prefersReducedMotionProp ?? systemReducedMotion;
 
     const isRunning = status === 'running';
+    const hasPagination = pagination != null;
     const hasMore = pagination?.hasMore ?? false;
     const hasMoreAfter = pagination?.hasMoreAfter ?? false;
     const loadingMore = pagination?.loadingMore ?? false;
-    const totalMessages = pagination?.total ?? 0;
+    const paginationTotal = pagination?.total;
+    const paginationWindowStart = pagination?.windowStart;
     const loadedCount = messages?.length ?? 0;
-    const windowStart =
-      pagination?.windowStart ?? (hasMore ? Math.max(0, totalMessages - loadedCount) : 0);
-    const unloadedBeforeCount = hasMore ? Math.max(0, windowStart) : 0;
-    const unloadedAfterCount = hasMoreAfter
-      ? Math.max(0, totalMessages - windowStart - loadedCount)
-      : 0;
-
     const scrollViewportRef = useRef<HTMLDivElement>(null);
     const threadIdRef = useRef(threadId);
     threadIdRef.current = threadId;
     const userHasScrolledUp = useRef(false);
     const smoothScrollPending = useRef(false);
     const scrollingToBottomRef = useRef(false);
+    const lastScrollTopRef = useRef<number | null>(null);
     const scrolledThreadRef = useRef<string | null>(null);
     const prevOldestIdRef = useRef<string | null>(null);
+    const prevNewestIdRef = useRef<string | null>(null);
+    const pendingLoadAfterBottomPinRef = useRef(false);
     const prevScrollHeightRef = useRef(0);
     const prevStickyMetricsRef = useRef<{ scrollHeight: number; clientHeight: number } | null>(
       null,
@@ -132,24 +134,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     const contentStackRef = useRef<HTMLDivElement>(null);
     const messageListRef = useRef<MemoizedMessageListHandle>(null);
     const handleViewportScrollRef = useRef<() => void>(() => {});
-
-    const listWrapperRef = useRef<HTMLDivElement>(null);
-    const avgMsgHeightRef = useRef(DEFAULT_MSG_HEIGHT_PX);
-    const [phantomHeight, setPhantomHeight] = useState(0);
-    const [bottomPhantomHeight, setBottomPhantomHeight] = useState(0);
-    const phantomHeightRef = useRef(0);
-    phantomHeightRef.current = phantomHeight;
-    const bottomPhantomHeightRef = useRef(0);
-    bottomPhantomHeightRef.current = bottomPhantomHeight;
-    const prevPhantomAppliedRef = useRef(0);
-    const prevThreadForPhantomRef = useRef(threadId);
-    if (prevThreadForPhantomRef.current !== threadId) {
-      prevThreadForPhantomRef.current = threadId;
-      avgMsgHeightRef.current = DEFAULT_MSG_HEIGHT_PX;
-      prevPhantomAppliedRef.current = 0;
-      if (phantomHeight !== 0) setPhantomHeight(0);
-      if (bottomPhantomHeight !== 0) setBottomPhantomHeight(0);
-    }
 
     const pinnedPromptIdRef = useRef<string | null>(null);
     const [promptPinSpacerHeight, setPromptPinSpacerHeight] = useState(0);
@@ -213,17 +197,67 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       }
     }, []);
 
-    const saveThreadScrollPosition = useCallback((id: string, viewport: HTMLDivElement) => {
-      if (threadIdRef.current !== id) return;
+    const getThreadScrollProgress = useCallback(
+      (viewport: HTMLDivElement) => {
+        const localProgress = getScrollProgress(viewport);
+        if (
+          !hasPagination ||
+          typeof paginationTotal !== 'number' ||
+          paginationTotal <= 1 ||
+          loadedCount <= 0 ||
+          typeof paginationWindowStart !== 'number'
+        ) {
+          return localProgress;
+        }
 
-      const distanceFromBottom = getDistanceFromBottom(viewport);
-      const atBottom = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
-      threadScrollPositionsRef.current!.set(id, {
-        scrollProgress: atBottom ? 1 : getScrollProgress(viewport),
-        atBottom,
-        userHasScrolledUp: userHasScrolledUp.current,
-      });
-      saveThreadScrollProgress(id, atBottom ? 1 : getScrollProgress(viewport));
+        const loadedSpan = Math.max(0, loadedCount - 1);
+        const globalMessageIndex = paginationWindowStart + localProgress * loadedSpan;
+        return clampProgress(globalMessageIndex / Math.max(1, paginationTotal - 1));
+      },
+      [hasPagination, loadedCount, paginationTotal, paginationWindowStart],
+    );
+
+    const getLocalScrollProgress = useCallback(
+      (threadProgress: number) => {
+        if (
+          !hasPagination ||
+          typeof paginationTotal !== 'number' ||
+          paginationTotal <= 1 ||
+          loadedCount <= 1 ||
+          typeof paginationWindowStart !== 'number'
+        ) {
+          return clampProgress(threadProgress);
+        }
+
+        const targetMessageIndex = clampProgress(threadProgress) * Math.max(1, paginationTotal - 1);
+        return clampProgress(
+          (targetMessageIndex - paginationWindowStart) / Math.max(1, loadedCount - 1),
+        );
+      },
+      [hasPagination, loadedCount, paginationTotal, paginationWindowStart],
+    );
+
+    const saveThreadScrollPosition = useCallback(
+      (id: string, viewport: HTMLDivElement) => {
+        if (threadIdRef.current !== id) return;
+
+        const distanceFromBottom = getDistanceFromBottom(viewport);
+        const atLoadedBottom = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
+        const atThreadBottom = atLoadedBottom && !hasMoreAfter;
+        const scrollProgress = atThreadBottom ? 1 : getThreadScrollProgress(viewport);
+
+        threadScrollPositionsRef.current!.set(id, {
+          scrollProgress,
+          atBottom: atThreadBottom,
+          userHasScrolledUp: userHasScrolledUp.current,
+        });
+        saveThreadScrollProgress(id, scrollProgress);
+      },
+      [getThreadScrollProgress, hasMoreAfter],
+    );
+
+    const rememberScrollTop = useCallback((viewport: HTMLDivElement) => {
+      lastScrollTopRef.current = viewport.scrollTop;
     }, []);
 
     const applyThreadScrollPosition = useCallback(
@@ -245,6 +279,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           scrollingToBottomRef.current = false;
           userHasScrolledUp.current = false;
           viewport.scrollTop = viewport.scrollHeight;
+          rememberScrollTop(viewport);
           updateStickyMetrics(viewport);
           saveThreadScrollPosition(id, viewport);
           updateScrollDownButton(viewport, true);
@@ -253,7 +288,8 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
         scrollingToBottomRef.current = false;
         const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-        viewport.scrollTop = saved.scrollProgress * maxScrollTop;
+        viewport.scrollTop = getLocalScrollProgress(saved.scrollProgress) * maxScrollTop;
+        rememberScrollTop(viewport);
         userHasScrolledUp.current = saved.userHasScrolledUp;
         updateStickyMetrics(viewport);
         updateScrollDownButton(
@@ -261,8 +297,15 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX,
         );
       },
-      [saveThreadScrollPosition, updateScrollDownButton, updateStickyMetrics],
+      [
+        getLocalScrollProgress,
+        rememberScrollTop,
+        saveThreadScrollPosition,
+        updateScrollDownButton,
+        updateStickyMetrics,
+      ],
     );
+    const applyThreadScrollPositionEvent = useEffectEvent(applyThreadScrollPosition);
 
     const wasViewportPinnedBeforeLayoutChange = useCallback((viewport: HTMLDivElement) => {
       const previousMetrics = prevStickyMetricsRef.current ?? viewport;
@@ -274,17 +317,20 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         const targetThreadId = threadId;
         scrollingToBottomRef.current = true;
         viewport.scrollTop = viewport.scrollHeight;
+        rememberScrollTop(viewport);
         updateStickyMetrics(viewport);
         saveThreadScrollPosition(targetThreadId, viewport);
         requestAnimationFrame(() => {
           if (threadIdRef.current !== targetThreadId) return;
           viewport.scrollTop = viewport.scrollHeight;
+          rememberScrollTop(viewport);
           updateStickyMetrics(viewport);
           saveThreadScrollPosition(targetThreadId, viewport);
           requestAnimationFrame(() => {
             if (threadIdRef.current !== targetThreadId) return;
             if (!userHasScrolledUp.current) {
               viewport.scrollTop = viewport.scrollHeight;
+              rememberScrollTop(viewport);
               updateStickyMetrics(viewport);
               saveThreadScrollPosition(targetThreadId, viewport);
             }
@@ -292,7 +338,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           });
         });
       },
-      [saveThreadScrollPosition, threadId, updateStickyMetrics],
+      [rememberScrollTop, saveThreadScrollPosition, threadId, updateStickyMetrics],
     );
 
     useLayoutEffect(() => {
@@ -302,8 +348,11 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       const saved = threadScrollPositionsRef.current!.get(threadId);
       userHasScrolledUp.current = saved ? saved.userHasScrolledUp : false;
       prevOldestIdRef.current = null;
+      prevNewestIdRef.current = null;
+      pendingLoadAfterBottomPinRef.current = false;
       prevScrollHeightRef.current = 0;
       prevStickyMetricsRef.current = null;
+      lastScrollTopRef.current = null;
       pinnedPromptIdRef.current = null;
       scrolledThreadRef.current = threadId;
       prevLastUserMessageIdRef.current = lastUserMessageIdForThreadSwitchRef.current;
@@ -311,13 +360,13 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       setPromptPinSpacerHeight(0);
 
       let cancelled = false;
-      applyThreadScrollPosition(viewport, threadId);
+      applyThreadScrollPositionEvent(viewport, threadId);
       const firstRafId = requestAnimationFrame(() => {
         if (cancelled) return;
-        applyThreadScrollPosition(viewport, threadId);
+        applyThreadScrollPositionEvent(viewport, threadId);
         requestAnimationFrame(() => {
           if (cancelled) return;
-          applyThreadScrollPosition(viewport, threadId);
+          applyThreadScrollPositionEvent(viewport, threadId);
         });
       });
 
@@ -325,33 +374,38 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         cancelled = true;
         cancelAnimationFrame(firstRafId);
       };
-    }, [threadId, applyThreadScrollPosition]);
+    }, [threadId]);
 
     handleViewportScrollRef.current = () => {
       const viewport = scrollViewportRef.current;
       if (!viewport) return;
 
       const { scrollTop, scrollHeight, clientHeight } = viewport;
+      const previousScrollTop = lastScrollTopRef.current ?? scrollTop;
+      const isScrollingUp = scrollTop < previousScrollTop - 1;
+      lastScrollTopRef.current = scrollTop;
       const promptPinned = !compact && promptPinSpacerHeightRef.current > 0;
-      const isAtBottom = getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX;
+      const isAtLoadedBottom = getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX;
+      const isAtThreadBottom = isAtLoadedBottom && !hasMoreAfter;
       prevStickyMetricsRef.current = { scrollHeight, clientHeight };
 
       if (!scrollingToBottomRef.current) {
-        userHasScrolledUp.current = promptPinned || !isAtBottom;
-      } else if (isAtBottom) {
+        userHasScrolledUp.current = promptPinned || !isAtThreadBottom;
+      } else if (isAtThreadBottom) {
         scrollingToBottomRef.current = false;
         userHasScrolledUp.current = false;
       }
 
       saveThreadScrollPosition(threadId, viewport);
-      updateScrollDownButton(viewport, isAtBottom);
+      updateScrollDownButton(viewport, isAtThreadBottom);
 
       // Load older messages when scrolled near the top of the loaded window.
-      // The phantom spacer pushes real content down by its height, so the
-      // trigger zone shifts down with it.
+      // Unloaded history is not represented by estimated spacers; the scrollbar
+      // stays tied to real, currently loaded content.
       if (
         pagination &&
-        scrollTop < phantomHeightRef.current + 200 &&
+        scrollTop < LOAD_MORE_THRESHOLD_PX &&
+        (isScrollingUp || scrollTop <= 1) &&
         hasMore &&
         !loadingMore &&
         !messageListRef.current?.hasHiddenItems()
@@ -364,12 +418,13 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         pagination?.loadAfter &&
         hasMoreAfter &&
         !loadingMore &&
-        scrollTop + clientHeight > scrollHeight - bottomPhantomHeightRef.current - 200
+        scrollTop + clientHeight > scrollHeight - LOAD_MORE_THRESHOLD_PX
       ) {
+        pendingLoadAfterBottomPinRef.current = true;
         pagination.loadAfter();
       }
 
-      if (!compact && isAtBottom && lastUserMsgIdRef.current && onVisibleMessageChange) {
+      if (!compact && isAtThreadBottom && lastUserMsgIdRef.current && onVisibleMessageChange) {
         onVisibleMessageChange(lastUserMsgIdRef.current);
       }
     };
@@ -479,7 +534,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
     const firstMessageId = selectFirstMessage({ messages } as any)?.id ?? null;
     useLayoutEffect(() => {
-      if (!pagination) return;
+      if (!hasPagination) return;
       const oldestId = firstMessageId;
       const viewport = scrollViewportRef.current;
 
@@ -490,6 +545,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         const addedHeight = viewport.scrollHeight - prevScrollHeightRef.current;
         if (addedHeight > 0 && !messageListRef.current) {
           viewport.scrollTop += addedHeight;
+          rememberScrollTop(viewport);
         }
       }
 
@@ -497,75 +553,43 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       if (viewport) {
         prevScrollHeightRef.current = viewport.scrollHeight;
       }
-    }, [firstMessageId, pagination]);
+    }, [firstMessageId, hasPagination, rememberScrollTop]);
 
-    const recomputePhantom = useCallback(() => {
-      const wrapper = listWrapperRef.current;
-      if (wrapper && loadedCount > 0) {
-        const measured = wrapper.offsetHeight / loadedCount;
-        if (measured > 0) {
-          avgMsgHeightRef.current = Math.min(
-            MAX_MSG_HEIGHT_PX,
-            Math.max(MIN_MSG_HEIGHT_PX, measured),
-          );
-        }
-      }
-      const nextTop =
-        unloadedBeforeCount > 0 ? Math.round(unloadedBeforeCount * avgMsgHeightRef.current) : 0;
-      const nextBottom =
-        unloadedAfterCount > 0 ? Math.round(unloadedAfterCount * avgMsgHeightRef.current) : 0;
-      setPhantomHeight((prev) => (Math.abs(prev - nextTop) > 1 ? nextTop : prev));
-      setBottomPhantomHeight((prev) => (Math.abs(prev - nextBottom) > 1 ? nextBottom : prev));
-    }, [loadedCount, unloadedAfterCount, unloadedBeforeCount]);
-
+    const lastMessageId = lastMessage?.id ?? null;
     useLayoutEffect(() => {
-      recomputePhantom();
-    }, [recomputePhantom]);
-
-    useEffect(() => {
-      const wrapper = listWrapperRef.current;
-      if (!wrapper) return;
-      const ro = new ResizeObserver(() => recomputePhantom());
-      ro.observe(wrapper);
-      return () => ro.disconnect();
-    }, [recomputePhantom]);
-
-    // Keep the viewport visually anchored when the phantom resizes. The phantom
-    // sits at the very top, so growing/shrinking it by `delta` shifts everything
-    // below by `delta`; matching scrollTop keeps the read position (and the
-    // bottom pin) stable instead of lurching. Pagination commits (firstMessageId
-    // changed) are owned by restoreScrollAnchor, which measures the true drift
-    // including the phantom shrink — so we skip those to avoid double-correcting.
-    const prevFirstIdForPhantomRef = useRef(firstMessageId);
-    useLayoutEffect(() => {
-      const prevPhantom = prevPhantomAppliedRef.current;
-      prevPhantomAppliedRef.current = phantomHeight;
-      const firstChanged = prevFirstIdForPhantomRef.current !== firstMessageId;
-      prevFirstIdForPhantomRef.current = firstMessageId;
-
-      if (firstChanged) return;
-      const delta = phantomHeight - prevPhantom;
-      if (delta === 0) return;
+      if (!hasPagination) return;
       const viewport = scrollViewportRef.current;
-      if (!viewport) return;
+      const previousNewestId = prevNewestIdRef.current;
+      const shouldPinAfterAppend = pendingLoadAfterBottomPinRef.current;
 
       if (
-        !userHasScrolledUp.current &&
-        !loadingMore &&
-        wasViewportPinnedBeforeLayoutChange(viewport)
+        viewport &&
+        shouldPinAfterAppend &&
+        previousNewestId &&
+        lastMessageId !== previousNewestId
       ) {
-        pinViewportToBottom(viewport);
-      } else {
-        viewport.scrollTop += delta;
+        const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+        viewport.scrollTop = maxScrollTop;
+        rememberScrollTop(viewport);
         updateStickyMetrics(viewport);
+        saveThreadScrollPosition(threadId, viewport);
+        updateScrollDownButton(viewport, !hasMoreAfter);
+        pendingLoadAfterBottomPinRef.current = false;
+      } else if (shouldPinAfterAppend && !loadingMore) {
+        pendingLoadAfterBottomPinRef.current = false;
       }
+
+      prevNewestIdRef.current = lastMessageId;
     }, [
-      phantomHeight,
-      firstMessageId,
+      hasMoreAfter,
+      hasPagination,
+      lastMessageId,
       loadingMore,
-      pinViewportToBottom,
+      rememberScrollTop,
+      saveThreadScrollPosition,
+      threadId,
+      updateScrollDownButton,
       updateStickyMetrics,
-      wasViewportPinnedBeforeLayoutChange,
     ]);
 
     const scrollToBottom = useCallback(() => {
@@ -583,6 +607,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
       viewport.scrollTop = viewport.scrollHeight;
+      rememberScrollTop(viewport);
       updateStickyMetrics(viewport);
       saveThreadScrollPosition(targetThreadId, viewport);
 
@@ -592,12 +617,13 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           if (threadIdRef.current !== targetThreadId) return;
           if (!scrollingToBottomRef.current) return;
           viewport.scrollTop = viewport.scrollHeight;
+          rememberScrollTop(viewport);
           updateStickyMetrics(viewport);
           saveThreadScrollPosition(targetThreadId, viewport);
           scrollingToBottomRef.current = false;
         });
       });
-    }, [compact, saveThreadScrollPosition, threadId, updateStickyMetrics]);
+    }, [compact, rememberScrollTop, saveThreadScrollPosition, threadId, updateStickyMetrics]);
 
     useImperativeHandle(
       ref,
@@ -656,17 +682,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             compact && 'space-y-2 px-2 py-2',
           )}
         >
-          {/* Phantom spacer: reserves scroll height for older messages not yet
-              loaded, so the scrollbar reflects the whole conversation and the
-              thumb doesn't jump as pages stream in. */}
-          {phantomHeight > 0 && (
-            <div
-              aria-hidden="true"
-              data-testid="message-stream-phantom-spacer"
-              style={{ height: phantomHeight }}
-            />
-          )}
-
           {/* Loading indicator (pagination) */}
           {pagination?.loadingMore && (
             <LoadingState
@@ -697,13 +712,13 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             />
           )}
 
-          {/* Message list — wrapped so we can measure its full height for the
-              phantom spacer's per-message estimate. */}
-          <div ref={listWrapperRef}>
+          {/* Message list wrapper keeps the virtualizer scroll-margin observer stable. */}
+          <div>
             <MemoizedMessageList
               key={threadId}
               ref={messageListRef}
               messages={messages ?? EMPTY_MESSAGES}
+              leadingUserMessage={leadingUserMessage}
               threadEvents={threadEvents}
               compactionEvents={compactionEvents}
               threadId={threadId}
@@ -748,14 +763,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           {/* Prompt pin spacer (full mode only) */}
           {!compact && promptPinSpacerHeight > 0 && (
             <div aria-hidden="true" style={{ height: promptPinSpacerHeight }} />
-          )}
-
-          {bottomPhantomHeight > 0 && (
-            <div
-              aria-hidden="true"
-              data-testid="message-stream-bottom-phantom-spacer"
-              style={{ height: bottomPhantomHeight }}
-            />
           )}
         </div>
 

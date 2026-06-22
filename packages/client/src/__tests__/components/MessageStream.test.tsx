@@ -41,6 +41,9 @@ vi.mock('motion/react', () => {
 const memoizedMessageListLifecycle = vi.hoisted(() => ({
   mounts: 0,
   unmounts: 0,
+  captureScrollAnchorCalls: 0,
+  restoreScrollAnchorCalls: 0,
+  hasHiddenItems: false,
 }));
 
 vi.mock('@/components/thread/MemoizedMessageList', () => ({
@@ -58,9 +61,13 @@ vi.mock('@/components/thread/MemoizedMessageList', () => ({
 
     useImperativeHandle(ref, () => ({
       expandToItem: () => {},
-      hasHiddenItems: () => false,
-      captureScrollAnchor: () => {},
-      restoreScrollAnchor: () => {},
+      hasHiddenItems: () => memoizedMessageListLifecycle.hasHiddenItems,
+      captureScrollAnchor: () => {
+        memoizedMessageListLifecycle.captureScrollAnchorCalls += 1;
+      },
+      restoreScrollAnchor: () => {
+        memoizedMessageListLifecycle.restoreScrollAnchorCalls += 1;
+      },
     }));
 
     return (
@@ -114,6 +121,16 @@ function makeMessages(assistantContent: string) {
   ];
 }
 
+function makeWindowMessages(threadId: string, count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${threadId}-m${index}`,
+    threadId,
+    role: index % 2 === 0 ? 'user' : 'assistant',
+    content: `message ${index}`,
+    timestamp: `2026-01-01T00:00:${String(index).padStart(2, '0')}.000Z`,
+  }));
+}
+
 function setScrollMetrics(
   el: HTMLElement,
   metrics: {
@@ -142,6 +159,9 @@ describe('MessageStream sticky bottom', () => {
     window.localStorage.clear();
     memoizedMessageListLifecycle.mounts = 0;
     memoizedMessageListLifecycle.unmounts = 0;
+    memoizedMessageListLifecycle.captureScrollAnchorCalls = 0;
+    memoizedMessageListLifecycle.restoreScrollAnchorCalls = 0;
+    memoizedMessageListLifecycle.hasHiddenItems = false;
   });
 
   afterEach(() => {
@@ -421,6 +441,359 @@ describe('MessageStream sticky bottom', () => {
 
     expect(memoizedMessageListLifecycle.mounts).toBe(2);
     expect(memoizedMessageListLifecycle.unmounts).toBe(1);
+  });
+
+  test('does not render phantom spacers for unloaded pages', () => {
+    const { queryByTestId } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: () => {},
+          loadAfter: () => {},
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(queryByTestId('message-stream-phantom-spacer')).toBeNull();
+    expect(queryByTestId('message-stream-bottom-phantom-spacer')).toBeNull();
+  });
+
+  test('does not load older pages while scrolling down near the top of the loaded window', () => {
+    const scrollHeight = 1000;
+    const loadOlder = vi.fn();
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          loadingMore: false,
+          load: loadOlder,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    act(() => {
+      viewport.scrollTop = 80;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+    loadOlder.mockClear();
+    memoizedMessageListLifecycle.captureScrollAnchorCalls = 0;
+
+    act(() => {
+      viewport.scrollTop = 120;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadOlder).not.toHaveBeenCalled();
+    expect(memoizedMessageListLifecycle.captureScrollAnchorCalls).toBe(0);
+  });
+
+  test('loads older pages when scrolling upward near the loaded window', () => {
+    const scrollHeight = 1000;
+    const loadOlder = vi.fn();
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          loadingMore: false,
+          load: loadOlder,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    act(() => {
+      viewport.scrollTop = 300;
+      viewport.dispatchEvent(new Event('scroll'));
+      viewport.scrollTop = 100;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    expect(memoizedMessageListLifecycle.captureScrollAnchorCalls).toBe(1);
+  });
+
+  test('loads newer pages when scrolling near the bottom of the loaded window', () => {
+    const scrollHeight = 1200;
+    const loadNewer = vi.fn();
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: false,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: () => {},
+          loadAfter: loadNewer,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 650;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadNewer).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps the viewport at the loaded bottom after newer messages append', () => {
+    let scrollHeight = 1200;
+    const loadNewer = vi.fn();
+    const initialMessages = makeMessages('loaded window');
+    const { container, rerender } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={initialMessages}
+        onSend={() => {}}
+        pagination={{
+          hasMore: false,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: () => {},
+          loadAfter: loadNewer,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 650;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadNewer).toHaveBeenCalledTimes(1);
+
+    scrollHeight = 1700;
+    rerender(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={[
+          ...initialMessages,
+          {
+            id: 'newer',
+            threadId: 't1',
+            role: 'assistant',
+            content: 'newer message',
+            timestamp: '2026-01-01T00:00:02.000Z',
+          },
+        ]}
+        onSend={() => {}}
+        pagination={{
+          hasMore: false,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: () => {},
+          loadAfter: loadNewer,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(1200);
+  });
+
+  test('restores paginated scroll progress in full-thread coordinates', () => {
+    const scrollHeight = 1500;
+    const progressThreadMessages = makeWindowMessages('progress-thread', 10);
+    const { container, rerender } = render(
+      <MessageStream
+        threadId="progress-thread"
+        status="idle"
+        messages={progressThreadMessages}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: () => {},
+          loadAfter: () => {},
+          total: 100,
+          windowStart: 40,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 500;
+      viewport.dispatchEvent(new Event('scroll'));
+      vi.advanceTimersByTime(300);
+    });
+
+    rerender(
+      <MessageStream
+        threadId="other-thread"
+        status="idle"
+        messages={makeWindowMessages('other-thread', 10)}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    rerender(
+      <MessageStream
+        threadId="progress-thread"
+        status="idle"
+        messages={progressThreadMessages}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: () => {},
+          loadAfter: () => {},
+          total: 100,
+          windowStart: 40,
+        }}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(500);
+  });
+
+  test('restores the captured anchor after older messages prepend', () => {
+    const scrollHeight = 1000;
+    const loadOlder = vi.fn();
+    const { container, rerender } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          loadingMore: false,
+          load: loadOlder,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 300;
+      viewport.dispatchEvent(new Event('scroll'));
+      viewport.scrollTop = 100;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    expect(memoizedMessageListLifecycle.captureScrollAnchorCalls).toBe(1);
+
+    rerender(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={[
+          {
+            id: 'older',
+            threadId: 't1',
+            role: 'assistant',
+            content: 'older message',
+            timestamp: '2025-12-31T23:59:59.000Z',
+          },
+          ...makeMessages('loaded window'),
+        ]}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          loadingMore: false,
+          load: loadOlder,
+          total: 100,
+          windowStart: 19,
+        }}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(memoizedMessageListLifecycle.restoreScrollAnchorCalls).toBe(1);
   });
 
   test('restores a non-bottom thread by scroll level when content height changes', () => {

@@ -153,6 +153,7 @@ export function ThreadConversation({
         threadId={activeThread.id}
         status={activeThread.status}
         messages={stableMessages ?? EMPTY_MESSAGES}
+        leadingUserMessage={activeThread.leadingUserMessage}
         threadEvents={stableThreadEvents}
         compactionEvents={stableCompactionEvents}
         initInfo={activeThread.initInfo}

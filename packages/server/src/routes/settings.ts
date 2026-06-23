@@ -1,18 +1,26 @@
 /**
- * Instance settings routes for the central server.
+ * Settings routes for the central server.
  *
- * Handles SMTP and other instance-level settings using the server's DB.
- * All routes require admin role.
+ * SMTP is instance-level and requires admin role. Agent execution profiles are
+ * user-scoped settings and use the authenticated user id.
  */
 
-import { eq } from 'drizzle-orm';
+import {
+  createAgentExecutionProfileSchema,
+  updateAgentExecutionProfileSchema,
+  updateProjectAgentProfileBindingSchema,
+} from '@funny/shared';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
-import { db } from '../db/index.js';
-import { instanceSettings } from '../db/schema.js';
+import { db, dbGet } from '../db/index.js';
+import { instanceSettings, projectMembers } from '../db/schema.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import type { ServerEnv } from '../lib/types.js';
 import { requireAdmin } from '../middleware/auth.js';
+import * as agentProfileRepo from '../services/agent-execution-profile-repository.js';
+import * as projectRepo from '../services/project-repository.js';
+import { parseJsonBody } from '../validation/request.js';
 
 export const settingsRoutes = new Hono<ServerEnv>();
 
@@ -38,6 +46,87 @@ async function setSetting(key: string, value: string): Promise<void> {
     await db.insert(instanceSettings).values({ key, value, updatedAt: now });
   }
 }
+
+async function userCanAccessProject(projectId: string, userId: string): Promise<boolean> {
+  const project = await projectRepo.getProject(projectId);
+  if (!project) return false;
+  if (project.userId === userId) return true;
+  const member = await dbGet(
+    db
+      .select({ userId: projectMembers.userId })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
+  );
+  return !!member;
+}
+
+// ── Agent execution profiles ────────────────────────────────────
+
+// GET /api/settings/agent-profiles — list current user's execution profiles
+settingsRoutes.get('/agent-profiles', async (c) => {
+  const userId = c.get('userId') as string;
+  return c.json({ profiles: await agentProfileRepo.listProfiles(userId) });
+});
+
+// POST /api/settings/agent-profiles — create current user's execution profile
+settingsRoutes.post('/agent-profiles', async (c) => {
+  const userId = c.get('userId') as string;
+  const parsed = await parseJsonBody(c, createAgentExecutionProfileSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+
+  const profile = await agentProfileRepo.createProfile(userId, parsed.value);
+  return c.json(profile, 201);
+});
+
+// PATCH /api/settings/agent-profiles/:id — update current user's execution profile
+settingsRoutes.patch('/agent-profiles/:id', async (c) => {
+  const userId = c.get('userId') as string;
+  const parsed = await parseJsonBody(c, updateAgentExecutionProfileSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+
+  const profile = await agentProfileRepo.updateProfile(c.req.param('id'), userId, parsed.value);
+  if (!profile) return c.json({ error: 'Agent execution profile not found' }, 404);
+  return c.json(profile);
+});
+
+// DELETE /api/settings/agent-profiles/:id — delete current user's execution profile
+settingsRoutes.delete('/agent-profiles/:id', async (c) => {
+  const userId = c.get('userId') as string;
+  const deleted = await agentProfileRepo.deleteProfile(c.req.param('id'), userId);
+  if (!deleted) return c.json({ error: 'Agent execution profile not found' }, 404);
+  return c.json({ ok: true });
+});
+
+// GET /api/settings/agent-profiles/projects/:projectId — read current user's project binding
+settingsRoutes.get('/agent-profiles/projects/:projectId', async (c) => {
+  const userId = c.get('userId') as string;
+  const projectId = c.req.param('projectId');
+  if (!(await userCanAccessProject(projectId, userId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  return c.json(await agentProfileRepo.getProjectBinding(projectId, userId));
+});
+
+// PUT /api/settings/agent-profiles/projects/:projectId — set/clear current user's binding
+settingsRoutes.put('/agent-profiles/projects/:projectId', async (c) => {
+  const userId = c.get('userId') as string;
+  const projectId = c.req.param('projectId');
+  if (!(await userCanAccessProject(projectId, userId))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const parsed = await parseJsonBody(c, updateProjectAgentProfileBindingSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+
+  const binding = await agentProfileRepo.setProjectBinding(
+    projectId,
+    userId,
+    parsed.value.profileId,
+  );
+  if (!binding) return c.json({ error: 'Agent execution profile not found' }, 404);
+  return c.json(binding);
+});
 
 // ── SMTP settings ────────────────────────────────────────────────
 

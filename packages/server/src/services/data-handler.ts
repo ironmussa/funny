@@ -150,7 +150,10 @@ async function assertDataOwnership(
         ? payload.userId
         : undefined;
   if (candidateUserId && candidateUserId !== runnerUserId) {
-    return { ok: false, reason: `userId ${candidateUserId} !== runner ${runnerUserId}` };
+    return {
+      ok: false,
+      reason: `userId ${candidateUserId} !== runner ${runnerUserId}`,
+    };
   }
 
   // ── Thread ownership ───────────────────────────────────────────
@@ -168,6 +171,39 @@ async function assertDataOwnership(
     if (!row) return { ok: false, reason: `thread ${threadId} not found` };
     if (row.userId !== runnerUserId) {
       return { ok: false, reason: `thread ${threadId} owned by ${row.userId}` };
+    }
+  }
+
+  if (
+    data?.type === 'data:get_thread_by_external_request_id' &&
+    typeof data?.externalRequestId === 'string'
+  ) {
+    const row = (await dbGet(
+      db
+        .select({ userId: schema.threads.userId })
+        .from(schema.threads)
+        .where(eq(schema.threads.externalRequestId, data.externalRequestId)),
+    )) as { userId: string } | undefined;
+    if (row && row.userId !== runnerUserId) {
+      return {
+        ok: false,
+        reason: `external request ${data.externalRequestId} owned by ${row.userId}`,
+      };
+    }
+  }
+
+  if (data?.type === 'data:get_thread_by_session_id' && typeof data?.sessionId === 'string') {
+    const row = (await dbGet(
+      db
+        .select({ userId: schema.threads.userId })
+        .from(schema.threads)
+        .where(eq(schema.threads.sessionId, data.sessionId)),
+    )) as { userId: string } | undefined;
+    if (row && row.userId !== runnerUserId) {
+      return {
+        ok: false,
+        reason: `session ${data.sessionId} owned by ${row.userId}`,
+      };
     }
   }
 
@@ -193,7 +229,10 @@ async function assertDataOwnership(
           ),
       )) as { userId: string } | undefined;
       if (!member) {
-        return { ok: false, reason: `project ${projectId} owned by ${p.userId}` };
+        return {
+          ok: false,
+          reason: `project ${projectId} owned by ${p.userId}`,
+        };
       }
     }
   }
@@ -216,7 +255,10 @@ async function assertDataOwnership(
           .where(eq(schema.threads.id, m.threadId)),
       )) as { userId: string } | undefined;
       if (!t || t.userId !== runnerUserId) {
-        return { ok: false, reason: `message ${messageIdForToolCall} cross-tenant` };
+        return {
+          ok: false,
+          reason: `message ${messageIdForToolCall} cross-tenant`,
+        };
       }
     }
   }
@@ -284,7 +326,11 @@ async function assertDataOwnership(
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
     )) as { threadId: string } | undefined;
-    if (!q) return { ok: false, reason: `queued message ${data.messageId} not found` };
+    if (!q)
+      return {
+        ok: false,
+        reason: `queued message ${data.messageId} not found`,
+      };
     const t = (await dbGet(
       db
         .select({ userId: schema.threads.userId })
@@ -292,7 +338,10 @@ async function assertDataOwnership(
         .where(eq(schema.threads.id, q.threadId)),
     )) as { userId: string } | undefined;
     if (!t || t.userId !== runnerUserId) {
-      return { ok: false, reason: `queued message ${data.messageId} cross-tenant` };
+      return {
+        ok: false,
+        reason: `queued message ${data.messageId} cross-tenant`,
+      };
     }
   }
 
@@ -367,7 +416,12 @@ export async function handleDataMessageWithAck(
         action: 'authz.cross_tenant_refused',
         actorId: runnerUserId,
         detail: `runner data request refused: ${data?.type}`,
-        meta: { source: 'data-handler', runnerId, type: data?.type, reason: ownership.reason },
+        meta: {
+          source: 'data-handler',
+          runnerId,
+          type: data?.type,
+          reason: ownership.reason,
+        },
       });
       return { type: 'data:ack', success: false, error: 'Forbidden' };
     }
@@ -411,6 +465,22 @@ export async function handleDataMessageWithAck(
         const thread = await threadRepo.getThread(data.threadId);
         return { type: 'data:get_thread_response', thread: thread ?? null };
       }
+      case 'data:get_thread_by_external_request_id': {
+        const threadRepo = getThreadRepo();
+        const thread = await threadRepo.getThreadByExternalRequestId(data.externalRequestId);
+        return {
+          type: 'data:get_thread_by_external_request_id_response',
+          thread: thread ?? null,
+        };
+      }
+      case 'data:get_thread_by_session_id': {
+        const threadRepo = getThreadRepo();
+        const thread = await threadRepo.getThreadBySessionId(data.sessionId);
+        return {
+          type: 'data:get_thread_by_session_id_response',
+          thread: thread ?? null,
+        };
+      }
       case 'data:get_thread_with_messages': {
         const messageRepo = getMessageRepo();
         const thread = await messageRepo.getThreadWithMessages(
@@ -421,7 +491,10 @@ export async function handleDataMessageWithAck(
               typeof data.messageProgress === 'number' ? data.messageProgress : undefined,
           },
         );
-        return { type: 'data:get_thread_with_messages_response', thread: thread ?? null };
+        return {
+          type: 'data:get_thread_with_messages_response',
+          thread: thread ?? null,
+        };
       }
       case 'data:get_thread_messages': {
         const messageRepo = getMessageRepo();
@@ -444,7 +517,10 @@ export async function handleDataMessageWithAck(
       case 'data:get_tool_call': {
         const toolCallRepo = getToolCallRepo();
         const toolCall = await toolCallRepo.getToolCall(data.toolCallId);
-        return { type: 'data:get_tool_call_response', toolCall: toolCall ?? null };
+        return {
+          type: 'data:get_tool_call_response',
+          toolCall: toolCall ?? null,
+        };
       }
       case 'data:search_threads': {
         // Carries no entity id — scoped to the runner's own user (like the
@@ -488,7 +564,10 @@ export async function handleDataMessageWithAck(
       }
       case 'data:get_startup_command': {
         const command = await startupCommandsRepo.getCommand(data.cmdId, data.projectId);
-        return { type: 'data:get_startup_command_response', command: command ?? null };
+        return {
+          type: 'data:get_startup_command_response',
+          command: command ?? null,
+        };
       }
       case 'data:get_agent_template': {
         // Check builtin templates first
@@ -497,7 +576,10 @@ export async function handleDataMessageWithAck(
           (t: { id: string }) => t.id === data.templateId,
         );
         if (builtin) {
-          return { type: 'data:get_agent_template_response', template: builtin };
+          return {
+            type: 'data:get_agent_template_response',
+            template: builtin,
+          };
         }
         const row = await dbGet(
           db
@@ -505,7 +587,10 @@ export async function handleDataMessageWithAck(
             .from(schema.agentTemplates)
             .where(eq(schema.agentTemplates.id, data.templateId)),
         );
-        return { type: 'data:get_agent_template_response', template: row ?? null };
+        return {
+          type: 'data:get_agent_template_response',
+          template: row ?? null,
+        };
       }
       case 'data:list_projects': {
         // Collaborator model: the runner needs the user's owned projects AND
@@ -517,7 +602,10 @@ export async function handleDataMessageWithAck(
         const shared = (await projectRepo.listMemberProjects(data.userId)).filter(
           (p) => p.userId !== data.userId && !ownedIds.has(p.id),
         );
-        return { type: 'data:list_projects_response', projects: [...owned, ...shared] };
+        return {
+          type: 'data:list_projects_response',
+          projects: [...owned, ...shared],
+        };
       }
       case 'data:list_project_threads': {
         const threads = await dbAll(
@@ -538,7 +626,11 @@ export async function handleDataMessageWithAck(
       case 'data:resolve_project_path': {
         const result = await projectRepo.resolveProjectPath(data.projectId, data.userId);
         if (result.isOk()) {
-          return { type: 'data:resolve_project_path_response', ok: true, path: result.value };
+          return {
+            type: 'data:resolve_project_path_response',
+            ok: true,
+            path: result.value,
+          };
         } else {
           return {
             type: 'data:resolve_project_path_response',
@@ -585,7 +677,10 @@ export async function handleDataMessageWithAck(
               error: (e as Error).message,
             });
           }
-          return { type: 'data:create_project_response', project: cpResult.value };
+          return {
+            type: 'data:create_project_response',
+            project: cpResult.value,
+          };
         } else {
           return {
             type: 'data:create_project_response',
@@ -633,7 +728,11 @@ export async function handleDataMessageWithAck(
             .from(schema.messageQueue)
             .where(eq(schema.messageQueue.id, data.messageId)),
         )) as { threadId: string } | undefined;
-        if (!q) return { type: 'data:cancel_queued_message_response', success: false };
+        if (!q)
+          return {
+            type: 'data:cancel_queued_message_response',
+            success: false,
+          };
         const success = await messageQueueRepo.cancel(data.messageId, q.threadId);
         return { type: 'data:cancel_queued_message_response', success };
       }
@@ -676,7 +775,10 @@ export async function handleDataMessageWithAck(
       case 'data:update_profile': {
         const { upsertProfile } = await import('./profile-service.js');
         const updatedProfile = await upsertProfile(data.userId, data.payload);
-        return { type: 'data:update_profile_response', profile: updatedProfile };
+        return {
+          type: 'data:update_profile_response',
+          profile: updatedProfile,
+        };
       }
       case 'data:get_builtin_providers': {
         // Owner-scoped: the runner asks for its owning user's stored selection.
@@ -690,7 +792,11 @@ export async function handleDataMessageWithAck(
       }
       case 'data:set_builtin_providers': {
         if (!runnerUserId) {
-          return { type: 'data:ack', success: false, error: 'runner has no owning user' };
+          return {
+            type: 'data:ack',
+            success: false,
+            error: 'runner has no owning user',
+          };
         }
         const { setBuiltinProviderSettings } = await import('./profile-service.js');
         const active = Array.isArray(data.active)
@@ -702,7 +808,10 @@ export async function handleDataMessageWithAck(
       case 'data:mark_and_list_stale_threads': {
         const threadRepo = getThreadRepo();
         const staleThreads = await threadRepo.markAndListStaleThreads(runnerId);
-        return { type: 'data:mark_and_list_stale_threads_response', threads: staleThreads };
+        return {
+          type: 'data:mark_and_list_stale_threads_response',
+          threads: staleThreads,
+        };
       }
 
       // ── Agent watchers (deferred-wake "snooze") ──────────────────
@@ -719,7 +828,10 @@ export async function handleDataMessageWithAck(
           data.payload.threadId,
           data.payload.key,
         );
-        return { type: 'data:watcher_get_live_by_thread_key_response', watcher: watcher ?? null };
+        return {
+          type: 'data:watcher_get_live_by_thread_key_response',
+          watcher: watcher ?? null,
+        };
       }
       case 'data:watcher_list_pending': {
         // Scoped to the runner's user — never another tenant's watchers.

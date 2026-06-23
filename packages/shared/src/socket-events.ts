@@ -105,6 +105,8 @@ export const RUNNER_DATA_EVENTS = [
   'data:delete_messages_after',
   'data:update_tool_call_output',
   'data:get_thread',
+  'data:get_thread_by_external_request_id',
+  'data:get_thread_by_session_id',
   'data:get_thread_with_messages',
   'data:get_tool_call',
   'data:find_tool_call',

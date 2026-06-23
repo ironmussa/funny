@@ -45,11 +45,13 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async listArchivedThreads() {
         return [];
       },
-      async getThreadByExternalRequestId() {
-        return undefined;
+      async getThreadByExternalRequestId(externalRequestId) {
+        const { remoteGetThreadByExternalRequestId } = await import('./team-client.js');
+        return remoteGetThreadByExternalRequestId(externalRequestId);
       },
-      async getThreadBySessionId() {
-        return undefined;
+      async getThreadBySessionId(sessionId) {
+        const { remoteGetThreadBySessionId } = await import('./team-client.js');
+        return remoteGetThreadBySessionId(sessionId);
       },
       async createThread(data) {
         const { remoteCreateThread } = await import('./team-client.js');
@@ -348,7 +350,11 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return errAsync(internal('startOAuthFlow is not available in runner mode'));
       },
       async handleOAuthCallback() {
-        return { serverName: '', success: false, error: 'Not available in runner mode' };
+        return {
+          serverName: '',
+          success: false,
+          error: 'Not available in runner mode',
+        };
       },
       async upsertToken() {},
     },

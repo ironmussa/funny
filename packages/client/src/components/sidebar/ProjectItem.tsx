@@ -36,14 +36,18 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
+import { useExternalClaudeSessionsLoaded } from '@/hooks/use-external-claude-sessions';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { openDirectoryInEditor } from '@/lib/editor-utils';
 import { openProjectTerminal } from '@/lib/open-terminal-tab';
+import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
+import { invalidateThreadData } from '@/stores/thread-machine-bridge';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -99,10 +103,19 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     });
   }, [thread.id, projectId]);
 
-  const handleSelect = useCallback(
-    () => onSelectThread(projectId, thread.id),
-    [onSelectThread, projectId, thread.id],
-  );
+  const handleSelect = useCallback(async () => {
+    if (isExternalClaudeShell(thread) && thread.sessionId) {
+      const result = await api.importExternalClaudeSession(thread.sessionId, {
+        projectId,
+      });
+      if (result.isErr()) {
+        toastError(result.error);
+        return;
+      }
+      invalidateThreadData(thread.id);
+    }
+    onSelectThread(projectId, thread.id);
+  }, [onSelectThread, projectId, thread]);
   const handleRename = useCallback(
     (newTitle: string) => onRenameThread(projectId, thread.id, newTitle),
     [onRenameThread, projectId, thread.id],
@@ -115,10 +128,16 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     () => onPinThread(projectId, thread.id, !thread.pinned),
     [onPinThread, projectId, thread.id, thread.pinned],
   );
-  const handleDelete = useCallback(
-    () => onDeleteThread(projectId, thread.id, thread.title),
-    [onDeleteThread, projectId, thread.id, thread.title],
-  );
+  const handleDelete = useCallback(async () => {
+    if (isExternalClaudeShell(thread) && thread.sessionId) {
+      const result = await api.dismissExternalClaudeSession(thread.sessionId);
+      if (result.isErr()) {
+        toastError(result.error);
+        return;
+      }
+    }
+    onDeleteThread(projectId, thread.id, thread.title);
+  }, [onDeleteThread, projectId, thread]);
 
   const isBusy = thread.status === 'running' || thread.status === 'setting_up';
 
@@ -140,6 +159,14 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     </div>
   );
 });
+
+function isExternalClaudeShell(thread: Thread): boolean {
+  return (
+    thread.createdBy === 'external' &&
+    !!thread.sessionId &&
+    thread.externalRequestId?.startsWith('claude:') === true
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────
 
@@ -219,12 +246,16 @@ export const ProjectItem = memo(function ProjectItem({
   onPinThread,
   onDeleteThread,
   onShowAllThreads,
-  onShowIssues,
+  onShowIssues: _onShowIssues,
 }: ProjectItemProps) {
   const navigate = useStableNavigate();
   const { t } = useTranslation();
+  useMinuteTick();
   const [openDropdown, setOpenDropdown] = useState(false);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
+  // Read the shared global sync flag — the polling itself happens once at the
+  // sidebar root (useExternalClaudeSessionsSync), not per project.
+  const externalClaudeSessionsLoaded = useExternalClaudeSessionsLoaded();
   // Pre-compute branchKeys from thread data so we don't depend on threadToBranchKey
   // (which requires a prior fetch per thread to be populated).
   const threadBranchKeys = useMemo(
@@ -256,7 +287,7 @@ export const ProjectItem = memo(function ProjectItem({
       if (statusByBranch[bk]) result[id] = statusByBranch[bk];
     }
     return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
   }, [threadBranchKeys, gitStatusFingerprint]);
 
   // Read selectedThreadId from the store directly, scoped to this project's
@@ -277,7 +308,7 @@ export const ProjectItem = memo(function ProjectItem({
   // Only highlight the project row when no child thread is selected
   const isProjectHighlighted = isSelected && !selectedThreadId;
 
-  // Memoize sorted & sliced threads to avoid O(n log n) sort on every render
+  // Memoize sorted & sliced threads to avoid O(n log n) sort on every render.
   const visibleThreads = useMemo(() => {
     return threads
       .toSorted((a, b) => {
@@ -304,7 +335,10 @@ export const ProjectItem = memo(function ProjectItem({
 
     const cleanupDrag = draggable({
       element: el,
-      getInitialData: () => ({ type: 'sidebar-project', projectId: project.id }),
+      getInitialData: () => ({
+        type: 'sidebar-project',
+        projectId: project.id,
+      }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });
@@ -338,7 +372,6 @@ export const ProjectItem = memo(function ProjectItem({
           isDragging && 'opacity-50',
           isDropTarget && 'ring-2 ring-ring',
         )}
-        onClick={() => onSelectProject(project.id)}
       >
         <div
           className={cn(
@@ -358,30 +391,33 @@ export const ProjectItem = memo(function ProjectItem({
               className={cn('icon-sm transition-transform duration-200', isExpanded && 'rotate-90')}
             />
           </CollapsibleTrigger>
-          <span
+          <button
+            type="button"
             data-testid={`project-name-${project.id}`}
-            className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5"
+            className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5 text-left"
+            onClick={() => onSelectProject(project.id)}
           >
             <Folder className="icon-sm text-muted-foreground shrink-0" />
             <span className="truncate text-sm font-medium">{project.name}</span>
-            {project.needsSetup && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    data-testid={`project-needs-setup-${project.id}`}
-                    className="shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSetupDialogOpen(true);
-                    }}
-                  >
-                    <AlertTriangle className="icon-sm text-status-warning" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Local directory not configured</TooltipContent>
-              </Tooltip>
-            )}
-          </span>
+          </button>
+          {project.needsSetup && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid={`project-needs-setup-${project.id}`}
+                  className="shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSetupDialogOpen(true);
+                  }}
+                >
+                  <AlertTriangle className="icon-sm text-status-warning" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Local directory not configured</TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <div className="mr-2 flex items-center gap-0.5">
           <div
@@ -410,7 +446,9 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-open-directory"
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const result = await api.openDirectory({ path: project.path });
+                    const result = await api.openDirectory({
+                      path: project.path,
+                    });
                     if (result.isErr()) {
                       console.error('Failed to open directory:', result.error);
                     }
@@ -423,7 +461,10 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-open-terminal"
                   onClick={(e) => {
                     e.stopPropagation();
-                    openProjectTerminal({ projectId: project.id, cwd: project.path });
+                    openProjectTerminal({
+                      projectId: project.id,
+                      cwd: project.path,
+                    });
                   }}
                 >
                   <Terminal className="icon-sm" />
@@ -552,9 +593,12 @@ export const ProjectItem = memo(function ProjectItem({
               ))}
             </div>
           )}
-          {threads.length === 0 && threadsLoaded && (
-            <p className="text-muted-foreground px-2 py-2 text-xs">{t('sidebar.noThreads')}</p>
-          )}
+          {threads.length === 0 &&
+            threadsLoaded &&
+            externalClaudeSessionsLoaded &&
+            threads.length === 0 && (
+              <p className="text-muted-foreground px-2 py-2 text-xs">{t('sidebar.noThreads')}</p>
+            )}
           {visibleThreads.map((th) => (
             <ProjectThreadItem
               key={th.id}
@@ -572,7 +616,7 @@ export const ProjectItem = memo(function ProjectItem({
               onDeleteThread={onDeleteThread}
             />
           ))}
-          {threads.length > 5 && (
+          {threads.length > visibleThreads.length && (
             <ViewAllButton
               data-testid={`project-view-all-${project.id}`}
               onClick={() => onShowAllThreads(project.id)}

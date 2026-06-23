@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { SidebarContent } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useExternalClaudeSessionsSync } from '@/hooks/use-external-claude-sessions';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { buildPath } from '@/lib/url';
@@ -62,6 +63,9 @@ export function SidebarProjectsSection({
 }: Props) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
+  // Single global poll that syncs external Claude Code sessions across every
+  // project — mounted once here, not per ProjectItem.
+  useExternalClaudeSessionsSync();
   const [scrolled, setScrolled] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [closedExpanded, setClosedExpanded] = useState(false);

@@ -36,6 +36,7 @@ describe('stripOrgPrefix', () => {
       'new',
       'invite',
       'scratch',
+      'external',
     ];
     for (const route of statics) {
       const [slug, path] = stripOrgPrefix(`/${route}`);
@@ -69,6 +70,13 @@ describe('stripOrgPrefix', () => {
 
   test('does not treat /scratch/<threadId> as org-prefixed', () => {
     expect(stripOrgPrefix('/scratch/abc123')).toEqual([null, '/scratch/abc123']);
+  });
+
+  test('does not treat /external/claude/<sessionId> as org-prefixed', () => {
+    expect(stripOrgPrefix('/external/claude/session-1')).toEqual([
+      null,
+      '/external/claude/session-1',
+    ]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -37,5 +37,26 @@ describe('useRouteSync — URL thread id mirror', () => {
   test('is null on a non-thread route', () => {
     renderHook(() => useRouteSync(), { wrapper: wrapperFor('/projects/p1') });
     expect(getUrlThreadId()).toBeNull();
+  });
+
+  test('clears thread and project selection on an external Claude route', async () => {
+    const selectThread = vi.fn().mockResolvedValue(undefined);
+    const selectProject = vi.fn();
+    useThreadStore.setState({
+      activeThread: { id: 'T123' },
+      selectedThreadId: 'T123',
+      selectThread,
+    } as any);
+    useProjectStore.setState({
+      initialized: true,
+      selectedProjectId: 'p1',
+      selectProject,
+    } as any);
+
+    renderHook(() => useRouteSync(), { wrapper: wrapperFor('/external/claude/session-1') });
+
+    expect(getUrlThreadId()).toBeNull();
+    await waitFor(() => expect(selectThread).toHaveBeenCalledWith(null));
+    expect(selectProject).toHaveBeenCalledWith(null);
   });
 });

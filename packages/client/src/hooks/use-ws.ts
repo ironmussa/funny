@@ -192,7 +192,13 @@ let lastVisibilityResyncAt = 0;
 // re-fetches; WS events still update threadsById in the background.
 function routeNeedsThreadResync(pathname: string): boolean {
   const route = parseRoute(pathname);
-  return !(route.settingsPage || route.preferencesPage || route.addProject || route.scratchNew);
+  return !(
+    route.settingsPage ||
+    route.preferencesPage ||
+    route.addProject ||
+    route.scratchNew ||
+    route.externalClaudeSessionId
+  );
 }
 
 /**

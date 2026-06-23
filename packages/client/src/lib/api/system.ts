@@ -75,6 +75,53 @@ export type OpenCodeModelsResponse =
       discoveredAt: number;
     };
 
+export interface ExternalClaudeSession {
+  id: string;
+  source: 'claude-code';
+  pid: number | null;
+  ppid: number | null;
+  isRunning: boolean;
+  sessionId: string | null;
+  cwd: string | null;
+  projectId?: string | null;
+  projectName: string | null;
+  gitBranch: string | null;
+  title: string;
+  lastPrompt: string | null;
+  command: string | null;
+  startedAt: string | null;
+  elapsedSeconds: number | null;
+  updatedAt: string | null;
+}
+
+export interface ExternalClaudeTranscriptMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string | null;
+  toolCalls?: ExternalClaudeTranscriptToolCall[];
+}
+
+export interface ExternalClaudeTranscriptToolCall {
+  id: string;
+  name: string;
+  input: string;
+  output?: string;
+  timestamp: string | null;
+  author?: string;
+}
+
+export interface ExternalClaudeTranscript {
+  sessionId: string;
+  cwd: string | null;
+  projectName: string | null;
+  gitBranch: string | null;
+  title: string;
+  startedAt: string | null;
+  updatedAt: string | null;
+  messages: ExternalClaudeTranscriptMessage[];
+}
+
 export const systemApi = {
   // Deployment mode — 'team' when served by the central server (no co-located
   // Claude CLI; runner-only onboarding steps are skipped), 'standalone' when
@@ -105,6 +152,27 @@ export const systemApi = {
     request<{
       shells: Array<{ id: string; label: string; path: string }>;
     }>('/system/shells'),
+  listExternalClaudeSessions: (opts: { projectId?: string | null } = {}) => {
+    const qs = opts.projectId ? `?projectId=${encodeURIComponent(opts.projectId)}` : '';
+    return request<{
+      sessions: ExternalClaudeSession[];
+      syncedThreadIds?: string[];
+    }>(`/system/claude-code/external-sessions${qs}`);
+  },
+  getExternalClaudeTranscript: (sessionId: string) =>
+    request<{ transcript: ExternalClaudeTranscript }>(
+      `/system/claude-code/external-sessions/${encodeURIComponent(sessionId)}`,
+    ),
+  importExternalClaudeSession: (sessionId: string, body: { projectId?: string | null } = {}) =>
+    request<{ imported: boolean; thread: Record<string, any> }>(
+      `/system/claude-code/external-sessions/${encodeURIComponent(sessionId)}/import`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  dismissExternalClaudeSession: (sessionId: string) =>
+    request<{ ok: boolean }>(
+      `/system/claude-code/external-sessions/${encodeURIComponent(sessionId)}/dismiss`,
+      { method: 'POST' },
+    ),
   buildNativeGit: () => request<{ status: string }>('/system/build-native-git', { method: 'POST' }),
 
   // Dynamic ACP model catalog — one endpoint serves every provider whose
@@ -132,7 +200,10 @@ export const systemApi = {
         dirName: string;
         spawn: { command: string; args: string[] };
       };
-    }>('/system/providers/install', { method: 'POST', body: JSON.stringify(body) }),
+    }>('/system/providers/install', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   removeProvider: (id: string) =>
     request<{ ok: boolean; id: string }>('/system/providers/remove', {

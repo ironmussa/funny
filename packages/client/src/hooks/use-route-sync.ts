@@ -25,7 +25,8 @@ function isAnyRouteActive(parsed: ParsedRoute): boolean {
     parsed.analytics ||
     parsed.liveColumns ||
     parsed.orchestrator ||
-    parsed.addProject,
+    parsed.addProject ||
+    parsed.externalClaudeSessionId,
   );
 }
 

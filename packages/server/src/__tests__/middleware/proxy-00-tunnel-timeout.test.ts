@@ -62,6 +62,37 @@ function buildApp(deps: ProxyTransport): Hono<ServerEnv> {
 }
 
 describe('proxyToRunner — tunnel timeout fallback', () => {
+  test('prefers direct HTTP for loopback runner URLs before using the tunnel', async () => {
+    let tunnelCalls = 0;
+    let directFetchCalls = 0;
+    const deps = makeDeps({
+      resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://127.0.0.1:3003' }),
+      tunnelFetch: (async () => {
+        tunnelCalls++;
+        throw new Error('tunnel should not be used');
+      }) as ProxyTransport['tunnelFetch'],
+      directFetch: (async () => {
+        directFetchCalls++;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as ProxyTransport['directFetch'],
+    });
+    const app = buildApp(deps);
+
+    const res = await app.request('/api/threads/abc/message', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'hi' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(directFetchCalls).toBe(1);
+    expect(tunnelCalls).toBe(0);
+  });
+
   test('returns 504 and does NOT fall back to direct HTTP on tunnel timeout', async () => {
     let tunnelCalls = 0;
     let directFetchCalls = 0;

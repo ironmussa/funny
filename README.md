@@ -75,14 +75,21 @@ funny --port 8080
 funny --help
 ```
 
-Open `http://localhost:3001` in your browser. That's it.
+Open `http://localhost:3001` in your browser.
+
+On first startup, funny creates a local admin account:
+
+- **Username:** `admin`
+- **Password:** generated automatically and written to `~/.funny/admin-password.txt`
+
+The credentials file is created with mode `0600`. Delete it after first login and change the password. To choose the initial password yourself, set `ADMIN_PASSWORD` before the first startup; it must be at least 10 characters and include uppercase, lowercase, and numeric characters.
 
 ### Team Mode (Multiple Users)
 
 Team mode lets multiple users collaborate on shared projects. It requires two components:
 
 1. **Central server** (`funny-server`) — Runs on a shared machine. Manages users, projects, memberships, and coordinates runners.
-2. **Local runner** (`funny --team <url>`) — Each team member runs funny locally and connects to the central server.
+2. **Local runner** (`funny --team <url>`) — Each team member runs a runner that connects to the central server.
 
 #### Step 1: Start the central server
 
@@ -99,31 +106,25 @@ funny-server --port 3002
 On first start, a default admin account is created:
 
 - **Username:** `admin`
-- **Password:** `admin`
+- **Password:** generated automatically and written to the server data directory (`~/.funny/admin-password.txt` by default)
 
-The admin can create additional user accounts from the central server's API.
+The credentials file is created with mode `0600`. Delete it after first login and change the password. To choose the initial password yourself, set `ADMIN_PASSWORD` before the first startup; it must be at least 10 characters and include uppercase, lowercase, and numeric characters. The admin can create additional user accounts from the central server's API.
 
 #### Step 2: Each team member connects
 
-Each team member runs funny locally with the `--team` and `--token` flags:
+Each team member runs funny locally with the `--team` flag:
 
 ```bash
-funny --team http://<central-server-ip>:3002 --token <invite-token>
+funny --team http://<central-server-ip>:3002
 ```
 
-The invite token is generated from the central server's **Settings > Runners** page. Copy the install command and run it — it works on Windows, macOS, and Linux.
+The runner prints a short device-link code. In the central server UI, open **Settings > Runners**, click **Link a runner**, enter the code, and approve it. A plain `funny` or `bunx @ironmussa/funny@latest` always starts local by default; every team run should pass `--team <url>` explicitly.
 
-On first run, the `--team` and `--token` values are **automatically saved** to `~/.funny/.env`, so subsequent runs only need:
+This starts a runner-only process. The UI, auth, projects, and thread state live on the central server; the runner connects back to:
 
-```bash
-funny
-```
-
-This starts the full funny app locally (UI, git, agents) **and** connects to the central server to:
-
-- Authenticate and see team projects
-- Sync thread state across the team
 - Receive dispatched tasks from the central server
+- Run git operations and Claude agents on the member's machine
+- Stream terminal/browser/agent events back to the central server
 
 Each member's git operations and Claude agents run **on their own machine**, in their own local repos. The central server only coordinates — it never touches your filesystem.
 
@@ -136,7 +137,6 @@ Team member A                    Team member B
 │ ┌──────────────┐ │            │ ┌──────────────┐ │
 │ │ Local git    │ │            │ │ Local git    │ │
 │ │ Local agents │ │            │ │ Local agents │ │
-│ │ Local SQLite │ │            │ │ Local SQLite │ │
 │ └──────┬───────┘ │            │ └──────┬───────┘ │
 └────────┼─────────┘            └────────┼─────────┘
          │         ┌──────────┐          │
@@ -157,8 +157,9 @@ Team member A                    Team member B
 | `-p, --port <port>`  | Server port                               | `3001`      |
 | `-h, --host <host>`  | Server host                               | `127.0.0.1` |
 | `--auth-mode <mode>` | Authentication mode: `local` or `multi`   | `local`     |
-| `--team <url>`       | Connect to a central team server          | -           |
+| `--team <url>`       | Connect this machine as a runner to a central server | -           |
 | `--token <token>`    | Runner invite token for team registration | -           |
+| `--local`            | Start standalone; cannot combine with `--team` | `false` |
 | `--help`             | Show help message                         | -           |
 
 **funny-server** (team coordination server)
@@ -171,19 +172,19 @@ Team member A                    Team member B
 
 ### Persistent Configuration
 
-When you pass `--team` or `--token` via the CLI, the values are automatically saved to `~/.funny/.env`. On subsequent runs, funny loads this file so you don't need to repeat the flags.
+Saved values in `~/.funny/.env` do not activate team mode. A plain `funny` or `bunx @ironmussa/funny@latest` always starts in local mode by default. To connect to a central server, pass `--team <url>` explicitly.
 
 ```bash
-# First time — pass the full connection info
-funny --team http://192.168.1.10:3002 --token utkn_xxx
-
-# Every subsequent run — just this
+# Local standalone
 funny
+
+# Team runner
+funny --team http://192.168.1.10:3002
 ```
 
-**Precedence order:** CLI flags > shell environment variables > saved `~/.funny/.env`
+**Precedence order:** CLI flags > shell environment variables > saved non-team values in `~/.funny/.env`. Team mode requires `--team <url>`.
 
-To change the server, simply pass `--team` again with a new URL — the saved config is updated automatically. The `.env` file is created with restricted permissions (`0600`) since it contains tokens.
+To change the server, pass `--team` with the new URL.
 
 ### Environment Variables
 
@@ -192,8 +193,11 @@ To change the server, simply pass `--team` again with a new URL — the saved co
 | `PORT`                   | Server port                             | `3001` / `3002`    | both         |
 | `HOST`                   | Server hostname                         | `127.0.0.1`        | both         |
 | `AUTH_MODE`              | Authentication mode (`local`/`multi`)   | `local`            | funny        |
-| `TEAM_SERVER_URL`        | Central server URL (same as `--team`)   | -                  | funny        |
-| `RUNNER_INVITE_TOKEN`    | Runner invite token (same as `--token`) | -                  | funny        |
+| `ADMIN_USERNAME`         | Bootstrap admin username                | `admin`            | both         |
+| `ADMIN_EMAIL`            | Bootstrap admin email                   | `admin@local.host` | both         |
+| `ADMIN_PASSWORD`         | Bootstrap admin password; generated if unset | -             | both         |
+| `RUNNER_INVITE_TOKEN`    | Runner invite token for `--team` classic flow | -             | funny        |
+| `RUNNER_AUTH_SECRET`     | Shared secret for `--team` classic flow | -                  | funny        |
 | `CORS_ORIGIN`            | Custom CORS origins (comma-separated)   | Auto-configured    | both         |
 | `FUNNY_CENTRAL_DATA_DIR` | Central server data directory           | `~/.funny-central` | funny-server |
 | `LOG_LEVEL`              | Log level (debug/info/warn/error)       | `info`             | funny-server |
@@ -489,8 +493,9 @@ run `bun run dev` as usual, or prefix any command with `PORTLESS=0`.
 
 ```
 ~/.funny/
-├── .env              # Saved CLI config (--team, --token) — auto-generated
+├── .env              # Optional local env file; team connection keys are ignored by the CLI
 ├── data.db           # SQLite database (projects, threads, messages)
+├── admin-password.txt # Generated first-run admin password; delete after rotating
 ├── auth-token        # Bearer token for local auth
 ├── auth-secret       # Session secret (multi-user mode)
 └── encryption.key    # AES-256-GCM key for GitHub token encryption
@@ -501,6 +506,7 @@ run `bun run dev` as usual, or prefix any command with `PORTLESS=0`.
 ```
 ~/.funny-central/
 ├── central.db        # SQLite database (users, projects, memberships, runners)
+├── admin-password.txt # Generated first-run admin password; delete after rotating
 ├── auth-secret       # Session secret
 └── encryption.key    # AES-256-GCM key for token encryption
 ```

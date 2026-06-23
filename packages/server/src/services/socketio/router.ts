@@ -72,17 +72,32 @@ export function registerSocketRpc<
   },
 ): void {
   socket.on(eventName, async (data: unknown, ack?: (response: TResponse) => void) => {
-    if (typeof ack !== 'function') return;
+    const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
+    const payload = parseSocketPayload(schema, data);
+    const requestId =
+      data != null &&
+      typeof data === 'object' &&
+      !Array.isArray(data) &&
+      typeof (data as { _requestId?: unknown })._requestId === 'string'
+        ? (data as { _requestId: string })._requestId
+        : null;
+    const respond =
+      typeof ack === 'function'
+        ? ack
+        : requestId
+          ? (response: TResponse) => {
+              socket.emit('data:response', { requestId, response });
+            }
+          : null;
+    if (!respond) return;
     const ctx: SocketHandlerContext = { socket, eventName };
     for (const mw of spec.middleware ?? []) {
       if (!(await mw(ctx, data))) return;
     }
-    const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
-    const payload = parseSocketPayload(schema, data);
     if (payload === null) {
-      if (spec.invalidPayloadResponse !== undefined) ack(spec.invalidPayloadResponse);
+      if (spec.invalidPayloadResponse !== undefined) respond(spec.invalidPayloadResponse);
       return;
     }
-    await spec.handler(ctx, ack, payload);
+    await spec.handler(ctx, respond, payload);
   });
 }

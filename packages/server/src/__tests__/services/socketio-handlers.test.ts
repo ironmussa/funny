@@ -220,6 +220,23 @@ describe('socketio runner handlers', () => {
     expect(response).toEqual({ ok: true, wsConnected: true });
   });
 
+  test('runner:heartbeat emits data:response for requestId messages', async () => {
+    spyOn(runnerManager, 'handleHeartbeat').mockResolvedValue(true);
+
+    const socket = createMockSocket();
+    setupRunnerControlHandlers(socket, 'runner-1');
+
+    await socket.trigger('runner:heartbeat', { _requestId: 'hb-1', activeThreadIds: [] });
+
+    expect(socket.emitted[0]).toEqual({
+      event: 'data:response',
+      data: {
+        requestId: 'hb-1',
+        response: { ok: true, wsConnected: true },
+      },
+    });
+  });
+
   test('runner:assign_project rejects cross-tenant project access', async () => {
     spyOn(projectRepository, 'resolveProjectPath').mockResolvedValue(
       err({ message: 'Forbidden' } as any),

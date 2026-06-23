@@ -248,6 +248,31 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   const tunnelPath = `${path}${url.search}`;
   const tunnelActive = deps.isRunnerConnected(runnerId);
 
+  // Local bunx/dev runs register a loopback httpUrl. Prefer direct HTTP for
+  // those requests so regular API calls do not compete with high-volume agent
+  // stream persistence over the Socket.IO tunnel.
+  const preferDirectHttp = httpUrl ? isLoopbackRunnerUrl(httpUrl) : false;
+
+  if (preferDirectHttp && httpUrl) {
+    try {
+      return await directHttpFetch(
+        c,
+        httpUrl,
+        path,
+        url.search,
+        forwardedHeaders,
+        body,
+        deps.directFetch,
+      );
+    } catch (httpErr) {
+      log.warn('Direct HTTP to local runner failed; trying tunnel', {
+        namespace: 'proxy',
+        runnerId,
+        error: (httpErr as Error).message,
+      });
+    }
+  }
+
   // If the runner is connected via Socket.IO, use the tunnel as primary
   if (tunnelActive) {
     try {
@@ -324,6 +349,20 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   }
 
   return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
+}
+
+function isLoopbackRunnerUrl(rawUrl: string): boolean {
+  try {
+    const { hostname } = new URL(rawUrl);
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname === '[::1]'
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

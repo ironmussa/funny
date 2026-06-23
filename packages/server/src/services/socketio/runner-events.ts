@@ -47,9 +47,9 @@ export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
     if (isRateLimited(ctx.socket.id, 500, 10_000)) return;
     const msg = parseRunnerAgentEvent(data);
     if (!msg) return;
-    if (!allowRunnerEvent(RUNNER_AGENT_EVENT, msg)) return;
+    if (!allowRunnerEvent(RUNNER_AGENT_EVENT, msg as unknown as Record<string, unknown>)) return;
 
-    ctx.wsRelay.relayToUser(msg.userId, msg.event);
+    ctx.wsRelay.relayToUser(msg.userId, msg.event as Record<string, unknown>);
 
     const threadRegistry = await import('../thread-registry.js');
     const event = msg.event as Record<string, any> | null;
@@ -120,7 +120,8 @@ export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
     if (isRateLimited(ctx.socket.id, 500, 10_000)) return;
     const relay = parseRunnerBrowserRelay(data);
     if (!relay) return;
-    if (!allowRunnerEvent(RUNNER_BROWSER_RELAY, relay)) return;
-    ctx.wsRelay.relayToUser(relay.userId, relay.data);
+    if (!allowRunnerEvent(RUNNER_BROWSER_RELAY, relay as unknown as Record<string, unknown>))
+      return;
+    ctx.wsRelay.relayToUser(relay.userId, relay.data as Record<string, unknown>);
   });
 }

@@ -58,7 +58,7 @@ function createSqliteMigrationContext(db: any): MigrationContext {
   function queryOne<T>(
     query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>,
   ): Promise<T | undefined> {
-    return Promise.resolve(db.get<T>(query));
+    return Promise.resolve(db.get(query) as T | undefined);
   }
 
   async function addColumn(table: string, column: string, type: string, dflt?: string) {

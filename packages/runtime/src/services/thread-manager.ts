@@ -54,8 +54,10 @@ export const insertMessage = (data: {
   effort?: string | null;
   author?: string | null;
 }) => getServices().threads.insertMessage(data);
-export const updateMessage = (id: string, content: string) =>
-  getServices().threads.updateMessage(id, content);
+export const updateMessage = (
+  id: string,
+  data: string | { content: string; images?: string | null },
+) => getServices().threads.updateMessage(id, data);
 export const deleteMessagesAfter = (threadId: string, anchorMessageId: string) =>
   getServices().threads.deleteMessagesAfter(threadId, anchorMessageId);
 

@@ -114,7 +114,7 @@ export interface HandlerServiceContext {
       disallowedTools?: string;
       fileReferences?: string;
     },
-  ): Promise<QueueEntry>;
+  ): Promise<QueueEntry | Record<string, unknown>>;
   queueCount(threadId: string): number | Promise<number>;
   peekMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
 

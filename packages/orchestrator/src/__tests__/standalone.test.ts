@@ -20,7 +20,7 @@ interface FakeCall {
 
 function makeFakeFetch(): { fetch: typeof fetch; calls: FakeCall[] } {
   const calls: FakeCall[] = [];
-  const fakeFetch: typeof fetch = async (input, init) => {
+  const fakeFetch = (async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
     calls.push({ url, method });
@@ -42,7 +42,7 @@ function makeFakeFetch(): { fetch: typeof fetch; calls: FakeCall[] } {
       return new Response(JSON.stringify({ dependencies: {} }), { status: 200 });
     }
     return new Response('{}', { status: 200 });
-  };
+  }) as typeof fetch;
   return { fetch: fakeFetch, calls };
 }
 

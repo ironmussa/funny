@@ -202,7 +202,7 @@ async function searchViaFts5(
 
   // SQLite: synchronous .all() on raw SQL is the correct API for FTS5 queries.
   // This is intentionally dialect-specific — guarded by the dbDialect check above.
-  const rows = (db as any).all<{ threadId: string; snippet: string }>(stmt) as {
+  const rows = (db as any).all(stmt) as {
     threadId: string;
     snippet: string;
   }[];

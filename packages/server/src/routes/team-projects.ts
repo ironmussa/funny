@@ -80,6 +80,7 @@ teamProjectRoutes.delete('/:projectId', requirePermission('project', 'delete'), 
   if (!orgId) return c.json({ error: 'No active organization' }, 400);
 
   const projectId = c.req.param('projectId');
+  if (!projectId) return c.json({ error: 'Project id required' }, 400);
 
   await dbRun(
     db

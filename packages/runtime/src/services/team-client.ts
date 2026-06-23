@@ -1214,8 +1214,12 @@ function emitUpdateMessage(messageId: string, content: string): void {
 }
 
 /** Update message content on the server (debounced fire-and-forget). */
-export async function remoteUpdateMessage(messageId: string, content: string): Promise<void> {
+export async function remoteUpdateMessage(
+  messageId: string,
+  data: string | { content: string; images?: string | null },
+): Promise<void> {
   if (!state.socket?.connected) return;
+  const content = typeof data === 'string' ? data : data.content;
   const existing = pendingMessageUpdates.get(messageId);
   if (existing) clearTimeout(existing.timer);
   const timer = setTimeout(() => {

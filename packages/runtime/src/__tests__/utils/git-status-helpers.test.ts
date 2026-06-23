@@ -127,6 +127,7 @@ describe('emitGitStatusForThread', () => {
       getThread: vi.fn(async () => ({
         id: 't-1',
         projectId: 'p-1',
+        userId: 'u-1',
         mode: 'local',
         branch: 'main',
         worktreePath: null,

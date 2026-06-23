@@ -15,6 +15,7 @@ import type { Hono } from 'hono';
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { wsBroker } from '../services/ws-broker.js';
+import type { HonoEnv } from '../types/hono-env.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
 import { getAvailableProviders, resetProviderCache } from '../utils/provider-detection.js';
 
@@ -24,7 +25,7 @@ import { getAvailableProviders, resetProviderCache } from '../utils/provider-det
  * Pulled out of app.ts so the bootstrap file doesn't need spawnSync,
  * fs/path, provider-detection, claude-binary, or shared/models utilities.
  */
-export function registerSystemRoutes(app: Hono): void {
+export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/health', (c) => {
     return c.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
@@ -33,6 +34,14 @@ export function registerSystemRoutes(app: Hono): void {
     const { detectShells } =
       require('../services/shell-detector.js') as typeof import('../services/shell-detector.js');
     return c.json({ shells: detectShells() });
+  });
+
+  app.get('/api/system/claude-code/external-sessions', async (c) => {
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
+    const { listExternalClaudeSessions } = await import('../services/external-claude-sessions.js');
+    return c.json({ sessions: listExternalClaudeSessions() });
   });
 
   // Dynamic model discovery. Pi uses its native SDK; dynamic ACP providers use

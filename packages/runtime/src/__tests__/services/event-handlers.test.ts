@@ -194,7 +194,12 @@ describe('gitCommitPersistenceHandler', () => {
 describe('stageTransitionOnAgentStartHandler', () => {
   test('filter accepts backlog/planning/review stages only', async () => {
     const ctx = makeCtx({
-      getThread: vi.fn(async () => ({ id: 't-1', stage: 'backlog' })),
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: 'p-1',
+        userId: 'u-1',
+        stage: 'backlog',
+      })),
     });
 
     expect(
@@ -206,6 +211,8 @@ describe('stageTransitionOnAgentStartHandler', () => {
 
     (ctx.getThread as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: 't-1',
+      projectId: 'p-1',
+      userId: 'u-1',
       stage: 'in_progress',
     });
     expect(
@@ -218,7 +225,12 @@ describe('stageTransitionOnAgentStartHandler', () => {
 
   test('moves thread to in_progress and notifies client', async () => {
     const ctx = makeCtx({
-      getThread: vi.fn(async () => ({ id: 't-1', stage: 'planning' })),
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: 'p-1',
+        userId: 'u-1',
+        stage: 'planning',
+      })),
     });
 
     await stageTransitionOnAgentStartHandler.action(

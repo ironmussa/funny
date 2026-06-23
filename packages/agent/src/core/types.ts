@@ -7,6 +7,7 @@
 export type PipelineEventType =
   // Session lifecycle events
   | 'session.created'
+  | 'session.started'
   | 'session.transition'
   | 'session.accepted'
   | 'session.plan_ready'
@@ -19,6 +20,8 @@ export type PipelineEventType =
   | 'session.merged'
   | 'session.failed'
   | 'session.escalated'
+  | 'session.tool_call'
+  | 'session.tool_result'
   // Reaction events
   | 'reaction.triggered'
   | 'reaction.agent_respawned'

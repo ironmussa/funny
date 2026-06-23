@@ -19,7 +19,7 @@ import {
 } from '../helpers/test-db.js';
 
 describe('data-handler handleDataMessageWithAck', () => {
-  let db: Awaited<ReturnType<typeof import('../../db/index.js')>>['db'];
+  let db: (typeof import('../../db/index.js'))['db'];
   let schema: typeof import('../../db/schema.js');
 
   beforeAll(async () => {
@@ -590,8 +590,8 @@ describe('data-handler handleDataMessageWithAck', () => {
       .from(schema.messages)
       .where(eq(schema.messages.threadId, 't1'))
       .all();
-    expect(remaining.some((m) => m.id === 'm1')).toBe(true);
-    expect(remaining.some((m) => m.id === 'm3')).toBe(false);
+    expect(remaining.some((m: any) => m.id === 'm1')).toBe(true);
+    expect(remaining.some((m: any) => m.id === 'm3')).toBe(false);
   });
 
   test('get_profile returns profile for user', async () => {

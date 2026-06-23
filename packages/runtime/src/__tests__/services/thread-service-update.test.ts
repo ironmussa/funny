@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
     getThread: vi.fn(),
     updateThread: vi.fn(async () => undefined),
     deleteThread: vi.fn(async () => undefined),
-    getThreadMessages: vi.fn(async () => ({ messages: [], hasMore: false })),
+    getThreadMessages: vi.fn(async (): Promise<any> => ({ messages: [], hasMore: false })),
   },
   projects: {
     getProject: vi.fn(),

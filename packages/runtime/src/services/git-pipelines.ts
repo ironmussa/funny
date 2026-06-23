@@ -240,6 +240,7 @@ async function hooksNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
             hookError: hookResult.output || 'Hook failed',
             fixModel: ctx.precommitFixModel,
             maxIterations: ctx.precommitFixMaxIterations,
+            precommitFixerPrompt: ctx.precommitFixerPrompt,
             setStep: ctx.setStep,
             hooks: ctx.hooks,
             hookIndex: i,
@@ -460,6 +461,7 @@ async function reviewNode(
   }
 
   const { verdict, findings } = parseReviewVerdict(lastAssistantMsg.content);
+  const reviewFindings = Array.isArray(findings) ? findings : [];
 
   await cleanupReviewerThread(reviewerThread.id, ctx.projectId);
 
@@ -471,7 +473,7 @@ async function reviewNode(
       workflowId: ctx.workflowId,
       iteration: ctx.iteration,
       verdict,
-      findingsCount: findings?.length ?? 0,
+      findingsCount: reviewFindings.length,
       reviewerThreadId: reviewerThread.id,
     });
   }
@@ -480,7 +482,7 @@ async function reviewNode(
     ...ctx,
     reviewerThreadId: reviewerThread.id,
     verdict,
-    findings: findings ? JSON.stringify(findings) : null,
+    findings: reviewFindings.length ? JSON.stringify(reviewFindings) : null,
   };
 }
 
@@ -1088,6 +1090,7 @@ interface AutoFixParams {
   hookError: string;
   fixModel: string;
   maxIterations: number;
+  precommitFixerPrompt?: string;
   setStep: (stepId: string, update: Partial<GitWorkflowProgressStep>) => void;
   hooks: { label: string; command: string }[];
   hookIndex: number;
@@ -1146,7 +1149,7 @@ async function attemptPrecommitAutoFix(params: AutoFixParams): Promise<boolean> 
       hookLabel,
       hookError,
       stagedFiles,
-      ctx.precommitFixerPrompt,
+      params.precommitFixerPrompt,
     );
 
     // Create a separate thread for the fixer agent

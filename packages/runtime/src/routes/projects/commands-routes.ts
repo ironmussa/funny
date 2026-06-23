@@ -24,6 +24,11 @@ const startCommandBodySchema = z.object({
   threadId: z.string().min(1).optional(),
 });
 
+function requireRouteParam(value: string | undefined, name: string): string {
+  if (!value) throw new Error(`Missing route parameter: ${name}`);
+  return value;
+}
+
 // Security CR-6: every CRUD route below validates project ownership via
 // requireProject *before* touching startup-commands. Mutations also pass
 // the parent projectId to the repo so a guessed cmdId from another project
@@ -32,7 +37,7 @@ const startCommandBodySchema = z.object({
 
 // GET /api/projects/:id/commands
 projectCommandsRoutes.get('/:id/commands', async (c) => {
-  const projectId = c.req.param('id');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
   const projectResult = await requireProject(
     projectId,
     c.get('userId'),
@@ -45,7 +50,7 @@ projectCommandsRoutes.get('/:id/commands', async (c) => {
 
 // POST /api/projects/:id/commands
 projectCommandsRoutes.post('/:id/commands', async (c) => {
-  const projectId = c.req.param('id');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
   const projectResult = await requireProject(
     projectId,
     c.get('userId'),
@@ -63,8 +68,8 @@ projectCommandsRoutes.post('/:id/commands', async (c) => {
 
 // PUT /api/projects/:id/commands/:cmdId
 projectCommandsRoutes.put('/:id/commands/:cmdId', async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
+  const cmdId = requireRouteParam(c.req.param('cmdId'), 'cmdId');
   const projectResult = await requireProject(
     projectId,
     c.get('userId'),
@@ -87,8 +92,8 @@ projectCommandsRoutes.put('/:id/commands/:cmdId', async (c) => {
 
 // DELETE /api/projects/:id/commands/:cmdId
 projectCommandsRoutes.delete('/:id/commands/:cmdId', async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
+  const cmdId = requireRouteParam(c.req.param('cmdId'), 'cmdId');
   const projectResult = await requireProject(
     projectId,
     c.get('userId'),
@@ -101,8 +106,8 @@ projectCommandsRoutes.delete('/:id/commands/:cmdId', async (c) => {
 
 // POST /api/projects/:id/commands/:cmdId/start
 projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
+  const cmdId = requireRouteParam(c.req.param('cmdId'), 'cmdId');
 
   const projectResult = await requireProject(
     projectId,
@@ -162,8 +167,8 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
 
 // POST /api/projects/:id/commands/:cmdId/stop
 projectCommandsRoutes.post('/:id/commands/:cmdId/stop', requireAdmin, async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
+  const cmdId = requireRouteParam(c.req.param('cmdId'), 'cmdId');
 
   const projectResult = await requireProject(
     projectId,
@@ -181,8 +186,8 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/stop', requireAdmin, async (c) 
 
 // GET /api/projects/:id/commands/:cmdId/status
 projectCommandsRoutes.get('/:id/commands/:cmdId/status', async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
+  const cmdId = requireRouteParam(c.req.param('cmdId'), 'cmdId');
 
   const projectResult = await requireProject(
     projectId,
@@ -199,8 +204,8 @@ projectCommandsRoutes.get('/:id/commands/:cmdId/status', async (c) => {
 
 // GET /api/projects/:id/commands/:cmdId/metrics
 projectCommandsRoutes.get('/:id/commands/:cmdId/metrics', async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
+  const cmdId = requireRouteParam(c.req.param('cmdId'), 'cmdId');
 
   const projectResult = await requireProject(
     projectId,
@@ -219,7 +224,7 @@ projectCommandsRoutes.get('/:id/commands/:cmdId/metrics', async (c) => {
 
 // POST /api/projects/:id/sync-processes — sync .funny.json processes + Procfile with startup commands
 projectCommandsRoutes.post('/:id/sync-processes', requireAdmin, async (c) => {
-  const projectId = c.req.param('id');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
   const projectResult = await requireProject(
     projectId,
     c.get('userId'),
@@ -267,7 +272,7 @@ projectCommandsRoutes.post('/:id/sync-processes', requireAdmin, async (c) => {
 
 // POST /api/projects/:id/sync-config — sync both processes and automations from .funny.json
 projectCommandsRoutes.post('/:id/sync-config', requireAdmin, async (c) => {
-  const projectId = c.req.param('id');
+  const projectId = requireRouteParam(c.req.param('id'), 'id');
   const userId = c.get('userId');
   const projectResult = await requireProject(
     projectId,

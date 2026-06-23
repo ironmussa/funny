@@ -530,6 +530,8 @@ export class RuntimeProgressReporter implements ProgressReporter {
           stage: stepId,
           status: data.status,
           error: data.error,
+          iteration: 1,
+          maxIterations: 1,
           ...data.metadata,
         },
       } as WSEvent);

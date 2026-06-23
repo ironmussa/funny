@@ -1,4 +1,5 @@
 import { deriveGitSyncState, getNativeGit, getStatusSummary } from '@funny/core/git';
+import type { AgentModel, PermissionMode } from '@funny/shared';
 import type { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
@@ -11,6 +12,7 @@ import * as ptyManager from '../services/pty-manager.js';
 import { getServices, setServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
 import { wsBroker } from '../services/ws-broker.js';
+import type { HonoEnv } from '../types/hono-env.js';
 import { logProviderStatus } from '../utils/provider-detection.js';
 import { handleBrowserSessionMessage } from './browser-session-message-handler.js';
 import { handlePtyMessage } from './pty-message-handler.js';
@@ -24,7 +26,7 @@ import { handlePtyMessage } from './pty-message-handler.js';
  * Pulled out of app.ts so the bootstrap file doesn't import 11+ services
  * directly.
  */
-export async function initRuntime(app: Hono): Promise<void> {
+export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   const { createRunnerServiceProvider } = await import('../services/runner-service-provider.js');
   setServices(createRunnerServiceProvider());
   log.info('Runner service provider created', { namespace: 'server' });
@@ -52,8 +54,8 @@ export async function initRuntime(app: Hono): Promise<void> {
         threadId,
         prompt,
         cwd,
-        model,
-        permissionMode,
+        model as AgentModel | undefined,
+        permissionMode as PermissionMode | undefined,
         images,
         disallowedTools,
         allowedTools,

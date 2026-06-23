@@ -22,7 +22,7 @@ export interface TestAppOptions {
   /** Default userId for all requests (overridable per-request via header) */
   userId?: string;
   /** Default userRole ('user' | 'admin') */
-  userRole?: string;
+  userRole?: 'user' | 'admin';
 }
 
 export interface TestApp {
@@ -32,7 +32,7 @@ export interface TestApp {
   /** Make requests as a specific user */
   requestAs: (
     userId: string,
-    role?: string,
+    role?: 'user' | 'admin',
     extras?: { orgId?: string },
   ) => {
     get: (path: string) => Promise<Response>;
@@ -71,7 +71,9 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   app.use('*', async (c, next) => {
     c.set('userId', c.req.header('X-Test-User-Id') ?? opts.userId ?? 'test-user-1');
-    c.set('userRole', c.req.header('X-Test-User-Role') ?? opts.userRole ?? 'user');
+    const userRole =
+      c.req.header('X-Test-User-Role') === 'admin' ? 'admin' : (opts.userRole ?? 'user');
+    c.set('userRole', userRole);
     c.set('isRunner', c.req.header('X-Test-Is-Runner') === 'true');
     c.set('runnerId', c.req.header('X-Test-Runner-Id') ?? '');
     c.set('organizationId', c.req.header('X-Test-Org-Id') ?? null);
@@ -153,49 +155,63 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
     }
   };
 
-  const testHeaders = (userId: string, role: string, extras?: { orgId?: string }) => ({
+  const testHeaders = (userId: string, role: 'user' | 'admin', extras?: { orgId?: string }) => ({
     'X-Test-User-Id': userId,
     'X-Test-User-Role': role,
     ...(extras?.orgId ? { 'X-Test-Org-Id': extras.orgId } : {}),
   });
 
-  const requestAs = (userId: string, role = 'user', extras?: { orgId?: string }) => ({
+  const requestAs = (
+    userId: string,
+    role: 'user' | 'admin' = 'user',
+    extras?: { orgId?: string },
+  ) => ({
     get: (path: string) =>
-      app.request(path, {
-        headers: testHeaders(userId, role, extras),
-      }),
+      Promise.resolve(
+        app.request(path, {
+          headers: testHeaders(userId, role, extras),
+        }),
+      ),
     post: (path: string, body?: any) =>
-      app.request(path, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...testHeaders(userId, role, extras),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      }),
+      Promise.resolve(
+        app.request(path, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...testHeaders(userId, role, extras),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        }),
+      ),
     patch: (path: string, body?: any) =>
-      app.request(path, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...testHeaders(userId, role, extras),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      }),
+      Promise.resolve(
+        app.request(path, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...testHeaders(userId, role, extras),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        }),
+      ),
     put: (path: string, body?: any) =>
-      app.request(path, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...testHeaders(userId, role, extras),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      }),
+      Promise.resolve(
+        app.request(path, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...testHeaders(userId, role, extras),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        }),
+      ),
     delete: (path: string) =>
-      app.request(path, {
-        method: 'DELETE',
-        headers: testHeaders(userId, role, extras),
-      }),
+      Promise.resolve(
+        app.request(path, {
+          method: 'DELETE',
+          headers: testHeaders(userId, role, extras),
+        }),
+      ),
   });
 
   const runnerHeaders = (runnerId: string) => ({
@@ -205,18 +221,22 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   const requestAsRunner = (runnerId: string) => ({
     get: (path: string) =>
-      app.request(path, {
-        headers: runnerHeaders(runnerId),
-      }),
+      Promise.resolve(
+        app.request(path, {
+          headers: runnerHeaders(runnerId),
+        }),
+      ),
     post: (path: string, body?: any) =>
-      app.request(path, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...runnerHeaders(runnerId),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      }),
+      Promise.resolve(
+        app.request(path, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...runnerHeaders(runnerId),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        }),
+      ),
   });
 
   return { app, db, schema, requestAs, requestAsRunner, cleanup };

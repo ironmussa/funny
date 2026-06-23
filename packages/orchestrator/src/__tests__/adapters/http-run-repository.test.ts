@@ -19,7 +19,7 @@ function fakeClient(responder: (call: FakeCall) => unknown): {
   calls: FakeCall[];
 } {
   const calls: FakeCall[] = [];
-  const fakeFetch: typeof fetch = async (input, init) => {
+  const fakeFetch = (async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
     const u = new URL(url);
     const path = u.pathname + (u.search || '');
@@ -34,7 +34,7 @@ function fakeClient(responder: (call: FakeCall) => unknown): {
       status: result === undefined ? 204 : 200,
       headers: { 'content-type': 'application/json' },
     });
-  };
+  }) as typeof fetch;
   const client = new HttpOrchestratorClient({
     baseUrl: 'http://srv',
     authSecret: 's',

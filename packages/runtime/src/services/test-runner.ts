@@ -484,11 +484,14 @@ export async function runTest(
     data: { status: 'running', file: safeFile, runId },
   });
 
+  let wrapperConfigPath: string | null = null;
+  let reporterPath: string | null = null;
+
   try {
     // Write a wrapper config that injects --remote-debugging-port and our custom
     // action reporter into the user's Playwright config.
-    const wrapperConfigPath = join(projectPath, '.playwright.funny.config.ts');
-    const reporterPath = join(projectPath, '.funny-action-reporter.cjs');
+    wrapperConfigPath = join(projectPath, '.playwright.funny.config.ts');
+    reporterPath = join(projectPath, '.funny-action-reporter.cjs');
     await writeFile(reporterPath, REPORTER_SOURCE, 'utf-8');
 
     const wrapperConfig = `
@@ -560,8 +563,8 @@ export default defineConfig({
     const exitCode = await proc.exited;
 
     // Cleanup
-    await unlink(wrapperConfigPath).catch(() => {});
-    await unlink(reporterPath).catch(() => {});
+    if (wrapperConfigPath) await unlink(wrapperConfigPath).catch(() => {});
+    if (reporterPath) await unlink(reporterPath).catch(() => {});
     const currentRun = activeRuns.get(projectId);
     if (currentRun?.runId === runId) {
       if (currentRun.chromeSession) {
@@ -579,8 +582,8 @@ export default defineConfig({
       });
     }
   } catch (err) {
-    await unlink(wrapperConfigPath).catch(() => {});
-    await unlink(reporterPath).catch(() => {});
+    if (wrapperConfigPath) await unlink(wrapperConfigPath).catch(() => {});
+    if (reporterPath) await unlink(reporterPath).catch(() => {});
     const currentRun = activeRuns.get(projectId);
     if (currentRun?.runId === runId) {
       activeRuns.delete(projectId);

@@ -266,7 +266,7 @@ export function dropStash(
   cwd: string,
   stashIndex: number,
 ): ResultAsync<string, DomainError> {
-  return gitStashDrop(cwd, stashIndex).map(async (output) => {
+  return gitStashDrop(cwd, `stash@{${stashIndex}}`).map(async (output) => {
     threadEventBus.emit('git:stash-dropped', {
       threadId,
       userId,
@@ -504,7 +504,7 @@ export interface MergeParams {
 }
 
 export function merge(params: MergeParams): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(
+  return ResultAsync.fromPromise(
     (async () => {
       const thread = await tm.getThread(params.threadId);
       if (!thread || !thread.branch) {
@@ -516,121 +516,128 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
 
       return { thread, project } as const;
     })(),
-  ).andThen((lookup) => {
-    if ('err' in lookup) return errAsync(lookup.err);
-    const { thread, project } = lookup;
+    (e) => internal(String(e)),
+  )
+    .andThen((lookup) => {
+      if ('err' in lookup) return errAsync(lookup.err);
+      const { thread, project } = lookup;
+      const sourceBranch = thread.branch;
 
-    const targetBranch = params.targetBranch || thread.baseBranch;
-    if (!targetBranch) {
-      return errAsync(badRequest('No target branch specified and no baseBranch set on thread'));
-    }
+      const targetBranch = params.targetBranch || thread.baseBranch;
+      if (!sourceBranch || !targetBranch) {
+        return errAsync(badRequest('No target branch specified and no baseBranch set on thread'));
+      }
 
-    return ResultAsync.fromSafePromise(resolveIdentity(params.userId)).andThen((identity) =>
-      gitMerge(
-        project.path,
-        thread.branch,
-        targetBranch,
-        identity,
-        thread.worktreePath ?? undefined,
-      ).andThen((mergeOutput) => {
-        threadEventBus.emit('git:merged', {
-          threadId: params.threadId,
-          userId: params.userId,
-          projectId: thread.projectId,
-          sourceBranch: thread.branch!,
+      return ResultAsync.fromPromise(resolveIdentity(params.userId), (e) =>
+        internal(String(e)),
+      ).andThen((identity) =>
+        gitMerge(
+          project.path,
+          sourceBranch,
           targetBranch,
-          output: mergeOutput,
-        });
+          identity,
+          thread.worktreePath ?? undefined,
+        ).andThen((mergeOutput) => {
+          threadEventBus.emit('git:merged', {
+            threadId: params.threadId,
+            userId: params.userId,
+            projectId: thread.projectId,
+            sourceBranch,
+            targetBranch,
+            output: mergeOutput,
+          });
 
-        return ResultAsync.fromSafePromise(
-          (async () => {
-            if (params.push) {
-              const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-              const pushResult = await git(['push', 'origin', targetBranch], project.path, env);
-              if (pushResult.isErr()) {
-                return err<string, DomainError>(
-                  internal(`Merge succeeded but push failed: ${pushResult.error.message}`),
-                );
+          return ResultAsync.fromPromise(
+            (async () => {
+              if (params.push) {
+                const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+                const pushResult = await git(['push', 'origin', targetBranch], project.path, env);
+                if (pushResult.isErr()) {
+                  return err<string, DomainError>(
+                    internal(`Merge succeeded but push failed: ${pushResult.error.message}`),
+                  );
+                }
               }
-            }
 
-            if (params.cleanup && thread.worktreePath) {
-              await removeWorktree(project.path, thread.worktreePath).match(
-                () => undefined,
-                (e) =>
-                  log.warn('Worktree directory could not be removed (will be orphaned)', {
-                    namespace: 'git',
-                    worktreePath: thread.worktreePath,
-                    error: String(e),
-                  }),
-              );
+              if (params.cleanup && thread.worktreePath) {
+                await removeWorktree(project.path, thread.worktreePath).match(
+                  () => undefined,
+                  (e) =>
+                    log.warn('Worktree directory could not be removed (will be orphaned)', {
+                      namespace: 'git',
+                      worktreePath: thread.worktreePath,
+                      error: String(e),
+                    }),
+                );
 
-              await removeBranch(project.path, thread.branch!).match(
-                () => undefined,
-                (e) =>
-                  log.warn('Failed to remove branch after merge', {
-                    namespace: 'git',
-                    error: String(e),
-                  }),
-              );
-              await tm.updateThread(params.threadId, {
-                worktreePath: null,
-                branch: null,
-                mode: 'local',
-                mergedAt: new Date().toISOString(),
-              });
-
-              // Notify sidebar/client that thread structure changed
-              wsBroker.emitToUser(params.userId, {
-                type: 'thread:updated',
-                threadId: params.threadId,
-                data: {
-                  branch: null,
+                await removeBranch(project.path, sourceBranch).match(
+                  () => undefined,
+                  (e) =>
+                    log.warn('Failed to remove branch after merge', {
+                      namespace: 'git',
+                      error: String(e),
+                    }),
+                );
+                await tm.updateThread(params.threadId, {
                   worktreePath: null,
+                  branch: null,
                   mode: 'local',
                   mergedAt: new Date().toISOString(),
-                },
-              });
+                });
 
-              // Calculate actual unpushed commits on the target branch after merge
-              let unpushedCommitCount = 0;
-              const countResult = await git(
-                ['rev-list', '--count', `origin/${targetBranch}..${targetBranch}`],
-                project.path,
-              );
-              if (countResult.isOk()) {
-                unpushedCommitCount = parseInt(countResult.value.trim(), 10) || 0;
+                // Notify sidebar/client that thread structure changed
+                wsBroker.emitToUser(params.userId, {
+                  type: 'thread:updated',
+                  threadId: params.threadId,
+                  data: {
+                    branch: null,
+                    worktreePath: null,
+                    mode: 'local',
+                    mergedAt: new Date().toISOString(),
+                  },
+                });
+
+                // Calculate actual unpushed commits on the target branch after merge
+                let unpushedCommitCount = 0;
+                const countResult = await git(
+                  ['rev-list', '--count', `origin/${targetBranch}..${targetBranch}`],
+                  project.path,
+                );
+                if (countResult.isOk()) {
+                  unpushedCommitCount = parseInt(countResult.value.trim(), 10) || 0;
+                }
+
+                wsBroker.emitToUser(params.userId, {
+                  type: 'git:status',
+                  threadId: params.threadId,
+                  data: {
+                    statuses: [
+                      {
+                        threadId: params.threadId,
+                        branchKey: `tid:${params.threadId}`,
+                        state: 'merged' as const,
+                        dirtyFileCount: 0,
+                        unpushedCommitCount,
+                        unpulledCommitCount: 0,
+                        hasRemoteBranch: unpushedCommitCount > 0,
+                        isMergedIntoBase: true,
+                        linesAdded: 0,
+                        linesDeleted: 0,
+                      },
+                    ],
+                  },
+                });
               }
 
-              wsBroker.emitToUser(params.userId, {
-                type: 'git:status',
-                threadId: params.threadId,
-                data: {
-                  statuses: [
-                    {
-                      threadId: params.threadId,
-                      branchKey: `tid:${params.threadId}`,
-                      state: 'merged' as const,
-                      dirtyFileCount: 0,
-                      unpushedCommitCount,
-                      unpulledCommitCount: 0,
-                      hasRemoteBranch: unpushedCommitCount > 0,
-                      isMergedIntoBase: true,
-                      linesAdded: 0,
-                      linesDeleted: 0,
-                    },
-                  ],
-                },
-              });
-            }
-
-            invalidateStatusCache(thread.worktreePath ?? project.path);
-            return ok<string, DomainError>(mergeOutput);
-          })(),
-        ).andThen((r) => r);
-      }),
-    );
-  });
+              invalidateStatusCache(thread.worktreePath ?? project.path);
+              return ok<string, DomainError>(mergeOutput);
+            })(),
+            (e) => internal(String(e)),
+          ).andThen((r) => r);
+        }),
+      );
+    })
+    .mapErr((e) => e ?? internal('Unknown merge error'));
 }
 
 // ── Create Pull Request ─────────────────────────────────────────
@@ -644,7 +651,9 @@ export interface CreatePRParams {
 }
 
 export function createPullRequest(params: CreatePRParams): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(tm.getThread(params.threadId)).andThen((thread) =>
+  return ResultAsync.fromPromise(Promise.resolve(tm.getThread(params.threadId)), (e) =>
+    internal(String(e)),
+  ).andThen((thread) =>
     ResultAsync.fromSafePromise(resolveIdentity(params.userId)).andThen((identity) =>
       gitCreatePR(
         params.cwd,

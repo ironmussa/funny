@@ -19,13 +19,14 @@ import { testRoutes } from '../routes/tests.js';
 import { textSearchRoutes } from '../routes/text-search.js';
 import { threadRoutes } from '../routes/threads.js';
 import { worktreeRoutes } from '../routes/worktrees.js';
+import type { HonoEnv } from '../types/hono-env.js';
 
 /**
  * Mounts every domain route module on the given Hono app and applies the
  * stricter mutation rate limit to mutation-heavy paths. Pulled out of app.ts
  * so the bootstrap file doesn't import all 14 route modules directly.
  */
-export function registerRoutes(app: Hono): void {
+export function registerRoutes(app: Hono<HonoEnv>): void {
   // Tiered rate limits: stricter limits for mutation-heavy endpoints
   app.use('/api/threads/*', mutationRateLimit());
   app.use('/api/git/*', mutationRateLimit());

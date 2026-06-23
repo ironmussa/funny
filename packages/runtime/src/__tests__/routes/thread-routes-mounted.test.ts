@@ -3,6 +3,7 @@ import { errAsync, okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ThreadServiceError } from '../../services/thread-service/helpers.js';
+import type { HonoEnv } from '../../types/hono-env.js';
 
 const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
@@ -93,7 +94,7 @@ const baseThread = {
 };
 
 function makeApp(userId = 'user-1', organizationId: string | null = null) {
-  const app = new Hono();
+  const app = new Hono<HonoEnv>();
   app.use('*', async (c, next) => {
     c.set('userId', userId);
     c.set('organizationId', organizationId);

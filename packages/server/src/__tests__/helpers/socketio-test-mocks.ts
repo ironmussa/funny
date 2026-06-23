@@ -98,7 +98,7 @@ export interface RunnerNamespaceTestHarness {
   authMiddlewares: Array<(socket: any, next: (err?: Error) => void) => void | Promise<void>>;
   connectionHandlers: Array<(socket: any) => void | Promise<void>>;
   userRoomEmits: Array<{ room: string; event: string; payload: unknown }>;
-  runnerSockets: Map<string, { disconnect: ReturnType<typeof mock> }>;
+  runnerSockets: Map<string, { disconnect: any }>;
 }
 
 /** IO stub with separate /runner and / browser namespace wiring. */
@@ -106,7 +106,7 @@ export function createRunnerNamespaceTestIo(): RunnerNamespaceTestHarness {
   const authMiddlewares: RunnerNamespaceTestHarness['authMiddlewares'] = [];
   const connectionHandlers: RunnerNamespaceTestHarness['connectionHandlers'] = [];
   const userRoomEmits: RunnerNamespaceTestHarness['userRoomEmits'] = [];
-  const runnerSockets = new Map<string, { disconnect: ReturnType<typeof mock> }>();
+  const runnerSockets = new Map<string, { disconnect: any }>();
 
   const io = {
     close: () => {},

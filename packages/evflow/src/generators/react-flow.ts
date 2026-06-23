@@ -37,6 +37,7 @@ export interface RFEdge {
   label?: string;
   type?: string;
   animated?: boolean;
+  interactionWidth?: number;
   style?: Record<string, string | number>;
 }
 

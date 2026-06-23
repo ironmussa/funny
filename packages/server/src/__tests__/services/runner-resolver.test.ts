@@ -31,7 +31,8 @@ async function bindTestDb() {
     db: testDb.db as any,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
-    close: () => testDb.sqlite.close(),
+    mode: 'sqlite',
+    close: async () => testDb.sqlite.close(),
   });
 }
 

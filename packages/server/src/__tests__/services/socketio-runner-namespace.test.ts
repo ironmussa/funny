@@ -129,15 +129,17 @@ describe('setupRunnerNamespace', () => {
 
     const scheduled: Array<{ delay: number; fn: () => void | Promise<void> }> = [];
     const originalSetTimeout = globalThis.setTimeout.bind(globalThis);
-    spyOn(globalThis, 'setTimeout').mockImplementation(
-      (fn: TimerHandler, delay?: number, ...args: unknown[]) => {
-        if (delay === 15_000) {
-          scheduled.push({ delay: delay ?? 0, fn: fn as () => void | Promise<void> });
-          return 1 as unknown as ReturnType<typeof setTimeout>;
-        }
-        return originalSetTimeout(fn, delay, ...args);
-      },
-    );
+    spyOn(globalThis, 'setTimeout').mockImplementation(((
+      fn: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 15_000) {
+        scheduled.push({ delay: delay ?? 0, fn: fn as () => void | Promise<void> });
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      }
+      return originalSetTimeout(fn, delay, ...args);
+    }) as typeof setTimeout);
 
     const harness = installRunnerNamespaceHarness();
     const socket = createMockSocket({

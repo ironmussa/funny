@@ -31,7 +31,13 @@ export const gitWatcherStartHandler: EventHandler<'thread:created'> = {
     // Always use the project path (where .git/ lives), not the worktree path
     const project = await ctx.getProject(event.projectId);
     if (!project) return;
-    startWatching(event.projectId, project.path, event.threadId, event.userId, event.worktreePath);
+    startWatching(
+      event.projectId,
+      project.path,
+      event.threadId,
+      event.userId,
+      event.worktreePath ?? null,
+    );
   },
 };
 
@@ -51,7 +57,13 @@ export const gitWatcherStartOnAgentStartHandler: EventHandler<'agent:started'> =
   async action(event: AgentStartedEvent, ctx) {
     const project = await ctx.getProject(event.projectId);
     if (!project) return;
-    startWatching(event.projectId, project.path, event.threadId, event.userId, event.worktreePath);
+    startWatching(
+      event.projectId,
+      project.path,
+      event.threadId,
+      event.userId,
+      event.worktreePath ?? null,
+    );
   },
 };
 

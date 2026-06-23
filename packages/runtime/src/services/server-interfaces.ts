@@ -24,24 +24,38 @@ import type {
 import type { DomainError } from '@funny/shared/errors';
 import type { Result, ResultAsync } from 'neverthrow';
 
+export interface RuntimeThreadRecord {
+  id: string;
+  projectId: string;
+  userId: string;
+  sessionId: string | null;
+  status?: string | null;
+  stage?: string | null;
+  mode?: string | null;
+  model?: string | null;
+  provider?: string | null;
+  permissionMode?: string | null;
+  branch?: string | null;
+  baseBranch?: string | null;
+  worktreePath?: string | null;
+  mergedAt?: string | null;
+  cost?: number | null;
+  [key: string]: any;
+}
+
 // ── Thread query / mutation ────────────────────────────────────
 
 export interface IThreadQuery {
-  getThread(
-    id: string,
-  ):
-    | { sessionId: string | null; [key: string]: any }
-    | undefined
-    | Promise<{ sessionId: string | null; [key: string]: any } | undefined>;
+  getThread(id: string): RuntimeThreadRecord | undefined | Promise<RuntimeThreadRecord | undefined>;
   updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
   getThreadWithMessages(
     id: string,
     messageLimit?: number,
     opts?: { messageProgress?: number },
   ):
-    | { messages: any[]; [key: string]: any }
+    | (RuntimeThreadRecord & { messages: any[] })
     | null
-    | Promise<{ messages: any[]; [key: string]: any } | null>;
+    | Promise<(RuntimeThreadRecord & { messages: any[] }) | null>;
 }
 
 // ── Message repository ──────────────────────────────────────────
@@ -57,7 +71,10 @@ export interface IMessageRepository {
     effort?: string | null;
     author?: string | null;
   }): string | Promise<string>;
-  updateMessage(id: string, content: string): void | Promise<void>;
+  updateMessage(
+    id: string,
+    data: string | { content: string; images?: string | null },
+  ): void | Promise<void>;
   /** Truncate the thread by removing every message strictly after the
    *  anchor (used by Rewind code to here). Returns the deleted count. */
   deleteMessagesAfter(threadId: string, anchorMessageId: string): Promise<number>;

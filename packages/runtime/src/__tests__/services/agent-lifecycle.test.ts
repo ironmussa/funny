@@ -3,7 +3,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   orchestrator: {
-    startAgent: vi.fn(async () => undefined),
+    startAgent: vi.fn(async (_opts?: Record<string, unknown>) => undefined),
     stopAgent: vi.fn(async () => undefined),
     stopAll: vi.fn(async () => undefined),
     isRunning: vi.fn(() => false),
@@ -54,7 +54,9 @@ const mocks = vi.hoisted(() => ({
   setThreadTrace: vi.fn(),
   metric: vi.fn(),
   getProject: vi.fn(),
-  getProviderKey: vi.fn(async () => undefined),
+  getProviderKey: vi.fn(
+    async (_userId?: string, _keyId?: string): Promise<string | undefined> => undefined,
+  ),
   getGitIdentity: vi.fn(async (): Promise<{ name: string; email: string } | null> => null),
   threadEventBusEmit: vi.fn(),
   threadEventBusOn: vi.fn(),
@@ -84,11 +86,11 @@ vi.mock('@funny/core/ports', () => ({
 }));
 
 vi.mock('../../services/agent-startup/recover-context.js', () => ({
-  recoverThreadContext: (...args: unknown[]) => mocks.recoverThreadContext(...args),
+  recoverThreadContext: (opts: any) => mocks.recoverThreadContext(opts),
 }));
 
 vi.mock('../../services/agent-startup/load-mcp-servers.js', () => ({
-  loadProjectMcpServers: (...args: unknown[]) => mocks.loadProjectMcpServers(...args),
+  loadProjectMcpServers: () => mocks.loadProjectMcpServers(),
 }));
 
 vi.mock('../../services/thread-context.js', async (importOriginal) => {
@@ -191,7 +193,7 @@ async function startWithStatus(
     undefined,
     provider,
   );
-  return mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+  return mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as unknown as Record<string, unknown>;
 }
 
 describe('AgentLifecycleManager', () => {
@@ -668,7 +670,10 @@ describe('AgentLifecycleManager', () => {
 
       await manager.startAgent('thread-no-user', 'hello', '/tmp/repo');
 
-      const call = mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+      const call = mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as unknown as Record<
+        string,
+        unknown
+      >;
       expect(call.env).toBeUndefined();
       expect(call.permissionRuleLookup).toBeUndefined();
       expect(mocks.getProviderKey).not.toHaveBeenCalled();

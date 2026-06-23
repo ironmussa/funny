@@ -297,7 +297,9 @@ describe('runner-manager service', () => {
     test('createRunnerTask → getPendingTasks → completeTask', async () => {
       seedRunner(t.db as any, { id: 'r-task', userId: 'user-1', token: 'tok-task' });
 
-      const created = await rm.createRunnerTask('r-task', 't1', 'start_agent', { threadId: 't1' });
+      const created = await rm.createRunnerTask('r-task', 't1', 'start_agent', {
+        threadId: 't1',
+      } as any);
       expect(created.taskId).toBeTruthy();
 
       const pending = await rm.getPendingTasks('r-task');

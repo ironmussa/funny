@@ -229,7 +229,8 @@ async function checkCompletedRuns(): Promise<void> {
     const thread = await tm.getThread(run.threadId);
     if (!thread) continue;
 
-    if (['completed', 'failed', 'stopped'].includes(thread.status)) {
+    const terminalStatus = thread.status;
+    if (terminalStatus && ['completed', 'failed', 'stopped'].includes(terminalStatus)) {
       const hasFindings = thread.status === 'completed';
 
       // Generate a summary from the last assistant message

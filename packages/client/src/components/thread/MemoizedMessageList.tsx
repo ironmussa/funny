@@ -786,7 +786,7 @@ export const MemoizedMessageList = memo(
       if (!firstVisibleRow || !firstVisibleVirtualItem) return null;
       if (firstVisibleRow.type === 'session-summary') return firstVisibleRow.userItem;
       if (firstVisibleRow.item.type === 'message' && firstVisibleRow.item.msg.role === 'user') {
-        if (firstVisibleVirtualItem.start <= stickyScrollOffset + STICKY_SECTION_EPSILON_PX) {
+        if (firstVisibleVirtualItem.start < stickyScrollOffset - STICKY_SECTION_EPSILON_PX) {
           return firstVisibleRow.item as MessageItem;
         }
         return null;
@@ -850,7 +850,7 @@ export const MemoizedMessageList = memo(
 
           const viewportRect = viewport.getBoundingClientRect();
           const sectionRect = section.getBoundingClientRect();
-          // Bring the real card's top to the top of the viewport…
+          // Bring the real card's top to the top of the viewport.
           const desiredTop = viewport.scrollTop + (sectionRect.top - viewportRect.top);
 
           // …but never scroll past the point where the real message content

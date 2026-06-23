@@ -41,6 +41,8 @@ describe('data-handler handleDataMessageWithAck', () => {
       'thread_events',
       'threads',
       'agent_templates',
+      'project_agent_profile_bindings',
+      'agent_execution_profiles',
       'runner_project_assignments',
       'runner_tasks',
       'runners',
@@ -803,6 +805,52 @@ describe('data-handler handleDataMessageWithAck', () => {
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_github_token',
+      userId: 'user-2',
+    });
+
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
+  });
+
+  test('resolve_agent_execution_profile returns bound profile env for runner owner', async () => {
+    const now = new Date().toISOString();
+    await db.insert(schema.agentExecutionProfiles).values({
+      id: 'profile-1',
+      userId: 'user-1',
+      name: 'Work Claude',
+      provider: 'claude',
+      config: JSON.stringify({
+        claude: { configDir: '/home/user-1/.claude-work' },
+      }),
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.projectAgentProfileBindings).values({
+      projectId: 'p1',
+      userId: 'user-1',
+      profileId: 'profile-1',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:resolve_agent_execution_profile',
+      projectId: 'p1',
+      userId: 'user-1',
+    });
+
+    expect(res.type).toBe('data:resolve_agent_execution_profile_response');
+    expect(res.profile?.id).toBe('profile-1');
+    expect(res.env).toEqual({ CLAUDE_CONFIG_DIR: '/home/user-1/.claude-work' });
+  });
+
+  test('rejects resolve_agent_execution_profile for mismatched userId', async () => {
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:resolve_agent_execution_profile',
+      projectId: 'p1',
       userId: 'user-2',
     });
 

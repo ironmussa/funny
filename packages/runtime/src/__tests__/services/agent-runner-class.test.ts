@@ -190,6 +190,7 @@ function seedRunnerThread(
 function createMockServiceProvider(
   tm: ReturnType<typeof createMockThreadManager>,
   ws: ReturnType<typeof createMockWSBroker>,
+  resolvedAgentProfile: any = { profile: null, env: {} },
 ): RuntimeServiceProvider {
   const notImpl = () => {
     throw new Error('not implemented in test');
@@ -245,6 +246,9 @@ function createMockServiceProvider(
       getProviderKey: () => Promise.resolve(null),
       getGitIdentity: () => Promise.resolve(null),
     } as any,
+    agentProfiles: {
+      resolveEffectiveProfile: () => Promise.resolve(resolvedAgentProfile),
+    },
     wsBroker: ws,
     // Remaining services stubbed as empty objects — not used by startAgent
     automations: {} as any,
@@ -268,6 +272,7 @@ describe('AgentRunner class', () => {
   let tmMock: ReturnType<typeof createMockThreadManager>;
   let wsMock: ReturnType<typeof createMockWSBroker>;
   let lastProcess: MockClaudeProcess;
+  let lastProcessOptions: any;
   let factory: IClaudeProcessFactory;
 
   beforeEach(() => {
@@ -275,8 +280,10 @@ describe('AgentRunner class', () => {
     tmMock = createMockThreadManager();
     wsMock = createMockWSBroker();
     lastProcess = null as any;
+    lastProcessOptions = null;
     factory = {
-      create(_opts) {
+      create(opts) {
+        lastProcessOptions = opts;
         lastProcess = new MockClaudeProcess();
         return lastProcess;
       },
@@ -304,6 +311,36 @@ describe('AgentRunner class', () => {
       const userMsgs = [...tmMock.messages.values()].filter((m) => m.role === 'user');
       expect(userMsgs).toHaveLength(1);
       expect(userMsgs[0].content).toBe('Fix the bug');
+    });
+
+    test('applies bound agent execution profile env and snapshots it on the thread', async () => {
+      resetServices();
+      setServices(
+        createMockServiceProvider(tmMock, wsMock, {
+          profile: {
+            id: 'profile-1',
+            name: 'Work Claude',
+            provider: 'claude',
+            config: { claude: { configDir: '/home/user/.claude-work' } },
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          env: { CLAUDE_CONFIG_DIR: '/home/user/.claude-work' },
+        }),
+      );
+      runner = new AgentRunner(tmMock, wsMock, factory, () => undefined);
+      seedRunnerThread(tmMock, 't1');
+
+      await runner.startAgent('t1', 'Fix the bug', '/tmp/repo');
+
+      expect(lastProcessOptions.env).toMatchObject({
+        CLAUDE_CONFIG_DIR: '/home/user/.claude-work',
+      });
+      expect(tmMock.threads.get('t1')).toMatchObject({
+        agentProfileId: 'profile-1',
+        agentProfileName: 'Work Claude',
+        agentProfileProvider: 'claude',
+      });
     });
 
     test('emits agent:status running via WebSocket', async () => {

@@ -100,6 +100,9 @@ export function createTestDb() {
       runner_id TEXT,
       merged_at TEXT,
       context_recovery_reason TEXT,
+      agent_profile_id TEXT,
+      agent_profile_name TEXT,
+      agent_profile_provider TEXT,
       file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
       orchestrator_managed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -204,6 +207,29 @@ export function createTestDb() {
       runner_invite_token_used_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS agent_execution_profiles (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      config TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_agent_profile_bindings (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      profile_id TEXT NOT NULL REFERENCES agent_execution_profiles(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, user_id)
     )
   `);
 

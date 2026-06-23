@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { ADMIN_ONLY_PREFERENCES, type GeneralPage } from '@/components/PreferencesPanel';
 import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
+import { AgentExecutionProfilesSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
@@ -680,6 +681,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'organizations' && <OrganizationManagement />}
         {activePreferencesPage === 'team-members' && <TeamMembers />}
         {activePreferencesPage === 'runners' && <RunnersSettings />}
+        {activePreferencesPage === 'agent-profiles' && <AgentExecutionProfilesSettings />}
         {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
         {activePreferencesPage === 'extensions' && <ExtensionsSettings />}
         {activePreferencesPage === 'providers' && <ProvidersSettings />}

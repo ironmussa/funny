@@ -46,6 +46,7 @@ export type GeneralPage =
   | 'system'
   | 'extensions'
   | 'providers'
+  | 'agent-profiles'
   | 'agent-templates';
 
 export const PREFERENCES_NAV_ITEMS: Array<{
@@ -59,6 +60,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: SiGithub },
   { id: 'ai-keys', label: 'AI Providers', icon: Bot },
+  { id: 'agent-profiles', label: 'settings.agentProfiles', icon: Bot },
   { id: 'speech', label: 'Speech', icon: Mic },
   { id: 'email', label: 'Email (SMTP)', icon: Mail },
   { id: 'users', label: 'Users', icon: Users },

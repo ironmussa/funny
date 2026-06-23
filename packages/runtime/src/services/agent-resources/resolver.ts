@@ -76,9 +76,12 @@ export function resolveAgentResources(
     }
   }
 
-  const mcpResult: ResultAsync<McpServer[], DomainError> = projectPath
-    ? listMcpServers(projectPath)
-    : okAsync<McpServer[], DomainError>([]);
+  // Composer autocomplete only consumes skills and slash commands. Listing MCP
+  // can shell out to provider CLIs, so keep it off the render-critical path.
+  const mcpResult: ResultAsync<McpServer[], DomainError> =
+    projectPath && phase !== 'composer'
+      ? listMcpServers(projectPath, provider)
+      : okAsync<McpServer[], DomainError>([]);
 
   return mcpResult
     .orElse(() => okAsync<McpServer[], DomainError>([])) // MCP listing failure → no MCP, not a hard error

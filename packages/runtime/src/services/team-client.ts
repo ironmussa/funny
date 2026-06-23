@@ -92,7 +92,9 @@ export type BrowserWSHandler = (
 ) => void;
 
 /** A Hono-like app that can handle fetch requests */
-type FetchableApp = { fetch: (request: Request) => Promise<Response> | Response };
+type FetchableApp = {
+  fetch: (request: Request) => Promise<Response> | Response;
+};
 
 /** Timeout for data requests awaiting server response (ms) */
 const DATA_REQUEST_TIMEOUT = 15_000;
@@ -199,7 +201,10 @@ async function register(): Promise<RegisterResult> {
         body,
       });
       // 401/403 = our credentials were rejected → caller falls back to enrollment.
-      return { ok: false, authFailed: res.status === 401 || res.status === 403 };
+      return {
+        ok: false,
+        authFailed: res.status === 401 || res.status === 403,
+      };
     }
 
     const data = (await res.json()) as RunnerRegisterResponse;
@@ -210,7 +215,10 @@ async function register(): Promise<RegisterResult> {
     try {
       const hbRes = await centralFetch('/api/runners/heartbeat', {
         method: 'POST',
-        body: JSON.stringify({ activeThreadIds: [], ...(await advertisedProviderState()) }),
+        body: JSON.stringify({
+          activeThreadIds: [],
+          ...(await advertisedProviderState()),
+        }),
       });
       if (hbRes.status === 404) {
         log.warn('Registration returned stale runner — server may be using wrong DB', {
@@ -274,7 +282,10 @@ async function resumeSession(): Promise<boolean> {
   try {
     const res = await centralFetch('/api/runners/heartbeat', {
       method: 'POST',
-      body: JSON.stringify({ activeThreadIds: [], ...(await advertisedProviderState()) }),
+      body: JSON.stringify({
+        activeThreadIds: [],
+        ...(await advertisedProviderState()),
+      }),
     });
     if (res.ok) {
       log.info('Resumed runner session from stored credentials', {
@@ -415,7 +426,9 @@ async function sendHeartbeat(): Promise<void> {
 
     // Server purged our runner record (e.g. after restart) — re-register
     if (res.status === 404) {
-      log.warn('Runner not found on server — re-registering', { namespace: 'runner' });
+      log.warn('Runner not found on server — re-registering', {
+        namespace: 'runner',
+      });
       state.runnerId = null;
       state.runnerToken = null;
       clearRunnerCredentials();
@@ -441,7 +454,9 @@ async function sendHeartbeat(): Promise<void> {
     // client missed). Without this, agent events stay stranded in the local
     // ws-broker and never reach the browser.
     if (res.ok) {
-      const body = (await res.json().catch(() => null)) as { wsConnected?: boolean } | null;
+      const body = (await res.json().catch(() => null)) as {
+        wsConnected?: boolean;
+      } | null;
       if (body && body.wsConnected === false) {
         log.warn('Server reports WS tunnel disconnected — forcing reconnect', {
           namespace: 'runner',
@@ -471,7 +486,9 @@ async function sendHeartbeatWS(): Promise<void> {
 
     // Handle re-registration if runner not found
     if (response?.code === 'RUNNER_NOT_FOUND') {
-      log.warn('Runner not found on server — re-registering', { namespace: 'runner' });
+      log.warn('Runner not found on server — re-registering', {
+        namespace: 'runner',
+      });
       state.runnerId = null;
       state.runnerToken = null;
       clearRunnerCredentials();
@@ -494,7 +511,9 @@ async function sendHeartbeatWS(): Promise<void> {
     // Repeated failures indicate a zombie socket — recreate it.
     if (_wsHeartbeatFailures >= WS_HEARTBEAT_FAILURE_THRESHOLD) {
       _wsHeartbeatFailures = 0;
-      log.warn('WS heartbeat failed repeatedly — forcing reconnect', { namespace: 'runner' });
+      log.warn('WS heartbeat failed repeatedly — forcing reconnect', {
+        namespace: 'runner',
+      });
       connectSocket();
     }
   }
@@ -657,7 +676,9 @@ const MAX_REREGISTER_ATTEMPTS = 5;
 
 function connectSocket(): void {
   if (!state.runnerToken) {
-    log.warn('Cannot connect Socket.IO — no runner token', { namespace: 'runner' });
+    log.warn('Cannot connect Socket.IO — no runner token', {
+      namespace: 'runner',
+    });
     return;
   }
 
@@ -951,7 +972,9 @@ async function handleTunnelRequest(data: {
   body: string | null;
 }): Promise<TunnelHttpResponse> {
   if (!state.localApp) {
-    log.warn('Received tunnel:request but no local app registered', { namespace: 'runner' });
+    log.warn('Received tunnel:request but no local app registered', {
+      namespace: 'runner',
+    });
     return { status: 503, headers: {}, body: 'Local app not initialized' };
   }
 
@@ -1016,14 +1039,23 @@ async function handleTunnelRequest(data: {
       };
     }
 
-    return { status: response.status, headers: responseHeaders, body: responseBody, bodyEncoding };
+    return {
+      status: response.status,
+      headers: responseHeaders,
+      body: responseBody,
+      bodyEncoding,
+    };
   } catch (err) {
     log.error('Failed to handle tunnel request', {
       namespace: 'runner',
       path: data.path,
       error: (err as Error).message,
     });
-    return { status: 500, headers: {}, body: JSON.stringify({ error: 'Internal runner error' }) };
+    return {
+      status: 500,
+      headers: {},
+      body: JSON.stringify({ error: 'Internal runner error' }),
+    };
   }
 }
 
@@ -1164,13 +1196,17 @@ async function sendDataMessage(eventType: string, payload: Record<string, any>):
 
 /** Insert a message on the server, returns the server-generated messageId */
 export async function remoteInsertMessage(data: DataInsertMessage['payload']): Promise<string> {
-  const response = await sendDataMessage('data:insert_message', { payload: data });
+  const response = await sendDataMessage('data:insert_message', {
+    payload: data,
+  });
   return response.messageId;
 }
 
 /** Insert a tool call on the server, returns the server-generated toolCallId */
 export async function remoteInsertToolCall(data: DataInsertToolCall['payload']): Promise<string> {
-  const response = await sendDataMessage('data:insert_tool_call', { payload: data });
+  const response = await sendDataMessage('data:insert_tool_call', {
+    payload: data,
+  });
   return response.toolCallId;
 }
 
@@ -1180,7 +1216,9 @@ export async function remoteUpdateThread(
   updates: Record<string, any>,
 ): Promise<void> {
   invalidateThreadCache(threadId);
-  await sendDataMessage('data:update_thread', { payload: { threadId, updates } });
+  await sendDataMessage('data:update_thread', {
+    payload: { threadId, updates },
+  });
 }
 
 /**
@@ -1265,7 +1303,9 @@ export async function remoteSaveThreadEvent(
   data: Record<string, unknown>,
 ): Promise<void> {
   if (!state.socket?.connected) return;
-  state.socket.emit('data:save_thread_event', { payload: { threadId, eventType: type, data } });
+  state.socket.emit('data:save_thread_event', {
+    payload: { threadId, eventType: type, data },
+  });
 }
 
 /** Update tool call output on the server (fire-and-forget) */
@@ -1274,7 +1314,9 @@ export async function remoteUpdateToolCallOutput(
   output: string,
 ): Promise<void> {
   if (!state.socket?.connected) return;
-  state.socket.emit('data:update_tool_call_output', { payload: { toolCallId, output } });
+  state.socket.emit('data:update_tool_call_output', {
+    payload: { toolCallId, output },
+  });
 }
 
 /**
@@ -1301,7 +1343,10 @@ export async function remoteGetThread(threadId: string): Promise<any> {
   const promise = sendDataMessage('data:get_thread', { threadId })
     .then((response) => {
       const thread = response?.thread ?? null;
-      threadCache.set(threadId, { value: thread, expiry: Date.now() + THREAD_CACHE_TTL });
+      threadCache.set(threadId, {
+        value: thread,
+        expiry: Date.now() + THREAD_CACHE_TTL,
+      });
       return thread;
     })
     .finally(() => {
@@ -1310,6 +1355,24 @@ export async function remoteGetThread(threadId: string): Promise<any> {
 
   threadInflight.set(threadId, promise);
   return promise;
+}
+
+/** Get a thread from the server by external request ID */
+export async function remoteGetThreadByExternalRequestId(
+  externalRequestId: string,
+): Promise<any | undefined> {
+  const response = await sendDataMessage('data:get_thread_by_external_request_id', {
+    externalRequestId,
+  });
+  return response?.thread ?? undefined;
+}
+
+/** Get a thread from the server by persisted agent session ID */
+export async function remoteGetThreadBySessionId(sessionId: string): Promise<any | undefined> {
+  const response = await sendDataMessage('data:get_thread_by_session_id', {
+    sessionId,
+  });
+  return response?.thread ?? undefined;
 }
 
 /** Invalidate the thread cache (call after updates) */
@@ -1400,7 +1463,9 @@ export async function remoteSearchThreads(opts: {
 
 /** Get an agent template from the server by ID */
 export async function remoteGetAgentTemplate(templateId: string): Promise<any> {
-  const response = await sendDataMessage('data:get_agent_template', { templateId });
+  const response = await sendDataMessage('data:get_agent_template', {
+    templateId,
+  });
   return response?.template ?? null;
 }
 
@@ -1455,7 +1520,10 @@ export async function remoteGetProject(projectId: string): Promise<any> {
   const promise = sendDataMessage('data:get_project', { projectId })
     .then((response) => {
       const project = response?.project ?? null;
-      projectCache.set(projectId, { value: project, expiry: Date.now() + PROJECT_CACHE_TTL });
+      projectCache.set(projectId, {
+        value: project,
+        expiry: Date.now() + PROJECT_CACHE_TTL,
+      });
       return project;
     })
     .finally(() => {
@@ -1473,7 +1541,10 @@ export function invalidateProjectCache(projectId: string): void {
 
 /** Get a startup command from the server, scoped to its parent project. */
 export async function remoteGetStartupCommand(cmdId: string, projectId: string): Promise<any> {
-  const response = await sendDataMessage('data:get_startup_command', { cmdId, projectId });
+  const response = await sendDataMessage('data:get_startup_command', {
+    cmdId,
+    projectId,
+  });
   return response?.command ?? null;
 }
 
@@ -1485,7 +1556,9 @@ export async function remoteListProjects(userId: string): Promise<any[]> {
 
 /** List all non-archived threads for a project (system call, no userId filter) */
 export async function remoteListProjectThreads(projectId: string): Promise<any[]> {
-  const result = await sendDataMessage('data:list_project_threads', { projectId });
+  const result = await sendDataMessage('data:list_project_threads', {
+    projectId,
+  });
   return result?.threads ?? [];
 }
 
@@ -1510,7 +1583,10 @@ export async function remoteGetProviderKey(
   userId: string,
   provider: string,
 ): Promise<string | null> {
-  const result = await sendDataMessage('data:get_provider_key', { userId, provider });
+  const result = await sendDataMessage('data:get_provider_key', {
+    userId,
+    provider,
+  });
   return result?.key ?? null;
 }
 
@@ -1526,7 +1602,10 @@ export async function remoteGetMinimaxApiKey(userId: string): Promise<string | n
 
 /** Update a user profile on the server */
 export async function remoteUpdateProfile(userId: string, data: Record<string, any>): Promise<any> {
-  const response = await sendDataMessage('data:update_profile', { userId, payload: data });
+  const response = await sendDataMessage('data:update_profile', {
+    userId,
+    payload: data,
+  });
   return response?.profile ?? null;
 }
 
@@ -1548,7 +1627,9 @@ export async function remoteDeleteThread(threadId: string): Promise<void> {
 // server-side (runner-isolation boundary).
 
 export async function remoteInsertWatcher(row: Record<string, any>): Promise<void> {
-  await sendDataMessage('data:watcher_insert', { payload: { threadId: row.threadId, row } });
+  await sendDataMessage('data:watcher_insert', {
+    payload: { threadId: row.threadId, row },
+  });
 }
 
 export async function remoteGetWatcher(id: string): Promise<any> {
@@ -1569,12 +1650,16 @@ export async function remoteListPendingWatchers(): Promise<any[]> {
 }
 
 export async function remoteListDueWatchers(now: number): Promise<any[]> {
-  const r = await sendDataMessage('data:watcher_list_due', { payload: { now } });
+  const r = await sendDataMessage('data:watcher_list_due', {
+    payload: { now },
+  });
   return r?.watchers ?? [];
 }
 
 export async function remoteListWatchersByUser(userId: string): Promise<any[]> {
-  const r = await sendDataMessage('data:watcher_list_by_user', { payload: { userId } });
+  const r = await sendDataMessage('data:watcher_list_by_user', {
+    payload: { userId },
+  });
   return r?.watchers ?? [];
 }
 
@@ -1583,7 +1668,9 @@ export async function remoteUpdateWatcher(id: string, patch: Record<string, any>
 }
 
 export async function remoteDeleteWatchersByThread(threadId: string): Promise<void> {
-  await sendDataMessage('data:watcher_delete_by_thread', { payload: { threadId } });
+  await sendDataMessage('data:watcher_delete_by_thread', {
+    payload: { threadId },
+  });
 }
 
 // ── Agent jobs (detached background processes) ──────────────────
@@ -1591,7 +1678,9 @@ export async function remoteDeleteWatchersByThread(threadId: string): Promise<vo
 // server-side.
 
 export async function remoteInsertJob(row: Record<string, any>): Promise<void> {
-  await sendDataMessage('data:job_insert', { payload: { threadId: row.threadId, row } });
+  await sendDataMessage('data:job_insert', {
+    payload: { threadId: row.threadId, row },
+  });
 }
 
 export async function remoteGetJob(id: string): Promise<any> {
@@ -1605,7 +1694,9 @@ export async function remoteListRunningJobs(): Promise<any[]> {
 }
 
 export async function remoteListJobsByUser(userId: string): Promise<any[]> {
-  const r = await sendDataMessage('data:job_list_by_user', { payload: { userId } });
+  const r = await sendDataMessage('data:job_list_by_user', {
+    payload: { userId },
+  });
   return r?.jobs ?? [];
 }
 
@@ -1674,7 +1765,9 @@ export async function remoteListQueue(threadId: string): Promise<any[]> {
 
 /** Cancel a queued message */
 export async function remoteCancelQueuedMessage(messageId: string): Promise<boolean> {
-  const result = await sendDataMessage('data:cancel_queued_message', { messageId });
+  const result = await sendDataMessage('data:cancel_queued_message', {
+    messageId,
+  });
   return result?.success ?? false;
 }
 
@@ -1683,7 +1776,10 @@ export async function remoteUpdateQueuedMessage(
   messageId: string,
   content: string,
 ): Promise<any | null> {
-  const result = await sendDataMessage('data:update_queued_message', { messageId, content });
+  const result = await sendDataMessage('data:update_queued_message', {
+    messageId,
+    content,
+  });
   return result?.updated ?? null;
 }
 
@@ -1709,7 +1805,9 @@ export async function remoteCreatePermissionRule(input: {
   pattern: string | null;
   decision: 'allow' | 'deny';
 }): Promise<any> {
-  const response = await sendDataMessage('data:create_permission_rule', { payload: input });
+  const response = await sendDataMessage('data:create_permission_rule', {
+    payload: input,
+  });
   return response?.rule ?? null;
 }
 
@@ -1720,7 +1818,9 @@ export async function remoteFindPermissionRule(query: {
   toolName: string;
   toolInput?: string;
 }): Promise<any> {
-  const response = await sendDataMessage('data:find_permission_rule', { payload: query });
+  const response = await sendDataMessage('data:find_permission_rule', {
+    payload: query,
+  });
   return response?.rule ?? null;
 }
 
@@ -1729,7 +1829,9 @@ export async function remoteListPermissionRules(query: {
   userId: string;
   projectPath?: string;
 }): Promise<any[]> {
-  const response = await sendDataMessage('data:list_permission_rules', { payload: query });
+  const response = await sendDataMessage('data:list_permission_rules', {
+    payload: query,
+  });
   return response?.rules ?? [];
 }
 
@@ -1795,7 +1897,9 @@ async function applyPersistedBuiltinProviders(): Promise<void> {
 export async function initTeamMode(serverUrl: string): Promise<void> {
   state.serverUrl = serverUrl.replace(/\/$/, '');
 
-  log.info(`Connecting to server at ${state.serverUrl}`, { namespace: 'runner' });
+  log.info(`Connecting to server at ${state.serverUrl}`, {
+    namespace: 'runner',
+  });
 
   // Load runner-installed provider extensions before registering so this runner
   // advertises them to the server (provider-manifest-loader §3). Errors are
@@ -1809,10 +1913,16 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
       });
     }
     for (const e of errors) {
-      log.warn('Skipped invalid provider extension', { namespace: 'runner', ...e });
+      log.warn('Skipped invalid provider extension', {
+        namespace: 'runner',
+        ...e,
+      });
     }
   } catch (err) {
-    log.error('Provider extension load failed', { namespace: 'runner', error: String(err) });
+    log.error('Provider extension load failed', {
+      namespace: 'runner',
+      error: String(err),
+    });
   }
 
   // Subscribe to local wsBroker events early

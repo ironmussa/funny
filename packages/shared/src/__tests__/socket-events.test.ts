@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   BROWSER_PTY_FORWARD_EVENTS,
+  RUNNER_DATA_EVENTS,
   browserPtyForwardPayloadSchema,
   parseSocketPayload,
   parseCentralCommand,
@@ -18,7 +19,9 @@ import {
 describe('socket-events', () => {
   test('parseObjectPayload accepts objects and nullish', () => {
     expect(parseObjectPayload(null)).toEqual({});
-    expect(parseObjectPayload({ projectId: 'p1' })).toEqual({ projectId: 'p1' });
+    expect(parseObjectPayload({ projectId: 'p1' })).toEqual({
+      projectId: 'p1',
+    });
     expect(parseObjectPayload([])).toBeNull();
     expect(parseObjectPayload('x')).toBeNull();
   });
@@ -33,6 +36,11 @@ describe('socket-events', () => {
 
   test('BROWSER_PTY_FORWARD_EVENTS includes pty:signal', () => {
     expect(BROWSER_PTY_FORWARD_EVENTS).toContain('pty:signal');
+  });
+
+  test('RUNNER_DATA_EVENTS includes thread lookup queries', () => {
+    expect(RUNNER_DATA_EVENTS).toContain('data:get_thread_by_external_request_id');
+    expect(RUNNER_DATA_EVENTS).toContain('data:get_thread_by_session_id');
   });
 
   test('runnerAgentEventSchema rejects arrays', () => {
@@ -79,7 +87,10 @@ describe('socket-events', () => {
 
   test('parseSocketPayload applies per-event schemas', () => {
     expect(
-      parseSocketPayload(browserPtyForwardPayloadSchema, { projectId: 'p1', id: 'pty1' }),
+      parseSocketPayload(browserPtyForwardPayloadSchema, {
+        projectId: 'p1',
+        id: 'pty1',
+      }),
     ).toEqual({
       projectId: 'p1',
       id: 'pty1',
@@ -88,7 +99,9 @@ describe('socket-events', () => {
   });
 
   test('runner control schemas normalize compatible payloads', () => {
-    expect(parseSocketPayload(runnerHeartbeatSchema, undefined)).toEqual({ activeThreadIds: [] });
+    expect(parseSocketPayload(runnerHeartbeatSchema, undefined)).toEqual({
+      activeThreadIds: [],
+    });
     expect(
       parseSocketPayload(runnerAssignProjectSchema, {
         payload: { projectId: 'p1', localPath: '/tmp/project' },

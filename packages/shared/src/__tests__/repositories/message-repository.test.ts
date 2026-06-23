@@ -26,21 +26,37 @@ beforeEach(() => {
 
 describe('insertMessage', () => {
   test('returns a generated ID', async () => {
-    const id = await repo.insertMessage({ threadId: 't1', role: 'user', content: 'hello' });
+    const id = await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'hello',
+    });
     expect(id).toBeTruthy();
     expect(typeof id).toBe('string');
   });
 
   test('generates unique IDs', async () => {
-    const id1 = await repo.insertMessage({ threadId: 't1', role: 'user', content: 'a' });
-    const id2 = await repo.insertMessage({ threadId: 't1', role: 'user', content: 'b' });
+    const id1 = await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'a',
+    });
+    const id2 = await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'b',
+    });
     expect(id1).not.toBe(id2);
   });
 });
 
 describe('updateMessage', () => {
   test('updates content with string arg', async () => {
-    const id = await repo.insertMessage({ threadId: 't1', role: 'assistant', content: 'old' });
+    const id = await repo.insertMessage({
+      threadId: 't1',
+      role: 'assistant',
+      content: 'old',
+    });
     await repo.updateMessage(id, 'new content');
 
     const result = await repo.getThreadWithMessages('t1');
@@ -49,8 +65,15 @@ describe('updateMessage', () => {
   });
 
   test('updates content with object arg', async () => {
-    const id = await repo.insertMessage({ threadId: 't1', role: 'assistant', content: 'old' });
-    await repo.updateMessage(id, { content: 'updated', images: '[{"type":"image"}]' });
+    const id = await repo.insertMessage({
+      threadId: 't1',
+      role: 'assistant',
+      content: 'old',
+    });
+    await repo.updateMessage(id, {
+      content: 'updated',
+      images: '[{"type":"image"}]',
+    });
 
     const result = await repo.getThreadWithMessages('t1');
     const msg = result!.messages.find((m: any) => m.id === id);
@@ -65,9 +88,17 @@ describe('getThreadWithMessages', () => {
   });
 
   test('returns thread with messages in ascending order', async () => {
-    await repo.insertMessage({ threadId: 't1', role: 'user', content: 'first' });
+    await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'first',
+    });
     // Small delay to ensure different timestamps
-    await repo.insertMessage({ threadId: 't1', role: 'assistant', content: 'second' });
+    await repo.insertMessage({
+      threadId: 't1',
+      role: 'assistant',
+      content: 'second',
+    });
 
     const result = await repo.getThreadWithMessages('t1');
     expect(result).not.toBeNull();
@@ -151,7 +182,11 @@ describe('getThreadWithMessages', () => {
 
   test('respects messageLimit and sets hasMore', async () => {
     for (let i = 0; i < 5; i++) {
-      await repo.insertMessage({ threadId: 't1', role: 'user', content: `msg-${i}` });
+      await repo.insertMessage({
+        threadId: 't1',
+        role: 'user',
+        content: `msg-${i}`,
+      });
     }
 
     const result = await repo.getThreadWithMessages('t1', 3);
@@ -169,7 +204,9 @@ describe('getThreadWithMessages', () => {
       });
     }
 
-    const result = await repo.getThreadWithMessages('t1', 4, { messageProgress: 0.5 });
+    const result = await repo.getThreadWithMessages('t1', 4, {
+      messageProgress: 0.5,
+    });
     expect(result!.messages.map((m: any) => m.id)).toEqual(['m3', 'm4', 'm5', 'm6']);
     expect(result!.windowStart).toBe(3);
     expect(result!.hasMore).toBe(true);
@@ -178,7 +215,11 @@ describe('getThreadWithMessages', () => {
   });
 
   test('hasMore is false when all messages fit in limit', async () => {
-    await repo.insertMessage({ threadId: 't1', role: 'user', content: 'only one' });
+    await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'only one',
+    });
 
     const result = await repo.getThreadWithMessages('t1', 10);
     expect(result!.messages).toHaveLength(1);
@@ -186,8 +227,16 @@ describe('getThreadWithMessages', () => {
   });
 
   test('includes lastUserMessage', async () => {
-    await repo.insertMessage({ threadId: 't1', role: 'user', content: 'user prompt' });
-    await repo.insertMessage({ threadId: 't1', role: 'assistant', content: 'response' });
+    await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'user prompt',
+    });
+    await repo.insertMessage({
+      threadId: 't1',
+      role: 'assistant',
+      content: 'response',
+    });
 
     const result = await repo.getThreadWithMessages('t1');
     expect(result!.lastUserMessage).toBeDefined();
@@ -199,7 +248,12 @@ describe('getThreadWithMessages', () => {
     // The repo must NOT extend backwards to include the user — that's the
     // client's job (loadOlderMessages, fired on idle). Initial response stays
     // small to keep first paint fast.
-    seedMessage(deps.db, { id: 'u', role: 'user', content: 'prompt', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'u',
+      role: 'user',
+      content: 'prompt',
+      timestamp: ts(0),
+    });
     for (let i = 1; i <= 8; i++) {
       seedMessage(deps.db, {
         id: `a${i}`,
@@ -219,7 +273,12 @@ describe('getThreadWithMessages', () => {
   });
 
   test('lastUserMessage is fetched separately when no user message is in the window', async () => {
-    seedMessage(deps.db, { id: 'u', role: 'user', content: 'old prompt', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'u',
+      role: 'user',
+      content: 'old prompt',
+      timestamp: ts(0),
+    });
     for (let i = 1; i <= 5; i++) {
       seedMessage(deps.db, {
         id: `a${i}`,
@@ -238,7 +297,12 @@ describe('getThreadWithMessages', () => {
   });
 
   test('lastUserMessage fetched out-of-window is enriched with its tool calls', async () => {
-    seedMessage(deps.db, { id: 'u', role: 'user', content: 'old prompt', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'u',
+      role: 'user',
+      content: 'old prompt',
+      timestamp: ts(0),
+    });
     seedToolCall(deps.db, { id: 'tc-u', messageId: 'u', name: 'UserTool' });
     for (let i = 1; i <= 5; i++) {
       seedMessage(deps.db, {
@@ -256,8 +320,18 @@ describe('getThreadWithMessages', () => {
   });
 
   test('hasMore is false when total rows fit within the limit', async () => {
-    seedMessage(deps.db, { id: 'u', role: 'user', content: 'prompt', timestamp: ts(0) });
-    seedMessage(deps.db, { id: 'a1', role: 'assistant', content: 'r1', timestamp: ts(1) });
+    seedMessage(deps.db, {
+      id: 'u',
+      role: 'user',
+      content: 'prompt',
+      timestamp: ts(0),
+    });
+    seedMessage(deps.db, {
+      id: 'a1',
+      role: 'assistant',
+      content: 'r1',
+      timestamp: ts(1),
+    });
 
     const result = await repo.getThreadWithMessages('t1', 5);
     expect(result!.messages).toHaveLength(2);
@@ -266,7 +340,12 @@ describe('getThreadWithMessages', () => {
 
   test('total is the full count when windowed, and equals loaded count otherwise', async () => {
     for (let i = 0; i < 6; i++) {
-      seedMessage(deps.db, { id: `m${i}`, role: 'user', content: `m-${i}`, timestamp: ts(i) });
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `m-${i}`,
+        timestamp: ts(i),
+      });
     }
 
     // Windowed load reports the full total...
@@ -285,10 +364,30 @@ describe('getThreadWithMessages', () => {
     // When the window already contains the most-recent user message, the
     // implementation reuses it instead of issuing the fallback query — this
     // also exercises the code path that finds it in the loaded slice.
-    seedMessage(deps.db, { id: 'u1', role: 'user', content: 'first', timestamp: ts(0) });
-    seedMessage(deps.db, { id: 'a1', role: 'assistant', content: 'r1', timestamp: ts(1) });
-    seedMessage(deps.db, { id: 'u2', role: 'user', content: 'second', timestamp: ts(2) });
-    seedMessage(deps.db, { id: 'a2', role: 'assistant', content: 'r2', timestamp: ts(3) });
+    seedMessage(deps.db, {
+      id: 'u1',
+      role: 'user',
+      content: 'first',
+      timestamp: ts(0),
+    });
+    seedMessage(deps.db, {
+      id: 'a1',
+      role: 'assistant',
+      content: 'r1',
+      timestamp: ts(1),
+    });
+    seedMessage(deps.db, {
+      id: 'u2',
+      role: 'user',
+      content: 'second',
+      timestamp: ts(2),
+    });
+    seedMessage(deps.db, {
+      id: 'a2',
+      role: 'assistant',
+      content: 'r2',
+      timestamp: ts(3),
+    });
 
     const result = await repo.getThreadWithMessages('t1', 3);
     // Window is u2, a2 plus one more (a1) — most recent 3.
@@ -301,7 +400,12 @@ describe('getThreadWithMessages', () => {
   test('single tool-calls fetch covers messages and out-of-window lastUserMessage', async () => {
     // Tool calls on both an in-window assistant and the out-of-window user
     // must both be returned, even though they come from a single batched query.
-    seedMessage(deps.db, { id: 'u', role: 'user', content: 'old prompt', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'u',
+      role: 'user',
+      content: 'old prompt',
+      timestamp: ts(0),
+    });
     seedToolCall(deps.db, { id: 'tc-u', messageId: 'u', name: 'UserTool' });
     for (let i = 1; i <= 5; i++) {
       seedMessage(deps.db, {
@@ -379,8 +483,18 @@ describe('deleteMessagesAfter', () => {
   });
 
   test('returns 0 when anchor is the last message', async () => {
-    seedMessage(deps.db, { id: 'm1', timestamp: ts(0), role: 'user', content: 'a' });
-    seedMessage(deps.db, { id: 'm2', timestamp: ts(1), role: 'assistant', content: 'b' });
+    seedMessage(deps.db, {
+      id: 'm1',
+      timestamp: ts(0),
+      role: 'user',
+      content: 'a',
+    });
+    seedMessage(deps.db, {
+      id: 'm2',
+      timestamp: ts(1),
+      role: 'assistant',
+      content: 'b',
+    });
     const deleted = await repo.deleteMessagesAfter('t1', 'm2');
     expect(deleted).toBe(0);
     const result = await repo.getThreadWithMessages('t1');
@@ -388,11 +502,36 @@ describe('deleteMessagesAfter', () => {
   });
 
   test('removes every message strictly after the anchor', async () => {
-    seedMessage(deps.db, { id: 'u1', timestamp: ts(0), role: 'user', content: 'first' });
-    seedMessage(deps.db, { id: 'a1', timestamp: ts(1), role: 'assistant', content: 'reply' });
-    seedMessage(deps.db, { id: 'u2', timestamp: ts(2), role: 'user', content: 'second' });
-    seedMessage(deps.db, { id: 'a2', timestamp: ts(3), role: 'assistant', content: 'reply2' });
-    seedMessage(deps.db, { id: 'u3', timestamp: ts(4), role: 'user', content: 'third' });
+    seedMessage(deps.db, {
+      id: 'u1',
+      timestamp: ts(0),
+      role: 'user',
+      content: 'first',
+    });
+    seedMessage(deps.db, {
+      id: 'a1',
+      timestamp: ts(1),
+      role: 'assistant',
+      content: 'reply',
+    });
+    seedMessage(deps.db, {
+      id: 'u2',
+      timestamp: ts(2),
+      role: 'user',
+      content: 'second',
+    });
+    seedMessage(deps.db, {
+      id: 'a2',
+      timestamp: ts(3),
+      role: 'assistant',
+      content: 'reply2',
+    });
+    seedMessage(deps.db, {
+      id: 'u3',
+      timestamp: ts(4),
+      role: 'user',
+      content: 'third',
+    });
 
     const deleted = await repo.deleteMessagesAfter('t1', 'u2');
 
@@ -431,38 +570,76 @@ describe('searchMessages', () => {
     // Regression: `_` is a LIKE wildcard. Escaping it to `\_` without an
     // `ESCAPE '\'` clause made the DB search for a literal `apply\_patch`,
     // which never matched, so underscore queries returned nothing.
-    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'use apply_patch here' });
+    seedMessage(deps.db, {
+      id: 'm1',
+      role: 'assistant',
+      content: 'use apply_patch here',
+    });
 
-    const results = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    const results = await repo.searchMessages({
+      threadId: 't1',
+      query: 'apply_patch',
+    });
     expect(results.map((r) => r.messageId)).toEqual(['m1']);
   });
 
   test('underscore matches only a literal underscore, not any char', async () => {
-    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'apply_patch', timestamp: ts(0) });
-    seedMessage(deps.db, { id: 'm2', role: 'assistant', content: 'applyXpatch', timestamp: ts(1) });
+    seedMessage(deps.db, {
+      id: 'm1',
+      role: 'assistant',
+      content: 'apply_patch',
+      timestamp: ts(0),
+    });
+    seedMessage(deps.db, {
+      id: 'm2',
+      role: 'assistant',
+      content: 'applyXpatch',
+      timestamp: ts(1),
+    });
 
-    const results = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    const results = await repo.searchMessages({
+      threadId: 't1',
+      query: 'apply_patch',
+    });
     expect(results.map((r) => r.messageId)).toEqual(['m1']);
   });
 
   test('finds content containing a literal percent sign', async () => {
-    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'load is at 50% now' });
+    seedMessage(deps.db, {
+      id: 'm1',
+      role: 'assistant',
+      content: 'load is at 50% now',
+    });
 
     const results = await repo.searchMessages({ threadId: 't1', query: '50%' });
     expect(results.map((r) => r.messageId)).toEqual(['m1']);
   });
 
   test('case-insensitive by default', async () => {
-    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'Apply_Patch' });
+    seedMessage(deps.db, {
+      id: 'm1',
+      role: 'assistant',
+      content: 'Apply_Patch',
+    });
 
-    const results = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    const results = await repo.searchMessages({
+      threadId: 't1',
+      query: 'apply_patch',
+    });
     expect(results.map((r) => r.messageId)).toEqual(['m1']);
   });
 
   test('case-sensitive search respects exact case', async () => {
-    seedMessage(deps.db, { id: 'm1', role: 'assistant', content: 'Apply_Patch' });
+    seedMessage(deps.db, {
+      id: 'm1',
+      role: 'assistant',
+      content: 'Apply_Patch',
+    });
 
-    const insensitive = await repo.searchMessages({ threadId: 't1', query: 'apply_patch' });
+    const insensitive = await repo.searchMessages({
+      threadId: 't1',
+      query: 'apply_patch',
+    });
     expect(insensitive).toHaveLength(1);
 
     const sensitive = await repo.searchMessages({
@@ -477,7 +654,11 @@ describe('searchMessages', () => {
 describe('getThreadMessages (pagination)', () => {
   test('returns messages with hasMore flag', async () => {
     for (let i = 0; i < 5; i++) {
-      await repo.insertMessage({ threadId: 't1', role: 'user', content: `msg-${i}` });
+      await repo.insertMessage({
+        threadId: 't1',
+        role: 'user',
+        content: `msg-${i}`,
+      });
     }
 
     const result = await repo.getThreadMessages({ threadId: 't1', limit: 3 });
@@ -486,7 +667,11 @@ describe('getThreadMessages (pagination)', () => {
   });
 
   test('returns all messages when under limit', async () => {
-    await repo.insertMessage({ threadId: 't1', role: 'user', content: 'only one' });
+    await repo.insertMessage({
+      threadId: 't1',
+      role: 'user',
+      content: 'only one',
+    });
 
     const result = await repo.getThreadMessages({ threadId: 't1', limit: 10 });
     expect(result.messages).toHaveLength(1);
@@ -495,7 +680,12 @@ describe('getThreadMessages (pagination)', () => {
 
   test('total reflects the full message count regardless of the limit', async () => {
     for (let i = 0; i < 5; i++) {
-      seedMessage(deps.db, { id: `m${i}`, role: 'user', content: `msg-${i}`, timestamp: ts(i) });
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
     }
 
     // Limited window still reports the full total so the client can describe
@@ -536,7 +726,12 @@ describe('getThreadMessages (pagination)', () => {
   });
 
   test('returns the owning user message as leading context for older pages', async () => {
-    seedMessage(deps.db, { id: 'u0', role: 'user', content: 'first prompt', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'u0',
+      role: 'user',
+      content: 'first prompt',
+      timestamp: ts(0),
+    });
     seedMessage(deps.db, {
       id: 'a1',
       role: 'assistant',
@@ -549,7 +744,12 @@ describe('getThreadMessages (pagination)', () => {
       content: 'more first response',
       timestamp: ts(2),
     });
-    seedMessage(deps.db, { id: 'u3', role: 'user', content: 'second prompt', timestamp: ts(3) });
+    seedMessage(deps.db, {
+      id: 'u3',
+      role: 'user',
+      content: 'second prompt',
+      timestamp: ts(3),
+    });
     seedMessage(deps.db, {
       id: 'a4',
       role: 'assistant',
@@ -574,9 +774,27 @@ describe('getThreadMessages (pagination)', () => {
 
   test('total counts only the requested thread (isolation)', async () => {
     seedThread(deps.db, { id: 't2' });
-    seedMessage(deps.db, { id: 'a', threadId: 't1', role: 'user', content: 'x', timestamp: ts(0) });
-    seedMessage(deps.db, { id: 'b', threadId: 't1', role: 'user', content: 'y', timestamp: ts(1) });
-    seedMessage(deps.db, { id: 'c', threadId: 't2', role: 'user', content: 'z', timestamp: ts(0) });
+    seedMessage(deps.db, {
+      id: 'a',
+      threadId: 't1',
+      role: 'user',
+      content: 'x',
+      timestamp: ts(0),
+    });
+    seedMessage(deps.db, {
+      id: 'b',
+      threadId: 't1',
+      role: 'user',
+      content: 'y',
+      timestamp: ts(1),
+    });
+    seedMessage(deps.db, {
+      id: 'c',
+      threadId: 't2',
+      role: 'user',
+      content: 'z',
+      timestamp: ts(0),
+    });
 
     const result = await repo.getThreadMessages({ threadId: 't1', limit: 50 });
     expect(result.total).toBe(2);

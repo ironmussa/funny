@@ -132,7 +132,12 @@ function createMockThreadManager(): IThreadManager & {
     getToolCall(id: string) {
       const tc = toolCalls.get(id);
       if (!tc) return undefined;
-      return { id: tc.id, name: tc.name, input: tc.input ?? null, output: tc.output ?? null };
+      return {
+        id: tc.id,
+        name: tc.name,
+        input: tc.input ?? null,
+        output: tc.output ?? null,
+      };
     },
     getThreadWithMessages(id: string) {
       const thread = threads.get(id);
@@ -433,7 +438,10 @@ describe('AgentRunner class', () => {
 
       const wsMsg = wsMock.events.find((e) => e.type === 'agent:message');
       expect(wsMsg).toBeTruthy();
-      expect(wsMsg!.data).toMatchObject({ role: 'assistant', content: 'Hello' });
+      expect(wsMsg!.data).toMatchObject({
+        role: 'assistant',
+        content: 'Hello',
+      });
     });
 
     test('updates existing message on cumulative streaming', async () => {
@@ -521,7 +529,14 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'test.ts' } }],
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'test.ts' },
+            },
+          ],
         },
       };
 
@@ -543,7 +558,12 @@ describe('AgentRunner class', () => {
       await runner.startAgent('t1', 'test', '/tmp');
 
       const content = [
-        { type: 'tool_use' as const, id: 'tu-1', name: 'Read', input: { file: 'a.ts' } },
+        {
+          type: 'tool_use' as const,
+          id: 'tu-1',
+          name: 'Read',
+          input: { file: 'a.ts' },
+        },
       ];
       const msg1: CLIAssistantMessage = {
         type: 'assistant',
@@ -572,7 +592,14 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [{ type: 'tool_use', id: 'tu-1', name: 'Glob', input: { pattern: '*.ts' } }],
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Glob',
+              input: { pattern: '*.ts' },
+            },
+          ],
         },
       };
 
@@ -596,8 +623,18 @@ describe('AgentRunner class', () => {
         message: {
           id: 'cli-msg-1',
           content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } },
-            { type: 'tool_use', id: 'tu-2', name: 'Edit', input: { file: 'b.ts' } },
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'a.ts' },
+            },
+            {
+              type: 'tool_use',
+              id: 'tu-2',
+              name: 'Edit',
+              input: { file: 'b.ts' },
+            },
           ],
         },
       };
@@ -650,7 +687,10 @@ describe('AgentRunner class', () => {
 
       expect(tmMock.threads.get('t1')?.status).toBe('waiting');
       const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
-      expect(resultEvent!.data).toMatchObject({ status: 'waiting', waitingReason: 'question' });
+      expect(resultEvent!.data).toMatchObject({
+        status: 'waiting',
+        waitingReason: 'question',
+      });
     });
 
     test('tracks ExitPlanMode as pending user input', async () => {
@@ -701,7 +741,14 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'test.ts' } }],
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'test.ts' },
+            },
+          ],
         },
       };
       lastProcess.simulateMessage(assistantMsg);
@@ -713,7 +760,13 @@ describe('AgentRunner class', () => {
       const userMsg: CLIUserMessage = {
         type: 'user',
         message: {
-          content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents here' }],
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu-1',
+              content: 'file contents here',
+            },
+          ],
         },
       };
       lastProcess.simulateMessage(userMsg);
@@ -723,7 +776,10 @@ describe('AgentRunner class', () => {
 
       const outputEvent = wsMock.events.find((e) => e.type === 'agent:tool_output');
       expect(outputEvent).toBeTruthy();
-      expect(outputEvent!.data).toMatchObject({ toolCallId: tcId, output: 'file contents here' });
+      expect(outputEvent!.data).toMatchObject({
+        toolCallId: tcId,
+        output: 'file contents here',
+      });
     });
 
     test('decodes Unicode in tool output', async () => {
@@ -734,7 +790,14 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: 'echo' } }],
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Bash',
+              input: { command: 'echo' },
+            },
+          ],
         },
       };
       lastProcess.simulateMessage(assistantMsg);
@@ -925,7 +988,12 @@ describe('AgentRunner class', () => {
           id: 'cli-1',
           content: [
             { type: 'text', text: 'Hello' },
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } },
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'a.ts' },
+            },
           ],
         },
       };
@@ -1025,7 +1093,14 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-1',
-          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } }],
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'a.ts' },
+            },
+          ],
         },
       });
       await flush();
@@ -1054,7 +1129,14 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-1',
-          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } }],
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'a.ts' },
+            },
+          ],
         },
       });
       await flush();
@@ -1088,7 +1170,12 @@ describe('AgentRunner class', () => {
           id: 'cli-1',
           content: [
             { type: 'text', text: 'Let me read the file' },
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'bug.ts' } },
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'Read',
+              input: { file: 'bug.ts' },
+            },
           ],
         },
       });
@@ -1098,7 +1185,13 @@ describe('AgentRunner class', () => {
       lastProcess.simulateMessage({
         type: 'user',
         message: {
-          content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents...' }],
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu-1',
+              content: 'file contents...',
+            },
+          ],
         },
       });
       await flush();

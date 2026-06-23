@@ -57,7 +57,12 @@ describe('data-handler handleDataMessageWithAck', () => {
       }
     }
     seedProject(db as any, { id: 'p1', userId: 'user-1', path: '/tmp/repo' });
-    seedThread(db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Thread' });
+    seedThread(db as any, {
+      id: 't1',
+      projectId: 'p1',
+      userId: 'user-1',
+      title: 'Thread',
+    });
   });
 
   afterAll(async () => {
@@ -71,7 +76,11 @@ describe('data-handler handleDataMessageWithAck', () => {
       payload: { userId: 'user-2', threadId: 't-new', projectId: 'p1' },
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('create_project persists the project and assigns it to the creating runner', async () => {
@@ -80,7 +89,11 @@ describe('data-handler handleDataMessageWithAck', () => {
     // that row on the same round-trip — relying only on the runner's separate
     // runner:assign_project message orphaned projects whenever it was lost,
     // which surfaced as "No runner available to handle terminal request".
-    seedRunner(db as any, { id: 'runner-1', userId: 'user-1', token: 'tok-cp' });
+    seedRunner(db as any, {
+      id: 'runner-1',
+      userId: 'user-1',
+      token: 'tok-cp',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:create_project',
@@ -136,14 +149,109 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_thread for another user thread', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_thread',
       threadId: 't2',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
+  });
+
+  test('get_thread_by_external_request_id returns an owned thread', async () => {
+    seedThread(db as any, {
+      id: 't-external',
+      projectId: 'p1',
+      userId: 'user-1',
+      externalRequestId: 'claude:session-1',
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_thread_by_external_request_id',
+      externalRequestId: 'claude:session-1',
+    });
+
+    expect(res.type).toBe('data:get_thread_by_external_request_id_response');
+    expect(res.thread?.id).toBe('t-external');
+  });
+
+  test('get_thread_by_external_request_id returns null when no thread exists', async () => {
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_thread_by_external_request_id',
+      externalRequestId: 'claude:missing',
+    });
+
+    expect(res).toEqual({
+      type: 'data:get_thread_by_external_request_id_response',
+      thread: null,
+    });
+  });
+
+  test('rejects get_thread_by_external_request_id for another user thread', async () => {
+    seedThread(db as any, {
+      id: 't-external-other',
+      projectId: 'p1',
+      userId: 'user-2',
+      externalRequestId: 'claude:other',
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_thread_by_external_request_id',
+      externalRequestId: 'claude:other',
+    });
+
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
+  });
+
+  test('get_thread_by_session_id returns an owned thread', async () => {
+    seedThread(db as any, {
+      id: 't-session',
+      projectId: 'p1',
+      userId: 'user-1',
+      sessionId: 'session-1',
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_thread_by_session_id',
+      sessionId: 'session-1',
+    });
+
+    expect(res.type).toBe('data:get_thread_by_session_id_response');
+    expect(res.thread?.id).toBe('t-session');
+  });
+
+  test('rejects get_thread_by_session_id for another user thread', async () => {
+    seedThread(db as any, {
+      id: 't-session-other',
+      projectId: 'p1',
+      userId: 'user-2',
+      sessionId: 'session-other',
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_thread_by_session_id',
+      sessionId: 'session-other',
+    });
+
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('enqueue_message returns queued row', async () => {
@@ -159,7 +267,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('update_message requires message ownership', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
     seedMessage(db as any, { id: 'm2', threadId: 't2', content: 'secret' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
@@ -168,7 +281,11 @@ describe('data-handler handleDataMessageWithAck', () => {
       payload: { messageId: 'm2', content: 'hacked' },
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('get_agent_template returns builtin template without user', async () => {
@@ -263,8 +380,16 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('mark_and_list_stale_threads marks running threads interrupted', async () => {
-    seedRunner(db as any, { id: 'runner-1', userId: 'user-1', token: 'token-runner-1' });
-    seedRunner(db as any, { id: 'runner-2', userId: 'user-2', token: 'token-runner-2' });
+    seedRunner(db as any, {
+      id: 'runner-1',
+      userId: 'user-1',
+      token: 'token-runner-1',
+    });
+    seedRunner(db as any, {
+      id: 'runner-2',
+      userId: 'user-2',
+      token: 'token-runner-2',
+    });
     seedThread(db as any, {
       id: 'stale-1',
       projectId: 'p1',
@@ -328,7 +453,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('insert_tool_call persists and returns toolCallId', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1', role: 'assistant', content: 'hi' });
+    seedMessage(db as any, {
+      id: 'm1',
+      threadId: 't1',
+      role: 'assistant',
+      content: 'hi',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:insert_tool_call',
@@ -368,7 +498,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   test('find_tool_call returns matching tool call by messageId, name, and input', async () => {
     const input = JSON.stringify({ file: 'src/a.ts' });
     seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedToolCall(db as any, { id: 'tc-find', messageId: 'm1', name: 'Read', input });
+    seedToolCall(db as any, {
+      id: 'tc-find',
+      messageId: 'm1',
+      name: 'Read',
+      input,
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:find_tool_call',
@@ -398,7 +533,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects find_tool_call for cross-tenant message', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
     seedMessage(db as any, { id: 'm2', threadId: 't2' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
@@ -406,7 +546,11 @@ describe('data-handler handleDataMessageWithAck', () => {
       payload: { messageId: 'm2', name: 'Read', input: '{}' },
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('find_last_unanswered_interactive_tool_call returns latest unanswered', async () => {
@@ -462,18 +606,32 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects find_last_unanswered_interactive_tool_call for foreign thread', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:find_last_unanswered_interactive_tool_call',
       threadId: 't2',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('rejects get_tool_call for cross-tenant tool call', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
     seedMessage(db as any, { id: 'm2', threadId: 't2' });
     seedToolCall(db as any, { id: 'tc-2', messageId: 'm2' });
 
@@ -482,7 +640,11 @@ describe('data-handler handleDataMessageWithAck', () => {
       toolCallId: 'tc-2',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('update_tool_call_output persists output for owned tool call', async () => {
@@ -532,7 +694,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('delete_thread removes thread owned by runner user', async () => {
-    seedThread(db as any, { id: 't-del', projectId: 'p1', userId: 'user-1', title: 'Delete me' });
+    seedThread(db as any, {
+      id: 't-del',
+      projectId: 'p1',
+      userId: 'user-1',
+      title: 'Delete me',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:delete_thread',
@@ -546,14 +713,23 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects delete_thread for another user', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:delete_thread',
       threadId: 't2',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('delete_messages_after removes messages after anchor', async () => {
@@ -595,7 +771,10 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('get_profile returns profile for user', async () => {
-    await upsertProfile('user-1', { gitName: 'Test User', gitEmail: 'test@example.com' });
+    await upsertProfile('user-1', {
+      gitName: 'Test User',
+      gitEmail: 'test@example.com',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_profile',
@@ -627,7 +806,11 @@ describe('data-handler handleDataMessageWithAck', () => {
       userId: 'user-2',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('builtin providers default to null (no override)', async () => {
@@ -661,11 +844,17 @@ describe('data-handler handleDataMessageWithAck', () => {
       active: ['codex'],
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('get_provider_key returns provider secret', async () => {
-    await upsertProfile('user-1', { providerKey: { id: 'minimax', value: 'mm-key' } });
+    await upsertProfile('user-1', {
+      providerKey: { id: 'minimax', value: 'mm-key' },
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_provider_key',
@@ -678,8 +867,18 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('list_projects returns only projects owned by userId', async () => {
-    seedProject(db as any, { id: 'p2', userId: 'user-1', name: 'Mine B', path: '/b' });
-    seedProject(db as any, { id: 'p3', userId: 'user-2', name: 'Theirs', path: '/c' });
+    seedProject(db as any, {
+      id: 'p2',
+      userId: 'user-1',
+      name: 'Mine B',
+      path: '/b',
+    });
+    seedProject(db as any, {
+      id: 'p3',
+      userId: 'user-2',
+      name: 'Theirs',
+      path: '/c',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:list_projects',
@@ -703,14 +902,22 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_project for foreign project', async () => {
-    seedProject(db as any, { id: 'p-foreign', userId: 'user-2', path: '/other' });
+    seedProject(db as any, {
+      id: 'p-foreign',
+      userId: 'user-2',
+      path: '/other',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_project',
       projectId: 'p-foreign',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('update_thread applies allowed field updates', async () => {
@@ -731,7 +938,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects update_thread for another user thread', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:update_thread',
@@ -739,11 +951,20 @@ describe('data-handler handleDataMessageWithAck', () => {
       payload: { threadId: 't2', updates: { status: 'running' } },
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('list_project_threads returns non-archived threads for owned project', async () => {
-    seedThread(db as any, { id: 't-active', projectId: 'p1', userId: 'user-1', archived: 0 });
+    seedThread(db as any, {
+      id: 't-active',
+      projectId: 'p1',
+      userId: 'user-1',
+      archived: 0,
+    });
     seedThread(db as any, {
       id: 't-archived',
       projectId: 'p1',
@@ -790,18 +1011,32 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_thread_messages for foreign thread', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_thread_messages',
       threadId: 't2',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('search_threads finds messages by text, scoped to the runner user', async () => {
-    seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+    seedThread(db as any, {
+      id: 't2',
+      projectId: 'p1',
+      userId: 'user-2',
+      title: 'Theirs',
+    });
     seedMessage(db as any, {
       id: 'm-mine',
       threadId: 't1',
@@ -910,7 +1145,11 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('resolve_project_path returns member local path for shared project', async () => {
-    seedProject(db as any, { id: 'p-shared', userId: 'user-2', path: '/owner/path' });
+    seedProject(db as any, {
+      id: 'p-shared',
+      userId: 'user-2',
+      path: '/owner/path',
+    });
     seedProjectMember(db as any, {
       projectId: 'p-shared',
       userId: 'user-1',
@@ -931,7 +1170,11 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects resolve_project_path for foreign project', async () => {
-    seedProject(db as any, { id: 'p-foreign', userId: 'user-2', path: '/other' });
+    seedProject(db as any, {
+      id: 'p-foreign',
+      userId: 'user-2',
+      path: '/other',
+    });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:resolve_project_path',
@@ -939,7 +1182,11 @@ describe('data-handler handleDataMessageWithAck', () => {
       userId: 'user-1',
     });
 
-    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(res).toEqual({
+      type: 'data:ack',
+      success: false,
+      error: 'Forbidden',
+    });
   });
 
   test('get_thread_with_messages returns thread and messages', async () => {
@@ -1087,7 +1334,12 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('rejects cancel_queued_message for cross-tenant queue row', async () => {
-      seedThread(db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+      seedThread(db as any, {
+        id: 't2',
+        projectId: 'p1',
+        userId: 'user-2',
+        title: 'Theirs',
+      });
       const row = seedMessageQueue(db as any, {
         id: 'q-foreign',
         threadId: 't2',
@@ -1099,7 +1351,11 @@ describe('data-handler handleDataMessageWithAck', () => {
         messageId: row.id,
       });
 
-      expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+      expect(res).toEqual({
+        type: 'data:ack',
+        success: false,
+        error: 'Forbidden',
+      });
 
       const stillThere = await db
         .select()
@@ -1121,7 +1377,12 @@ describe('data-handler handleDataMessageWithAck', () => {
         timestamp: '2026-06-10T12:00:00Z',
       });
       // Foreign user's thread with the same term — must NOT leak.
-      seedThread(db as any, { id: 't-foreign', projectId: 'p1', userId: 'user-2', title: 'Other' });
+      seedThread(db as any, {
+        id: 't-foreign',
+        projectId: 'p1',
+        userId: 'user-2',
+        title: 'Other',
+      });
       seedMessage(db as any, {
         id: 'm-foreign-1',
         threadId: 't-foreign',
@@ -1179,7 +1440,11 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('returns [] when no filter is given (never dumps full history)', async () => {
-      seedMessage(db as any, { id: 'm-x', threadId: 't1', content: 'anything' });
+      seedMessage(db as any, {
+        id: 'm-x',
+        threadId: 't1',
+        content: 'anything',
+      });
 
       const res = await handleDataMessageWithAck('runner-1', 'user-1', {
         type: 'data:search_threads',

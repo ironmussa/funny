@@ -443,6 +443,8 @@ export interface ToolCall {
   name: string;
   input: string;
   output?: string;
+  /** Event timestamp used by the client to interleave tool cards chronologically. */
+  timestamp?: string;
   /** Agent name that executed this tool call (for pipeline threads) */
   author?: string;
   /** Links subagent tool calls to their parent Task tool call */

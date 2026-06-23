@@ -53,6 +53,7 @@ export const insertMessage = (data: {
   permissionMode?: string | null;
   effort?: string | null;
   author?: string | null;
+  timestamp?: string | null;
 }) => getServices().threads.insertMessage(data);
 export const updateMessage = (
   id: string,

@@ -70,6 +70,7 @@ export interface IMessageRepository {
     permissionMode?: string | null;
     effort?: string | null;
     author?: string | null;
+    timestamp?: string | null;
   }): string | Promise<string>;
   updateMessage(
     id: string,
@@ -96,13 +97,17 @@ export interface IToolCallRepository {
     name: string,
     input: string,
   ): { id: string } | undefined | Promise<{ id: string } | undefined>;
-  getToolCall(
-    id: string,
-  ):
+  getToolCall(id: string):
     | { id: string; name: string; input: string | null; output?: string | null }
     | undefined
     | Promise<
-        { id: string; name: string; input: string | null; output?: string | null } | undefined
+        | {
+            id: string;
+            name: string;
+            input: string | null;
+            output?: string | null;
+          }
+        | undefined
       >;
 }
 
@@ -351,7 +356,12 @@ export interface IStartupCommandsService {
   updateCommand(
     cmdId: string,
     projectId: string,
-    data: { label: string; command: string; port?: number; portEnvVar?: string },
+    data: {
+      label: string;
+      command: string;
+      port?: number;
+      portEnvVar?: string;
+    },
   ): Promise<void>;
   deleteCommand(cmdId: string, projectId: string): Promise<void>;
   getCommand(cmdId: string, projectId: string): Promise<any | undefined>;

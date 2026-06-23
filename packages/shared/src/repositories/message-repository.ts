@@ -375,6 +375,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     permissionMode?: string | null;
     effort?: string | null;
     author?: string | null;
+    timestamp?: string | null;
   }): Promise<string> {
     const id = nanoid();
     await dbRun(
@@ -388,7 +389,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         permissionMode: data.permissionMode ?? null,
         effort: data.effort ?? null,
         author: data.author ?? null,
-        timestamp: new Date().toISOString(),
+        timestamp: data.timestamp ?? new Date().toISOString(),
       }),
     );
     return id;
@@ -418,7 +419,13 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     limit?: number;
     caseSensitive?: boolean;
   }): Promise<
-    { messageId: string; role: string; content: string; timestamp: string; snippet: string }[]
+    {
+      messageId: string;
+      role: string;
+      content: string;
+      timestamp: string;
+      snippet: string;
+    }[]
   > {
     const { threadId, query, limit = 100, caseSensitive = false } = opts;
     // Escape the LIKE wildcards (`%`, `_`) AND the escape char itself so a query

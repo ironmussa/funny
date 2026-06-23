@@ -414,6 +414,7 @@ export interface DataInsertMessage {
     permissionMode?: string | null;
     effort?: string | null;
     author?: string | null;
+    timestamp?: string | null;
   };
 }
 
@@ -532,6 +533,8 @@ export interface DataAck {
 
 export type RunnerDataQuery =
   | DataGetThread
+  | DataGetThreadByExternalRequestId
+  | DataGetThreadBySessionId
   | DataGetThreadWithMessages
   | DataGetThreadMessages
   | DataGetToolCall
@@ -542,6 +545,20 @@ export interface DataGetThread {
   type: 'data:get_thread';
   requestId: string;
   threadId: string;
+}
+
+/** Runner -> Server: get thread by external request ID */
+export interface DataGetThreadByExternalRequestId {
+  type: 'data:get_thread_by_external_request_id';
+  requestId: string;
+  externalRequestId: string;
+}
+
+/** Runner -> Server: get thread by Claude/agent session ID */
+export interface DataGetThreadBySessionId {
+  type: 'data:get_thread_by_session_id';
+  requestId: string;
+  sessionId: string;
 }
 
 /** Runner → Server: get thread with its messages + tool calls */
@@ -585,6 +602,8 @@ export interface DataFindToolCall {
 // Server → Runner: query responses
 export type ServerDataQueryResponse =
   | DataGetThreadResponse
+  | DataGetThreadByExternalRequestIdResponse
+  | DataGetThreadBySessionIdResponse
   | DataGetThreadWithMessagesResponse
   | DataGetThreadMessagesResponse
   | DataGetToolCallResponse
@@ -592,6 +611,18 @@ export type ServerDataQueryResponse =
 
 export interface DataGetThreadResponse {
   type: 'data:get_thread_response';
+  requestId: string;
+  thread: Record<string, any> | null;
+}
+
+export interface DataGetThreadByExternalRequestIdResponse {
+  type: 'data:get_thread_by_external_request_id_response';
+  requestId: string;
+  thread: Record<string, any> | null;
+}
+
+export interface DataGetThreadBySessionIdResponse {
+  type: 'data:get_thread_by_session_id_response';
   requestId: string;
   thread: Record<string, any> | null;
 }

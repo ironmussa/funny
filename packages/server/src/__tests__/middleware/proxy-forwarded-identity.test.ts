@@ -53,7 +53,7 @@ import {
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
-import { proxyToRunner } from '../../middleware/proxy.js';
+import { createProxyToRunner, proxyToRunner } from '../../middleware/proxy.js';
 
 describe('proxyToRunner — forwarded identity signature payload', () => {
   let originalFetch: typeof globalThis.fetch;
@@ -161,5 +161,82 @@ describe('proxyToRunner — forwarded identity signature payload', () => {
         ),
       ).toBe(true);
     }
+  });
+
+  test('regression: direct-HTTP → tunnel fallback re-signs with a fresh nonce so the retry is not a replay', async () => {
+    // Reproduces the production 401: a loopback runner prefers direct HTTP; the
+    // first attempt reaches the runtime (which records the nonce in its replay
+    // cache) but the response socket closes, so the server retries over the
+    // tunnel. If the retry reused the SAME nonce, the runtime would reject it as
+    // a replay ("invalid signature") and the caller would see a spurious 401.
+    __resetForwardedIdentityNonceCacheForTests();
+
+    const directHeaders: Array<Record<string, string>> = [];
+    const tunnelHeaders: Array<Record<string, string>> = [];
+
+    const deps = {
+      resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://127.0.0.1:3003' }),
+      resolveAnyRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://127.0.0.1:3003' }),
+      isRunnerConnected: () => true,
+      isTunnelTimeoutError: () => false,
+      // Direct HTTP: capture the signed headers, then fail like a dropped socket.
+      directFetch: (async (_url: string, init: RequestInit) => {
+        const captured: Record<string, string> = {};
+        new Headers(init.headers).forEach((v, k) => {
+          captured[k.toLowerCase()] = v;
+        });
+        directHeaders.push(captured);
+        throw new Error('The socket connection was closed unexpectedly.');
+      }) as unknown as typeof fetch,
+      // Tunnel: capture the (should-be-fresh) signed headers and succeed.
+      tunnelFetch: async (_runnerId: string, req: { headers: Record<string, string> }) => {
+        const captured: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.headers)) captured[k.toLowerCase()] = v;
+        tunnelHeaders.push(captured);
+        return { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' };
+      },
+    };
+
+    const app = new Hono<ServerEnv>();
+    app.use('*', async (c, next) => {
+      c.set('userId', 'user-1');
+      c.set('userRole', 'admin');
+      return next();
+    });
+    app.all('/api/*', createProxyToRunner(deps as any));
+
+    const res = await app.request('/api/git/status?projectId=p1');
+    expect(res.status).toBe(200);
+
+    expect(directHeaders).toHaveLength(1);
+    expect(tunnelHeaders).toHaveLength(1);
+
+    const directNonce = directHeaders[0][NONCE_HEADER.toLowerCase()];
+    const tunnelNonce = tunnelHeaders[0][NONCE_HEADER.toLowerCase()];
+    // The two physical sends MUST carry distinct nonces.
+    expect(directNonce).toBeTruthy();
+    expect(tunnelNonce).toBeTruthy();
+    expect(tunnelNonce).not.toBe(directNonce);
+
+    // Simulate the runtime consuming the direct attempt's nonce first…
+    expect(
+      verifyForwardedIdentity(
+        { userId: 'user-1', role: 'admin', orgId: null, orgName: null },
+        'test-secret',
+        directHeaders[0][SIGNATURE_HEADER.toLowerCase()],
+        directHeaders[0][TIMESTAMP_HEADER.toLowerCase()],
+        directNonce,
+      ),
+    ).toBe(true);
+    // …the tunnel retry must STILL verify (it would be a replay with the old code).
+    expect(
+      verifyForwardedIdentity(
+        { userId: 'user-1', role: 'admin', orgId: null, orgName: null },
+        'test-secret',
+        tunnelHeaders[0][SIGNATURE_HEADER.toLowerCase()],
+        tunnelHeaders[0][TIMESTAMP_HEADER.toLowerCase()],
+        tunnelNonce,
+      ),
+    ).toBe(true);
   });
 });

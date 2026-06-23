@@ -17,6 +17,7 @@ mock.module('../../services/socketio/runner-namespace.js', () => ({
 
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { resolveCorsOrigins } from '../../lib/cors-origins.js';
 import { closeSocketIO, createSocketIOServer, getEngine, getIO } from '../../services/socketio.js';
 import { allowedOrigins, authInstance } from '../../services/socketio/state.js';
 
@@ -46,5 +47,26 @@ describe('socketio bootstrap', () => {
     createSocketIOServer({ api: {} }, ['http://localhost:5173']);
     await closeSocketIO();
     expect(() => getIO()).toThrow(/not initialized/);
+  });
+
+  test('Socket.IO polling handshake allows the built local app origin', async () => {
+    const auth = { api: { getSession: async () => null } };
+    const corsOrigins = resolveCorsOrigins({
+      PORT: '3001',
+      VITE_PORT: '5173',
+      CORS_ORIGIN: 'http://localhost:5173,http://127.0.0.1:5173',
+    } as any);
+    const { engine } = createSocketIOServer(auth, corsOrigins);
+
+    const res = await engine.handleRequest(
+      new Request('http://127.0.0.1:3001/socket.io/?EIO=4&transport=polling', {
+        headers: { origin: 'http://localhost:3001' },
+      }),
+      {} as any,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3001');
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true');
   });
 });

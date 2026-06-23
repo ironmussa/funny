@@ -217,23 +217,39 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
 
   // HMAC-sign the forwarded identity so the runtime can distinguish a real
   // server-proxied request from a spoofed one carrying the shared secret.
-  if (userId) {
-    const signedIdentity = {
-      userId,
-      role: userRole,
-      orgId: orgId ?? null,
-      orgName: orgName ?? null,
-      shareLevel,
-      onBehalfOfThread,
-    };
+  //
+  // CRITICAL: the signature carries a single-use nonce that the runtime records
+  // in a replay cache once the HMAC verifies. If we signed ONCE and reused the
+  // same headers across a transport fallback (direct HTTP → tunnel), a first
+  // attempt that reached the runtime but whose response failed to deliver (e.g.
+  // "socket connection was closed unexpectedly" on a loopback keep-alive socket)
+  // would have already burned the nonce — so the retry over the other transport
+  // is rejected as a replay ("invalid signature") and the caller sees a spurious
+  // 401. We therefore mint a FRESH nonce/signature for every physical send.
+  const signedIdentity = userId
+    ? {
+        userId,
+        role: userRole,
+        orgId: orgId ?? null,
+        orgName: orgName ?? null,
+        shareLevel,
+        onBehalfOfThread,
+      }
+    : null;
+  /** Clone the forwarded headers with a freshly-signed identity (new nonce). */
+  const withFreshSignature = (): Record<string, string> => {
+    if (!signedIdentity) return { ...forwardedHeaders };
     const { signature, timestamp, nonce } = signForwardedIdentity(
       signedIdentity,
       getRunnerAuthSecret(),
     );
-    forwardedHeaders[SIGNATURE_HEADER] = signature;
-    forwardedHeaders[TIMESTAMP_HEADER] = String(timestamp);
-    forwardedHeaders[NONCE_HEADER] = nonce;
-  }
+    return {
+      ...forwardedHeaders,
+      [SIGNATURE_HEADER]: signature,
+      [TIMESTAMP_HEADER]: String(timestamp),
+      [NONCE_HEADER]: nonce,
+    };
+  };
 
   // Read body for non-GET/HEAD requests
   let body: string | null = null;
@@ -260,7 +276,7 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
         httpUrl,
         path,
         url.search,
-        forwardedHeaders,
+        withFreshSignature(),
         body,
         deps.directFetch,
       );
@@ -279,7 +295,7 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       const tunnelResp = await deps.tunnelFetch(runnerId, {
         method: c.req.method,
         path: tunnelPath,
-        headers: forwardedHeaders,
+        headers: withFreshSignature(),
         body,
       });
 
@@ -335,7 +351,7 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
         httpUrl,
         path,
         url.search,
-        forwardedHeaders,
+        withFreshSignature(),
         body,
         deps.directFetch,
       );

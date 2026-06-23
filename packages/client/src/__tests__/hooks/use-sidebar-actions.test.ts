@@ -34,15 +34,21 @@ const mockArchiveThread = vi.fn().mockResolvedValue(undefined);
 const mockRenameThread = vi.fn().mockResolvedValue(undefined);
 const mockPinThread = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@/stores/project-store', () => ({
-  useProjectStore: (selector: (s: any) => unknown) =>
-    selector({
-      renameProject: vi.fn(),
-      deleteProject: vi.fn(),
-      closeProject: vi.fn(),
-      reopenProject: vi.fn(),
-    }),
-}));
+vi.mock('@/stores/project-store', () => {
+  const projectStore = {
+    renameProject: vi.fn(),
+    deleteProject: vi.fn(),
+    closeProject: vi.fn(),
+    reopenProject: vi.fn(),
+    expandedProjects: new Set<string>(),
+    selectedProjectId: null,
+    toggleProject: vi.fn(),
+    selectProject: vi.fn(),
+  };
+  const useProjectStore = (selector: (s: any) => unknown) => selector(projectStore);
+  useProjectStore.getState = () => projectStore;
+  return { useProjectStore };
+});
 
 vi.mock('@/lib/api', () => ({
   api: {

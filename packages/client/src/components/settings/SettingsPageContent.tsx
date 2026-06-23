@@ -8,6 +8,7 @@ import { GeneralSettings } from '@/components/GeneralSettings';
 import { McpServerSettings } from '@/components/McpServerSettings';
 import { PipelineSettings } from '@/components/PipelineSettings';
 import { ProjectConfigSettings } from '@/components/ProjectConfigSettings';
+import { AgentExecutionProfilesSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { type SettingsItemId } from '@/components/settings/items';
 import { ProjectCollaborators } from '@/components/settings/ProjectCollaborators';
 import { SkillsSettings } from '@/components/SkillsSettings';
@@ -38,6 +39,8 @@ export function SettingsPageContent({ page, label }: Props) {
       return <GeneralSettings />;
     case 'agent-resources':
       return <AgentResourcesSettings />;
+    case 'agent-profiles':
+      return <AgentExecutionProfilesSettings />;
     case 'mcp-server':
       return <McpServerSettings />;
     case 'skills':

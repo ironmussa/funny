@@ -3,6 +3,7 @@ import {
   Server,
   Sparkles,
   Boxes,
+  Bot,
   GitFork,
   Terminal,
   FileJson2,
@@ -17,6 +18,7 @@ import {
 const baseSettingsItems = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'agent-resources', label: 'Agent Resources', icon: Boxes },
+  { id: 'agent-profiles', label: 'Agent Profiles', icon: Bot },
   { id: 'mcp-server', label: 'MCP Server', icon: Server },
   { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'worktrees', label: 'Worktrees', icon: GitFork },
@@ -79,6 +81,7 @@ export function buildSettingsItems(opts: {
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
   'agent-resources': 'settings.agentResources',
+  'agent-profiles': 'settings.agentProfiles',
   'mcp-server': 'settings.mcpServer',
   skills: 'settings.skills',
   worktrees: 'settings.worktrees',

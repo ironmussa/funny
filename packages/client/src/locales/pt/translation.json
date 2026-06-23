@@ -589,7 +589,8 @@
     "shellDefault": "Padrão (sistema)",
     "saved": "Configurações salvas",
     "projectSaved": "Configurações do projeto salvas",
-    "agentResources": "Recursos do agente"
+    "agentResources": "Recursos do agente",
+    "agentProfiles": "Perfis de agente"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

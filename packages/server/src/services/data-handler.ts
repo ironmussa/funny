@@ -780,6 +780,14 @@ export async function handleDataMessageWithAck(
           profile: updatedProfile,
         };
       }
+      case 'data:resolve_agent_execution_profile': {
+        const { resolveEffectiveProfile } = await import('./agent-execution-profile-repository.js');
+        const resolved = await resolveEffectiveProfile(data.projectId, data.userId);
+        return {
+          type: 'data:resolve_agent_execution_profile_response',
+          ...resolved,
+        };
+      }
       case 'data:get_builtin_providers': {
         // Owner-scoped: the runner asks for its owning user's stored selection.
         // Ownership guard above already required a non-null runnerUserId.

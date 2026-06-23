@@ -31,7 +31,7 @@ import {
   getAdvertisedProviders,
   loadProviderExtensions,
 } from '@funny/core/agents';
-import type { Project, WSEvent } from '@funny/shared';
+import type { Project, ResolvedAgentExecutionProfileResponse, WSEvent } from '@funny/shared';
 import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
@@ -1607,6 +1607,21 @@ export async function remoteUpdateProfile(userId: string, data: Record<string, a
     payload: data,
   });
   return response?.profile ?? null;
+}
+
+/** Resolve the current user's effective agent execution profile for a project. */
+export async function remoteResolveAgentExecutionProfile(
+  projectId: string,
+  userId: string,
+): Promise<ResolvedAgentExecutionProfileResponse> {
+  const response = await sendDataMessage('data:resolve_agent_execution_profile', {
+    projectId,
+    userId,
+  });
+  return {
+    profile: response?.profile ?? null,
+    env: response?.env && typeof response.env === 'object' ? response.env : {},
+  };
 }
 
 // ── Thread creation/deletion ────────────────────────────

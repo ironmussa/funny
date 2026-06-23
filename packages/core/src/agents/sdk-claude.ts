@@ -178,6 +178,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     const { CLAUDECODE: _cc, CLAUDE_CODE_ENTRY_POINT: _ep, ...cleanEnv } = process.env;
     const sdkEnv = {
       ...cleanEnv,
+      ...this.options.env,
       CLAUDECODE: undefined,
       CLAUDE_CODE_ENTRY_POINT: undefined,
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS ?? '14400000',

@@ -211,6 +211,32 @@ export type {
 export { DEEPAGENT_TOOLS, BUILTIN_AGENT_TEMPLATES } from './types/agent-templates.js';
 
 export type {
+  AgentExecutionProfileProvider,
+  ClaudeExecutionProfileConfig,
+  AgentExecutionProfileConfig,
+  CreateAgentExecutionProfileRequest,
+  UpdateAgentExecutionProfileRequest,
+  UpdateProjectAgentProfileBindingRequest,
+  AgentExecutionProfile,
+  AgentExecutionProfileResponse,
+  ProjectAgentProfileBinding,
+  ProjectAgentProfileBindingResponse,
+  ResolvedAgentExecutionProfile,
+  ResolvedAgentExecutionProfileResponse,
+  ThreadResolvedAgentProfileSnapshot,
+} from './types/agent-execution-profiles.js';
+export {
+  agentExecutionProfileProviderSchema,
+  claudeExecutionProfileConfigSchema,
+  agentExecutionProfileConfigSchema,
+  createAgentExecutionProfileSchema,
+  updateAgentExecutionProfileSchema,
+  updateProjectAgentProfileBindingSchema,
+  toAgentExecutionProfileResponse,
+  buildAgentExecutionProfileEnv,
+} from './types/agent-execution-profiles.js';
+
+export type {
   PipelineStatus,
   PipelineRunStatus,
   PipelineStageType,

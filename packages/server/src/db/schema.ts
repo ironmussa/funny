@@ -30,6 +30,8 @@ export {
   threadEvents,
   instanceSettings,
   permissionRules,
+  agentExecutionProfiles,
+  projectAgentProfileBindings,
   // Server-only tables
   runners,
   runnerProjectAssignments,

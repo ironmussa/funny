@@ -8,6 +8,7 @@ import type {
   ThreadStage,
   ThreadStatus,
 } from '../primitives.js';
+import type { ThreadResolvedAgentProfileSnapshot } from './agent-execution-profiles.js';
 
 export interface Thread {
   id: string;
@@ -62,6 +63,11 @@ export interface Thread {
   lastAssistantMessage?: string;
   /** Agent template used to configure this thread (Deep Agent only). */
   agentTemplateId?: string;
+  /** Execution profile snapshot used when this thread was last started. */
+  agentProfile?: ThreadResolvedAgentProfileSnapshot | null;
+  agentProfileId?: string | null;
+  agentProfileName?: string | null;
+  agentProfileProvider?: AgentProvider | null;
   /** Filled template variable values (key → value). */
   templateVariables?: Record<string, string>;
   /**

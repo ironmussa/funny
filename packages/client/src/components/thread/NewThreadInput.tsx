@@ -88,6 +88,12 @@ export function NewThreadInput({
 
   // ── Project path (for AvailableMcpServers) ──
   const projectPath = useMemo(() => project?.path ?? '', [project?.path]);
+  const defaultProvider = project?.defaultProvider ?? DEFAULT_PROVIDER;
+  const [mcpProvider, setMcpProvider] = useState(defaultProvider);
+
+  useEffect(() => {
+    setMcpProvider(defaultProvider);
+  }, [defaultProvider]);
 
   // ── Worktree preview ──
   const [previewBranch, setPreviewBranch] = useState<string | null>(null);
@@ -321,11 +327,12 @@ export function NewThreadInput({
           }
           onContentChange={handleContentChange}
           onWorktreeModeChange={setIsWorktreeMode}
+          onProviderChange={setMcpProvider}
         />
         <AvailableMcpServers
           projectPath={projectPath || undefined}
           projectId={effectiveProjectId || undefined}
-          provider={project?.defaultProvider ?? DEFAULT_PROVIDER}
+          provider={mcpProvider}
         />
       </div>
 

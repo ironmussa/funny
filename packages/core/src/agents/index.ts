@@ -24,6 +24,9 @@ export {
   type StartAgentOptions,
   type OrchestratorEvents,
   type IdleReapPolicy,
+  type ActiveAgentSnapshot,
+  type AdoptedAgentState,
+  type ProcessOptionsSnapshot,
 } from './orchestrator.js';
 export {
   defaultProcessFactory,

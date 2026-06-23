@@ -112,7 +112,7 @@ export interface OrchestratorEvents {
  * Subset of process options compared to decide whether a follow-up prompt
  * can be issued on a live process via `sendPrompt()` instead of respawning.
  */
-interface ProcessOptionsSnapshot {
+export interface ProcessOptionsSnapshot {
   provider: string;
   model: string;
   cwd: string;
@@ -121,6 +121,19 @@ interface ProcessOptionsSnapshot {
   fastMode: boolean;
   /** Stable JSON of mcpServers — '' when none. */
   mcpServersKey: string;
+}
+
+export interface ActiveAgentSnapshot {
+  agents: Map<string, IAgentProcess>;
+  resultReceived: Set<string>;
+  lastActivityAt: Map<string, number>;
+  lastOptions: Map<string, ProcessOptionsSnapshot>;
+}
+
+export interface AdoptedAgentState {
+  resultReceived?: boolean;
+  lastActivityAt?: number;
+  lastOptions?: ProcessOptionsSnapshot;
 }
 
 function snapshotProcessOptions(opts: {
@@ -317,9 +330,8 @@ export class AgentOrchestrator extends EventEmitter {
     // messages and tool calls as new updates, duplicating them in the DB).
     // The persisted sessionId in `options.sessionId` is just a reflection
     // of what this same live process emitted via system:init — it does not
-    // imply the process is gone. After a watcher restart, `lastOptions` is
-    // cleared by extractActiveAgents, so isCompatibleOptions returns false
-    // and we fall through to the kill+respawn loadSession path.
+    // imply the process is gone. Watcher restarts preserve the compatibility
+    // snapshot, so a re-adopted live process can still take the warm path.
     const existing = this.activeAgents.get(threadId);
     const liveAndCompatible =
       existing &&
@@ -569,10 +581,14 @@ export class AgentOrchestrator extends EventEmitter {
   /**
    * Extract active agent processes WITHOUT killing them.
    * Used to preserve agents across bun --watch restarts.
-   * Returns the current active agents and clears internal state.
+   * Returns the current active agents plus the state needed to keep reaping
+   * and process reuse correct after re-adoption, then clears internal state.
    */
-  extractActiveAgents(): Map<string, IAgentProcess> {
+  extractActiveAgentSnapshot(): ActiveAgentSnapshot {
     const agents = new Map(this.activeAgents);
+    const resultReceived = new Set(this.resultReceived);
+    const lastActivityAt = new Map(this.lastActivityAt);
+    const lastOptions = new Map(this.lastOptions);
     // Detach: remove all our listeners so the old orchestrator
     // doesn't interfere when these processes emit events.
     for (const [, proc] of agents) {
@@ -582,15 +598,28 @@ export class AgentOrchestrator extends EventEmitter {
     this.resultReceived.clear();
     this.lastOptions.clear();
     this.lastActivityAt.clear();
-    return agents;
+    return { agents, resultReceived, lastActivityAt, lastOptions };
+  }
+
+  extractActiveAgents(): Map<string, IAgentProcess> {
+    return this.extractActiveAgentSnapshot().agents;
   }
 
   /**
    * Adopt a surviving agent process (from a previous module evaluation).
    * Wires fresh event handlers so messages flow to the new DB + WebSocket.
    */
-  adoptProcess(threadId: string, proc: IAgentProcess): void {
+  adoptProcess(threadId: string, proc: IAgentProcess, state: AdoptedAgentState = {}): void {
     this.wireProcessHandlers(proc, threadId);
+    if (state.resultReceived) {
+      this.resultReceived.add(threadId);
+    }
+    if (state.lastActivityAt !== undefined) {
+      this.lastActivityAt.set(threadId, state.lastActivityAt);
+    }
+    if (state.lastOptions) {
+      this.lastOptions.set(threadId, state.lastOptions);
+    }
     dlog.info('Adopted surviving agent', { threadId });
   }
 

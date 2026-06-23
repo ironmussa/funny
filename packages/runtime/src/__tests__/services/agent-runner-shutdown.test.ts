@@ -3,6 +3,12 @@ import { describe, test, expect, vi, beforeAll, afterEach } from 'vitest';
 const lifecycleMock = vi.hoisted(() => ({
   stopAllAgents: vi.fn(async () => undefined),
   extractActiveAgents: vi.fn(() => new Map<string, unknown>()),
+  extractActiveAgentSnapshot: vi.fn(() => ({
+    agents: new Map<string, unknown>(),
+    resultReceived: new Set<string>(),
+    lastActivityAt: new Map<string, number>(),
+    lastOptions: new Map<string, unknown>(),
+  })),
   startAgent: vi.fn(async () => undefined),
   stopAgent: vi.fn(async () => undefined),
   isAgentRunning: vi.fn(() => false),
@@ -79,26 +85,39 @@ describe('AgentRunner shutdown handler', () => {
   });
 
   afterEach(() => {
+    delete (globalThis as any).__funnyActiveAgentSnapshot;
     delete (globalThis as any).__funnyActiveAgents;
     vi.clearAllMocks();
   });
 
-  test('hotReload preserves active agents on globalThis when any are running', async () => {
-    const surviving = new Map([['t-1', { threadId: 't-1' }]]);
-    lifecycleMock.extractActiveAgents.mockReturnValue(surviving);
+  test('hotReload preserves active agent snapshot on globalThis when any are running', async () => {
+    const snapshot = {
+      agents: new Map([['t-1', { threadId: 't-1' }]]),
+      resultReceived: new Set(['t-1']),
+      lastActivityAt: new Map([['t-1', 123]]),
+      lastOptions: new Map(),
+    };
+    lifecycleMock.extractActiveAgentSnapshot.mockReturnValue(snapshot);
 
     await shutdownCapture.handler!('hotReload');
 
-    expect((globalThis as any).__funnyActiveAgents).toBe(surviving);
+    expect((globalThis as any).__funnyActiveAgentSnapshot).toBe(snapshot);
+    expect((globalThis as any).__funnyActiveAgents).toBeUndefined();
     expect(lifecycleMock.stopAllAgents).not.toHaveBeenCalled();
   });
 
   test('hotReload stops all agents when none are active', async () => {
-    lifecycleMock.extractActiveAgents.mockReturnValue(new Map());
+    lifecycleMock.extractActiveAgentSnapshot.mockReturnValue({
+      agents: new Map(),
+      resultReceived: new Set(),
+      lastActivityAt: new Map(),
+      lastOptions: new Map(),
+    });
 
     await shutdownCapture.handler!('hotReload');
 
     expect(lifecycleMock.stopAllAgents).toHaveBeenCalled();
+    expect((globalThis as any).__funnyActiveAgentSnapshot).toBeUndefined();
     expect((globalThis as any).__funnyActiveAgents).toBeUndefined();
   });
 
@@ -108,6 +127,7 @@ describe('AgentRunner shutdown handler', () => {
     await shutdownCapture.handler!('hard');
 
     expect(lifecycleMock.stopAllAgents).toHaveBeenCalled();
+    expect((globalThis as any).__funnyActiveAgentSnapshot).toBeUndefined();
     expect((globalThis as any).__funnyActiveAgents).toBeUndefined();
   });
 });

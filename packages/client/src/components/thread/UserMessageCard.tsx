@@ -1,6 +1,14 @@
 import type { AgentModel, EffortLevel, PermissionMode } from '@funny/shared';
 import { ChevronRight, ChevronDown, GitBranch, Undo2, RotateCcw, MoreVertical } from 'lucide-react';
-import { useState, useRef, useLayoutEffect, useCallback, useMemo, type ReactNode } from 'react';
+import {
+  useState,
+  useRef,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
@@ -302,6 +310,28 @@ export function UserMessageCard({
   const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
   const hasThreadActions = Boolean(onFork || onRewind || onForkAndRewind);
   const hasFooterBadges = Boolean(model || permissionMode);
+  const hasSideMeta = Boolean(hasThreadActions || timestamp);
+  let sideMetaJustify = 'justify-start';
+  if (timestamp) sideMetaJustify = 'justify-end';
+  if (timestamp && hasThreadActions) sideMetaJustify = 'justify-between';
+  const handleCardKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!onClick || event.defaultPrevented) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+
+      event.preventDefault();
+      onClick();
+    },
+    [onClick],
+  );
+  const interactiveCardProps = onClick
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick,
+        onKeyDown: handleCardKeyDown,
+      }
+    : {};
 
   return (
     <div
@@ -310,16 +340,84 @@ export function UserMessageCard({
         'relative group text-sm',
         'w-full rounded-lg py-2 bg-foreground text-background',
         'px-3',
-        // Reserve top-right space for timestamp and/or hover actions.
-        timestamp && hasThreadActions ? 'pr-24' : timestamp ? 'pr-14' : hasThreadActions && 'pr-9',
+        hasSideMeta && 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-2',
         onClick && 'cursor-pointer',
         'shadow-md',
       )}
-      onClick={onClick}
+      {...interactiveCardProps}
     >
-      {(timestamp || hasThreadActions) && (
-        <div className="absolute top-1.5 right-1.5 z-10 flex h-6 items-center justify-end gap-1">
-          {/* Fork / rewind menu — visible on hover */}
+      <div className="min-w-0">
+        {/* Image attachments */}
+        {allImages && allImages.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {allImages.map((img, idx) => (
+              <button
+                key={img.src}
+                type="button"
+                aria-label={`Open ${img.alt}`}
+                className="border-border max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer overflow-hidden rounded border p-0 transition-opacity hover:opacity-80"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onImageClick?.(allImages, idx);
+                }}
+              >
+                <img
+                  src={img.src}
+                  alt={img.alt}
+                  loading="lazy"
+                  className="block max-h-10 min-h-10 max-w-24 min-w-10 object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Attached files not already @-mentioned inline */}
+        {unmentionedFiles.length > 0 && (
+          <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
+            {unmentionedFiles.map((item) => (
+              <ReferencedFileChip key={`attached-${item.path}`} item={item} />
+            ))}
+          </div>
+        )}
+
+        {/* Message content with inline file chips */}
+        <UserMessageContent content={inlineContent.trim()} fileMap={fileMap} />
+
+        {/* Metadata: model and permission mode */}
+        {hasFooterBadges && (
+          <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
+            {model && (
+              <Badge
+                variant="outline"
+                className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
+              >
+                {resolveModelLabel(model, t)}
+                {effort && (
+                  <>
+                    {' · '}
+                    {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
+                  </>
+                )}
+              </Badge>
+            )}
+            {permissionMode && (
+              <Badge
+                variant="outline"
+                className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
+              >
+                {t(`prompt.${permissionMode}`)}
+              </Badge>
+            )}
+          </div>
+        )}
+      </div>
+
+      {hasSideMeta && (
+        <div
+          data-testid="user-message-side-meta"
+          className={cn('flex min-w-6 flex-col items-end self-stretch', sideMetaJustify)}
+        >
           {hasThreadActions && (
             <DropdownMenu>
               <Tooltip>
@@ -387,71 +485,10 @@ export function UserMessageCard({
             </DropdownMenu>
           )}
           {timestamp && (
-            <span className="text-background/50 text-[10px] whitespace-nowrap">
+            <span className="text-background/50 text-right text-[10px] leading-4 whitespace-nowrap">
               {timeAgo(timestamp, t)}
             </span>
           )}
-        </div>
-      )}
-
-      {/* Image attachments */}
-      {allImages && allImages.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {allImages.map((img, idx) => (
-            <img
-              key={`attachment-${idx}`}
-              src={img.src}
-              alt={img.alt}
-              loading="lazy"
-              className="border-border max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border object-cover transition-opacity hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onImageClick?.(allImages, idx);
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Attached files not already @-mentioned inline */}
-      {unmentionedFiles.length > 0 && (
-        <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
-          {unmentionedFiles.map((item) => (
-            <ReferencedFileChip key={`attached-${item.path}`} item={item} />
-          ))}
-        </div>
-      )}
-
-      {/* Message content with inline file chips */}
-      <UserMessageContent content={inlineContent.trim()} fileMap={fileMap} />
-
-      {/* Metadata: model + permission mode */}
-      {hasFooterBadges && (
-        <div className="mt-1.5 flex items-center">
-          <div className="flex gap-1">
-            {model && (
-              <Badge
-                variant="outline"
-                className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
-              >
-                {resolveModelLabel(model, t)}
-                {effort && (
-                  <>
-                    {' · '}
-                    {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
-                  </>
-                )}
-              </Badge>
-            )}
-            {permissionMode && (
-              <Badge
-                variant="outline"
-                className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
-              >
-                {t(`prompt.${permissionMode}`)}
-              </Badge>
-            )}
-          </div>
         </div>
       )}
     </div>

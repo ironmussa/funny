@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { UserMessageCard } from '@/components/thread/UserMessageCard';
@@ -15,11 +16,10 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/components/ui/dropdown-menu', () => {
-  const React = require('react');
   return {
-    DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
+    DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+    DropdownMenuContent: ({ children }: { children: ReactNode }) => (
       <div role="menu">{children}</div>
     ),
     DropdownMenuItem: ({
@@ -28,7 +28,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       disabled,
       ...props
     }: {
-      children: React.ReactNode;
+      children: ReactNode;
       onSelect?: () => void;
       disabled?: boolean;
     }) => (
@@ -104,13 +104,15 @@ describe('UserMessageCard', () => {
   });
 
   test('renders model and permission badges', () => {
+    const timestampIso = new Date().toISOString();
+
     renderWithProviders(
       <UserMessageCard
         content="hello"
         model="sonnet-4.6"
         permissionMode="autoEdit"
         effort="high"
-        timestamp={new Date().toISOString()}
+        timestamp={timestampIso}
         data-testid="msg-4"
       />,
     );
@@ -120,7 +122,68 @@ describe('UserMessageCard', () => {
     expect(screen.getByText(/High/)).toBeInTheDocument();
     const timestamp = screen.getByText('time.now');
     expect(timestamp).toBeInTheDocument();
-    expect(timestamp.parentElement?.className).toContain('absolute top-1.5 right-1.5');
+    expect(screen.getByTestId('msg-4').className).toContain('grid grid-cols-[minmax(0,1fr)_auto]');
+    expect(timestamp.parentElement).toHaveAttribute('data-testid', 'user-message-side-meta');
+    expect(timestamp.parentElement?.className).toContain('justify-end');
+  });
+
+  test('keeps actions and timestamp in the same right-side column', () => {
+    const timestampIso = new Date().toISOString();
+
+    renderWithProviders(
+      <UserMessageCard
+        content="branch me"
+        timestamp={timestampIso}
+        onFork={vi.fn()}
+        data-testid="msg-actions-layout"
+      />,
+    );
+
+    const actionsButton = screen.getByTestId('user-message-actions-menu-msg-actions-layout');
+    const timestamp = screen.getByText('time.now');
+    const sideMeta = screen.getByTestId('user-message-side-meta');
+
+    expect(sideMeta).toContainElement(actionsButton);
+    expect(sideMeta).toContainElement(timestamp);
+    expect(sideMeta.className).toContain('items-end');
+    expect(sideMeta.className).toContain('justify-between');
+  });
+
+  test('supports keyboard activation when the card is clickable', () => {
+    const onClick = vi.fn();
+
+    renderWithProviders(
+      <UserMessageCard content="open me" onClick={onClick} data-testid="msg-keyboard" />,
+    );
+
+    const card = screen.getByTestId('msg-keyboard');
+    expect(card).toHaveAttribute('role', 'button');
+    expect(card).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(card, { key: 'Enter' });
+    fireEvent.keyDown(card, { key: ' ' });
+
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  test('renders image attachments as clickable buttons', () => {
+    const onImageClick = vi.fn();
+
+    renderWithProviders(
+      <UserMessageCard
+        content="review screenshot"
+        images={[{ source: { media_type: 'image/png', data: 'ZmFrZQ==' } }]}
+        onImageClick={onImageClick}
+        data-testid="msg-image"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Attachment 1' }));
+
+    expect(onImageClick).toHaveBeenCalledWith(
+      [{ src: 'data:image/png;base64,ZmFrZQ==', alt: 'Attachment 1' }],
+      0,
+    );
   });
 
   test('invokes fork handler from the actions menu', () => {

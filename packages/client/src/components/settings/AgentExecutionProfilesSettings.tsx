@@ -1,5 +1,5 @@
 import type { AgentExecutionProfileResponse } from '@funny/shared';
-import { Bot, Plus, Save, Trash2 } from 'lucide-react';
+import { Bot, Check, Copy, Plus, Save, Trash2 } from 'lucide-react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,11 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 
 const NO_PROFILE_VALUE = '__default__';
+const CONFIG_DIR_PLACEHOLDER = '<config-dir>';
+const SHELL_SAFE_VALUE = /^[A-Za-z0-9_@%+=:,./~-]+$/;
 
 interface ProfileDraft {
   name: string;
@@ -43,23 +46,28 @@ function profileDraftPayload(draft: ProfileDraft) {
   };
 }
 
+function shellQuoteEnvValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return CONFIG_DIR_PLACEHOLDER;
+  if (SHELL_SAFE_VALUE.test(trimmed)) return trimmed;
+  return `'${trimmed.replaceAll("'", "'\\''")}'`;
+}
+
+function buildClaudeAuthCommand(configDir: string) {
+  return `CLAUDE_CONFIG_DIR=${shellQuoteEnvValue(configDir)} claude auth login`;
+}
+
 export function AgentExecutionProfilesSettings() {
   const { t } = useTranslation();
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProject = useProjectStore((s) =>
-    s.projects.find((project) => project.id === s.selectedProjectId),
-  );
   const [profiles, setProfiles] = useState<AgentExecutionProfileResponse[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ProfileDraft>>({});
   const [createDraft, setCreateDraft] = useState<ProfileDraft>({
     name: '',
     configDir: '',
   });
-  const [bindingProfileId, setBindingProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [bindingSaving, setBindingSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,23 +82,8 @@ export function AgentExecutionProfilesSettings() {
 
     setProfiles(profilesResult.value.profiles);
     setDrafts(profilesToDrafts(profilesResult.value.profiles));
-
-    if (selectedProjectId) {
-      const bindingResult = await api.getProjectAgentProfileBinding(selectedProjectId);
-      if (bindingResult.isOk()) {
-        setBindingProfileId(bindingResult.value.profile?.id ?? null);
-      } else {
-        toast.error(t('agentProfiles.bindingLoadError', 'Failed to load project profile'), {
-          description: bindingResult.error.message,
-        });
-        setBindingProfileId(null);
-      }
-    } else {
-      setBindingProfileId(null);
-    }
-
     setLoading(false);
-  }, [selectedProjectId, t]);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -186,36 +179,9 @@ export function AgentExecutionProfilesSettings() {
         delete next[profile.id];
         return next;
       });
-      if (bindingProfileId === profile.id) setBindingProfileId(null);
       toast.success(t('agentProfiles.deleted', 'Profile deleted'));
     },
-    [bindingProfileId, t],
-  );
-
-  const updateBinding = useCallback(
-    async (value: string) => {
-      if (!selectedProjectId) return;
-      const nextProfileId = value === NO_PROFILE_VALUE ? null : value;
-      setBindingProfileId(nextProfileId);
-      setBindingSaving(true);
-
-      const result = await api.updateProjectAgentProfileBinding(selectedProjectId, {
-        profileId: nextProfileId,
-      });
-      setBindingSaving(false);
-
-      if (result.isErr()) {
-        toast.error(t('agentProfiles.bindingSaveError', 'Failed to save project profile'), {
-          description: result.error.message,
-        });
-        await load();
-        return;
-      }
-
-      setBindingProfileId(result.value.profile?.id ?? null);
-      toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
-    },
-    [load, selectedProjectId, t],
+    [t],
   );
 
   if (loading) {
@@ -228,16 +194,6 @@ export function AgentExecutionProfilesSettings() {
 
   return (
     <div className="space-y-6">
-      {selectedProjectId && (
-        <ProjectProfileBinding
-          projectName={selectedProject?.name ?? selectedProjectId}
-          profiles={profiles}
-          bindingProfileId={bindingProfileId}
-          bindingSaving={bindingSaving}
-          onBindingChange={updateBinding}
-        />
-      )}
-
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -275,6 +231,96 @@ export function AgentExecutionProfilesSettings() {
         )}
       </section>
     </div>
+  );
+}
+
+export function ProjectAgentExecutionProfileSettings() {
+  const { t } = useTranslation();
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedProject = useProjectStore((s) =>
+    s.projects.find((project) => project.id === s.selectedProjectId),
+  );
+  const [profiles, setProfiles] = useState<AgentExecutionProfileResponse[]>([]);
+  const [bindingProfileId, setBindingProfileId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [bindingSaving, setBindingSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const profilesResult = await api.listAgentExecutionProfiles();
+    if (profilesResult.isErr()) {
+      toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
+        description: profilesResult.error.message,
+      });
+      setLoading(false);
+      return;
+    }
+
+    setProfiles(profilesResult.value.profiles);
+
+    if (selectedProjectId) {
+      const bindingResult = await api.getProjectAgentProfileBinding(selectedProjectId);
+      if (bindingResult.isOk()) {
+        setBindingProfileId(bindingResult.value.profile?.id ?? null);
+      } else {
+        toast.error(t('agentProfiles.bindingLoadError', 'Failed to load project profile'), {
+          description: bindingResult.error.message,
+        });
+        setBindingProfileId(null);
+      }
+    } else {
+      setBindingProfileId(null);
+    }
+
+    setLoading(false);
+  }, [selectedProjectId, t]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const updateBinding = useCallback(
+    async (value: string) => {
+      if (!selectedProjectId) return;
+      const nextProfileId = value === NO_PROFILE_VALUE ? null : value;
+      setBindingProfileId(nextProfileId);
+      setBindingSaving(true);
+
+      const result = await api.updateProjectAgentProfileBinding(selectedProjectId, {
+        profileId: nextProfileId,
+      });
+      setBindingSaving(false);
+
+      if (result.isErr()) {
+        toast.error(t('agentProfiles.bindingSaveError', 'Failed to save project profile'), {
+          description: result.error.message,
+        });
+        await load();
+        return;
+      }
+
+      setBindingProfileId(result.value.profile?.id ?? null);
+      toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
+    },
+    [load, selectedProjectId, t],
+  );
+
+  if (loading) {
+    return (
+      <div className="text-muted-foreground py-6 text-center text-sm">
+        {t('common.loading', 'Loading…')}
+      </div>
+    );
+  }
+
+  return (
+    <ProjectProfileBinding
+      projectName={selectedProject?.name ?? selectedProjectId ?? ''}
+      profiles={profiles}
+      bindingProfileId={bindingProfileId}
+      bindingSaving={bindingSaving}
+      onBindingChange={updateBinding}
+    />
   );
 }
 
@@ -373,6 +419,7 @@ function CreateProfileForm({
           {t('common.create', 'Create')}
         </Button>
       </div>
+      <ClaudeAuthCommand configDir={draft.configDir} className="sm:col-span-3" />
     </form>
   );
 }
@@ -468,6 +515,41 @@ function ProfileEditor({
           data-testid={`agent-profile-${profile.id}-delete`}
         >
           <Trash2 className="icon-sm" />
+        </Button>
+      </div>
+      <ClaudeAuthCommand configDir={draft.configDir} className="sm:col-span-3" />
+    </div>
+  );
+}
+
+function ClaudeAuthCommand({ configDir, className }: { configDir: string; className?: string }) {
+  const { t } = useTranslation();
+  const [copied, copy] = useCopyToClipboard();
+  const command = buildClaudeAuthCommand(configDir);
+  const hasConfigDir = configDir.trim().length > 0;
+
+  return (
+    <div className={cn('grid gap-1.5', className)}>
+      <span className="text-muted-foreground text-xs font-medium">
+        {t('agentProfiles.authCommand', 'Subscription login command')}
+      </span>
+      <div className="flex min-w-0 items-center gap-2">
+        <code
+          className="bg-muted text-foreground min-w-0 flex-1 truncate rounded px-3 py-2 font-mono text-xs"
+          data-testid="agent-profile-auth-command"
+        >
+          {command}
+        </code>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={() => copy(command)}
+          disabled={!hasConfigDir}
+          aria-label={t('agentProfiles.copyAuthCommand', 'Copy subscription login command')}
+          data-testid="agent-profile-copy-auth-command"
+        >
+          {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
         </Button>
       </div>
     </div>

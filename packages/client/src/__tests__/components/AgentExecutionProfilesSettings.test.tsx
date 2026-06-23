@@ -32,7 +32,10 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-import { AgentExecutionProfilesSettings } from '@/components/settings/AgentExecutionProfilesSettings';
+import {
+  AgentExecutionProfilesSettings,
+  ProjectAgentExecutionProfileSettings,
+} from '@/components/settings/AgentExecutionProfilesSettings';
 import { useProjectStore } from '@/stores/project-store';
 
 const workProfile: AgentExecutionProfileResponse = {
@@ -68,16 +71,13 @@ describe('AgentExecutionProfilesSettings', () => {
       okAsync({ projectId: 'project-1', profile: workProfile }),
     );
 
-    render(<AgentExecutionProfilesSettings />);
+    render(<ProjectAgentExecutionProfileSettings />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('agent-profile-profile-1')).toBeInTheDocument();
+      expect(screen.getByTestId('agent-profile-project-select')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('agent-profile-profile-1-name')).toHaveValue('Work Claude');
-    expect(screen.getByTestId('agent-profile-profile-1-config-dir')).toHaveValue(
-      '/home/user/.claude-work',
-    );
     expect(mockGetProjectAgentProfileBinding).toHaveBeenCalledWith('project-1');
+    expect(screen.queryByTestId('agent-profile-create-name')).not.toBeInTheDocument();
   });
 
   test('creates a Claude profile', async () => {
@@ -97,6 +97,9 @@ describe('AgentExecutionProfilesSettings', () => {
     fireEvent.change(screen.getByTestId('agent-profile-create-config-dir'), {
       target: { value: '/home/user/.claude-work' },
     });
+    expect(
+      screen.getByText('CLAUDE_CONFIG_DIR=/home/user/.claude-work claude auth login'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('agent-profile-create'));
 
     await waitFor(() => {
@@ -107,5 +110,25 @@ describe('AgentExecutionProfilesSettings', () => {
       });
     });
     expect(await screen.findByTestId('agent-profile-profile-1')).toBeInTheDocument();
+    expect(mockGetProjectAgentProfileBinding).not.toHaveBeenCalled();
+  });
+
+  test('quotes Claude auth command directories with spaces', async () => {
+    useProjectStore.setState({ projects: [], selectedProjectId: null });
+    mockListAgentExecutionProfiles.mockReturnValue(okAsync({ profiles: [] }));
+
+    render(<AgentExecutionProfilesSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-profile-create-config-dir')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId('agent-profile-create-config-dir'), {
+      target: { value: '/home/user/Claude Work' },
+    });
+
+    expect(
+      screen.getByText("CLAUDE_CONFIG_DIR='/home/user/Claude Work' claude auth login"),
+    ).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
@@ -29,7 +29,7 @@ import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 function renderMcpList(ui: React.ReactElement) {
   return render(
     <MemoryRouter>
-      <TooltipProvider>{ui}</TooltipProvider>
+      <TooltipProvider delayDuration={0}>{ui}</TooltipProvider>
     </MemoryRouter>,
   );
 }
@@ -68,6 +68,57 @@ describe('AvailableMcpServers', () => {
     expect(screen.queryByTestId('available-mcp-disabled-one')).not.toBeInTheDocument();
     expect(screen.queryByTestId('available-mcp-broken')).not.toBeInTheDocument();
     expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude');
+  });
+
+  test('labels MCP tooltip details and only applies warning color to auth issues', async () => {
+    mockListMcpServers.mockReturnValue(
+      okAsync({
+        servers: [
+          {
+            name: 'healthy-http',
+            type: 'http',
+            url: 'https://mcp.example.test/mcp',
+            source: 'project',
+            disabled: false,
+            status: 'ok',
+          },
+          {
+            name: 'linear-server',
+            type: 'http',
+            url: 'https://mcp.linear.app/mcp',
+            source: 'user',
+            disabled: false,
+            status: 'needs_auth',
+          },
+        ],
+      }),
+    );
+
+    renderMcpList(<AvailableMcpServers projectPath="/repo" />);
+
+    const healthyBadge = await screen.findByTestId('available-mcp-healthy-http');
+    expect(healthyBadge).not.toHaveClass(
+      'border-amber-500/50',
+      'bg-amber-500/10',
+      'text-amber-300',
+    );
+
+    const badge = await screen.findByTestId('available-mcp-linear-server');
+    expect(badge).toHaveClass('border-amber-500/50', 'bg-amber-500/10', 'text-amber-300');
+
+    fireEvent.pointerMove(badge);
+    fireEvent.focus(badge);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Transport').length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText('Remote HTTP').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Scope').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Endpoint').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('https://mcp.linear.app/mcp').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Status').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('mcp.needsAuth').length).toBeGreaterThan(0);
   });
 
   test('isActiveMcpServer excludes disabled and unhealthy servers', () => {

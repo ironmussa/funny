@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
     cleanupThread: vi.fn(),
     adoptProcess: vi.fn(),
     extractActiveAgents: vi.fn(() => new Map()),
+    extractActiveAgentSnapshot: vi.fn(() => ({
+      agents: new Map(),
+      resultReceived: new Set(),
+      lastActivityAt: new Map(),
+      lastOptions: new Map(),
+    })),
   },
   threadManager: {
     getThread: vi.fn(),
@@ -192,6 +198,7 @@ describe('AgentLifecycleManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cleanupThreadActor('thread-1');
+    delete (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot;
     delete (globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents;
     mocks.orchestrator.startAgent.mockResolvedValue(undefined);
     mocks.remoteGetAgentTemplate.mockResolvedValue(undefined);
@@ -209,6 +216,7 @@ describe('AgentLifecycleManager', () => {
   });
 
   afterEach(() => {
+    delete (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot;
     delete (globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents;
   });
 
@@ -775,10 +783,28 @@ describe('AgentLifecycleManager', () => {
   describe('extractActiveAgents', () => {
     test('delegates to orchestrator', () => {
       const active = new Map([['t-1', { threadId: 't-1' }]]);
-      mocks.orchestrator.extractActiveAgents.mockReturnValue(active);
+      mocks.orchestrator.extractActiveAgentSnapshot.mockReturnValue({
+        agents: active,
+        resultReceived: new Set(),
+        lastActivityAt: new Map(),
+        lastOptions: new Map(),
+      });
 
       const manager = createManager();
       expect(manager.extractActiveAgents()).toBe(active);
+    });
+
+    test('extractActiveAgentSnapshot delegates to orchestrator', () => {
+      const snapshot = {
+        agents: new Map([['t-1', { threadId: 't-1' }]]),
+        resultReceived: new Set(['t-1']),
+        lastActivityAt: new Map([['t-1', 123]]),
+        lastOptions: new Map(),
+      };
+      mocks.orchestrator.extractActiveAgentSnapshot.mockReturnValue(snapshot);
+
+      const manager = createManager();
+      expect(manager.extractActiveAgentSnapshot()).toBe(snapshot);
     });
   });
 
@@ -827,7 +853,29 @@ describe('AgentLifecycleManager', () => {
   });
 
   describe('adoptSurvivingProcesses', () => {
-    test('adopts non-exited processes from globalThis on construction', () => {
+    test('adopts non-exited processes from snapshot on construction', () => {
+      const proc = { exited: false };
+      (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot = {
+        agents: new Map([['t-survive', proc]]),
+        resultReceived: new Set(['t-survive']),
+        lastActivityAt: new Map([['t-survive', 123]]),
+        lastOptions: new Map([['t-survive', { provider: 'codex' }]]),
+      };
+
+      createManager();
+
+      expect(mocks.orchestrator.adoptProcess).toHaveBeenCalledWith('t-survive', proc, {
+        resultReceived: true,
+        lastActivityAt: 123,
+        lastOptions: { provider: 'codex' },
+      });
+      expect(
+        (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot,
+      ).toBeUndefined();
+      expect((globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents).toBeUndefined();
+    });
+
+    test('adopts legacy non-exited processes from globalThis on construction', () => {
       const proc = { exited: false };
       (globalThis as { __funnyActiveAgents?: Map<string, unknown> }).__funnyActiveAgents = new Map([
         ['t-survive', proc],
@@ -835,8 +883,11 @@ describe('AgentLifecycleManager', () => {
 
       createManager();
 
-      expect(mocks.orchestrator.adoptProcess).toHaveBeenCalledWith('t-survive', proc);
-      expect((globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents).toBeUndefined();
+      expect(mocks.orchestrator.adoptProcess).toHaveBeenCalledWith('t-survive', proc, {
+        resultReceived: undefined,
+        lastActivityAt: undefined,
+        lastOptions: undefined,
+      });
     });
 
     test('marks interrupted when surviving process already exited', async () => {

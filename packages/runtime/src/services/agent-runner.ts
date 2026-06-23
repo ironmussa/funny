@@ -20,6 +20,7 @@ import { AgentLifecycleManager } from './agent-lifecycle.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import {
   cleanupThreadState,
+  extractActiveAgentSnapshot,
   extractActiveAgents,
   getSupportedSlashCommands,
   isAgentRunning,
@@ -139,6 +140,10 @@ export class AgentRunner {
     return this.lifecycle.extractActiveAgents();
   }
 
+  extractActiveAgentSnapshot(): ReturnType<AgentLifecycleManager['extractActiveAgentSnapshot']> {
+    return this.lifecycle.extractActiveAgentSnapshot();
+  }
+
   /**
    * Slash commands the SDK reported for this thread (names without leading
    * slash), or `undefined` if none captured yet (no run this process lifetime).
@@ -169,6 +174,7 @@ registerAgentRunnerControl({
   stopAllAgents: defaultRunner.stopAllAgents.bind(defaultRunner),
   isAgentRunning: defaultRunner.isAgentRunning.bind(defaultRunner),
   cleanupThreadState: defaultRunner.cleanupThreadState.bind(defaultRunner),
+  extractActiveAgentSnapshot: defaultRunner.extractActiveAgentSnapshot.bind(defaultRunner),
   extractActiveAgents: defaultRunner.extractActiveAgents.bind(defaultRunner),
   getSupportedSlashCommands: defaultRunner.getSupportedSlashCommands.bind(defaultRunner),
 });
@@ -179,6 +185,7 @@ export {
   stopAllAgents,
   isAgentRunning,
   cleanupThreadState,
+  extractActiveAgentSnapshot,
   extractActiveAgents,
   getSupportedSlashCommands,
 };
@@ -198,10 +205,12 @@ shutdownManager.register(
     // (start() also dedupes via a global handle as a backstop).
     defaultRunner.stopIdleReaper();
     if (mode === 'hotReload') {
-      const surviving = extractActiveAgents();
-      if (surviving.size > 0) {
-        (globalThis as any).__funnyActiveAgents = surviving;
-        log.info(`Preserved ${surviving.size} agent(s) for next instance`, { namespace: 'agent' });
+      const snapshot = extractActiveAgentSnapshot();
+      if (snapshot.agents.size > 0) {
+        (globalThis as any).__funnyActiveAgentSnapshot = snapshot;
+        log.info(`Preserved ${snapshot.agents.size} agent(s) for next instance`, {
+          namespace: 'agent',
+        });
       } else {
         await stopAllAgents();
       }

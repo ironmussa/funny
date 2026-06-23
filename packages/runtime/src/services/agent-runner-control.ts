@@ -1,3 +1,4 @@
+import type { ActiveAgentSnapshot } from '@funny/core/agents';
 import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
 
 type StartAgent = (
@@ -22,6 +23,7 @@ export interface AgentRunnerControl {
   stopAllAgents: () => Promise<void>;
   isAgentRunning: (threadId: string) => boolean;
   cleanupThreadState: (threadId: string) => void;
+  extractActiveAgentSnapshot: () => ActiveAgentSnapshot;
   extractActiveAgents: () => Map<string, unknown>;
   getSupportedSlashCommands: (threadId: string) => Set<string> | undefined;
 }
@@ -59,6 +61,10 @@ export function cleanupThreadState(threadId: string): void {
 
 export function extractActiveAgents(): Map<string, unknown> {
   return currentControl().extractActiveAgents();
+}
+
+export function extractActiveAgentSnapshot(): ActiveAgentSnapshot {
+  return currentControl().extractActiveAgentSnapshot();
 }
 
 export function getSupportedSlashCommands(threadId: string): Set<string> | undefined {

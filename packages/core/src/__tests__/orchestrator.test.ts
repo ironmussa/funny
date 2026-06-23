@@ -810,7 +810,22 @@ describe('AgentOrchestrator', () => {
       ).toEqual([]);
     });
 
-    test('3.6 reap is non-destructive and distinguishable from a stop', async () => {
+    test('3.6 preserves idle reaper state across extraction and adoption', async () => {
+      await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
+      factory.lastProcess.simulateMessage(result());
+
+      const snapshot = orchestrator.extractActiveAgentSnapshot();
+      const adopted = new AgentOrchestrator(factory);
+      adopted.adoptProcess('t1', snapshot.agents.get('t1')!, {
+        resultReceived: snapshot.resultReceived.has('t1'),
+        lastActivityAt: snapshot.lastActivityAt.get('t1'),
+        lastOptions: snapshot.lastOptions.get('t1'),
+      });
+
+      expect(adopted.getIdleCandidates(Date.now() + 10_001, POLICY)).toContain('t1');
+    });
+
+    test('3.7 reap is non-destructive and distinguishable from a stop', async () => {
       const events: Array<[string, unknown[]]> = [];
       orchestrator.on('agent:reaped', (...a) => events.push(['reaped', a]));
       orchestrator.on('agent:stopped', (...a) => events.push(['stopped', a]));

@@ -587,8 +587,12 @@ export class AgentLifecycleManager {
     await this.orchestrator.stopAll();
   }
 
+  extractActiveAgentSnapshot(): ReturnType<typeof this.orchestrator.extractActiveAgentSnapshot> {
+    return this.orchestrator.extractActiveAgentSnapshot();
+  }
+
   extractActiveAgents(): Map<string, any> {
-    return this.orchestrator.extractActiveAgents();
+    return this.extractActiveAgentSnapshot().agents;
   }
 
   // ── Helpers ────────────────────────────────────────────────────
@@ -614,14 +618,22 @@ export class AgentLifecycleManager {
 
   /** Adopt surviving agent processes from a previous --watch restart */
   private adoptSurvivingProcesses(): void {
-    const surviving = (globalThis as any).__funnyActiveAgents as Map<string, any> | undefined;
+    const snapshot = (globalThis as any).__funnyActiveAgentSnapshot as
+      | ReturnType<typeof this.orchestrator.extractActiveAgentSnapshot>
+      | undefined;
+    const legacySurviving = (globalThis as any).__funnyActiveAgents as Map<string, any> | undefined;
+    const surviving = snapshot?.agents ?? legacySurviving;
     if (!surviving?.size) return;
 
     let adopted = 0;
     const markInterrupted: Promise<void>[] = [];
     for (const [threadId, proc] of surviving) {
       if (!proc.exited) {
-        this.orchestrator.adoptProcess(threadId, proc);
+        this.orchestrator.adoptProcess(threadId, proc, {
+          resultReceived: snapshot?.resultReceived.has(threadId),
+          lastActivityAt: snapshot?.lastActivityAt.get(threadId),
+          lastOptions: snapshot?.lastOptions.get(threadId),
+        });
         adopted++;
       } else {
         log.info('Surviving agent already exited, marking thread interrupted', {
@@ -650,6 +662,7 @@ export class AgentLifecycleManager {
         count: adopted,
       });
     }
+    delete (globalThis as any).__funnyActiveAgentSnapshot;
     delete (globalThis as any).__funnyActiveAgents;
   }
 }

@@ -409,15 +409,26 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
 
   ensureStatusForThreads: (threads) => {
     const { statusByBranch } = get();
-    const seenBranches = new Set<string>();
+    // Collapse to ONE bulk fetch per project rather than one per thread/branch.
+    // Worktree threads each get a unique branchKey (wt:<project>:<branch>:<id>),
+    // so per-thread `fetchForThread` fan-out produces N simultaneous
+    // `GET /api/git/:threadId/status` requests, which saturate the runner→server
+    // data channel (MAX_CONCURRENT_DATA_REQUESTS) and starve the watcher/job
+    // scanners. The bulk `/git/status?projectId=` endpoint computes every
+    // thread's status server-side in a single request (shared git summaries,
+    // one identity resolve) and writes the same `statusByBranch` slice. We only
+    // hit it for a project that still has an uncovered branch, and
+    // `fetchForProject`'s own cooldown + abort-dedup collapses repeat calls.
+    const projectsNeedingFetch = new Set<string>();
     for (const thread of threads) {
       // Skip scratch threads — they have no git working tree.
       if (isScratch(thread as any)) continue;
+      if (!thread.projectId) continue;
       const bk = branchKey(thread);
-      if (!statusByBranch[bk] && !seenBranches.has(bk)) {
-        seenBranches.add(bk);
-        get().fetchForThread(thread.id);
-      }
+      if (!statusByBranch[bk]) projectsNeedingFetch.add(thread.projectId);
+    }
+    for (const projectId of projectsNeedingFetch) {
+      get().fetchForProject(projectId);
     }
   },
 

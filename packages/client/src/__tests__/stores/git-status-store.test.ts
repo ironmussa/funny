@@ -581,14 +581,17 @@ describe('GitStatusStore', () => {
 
   // ── 8. ensureStatusForThreads ─────────────────────────────
   describe('ensureStatusForThreads', () => {
-    test('fetches only threads whose branchKey is missing', async () => {
+    test('issues one bulk per-project fetch when a branchKey is missing', async () => {
+      // Worktree threads each get a unique branchKey, so per-thread fan-out
+      // would flood the data channel. ensureStatusForThreads collapses to a
+      // single bulk `/git/status?projectId=` request per project instead.
       useGitStatusStore.setState({
         statusByBranch: {
           'p1:main': makeStatus({ threadId: 't1', branchKey: 'p1:main' }),
         },
       });
-      mockApi.getGitStatus.mockReturnValue(
-        okAsync(makeStatus({ threadId: 't2', branchKey: 'p1:feat' })) as any,
+      mockApi.getGitStatuses.mockReturnValue(
+        okAsync({ statuses: [makeStatus({ threadId: 't2', branchKey: 'p1:feat' })] }) as any,
       );
 
       useGitStatusStore.getState().ensureStatusForThreads([
@@ -597,13 +600,31 @@ describe('GitStatusStore', () => {
       ]);
 
       await vi.waitFor(() => {
-        expect(mockApi.getGitStatus).toHaveBeenCalledTimes(1);
+        expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(1);
       });
-      expect(mockApi.getGitStatus).toHaveBeenCalledWith('t2', expect.any(AbortSignal));
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
+      // The per-thread endpoint must NOT be used by the sidebar batch path.
+      expect(mockApi.getGitStatus).not.toHaveBeenCalled();
+    });
+
+    test('fetches each distinct project at most once', async () => {
+      mockApi.getGitStatuses.mockReturnValue(okAsync({ statuses: [] }) as any);
+
+      useGitStatusStore.getState().ensureStatusForThreads([
+        { id: 'a1', projectId: 'p1', mode: 'worktree', branch: 'feat-a', worktreePath: '/wt/a' },
+        { id: 'a2', projectId: 'p1', mode: 'worktree', branch: 'feat-b', worktreePath: '/wt/b' },
+        { id: 'b1', projectId: 'p2', mode: 'worktree', branch: 'feat-c', worktreePath: '/wt/c' },
+      ]);
+
+      await vi.waitFor(() => {
+        expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(2);
+      });
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p2', expect.any(AbortSignal));
     });
 
     test('skips scratch threads', () => {
-      const fetchSpy = vi.spyOn(useGitStatusStore.getState(), 'fetchForThread');
+      const fetchSpy = vi.spyOn(useGitStatusStore.getState(), 'fetchForProject');
 
       useGitStatusStore
         .getState()

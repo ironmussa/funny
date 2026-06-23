@@ -600,6 +600,44 @@ describe('MessageStream sticky bottom', () => {
     expect(memoizedMessageListLifecycle.captureScrollAnchorCalls).toBe(1);
   });
 
+  test('loads older pages near the top even if virtual rows still report hidden items', () => {
+    const scrollHeight = 1000;
+    const loadOlder = vi.fn();
+    memoizedMessageListLifecycle.hasHiddenItems = true;
+
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          loadingMore: false,
+          load: loadOlder,
+          total: 100,
+          windowStart: 20,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 300;
+      viewport.dispatchEvent(new Event('scroll'));
+      viewport.scrollTop = 100;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    expect(memoizedMessageListLifecycle.captureScrollAnchorCalls).toBe(1);
+  });
+
   test('loads newer pages when scrolling near the bottom of the loaded window', () => {
     const scrollHeight = 1200;
     const loadNewer = vi.fn();

@@ -107,7 +107,14 @@ export function EditFileCard({
   const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);
   const diffSlotRef = useRef<HTMLDivElement | null>(null);
 
+  // `snippetBaseLine` only feeds the rendered diff (computeUnifiedDiff /
+  // baseLine prop), which itself is gated behind `diffMounted`. Reading the
+  // file on mount for *every* card floods `/files/read` when a transcript has
+  // hundreds of Edit/Write cards (e.g. an imported Claude Code session). Gate
+  // the read on `diffMounted` so only cards whose diff is actually on-screen
+  // fetch the file.
   useEffect(() => {
+    if (!diffMounted) return;
     if (!filePath || newString == null) return;
     let cancelled = false;
     api.readFile(filePath).then((result) => {
@@ -121,7 +128,7 @@ export function EditFileCard({
     return () => {
       cancelled = true;
     };
-  }, [filePath, newString]);
+  }, [diffMounted, filePath, newString]);
 
   useEffect(() => {
     if (!expanded || diffMounted) return;

@@ -21,6 +21,8 @@ mock.module('../../services/ws-relay.js', () => ({
   removeRunnerClient: () => {},
   isRunnerConnected: () => false,
   relayToUser: () => {},
+  relayToThreadViewers: () => {},
+  evictUserFromThread: () => {},
   broadcast: () => {},
   sendToRunner: () => false,
   forwardBrowserMessageToRunner: () => {},
@@ -271,6 +273,88 @@ describe('Settings & Profile Routes (Integration)', () => {
       const res2 = await t.requestAs('user-2').get('/api/profile');
       expect((await res1.json()).gitName).toBe('User 1');
       expect((await res2.json()).gitName).toBe('User 2');
+    });
+  });
+
+  // ── Agent Execution Profiles ───────────────────────────
+
+  describe('Agent execution profile settings', () => {
+    async function createProject(id: string, userId: string) {
+      await t.db.insert(t.schema.projects).values({
+        id,
+        name: `Project ${id}`,
+        path: `/tmp/${id}`,
+        userId,
+        sortOrder: 0,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    test('creates and lists profiles scoped to the current user', async () => {
+      const createRes = await t.requestAs('user-1').post('/api/settings/agent-profiles', {
+        name: 'Work Claude',
+        provider: 'claude',
+        config: { claude: { configDir: '/home/user-1/.claude-work' } },
+      });
+      expect(createRes.status).toBe(201);
+      const profile = await createRes.json();
+      expect(profile.name).toBe('Work Claude');
+      expect(profile.config.claude.configDir).toBe('/home/user-1/.claude-work');
+
+      const listRes = await t.requestAs('user-1').get('/api/settings/agent-profiles');
+      expect(listRes.status).toBe(200);
+      expect((await listRes.json()).profiles).toHaveLength(1);
+
+      const otherUserRes = await t.requestAs('user-2').get('/api/settings/agent-profiles');
+      expect((await otherUserRes.json()).profiles).toHaveLength(0);
+    });
+
+    test('sets, reads, and clears a project binding', async () => {
+      await createProject('project-1', 'user-1');
+      const createRes = await t.requestAs('user-1').post('/api/settings/agent-profiles', {
+        name: 'Client Claude',
+        provider: 'claude',
+        config: { claude: { configDir: '/home/user-1/.claude-client' } },
+      });
+      const profile = await createRes.json();
+
+      const setRes = await t
+        .requestAs('user-1')
+        .put('/api/settings/agent-profiles/projects/project-1', {
+          profileId: profile.id,
+        });
+      expect(setRes.status).toBe(200);
+      expect((await setRes.json()).profile.id).toBe(profile.id);
+
+      const getRes = await t
+        .requestAs('user-1')
+        .get('/api/settings/agent-profiles/projects/project-1');
+      expect((await getRes.json()).profile.name).toBe('Client Claude');
+
+      const clearRes = await t
+        .requestAs('user-1')
+        .put('/api/settings/agent-profiles/projects/project-1', {
+          profileId: null,
+        });
+      expect(clearRes.status).toBe(200);
+      expect((await clearRes.json()).profile).toBeNull();
+    });
+
+    test('rejects binding another user profile', async () => {
+      await createProject('project-2', 'user-1');
+      const createRes = await t.requestAs('user-2').post('/api/settings/agent-profiles', {
+        name: 'Other Claude',
+        provider: 'claude',
+        config: { claude: { configDir: '/home/user-2/.claude' } },
+      });
+      const profile = await createRes.json();
+
+      const setRes = await t
+        .requestAs('user-1')
+        .put('/api/settings/agent-profiles/projects/project-2', {
+          profileId: profile.id,
+        });
+      expect(setRes.status).toBe(404);
     });
   });
 

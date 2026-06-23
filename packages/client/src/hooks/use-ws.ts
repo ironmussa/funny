@@ -8,6 +8,7 @@ import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import type { ThreadState } from '@/stores/thread-state';
 import { useThreadStore } from '@/stores/thread-store';
 
 import {
@@ -207,6 +208,49 @@ export function shouldResyncThreadsOnConnect(isReconnect: boolean, pathname: str
   return isReconnect && routeNeedsThreadResync(pathname);
 }
 
+const ACTIVE_SIDEBAR_STATUSES = new Set(['setting_up', 'pending', 'running', 'waiting']);
+
+type SidebarResyncTargets = {
+  projectIds: string[];
+  scratch: boolean;
+  shared: boolean;
+};
+
+export function getLoadedSidebarResyncTargets(
+  state: Pick<
+    ThreadState,
+    'threadIdsByProject' | 'threadsById' | 'scratchThreadIds' | 'sharedThreadIds'
+  >,
+): SidebarResyncTargets {
+  const projectIds: string[] = [];
+
+  for (const [projectId, threadIds] of Object.entries(state.threadIdsByProject)) {
+    const hasActiveThread = threadIds.some((id) =>
+      ACTIVE_SIDEBAR_STATUSES.has(state.threadsById[id]?.status),
+    );
+    if (hasActiveThread) projectIds.push(projectId);
+  }
+
+  return {
+    projectIds,
+    scratch: state.scratchThreadIds.some((id) =>
+      ACTIVE_SIDEBAR_STATUSES.has(state.threadsById[id]?.status),
+    ),
+    shared: state.sharedThreadIds.some((id) =>
+      ACTIVE_SIDEBAR_STATUSES.has(state.threadsById[id]?.status),
+    ),
+  };
+}
+
+function refreshLoadedSidebarRowsForActiveThreads(store: ThreadState) {
+  const targets = getLoadedSidebarResyncTargets(store);
+  for (const projectId of targets.projectIds) {
+    void store.loadThreadsForProject(projectId);
+  }
+  if (targets.scratch) void store.loadScratchThreads();
+  if (targets.shared) void store.loadSharedThreads();
+}
+
 function resyncOnFocus(reason: 'visibility' | 'focus') {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   if (!activeSocket?.connected) return;
@@ -224,9 +268,10 @@ function resyncOnFocus(reason: 'visibility' | 'focus') {
   // kanban, grid, analytics) where every loaded project's status matters.
   const store = useThreadStore.getState();
   if (store.activeThread) {
-    store.refreshActiveThread();
+    void store.refreshActiveThread();
+    refreshLoadedSidebarRowsForActiveThreads(store);
   } else {
-    store.refreshAllLoadedThreads();
+    void store.refreshAllLoadedThreads();
   }
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldResyncThreadsOnConnect } from '@/hooks/use-ws';
+import { getLoadedSidebarResyncTargets, shouldResyncThreadsOnConnect } from '@/hooks/use-ws';
 
 /**
  * Regression: opening a heavy thread (megabytes of inline base64 images) showed
@@ -24,5 +24,31 @@ describe('shouldResyncThreadsOnConnect', () => {
     expect(shouldResyncThreadsOnConnect(true, '/settings/profile')).toBe(false);
     expect(shouldResyncThreadsOnConnect(true, '/preferences/appearance')).toBe(false);
     expect(shouldResyncThreadsOnConnect(false, '/settings/profile')).toBe(false);
+  });
+});
+
+describe('getLoadedSidebarResyncTargets', () => {
+  it('selects only loaded sidebar buckets that still contain active threads', () => {
+    const state = {
+      threadIdsByProject: {
+        p1: ['running-project-thread', 'completed-project-thread'],
+        p2: ['completed-other-project-thread'],
+      },
+      scratchThreadIds: ['waiting-scratch-thread'],
+      sharedThreadIds: ['completed-shared-thread'],
+      threadsById: {
+        'running-project-thread': { status: 'running' },
+        'completed-project-thread': { status: 'completed' },
+        'completed-other-project-thread': { status: 'completed' },
+        'waiting-scratch-thread': { status: 'waiting' },
+        'completed-shared-thread': { status: 'completed' },
+      },
+    };
+
+    expect(getLoadedSidebarResyncTargets(state as any)).toEqual({
+      projectIds: ['p1'],
+      scratch: true,
+      shared: false,
+    });
   });
 });

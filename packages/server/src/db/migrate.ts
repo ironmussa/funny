@@ -873,8 +873,16 @@ const migrations: Migration[] = [
         { table: 'account', from: '"accessToken"', to: 'access_token' },
         { table: 'account', from: '"refreshToken"', to: 'refresh_token' },
         { table: 'account', from: '"idToken"', to: 'id_token' },
-        { table: 'account', from: '"accessTokenExpiresAt"', to: 'access_token_expires_at' },
-        { table: 'account', from: '"refreshTokenExpiresAt"', to: 'refresh_token_expires_at' },
+        {
+          table: 'account',
+          from: '"accessTokenExpiresAt"',
+          to: 'access_token_expires_at',
+        },
+        {
+          table: 'account',
+          from: '"refreshTokenExpiresAt"',
+          to: 'refresh_token_expires_at',
+        },
         { table: 'account', from: '"createdAt"', to: 'created_at' },
         { table: 'account', from: '"updatedAt"', to: 'updated_at' },
         // verification table
@@ -888,7 +896,11 @@ const migrations: Migration[] = [
         { table: 'member', from: '"userId"', to: 'user_id' },
         { table: 'member', from: '"createdAt"', to: 'created_at' },
         // invitation table
-        { table: 'invitation', from: '"organizationId"', to: 'organization_id' },
+        {
+          table: 'invitation',
+          from: '"organizationId"',
+          to: 'organization_id',
+        },
         { table: 'invitation', from: '"expiresAt"', to: 'expires_at' },
         { table: 'invitation', from: '"inviterId"', to: 'inviter_id' },
       ];
@@ -1491,6 +1503,46 @@ const migrations: Migration[] = [
     name: '071_threads_init_slash_commands',
     async up() {
       await ctx().addColumn('threads', 'init_slash_commands', 'TEXT');
+    },
+  },
+  {
+    // User-scoped agent execution profiles. Today this stores Claude config
+    // directory overrides and project bindings; the thread snapshot columns
+    // preserve which profile was used after a binding changes or is deleted.
+    name: '072_agent_execution_profiles',
+    async up() {
+      await ctx().addColumn('threads', 'agent_profile_id', 'TEXT');
+      await ctx().addColumn('threads', 'agent_profile_name', 'TEXT');
+      await ctx().addColumn('threads', 'agent_profile_provider', 'TEXT');
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS agent_execution_profiles (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          config TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_agent_execution_profiles_user
+        ON agent_execution_profiles (user_id)
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_agent_profile_bindings (
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          profile_id TEXT NOT NULL REFERENCES agent_execution_profiles(id) ON DELETE CASCADE,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, user_id)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_project_agent_profile_bindings_profile
+        ON project_agent_profile_bindings (profile_id)
+      `);
     },
   },
 ];

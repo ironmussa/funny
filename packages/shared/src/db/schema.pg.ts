@@ -120,6 +120,9 @@ export const threads = pgTable('threads', {
   runnerId: text('runner_id'),
   mergedAt: text('merged_at'),
   contextRecoveryReason: text('context_recovery_reason'),
+  agentProfileId: text('agent_profile_id'),
+  agentProfileName: text('agent_profile_name'),
+  agentProfileProvider: text('agent_profile_provider'),
   agentTemplateId: text('agent_template_id'), // agent template used (Deep Agent only)
   templateVariables: text('template_variables'), // JSON: filled variable values
   fileCheckpointingEnabled: integer('file_checkpointing_enabled').notNull().default(0),
@@ -478,6 +481,32 @@ export const permissionRules = pgTable('permission_rules', {
   decision: text('decision').notNull(),
   createdAt: text('created_at').notNull(),
 });
+
+export const agentExecutionProfiles = pgTable('agent_execution_profiles', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  provider: text('provider').notNull(),
+  config: text('config').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const projectAgentProfileBindings = pgTable(
+  'project_agent_profile_bindings',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => agentExecutionProfiles.id, { onDelete: 'cascade' }),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
+);
 
 // ── Server-only tables (multi/team mode) ───────────────────────
 

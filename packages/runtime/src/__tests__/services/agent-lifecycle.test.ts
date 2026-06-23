@@ -58,6 +58,7 @@ const mocks = vi.hoisted(() => ({
     async (_userId?: string, _keyId?: string): Promise<string | undefined> => undefined,
   ),
   getGitIdentity: vi.fn(async (): Promise<{ name: string; email: string } | null> => null),
+  resolveEffectiveProfile: vi.fn(async () => ({ profile: null, env: {} })),
   threadEventBusEmit: vi.fn(),
   threadEventBusOn: vi.fn(),
   remoteGetAgentTemplate: vi.fn(),
@@ -107,6 +108,9 @@ vi.mock('../../services/service-registry.js', () => ({
     profile: {
       getProviderKey: mocks.getProviderKey,
       getGitIdentity: mocks.getGitIdentity,
+    },
+    agentProfiles: {
+      resolveEffectiveProfile: mocks.resolveEffectiveProfile,
     },
   }),
 }));
@@ -206,6 +210,7 @@ describe('AgentLifecycleManager', () => {
     mocks.remoteGetAgentTemplate.mockResolvedValue(undefined);
     mocks.getProviderKey.mockResolvedValue(undefined);
     mocks.findPermissionRule.mockResolvedValue(undefined);
+    mocks.resolveEffectiveProfile.mockResolvedValue({ profile: null, env: {} });
     mocks.runSensitivePathBypass.mockResolvedValue({ output: 'bypassed' });
     mocks.startSpan.mockReturnValue({
       traceId: 'trace-1',

@@ -322,18 +322,24 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         saveThreadScrollPosition(targetThreadId, viewport);
         requestAnimationFrame(() => {
           if (threadIdRef.current !== targetThreadId) return;
+          if (userHasScrolledUp.current) {
+            scrollingToBottomRef.current = false;
+            return;
+          }
           viewport.scrollTop = viewport.scrollHeight;
           rememberScrollTop(viewport);
           updateStickyMetrics(viewport);
           saveThreadScrollPosition(targetThreadId, viewport);
           requestAnimationFrame(() => {
             if (threadIdRef.current !== targetThreadId) return;
-            if (!userHasScrolledUp.current) {
-              viewport.scrollTop = viewport.scrollHeight;
-              rememberScrollTop(viewport);
-              updateStickyMetrics(viewport);
-              saveThreadScrollPosition(targetThreadId, viewport);
+            if (userHasScrolledUp.current) {
+              scrollingToBottomRef.current = false;
+              return;
             }
+            viewport.scrollTop = viewport.scrollHeight;
+            rememberScrollTop(viewport);
+            updateStickyMetrics(viewport);
+            saveThreadScrollPosition(targetThreadId, viewport);
             scrollingToBottomRef.current = false;
           });
         });
@@ -391,6 +397,9 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
       if (!scrollingToBottomRef.current) {
         userHasScrolledUp.current = promptPinned || !isAtThreadBottom;
+      } else if (isScrollingUp && !isAtThreadBottom) {
+        scrollingToBottomRef.current = false;
+        userHasScrolledUp.current = true;
       } else if (isAtThreadBottom) {
         scrollingToBottomRef.current = false;
         userHasScrolledUp.current = false;

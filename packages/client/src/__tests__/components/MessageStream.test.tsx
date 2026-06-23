@@ -278,6 +278,53 @@ describe('MessageStream sticky bottom', () => {
     expect(viewport.scrollTop).toBe(300);
   });
 
+  test('cancels pending sticky-bottom frames when the user scrolls up during streaming', () => {
+    let scrollHeight = 1000;
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="t1"
+        status="running"
+        messages={makeMessages('partial')}
+        onSend={() => {}}
+        isExternal
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 500;
+      viewport.dispatchEvent(new Event('scroll'));
+      vi.runOnlyPendingTimers();
+    });
+
+    scrollHeight = 1300;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="t1"
+        status="running"
+        messages={makeMessages('partial response with more streamed content')}
+        onSend={() => {}}
+        isExternal
+      />,
+    );
+
+    act(() => {
+      viewport.scrollTop = 600;
+      viewport.dispatchEvent(new Event('scroll'));
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(600);
+  });
+
   test('restores a bottom-pinned long thread after visiting a shorter thread', () => {
     let scrollHeight = 2000;
     const ref = createRef<MessageStreamHandle>();

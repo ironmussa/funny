@@ -202,6 +202,32 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelector('[data-virtual-row-key="m1"]')?.className).toContain('z-0');
   });
 
+  test('does not show sticky section context while the user row is already visible at the top', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 1;
+    virtualizerMockState.scrollOffset = 0;
+
+    const { getByTestId, queryByTestId } = render(<Harness messages={makeMessages(4)} />);
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() => expect(viewport.querySelector('[data-item-key="m0"]')).toBeTruthy());
+
+    expect(queryByTestId('sticky-section-context')).toBeNull();
+  });
+
+  test('shows sticky section context once the user row has scrolled past the top', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 1;
+    virtualizerMockState.scrollOffset = 4;
+
+    const { getByTestId } = render(<Harness messages={makeMessages(4)} />);
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() => expect(viewport.querySelector('[data-item-key="m0"]')).toBeTruthy());
+
+    expect(getByTestId('sticky-section-context')).toBeTruthy();
+  });
+
   test('uses leading user context when the owner row is outside the loaded window', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 2;

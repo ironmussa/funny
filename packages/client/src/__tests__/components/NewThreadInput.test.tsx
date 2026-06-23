@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { okAsync } from 'neverthrow';
 import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
@@ -12,6 +13,7 @@ import { renderWithProviders } from '../helpers/render';
 
 const mockCreateThread = vi.fn().mockResolvedValue(true);
 const mockNavigate = vi.fn();
+const mockListMcpServers = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -53,11 +55,22 @@ vi.mock('@/hooks/use-branch-switch', () => ({
   }),
 }));
 
+vi.mock('@/lib/api', async () => {
+  const { okAsync: okAsyncResult } = await import('neverthrow');
+  return {
+    api: {
+      listMcpServers: mockListMcpServers,
+      remoteUrl: vi.fn().mockReturnValue(okAsyncResult({ url: '' })),
+    },
+  };
+});
+
 vi.mock('@/components/PromptInput', () => ({
   PromptInput: (props: {
     onSubmit?: () => void;
     onWorktreeModeChange?: (value: boolean) => void;
     onContentChange?: (hasContent: boolean, text: string) => void;
+    onProviderChange?: (provider: string) => void;
     initialPrompt?: string;
     newThreadContextBar?: ReactNode;
   }) => (
@@ -83,6 +96,20 @@ vi.mock('@/components/PromptInput', () => ({
       >
         Type
       </button>
+      <button
+        type="button"
+        data-testid="mock-same-provider-model"
+        onClick={() => props.onProviderChange?.('codex')}
+      >
+        Codex model
+      </button>
+      <button
+        type="button"
+        data-testid="mock-other-provider-model"
+        onClick={() => props.onProviderChange?.('claude')}
+      >
+        Claude model
+      </button>
     </div>
   ),
 }));
@@ -90,6 +117,7 @@ vi.mock('@/components/PromptInput', () => ({
 describe('NewThreadInput', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
     useUIStore.setState({
       newThreadIsScratch: false,
       newThreadProjectId: null,
@@ -190,5 +218,36 @@ describe('NewThreadInput', () => {
     expect(screen.getByTestId('worktree-preview')).toHaveTextContent(
       'my-project/build-feature-x-xxxxxx',
     );
+  });
+
+  test('reloads available MCP servers only when the selected provider changes', async () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'My Project',
+          path: '/repo',
+          defaultMode: 'local',
+          defaultProvider: 'codex',
+        } as any,
+      ],
+      selectedProjectId: 'p1',
+    });
+
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+
+    await waitFor(() => {
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex');
+    });
+    expect(mockListMcpServers).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId('mock-same-provider-model'));
+    expect(mockListMcpServers).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId('mock-other-provider-model'));
+    await waitFor(() => {
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude');
+    });
+    expect(mockListMcpServers).toHaveBeenCalledTimes(2);
   });
 });

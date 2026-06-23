@@ -79,6 +79,7 @@ interface UsePromptInputStateArgs {
   onSubmit: SubmitFn;
   onContentChange?: (hasContent: boolean, text: string) => void;
   onWorktreeModeChange?: (enabled: boolean) => void;
+  onProviderChange?: (provider: string) => void;
   loading: boolean;
   running: boolean;
   queuedCountProp: number;
@@ -99,6 +100,7 @@ export function usePromptInputState({
   onSubmit,
   onContentChange,
   onWorktreeModeChange,
+  onProviderChange,
   loading,
   running,
   queuedCountProp,
@@ -165,7 +167,7 @@ export function usePromptInputState({
   const editorRef = useRef<PromptEditorHandle>(null);
 
   // ── Model & mode state ──
-  const [unifiedModel, setUnifiedModel] = useState<string>(`${defaultProvider}:${defaultModel}`);
+  const [unifiedModel, setUnifiedModelRaw] = useState<string>(`${defaultProvider}:${defaultModel}`);
   const [mode, setMode] = useState<string>(defaultPermissionMode);
   const [createWorktree, setCreateWorktreeRaw] = useState(defaultThreadMode === 'worktree');
   const setCreateWorktree = useCallback(
@@ -189,6 +191,16 @@ export function usePromptInputState({
   const { provider: currentProvider, model: currentModel } = useMemo(
     () => parseUnifiedModel(unifiedModel),
     [unifiedModel],
+  );
+  const setUnifiedModel = useCallback(
+    (nextUnifiedModel: string) => {
+      const nextProvider = parseUnifiedModel(nextUnifiedModel).provider;
+      if (nextProvider !== currentProvider) {
+        onProviderChange?.(nextProvider);
+      }
+      setUnifiedModelRaw(nextUnifiedModel);
+    },
+    [currentProvider, onProviderChange],
   );
   const effortOptions = useMemo(
     () => getEffortLevels(currentModel, currentProvider),
@@ -349,9 +361,9 @@ export function usePromptInputState({
 
   useEffect(() => {
     if (!isNewThread && activeThreadProvider && activeThreadModel) {
-      setUnifiedModel(`${activeThreadProvider}:${activeThreadModel}`);
+      setUnifiedModelRaw(`${activeThreadProvider}:${activeThreadModel}`);
     } else if (isNewThread) {
-      setUnifiedModel(`${defaultProvider}:${defaultModel}`);
+      setUnifiedModelRaw(`${defaultProvider}:${defaultModel}`);
     }
   }, [isNewThread, activeThreadProvider, activeThreadModel, defaultProvider, defaultModel]);
 

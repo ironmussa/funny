@@ -33,6 +33,8 @@ interface PromptInputProps {
   onContentChange?: (hasContent: boolean, text: string) => void;
   /** Called when the worktree mode toggle changes */
   onWorktreeModeChange?: (enabled: boolean) => void;
+  /** Called when the selected model's provider changes */
+  onProviderChange?: (provider: string) => void;
   /** Override thread data (for live columns where the thread is not the activeThread) */
   threadOverride?: ThreadOverride;
 }
@@ -56,6 +58,7 @@ export const PromptInput = memo(function PromptInput({
   setPromptRef,
   onContentChange,
   onWorktreeModeChange,
+  onProviderChange,
   threadOverride,
 }: PromptInputProps) {
   const state = usePromptInputState({
@@ -70,6 +73,7 @@ export const PromptInput = memo(function PromptInput({
     propProjectId,
     initialPromptProp,
     threadOverride,
+    onProviderChange,
   });
 
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);

@@ -941,7 +941,7 @@ function GraphToolbar({
  * the tree is dirty; clicking it jumps to the Changes tab. Draws a hollow dashed
  * node in HEAD's lane with a dashed connector heading down toward the tip.
  */
-function GraphWipRow({
+export function GraphWipRow({
   status,
   firstRow,
   laneCount,
@@ -966,7 +966,7 @@ function GraphWipRow({
       type="button"
       onClick={() => setReviewSubTab('changes')}
       style={{ height: rowHeight }}
-      className="border-sidebar-border/60 hover:bg-accent/50 flex w-full shrink-0 cursor-pointer items-center gap-2 overflow-hidden border-b pr-2 pl-3 text-left transition-colors"
+      className="hover:bg-accent/50 flex w-full shrink-0 cursor-pointer items-center gap-2 overflow-hidden pr-2 pl-3 text-left transition-colors"
       data-testid="graph-wip-row"
     >
       <div style={{ width: gutterWidth }} className="shrink-0 self-stretch">
@@ -1330,7 +1330,7 @@ function GraphCommitRow({
                   prNumber={pr.number}
                   prState={pr.state}
                   prUrl={pr.url}
-                  size="xxs"
+                  size="compact"
                   className="ml-1"
                   data-testid={`graph-pr-badge-${pr.number}`}
                 />

@@ -65,15 +65,17 @@ export interface PowerlineBarProps {
 
 const sizeConfig = {
   sm: {
-    arrow: 8,
-    padding: 'px-1.5 py-px',
-    text: 'text-[10px] leading-tight',
+    arrow: 6,
+    height: 'h-[15px]',
+    padding: 'px-1.5 py-0',
+    text: 'text-[10px] leading-[15px]',
     icon: ICON_SIZE['2xs'],
   },
   md: {
     arrow: 10,
+    height: 'min-h-6',
     padding: 'px-2 py-0.5',
-    text: 'text-[11px] leading-tight',
+    text: 'text-[11px] leading-4',
     icon: ICON_SIZE.xs,
   },
 } as const;
@@ -232,6 +234,7 @@ export function PowerlineBar({
                   <div
                     className={cn(
                       'group/seg inline-flex items-center gap-0.5 min-w-0 rounded-full',
+                      config.height,
                       config.padding,
                       copyable && 'cursor-pointer',
                     )}
@@ -270,6 +273,7 @@ export function PowerlineBar({
                   <div
                     className={cn(
                       'inline-flex items-center gap-0.5 min-w-0 w-full',
+                      config.height,
                       config.padding,
                       isFirst && 'rounded-l-sm',
                     )}

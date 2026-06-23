@@ -18,4 +18,10 @@ describe('PRBadge', () => {
     expect(screen.getByTestId(`pr-badge-${state}`)).toHaveClass(bgClass);
     expect(screen.getByTestId(`pr-badge-${state}`)).toHaveClass(textClass);
   });
+
+  test('supports a 15px compact size for powerline rows', () => {
+    renderWithProviders(<PRBadge prNumber={31} size="compact" data-testid="pr-badge-compact" />);
+
+    expect(screen.getByTestId('pr-badge-compact')).toHaveClass('h-[15px]');
+  });
 });

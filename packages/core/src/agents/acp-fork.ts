@@ -17,6 +17,8 @@ import { Readable, Writable } from 'stream';
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 import { getManifest, type KnownAcpProvider } from '@funny/shared/provider-manifests';
 
+import { killProcessTree } from './base-process.js';
+
 type AcpProvider = KnownAcpProvider;
 
 /** Resolve the CLI command + args for an ACP provider from its manifest. */
@@ -85,6 +87,9 @@ export async function forkAcpSession(
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
     shell: process.platform === 'win32',
+    // Fork probing is short-lived, but the ACP CLI may spawn helpers. Put it
+    // in its own process group so cleanup can reap descendants too.
+    detached: process.platform !== 'win32',
   });
 
   // Drain stderr so the child doesn't block on a full pipe buffer.
@@ -120,7 +125,7 @@ export async function forkAcpSession(
   );
 
   const cleanup = () => {
-    if (!child.killed) child.kill('SIGTERM');
+    killProcessTree(child);
   };
 
   try {

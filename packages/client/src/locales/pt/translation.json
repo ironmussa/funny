@@ -612,7 +612,27 @@
     "manualToken": "Token Manual",
     "tokenPlaceholder": "Cole seu token aqui",
     "confirmRemoveTitle": "Remover Servidor MCP",
-    "confirmRemoveDescription": "Tem certeza de que deseja remover \"{{name}}\"? Esta acao nao pode ser desfeita."
+    "confirmRemoveDescription": "Tem certeza de que deseja remover \"{{name}}\"? Esta acao nao pode ser desfeita.",
+    "tooltip": {
+      "transport": "Transporte",
+      "scope": "Escopo",
+      "endpoint": "Endpoint",
+      "command": "Comando",
+      "status": "Estado"
+    },
+    "transport": {
+      "stdio": "Comando local",
+      "http": "HTTP remoto",
+      "sse": "SSE streaming"
+    },
+    "source": {
+      "project": "Projeto",
+      "user": "Usuario",
+      "unknown": "Desconhecido"
+    },
+    "status": {
+      "ready": "Pronto"
+    }
   },
   "tools": {
     "readFile": "Ler Arquivo",

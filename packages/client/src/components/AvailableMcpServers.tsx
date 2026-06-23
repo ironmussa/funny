@@ -25,6 +25,23 @@ function mcpSettingsPath(projectId?: string): string {
     : buildPath('/settings/mcp-server');
 }
 
+const MCP_TRANSPORT_FALLBACK: Record<McpServer['type'], string> = {
+  stdio: 'Local command',
+  http: 'Remote HTTP',
+  sse: 'Streaming SSE',
+};
+
+const MCP_SOURCE_FALLBACK: Record<NonNullable<McpServer['source']>, string> = {
+  project: 'Project',
+  user: 'User',
+};
+
+function getMcpEndpoint(server: McpServer): string | null {
+  if (server.url) return server.url;
+  if (server.command) return [server.command, ...(server.args ?? [])].join(' ');
+  return null;
+}
+
 export function AvailableMcpServers({
   projectPath,
   projectId,
@@ -84,6 +101,15 @@ export function AvailableMcpServers({
       ) : (
         visibleServers.map((server) => {
           const needsAuth = server.status === 'needs_auth';
+          const endpoint = getMcpEndpoint(server);
+          const transportLabel = t(
+            `mcp.transport.${server.type}`,
+            MCP_TRANSPORT_FALLBACK[server.type],
+          );
+          const sourceLabel = server.source
+            ? t(`mcp.source.${server.source}`, MCP_SOURCE_FALLBACK[server.source])
+            : t('mcp.source.unknown', 'Unknown');
+          const statusLabel = needsAuth ? t('mcp.needsAuth') : t('mcp.status.ready', 'Ready');
 
           return (
             <Tooltip key={server.name}>
@@ -93,19 +119,48 @@ export function AvailableMcpServers({
                   size="xs"
                   data-testid={`available-mcp-${server.name}`}
                   aria-label={needsAuth ? `${server.name}: ${t('mcp.needsAuth')}` : server.name}
-                  className={cn(needsAuth && 'border-amber-500/40 bg-amber-500/10 text-amber-300')}
+                  className={cn(needsAuth && 'border-amber-500/50 bg-amber-500/10 text-amber-300')}
                 >
                   {needsAuth && <ShieldAlert aria-hidden="true" />}
                   {server.name}
                 </Badge>
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs">
-                <p className="font-mono text-xs">{server.type}</p>
-                {server.source && <p className="text-muted-foreground">{server.source}</p>}
+              <TooltipContent side="bottom" align="start" className="w-72 p-3 text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 truncate font-medium text-gray-950">{server.name}</p>
+                  <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] leading-none text-gray-600 uppercase">
+                    {server.type}
+                  </span>
+                </div>
+                <dl className="mt-2 space-y-1.5">
+                  <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
+                    <dt className="text-gray-500">{t('mcp.tooltip.transport', 'Transport')}</dt>
+                    <dd className="truncate text-gray-900">{transportLabel}</dd>
+                  </div>
+                  <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
+                    <dt className="text-gray-500">{t('mcp.tooltip.scope', 'Scope')}</dt>
+                    <dd className="truncate text-gray-900">{sourceLabel}</dd>
+                  </div>
+                  {endpoint && (
+                    <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
+                      <dt className="text-gray-500">
+                        {server.url
+                          ? t('mcp.tooltip.endpoint', 'Endpoint')
+                          : t('mcp.tooltip.command', 'Command')}
+                      </dt>
+                      <dd className="truncate font-mono text-[11px] text-gray-900">{endpoint}</dd>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
+                    <dt className="text-gray-500">{t('mcp.tooltip.status', 'Status')}</dt>
+                    <dd className={cn('truncate text-gray-900', needsAuth && 'text-amber-700')}>
+                      {statusLabel}
+                    </dd>
+                  </div>
+                </dl>
                 {needsAuth && (
-                  <div className="mt-1 space-y-0.5">
-                    <p className="text-amber-300">{t('mcp.needsAuth')}</p>
-                    <p className="text-muted-foreground">{t('mcp.authHint')}</p>
+                  <div className="mt-2 rounded border border-amber-500/30 bg-amber-50 px-2 py-1.5">
+                    <p className="text-amber-800">{t('mcp.authHint')}</p>
                   </div>
                 )}
               </TooltipContent>

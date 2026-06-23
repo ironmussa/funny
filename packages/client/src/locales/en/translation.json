@@ -615,7 +615,27 @@
     "manualToken": "Manual Token",
     "tokenPlaceholder": "Paste your bearer token here",
     "confirmRemoveTitle": "Remove MCP Server",
-    "confirmRemoveDescription": "Are you sure you want to remove \"{{name}}\"? This action cannot be undone."
+    "confirmRemoveDescription": "Are you sure you want to remove \"{{name}}\"? This action cannot be undone.",
+    "tooltip": {
+      "transport": "Transport",
+      "scope": "Scope",
+      "endpoint": "Endpoint",
+      "command": "Command",
+      "status": "Status"
+    },
+    "transport": {
+      "stdio": "Local command",
+      "http": "Remote HTTP",
+      "sse": "Streaming SSE"
+    },
+    "source": {
+      "project": "Project",
+      "user": "User",
+      "unknown": "Unknown"
+    },
+    "status": {
+      "ready": "Ready"
+    }
   },
   "tools": {
     "readFile": "Read File",

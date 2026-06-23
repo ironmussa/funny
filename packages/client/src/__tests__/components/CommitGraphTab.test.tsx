@@ -5,6 +5,7 @@ import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import {
   GraphCommitSyncMarkers,
   GraphCommitTime,
+  GraphWipRow,
   renderedGraphLaneCount,
 } from '@/components/CommitGraphTab';
 import {
@@ -79,6 +80,31 @@ describe('renderedGraphLaneCount', () => {
   test('reserves every computed lane instead of capping the graph gutter', () => {
     expect(renderedGraphLaneCount(18)).toBe(18);
     expect(renderedGraphLaneCount(0)).toBe(1);
+  });
+});
+
+describe('GraphWipRow', () => {
+  test('does not draw a separator before the first commit row', () => {
+    renderWithProviders(
+      <GraphWipRow
+        status={{
+          state: 'dirty',
+          linesAdded: 2,
+          linesDeleted: 0,
+          dirtyFileCount: 1,
+          unpushedCommitCount: 0,
+          unpulledCommitCount: 0,
+          hasRemoteBranch: true,
+          isMergedIntoBase: false,
+        }}
+        firstRow={{ commitLane: 0, nodeColor: 0, segments: [] }}
+        laneCount={1}
+        gutterWidth={16}
+        rowHeight={48}
+      />,
+    );
+
+    expect(screen.getByTestId('graph-wip-row')).not.toHaveClass('border-b');
   });
 });
 

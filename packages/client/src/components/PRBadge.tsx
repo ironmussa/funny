@@ -8,8 +8,8 @@ export interface PRBadgeProps {
   prNumber: number;
   prState?: 'OPEN' | 'MERGED' | 'CLOSED';
   prUrl?: string;
-  /** "sm" for large displays, "xs" for sidebar thread items, "xxs" for compact headers */
-  size?: 'sm' | 'xs' | 'xxs';
+  /** "sm" for large displays, "xs" for lists, "compact" for powerline rows, "xxs" for compact headers */
+  size?: 'sm' | 'xs' | 'compact' | 'xxs';
   showExternalIcon?: boolean;
   className?: string;
   'data-testid'?: string;
@@ -23,6 +23,10 @@ const SIZE_CLASS = {
   xs: {
     badge: 'h-5 px-1.5 text-xs',
     icon: 'h-3 w-3',
+  },
+  compact: {
+    badge: 'h-[15px] px-1 text-[10px]',
+    icon: 'h-2.5 w-2.5',
   },
   xxs: {
     badge: 'h-4 px-1 text-[10px]',

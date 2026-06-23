@@ -416,8 +416,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         scrollTop < LOAD_MORE_THRESHOLD_PX &&
         (isScrollingUp || scrollTop <= 1) &&
         hasMore &&
-        !loadingMore &&
-        !messageListRef.current?.hasHiddenItems()
+        !loadingMore
       ) {
         messageListRef.current?.captureScrollAnchor();
         pagination.load();

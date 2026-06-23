@@ -256,19 +256,19 @@ describe('MemoizedMessageList virtualization', () => {
     expect(queryByTestId('sticky-section-context')).toBeNull();
   });
 
-  test('does not show previous sticky context when a later user row is visible', async () => {
+  test('shows sticky context for the first visible section when a later user row is visible', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 4;
     virtualizerMockState.scrollOffset = 130;
 
-    const { getByTestId, queryByTestId } = render(
-      <Harness messages={makeMessages(6)} viewportHeight={240} />,
-    );
+    const { getByTestId } = render(<Harness messages={makeMessages(6)} viewportHeight={240} />);
     const viewport = getByTestId('viewport');
 
     await waitFor(() => expect(viewport.querySelector('[data-item-key="m2"]')).toBeTruthy());
 
-    expect(queryByTestId('sticky-section-context')).toBeNull();
+    expect(getByTestId('sticky-section-context')).toBeTruthy();
+    expect(viewport.querySelectorAll('[data-testid="user-message-m0"]')).toHaveLength(2);
+    expect(viewport.querySelector('[data-item-key="m2"]')).toBeTruthy();
   });
 
   test('uses leading user context when the owner row is outside the loaded window', async () => {

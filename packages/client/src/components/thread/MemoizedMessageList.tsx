@@ -384,7 +384,6 @@ export const MemoizedMessageList = memo(
     const itemContainerRef = useRef<HTMLDivElement>(null);
     const stickySectionContentRef = useRef<HTMLDivElement>(null);
     const [listScrollMargin, setListScrollMargin] = useState(0);
-    const [viewportHeight, setViewportHeight] = useState(0);
     const [measuredLeadingStickyHeight, setMeasuredLeadingStickyHeight] = useState(0);
 
     const measureListScrollMargin = useCallback(() => {
@@ -402,16 +401,10 @@ export const MemoizedMessageList = memo(
       setListScrollMargin((prev) => (Math.abs(prev - next) > 1 ? next : prev));
     }, [measureListScrollMargin]);
     const updateListScrollMarginEvent = useEffectEvent(updateListScrollMargin);
-    const updateViewportHeight = useCallback(() => {
-      const next = scrollRef.current?.clientHeight ?? 0;
-      setViewportHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev));
-    }, [scrollRef]);
-    const updateViewportHeightEvent = useEffectEvent(updateViewportHeight);
 
     useLayoutEffect(() => {
       updateListScrollMargin();
-      updateViewportHeight();
-    }, [updateListScrollMargin, updateViewportHeight]);
+    }, [updateListScrollMargin]);
 
     useEffect(() => {
       const viewport = scrollRef.current;
@@ -425,7 +418,6 @@ export const MemoizedMessageList = memo(
         rafId = requestAnimationFrame(() => {
           rafId = null;
           updateListScrollMarginEvent();
-          updateViewportHeightEvent();
         });
       };
 
@@ -789,20 +781,7 @@ export const MemoizedMessageList = memo(
     const firstVisibleRow = firstVisibleVirtualItem
       ? virtualRows[firstVisibleVirtualItem.index]
       : undefined;
-    const hasVisibleUserRow =
-      viewportHeight > 0 &&
-      visibleVirtualItems.some((virtualItem) => {
-        if (
-          virtualItem.end <= stickyScrollOffset ||
-          virtualItem.start >= stickyScrollOffset + viewportHeight
-        ) {
-          return false;
-        }
-        const row = virtualRows[virtualItem.index];
-        return row?.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
-      });
     const hiddenSectionUserItem = useMemo(() => {
-      if (hasVisibleUserRow) return null;
       if (!firstVisibleRow || !firstVisibleVirtualItem) return null;
       if (firstVisibleRow.type === 'session-summary') return firstVisibleRow.userItem;
       if (firstVisibleRow.item.type === 'message' && firstVisibleRow.item.msg.role === 'user') {
@@ -814,13 +793,7 @@ export const MemoizedMessageList = memo(
         findNearestPrecedingUserMessageItem(groupedItems, firstVisibleRow.itemIndex) ??
         leadingUserItem
       );
-    }, [
-      firstVisibleRow,
-      firstVisibleVirtualItem,
-      groupedItems,
-      hasVisibleUserRow,
-      leadingUserItem,
-    ]);
+    }, [firstVisibleRow, firstVisibleVirtualItem, groupedItems, leadingUserItem]);
 
     useLayoutEffect(() => {
       if (!shouldReserveLeadingStickySpace) {

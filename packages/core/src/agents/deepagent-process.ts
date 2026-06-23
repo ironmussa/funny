@@ -29,6 +29,8 @@ import { inferACPToolName, buildACPToolInput, extractACPToolOutput } from './acp
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import type { CLIMessage } from './types.js';
 
+type Uuid = `${string}-${string}-${string}-${string}-${string}`;
+
 // Lazy-loaded SDK types (avoid crash if not installed)
 type ACPSDK = typeof import('@agentclientprotocol/sdk');
 type ACPClient = import('@agentclientprotocol/sdk').Client;
@@ -244,7 +246,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
     let totalCost = 0;
 
     // Current assistant message ID — rotated after each tool call
-    let assistantMsgId = randomUUID();
+    let assistantMsgId = randomUUID() as Uuid;
 
     // Accumulate text chunks so we emit the full content, not just deltas
     let accumulatedText = '';
@@ -400,11 +402,11 @@ export class DeepAgentProcess extends BaseAgentProcess {
    */
   private translateUpdate(
     update: ACPSessionUpdate,
-    assistantMsgId: string,
+    assistantMsgId: Uuid,
     toolCallsSeen: Map<string, string>,
     accumulatedText: string,
-  ): { text: string; msgId: string } {
-    const ret = (text: string, msgId?: string) => ({ text, msgId: msgId ?? assistantMsgId });
+  ): { text: string; msgId: Uuid } {
+    const ret = (text: string, msgId?: Uuid) => ({ text, msgId: msgId ?? assistantMsgId });
 
     // Log non-streaming ACP update types at debug level (skip noise like available_commands_update)
     if (
@@ -424,7 +426,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         // After tool calls, start a new message so new text doesn't merge
         // with the tool-call parent message from the previous turn.
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID();
+          assistantMsgId = randomUUID() as Uuid;
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -501,7 +503,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       case 'agent_thought_chunk': {
         // After tool calls, start a new message for new thoughts.
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID();
+          assistantMsgId = randomUUID() as Uuid;
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -657,7 +659,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
       case 'plan': {
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID();
+          assistantMsgId = randomUUID() as Uuid;
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }

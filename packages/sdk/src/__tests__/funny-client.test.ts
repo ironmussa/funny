@@ -18,7 +18,7 @@ function makeFetch(impl: (req: FakeRequest) => Response | Promise<Response>): {
   calls: FakeRequest[];
 } {
   const calls: FakeRequest[] = [];
-  const fakeFetch: typeof fetch = async (input, init) => {
+  const fakeFetch = (async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
     const req: FakeRequest = {
       url,
@@ -28,7 +28,7 @@ function makeFetch(impl: (req: FakeRequest) => Response | Promise<Response>): {
     };
     calls.push(req);
     return impl(req);
-  };
+  }) as typeof fetch;
   return { fetch: fakeFetch, calls };
 }
 

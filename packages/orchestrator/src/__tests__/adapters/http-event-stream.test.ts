@@ -14,13 +14,13 @@ interface PollResponse {
 
 function makeStream(responses: PollResponse[]): HttpEventStream {
   let i = 0;
-  const fakeFetch: typeof fetch = async () => {
+  const fakeFetch = (async () => {
     const next = responses[i++] ?? { events: [], nextSeq: 0 };
     return new Response(JSON.stringify(next), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
-  };
+  }) as unknown as typeof fetch;
   const client = new HttpOrchestratorClient({
     baseUrl: 'http://srv',
     authSecret: 's',

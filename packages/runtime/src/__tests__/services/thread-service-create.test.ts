@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   isRegisteredWorktreePath: vi.fn(),
   launchContainer: vi.fn(),
   safeFetchUserUrl: vi.fn(),
-  listPermissionRules: vi.fn(async () => []),
+  listPermissionRules: vi.fn(async (): Promise<any[]> => []),
   executeShellEscape: vi.fn(async (command: string) => ({
     command,
     stdout: 'hello',

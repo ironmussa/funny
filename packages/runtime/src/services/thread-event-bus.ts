@@ -37,12 +37,15 @@ export interface ThreadDeletedEvent {
   /** Empty string `''` for scratch threads (no project). */
   projectId: string;
   userId: string;
-  worktreePath: string | null;
+  worktreePath?: string | null;
 }
 
-export interface AgentStartedEvent extends ThreadLifecycleContext {
-  model: AgentModel;
-  provider: AgentProvider;
+export interface AgentStartedEvent extends Partial<ThreadLifecycleContext> {
+  threadId: string;
+  projectId: string;
+  userId: string;
+  model?: AgentModel;
+  provider?: AgentProvider;
 }
 
 export interface AgentCompletedEvent extends ThreadLifecycleContext {
@@ -50,7 +53,11 @@ export interface AgentCompletedEvent extends ThreadLifecycleContext {
   cost: number;
 }
 
-export interface GitChangedEvent extends ThreadLifecycleContext {
+export interface GitChangedEvent extends Partial<ThreadLifecycleContext> {
+  threadId: string;
+  projectId: string;
+  userId: string;
+  cwd: string;
   toolName: string;
 }
 
@@ -87,6 +94,7 @@ export interface GitMergedEvent {
   sourceBranch: string;
   targetBranch: string;
   output: string;
+  cwd?: string;
 }
 
 export interface GitStagedEvent {
@@ -151,6 +159,23 @@ export interface GitResetSoftEvent {
   output: string;
 }
 
+export interface GitHashOperationEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+  hash: string;
+  output: string;
+}
+
+export interface GitStashDroppedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+  output: string;
+}
+
 // ── Event map ─────────────────────────────────────────────────────
 
 export interface ThreadEventMap {
@@ -169,7 +194,11 @@ export interface ThreadEventMap {
   'git:pulled': (event: GitPulledEvent) => void;
   'git:stashed': (event: GitStashedEvent) => void;
   'git:stash-popped': (event: GitStashPoppedEvent) => void;
+  'git:stash-dropped': (event: GitStashDroppedEvent) => void;
   'git:reset-soft': (event: GitResetSoftEvent) => void;
+  'git:checkout': (event: GitHashOperationEvent) => void;
+  'git:revert': (event: GitHashOperationEvent) => void;
+  'git:reset-hard': (event: GitHashOperationEvent) => void;
 }
 
 // ── Typed EventEmitter ────────────────────────────────────────────

@@ -214,12 +214,14 @@ export async function initBetterAuth(): Promise<void> {
         roles: { owner, admin: adminRole, member, viewer },
       }),
     ],
-  });
+  }) as unknown as ReturnType<typeof betterAuth>;
 
   // Better Auth tables are created by the server's own migration system (027_better_auth_tables).
 
   try {
-    const ctx = await _auth.$context;
+    const authInstance = _auth;
+    if (!authInstance) throw new Error('Auth initialization failed');
+    const ctx = await authInstance.$context;
 
     // Only seed on first run — skip if any users already exist
     const existingUsers = await ctx.internalAdapter.listUsers(1);

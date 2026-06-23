@@ -3,24 +3,26 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   tm: {
     createThread: vi.fn(async () => undefined),
-    getThread: vi.fn(async () => null),
-    getThreadByExternalRequestId: vi.fn(async () => undefined),
+    getThread: vi.fn(async (): Promise<any> => null),
+    getThreadByExternalRequestId: vi.fn(async (): Promise<any> => undefined),
     updateThread: vi.fn(async () => undefined),
     updateMessage: vi.fn(async () => undefined),
     insertMessage: vi.fn(async () => 'msg-1'),
     insertToolCall: vi.fn(async () => 'tc-1'),
     updateToolCallOutput: vi.fn(async () => undefined),
-    findToolCall: vi.fn(async () => undefined),
+    findToolCall: vi.fn(async (): Promise<any> => undefined),
   },
   projects: {
-    listProjects: vi.fn(async () => []),
+    listProjects: vi.fn(async (): Promise<Array<{ id: string; path: string }>> => []),
     getProject: vi.fn(async () => ({ id: 'p-1', path: '/projects/app' })),
   },
   wsBroker: {
     emitToUser: vi.fn(),
     emit: vi.fn(),
   },
-  getCurrentBranch: vi.fn(async () => ({ isOk: () => true, isErr: () => false, value: 'main' })),
+  getCurrentBranch: vi.fn(
+    async (): Promise<any> => ({ isOk: () => true, isErr: () => false, value: 'main' }),
+  ),
   getRemoteUrl: vi.fn(),
 }));
 
@@ -1204,7 +1206,7 @@ describe('startExternalThreadSweep', () => {
     const registered = vi
       .mocked(shutdownManager.register)
       .mock.calls.find(([name]) => name === 'ingest-sweep');
-    await registered?.[1]?.();
+    await registered?.[1]?.('hard');
     vi.useRealTimers();
   });
 
@@ -1234,7 +1236,7 @@ describe('startExternalThreadSweep', () => {
     const registered = vi
       .mocked(shutdownManager.register)
       .mock.calls.find(([name]) => name === 'ingest-sweep');
-    await registered?.[1]?.();
+    await registered?.[1]?.('hard');
 
     startExternalThreadSweep();
     await handleIngestEvent(

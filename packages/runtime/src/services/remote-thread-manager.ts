@@ -42,7 +42,7 @@ export function createRemoteThreadManager(): IThreadManager {
       return remoteInsertMessage(data);
     },
 
-    async updateMessage(id: string, content: string) {
+    async updateMessage(id: string, content: string | { content: string; images?: string | null }) {
       const { remoteUpdateMessage } = await import('./team-client.js');
       return remoteUpdateMessage(id, content);
     },

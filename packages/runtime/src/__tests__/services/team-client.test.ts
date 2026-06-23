@@ -67,7 +67,7 @@ function installSocket() {
                     createdAt: '2026-06-21T00:00:00.000Z',
                   },
                 }
-            : { type: 'data:ack', success: true };
+              : { type: 'data:ack', success: true };
         queueMicrotask(() => {
           socketHandlers['data:response']?.({ requestId, response });
         });
@@ -84,7 +84,7 @@ function installSocket() {
     }),
     removeAllListeners: vi.fn(),
     disconnect: vi.fn(),
-  };
+  } as any;
 }
 
 describe('team-client', () => {

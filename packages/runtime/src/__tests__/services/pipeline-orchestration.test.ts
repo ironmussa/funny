@@ -324,6 +324,9 @@ describe('Pipeline Orchestration', () => {
     test('no-ops when project is missing', async () => {
       vi.mocked(tm.getThread).mockResolvedValue({
         id: 'rev-1',
+        projectId: 'proj-1',
+        userId: 'user-1',
+        sessionId: null,
         mode: 'worktree',
         worktreePath: '/tmp/repo/.worktrees/rev',
         branch: 'review/fix',
@@ -338,6 +341,9 @@ describe('Pipeline Orchestration', () => {
     test('archives reviewer worktree and removes git artifacts', async () => {
       vi.mocked(tm.getThread).mockResolvedValue({
         id: 'rev-1',
+        projectId: 'proj-1',
+        userId: 'user-1',
+        sessionId: null,
         mode: 'worktree',
         worktreePath: '/tmp/repo/.worktrees/rev',
         branch: 'review/fix',
@@ -358,6 +364,9 @@ describe('Pipeline Orchestration', () => {
     test('archives local reviewer thread without git cleanup', async () => {
       vi.mocked(tm.getThread).mockResolvedValue({
         id: 'rev-local',
+        projectId: 'proj-1',
+        userId: 'user-1',
+        sessionId: null,
         mode: 'local',
         worktreePath: null,
         branch: 'main',
@@ -517,7 +526,7 @@ describe('Pipeline Orchestration', () => {
       const pipeline = definePipeline<{ value: number }>({
         name: 'test-error',
         nodes: [
-          node('will-fail', async () => {
+          node<{ value: number }>('will-fail', async () => {
             throw new Error('boom');
           }),
         ],

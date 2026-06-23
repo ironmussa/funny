@@ -226,7 +226,7 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
   try {
     // 1. Create the user via admin API (bypasses disableSignUp)
     const email = `${body.username}@invite.local`;
-    const createResult = await auth.api.createUser({
+    const createResult = await (auth.api as any).createUser({
       body: {
         email,
         password: body.password,

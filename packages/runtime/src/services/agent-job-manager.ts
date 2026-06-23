@@ -24,7 +24,14 @@ import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { open, stat } from 'fs/promises';
 import { join } from 'path';
 
-import type { Job, JobLogChunk, JobStatus, WSEvent } from '@funny/shared';
+import type {
+  AgentModel,
+  Job,
+  JobLogChunk,
+  JobStatus,
+  PermissionMode,
+  WSEvent,
+} from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_PROVIDER } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 
@@ -259,8 +266,8 @@ async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> 
     job.threadId,
     prompt,
     cwdResult.value,
-    thread.model || DEFAULT_MODEL,
-    thread.permissionMode || DEFAULT_PERMISSION_MODE,
+    (thread.model || DEFAULT_MODEL) as AgentModel,
+    (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
     undefined,
     undefined,
     undefined,

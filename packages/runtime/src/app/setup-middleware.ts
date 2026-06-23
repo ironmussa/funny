@@ -8,6 +8,7 @@ import { handleError } from '../middleware/error-handler.js';
 import { defaultRateLimit } from '../middleware/rate-limit.js';
 import { tracingMiddleware } from '../middleware/tracing.js';
 import { ingestRoutes } from '../routes/ingest.js';
+import type { HonoEnv } from '../types/hono-env.js';
 
 /**
  * Security HI-8 + HI-9: CSP/HSTS posture for any Hono app that may serve the
@@ -61,7 +62,7 @@ interface Options {
  * headers, CORS, default rate limit, tracing, ingest passthrough, then
  * runner auth. Order matters and matches the original sequence in app.ts.
  */
-export function setupMiddleware(app: Hono, { clientPort, corsOrigin }: Options): void {
+export function setupMiddleware(app: Hono<HonoEnv>, { clientPort, corsOrigin }: Options): void {
   app.onError(handleError);
 
   app.use('*', honoLogger());

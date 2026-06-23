@@ -99,7 +99,7 @@ describe('GitHub CLI wrappers (E2E)', () => {
       expect(data.reviewDecision).toBe('CHANGES_REQUESTED');
 
       // Verify correct gh command was called
-      const [cmd, args] = mockExecute.mock.calls[0] as [string, string[], any];
+      const [cmd, args] = mockExecute.mock.calls[0] as unknown as [string, string[], any];
       expect(cmd).toBe('gh');
       expect(args).toContain('pr');
       expect(args).toContain('view');
@@ -186,7 +186,7 @@ describe('GitHub CLI wrappers (E2E)', () => {
       const result = await mergePR('/tmp/repo', 42);
       expect(result.isOk()).toBe(true);
 
-      const [cmd, args] = mockExecute.mock.calls[0] as [string, string[]];
+      const [cmd, args] = mockExecute.mock.calls[0] as unknown as [string, string[]];
       expect(cmd).toBe('gh');
       expect(args).toContain('merge');
       expect(args).toContain('--squash');
@@ -201,7 +201,7 @@ describe('GitHub CLI wrappers (E2E)', () => {
 
       await mergePR('/tmp/repo', 42, 'rebase');
 
-      const [, args] = mockExecute.mock.calls[0] as [string, string[]];
+      const [, args] = mockExecute.mock.calls[0] as unknown as [string, string[]];
       expect(args).toContain('--rebase');
     });
   });

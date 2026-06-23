@@ -33,6 +33,7 @@ import { registerSystemRoutes } from './app/system-routes.js';
 import { BUILD_INFO } from './lib/build-info.js';
 import { log } from './lib/logger.js';
 import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
+import type { HonoEnv } from './types/hono-env.js';
 
 // Strip CLAUDECODE early so the Agent SDK never detects a "nested session",
 // even if the runner was started from inside a Claude Code terminal.
@@ -70,7 +71,7 @@ const corsOrigin = process.env.CORS_ORIGIN;
 const clientDistDir = resolve(import.meta.dir, '..', '..', 'client', 'dist');
 
 // Build the Hono app with all routes and middleware.
-const app = new Hono();
+const app = new Hono<HonoEnv>();
 setupMiddleware(app, { clientPort, corsOrigin });
 registerSystemRoutes(app);
 registerRoutes(app);

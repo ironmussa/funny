@@ -3,6 +3,8 @@ import { Hono } from 'hono';
 import { errAsync, okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { HonoEnv } from '../../types/hono-env.js';
+
 const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
   listThreads: vi.fn(),
@@ -146,7 +148,7 @@ import { gitRoutes } from '../../routes/git.js';
 import { resolveIdentity } from '../../services/git-service.js';
 
 function makeApp() {
-  const app = new Hono();
+  const app = new Hono<HonoEnv>();
   app.use('*', async (c, next) => {
     c.set('userId', 'user-1');
     c.set('organizationId', null);

@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
     insertMessage: vi.fn(async () => 'msg-new'),
     insertToolCall: vi.fn(async () => 'tc-shell'),
     updateMessage: vi.fn(async () => undefined),
-    findLastUnansweredInteractiveToolCall: vi.fn(async () => undefined),
+    findLastUnansweredInteractiveToolCall: vi.fn(async (): Promise<any> => undefined),
     updateToolCallOutput: vi.fn(async () => undefined),
     deleteComment: vi.fn(async () => undefined),
   },
@@ -26,11 +26,11 @@ const mocks = vi.hoisted(() => ({
     getProject: vi.fn(),
   },
   messageQueue: {
-    enqueue: vi.fn(),
+    enqueue: vi.fn(async (): Promise<any> => undefined),
     queueCount: vi.fn(async () => 0),
-    peek: vi.fn(async () => null),
-    cancel: vi.fn(),
-    update: vi.fn(),
+    peek: vi.fn(async (): Promise<any> => null),
+    cancel: vi.fn(async (): Promise<any> => undefined),
+    update: vi.fn(async (): Promise<any> => undefined),
   },
 }));
 
@@ -42,7 +42,7 @@ vi.mock('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(async () => undefined),
   stopAgent: vi.fn(async () => undefined),
   isAgentRunning: vi.fn(() => false),
-  getSupportedSlashCommands: vi.fn(() => undefined),
+  getSupportedSlashCommands: vi.fn((): any => undefined),
 }));
 
 vi.mock('../../services/ingest-mapper.js', () => ({
@@ -50,7 +50,7 @@ vi.mock('../../services/ingest-mapper.js', () => ({
 }));
 
 vi.mock('../../services/permission-rules-client.js', () => ({
-  listPermissionRules: vi.fn(async () => []),
+  listPermissionRules: vi.fn(async (): Promise<any[]> => []),
   createPermissionRule: vi.fn(async () => undefined),
 }));
 
@@ -948,7 +948,9 @@ describe('approveToolCall', () => {
   });
 
   test('merges always-allow permission rules into approved tool restart', async () => {
-    vi.mocked(listPermissionRules).mockResolvedValue([{ toolName: 'Read', decision: 'allow' }]);
+    vi.mocked(listPermissionRules).mockResolvedValue([
+      { toolName: 'Read', decision: 'allow' } as any,
+    ]);
 
     const result = await approveToolCall({
       threadId: 't-1',

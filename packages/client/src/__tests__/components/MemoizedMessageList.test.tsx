@@ -256,6 +256,41 @@ describe('MemoizedMessageList virtualization', () => {
     expect(queryByTestId('sticky-section-context')).toBeNull();
   });
 
+  test('does not show sticky section context when a stale virtual estimate says the visible user row has passed', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 2;
+    virtualizerMockState.scrollOffset = 130;
+
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockImplementation(function (this: Element) {
+      if (this.getAttribute('data-testid') === 'viewport') {
+        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+      }
+      if (this instanceof HTMLElement && this.clientHeight === 300) {
+        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+      }
+      if (this.getAttribute('data-section-msg-id') === 'm0') {
+        return { top: -80, bottom: 40, height: 120 } as DOMRect;
+      }
+      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+    });
+
+    try {
+      const { getByTestId, queryByTestId } = render(
+        <Harness messages={makeMessages(4)} viewportHeight={300} />,
+      );
+      const viewport = getByTestId('viewport');
+
+      await waitFor(() => expect(viewport.querySelector('[data-item-key="m0"]')).toBeTruthy());
+      await act(async () => {});
+
+      await waitFor(() => expect(queryByTestId('sticky-section-context')).toBeNull());
+      expect(viewport.querySelectorAll('[data-testid="user-message-m0"]')).toHaveLength(1);
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
   test('shows sticky context for the first visible section when a later user row is visible', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 4;

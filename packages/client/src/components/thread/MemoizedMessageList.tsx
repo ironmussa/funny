@@ -55,6 +55,7 @@ import { WorkflowEventGroup } from './WorkflowEventGroup';
 
 const VIRTUAL_ROW_GAP_PX = 16;
 const VIRTUAL_OVERSCAN = 8;
+const STICKY_SECTION_VISIBILITY_EPSILON_PX = 1;
 const USER_MESSAGE_ROW_PADDING_PX = 24;
 const USER_MESSAGE_CARD_VERTICAL_CHROME_PX = 38;
 const USER_MESSAGE_COLLAPSED_TEXT_PX = 48;
@@ -781,7 +782,7 @@ export const MemoizedMessageList = memo(
     const firstVisibleRow = firstVisibleVirtualItem
       ? virtualRows[firstVisibleVirtualItem.index]
       : undefined;
-    const hiddenSectionUserItem = useMemo(() => {
+    const candidateHiddenSectionUserItem = useMemo(() => {
       if (!firstVisibleRow || !firstVisibleVirtualItem) return null;
       if (firstVisibleRow.type === 'session-summary') return firstVisibleRow.userItem;
       if (firstVisibleRow.item.type === 'message' && firstVisibleRow.item.msg.role === 'user') {
@@ -794,6 +795,50 @@ export const MemoizedMessageList = memo(
         leadingUserItem
       );
     }, [firstVisibleRow, firstVisibleVirtualItem, groupedItems, leadingUserItem]);
+    const [visibleMountedSectionUserId, setVisibleMountedSectionUserId] = useState<string | null>(
+      null,
+    );
+
+    const updateMountedSectionVisibility = useCallback(() => {
+      const candidateId = candidateHiddenSectionUserItem?.msg.id;
+      if (!candidateId) {
+        setVisibleMountedSectionUserId((prev) => (prev === null ? prev : null));
+        return;
+      }
+
+      const viewport = scrollRef.current;
+      const container = itemContainerRef.current;
+      if (!viewport || !container) {
+        setVisibleMountedSectionUserId((prev) => (prev === null ? prev : null));
+        return;
+      }
+
+      const section = container.querySelector<HTMLElement>(
+        `[data-section-msg-id="${CSS.escape(candidateId)}"]`,
+      );
+      if (!section) {
+        setVisibleMountedSectionUserId((prev) => (prev === null ? prev : null));
+        return;
+      }
+
+      const viewportRect = viewport.getBoundingClientRect();
+      const sectionRect = section.getBoundingClientRect();
+      const isVisible =
+        sectionRect.bottom > viewportRect.top + STICKY_SECTION_VISIBILITY_EPSILON_PX &&
+        sectionRect.top < viewportRect.bottom - STICKY_SECTION_VISIBILITY_EPSILON_PX;
+      const next = isVisible ? candidateId : null;
+      setVisibleMountedSectionUserId((prev) => (prev === next ? prev : next));
+    }, [candidateHiddenSectionUserItem?.msg.id, scrollRef]);
+
+    useLayoutEffect(() => {
+      updateMountedSectionVisibility();
+    }, [stickyScrollOffset, updateMountedSectionVisibility]);
+
+    const hiddenSectionUserItem =
+      candidateHiddenSectionUserItem &&
+      visibleMountedSectionUserId !== candidateHiddenSectionUserItem.msg.id
+        ? candidateHiddenSectionUserItem
+        : null;
 
     useLayoutEffect(() => {
       if (!shouldReserveLeadingStickySpace) {
@@ -829,6 +874,15 @@ export const MemoizedMessageList = memo(
         restoreScrollAnchor,
       }),
       [itemIndexMap, rowVirtualizer, captureScrollAnchor, restoreScrollAnchor],
+    );
+
+    const measureVirtualRowElement = useCallback(
+      (element: Element | null) => {
+        if (!element) return;
+        rowVirtualizer.measureElement(element);
+        updateMountedSectionVisibility();
+      },
+      [rowVirtualizer, updateMountedSectionVisibility],
     );
 
     const scrollToUserMessagePosition = useCallback(
@@ -1159,7 +1213,7 @@ export const MemoizedMessageList = memo(
           return (
             <div
               key={virtualItem.key}
-              ref={rowVirtualizer.measureElement}
+              ref={measureVirtualRowElement}
               data-index={virtualItem.index}
               data-virtual-row-key={row.key}
               {...(row.type === 'item' &&

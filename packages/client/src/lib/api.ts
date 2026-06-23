@@ -1,4 +1,5 @@
 import { getBaseUrlForThread, validateContainerUrl, type PullStrategy } from './api/_core';
+import { agentExecutionProfilesApi } from './api/agent-execution-profiles';
 import { agentTemplatesApi } from './api/agent-templates';
 import { analyticsApi } from './api/analytics';
 import { automationsApi } from './api/automations';
@@ -35,6 +36,7 @@ export const api = {
   ...automationsApi, // Automations
   ...pipelinesApi, // Pipelines
   ...orchestratorApi, // Orchestrator queue
+  ...agentExecutionProfilesApi, // Agent execution profiles
   ...agentTemplatesApi, // Agent Templates (per-user, Deep Agent only)
   ...browseApi, // Browse (filesystem)
   ...githubApi, // GitHub (status, OAuth, repos, issues, PRs, comments)

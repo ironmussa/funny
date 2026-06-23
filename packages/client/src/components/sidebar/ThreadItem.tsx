@@ -13,7 +13,7 @@ import {
   Loader2,
   NotebookPen,
 } from 'lucide-react';
-import { useState, memo, useCallback, useRef } from 'react';
+import { useState, memo, useCallback, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PRBadge } from '@/components/PRBadge';
@@ -35,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -62,6 +63,9 @@ export interface ThreadItemProps {
   subtitle?: string;
   projectColor?: string;
   timeValue?: string;
+  search?: string;
+  contentSnippet?: string;
+  metadataBadge?: ReactNode;
   onRename?: (newTitle: string) => void;
   onArchive?: () => void;
   onPin?: () => void;
@@ -83,6 +87,9 @@ function threadItemAreEqual(prev: ThreadItemProps, next: ThreadItemProps): boole
   if (prev.subtitle !== next.subtitle) return false;
   if (prev.projectColor !== next.projectColor) return false;
   if (prev.timeValue !== next.timeValue) return false;
+  if (prev.search !== next.search) return false;
+  if (prev.contentSnippet !== next.contentSnippet) return false;
+  if (prev.metadataBadge !== next.metadataBadge) return false;
   if (prev.projectPath !== next.projectPath) return false;
   if (prev.gitStatus !== next.gitStatus) return false;
   if (prev.href !== next.href) return false;
@@ -97,6 +104,9 @@ export const ThreadItem = memo(function ThreadItem({
   subtitle,
   projectColor,
   timeValue,
+  search,
+  contentSnippet,
+  metadataBadge,
   onRename,
   onArchive,
   onPin,
@@ -173,7 +183,8 @@ export const ThreadItem = memo(function ThreadItem({
       effectiveGitStatus.linesDeleted > 0 ||
       effectiveGitStatus.dirtyFileCount > 0);
   const hasPR = !!effectiveGitStatus?.prNumber;
-  const hasSnippet = !!thread.lastAssistantMessage;
+  const snippetText = contentSnippet ?? thread.lastAssistantMessage;
+  const hasSnippet = !!snippetText;
   const showLaunching = isBusy && !hasSnippet;
   const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
   // Scratch threads have no project / branch / worktree — never show the
@@ -182,7 +193,7 @@ export const ThreadItem = memo(function ThreadItem({
   const scratch = isScratch(thread);
   const hasPowerline =
     canShowPowerline(thread) && (!!subtitle || !!thread.baseBranch || !!thread.branch);
-  const hasMetadataRow = hasDiffStats || hasPR || hasPowerline || scratch;
+  const hasMetadataRow = hasDiffStats || hasPR || hasPowerline || scratch || !!metadataBadge;
   const hasSnippetRow = hasSnippet || showLaunching || isBacklog;
 
   return (
@@ -249,6 +260,7 @@ export const ThreadItem = memo(function ThreadItem({
 
           <ThreadTitle
             title={thread.title}
+            search={search}
             className="text-sm leading-tight"
             badgeTestId={`thread-item-attachments-${thread.id}`}
           />
@@ -335,13 +347,20 @@ export const ThreadItem = memo(function ThreadItem({
                 prNumber={effectiveGitStatus.prNumber!}
                 prState={effectiveGitStatus.prState ?? 'OPEN'}
                 prUrl={effectiveGitStatus.prUrl}
-                size="xs"
+                size="compact"
                 data-testid={`thread-pr-badge-${thread.id}`}
               />
             )}
-            {hasSnippet ? (
+            {metadataBadge}
+            {hasSnippet && contentSnippet && search ? (
+              <HighlightText
+                text={snippetText!}
+                query={search}
+                className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs"
+              />
+            ) : hasSnippet ? (
               <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs">
-                {thread.lastAssistantMessage}
+                {snippetText}
               </span>
             ) : showLaunching ? (
               <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs italic">

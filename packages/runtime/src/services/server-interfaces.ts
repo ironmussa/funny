@@ -20,6 +20,7 @@ import type {
   UpdateProfileRequest,
   Watcher,
   Job,
+  ResolvedAgentExecutionProfileResponse,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import type { Result, ResultAsync } from 'neverthrow';
@@ -315,6 +316,15 @@ export interface IProfileService {
   getGitIdentity(userId: string): Promise<{ name: string; email: string } | null>;
   isSetupCompleted(userId: string): Promise<boolean>;
   updateProfile(userId: string, data: UpdateProfileRequest): Promise<UserProfile>;
+}
+
+// ── Agent execution profiles ────────────────────────────────────
+
+export interface IAgentExecutionProfileService {
+  resolveEffectiveProfile(
+    projectId: string,
+    userId: string,
+  ): Promise<ResolvedAgentExecutionProfileResponse>;
 }
 
 // ── Analytics service ───────────────────────────────────────────

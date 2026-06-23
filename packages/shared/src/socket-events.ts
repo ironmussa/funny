@@ -132,6 +132,7 @@ export const RUNNER_DATA_EVENTS = [
   'data:get_github_token',
   'data:get_minimax_api_key',
   'data:update_profile',
+  'data:resolve_agent_execution_profile',
   'data:mark_and_list_stale_threads',
   'data:get_agent_template',
   'data:create_permission_rule',

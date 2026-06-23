@@ -419,6 +419,15 @@ export class AgentLifecycleManager {
 
     // Resolve per-user API keys and git identity for agent subprocesses.
     let agentEnv: Record<string, string> | undefined;
+    const resolvedAgentProfile =
+      thread?.projectId && thread?.userId
+        ? await getServices().agentProfiles.resolveEffectiveProfile(thread.projectId, thread.userId)
+        : { profile: null, env: {} };
+    const activeAgentProfile =
+      resolvedAgentProfile.profile && resolvedAgentProfile.profile.provider === provider
+        ? resolvedAgentProfile
+        : { profile: null, env: {} };
+
     if (thread?.userId) {
       const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');
       const relevantKeys = PROVIDER_KEY_REGISTRY.filter(
@@ -461,6 +470,21 @@ export class AgentLifecycleManager {
           });
         }
       }
+    }
+
+    if (activeAgentProfile.profile) {
+      agentEnv = { ...(agentEnv ?? {}), ...activeAgentProfile.env };
+      await this.threadManager.updateThread(threadId, {
+        agentProfileId: activeAgentProfile.profile.id,
+        agentProfileName: activeAgentProfile.profile.name,
+        agentProfileProvider: activeAgentProfile.profile.provider,
+      });
+    } else {
+      await this.threadManager.updateThread(threadId, {
+        agentProfileId: null,
+        agentProfileName: null,
+        agentProfileProvider: null,
+      });
     }
 
     // Build a permission rule lookup bound to this thread's user + project.

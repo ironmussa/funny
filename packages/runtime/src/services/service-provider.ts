@@ -17,6 +17,7 @@ import type {
   IAutomationRepository,
   IPipelineRepository,
   IProfileService,
+  IAgentExecutionProfileService,
   IAnalyticsService,
   ISearchService,
   IStartupCommandsService,
@@ -40,6 +41,8 @@ export interface RuntimeServiceProvider {
   pipelines: IPipelineRepository;
   /** User profile, git identity, GitHub tokens */
   profile: IProfileService;
+  /** User/project-scoped agent execution profiles */
+  agentProfiles: IAgentExecutionProfileService;
   /** Overview and timeline analytics */
   analytics: IAnalyticsService;
   /** Full-text search across thread messages */

@@ -271,6 +271,13 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       },
     },
 
+    agentProfiles: {
+      async resolveEffectiveProfile(projectId, userId) {
+        const { remoteResolveAgentExecutionProfile } = await import('./team-client.js');
+        return remoteResolveAgentExecutionProfile(projectId, userId);
+      },
+    },
+
     analytics: {
       async getOverview() {
         return {};

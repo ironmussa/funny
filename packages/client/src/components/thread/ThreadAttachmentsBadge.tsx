@@ -9,6 +9,8 @@ import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { cleanThreadTitle, parseLeadingPromptCommand } from '@/lib/thread-title';
 import { cn } from '@/lib/utils';
 
+const URL_LIKE_RE = /^[a-z][a-z0-9+.-]*:\/\/\S+/i;
+
 interface ThreadAttachmentsBadgeProps {
   files: ReferencedItem[];
   className?: string;
@@ -101,14 +103,14 @@ export function ThreadTitle({
 }: ThreadTitleProps) {
   const { displayTitle, attachedFiles } = useMemo(() => cleanThreadTitle(title), [title]);
   const leadingCommand = useMemo(() => parseLeadingPromptCommand(displayTitle), [displayTitle]);
+  const text = leadingCommand.kind === 'slash' ? leadingCommand.rest : displayTitle;
   const titleClass = cn(
-    'first-letter:uppercase',
+    !URL_LIKE_RE.test(text.trimStart()) && 'first-letter:uppercase',
     multiline ? 'flex-1' : 'min-w-0 flex-1 truncate',
     className,
   );
   // Render leading `/slash-command` and `!command` titles as chips matching the
   // main thread message, then treat any remainder as plain title text.
-  const text = leadingCommand.kind === 'slash' ? leadingCommand.rest : displayTitle;
 
   return (
     <Root

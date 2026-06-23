@@ -13,6 +13,7 @@ const STATIC_ROUTES = new Set([
   'new',
   'invite',
   'scratch',
+  'external',
 ]);
 
 /** Build an app-internal path, auto-prefixing the active org slug if any. */

@@ -65,7 +65,9 @@ export interface ThreadItemProps {
   timeValue?: string;
   search?: string;
   contentSnippet?: string;
+  titleBadge?: ReactNode;
   metadataBadge?: ReactNode;
+  hideActions?: boolean;
   onRename?: (newTitle: string) => void;
   onArchive?: () => void;
   onPin?: () => void;
@@ -89,11 +91,175 @@ function threadItemAreEqual(prev: ThreadItemProps, next: ThreadItemProps): boole
   if (prev.timeValue !== next.timeValue) return false;
   if (prev.search !== next.search) return false;
   if (prev.contentSnippet !== next.contentSnippet) return false;
+  if (prev.titleBadge !== next.titleBadge) return false;
   if (prev.metadataBadge !== next.metadataBadge) return false;
+  if (prev.hideActions !== next.hideActions) return false;
   if (prev.projectPath !== next.projectPath) return false;
   if (prev.gitStatus !== next.gitStatus) return false;
   if (prev.href !== next.href) return false;
   return threadsVisuallyEqual(prev.thread, next.thread);
+}
+
+interface ThreadItemActionsProps {
+  thread: Thread;
+  displayTime: string;
+  isBusy: boolean;
+  isRunning: boolean;
+  onRename?: () => void;
+  onCreateBranch: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
+}
+
+function ThreadItemActions({
+  thread,
+  displayTime,
+  isBusy,
+  isRunning,
+  onRename,
+  onCreateBranch,
+  onArchive,
+  onDelete,
+}: ThreadItemActionsProps) {
+  const { t } = useTranslation();
+  const [openDropdown, setOpenDropdown] = useState(false);
+  const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
+
+  return (
+    <HoverTimeMenu
+      time={displayTime}
+      timeClassName="text-muted-foreground h-4 text-xs leading-4"
+      open={openDropdown}
+      group="thread"
+      className="min-w-10"
+    >
+      <DropdownMenu onOpenChange={handleDropdownChange}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            tabIndex={-1}
+            data-testid={`thread-item-more-${thread.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <MoreVertical className="icon-sm" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="bottom">
+          <DropdownMenuItem
+            onClick={async (e) => {
+              e.stopPropagation();
+              const result = await api.openDirectory({
+                threadId: thread.id,
+              });
+              if (result.isErr()) {
+                toastError(result.error);
+              }
+            }}
+          >
+            <FolderOpenDot className="icon-sm" />
+            {t('sidebar.openDirectory')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              openThreadTerminal({ thread });
+            }}
+          >
+            <Terminal className="icon-sm" />
+            {t('sidebar.openTerminal')}
+          </DropdownMenuItem>
+          {canConvertToWorktree(thread) && !isBusy && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                data-testid={`thread-convert-worktree-${thread.id}`}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const result = await api.convertToWorktree(thread.id);
+                  if (result.isErr()) {
+                    toastError(result.error);
+                  }
+                }}
+              >
+                <GitFork className="icon-sm" />
+                {t('dialog.convertToWorktreeTitle')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                data-testid={`thread-create-branch-${thread.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateBranch();
+                }}
+              >
+                <GitBranch className="icon-sm" />
+                {t('dialog.createBranchTitle')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {onRename && (
+            <DropdownMenuItem
+              data-testid={`thread-rename-${thread.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRename();
+              }}
+            >
+              <Pencil className="icon-sm" />
+              {t('sidebar.rename')}
+            </DropdownMenuItem>
+          )}
+          {isRunning && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const result = await api.stopThread(thread.id);
+                  if (result.isErr()) {
+                    console.error('Failed to stop thread:', result.error);
+                  }
+                }}
+                className="text-status-error focus:text-status-error"
+              >
+                <Square className="icon-sm" />
+                {t('common.stop')}
+              </DropdownMenuItem>
+            </>
+          )}
+          {onArchive && !isBusy && (
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+            >
+              <Archive className="icon-sm" />
+              {t('sidebar.archive')}
+            </DropdownMenuItem>
+          )}
+          {onDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                data-testid={`thread-delete-${thread.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="text-status-error focus:text-status-error"
+              >
+                <Trash2 className="icon-sm" />
+                {t('common.delete')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </HoverTimeMenu>
+  );
 }
 
 export const ThreadItem = memo(function ThreadItem({
@@ -106,7 +272,9 @@ export const ThreadItem = memo(function ThreadItem({
   timeValue,
   search,
   contentSnippet,
+  titleBadge,
   metadataBadge,
+  hideActions = false,
   onRename,
   onArchive,
   onPin,
@@ -115,8 +283,6 @@ export const ThreadItem = memo(function ThreadItem({
   href,
 }: ThreadItemProps) {
   const { t } = useTranslation();
-  const [openDropdown, setOpenDropdown] = useState(false);
-  const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
 
   // Rename dialog state
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -162,6 +328,8 @@ export const ThreadItem = memo(function ThreadItem({
     }
   }, [branchName, thread.projectId, thread.id]);
 
+  const openCreateBranchDialog = useCallback(() => setIsCreateBranchOpen(true), []);
+
   // Thread status (used for busy checks + dropdown gating)
   const isRunning = thread.status === 'running';
   const isSettingUp = thread.status === 'setting_up';
@@ -205,9 +373,8 @@ export const ThreadItem = memo(function ThreadItem({
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         data-testid={`thread-item-${thread.id}`}
         onPointerEnter={() => {
           if (!isSelected) useThreadStore.getState().prefetchThread(thread.id);
@@ -246,7 +413,7 @@ export const ThreadItem = memo(function ThreadItem({
             );
           }
         }}
-        className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden py-1.5 pl-2 text-left focus:outline-hidden focus-visible:ring-1"
+        className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden bg-transparent py-1.5 pl-2 text-left focus:outline-hidden focus-visible:ring-1"
       >
         {/* Row 1: Status icon + Title */}
         <div className="flex min-w-0 items-center gap-1.5">
@@ -264,6 +431,7 @@ export const ThreadItem = memo(function ThreadItem({
             className="text-sm leading-tight"
             badgeTestId={`thread-item-attachments-${thread.id}`}
           />
+          {titleBadge}
           {/* External creator icon */}
           {thread.createdBy && thread.createdBy !== 'user' && (
             <Tooltip>
@@ -373,141 +541,24 @@ export const ThreadItem = memo(function ThreadItem({
             ) : null}
           </div>
         )}
-      </div>
+      </button>
       <div className="flex shrink-0 items-center gap-1.5 py-1 pr-1.5 pl-2">
-        <HoverTimeMenu
-          time={displayTime}
-          timeClassName="text-muted-foreground h-4 text-xs leading-4"
-          open={openDropdown}
-          group="thread"
-          className="min-w-10"
-        >
-          <DropdownMenu onOpenChange={handleDropdownChange}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                tabIndex={-1}
-                data-testid={`thread-item-more-${thread.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <MoreVertical className="icon-sm" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="bottom">
-              <DropdownMenuItem
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const result = await api.openDirectory({
-                    threadId: thread.id,
-                  });
-                  if (result.isErr()) {
-                    toastError(result.error);
-                  }
-                }}
-              >
-                <FolderOpenDot className="icon-sm" />
-                {t('sidebar.openDirectory')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openThreadTerminal({ thread });
-                }}
-              >
-                <Terminal className="icon-sm" />
-                {t('sidebar.openTerminal')}
-              </DropdownMenuItem>
-              {canConvertToWorktree(thread) && !isBusy && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    data-testid={`thread-convert-worktree-${thread.id}`}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const result = await api.convertToWorktree(thread.id);
-                      if (result.isErr()) {
-                        toastError(result.error);
-                      }
-                    }}
-                  >
-                    <GitFork className="icon-sm" />
-                    {t('dialog.convertToWorktreeTitle')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid={`thread-create-branch-${thread.id}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsCreateBranchOpen(true);
-                    }}
-                  >
-                    <GitBranch className="icon-sm" />
-                    {t('dialog.createBranchTitle')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              {onRename && (
-                <DropdownMenuItem
-                  data-testid={`thread-rename-${thread.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openRenameDialog();
-                  }}
-                >
-                  <Pencil className="icon-sm" />
-                  {t('sidebar.rename')}
-                </DropdownMenuItem>
-              )}
-              {isRunning && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const result = await api.stopThread(thread.id);
-                      if (result.isErr()) {
-                        console.error('Failed to stop thread:', result.error);
-                      }
-                    }}
-                    className="text-status-error focus:text-status-error"
-                  >
-                    <Square className="icon-sm" />
-                    {t('common.stop')}
-                  </DropdownMenuItem>
-                </>
-              )}
-              {onArchive && !isBusy && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArchive();
-                  }}
-                >
-                  <Archive className="icon-sm" />
-                  {t('sidebar.archive')}
-                </DropdownMenuItem>
-              )}
-              {onDelete && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    data-testid={`thread-delete-${thread.id}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete();
-                    }}
-                    className="text-status-error focus:text-status-error"
-                  >
-                    <Trash2 className="icon-sm" />
-                    {t('common.delete')}
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </HoverTimeMenu>
+        {hideActions ? (
+          <span className="text-muted-foreground h-4 min-w-10 text-right text-xs leading-4">
+            {displayTime}
+          </span>
+        ) : (
+          <ThreadItemActions
+            thread={thread}
+            displayTime={displayTime}
+            isBusy={isBusy}
+            isRunning={isRunning}
+            onRename={onRename ? openRenameDialog : undefined}
+            onCreateBranch={openCreateBranchDialog}
+            onArchive={onArchive}
+            onDelete={onDelete}
+          />
+        )}
       </div>
 
       {/* Rename dialog */}

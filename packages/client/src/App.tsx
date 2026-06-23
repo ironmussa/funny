@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CenterDockview } from '@/components/CenterDockview';
 import { DockviewLayout, type RightTabSpec } from '@/components/DockviewLayout';
@@ -18,6 +18,7 @@ import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
+import { parseRoute } from '@/hooks/route-parser';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useDisplayThreadId } from '@/hooks/use-display-thread-id';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -111,6 +112,11 @@ const LiveColumnsView = lazy(() =>
 const OrchestratorView = lazy(() =>
   import('@/components/OrchestratorView').then((m) => ({ default: m.OrchestratorView })),
 );
+const ExternalClaudeSessionView = lazy(() =>
+  import('@/components/ExternalClaudeSessionView').then((m) => ({
+    default: m.ExternalClaudeSessionView,
+  })),
+);
 // Prefetch ReviewPane on idle so the first review toggle is instant. (The
 // global overlays — command palette, search dialogs, Monaco editor, media
 // preview — and their prefetch now live in OverlayDialogs.)
@@ -166,6 +172,9 @@ export function App() {
   );
   const hasSelectedProject = useProjectStore((s) => s.selectedProjectId != null);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const parsedRoute = useMemo(() => parseRoute(pathname), [pathname]);
+  const externalClaudeSessionId = parsedRoute.externalClaudeSessionId;
 
   // --- Right panel layout ---
   const isFullScreenView =
@@ -174,6 +183,7 @@ export function App() {
     analyticsOpen ||
     liveColumnsOpen ||
     orchestratorOpen ||
+    !!externalClaudeSessionId ||
     testRunnerOpen ||
     automationInboxOpen ||
     addProjectOpen ||
@@ -283,49 +293,69 @@ export function App() {
     </div>
   ) : undefined;
 
-  const threadContent = (
-    <ErrorBoundary area="main-content">
-      {/* Overlay views — same priority cascade as before. Wrapped in its
+  const threadContent = useMemo(
+    () => (
+      <div className="relative flex h-full w-full">
+        <ErrorBoundary area="main-content">
+          {/* Overlay views — same priority cascade as before. Wrapped in its
           own Suspense so a lazy overlay's first-load suspension does not
           unmount the persistent ThreadView below. */}
-      {isFullScreenView && (
-        <Suspense>
-          <div className="absolute inset-0 z-10 flex">
-            {generalSettingsOpen ? (
-              <GeneralSettingsView />
-            ) : settingsOpen ? (
-              <SettingsDetailView />
-            ) : analyticsOpen ? (
-              <AnalyticsView />
-            ) : liveColumnsOpen ? (
-              <LiveColumnsView />
-            ) : orchestratorOpen ? (
-              <OrchestratorView />
-            ) : testRunnerOpen ? (
-              <TestRunnerPane />
-            ) : automationInboxOpen ? (
-              <AutomationInboxView />
-            ) : addProjectOpen ? (
-              <AddProjectView />
-            ) : allThreadsProjectId ? (
-              <AllThreadsView />
-            ) : null}
-          </div>
-        </Suspense>
-      )}
+          {isFullScreenView && (
+            <Suspense>
+              <div className="absolute inset-0 z-10 flex">
+                {generalSettingsOpen ? (
+                  <GeneralSettingsView />
+                ) : settingsOpen ? (
+                  <SettingsDetailView />
+                ) : analyticsOpen ? (
+                  <AnalyticsView />
+                ) : liveColumnsOpen ? (
+                  <LiveColumnsView />
+                ) : orchestratorOpen ? (
+                  <OrchestratorView />
+                ) : externalClaudeSessionId ? (
+                  <ExternalClaudeSessionView sessionId={externalClaudeSessionId} />
+                ) : testRunnerOpen ? (
+                  <TestRunnerPane />
+                ) : automationInboxOpen ? (
+                  <AutomationInboxView />
+                ) : addProjectOpen ? (
+                  <AddProjectView />
+                ) : allThreadsProjectId ? (
+                  <AllThreadsView />
+                ) : null}
+              </div>
+            </Suspense>
+          )}
 
-      {/* ThreadView stays mounted under any overlay so returning from
+          {/* ThreadView stays mounted under any overlay so returning from
           Settings/Analytics/etc. is instant (no message refetch / Monaco
           / syntax-highlight re-render). Hidden via display:none when an
           overlay is active. */}
-      <Suspense>
-        <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
-          <ThreadProvider threadId={displayThreadId}>
-            <ThreadView />
-          </ThreadProvider>
-        </div>
-      </Suspense>
-    </ErrorBoundary>
+          <Suspense>
+            <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
+              <ThreadProvider threadId={displayThreadId}>
+                <ThreadView />
+              </ThreadProvider>
+            </div>
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    ),
+    [
+      addProjectOpen,
+      allThreadsProjectId,
+      analyticsOpen,
+      automationInboxOpen,
+      displayThreadId,
+      externalClaudeSessionId,
+      generalSettingsOpen,
+      isFullScreenView,
+      liveColumnsOpen,
+      orchestratorOpen,
+      settingsOpen,
+      testRunnerOpen,
+    ],
   );
 
   const centerPanel = (
@@ -340,7 +370,7 @@ export function App() {
       </ErrorBoundary>
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <CenterDockview
-          thread={<div className="relative flex h-full w-full">{threadContent}</div>}
+          thread={threadContent}
           right={singleRightPanel}
           rightTabs={rightTabs}
           activeRightTab={reviewSubTab}
@@ -401,6 +431,15 @@ function SidebarAwareDockview({
   browserPanelWidth: number;
 }) {
   const { open: sidebarOpen } = useSidebar();
+  const browserPanel = useMemo(
+    () => (
+      <Suspense fallback={null}>
+        <BrowserPanel />
+      </Suspense>
+    ),
+    [],
+  );
+
   return (
     <DockviewLayout
       left={leftPanel}
@@ -415,11 +454,7 @@ function SidebarAwareDockview({
       bottomPrefixActions={terminalDockview.bottomPrefixActions}
       bottomLeftActions={terminalDockview.bottomLeftActions}
       bottomRightActions={terminalDockview.bottomRightActions}
-      browser={
-        <Suspense fallback={null}>
-          <BrowserPanel />
-        </Suspense>
-      }
+      browser={browserPanel}
       browserOpen={browserPanelOpen && !isFullScreenView}
       onBrowserClose={togglebrowserPanel}
       initialLeftWidth={DEFAULT_SIDEBAR_WIDTH}

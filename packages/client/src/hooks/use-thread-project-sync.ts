@@ -21,7 +21,8 @@ function isOverlayActive(parsed: ParsedRoute): boolean {
     parsed.scratchNew ||
     parsed.globalSearch ||
     parsed.designId ||
-    parsed.designsList,
+    parsed.designsList ||
+    parsed.externalClaudeSessionId,
   );
 }
 
@@ -97,6 +98,10 @@ export function useThreadProjectSync(initialized: boolean, parsed: ParsedRoute) 
     if (!initialized) return;
     if (parsed.threadId) {
       applyThreadRoute(parsed, location.search);
+      return;
+    }
+    if (parsed.externalClaudeSessionId) {
+      applyRootRoute();
       return;
     }
     if (isOverlayActive(parsed)) {

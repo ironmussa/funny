@@ -17,6 +17,7 @@ export type ParsedRoute = {
   designsList: boolean;
   orchestrator: boolean;
   scratchNew: boolean;
+  externalClaudeSessionId: string | null;
 };
 
 function blank(orgSlug: string | null): ParsedRoute {
@@ -35,6 +36,7 @@ function blank(orgSlug: string | null): ParsedRoute {
     designsList: false,
     orchestrator: false,
     scratchNew: false,
+    externalClaudeSessionId: null,
   };
 }
 
@@ -110,6 +112,14 @@ export function parseRoute(pathname: string): ParsedRoute {
   if (p === '/orchestrator') return { ...blank(orgSlug), orchestrator: true };
   if (p === '/new') return { ...blank(orgSlug), addProject: true };
   if (p === '/scratch/new') return { ...blank(orgSlug), scratchNew: true };
+
+  const externalClaudeMatch = matchPath('/external/claude/:sessionId', p);
+  if (externalClaudeMatch) {
+    return {
+      ...blank(orgSlug),
+      externalClaudeSessionId: externalClaudeMatch.params.sessionId!,
+    };
+  }
 
   const scratchThreadMatch = matchPath('/scratch/:threadId', p);
   if (scratchThreadMatch) {

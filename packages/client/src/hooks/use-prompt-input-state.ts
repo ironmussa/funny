@@ -1,9 +1,10 @@
-import type { ImageAttachment, QueuedMessage } from '@funny/shared';
+import type { AgentProvider, ImageAttachment, QueuedMessage } from '@funny/shared';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
   DEFAULT_PERMISSION_MODE,
   DEFAULT_THREAD_MODE,
+  type AgentModel,
   getModelContextWindow,
 } from '@funny/shared/models';
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactElement } from 'react';
@@ -64,8 +65,8 @@ export type SubmitFn = (
 ) => Promise<boolean | void> | boolean | void;
 
 export interface ThreadOverride {
-  provider?: string | null;
-  model?: string | null;
+  provider?: AgentProvider | null;
+  model?: AgentModel | null;
   permissionMode?: string | null;
   branch?: string | null;
   baseBranch?: string | null;
@@ -129,7 +130,8 @@ export function usePromptInputState({
         0)
       : 0,
   );
-  const queuedCount = storeQueuedCount > 0 ? storeQueuedCount : queuedCountProp;
+  const queuedCount =
+    storeQueuedCount > 0 ? storeQueuedCount : (threadOverride?.queuedCount ?? queuedCountProp);
   const cachedQueuedMessages = useThreadStore((s) =>
     effectiveThreadId
       ? (s.queuedMessagesByThread[effectiveThreadId] ?? EMPTY_QUEUED_MESSAGES)
@@ -153,7 +155,8 @@ export function usePromptInputState({
   // back to the global selection there left `effectiveProject` undefined, so
   // the powerline lost its project segment and rendered a gray branch-only bar.
   // New threads still resolve from the selected/prop project.
-  const threadProjectId = useThreadSelector((t) => t?.projectId);
+  const storeThreadProjectId = useThreadSelector((t) => t?.projectId);
+  const threadProjectId = threadOverride?.projectId ?? storeThreadProjectId;
   const resolvedProjectId =
     (!isNewThread && threadProjectId) || propProjectId || selectedProjectIdForDefaults;
   const effectiveProject = resolvedProjectId
@@ -227,12 +230,21 @@ export function usePromptInputState({
   }, [currentProvider, mode]);
 
   // ── Active thread state (resolved via context) ──
-  const activeThreadPermissionMode = useThreadSelector((t) => t?.permissionMode);
-  const activeThreadWorktreePath = useThreadSelector((t) => t?.worktreePath);
-  const activeThreadProvider = useThreadSelector((t) => t?.provider);
-  const activeThreadModel = useThreadSelector((t) => t?.model);
-  const activeThreadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
-  const activeThreadBaseBranch = useThreadSelector((t) => t?.baseBranch);
+  const storeActiveThreadPermissionMode = useThreadSelector((t) => t?.permissionMode);
+  const activeThreadPermissionMode =
+    threadOverride?.permissionMode ?? storeActiveThreadPermissionMode;
+  const storeActiveThreadWorktreePath = useThreadSelector((t) => t?.worktreePath);
+  const activeThreadWorktreePath = threadOverride?.worktreePath ?? storeActiveThreadWorktreePath;
+  const storeActiveThreadProvider = useThreadSelector((t) => t?.provider);
+  const activeThreadProvider = threadOverride?.provider ?? storeActiveThreadProvider;
+  const storeActiveThreadModel = useThreadSelector((t) => t?.model);
+  const activeThreadModel = threadOverride?.model ?? storeActiveThreadModel;
+  const storeActiveThreadBranch = useThreadSelector((t) =>
+    t ? resolveThreadBranch(t) : undefined,
+  );
+  const activeThreadBranch = threadOverride?.branch ?? storeActiveThreadBranch;
+  const storeActiveThreadBaseBranch = useThreadSelector((t) => t?.baseBranch);
+  const activeThreadBaseBranch = threadOverride?.baseBranch ?? storeActiveThreadBaseBranch;
   // Full active thread + its working-tree status, for the prompt powerline bar.
   const activeThread = useThreadSelector((t) => t);
   // SDK-reported slash commands for this thread — merged into the editor's
@@ -240,9 +252,11 @@ export function usePromptInputState({
   const sdkSlashCommands =
     useThreadSelector((t) => t?.initInfo?.slashCommands) ?? EMPTY_SLASH_COMMANDS;
   const activeThreadGitStatus = useGitStatusForThread(effectiveThreadId);
-  const activeThreadContextTokens = useThreadSelector(
+  const storeActiveThreadContextTokens = useThreadSelector(
     (t) => t?.contextUsage?.cumulativeInputTokens ?? 0,
   );
+  const activeThreadContextTokens =
+    threadOverride?.contextUsage?.cumulativeInputTokens ?? storeActiveThreadContextTokens;
   const activeThreadLastEffort = useThreadSelector((t) => t?.lastUserMessage?.effort);
   const contextMaxTokens =
     activeThreadProvider && activeThreadModel
@@ -398,7 +412,7 @@ export function usePromptInputState({
   // Fetch follow-up branches — only refetch when the project changes.
   // Branch selection is updated separately when activeThreadBaseBranch changes.
   const storeSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProjectId = threadOverride?.projectId ?? storeSelectedProjectId;
+  const selectedProjectId = threadProjectId ?? storeSelectedProjectId;
   const followUpBranchCacheRef = useRef<{
     projectId: string;
     branches: string[];
@@ -474,8 +488,10 @@ export function usePromptInputState({
   // its own copy. `ensureSlashSkills` feeds both the editor and the submit path
   // (which resolves a leading slash command's thread mode).
   const composerProjectPath = useMemo(
-    () => (selectedProjectId ? projects.find((p) => p.id === selectedProjectId)?.path : undefined),
-    [selectedProjectId, projects],
+    () =>
+      activeThreadWorktreePath ??
+      (selectedProjectId ? projects.find((p) => p.id === selectedProjectId)?.path : undefined),
+    [activeThreadWorktreePath, selectedProjectId, projects],
   );
   const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
     projectPath: composerProjectPath,

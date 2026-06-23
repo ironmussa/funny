@@ -39,6 +39,7 @@ function makeFakeChild(): FakeChild {
     child.killed = true;
     return true;
   });
+  child.pid = 9_999_999;
   // Defer 'spawn' so the awaiter has time to register its listener.
   process.nextTick(() => child.emit('spawn'));
   return child;
@@ -84,10 +85,14 @@ const PROVIDER_ENVS = [
 
 describe('forkAcpSession', () => {
   let snapshot: Record<string, string | undefined>;
+  let killSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     snapshot = Object.fromEntries(PROVIDER_ENVS.map((k) => [k, process.env[k]]));
     for (const k of PROVIDER_ENVS) delete process.env[k];
+    killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
+    });
 
     spawnMock.mockReset();
     mockInitialize.mockReset();
@@ -105,6 +110,7 @@ describe('forkAcpSession', () => {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
+    killSpy.mockRestore();
   });
 
   test('happy path: returns { ok: true, newSessionId } when fork capability is advertised', async () => {
@@ -274,6 +280,7 @@ describe('forkAcpSession', () => {
     const call = spawnMock.mock.calls[0];
     expect(call?.[2]).toMatchObject({ cwd: '/somewhere/else' });
     expect(call?.[2]?.env).toMatchObject({ FOO: 'bar' });
+    expect(call?.[2]).toMatchObject({ detached: process.platform !== 'win32' });
   });
 
   test('child is killed on the happy path so it does not linger', async () => {

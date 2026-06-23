@@ -18,6 +18,8 @@ import { Readable, Writable } from 'stream';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 
+import { killProcessTree } from './base-process.js';
+
 export interface DiscoveredAcpModel {
   /** ID accepted by the provider's set-model method (e.g. `opencode/gpt-5-nano/high`). */
   modelId: string;
@@ -75,6 +77,9 @@ export async function discoverAcpModels(
     cwd,
     env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
     shell: process.platform === 'win32',
+    // Match long-lived ACP agents: isolate a POSIX process group so cleanup
+    // can terminate any MCP grandchildren the discovery CLI starts.
+    detached: process.platform !== 'win32',
   });
 
   child.stderr?.on('data', () => {});
@@ -89,7 +94,7 @@ export async function discoverAcpModels(
   }
 
   const cleanup = () => {
-    if (!child.killed) child.kill('SIGTERM');
+    killProcessTree(child);
   };
 
   let timer: ReturnType<typeof setTimeout> | null = null;

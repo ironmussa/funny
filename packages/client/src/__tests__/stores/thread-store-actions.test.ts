@@ -507,6 +507,36 @@ describe('thread store actions', () => {
         toolInput: '{"file_path":"/tmp/a.ts"}',
       });
     });
+
+    test('updates the sidebar row status when a terminal result was missed', async () => {
+      const runningThread = {
+        ...(baseThread as any),
+        status: 'running',
+        messages: [],
+      };
+      useThreadStore.setState({
+        ...seedThreads({ p1: [runningThread] }),
+        selectedThreadId: 't1',
+        threadDataById: { t1: runningThread },
+        activeThread: runningThread,
+      } as any);
+
+      mockGetThread.mockReturnValue(
+        okAsync({
+          ...runningThread,
+          status: 'completed',
+          completedAt: '2026-01-01T00:02:00.000Z',
+          updatedAt: '2026-01-01T00:02:00.000Z',
+          messages: [],
+        }),
+      );
+
+      await useThreadStore.getState().refreshActiveThread();
+
+      expect(useThreadStore.getState().activeThread?.status).toBe('completed');
+      expect(useThreadStore.getState().threadsById.t1.status).toBe('completed');
+      expect(useThreadStore.getState().threadsById.t1.completedAt).toBe('2026-01-01T00:02:00.000Z');
+    });
   });
 
   describe('loadThreadsForProject', () => {

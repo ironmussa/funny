@@ -1015,66 +1015,95 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // freshest payload from the map. Without this, a WS agent:message that
     // arrives during the await above gets clobbered.
     const freshMessages = (thread.messages ?? []) as LocalMessage[];
-    set((state) =>
-      mutations.applyThreadDataPatch(state, threadId, (current) => {
-        const mergedMessages = mergeMessagesById(current.messages, freshMessages);
-        const recovered = mergedMessages.length - current.messages.length;
-        if (recovered > 0) {
-          refreshLog.info('Recovered missed messages on resync', {
-            threadId,
-            recovered,
-            local: current.messages.length,
-            fresh: freshMessages.length,
-            merged: mergedMessages.length,
-          });
-          metric('thread.resync.messages_recovered', recovered, {
-            attributes: { 'thread.id': threadId },
-          });
-        }
-        const resultInfo =
-          current.resultInfo ??
-          (thread.status === 'completed' || thread.status === 'failed'
-            ? {
-                status: thread.status as 'completed' | 'failed',
+    set((state) => {
+      const existingSidebarThread = state.threadsById[threadId];
+      const sidebarPatch = existingSidebarThread
+        ? {
+            threadsById: {
+              ...state.threadsById,
+              [threadId]: {
+                ...existingSidebarThread,
+                status: thread.status,
                 cost: thread.cost,
-                duration: 0,
-                error: (thread as any).error,
-              }
-            : undefined);
-        return {
-          ...current,
-          status: thread.status,
-          cost: thread.cost,
-          stage: thread.stage,
-          completedAt: thread.completedAt,
-          archived: thread.archived,
-          pinned: thread.pinned,
-          mode: thread.mode,
-          branch: thread.branch,
-          worktreePath: thread.worktreePath,
-          baseBranch: thread.baseBranch,
-          initInfo: current.initInfo,
-          resultInfo,
-          threadEvents,
-          messages: mergedMessages,
-          lastUserMessage: thread.lastUserMessage ?? current.lastUserMessage,
-          hasMore: thread.hasMore ?? current.hasMore,
-          compactionEvents:
-            persistedCompaction.length > 0 ? persistedCompaction : current.compactionEvents,
-          contextUsage: current.contextUsage,
-          waitingReason: isServerWaiting
-            ? (thread.waitingReason ?? current.waitingReason)
-            : undefined,
-          pendingPermission: isServerWaiting
-            ? (thread.pendingPermission ?? current.pendingPermission)
-            : undefined,
-        };
-      }),
-    );
+                stage: thread.stage,
+                completedAt: thread.completedAt,
+                updatedAt: thread.updatedAt,
+                archived: thread.archived,
+                pinned: thread.pinned,
+                mode: thread.mode,
+                branch: thread.branch,
+                worktreePath: thread.worktreePath,
+                baseBranch: thread.baseBranch,
+              },
+            },
+          }
+        : {};
+
+      return {
+        ...sidebarPatch,
+        ...mutations.applyThreadDataPatch(state, threadId, (current) => {
+          const mergedMessages = mergeMessagesById(current.messages, freshMessages);
+          const recovered = mergedMessages.length - current.messages.length;
+          if (recovered > 0) {
+            refreshLog.info('Recovered missed messages on resync', {
+              threadId,
+              recovered,
+              local: current.messages.length,
+              fresh: freshMessages.length,
+              merged: mergedMessages.length,
+            });
+            metric('thread.resync.messages_recovered', recovered, {
+              attributes: { 'thread.id': threadId },
+            });
+          }
+          const resultInfo =
+            current.resultInfo ??
+            (thread.status === 'completed' || thread.status === 'failed'
+              ? {
+                  status: thread.status as 'completed' | 'failed',
+                  cost: thread.cost,
+                  duration: 0,
+                  error: (thread as any).error,
+                }
+              : undefined);
+          return {
+            ...current,
+            status: thread.status,
+            cost: thread.cost,
+            stage: thread.stage,
+            completedAt: thread.completedAt,
+            archived: thread.archived,
+            pinned: thread.pinned,
+            mode: thread.mode,
+            branch: thread.branch,
+            worktreePath: thread.worktreePath,
+            baseBranch: thread.baseBranch,
+            initInfo: current.initInfo,
+            resultInfo,
+            threadEvents,
+            messages: mergedMessages,
+            lastUserMessage: thread.lastUserMessage ?? current.lastUserMessage,
+            hasMore: thread.hasMore ?? current.hasMore,
+            compactionEvents:
+              persistedCompaction.length > 0 ? persistedCompaction : current.compactionEvents,
+            contextUsage: current.contextUsage,
+            waitingReason: isServerWaiting
+              ? (thread.waitingReason ?? current.waitingReason)
+              : undefined,
+            pendingPermission: isServerWaiting
+              ? (thread.pendingPermission ?? current.pendingPermission)
+              : undefined,
+          };
+        }),
+      };
+    });
   },
 
   refreshAllLoadedThreads: async () => {
-    const projectIds = Object.keys(get().threadIdsByProject);
+    const initialState = get();
+    const projectIds = Object.keys(initialState.threadIdsByProject);
+    const refreshScratch = initialState.scratchThreadIds.length > 0;
+    const refreshShared = initialState.sharedThreadIds.length > 0;
 
     // Fetch all projects in parallel, then apply each result through the
     // shared mutation so threadsById stays the single source of truth.
@@ -1101,6 +1130,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       return patch;
     });
 
+    await Promise.all([
+      refreshScratch ? get().loadScratchThreads() : Promise.resolve(),
+      refreshShared ? get().loadSharedThreads() : Promise.resolve(),
+    ]);
     await get().refreshActiveThread();
   },
 

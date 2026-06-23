@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   getRebaseReflogEvents: vi.fn(),
   getUnpushedHashes: vi.fn(),
   getUnpulledHashes: vi.fn(),
+  getCachedPR: vi.fn(),
   stashList: vi.fn(),
   stash: vi.fn(),
   stashShow: vi.fn(),
@@ -106,6 +107,7 @@ vi.mock('../../routes/git/helpers.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../routes/git/helpers.js')>();
   return {
     ...actual,
+    getCachedPR: mocks.getCachedPR,
     scheduleBackgroundFetch: vi.fn(),
     schedulePRLookup: vi.fn(),
     emitPRUpdateForThread: vi.fn(),
@@ -145,6 +147,7 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 
 import { gitRoutes } from '../../routes/git.js';
+import { getCachedPR, schedulePRLookup } from '../../routes/git/helpers.js';
 import { resolveIdentity } from '../../services/git-service.js';
 
 function makeApp() {
@@ -254,6 +257,7 @@ describe('gitRoutes (mounted)', () => {
     mocks.getUnpushedHashes.mockReturnValue(okAsync(new Set(['def222'])));
     mocks.getUnpulledHashes.mockReturnValue(okAsync(new Set()));
     mocks.getPRForBranch.mockResolvedValue(null);
+    mocks.getCachedPR.mockReturnValue(undefined);
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
     mocks.stash.mockReturnValue(okAsync('Saved working directory'));
     mocks.stashShow.mockReturnValue(okAsync([{ path: 'src/a.ts', status: 'modified' }]));
@@ -1141,8 +1145,13 @@ describe('gitRoutes (mounted)', () => {
     });
   });
 
-  test('GET /api/git/project/:projectId/graph-log annotates branch refs with PR metadata', async () => {
+  test('GET /api/git/project/:projectId/graph-log annotates branch refs with cached PR metadata', async () => {
     vi.mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
+    vi.mocked(getCachedPR).mockReturnValue({
+      prNumber: 42,
+      prUrl: 'https://github.com/acme/repo/pull/42',
+      prState: 'OPEN',
+    });
     mocks.getGraphLog.mockReturnValueOnce(
       okAsync([
         {
@@ -1166,11 +1175,6 @@ describe('gitRoutes (mounted)', () => {
         },
       ]),
     );
-    mocks.getPRForBranch.mockResolvedValueOnce({
-      prNumber: 42,
-      prUrl: 'https://github.com/acme/repo/pull/42',
-      prState: 'OPEN',
-    });
     const app = makeApp();
 
     const res = await app.request('/api/git/project/p1/graph-log');
@@ -1198,10 +1202,61 @@ describe('gitRoutes (mounted)', () => {
       { name: 'v1.0', kind: 'tag' },
       { name: 'HEAD', kind: 'local' },
     ]);
-    expect(mocks.getPRForBranch).toHaveBeenCalledTimes(1);
-    expect(mocks.getPRForBranch).toHaveBeenCalledWith('/tmp/repo', 'feature/x', {
-      GH_TOKEN: 'ghs_test',
+    expect(getCachedPR).toHaveBeenCalledTimes(1);
+    expect(getCachedPR).toHaveBeenCalledWith('/tmp/repo', 'feature/x');
+    expect(schedulePRLookup).not.toHaveBeenCalled();
+    expect(mocks.getPRForBranch).not.toHaveBeenCalled();
+  });
+
+  test('GET /api/git/project/:projectId/graph-log schedules uncached PR lookups only for visible rows', async () => {
+    vi.mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
+    mocks.getGraphLog.mockReturnValueOnce(
+      okAsync([
+        {
+          hash: 'abc111',
+          shortHash: 'abc',
+          author: 'a',
+          authorEmail: 'a@x',
+          committer: 'a',
+          committerEmail: 'a@x',
+          relativeDate: '1d',
+          message: 'visible',
+          body: '',
+          parentHashes: [],
+          refs: [{ name: 'feature/visible', kind: 'local' }],
+          headBranch: 'feature/visible',
+        },
+        {
+          hash: 'def222',
+          shortHash: 'def',
+          author: 'b',
+          authorEmail: 'b@x',
+          committer: 'b',
+          committerEmail: 'b@x',
+          relativeDate: '2d',
+          message: 'lookahead',
+          body: '',
+          parentHashes: ['abc111'],
+          refs: [{ name: 'feature/lookahead', kind: 'local' }],
+          headBranch: null,
+        },
+      ]),
+    );
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/graph-log?limit=1');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hasMore).toBe(true);
+    expect(body.entries).toHaveLength(1);
+    expect(schedulePRLookup).toHaveBeenCalledTimes(1);
+    expect(schedulePRLookup).toHaveBeenCalledWith({
+      projectPath: '/tmp/repo',
+      branch: 'feature/visible',
+      ghEnv: { GH_TOKEN: 'ghs_test' },
     });
+    expect(getCachedPR).not.toHaveBeenCalledWith('/tmp/repo', 'feature/lookahead');
+    expect(mocks.getPRForBranch).not.toHaveBeenCalled();
   });
 
   test('GET /api/git/project/:projectId/graph-log?all=false opts out of all refs', async () => {

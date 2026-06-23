@@ -138,10 +138,38 @@ function makeMessagesWithToolCalls(toolCalls: any[]) {
   ];
 }
 
-function Harness({ messages, leadingUserMessage }: { messages: any[]; leadingUserMessage?: any }) {
+function Harness({
+  messages,
+  leadingUserMessage,
+  viewportHeight,
+}: {
+  messages: any[];
+  leadingUserMessage?: any;
+  viewportHeight?: number;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  if (!scrollRef.current && viewportHeight !== undefined) {
+    const initialScrollElement = document.createElement('div');
+    Object.defineProperty(initialScrollElement, 'clientHeight', {
+      value: viewportHeight,
+      configurable: true,
+    });
+    scrollRef.current = initialScrollElement;
+  }
   return (
-    <div ref={scrollRef} data-testid="viewport">
+    <div
+      ref={(node) => {
+        if (!node) return;
+        if (viewportHeight !== undefined) {
+          Object.defineProperty(node, 'clientHeight', {
+            value: viewportHeight,
+            configurable: true,
+          });
+        }
+        scrollRef.current = node;
+      }}
+      data-testid="viewport"
+    >
       <MemoizedMessageList
         messages={messages}
         leadingUserMessage={leadingUserMessage}
@@ -215,17 +243,32 @@ describe('MemoizedMessageList virtualization', () => {
     expect(queryByTestId('sticky-section-context')).toBeNull();
   });
 
-  test('shows sticky section context once the user row has scrolled past the top', async () => {
+  test('does not show sticky section context while the user row is partially visible', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 1;
     virtualizerMockState.scrollOffset = 4;
 
-    const { getByTestId } = render(<Harness messages={makeMessages(4)} />);
+    const { getByTestId, queryByTestId } = render(<Harness messages={makeMessages(4)} />);
     const viewport = getByTestId('viewport');
 
     await waitFor(() => expect(viewport.querySelector('[data-item-key="m0"]')).toBeTruthy());
 
-    expect(getByTestId('sticky-section-context')).toBeTruthy();
+    expect(queryByTestId('sticky-section-context')).toBeNull();
+  });
+
+  test('does not show previous sticky context when a later user row is visible', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 4;
+    virtualizerMockState.scrollOffset = 130;
+
+    const { getByTestId, queryByTestId } = render(
+      <Harness messages={makeMessages(6)} viewportHeight={240} />,
+    );
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() => expect(viewport.querySelector('[data-item-key="m2"]')).toBeTruthy());
+
+    expect(queryByTestId('sticky-section-context')).toBeNull();
   });
 
   test('uses leading user context when the owner row is outside the loaded window', async () => {

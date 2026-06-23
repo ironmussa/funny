@@ -266,8 +266,8 @@ export function AllThreadsView() {
   }, [search, projectFilter, caseSensitive]);
 
   const projectInfoById = useMemo(() => {
-    const map: Record<string, { name: string; color?: string }> = {};
-    for (const p of projects) map[p.id] = { name: p.name, color: p.color };
+    const map: Record<string, { name: string; path: string; color?: string }> = {};
+    for (const p of projects) map[p.id] = { name: p.name, path: p.path, color: p.color };
     return map;
   }, [projects]);
   const projectNameById = useMemo(() => {

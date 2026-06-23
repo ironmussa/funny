@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveLocalThreadBranch, shouldCheckoutBranchForThreadSelect } from '@/lib/utils';
+import { goToThread } from '@/navigation/go-to-thread';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -150,13 +151,7 @@ export function useSidebarActions() {
         if (!canProceed) return;
       }
 
-      const freshStore = useThreadStore.getState();
-      if (freshStore.selectedThreadId !== threadId) {
-        void freshStore.selectThread(threadId);
-      } else if (!freshStore.activeThread || freshStore.activeThread.id !== threadId) {
-        void freshStore.selectThread(threadId);
-      }
-      navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
+      goToThread(navigate, thread ?? { id: threadId, projectId, isScratch: false });
     },
     [navigate, ensureBranch],
   );

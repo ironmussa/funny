@@ -17,7 +17,7 @@ describe('resolveCorsOrigins', () => {
       resolveCorsOrigins({
         VITE_PORT: '5173',
         PORT: '3001',
-        CORS_ORIGIN: 'https://app.example.com, http://localhost:3001 ',
+        CORS_ORIGIN: 'https://app.example.com, http://localhost:5173 ',
       } as any),
     ).toEqual([
       'http://localhost:5173',

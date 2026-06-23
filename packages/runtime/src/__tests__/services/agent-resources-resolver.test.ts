@@ -102,6 +102,14 @@ describe('resolveAgentResources — MCP', () => {
     ...over,
   });
 
+  test('composer skips MCP listing because autocomplete only needs skills and slash commands', async () => {
+    const res = (
+      await resolveAgentResources({ provider: 'codex', phase: 'composer', projectPath: '/p' })
+    )._unsafeUnwrap();
+    expect(res.resources.find((r) => r.kind === 'mcp-server')).toBeUndefined();
+    expect(listMcpServers).not.toHaveBeenCalled();
+  });
+
   test('disabled MCP server is hidden with reason disabled', async () => {
     listMcpServers.mockReturnValue(okAsync([mcp({ disabled: true })]));
     const res = (
@@ -117,6 +125,16 @@ describe('resolveAgentResources — MCP', () => {
       await resolveAgentResources({ provider: 'claude', phase: 'runtime', projectPath: '/p' })
     )._unsafeUnwrap();
     expect(res.resources.find((r) => r.name === 'ctx7')?.usable).toBe(true);
+    expect(listMcpServers).toHaveBeenCalledWith('/p', 'claude');
+  });
+
+  test('runtime lists MCP for the requested provider', async () => {
+    listMcpServers.mockReturnValue(okAsync([mcp({ provider: 'codex', type: 'http' })]));
+    const res = (
+      await resolveAgentResources({ provider: 'codex', phase: 'runtime', projectPath: '/p' })
+    )._unsafeUnwrap();
+    expect(res.resources.find((r) => r.name === 'ctx7')?.usable).toBe(true);
+    expect(listMcpServers).toHaveBeenCalledWith('/p', 'codex');
   });
 
   test('MCP is unsupported for llm-api (no transports)', async () => {

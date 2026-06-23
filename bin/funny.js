@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { resolve, join } from 'path';
 import { parseArgs } from 'util';
@@ -8,6 +8,7 @@ import { parseArgs } from 'util';
 
 const FUNNY_DIR = join(homedir(), '.funny');
 const ENV_FILE = join(FUNNY_DIR, '.env');
+const TEAM_ENV_KEYS = new Set(['TEAM_SERVER_URL', 'RUNNER_INVITE_TOKEN', 'RUNNER_AUTH_SECRET']);
 
 /**
  * Parse a simple .env file into key-value pairs.
@@ -37,6 +38,8 @@ function parseEnvFile(content) {
 /**
  * Load saved env vars from ~/.funny/.env.
  * Only sets values that are NOT already in process.env (env vars take precedence).
+ * Team connection keys are intentionally ignored: connecting to a central server
+ * must be requested explicitly with --team.
  */
 function loadSavedEnv() {
   if (!existsSync(ENV_FILE)) return;
@@ -44,6 +47,7 @@ function loadSavedEnv() {
     const content = readFileSync(ENV_FILE, 'utf-8');
     const vars = parseEnvFile(content);
     for (const [key, value] of Object.entries(vars)) {
+      if (TEAM_ENV_KEYS.has(key)) continue;
       if (!process.env[key]) {
         process.env[key] = value;
       }
@@ -53,51 +57,17 @@ function loadSavedEnv() {
   }
 }
 
-/**
- * Save env vars to ~/.funny/.env, merging with existing values.
- * Creates ~/.funny directory if it doesn't exist.
- */
-function saveEnv(updates) {
-  // Read existing values
-  let existing = {};
-  if (existsSync(ENV_FILE)) {
-    try {
-      existing = parseEnvFile(readFileSync(ENV_FILE, 'utf-8'));
-    } catch {}
-  }
-
-  // Merge updates
-  const merged = { ...existing, ...updates };
-
-  // Write header + key=value pairs
-  const lines = ['# Saved by funny CLI — do not edit while running'];
-  for (const [key, value] of Object.entries(merged)) {
-    lines.push(`${key}=${value}`);
-  }
-
-  // Ensure directory exists
-  mkdirSync(FUNNY_DIR, { recursive: true });
-
-  // Write with restricted permissions (0o600) — contains tokens
-  writeFileSync(ENV_FILE, lines.join('\n') + '\n', { mode: 0o600 });
-}
-
-// ── Load saved config before parsing CLI args ─────────────
-loadSavedEnv();
-
 // ── `funny ext` — manage visualizer extensions (runs without the server) ──
 // Dispatched BEFORE the strict parseArgs below, because `ext` subcommands carry
 // their own flags (--ref, --subdir) that the top-level parser doesn't know.
-{
-  const rawArgs = process.argv.slice(2);
-  if (rawArgs[0] === 'ext') {
-    process.exit(await runExtCommand(rawArgs.slice(1)));
-  }
+const rawArgs = process.argv.slice(2);
+if (rawArgs[0] === 'ext') {
+  process.exit(await runExtCommand(rawArgs.slice(1)));
 }
 
 // ── Parse CLI arguments ───────────────────────────────────
 
-const { values, positionals } = parseArgs({
+const { values } = parseArgs({
   options: {
     port: {
       type: 'string',
@@ -111,7 +81,7 @@ const { values, positionals } = parseArgs({
     },
     team: {
       type: 'string',
-      description: 'URL of the central server to connect to for team mode',
+      description: 'URL of the central server to connect to as a runner',
     },
     token: {
       type: 'string',
@@ -119,7 +89,12 @@ const { values, positionals } = parseArgs({
     },
     secret: {
       type: 'string',
-      description: 'Shared RUNNER_AUTH_SECRET (must match the central server) for team mode',
+      description:
+        'Shared RUNNER_AUTH_SECRET (must match the central server) for classic runner registration',
+    },
+    local: {
+      type: 'boolean',
+      default: false,
     },
     help: {
       type: 'boolean',
@@ -127,6 +102,22 @@ const { values, positionals } = parseArgs({
   },
   allowPositionals: true,
 });
+
+if (values.local && values.team) {
+  console.error('[funny] ERROR: --local cannot be combined with --team.');
+  process.exit(1);
+}
+
+// Saved and inherited team credentials are intentionally ignored unless --team
+// is present. A plain `funny` or `bunx @ironmussa/funny` should always start
+// local, even if the shell or ~/.funny/.env contains stale team variables.
+loadSavedEnv();
+
+if (!values.team || values.local) {
+  delete process.env.TEAM_SERVER_URL;
+  delete process.env.RUNNER_INVITE_TOKEN;
+  delete process.env.RUNNER_AUTH_SECRET;
+}
 
 if (values.help) {
   console.log(`
@@ -138,23 +129,21 @@ Usage:
 Options:
   -p, --port <port>          Server port (default: 3001)
   -h, --host <host>          Server host (default: 127.0.0.1)
-  --team <url>               Connect to a central team server (e.g. http://192.168.1.10:3002)
+  --team <url>               Connect this machine as a runner to a central server
   --token <token>            Runner invite token for team server registration
-  --secret <secret>          Shared RUNNER_AUTH_SECRET — must match the central server (team mode)
+  --secret <secret>          Shared RUNNER_AUTH_SECRET — classic runner registration only
+  --local                    Start standalone; cannot be combined with --team
   --help                     Show this help message
 
-Team Mode:
-  Connect this instance as a runner to a central server. The easy path is
+Runner Mode:
+  Connect this machine as a runner to a central server. The easy path is
   device-link enrollment — just point at the server:
 
     funny --team http://192.168.1.10:3002
 
   funny prints a short code; open the server, go to Settings ▸ Runners ▸
   "Link a runner", enter the code, and approve. The runner then receives its
-  credentials automatically — no secret or token to copy. Credentials are saved
-  to ~/.funny so later runs only need:
-
-    funny
+  credentials automatically — no secret or token to copy.
 
   Classic flow (advanced): you may instead supply the shared secret + an invite
   token yourself. RUNNER_AUTH_SECRET must match the central server's value:
@@ -164,7 +153,7 @@ Team Mode:
   To change the server, pass --team again with a new URL.
 
 Examples:
-  funny                          # Start standalone on http://127.0.0.1:3001
+  funny                          # Start all-in-one local app on http://127.0.0.1:3001
   funny --port 8080              # Start on custom port
   funny --team http://central:3002  # Connect via device-link enrollment (recommended)
   funny --team http://central:3002 --secret abc123 --token utkn_xxx  # Classic flow
@@ -176,15 +165,15 @@ Authentication:
 Environment Variables:
   PORT                       Server port
   HOST                       Server host
-  TEAM_SERVER_URL            Central team server URL (same as --team)
-  RUNNER_INVITE_TOKEN        Runner invite token (same as --token)
-  RUNNER_AUTH_SECRET         Shared secret matching the central server (same as --secret)
+  RUNNER_INVITE_TOKEN        Runner invite token for --team classic flow
+  RUNNER_AUTH_SECRET         Shared secret for --team classic flow
   CORS_ORIGIN                Custom CORS origins (comma-separated)
   DB_MODE                    Database mode: sqlite (default) or postgres
   DATABASE_URL               PostgreSQL connection URL (when DB_MODE=postgres)
 
 Config:
   Saved config:  ~/.funny/.env
+  Note: saved and inherited team connection keys are ignored; pass --team to connect.
   Database:      ~/.funny/data.db
 
 For more information, visit: https://github.com/anthropics/funny
@@ -196,8 +185,9 @@ For more information, visit: https://github.com/anthropics/funny
 
 process.env.PORT = values.port;
 process.env.HOST = values.host;
+const isTeamMode = !!values.team;
 
-// CLI --team and --token override env vars and saved config
+// CLI --team and --token override env vars for this process only.
 if (values.team) {
   process.env.TEAM_SERVER_URL = values.team;
 }
@@ -208,28 +198,11 @@ if (values.secret) {
   process.env.RUNNER_AUTH_SECRET = values.secret;
 }
 
-// ── Save team config when provided via CLI ────────────────
+// ── Runner mode log ───────────────────────────────────────
 
-const toSave = {};
-if (values.team) toSave.TEAM_SERVER_URL = values.team;
-if (values.token) toSave.RUNNER_INVITE_TOKEN = values.token;
-if (values.secret) toSave.RUNNER_AUTH_SECRET = values.secret;
-
-if (Object.keys(toSave).length > 0) {
-  try {
-    saveEnv(toSave);
-    console.log(`[funny] Config saved to ${ENV_FILE}`);
-  } catch (err) {
-    console.warn(`[funny] Warning: could not save config to ${ENV_FILE}:`, err.message);
-  }
-}
-
-// ── Team mode log ─────────────────────────────────────────
-
-if (process.env.TEAM_SERVER_URL) {
-  const source = values.team ? 'CLI' : existsSync(ENV_FILE) ? 'saved config' : 'env';
+if (isTeamMode) {
   console.log(
-    `[funny] Team mode enabled — connecting to ${process.env.TEAM_SERVER_URL} (from ${source})`,
+    `[funny] Runner mode enabled — connecting to ${process.env.TEAM_SERVER_URL} (from CLI)`,
   );
 }
 
@@ -255,7 +228,7 @@ if (!process.env.RUNNER_AUTH_SECRET) {
         '\n[funny] ERROR: RUNNER_AUTH_SECRET is required when using --token in team mode.\n\n' +
           'This runner connects to a central server and must use the SAME\n' +
           'RUNNER_AUTH_SECRET as that server. Ask your admin for it, then pass\n' +
-          'it via flag or env (it is saved to ~/.funny/.env for next time):\n\n' +
+          'it via flag or env:\n\n' +
           `  funny --team ${process.env.TEAM_SERVER_URL} --secret <secret-from-admin> --token <invite-token>\n\n` +
           'Or drop --token and use device-link enrollment (no secret needed):\n\n' +
           `  funny --team ${process.env.TEAM_SERVER_URL}\n`,
@@ -282,23 +255,90 @@ const serverSrc = resolve(import.meta.dir, '../packages/server/src/index.ts');
 const runtimeEntry = resolve(import.meta.dir, '../packages/runtime/dist/index.js');
 const runtimeSrc = resolve(import.meta.dir, '../packages/runtime/src/index.ts');
 
-// Try server first (unified architecture), then runtime (standalone)
-if (existsSync(serverEntry)) {
-  console.log('[funny] Starting from built server...');
-  await import(serverEntry);
-} else if (existsSync(serverSrc)) {
-  console.log('[funny] Starting from server source...');
-  await import(serverSrc);
-} else if (existsSync(runtimeEntry)) {
-  console.log('[funny] Starting from built runtime (standalone mode)...');
-  await import(runtimeEntry);
-} else if (existsSync(runtimeSrc)) {
-  console.log('[funny] Starting from runtime source (standalone mode)...');
-  await import(runtimeSrc);
+function resolveServerEntry() {
+  if (existsSync(serverEntry)) return { path: serverEntry, label: 'built server' };
+  if (existsSync(serverSrc)) return { path: serverSrc, label: 'server source' };
+  return null;
+}
+
+function resolveRuntimeEntry() {
+  if (existsSync(runtimeEntry)) return { path: runtimeEntry, label: 'built runtime' };
+  if (existsSync(runtimeSrc)) return { path: runtimeSrc, label: 'runtime source' };
+  return null;
+}
+
+async function startRuntimeInThisProcess() {
+  const entry = resolveRuntimeEntry();
+  if (!entry) {
+    console.error('[funny] Error: Runtime files not found.');
+    console.error('Please run "bun install" and "bun run build" first.');
+    process.exit(1);
+  }
+  console.log(`[funny] Starting from ${entry.label}...`);
+  await import(entry.path);
+}
+
+function ensureLoopbackRunnerOptIn() {
+  process.env.FUNNY_LOOPBACK_RUNNER_USERNAME ||= process.env.ADMIN_USERNAME || 'admin';
+  return process.env.FUNNY_LOOPBACK_RUNNER_USERNAME;
+}
+
+function startLocalRuntime(serverUrl) {
+  const entry = resolveRuntimeEntry();
+  if (!entry) {
+    console.warn('[funny] Warning: Runtime files not found; local agent runner was not started.');
+    return;
+  }
+
+  const loopbackRunnerUsername = ensureLoopbackRunnerOptIn();
+  const env = {
+    ...process.env,
+    TEAM_SERVER_URL: serverUrl,
+    RUNNER_AUTH_SECRET: process.env.RUNNER_AUTH_SECRET,
+    WS_TUNNEL_ONLY: process.env.WS_TUNNEL_ONLY || 'true',
+    FUNNY_LOOPBACK_RUNNER_USERNAME: loopbackRunnerUsername,
+  };
+
+  console.log(`[funny] Starting local runner from ${entry.label} -> ${serverUrl}`);
+  const child = Bun.spawn({
+    cmd: [process.execPath, entry.path],
+    env,
+    stdout: 'inherit',
+    stderr: 'inherit',
+  });
+
+  let shuttingDown = false;
+  const stopChild = (signal = 'SIGTERM') => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    child.kill(signal);
+  };
+
+  process.on('SIGINT', () => stopChild('SIGINT'));
+  process.on('SIGTERM', () => stopChild('SIGTERM'));
+
+  child.exited.then((code) => {
+    if (!shuttingDown && code !== 0) {
+      console.error(`[funny] Local runner exited with code ${code}.`);
+    }
+  });
+}
+
+if (isTeamMode) {
+  await startRuntimeInThisProcess();
 } else {
-  console.error('[funny] Error: Server files not found.');
-  console.error('Please run "bun install" and "bun run build" first.');
-  process.exit(1);
+  const entry = resolveServerEntry();
+  if (!entry) {
+    console.error('[funny] Error: Server files not found.');
+    console.error('Please run "bun install" and "bun run build" first.');
+    process.exit(1);
+  }
+
+  const localServerUrl = `http://127.0.0.1:${values.port}`;
+  ensureLoopbackRunnerOptIn();
+  console.log(`[funny] Starting from ${entry.label}...`);
+  await import(entry.path);
+  startLocalRuntime(localServerUrl);
 }
 
 // ── `funny ext` implementation ────────────────────────────

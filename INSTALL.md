@@ -20,6 +20,10 @@ bunx @ironmussa/funny@latest
 
 Open `http://localhost:3001` in your browser.
 
+This command starts in local standalone mode by default. Saved or inherited
+team-runner settings are ignored; pass `--team <url>` explicitly to connect this
+machine to a central server.
+
 Default credentials on first startup:
 
 - **Username:** `admin`
@@ -243,7 +247,7 @@ funny --team http://<central-server-ip>:3002
 └──────────────────────────────────────────────────────────┘
 ```
 
-In the funny UI you're already logged into, open **Settings ▸ Runners**, click **"Link a runner"**, enter the code, confirm the runner's hostname/OS/IP, and approve. The runner then receives its credentials automatically (a per-runner bearer token plus the shared forwarded-identity secret) and persists them to `~/.funny`, so subsequent runs only need `funny`. This works the same on a PaaS (Railway/Fly/Render) where you can't easily run a command beyond the container's start command, and behind NAT — only outbound access to the server is required.
+In the funny UI you're already logged into, open **Settings ▸ Runners**, click **"Link a runner"**, enter the code, confirm the runner's hostname/OS/IP, and approve. The runner then receives its credentials automatically (a per-runner bearer token plus the shared forwarded-identity secret) and persists them to `~/.funny`. On a local machine, every team run should pass `funny --team http://<central-server-ip>:3002`; a plain `funny` still starts standalone. This works the same on a PaaS (Railway/Fly/Render) where you can't easily run a command beyond the container's start command, and behind NAT — only outbound access to the server is required.
 
 **Classic flow (advanced).** You may instead supply the shared secret and a single-use invite token yourself — see the `--secret` / `--token` options below. `RUNNER_AUTH_SECRET` must match the central server's value, or every proxied request fails.
 
@@ -295,15 +299,16 @@ The runner machine needs:
 - Git installed and configured
 - Access to your project repositories
 
-**Environment variables for the runner:**
+**Runner command:**
+
+```bash
+funny --team http://<central-server-ip>:3002
+```
+
+**Optional environment variables for that runner process:**
 
 ```env
 # .env  (on Machine B)
-
-# ── Team mode — required to activate runner mode ──────────
-# URL of the central server. This is what activates team/runner mode.
-# Equivalent to passing --team <url> on the command line.
-TEAM_SERVER_URL=http://<central-server-ip>:3002
 
 # ── Runner authentication ─────────────────────────────────
 # Device-link (recommended): leave this UNSET. The runner obtains its
@@ -315,9 +320,12 @@ TEAM_SERVER_URL=http://<central-server-ip>:3002
 # request.
 # RUNNER_AUTH_SECRET=<same-secret-as-central-server>
 
-# ── Network ──────────────────────────────────────────────
-PORT=3001
-HOST=0.0.0.0             # Expose UI to browsers on the network (optional)
+# ── Runner HTTP fallback (optional) ──────────────────────
+# The runner primarily talks to the central server over an outbound Socket.IO
+# tunnel. Keep the direct HTTP listener loopback-only unless the central server
+# must call this runner directly.
+# RUNNER_PORT=3003
+# RUNNER_HOST=127.0.0.1
 
 # ── Claude CLI ───────────────────────────────────────────
 # Auto-detected if omitted:
@@ -329,30 +337,25 @@ HOST=0.0.0.0             # Expose UI to browsers on the network (optional)
 # persisted default; the Settings → Providers toggles are session-scoped.
 # FUNNY_PROVIDERS=claude,codex
 
-# ── Direct HTTP fallback (optional) ──────────────────────
+# ── Direct HTTP fallback URL (optional) ──────────────────
 # If the runner is reachable directly by the central server (not behind NAT),
 # set this so the server can also call it over HTTP instead of the WS tunnel.
-# RUNNER_HTTP_URL=http://<runner-ip>:3001
-
-# ── Database ─────────────────────────────────────────────
-# The runner keeps its own local SQLite by default.
-# Only set DATABASE_URL if the runner should share a PostgreSQL DB.
-# DATABASE_URL=postgresql://user:password@host:5432/funny
+# RUNNER_HTTP_URL=http://<runner-ip>:3003
 ```
 
 ---
 
 #### Machine C — Client (browser only)
 
-The web UI is served by each runner machine. Users open a browser pointing to `http://<runner-ip>:3001` — no environment variables or installation required on the client machine.
+The web UI is served by the central server. Users open a browser pointing to `http://<central-server-ip>:3002` — no environment variables or installation required on the client machine.
 
 If you are building the client separately and deploying it to a CDN or separate web server, configure the backend URL:
 
 ```env
 # .env  (packages/client — only for separate client builds)
 
-# Backend server URL (the runner or central server address)
-VITE_SERVER_URL=http://<runner-ip>:3001
+# Backend server URL (the central server address)
+VITE_SERVER_URL=http://<central-server-ip>:3002
 
 # Client dev server settings (development only)
 # VITE_PORT=5173
@@ -363,7 +366,7 @@ VITE_SERVER_URL=http://<runner-ip>:3001
 
 #### How runner registration works
 
-When a runner starts with `TEAM_SERVER_URL` set, it automatically registers with the central server:
+When a runner starts with `--team <url>`, it automatically registers with the central server:
 
 1. POSTs to `/api/runners/register` with `{ name, hostname, os }` and the `RUNNER_AUTH_SECRET` as an `X-Runner-Auth` header.
 2. The server responds with a `{ runnerId, token }`. The runner stores this token and uses it for all subsequent requests (heartbeat every 15 s, task polling every 5 s, WebSocket auth).
@@ -377,13 +380,13 @@ All runners share the same `RUNNER_AUTH_SECRET` but each gets its own unique `ru
 
 ```bash
 # Developer A — their workstation
-TEAM_SERVER_URL=http://central:3002 RUNNER_AUTH_SECRET=shared-secret funny
+RUNNER_AUTH_SECRET=shared-secret funny --team http://central:3002
 
 # Developer B — their workstation
-TEAM_SERVER_URL=http://central:3002 RUNNER_AUTH_SECRET=shared-secret funny
+RUNNER_AUTH_SECRET=shared-secret funny --team http://central:3002
 
 # Dedicated CI machine
-TEAM_SERVER_URL=http://central:3002 RUNNER_AUTH_SECRET=shared-secret funny
+RUNNER_AUTH_SECRET=shared-secret funny --team http://central:3002
 ```
 
 **Runner data stored on the central server:**
@@ -496,8 +499,7 @@ DATABASE_URL=postgresql://user:pass@db.example.com/funny?sslmode=require
 | -------------------- | ---------------------------------------------------- | -------------- | ----------------- |
 | `PORT`               | Port to listen on                                    | `3001`         | No                |
 | `HOST`               | Host to bind to                                      | `127.0.0.1`    | No                |
-| `TEAM_SERVER_URL`    | Central server URL — **activates team/runner mode**  | —              | Only in team mode |
-| `RUNNER_AUTH_SECRET` | Shared secret for runner ↔ server authentication     | Auto-generated | Yes in team mode  |
+| `RUNNER_AUTH_SECRET` | Shared secret for classic `--team` authentication    | Auto-generated | Only for classic flow |
 | `RUNNER_HTTP_URL`    | Runner's own HTTP URL (enables direct HTTP fallback) | —              | No                |
 | `DATABASE_URL`       | PostgreSQL connection URL                            | SQLite         | No                |
 | `CORS_ORIGIN`        | Allowed CORS origins (comma-separated)               | Auto           | No                |
@@ -540,7 +542,7 @@ Usage: funny [options]
 Options:
   -p, --port <port>    Server port (default: 3001)
   -h, --host <host>    Server host (default: 127.0.0.1)
-  --team <url>         Connect to a central team server (activates runner mode)
+  --team <url>         Connect this machine as a runner to a central server
   --help               Show help message
 ```
 

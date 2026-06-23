@@ -17,6 +17,7 @@ import { createAccessControl } from 'better-auth/plugins/access';
 
 import { db, dbDialect } from '../db/index.js';
 import { audit } from './audit.js';
+import { resolveCorsOrigins } from './cors-origins.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 import { validatePasswordStrength } from './password-policy.js';
@@ -102,12 +103,7 @@ const owner = ac.newRole({
 
 // ── Auth Instance ───────────────────────────────────────────────
 
-/** Vite dev port (from root `.env` when server uses --env-file) — keeps CORS/trustedOrigins in sync */
-const DEV_CLIENT_PORT = process.env.VITE_PORT || '5173';
-
-const corsOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : [`http://localhost:${DEV_CLIENT_PORT}`, `http://127.0.0.1:${DEV_CLIENT_PORT}`];
+const corsOrigins = resolveCorsOrigins();
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 

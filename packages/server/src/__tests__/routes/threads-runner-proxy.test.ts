@@ -37,7 +37,7 @@ describe('Thread routes — runner proxy', () => {
 
   const resolvedRunner = {
     runnerId: 'runner-1',
-    httpUrl: 'http://127.0.0.1:3003',
+    httpUrl: 'http://runner.local',
   };
 
   beforeEach(() => {
@@ -46,7 +46,7 @@ describe('Thread routes — runner proxy', () => {
     spyOn(wsTunnel, 'tunnelFetch').mockImplementation(tunnelFetch);
     spyOn(threadRegistry, 'registerThread').mockResolvedValue(undefined);
     spyOn(runnerManager, 'findRunnerForProject').mockResolvedValue({
-      runner: { runnerId: 'runner-1', httpUrl: 'http://127.0.0.1:3003' },
+      runner: { runnerId: 'runner-1', httpUrl: 'http://runner.local' },
     } as any);
     spyOn(runnerManager, 'findAnyRunnerForUser').mockResolvedValue(null);
     spyOn(runnerResolver, 'resolveRunner').mockResolvedValue(resolvedRunner as any);

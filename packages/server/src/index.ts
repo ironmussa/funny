@@ -18,6 +18,7 @@ import { csrf } from 'hono/csrf';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
+import { resolveCorsOrigins } from './lib/cors-origins.js';
 import { log } from './lib/logger.js';
 import type { ServerEnv } from './lib/types.js';
 import { authMiddleware, setAuthInstance } from './middleware/auth.js';
@@ -111,10 +112,7 @@ await purgeStaleRunners();
 const app = new Hono<ServerEnv>();
 
 // Middleware
-const devClientPort = process.env.VITE_PORT || '5173';
-const corsOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : [`http://localhost:${devClientPort}`, `http://127.0.0.1:${devClientPort}`];
+const corsOrigins = resolveCorsOrigins();
 
 app.use('*', cors({ origin: corsOrigins, credentials: true }));
 // Security HI-7: defense-in-depth on top of `SameSite=Strict` session cookies.

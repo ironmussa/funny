@@ -46,7 +46,12 @@ import { openProjectTerminal } from '@/lib/open-terminal-tab';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
+import {
+  useGitStatusStore,
+  branchKey as computeBranchKey,
+  gitStatusForThreadFromState,
+  gitStatusSidebarFingerprint,
+} from '@/stores/git-status-store';
 import { invalidateThreadData } from '@/stores/thread-machine-bridge';
 
 import { ThreadItem } from './ThreadItem';
@@ -267,12 +272,15 @@ export const ProjectItem = memo(function ProjectItem({
   // skips re-renders when unrelated threads' git statuses change.
   const gitStatusFingerprint = useGitStatusStore(
     useCallback(
-      (s: { statusByBranch: Record<string, import('@funny/shared').GitStatusInfo> }) => {
+      (s: {
+        statusByBranch: Record<string, import('@funny/shared').GitStatusInfo>;
+        threadToBranchKey: Record<string, string>;
+      }) => {
         let fp = '';
-        for (const [id, bk] of threadBranchKeys) {
+        for (const [id, fallbackBk] of threadBranchKeys) {
+          const bk = s.threadToBranchKey[id] ?? fallbackBk;
           const st = s.statusByBranch[bk];
-          if (st)
-            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.unpulledCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
+          if (st) fp += `${gitStatusSidebarFingerprint(id, st)},`;
         }
         return fp;
       },
@@ -281,14 +289,15 @@ export const ProjectItem = memo(function ProjectItem({
   );
   // Derive the actual status objects only when the fingerprint changes
   const gitStatusForThreads = useMemo(() => {
-    const { statusByBranch } = useGitStatusStore.getState();
+    const state = useGitStatusStore.getState();
     const result: Record<string, import('@funny/shared').GitStatusInfo> = {};
-    for (const [id, bk] of threadBranchKeys) {
-      if (statusByBranch[bk]) result[id] = statusByBranch[bk];
+    for (const thread of threads) {
+      const status = gitStatusForThreadFromState(state, thread);
+      if (status) result[thread.id] = status;
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
-  }, [threadBranchKeys, gitStatusFingerprint]);
+  }, [threads, threadBranchKeys, gitStatusFingerprint]);
 
   // Read selectedThreadId from the store directly, scoped to this project's
   // thread IDs. This avoids passing selectedThreadId as a prop from the parent,

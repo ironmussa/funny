@@ -8,7 +8,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
+import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 
 import { ThreadGroup } from './ThreadGroup';
@@ -28,6 +28,7 @@ export function RunningThreads() {
   const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
+  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const runningThreads = useMemo(() => {
     const result: RunningThread[] = [];
@@ -81,7 +82,7 @@ export function RunningThreads() {
             isSelected={activeThreadId === thread.id}
             subtitle={thread.projectName}
             projectColor={thread.projectColor}
-            gitStatus={statusByBranch[computeBranchKey(thread)]}
+            gitStatus={statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)]}
             href={buildThreadPath(thread)}
             onSelect={() => goToThread(navigate, thread)}
           />

@@ -22,7 +22,7 @@ import { timeAgo } from '@/lib/thread-utils';
 import { isScratch } from '@/lib/thread-variant';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
+import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const ROW_ESTIMATE_PX = 64;
@@ -68,6 +68,7 @@ export function AllThreadsThreadList({
   const { t } = useTranslation();
   const activeThreadId = useActiveThreadId();
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
+  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [highlightIndex, setHighlightIndex] = useState(-1);
 
@@ -194,7 +195,8 @@ export function AllThreadsThreadList({
               const thread = threads[v.index];
               if (!thread) return null;
               const projectInfo = projectInfoById[thread.projectId];
-              const gitStatus: GitStatusInfo | undefined = statusByBranch[computeBranchKey(thread)];
+              const gitStatus: GitStatusInfo | undefined =
+                statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)];
               const branch = resolveThreadBranch(thread);
               const isWorktree =
                 thread.mode === 'worktree' && !!branch && thread.provider !== 'external';
@@ -225,7 +227,9 @@ export function AllThreadsThreadList({
                       isScratch(thread)
                         ? undefined
                         : (projectInfo?.name ??
-                          t('allThreads.unknownProject', { defaultValue: 'Unknown project' }))
+                          t('allThreads.unknownProject', {
+                            defaultValue: 'Unknown project',
+                          }))
                     }
                     projectColor={projectInfo?.color}
                     timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}

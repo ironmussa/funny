@@ -31,6 +31,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadId, useThreadSelector } from '@/stores/thread-context';
 import * as mutations from '@/stores/thread-mutations';
 import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 const queueLog = createClientLogger('PromptInputQueue');
 
@@ -274,6 +275,7 @@ export function usePromptInputState({
   const selectedBranch = useBranchPickerStore((s) => s.selectedBranch);
   const gitCurrentBranch = useBranchPickerStore((s) => s.currentBranch);
   const fetchBranches = useBranchPickerStore((s) => s.fetchBranches);
+  const newThreadBaseBranch = useUIStore((s) => s.newThreadBaseBranch);
   const [sendToBacklog, setSendToBacklog] = useState(false);
   const [followUpBranches, setFollowUpBranches] = useState<string[]>([]);
   const [followUpRemoteBranches, setFollowUpRemoteBranches] = useState<string[]>([]);
@@ -399,9 +401,9 @@ export function usePromptInputState({
 
   useEffect(() => {
     if (isNewThread && effectiveProjectId) {
-      fetchBranches(effectiveProjectId, projectDefaultBranch);
+      fetchBranches(effectiveProjectId, projectDefaultBranch, newThreadBaseBranch);
     }
-  }, [isNewThread, effectiveProjectId, projectDefaultBranch, fetchBranches]);
+  }, [isNewThread, effectiveProjectId, projectDefaultBranch, newThreadBaseBranch, fetchBranches]);
 
   const projectPath = useMemo(
     () =>

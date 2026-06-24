@@ -1,8 +1,9 @@
-import type { Thread } from '@funny/shared';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import type { GitStatusInfo, Thread } from '@funny/shared';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadList } from '@/components/sidebar/ThreadList';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -61,6 +62,22 @@ function makeThread(id: string, overrides: Partial<Thread> = {}): Thread {
   } as Thread;
 }
 
+function makeStatus(overrides: Partial<GitStatusInfo> = {}): GitStatusInfo {
+  return {
+    threadId: 't-pr',
+    branchKey: 'p1:feature/pr',
+    state: 'pushed',
+    dirtyFileCount: 0,
+    unpushedCommitCount: 0,
+    unpulledCommitCount: 0,
+    hasRemoteBranch: true,
+    isMergedIntoBase: false,
+    linesAdded: 0,
+    linesDeleted: 0,
+    ...overrides,
+  };
+}
+
 const noopHandlers = {
   onRenameThread: vi.fn(),
   onArchiveThread: vi.fn(),
@@ -79,6 +96,13 @@ describe('ThreadList', () => {
       scratchThreadIds: [],
       selectedThreadId: null,
       activeThread: null,
+    } as any);
+    useGitStatusStore.setState({
+      statusByBranch: {},
+      threadToBranchKey: {},
+      loadingProjects: new Set(),
+      _loadingBranchKeys: new Set(),
+      _loadingProjectStatus: new Set(),
     } as any);
   });
 
@@ -158,7 +182,11 @@ describe('ThreadList', () => {
   });
 
   test('navigates to thread route on select', async () => {
-    const thread = makeThread('t-nav', { status: 'running', branch: 'main', mode: 'local' });
+    const thread = makeThread('t-nav', {
+      status: 'running',
+      branch: 'main',
+      mode: 'local',
+    });
     useThreadStore.setState({
       ...seedThreads({ p1: [thread] }),
       scratchThreadIds: [],
@@ -199,5 +227,75 @@ describe('ThreadList', () => {
     expect(rowB?.className).toContain('bg-accent text-foreground');
     expect(rowA?.className).not.toContain('bg-accent text-foreground');
     expect(rowA?.className).toContain('text-muted-foreground');
+  });
+
+  test('updates Activity row when PR metadata arrives for an existing git status', async () => {
+    const thread = makeThread('t-pr', {
+      branch: 'feature/pr',
+      mode: 'local',
+      title: 'PR branch thread',
+    });
+    const branchKey = 'p1:feature/pr';
+    useThreadStore.setState({
+      ...seedThreads({ p1: [thread] }),
+      scratchThreadIds: [],
+    } as any);
+    useGitStatusStore.setState({
+      statusByBranch: { [branchKey]: makeStatus({ branchKey }) },
+      threadToBranchKey: { [thread.id]: branchKey },
+    } as any);
+
+    renderWithProviders(<ThreadList {...noopHandlers} />);
+
+    expect(screen.queryByTestId(`thread-pr-badge-${thread.id}`)).not.toBeInTheDocument();
+
+    act(() => {
+      useGitStatusStore.setState({
+        statusByBranch: {
+          [branchKey]: makeStatus({
+            branchKey,
+            prNumber: 52,
+            prState: 'OPEN',
+            prUrl: 'https://github.com/example/repo/pull/52',
+          }),
+        },
+        threadToBranchKey: { [thread.id]: branchKey },
+      } as any);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`thread-pr-badge-${thread.id}`)).toHaveTextContent('#52');
+    });
+  });
+
+  test('uses server-provided branch key mapping for Activity PR badges', async () => {
+    const thread = makeThread('t-pr', {
+      branch: undefined,
+      baseBranch: 'main',
+      mode: 'local',
+      title: 'Merged PR thread',
+    });
+    const branchKey = 'tid:t-pr';
+    useThreadStore.setState({
+      ...seedThreads({ p1: [thread] }),
+      scratchThreadIds: [],
+    } as any);
+    useGitStatusStore.setState({
+      statusByBranch: {
+        [branchKey]: makeStatus({
+          branchKey,
+          prNumber: 67,
+          prState: 'OPEN',
+          prUrl: 'https://github.com/example/repo/pull/67',
+        }),
+      },
+      threadToBranchKey: { [thread.id]: branchKey },
+    } as any);
+
+    renderWithProviders(<ThreadList {...noopHandlers} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`thread-pr-badge-${thread.id}`)).toHaveTextContent('#67');
+    });
   });
 });

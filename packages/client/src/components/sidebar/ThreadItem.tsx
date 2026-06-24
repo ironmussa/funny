@@ -16,7 +16,6 @@ import {
 import { useState, memo, useCallback, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { PRBadge } from '@/components/PRBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
@@ -482,7 +481,7 @@ export const ThreadItem = memo(function ThreadItem({
         {/* Row 2: Powerline (project → branch) + Git status + Snippet + Time */}
         {(hasMetadataRow || hasSnippetRow) && (
           <div className="flex min-h-[22px] min-w-0 items-center gap-1.5 pl-5">
-            {hasPowerline && (
+            {(hasPowerline || hasPR) && (
               <ThreadPowerline
                 thread={thread}
                 projectName={subtitle}
@@ -490,6 +489,8 @@ export const ThreadItem = memo(function ThreadItem({
                 projectTooltip={projectPath}
                 gitStatus={effectiveGitStatus}
                 diffStatsSize="xs"
+                prBadgeSize="compact"
+                prBadgeTestId={`thread-pr-badge-${thread.id}`}
                 data-testid={`thread-powerline-${thread.id}`}
               />
             )}
@@ -509,15 +510,6 @@ export const ThreadItem = memo(function ThreadItem({
                   })}
                 </TooltipContent>
               </Tooltip>
-            )}
-            {hasPR && effectiveGitStatus && (
-              <PRBadge
-                prNumber={effectiveGitStatus.prNumber!}
-                prState={effectiveGitStatus.prState ?? 'OPEN'}
-                prUrl={effectiveGitStatus.prUrl}
-                size="compact"
-                data-testid={`thread-pr-badge-${thread.id}`}
-              />
             )}
             {metadataBadge}
             {hasSnippet && contentSnippet && search ? (

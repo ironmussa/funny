@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
+import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
 import {
   PRFilterBar,
   EMPTY_PR_FILTERS,
@@ -20,12 +21,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
+  useThreadId,
   useThreadBranch,
   useThreadProjectId,
   useThreadWorktreePath,
 } from '@/stores/thread-context';
+import { useUIStore } from '@/stores/ui-store';
 
 import { PinnedPRCard } from './PinnedPRCard';
 import { PRBadge } from './PRBadge';
@@ -60,6 +64,7 @@ interface PullRequestsTabProps {
 
 export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   const { t } = useTranslation();
+  const activeThreadId = useThreadId();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const activeThreadProjectId = useThreadProjectId();
   const activeThreadBranch = useThreadBranch();
@@ -82,6 +87,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
 
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
   const defaultBranch = project?.defaultBranch || undefined;
+  const startNewThread = useUIStore((s) => s.startNewThread);
 
   // Are we sitting on the default/main branch? If defaultBranch is unknown,
   // fall back to the common names so we don't lock users out of the full list.
@@ -237,6 +243,14 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
     fetchPRs(1, false);
   };
 
+  const createThreadFromPRBranch = useCallback(
+    (branch: string) => {
+      if (!projectId) return;
+      startNewThread(projectId, false, branch);
+    },
+    [projectId, startNewThread],
+  );
+
   const { currentBranchPRs, otherPRs } = useMemo(() => {
     if (!currentBranch) return { currentBranchPRs: [] as GitHubPR[], otherPRs: prs };
     const match: GitHubPR[] = [];
@@ -248,17 +262,45 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
     return { currentBranchPRs: match, otherPRs: rest };
   }, [prs, currentBranch]);
 
+  const currentBranchPR = currentBranchPRs[0];
+  const currentBranchPRNumber = currentBranchPR?.number;
+  const currentBranchPRUrl = currentBranchPR?.html_url;
+  const currentBranchPRMergedAt = currentBranchPR?.merged_at;
+  const currentBranchPRState = currentBranchPR?.state;
+
+  useEffect(() => {
+    if (!activeThreadId || !currentBranchPRNumber || !currentBranchPRUrl) return;
+    useGitStatusStore.getState().applyPRMetadata(activeThreadId, {
+      prNumber: currentBranchPRNumber,
+      prUrl: currentBranchPRUrl,
+      prState: currentBranchPRMergedAt
+        ? 'MERGED'
+        : currentBranchPRState === 'closed'
+          ? 'CLOSED'
+          : 'OPEN',
+    });
+  }, [
+    activeThreadId,
+    currentBranchPRMergedAt,
+    currentBranchPRNumber,
+    currentBranchPRState,
+    currentBranchPRUrl,
+  ]);
+
   const renderPRRow = (pr: GitHubPR) => {
     const prState = pr.merged_at ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN';
     return (
-      <button
-        type="button"
+      <div
         key={pr.number}
-        onClick={() => setSelectedPR(pr)}
-        className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs transition-colors"
+        className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
         data-testid={`pr-item-${pr.number}`}
       >
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <button
+          type="button"
+          onClick={() => setSelectedPR(pr)}
+          className="flex min-w-0 flex-1 flex-col gap-1.5 text-left"
+          data-testid={`pr-item-open-${pr.number}`}
+        >
           <div className="flex items-baseline gap-1.5">
             <PRBadge
               prNumber={pr.number}
@@ -300,8 +342,13 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               </>
             )}
           </div>
-        </div>
-      </button>
+        </button>
+        <PRActionsMenu
+          prNumber={pr.number}
+          branch={pr.head.ref}
+          onCreateThread={createThreadFromPRBranch}
+        />
+      </div>
     );
   };
 
@@ -484,6 +531,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                   projectId={projectId}
                   currentUserLogin={currentUserLogin}
                   onMerged={refresh}
+                  onCreateThreadForBranch={createThreadFromPRBranch}
                 />
               ))}
             </div>
@@ -514,6 +562,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                         projectId={projectId}
                         currentUserLogin={currentUserLogin}
                         onMerged={refresh}
+                        onCreateThreadForBranch={createThreadFromPRBranch}
                       />
                     ))}
                   </div>

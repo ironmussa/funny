@@ -15,7 +15,11 @@ interface BranchPickerState {
   projectId: string | null;
 
   // ── Actions ──
-  fetchBranches: (projectId: string, projectDefaultBranch?: string | null) => Promise<void>;
+  fetchBranches: (
+    projectId: string,
+    projectDefaultBranch?: string | null,
+    preferredBranch?: string | null,
+  ) => Promise<void>;
   setSelectedBranch: (branch: string) => void;
   setCurrentBranch: (branch: string) => void;
   invalidate: () => void;
@@ -32,16 +36,59 @@ const initialState = {
   projectId: null as string | null,
 };
 
+function normalizeBranchName(branch: string): string {
+  return branch
+    .trim()
+    .replace(/^refs\/heads\//, '')
+    .replace(/^refs\/remotes\//, '')
+    .replace(/^origin\//, '');
+}
+
+function normalizeRemoteBranches(branches: string[]): string[] {
+  return [...new Set(branches.map(normalizeBranchName).filter(Boolean))];
+}
+
+function findPreferredBranch(
+  preferredBranch: string | null | undefined,
+  branches: string[],
+  remoteBranches: string[],
+): string | null {
+  if (!preferredBranch) return null;
+  const preferred = preferredBranch.trim();
+  if (!preferred) return null;
+
+  if (branches.includes(preferred) || remoteBranches.includes(preferred)) return preferred;
+
+  const normalizedPreferred = normalizeBranchName(preferred);
+  return (
+    branches.find((branch) => normalizeBranchName(branch) === normalizedPreferred) ??
+    remoteBranches.find((branch) => normalizeBranchName(branch) === normalizedPreferred) ??
+    null
+  );
+}
+
 export const useBranchPickerStore = create<BranchPickerState>((set) => ({
   ...initialState,
 
-  fetchBranches: async (projectId: string, projectDefaultBranch?: string | null) => {
-    set({ loading: true, projectId });
+  fetchBranches: async (
+    projectId: string,
+    projectDefaultBranch?: string | null,
+    preferredBranch?: string | null,
+  ) => {
+    set({
+      loading: true,
+      projectId,
+      selectedBranch: preferredBranch?.trim() || '',
+    });
     const result = await api.listBranches(projectId);
     if (result.isOk()) {
       const data = result.value;
+      const remoteBranches = normalizeRemoteBranches(data.remoteBranches ?? []);
       let selected = '';
-      if (data.currentBranch && data.branches.includes(data.currentBranch)) {
+      const preferred = findPreferredBranch(preferredBranch, data.branches, remoteBranches);
+      if (preferred) {
+        selected = preferred;
+      } else if (data.currentBranch && data.branches.includes(data.currentBranch)) {
         selected = data.currentBranch;
       } else if (projectDefaultBranch && data.branches.includes(projectDefaultBranch)) {
         selected = projectDefaultBranch;
@@ -52,7 +99,7 @@ export const useBranchPickerStore = create<BranchPickerState>((set) => ({
       }
       set({
         branches: data.branches,
-        remoteBranches: data.remoteBranches ?? [],
+        remoteBranches,
         defaultBranch: data.defaultBranch,
         currentBranch: data.currentBranch,
         selectedBranch: selected,

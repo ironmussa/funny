@@ -58,7 +58,7 @@ export function NewThreadInput({
   const newThreadIsScratchStore = useUIStore((s) => s.newThreadIsScratch);
   const newThreadIsScratch = isScratchOverride ?? newThreadIsScratchStore;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const effectiveProjectId = projectIdOverride || selectedProjectId || newThreadProjectId;
+  const effectiveProjectId = projectIdOverride || newThreadProjectId || selectedProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
   const addScratchThread = useThreadStore((s) => s.addScratchThread);
   const activeDesignId = useUIStore((s) => s.activeDesignId);

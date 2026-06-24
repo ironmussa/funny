@@ -44,6 +44,8 @@ interface UIState {
   settingsReturnPath: string | null;
   newThreadProjectId: string | null;
   newThreadIdleOnly: boolean;
+  /** Branch preselected when opening the next normal new-thread compose. */
+  newThreadBaseBranch: string | null;
   /** True when the user is composing a scratch (projectless) thread. */
   newThreadIsScratch: boolean;
   allThreadsProjectId: string | null;
@@ -135,7 +137,7 @@ interface UIState {
   setSettingsReturnPath: (path: string | null) => void;
   setGeneralSettingsOpen: (open: boolean) => void;
   setActivePreferencesPage: (page: string | null) => void;
-  startNewThread: (projectId: string, idleOnly?: boolean) => void;
+  startNewThread: (projectId: string, idleOnly?: boolean, baseBranch?: string | null) => void;
   /** Open the compose form in scratch mode (no project, no git). */
   startNewScratchThread: () => void;
   cancelNewThread: () => void;
@@ -209,6 +211,7 @@ export const useUIStore = create<UIState>((set) => ({
   settingsReturnPath: null,
   newThreadProjectId: null,
   newThreadIdleOnly: false,
+  newThreadBaseBranch: null,
   newThreadIsScratch: false,
   allThreadsProjectId: null,
   automationInboxOpen: false,
@@ -497,6 +500,7 @@ export const useUIStore = create<UIState>((set) => ({
         automationInboxOpen: false,
         allThreadsProjectId: null,
         newThreadProjectId: null,
+        newThreadBaseBranch: null,
         testRunnerOpen: false,
       });
     } else {
@@ -504,7 +508,7 @@ export const useUIStore = create<UIState>((set) => ({
     }
   },
 
-  startNewThread: (projectId: string, idleOnly?: boolean) => {
+  startNewThread: (projectId: string, idleOnly?: boolean, baseBranch?: string | null) => {
     // Block thread creation on shared projects that haven't been set up yet
     const project = useProjectStore.getState().projects?.find((p) => p.id === projectId);
     if (project?.needsSetup) return;
@@ -515,6 +519,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({
       newThreadProjectId: projectId,
       newThreadIdleOnly: idleOnly ?? false,
+      newThreadBaseBranch: baseBranch ?? null,
       newThreadIsScratch: false,
       allThreadsProjectId: null,
       automationInboxOpen: false,
@@ -533,6 +538,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({
       newThreadProjectId: null,
       newThreadIdleOnly: false,
+      newThreadBaseBranch: null,
       newThreadIsScratch: true,
       allThreadsProjectId: null,
       automationInboxOpen: false,
@@ -549,6 +555,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({
       newThreadProjectId: null,
       newThreadIdleOnly: false,
+      newThreadBaseBranch: null,
       newThreadIsScratch: false,
       newThreadIssueContext: null,
     });
@@ -564,6 +571,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({
       allThreadsProjectId: '__all__',
       newThreadProjectId: null,
+      newThreadBaseBranch: null,
       automationInboxOpen: false,
       addProjectOpen: false,
       settingsOpen: false,
@@ -751,5 +759,9 @@ export const useUIStore = create<UIState>((set) => ({
 // Reset transient UI panes whenever a thread is selected.
 // Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.
 setThreadSelectListener(() => {
-  useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
+  useUIStore.setState({
+    newThreadProjectId: null,
+    newThreadBaseBranch: null,
+    allThreadsProjectId: null,
+  });
 });

@@ -105,6 +105,39 @@ describe('ThreadPowerline', () => {
     expect(onDiffStatsClick).toHaveBeenCalledTimes(1);
   });
 
+  test('renders the PR badge when gitStatus carries PR metadata', () => {
+    // Regression: the PR number showed in surfaces with their own PRBadge
+    // (sidebar, Activity) but not in the shared ThreadPowerline (prompt footer,
+    // Kanban, ThreadPicker). A clean branch with an open PR must still show it.
+    const gitStatus: GitStatusInfo = {
+      threadId: 'thread-1',
+      branchKey: 'thread-1:master',
+      state: 'clean',
+      dirtyFileCount: 0,
+      unpushedCommitCount: 0,
+      unpulledCommitCount: 0,
+      hasRemoteBranch: true,
+      isMergedIntoBase: false,
+      linesAdded: 0,
+      linesDeleted: 0,
+      prNumber: 51,
+      prState: 'OPEN',
+      prUrl: 'https://github.com/org/repo/pull/51',
+    };
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({ mode: 'local', baseBranch: 'master' })}
+        projectName="funny"
+        gitStatus={gitStatus}
+        prBadgeTestId="thread-pr-badge-thread-1"
+      />,
+    );
+
+    const badge = screen.getByTestId('thread-pr-badge-thread-1');
+    expect(badge).toHaveTextContent('#51');
+    expect(badge).toHaveAttribute('href', 'https://github.com/org/repo/pull/51');
+  });
+
   test('local thread keeps its single branch segment', () => {
     renderWithProviders(
       <ThreadPowerline

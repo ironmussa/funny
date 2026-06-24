@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DiffStats } from '@/components/DiffStats';
+import { PRBadge } from '@/components/PRBadge';
 import {
   PowerlineBar,
   type PowerlineBarProps,
@@ -24,6 +25,10 @@ export interface ThreadPowerlineProps {
   gitStatus?: GitStatusInfo;
   /** DiffStats size variant */
   diffStatsSize?: 'sm' | 'xs' | 'xxs';
+  /** PR badge size variant — rendered when gitStatus carries PR metadata */
+  prBadgeSize?: 'sm' | 'xs' | 'compact' | 'xxs';
+  /** data-testid for the PR badge (kept explicit so callers can preserve stable selectors) */
+  prBadgeTestId?: string;
   /** Powerline visual style — forwarded to PowerlineBar */
   variant?: PowerlineBarProps['variant'];
   /**
@@ -56,6 +61,8 @@ export function ThreadPowerline({
   projectTooltip,
   gitStatus,
   diffStatsSize = 'xs',
+  prBadgeSize = 'compact',
+  prBadgeTestId,
   variant,
   copyable = false,
   className,
@@ -148,7 +155,9 @@ export function ThreadPowerline({
     gitStatus.state !== 'clean' &&
     (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0);
 
-  if (segments.length === 0 && !hasDiffStats) return null;
+  const hasPR = !!gitStatus?.prNumber;
+
+  if (segments.length === 0 && !hasDiffStats && !hasPR) return null;
 
   return (
     <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
@@ -185,6 +194,15 @@ export function ThreadPowerline({
             size={diffStatsSize}
           />
         ))}
+      {hasPR && gitStatus && (
+        <PRBadge
+          prNumber={gitStatus.prNumber!}
+          prState={gitStatus.prState ?? 'OPEN'}
+          prUrl={gitStatus.prUrl}
+          size={prBadgeSize}
+          data-testid={prBadgeTestId}
+        />
+      )}
     </div>
   );
 }

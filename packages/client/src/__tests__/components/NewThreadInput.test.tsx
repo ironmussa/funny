@@ -156,6 +156,35 @@ describe('NewThreadInput', () => {
     expect(screen.getByTestId('new-thread-branch-picker')).toBeInTheDocument();
   });
 
+  test('uses the explicit new-thread project before the globally selected project', async () => {
+    useUIStore.setState({ newThreadProjectId: 'p2' } as any);
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Project One',
+          path: '/repo-one',
+          defaultMode: 'local',
+          defaultProvider: 'codex',
+        } as any,
+        {
+          id: 'p2',
+          name: 'Project Two',
+          path: '/repo-two',
+          defaultMode: 'local',
+          defaultProvider: 'codex',
+        } as any,
+      ],
+      selectedProjectId: 'p1',
+    });
+
+    renderWithProviders(<NewThreadInput />);
+
+    await waitFor(() => {
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo-two', 'codex');
+    });
+  });
+
   test('shows issue context banner and allows dismiss', () => {
     useUIStore.setState({
       newThreadIssueContext: { title: 'Bug #42', prompt: 'Fix it' },

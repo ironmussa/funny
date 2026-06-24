@@ -464,6 +464,7 @@ const RUNTIME_MODES = [
   { value: 'local', label: 'Local' },
   { value: 'remote', label: 'Remote' },
 ];
+const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = [];
 
 export const PromptInputUI = memo(function PromptInputUI({
   onSubmit,
@@ -472,7 +473,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   running = false,
   queuedCount = 0,
   isQueueMode = false,
-  queuedMessages: queuedMessagesProp = [],
+  queuedMessages: queuedMessagesProp = EMPTY_QUEUED_MESSAGES,
   queueLoading = false,
   onQueueEditSave,
   onQueueDelete,
@@ -584,7 +585,7 @@ export const PromptInputUI = memo(function PromptInputUI({
     () => (selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : undefined),
     [selectedTemplateId, templates],
   );
-  const templateVars = selectedTemplate?.variables ?? [];
+  const templateVars = useMemo(() => selectedTemplate?.variables ?? [], [selectedTemplate]);
 
   // ── Provider/model from unified string ──
   const provider = useMemo(() => unifiedModel.split(':')[0], [unifiedModel]);
@@ -726,6 +727,8 @@ export const PromptInputUI = memo(function PromptInputUI({
     editorRef,
     isDeepAgent,
     selectedTemplateId,
+    templateVars,
+    templateVarValues,
   ]);
 
   // ── Editor callbacks ──
@@ -1542,6 +1545,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                       projectTooltip={powerlineProjectPath}
                       gitStatus={powerlineGitStatus}
                       diffStatsSize="xs"
+                      prBadgeTestId="prompt-powerline-pr"
                       copyable
                       onDiffStatsClick={onOpenReview}
                       data-testid="prompt-powerline"

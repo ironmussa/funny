@@ -11,7 +11,7 @@ import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
-import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
+import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 
 const PAGE_SIZE = 100;
 
@@ -21,6 +21,7 @@ export function ArchivedThreadsSettings() {
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
+  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -144,7 +145,8 @@ export function ArchivedThreadsSettings() {
             loadingMore={loadingMore}
             onEndReached={handleLoadMore}
             renderExtraBadges={(thread) => {
-              const gs: GitStatusInfo | undefined = statusByBranch[computeBranchKey(thread)];
+              const gs: GitStatusInfo | undefined =
+                statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)];
               const project = projectMap[thread.projectId];
               return (
                 <ThreadPowerline

@@ -38,6 +38,7 @@ describe('useUIStore', () => {
       settingsReturnPath: null,
       newThreadProjectId: null,
       newThreadIdleOnly: false,
+      newThreadBaseBranch: null,
       newThreadIsScratch: false,
       allThreadsProjectId: null,
       automationInboxOpen: false,
@@ -172,6 +173,7 @@ describe('useUIStore', () => {
       const state = useUIStore.getState();
       expect(state.newThreadProjectId).toBe('project-1');
       expect(state.newThreadIdleOnly).toBe(false);
+      expect(state.newThreadBaseBranch).toBeNull();
       expect(state.allThreadsProjectId).toBeNull();
       expect(state.automationInboxOpen).toBe(false);
       expect(state.addProjectOpen).toBe(false);
@@ -197,6 +199,11 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().newThreadIdleOnly).toBe(true);
     });
 
+    test('sets a preselected base branch when provided', () => {
+      useUIStore.getState().startNewThread('project-1', false, 'feature/pr-branch');
+      expect(useUIStore.getState().newThreadBaseBranch).toBe('feature/pr-branch');
+    });
+
     test('defaults idleOnly to false when not passed', () => {
       useUIStore.getState().startNewThread('project-1');
       expect(useUIStore.getState().newThreadIdleOnly).toBe(false);
@@ -211,9 +218,14 @@ describe('useUIStore', () => {
     });
 
     test('resets newThreadIdleOnly to false', () => {
-      useUIStore.setState({ newThreadProjectId: 'project-1', newThreadIdleOnly: true });
+      useUIStore.setState({
+        newThreadProjectId: 'project-1',
+        newThreadIdleOnly: true,
+        newThreadBaseBranch: 'feature/pr-branch',
+      });
       useUIStore.getState().cancelNewThread();
       expect(useUIStore.getState().newThreadIdleOnly).toBe(false);
+      expect(useUIStore.getState().newThreadBaseBranch).toBeNull();
     });
   });
 

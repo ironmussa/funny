@@ -29,7 +29,12 @@ import {
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
+import {
+  useGitStatusStore,
+  branchKey as computeBranchKey,
+  gitStatusForThreadFromState,
+  gitStatusSidebarFingerprint,
+} from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -154,12 +159,15 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   // unrelated threads' git statuses change.
   const gitStatusFingerprint = useGitStatusStore(
     useCallback(
-      (s: { statusByBranch: Record<string, GitStatusInfo> }) => {
+      (s: {
+        statusByBranch: Record<string, GitStatusInfo>;
+        threadToBranchKey: Record<string, string>;
+      }) => {
         let fp = '';
-        for (const [id, bk] of threadBranchKeys) {
+        for (const [id, fallbackBk] of threadBranchKeys) {
+          const bk = s.threadToBranchKey[id] ?? fallbackBk;
           const st = s.statusByBranch[bk];
-          if (st)
-            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.unpulledCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
+          if (st) fp += `${gitStatusSidebarFingerprint(id, st)},`;
         }
         return fp;
       },
@@ -169,14 +177,15 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
   // Derive the actual status objects only when the fingerprint changes
   const gitStatusByThread = useMemo(() => {
-    const { statusByBranch } = useGitStatusStore.getState();
+    const state = useGitStatusStore.getState();
     const result: Record<string, GitStatusInfo> = {};
-    for (const [id, bk] of threadBranchKeys) {
-      if (statusByBranch[bk]) result[id] = statusByBranch[bk];
+    for (const thread of threads) {
+      const status = gitStatusForThreadFromState(state, thread);
+      if (status) result[thread.id] = status;
     }
     return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadBranchKeys, gitStatusFingerprint]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
+  }, [threads, threadBranchKeys, gitStatusFingerprint]);
 
   // Eagerly fetch git status for visible threads that don't have it yet.
   // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.

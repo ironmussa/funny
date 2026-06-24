@@ -11,7 +11,7 @@ import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
-import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
+import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -31,6 +31,7 @@ export function AllThreadsView() {
   const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
+  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
 
   // View mode derived from pathname: /kanban = board, /list (or anything else) = list
   // When ?status= param is present, force list view
@@ -123,7 +124,9 @@ export function AllThreadsView() {
 
   const handleProjectFilterChange = (projectId: string | null) => {
     setProjectFilter(projectId);
-    setSearchParams(buildSearchParams({ project: projectId }), { replace: true });
+    setSearchParams(buildSearchParams({ project: projectId }), {
+      replace: true,
+    });
   };
 
   const handleTypeToggle = useCallback(
@@ -356,7 +359,7 @@ export function AllThreadsView() {
     // Git status filter (multi-select)
     if (gitFilter.size > 0) {
       result = result.filter((t) => {
-        const gs = statusByBranch[computeBranchKey(t)];
+        const gs = statusByBranch[statusBranchKeyForThread(t, threadToBranchKey)];
         return gs ? gitFilter.has(gs.state) : false;
       });
     }
@@ -389,6 +392,7 @@ export function AllThreadsView() {
     modeFilter,
     typeFilter,
     statusByBranch,
+    threadToBranchKey,
     projectFilter,
     projectNameById,
     sortField,
@@ -453,13 +457,13 @@ export function AllThreadsView() {
   const gitCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const t of allThreads) {
-      const gs = statusByBranch[computeBranchKey(t)];
+      const gs = statusByBranch[statusBranchKeyForThread(t, threadToBranchKey)];
       if (gs) {
         counts[gs.state] = (counts[gs.state] || 0) + 1;
       }
     }
     return counts;
-  }, [allThreads, statusByBranch]);
+  }, [allThreads, statusByBranch, threadToBranchKey]);
 
   if (!allThreadsProjectId) return null;
 

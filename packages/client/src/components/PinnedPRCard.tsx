@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { PRBadge } from '@/components/PRBadge';
+import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -128,6 +129,7 @@ interface PinnedPRCardProps {
   currentUserLogin?: string;
   /** Called after a successful merge so the parent can refresh the PR list. */
   onMerged?: (prNumber: number) => void;
+  onCreateThreadForBranch?: (branch: string) => void;
 }
 
 type MergeMethod = 'squash' | 'merge' | 'rebase';
@@ -264,7 +266,13 @@ function EditForm({
 
 // ── Main component ──
 
-export function PinnedPRCard({ pr, projectId, currentUserLogin, onMerged }: PinnedPRCardProps) {
+export function PinnedPRCard({
+  pr,
+  projectId,
+  currentUserLogin,
+  onMerged,
+  onCreateThreadForBranch,
+}: PinnedPRCardProps) {
   const { t } = useTranslation();
   const [threads, setThreads] = useState<PRReviewThread[]>([]);
   const [conversation, setConversation] = useState<PRConversation | null>(null);
@@ -757,6 +765,13 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin, onMerged }: Pinn
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {onCreateThreadForBranch && (
+            <PRActionsMenu
+              prNumber={pr.number}
+              branch={pr.head.ref}
+              onCreateThread={onCreateThreadForBranch}
+            />
           )}
           <Tooltip>
             <TooltipTrigger asChild>

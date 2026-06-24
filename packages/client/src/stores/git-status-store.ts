@@ -36,6 +36,34 @@ export function branchKey(thread: {
   return thread.projectId;
 }
 
+export function statusBranchKeyForThread(
+  thread: {
+    id: string;
+    projectId: string;
+    mode?: string | null;
+    branch?: string | null;
+    worktreePath?: string | null;
+    baseBranch?: string | null;
+  },
+  mapping: Record<string, string>,
+): string {
+  return mapping[thread.id] ?? branchKey(thread);
+}
+
+export function gitStatusForThreadFromState(
+  state: Pick<GitStatusState, 'statusByBranch' | 'threadToBranchKey'>,
+  thread: {
+    id: string;
+    projectId: string;
+    mode?: string | null;
+    branch?: string | null;
+    worktreePath?: string | null;
+    baseBranch?: string | null;
+  },
+): GitStatusInfo | undefined {
+  return state.statusByBranch[statusBranchKeyForThread(thread, state.threadToBranchKey)];
+}
+
 interface GitStatusState {
   /** Git status keyed by branchKey (threads sharing a branch share one entry) */
   statusByBranch: Record<string, GitStatusInfo>;
@@ -61,6 +89,14 @@ interface GitStatusState {
     }>,
   ) => void;
   updateFromWS: (statuses: GitStatusInfo[]) => void;
+  applyPRMetadata: (
+    threadId: string,
+    pr: {
+      prNumber: number;
+      prUrl: string;
+      prState: NonNullable<GitStatusInfo['prState']>;
+    },
+  ) => void;
   clearForBranch: (bk: string) => void;
 }
 
@@ -176,8 +212,27 @@ function statusEqual(a: GitStatusInfo, b: GitStatusInfo): boolean {
     a.linesAdded === b.linesAdded &&
     a.linesDeleted === b.linesDeleted &&
     a.prNumber === b.prNumber &&
-    a.prState === b.prState
+    a.prState === b.prState &&
+    a.prUrl === b.prUrl
   );
+}
+
+/** Fields from a git status that affect sidebar thread rendering. */
+export function gitStatusSidebarFingerprint(threadId: string, status: GitStatusInfo): string {
+  return [
+    threadId,
+    status.state,
+    status.dirtyFileCount,
+    status.unpushedCommitCount,
+    status.unpulledCommitCount,
+    status.hasRemoteBranch,
+    status.isMergedIntoBase,
+    status.linesAdded,
+    status.linesDeleted,
+    status.prNumber ?? '',
+    status.prState ?? '',
+    status.prUrl ?? '',
+  ].join(':');
 }
 
 /** Only spread statusByBranch when at least one entry actually changed.
@@ -350,7 +405,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
           return {
             ...statusPatch,
             ...(keyChanged
-              ? { threadToBranchKey: { ...state.threadToBranchKey, [threadId]: key } }
+              ? {
+                  threadToBranchKey: {
+                    ...state.threadToBranchKey,
+                    [threadId]: key,
+                  },
+                }
               : {}),
           };
         });
@@ -394,7 +454,9 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     try {
       const result = await api.projectGitStatus(projectId, ac.signal);
       if (result.isOk() && claimProjectWrite(projectId, seq)) {
-        set((s) => ({ statusByProject: { ...s.statusByProject, [projectId]: result.value } }));
+        set((s) => ({
+          statusByProject: { ...s.statusByProject, [projectId]: result.value },
+        }));
       }
     } finally {
       _abortByProjectStatus.delete(projectId);
@@ -458,6 +520,42 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       return {
         ...statusPatch,
         ...(keyMapChanged ? { threadToBranchKey: { ...state.threadToBranchKey, ...keyMap } } : {}),
+      };
+    });
+  },
+
+  applyPRMetadata: (threadId, pr) => {
+    const bk = resolveBranchKey(threadId, get().threadToBranchKey);
+    if (!bk) return;
+    if (!get().statusByBranch[bk]) return;
+
+    // Treat PR metadata discovered by the PR tab as a fresh status write so an
+    // older in-flight status response without PR data cannot erase the badge.
+    const seq = nextStatusSeq();
+    if (!claimBranchWrite(bk, seq)) return;
+
+    set((state) => {
+      const prev = state.statusByBranch[bk];
+      if (!prev) return {};
+
+      const next = {
+        ...prev,
+        prNumber: pr.prNumber,
+        prUrl: pr.prUrl,
+        prState: pr.prState,
+      };
+      if (statusEqual(prev, next)) return {};
+
+      return {
+        statusByBranch: {
+          ...state.statusByBranch,
+          [bk]: next,
+        },
+        ...(state.threadToBranchKey[threadId] === bk
+          ? {}
+          : {
+              threadToBranchKey: { ...state.threadToBranchKey, [threadId]: bk },
+            }),
       };
     });
   },

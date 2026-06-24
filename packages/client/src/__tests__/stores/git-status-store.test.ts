@@ -384,6 +384,48 @@ describe('GitStatusStore', () => {
     });
   });
 
+  describe('applyPRMetadata', () => {
+    test('adds PR metadata to an existing thread status without changing git counts', () => {
+      const existing = makeStatus({
+        threadId: 't1',
+        branchKey: 'p1:feature/pr',
+        state: 'dirty',
+        dirtyFileCount: 2,
+        linesAdded: 12,
+        linesDeleted: 4,
+      });
+      useGitStatusStore.setState({
+        statusByBranch: { 'p1:feature/pr': existing },
+        threadToBranchKey: { t1: 'p1:feature/pr' },
+      });
+
+      useGitStatusStore.getState().applyPRMetadata('t1', {
+        prNumber: 51,
+        prUrl: 'https://github.com/acme/repo/pull/51',
+        prState: 'OPEN',
+      });
+
+      expect(useGitStatusStore.getState().statusByBranch['p1:feature/pr']).toEqual({
+        ...existing,
+        prNumber: 51,
+        prUrl: 'https://github.com/acme/repo/pull/51',
+        prState: 'OPEN',
+      });
+    });
+
+    test('is a no-op when the thread has no status entry yet', () => {
+      const before = useGitStatusStore.getState().statusByBranch;
+
+      useGitStatusStore.getState().applyPRMetadata('missing-thread', {
+        prNumber: 51,
+        prUrl: 'https://github.com/acme/repo/pull/51',
+        prState: 'OPEN',
+      });
+
+      expect(useGitStatusStore.getState().statusByBranch).toBe(before);
+    });
+  });
+
   // ── 4b. Staleness guard (last-writer-wins race) ──────────
   describe('staleness guard', () => {
     test('a slow stale bulk fetch does not overwrite a fresher forced fetch', async () => {

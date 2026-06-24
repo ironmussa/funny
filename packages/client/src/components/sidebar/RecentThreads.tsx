@@ -12,7 +12,7 @@ import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
+import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 
 import { ThreadGroup } from './ThreadGroup';
@@ -51,6 +51,7 @@ export function RecentThreads({
   const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
+  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   const { recentThreads, totalCount } = useMemo(() => {
     const result: FinishedThread[] = [];
     const projectMap = new Map(
@@ -107,7 +108,7 @@ export function RecentThreads({
             subtitle={thread.projectName}
             projectColor={thread.projectColor}
             timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
-            gitStatus={statusByBranch[computeBranchKey(thread)]}
+            gitStatus={statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)]}
             href={buildThreadPath(thread)}
             onSelect={() => goToThread(navigate, thread)}
             onRename={(newTitle: string) => onRenameThread(thread.id, thread.projectId, newTitle)}

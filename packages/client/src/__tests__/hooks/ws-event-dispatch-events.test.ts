@@ -500,10 +500,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     Object.defineProperty(window, 'Notification', {
       configurable: true,
-      value: class {
-        static permission = 'granted';
-        constructor(_title: string, _opts?: NotificationOptions) {}
-      },
+      value: Object.assign(function NotificationMock() {}, { permission: 'granted' }),
     });
 
     useThreadStore.setState({

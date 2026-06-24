@@ -45,7 +45,7 @@ export const ToolCallCard = memo(
     timestamp,
   }: ToolCallCardProps) {
     const { t } = useTranslation();
-    const tick = useMinuteTick();
+    useMinuteTick();
     const isTodo = isTodoToolName(name);
     const parsed = useMemo(() => formatInput(input), [input]);
     const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
@@ -55,10 +55,7 @@ export const ToolCallCard = memo(
     const filePath = getFilePath(name, parsed);
     const projectPath = useCurrentProjectPath();
     const displayPath = filePath ? makeRelativePath(filePath, projectPath) : null;
-    const displayTime = useMemo(
-      () => (timestamp ? timeAgo(timestamp, t) : null),
-      [timestamp, t, tick],
-    );
+    const displayTime = useMemo(() => (timestamp ? timeAgo(timestamp, t) : null), [timestamp, t]);
 
     const specialized = dispatchToolCard({
       name,

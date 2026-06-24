@@ -259,6 +259,7 @@ export function useDiffData({
     selectedFile,
     expandedFile,
     setSelectedFile,
+    setSummaries,
     setCheckedFiles,
   ]);
 

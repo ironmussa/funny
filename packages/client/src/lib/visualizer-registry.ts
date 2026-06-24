@@ -1,4 +1,4 @@
-import type { VisualizerPlugin, VisualizerProps } from '@funny/plugin-sdk';
+import type { VisualizerPlugin } from '@funny/plugin-sdk';
 
 import { createClientLogger } from '@/lib/client-logger';
 

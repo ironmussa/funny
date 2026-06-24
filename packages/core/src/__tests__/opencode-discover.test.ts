@@ -47,7 +47,6 @@ const { spawnMock, mockInitialize, mockNewSession } = vi.hoisted(() => ({
 vi.mock('child_process', () => ({ spawn: spawnMock }));
 vi.mock('@agentclientprotocol/sdk', () => {
   class ClientSideConnection {
-    constructor(_clientFactory: unknown, _stream: unknown) {}
     initialize(...args: unknown[]) {
       return mockInitialize(...args);
     }

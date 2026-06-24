@@ -134,7 +134,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
       setSearching(false);
       setActiveIndex(0);
     },
-    [indexEntry],
+    [indexEntry, getWorker],
   );
 
   useEffect(() => {

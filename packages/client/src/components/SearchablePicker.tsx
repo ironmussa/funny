@@ -423,14 +423,18 @@ export function BranchPicker({
     }
   }, [creatingNew]);
 
-  const createNewItem: SearchablePickerItem | undefined = showCreateNew
-    ? {
-        key: CREATE_NEW_BRANCH_KEY,
-        label: t('newThread.createNewBranch', 'Create new branch'),
-        isSelected: false,
-        icon: <Plus className="icon-xs text-muted-foreground" />,
-      }
-    : undefined;
+  const createNewItem = useMemo<SearchablePickerItem | undefined>(
+    () =>
+      showCreateNew
+        ? {
+            key: CREATE_NEW_BRANCH_KEY,
+            label: t('newThread.createNewBranch', 'Create new branch'),
+            isSelected: false,
+            icon: <Plus className="icon-xs text-muted-foreground" />,
+          }
+        : undefined,
+    [showCreateNew, t],
+  );
 
   const allItems = useMemo(() => {
     if (!createNewItem) return items;

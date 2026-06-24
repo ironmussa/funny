@@ -11,12 +11,7 @@
 
 import type { Client } from '@libsql/client';
 
-import {
-  checkAdmission,
-  runConsolidation,
-  shouldConsolidate,
-  markConsolidated,
-} from './consolidator.js';
+import { checkAdmission, runConsolidation } from './consolidator.js';
 import type { ConsolidationResult } from './consolidator.js';
 import { createEmbeddingProvider } from './embedding.js';
 import { formatRecallContext } from './formatter.js';
@@ -37,7 +32,6 @@ import { AccessTracker, canEvolve, findPotentialConflicts, inferDecayClass } fro
 import type {
   AddOptions,
   EmbeddingProvider,
-  LLMConfig,
   MemoryFact,
   MemoryRecallResult,
   OperatorProfile,

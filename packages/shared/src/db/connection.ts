@@ -12,7 +12,7 @@ import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import type { CreatePgOptions } from './adapters/pg.js';
 import type { CreateSqliteOptions } from './adapters/sqlite.js';
-import type { DatabaseProvider, DbDialect } from './provider.js';
+import type { DatabaseProvider } from './provider.js';
 import type * as sqliteSchema from './schema.sqlite.js';
 
 // Re-export provider types for convenience

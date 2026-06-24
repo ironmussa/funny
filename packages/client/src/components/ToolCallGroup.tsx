@@ -50,16 +50,13 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   renderCall,
 }: ToolCallGroupProps) {
   const { t } = useTranslation();
-  const tick = useMinuteTick(); // re-render every 60s so timeAgo stays fresh (memo blocks parent ticks)
+  useMinuteTick(); // re-render every 60s so timeAgo stays fresh (memo blocks parent ticks)
   const [expanded, setExpanded] = useState(
     name === 'Bash' && calls.some((call) => call.author === 'shell'),
   );
   const isTodo = isTodoToolName(name);
   const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
-  const displayTime = useMemo(
-    () => (timestamp ? timeAgo(timestamp, t) : null),
-    [timestamp, t, tick],
-  );
+  const displayTime = useMemo(() => (timestamp ? timeAgo(timestamp, t) : null), [timestamp, t]);
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">

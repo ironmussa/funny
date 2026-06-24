@@ -91,15 +91,17 @@ export const ManySteps: Story = {
 
 // --- Interactive simulation ---
 
-function LiveSimulationStory() {
-  const allSteps: GitProgressStep[] = [
-    { id: 'worktree', label: 'Creating worktree', status: 'pending' },
-    { id: 'ports', label: 'Allocating ports', status: 'pending' },
-    { id: 'cmd:bun install', label: 'bun install', status: 'pending' },
-    { id: 'cmd:bun run build', label: 'bun run build', status: 'pending' },
-  ];
+const LIVE_SIMULATION_STEPS: GitProgressStep[] = [
+  { id: 'worktree', label: 'Creating worktree', status: 'pending' },
+  { id: 'ports', label: 'Allocating ports', status: 'pending' },
+  { id: 'cmd:bun install', label: 'bun install', status: 'pending' },
+  { id: 'cmd:bun run build', label: 'bun run build', status: 'pending' },
+];
 
-  const [steps, setSteps] = useState<GitProgressStep[]>([{ ...allSteps[0], status: 'running' }]);
+function LiveSimulationStory() {
+  const [steps, setSteps] = useState<GitProgressStep[]>([
+    { ...LIVE_SIMULATION_STEPS[0], status: 'running' },
+  ]);
 
   useEffect(() => {
     const timers = [
@@ -107,10 +109,10 @@ function LiveSimulationStory() {
       setTimeout(
         () =>
           setSteps([
-            { ...allSteps[0], status: 'completed' },
-            { ...allSteps[1], status: 'running' },
-            { ...allSteps[2], status: 'pending' },
-            { ...allSteps[3], status: 'pending' },
+            { ...LIVE_SIMULATION_STEPS[0], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[1], status: 'running' },
+            { ...LIVE_SIMULATION_STEPS[2], status: 'pending' },
+            { ...LIVE_SIMULATION_STEPS[3], status: 'pending' },
           ]),
         2000,
       ),
@@ -118,10 +120,10 @@ function LiveSimulationStory() {
       setTimeout(
         () =>
           setSteps([
-            { ...allSteps[0], status: 'completed' },
-            { ...allSteps[1], status: 'completed' },
-            { ...allSteps[2], status: 'running' },
-            { ...allSteps[3], status: 'pending' },
+            { ...LIVE_SIMULATION_STEPS[0], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[1], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[2], status: 'running' },
+            { ...LIVE_SIMULATION_STEPS[3], status: 'pending' },
           ]),
         3500,
       ),
@@ -129,10 +131,10 @@ function LiveSimulationStory() {
       setTimeout(
         () =>
           setSteps([
-            { ...allSteps[0], status: 'completed' },
-            { ...allSteps[1], status: 'completed' },
-            { ...allSteps[2], status: 'completed' },
-            { ...allSteps[3], status: 'running' },
+            { ...LIVE_SIMULATION_STEPS[0], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[1], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[2], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[3], status: 'running' },
           ]),
         6000,
       ),
@@ -140,10 +142,10 @@ function LiveSimulationStory() {
       setTimeout(
         () =>
           setSteps([
-            { ...allSteps[0], status: 'completed' },
-            { ...allSteps[1], status: 'completed' },
-            { ...allSteps[2], status: 'completed' },
-            { ...allSteps[3], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[0], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[1], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[2], status: 'completed' },
+            { ...LIVE_SIMULATION_STEPS[3], status: 'completed' },
           ]),
         8000,
       ),

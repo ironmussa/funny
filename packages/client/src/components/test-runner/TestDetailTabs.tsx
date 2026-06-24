@@ -9,7 +9,6 @@ import {
   Crosshair,
   FileCode,
   Globe,
-  Loader2,
   Paperclip,
   Phone,
   ScrollText,
@@ -108,15 +107,14 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
     return () => observer.disconnect();
   }, []);
 
-  const ansiConverter = useMemo(
-    () =>
-      createAnsiConverter({
-        fg: getCssVar('--foreground'),
-        bg: getCssVar('--background'),
-        newline: false,
-      }),
-    [themeKey],
-  );
+  const ansiConverter = useMemo(() => {
+    void themeKey;
+    return createAnsiConverter({
+      fg: getCssVar('--foreground'),
+      bg: getCssVar('--background'),
+      newline: false,
+    });
+  }, [themeKey]);
 
   useEffect(() => {
     if (!logRef.current || userScrolled.current) return;

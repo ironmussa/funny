@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect } from 'vitest';
 
 import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 

@@ -30,15 +30,7 @@
  *    handler always and a boolean `disabled` prop.
  */
 
-import type {
-  Thread,
-  MessageRole,
-  ThreadStage,
-  WaitingReason,
-  AgentModel,
-  EffortLevel,
-  PermissionMode,
-} from '@funny/shared';
+import type { Thread, MessageRole, WaitingReason } from '@funny/shared';
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
@@ -1124,8 +1116,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       for (const { pid, threads, total } of results) {
         if (!threads) continue;
         const sub = mutations.replaceProjectThreads(workingState, pid, threads, total);
-        patch = { ...patch, ...sub };
-        workingState = { ...workingState, ...sub } as ThreadState;
+        Object.assign(patch, sub);
+        workingState = Object.assign({ ...workingState }, sub) as ThreadState;
       }
       return patch;
     });
@@ -1150,8 +1142,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         for (const id of ids) {
           _liveThreadRefCounts.delete(id);
           const sub = mutations.clearThreadData(working, id);
-          patch = { ...patch, ...sub };
-          working = { ...working, ...sub } as ThreadState;
+          Object.assign(patch, sub);
+          working = Object.assign({ ...working }, sub) as ThreadState;
         }
       }
       const active = state.activeThread;

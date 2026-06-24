@@ -97,12 +97,14 @@ export function ProjectFilesPane() {
     });
   }, [basePath]);
 
+  const cancelPendingRequests = useCallback(() => {
+    requestIdRef.current++;
+  }, []);
+
   useEffect(() => {
     loadFiles();
-    return () => {
-      requestIdRef.current++;
-    };
-  }, [loadFiles]);
+    return cancelPendingRequests;
+  }, [loadFiles, cancelPendingRequests]);
 
   useEffect(() => {
     collapsedInitializedRef.current = null;

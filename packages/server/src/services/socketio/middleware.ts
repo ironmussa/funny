@@ -1,5 +1,3 @@
-import type { Socket } from 'socket.io';
-
 import { isRateLimited } from '../socketio-rate-limit.js';
 import type { SocketEventMiddleware } from './router.js';
 

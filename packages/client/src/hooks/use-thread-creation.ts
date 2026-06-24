@@ -56,6 +56,16 @@ export interface UseThreadCreationResult {
 
 export function useThreadCreation(options: UseThreadCreationOptions): UseThreadCreationResult {
   const [creating, setCreating] = useState(false);
+  const {
+    projectId,
+    isScratch,
+    forceIdle,
+    stage,
+    defaultThreadMode,
+    toolPermissions,
+    designId,
+    onSuccess,
+  } = options;
 
   const createThread = useCallback(
     async (prompt: string, opts: SubmitOpts, images?: any[]): Promise<boolean> => {
@@ -68,16 +78,16 @@ export function useThreadCreation(options: UseThreadCreationOptions): UseThreadC
       const built = (() => {
         try {
           return buildThreadPayload({
-            projectId: options.projectId,
+            projectId,
             prompt,
             opts,
             images,
-            isScratch: options.isScratch,
-            forceIdle: options.forceIdle,
-            stage: options.stage,
-            defaultThreadMode: options.defaultThreadMode,
-            toolPermissions: options.toolPermissions,
-            designId: options.designId,
+            isScratch,
+            forceIdle,
+            stage,
+            defaultThreadMode,
+            toolPermissions,
+            designId,
           });
         } catch (err) {
           log.error('buildThreadPayload threw', {
@@ -116,7 +126,7 @@ export function useThreadCreation(options: UseThreadCreationOptions): UseThreadC
         // Hand off to the call-site BEFORE flipping creating=false so the
         // loader UI stays mounted through any navigation the call-site
         // triggers (avoids a flash of the empty form).
-        await options.onSuccess?.(result.value.id, built.kind, result.value);
+        await onSuccess?.(result.value.id, built.kind, result.value);
         setCreating(false);
         return true;
       } catch (err) {
@@ -131,14 +141,14 @@ export function useThreadCreation(options: UseThreadCreationOptions): UseThreadC
     },
     [
       creating,
-      options.projectId,
-      options.isScratch,
-      options.forceIdle,
-      options.stage,
-      options.defaultThreadMode,
-      options.toolPermissions,
-      options.designId,
-      options.onSuccess,
+      projectId,
+      isScratch,
+      forceIdle,
+      stage,
+      defaultThreadMode,
+      toolPermissions,
+      designId,
+      onSuccess,
     ],
   );
 

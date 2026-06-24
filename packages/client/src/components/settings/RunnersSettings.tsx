@@ -19,7 +19,7 @@ import {
   Server,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -146,7 +146,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const loadAssignments = async () => {
+  const loadAssignments = useCallback(async () => {
     // Fetch from the runner's projects list — reuse existing API
     const result = await api.getMyRunners();
     if (result.isOk()) {
@@ -163,7 +163,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
         );
       }
     }
-  };
+  }, [runner.runnerId]);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -190,7 +190,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
 
   useEffect(() => {
     if (open) loadAssignments();
-  }, [open]);
+  }, [open, loadAssignments]);
 
   const projects = useAppStore((s) => s.projects);
 

@@ -98,12 +98,13 @@ export function CommitListPanel({
 
   const virtualItems = virtualizer.getVirtualItems();
   const lastItem = virtualItems[virtualItems.length - 1];
+  const lastItemIndex = lastItem?.index;
   useEffect(() => {
-    if (!showSentinel || !lastItem) return;
-    if (lastItem.index >= filteredEntries.length - 5) {
+    if (!showSentinel || lastItemIndex == null) return;
+    if (lastItemIndex >= filteredEntries.length - 5) {
       onLoadMore();
     }
-  }, [lastItem?.index, filteredEntries.length, showSentinel, onLoadMore]);
+  }, [lastItemIndex, filteredEntries.length, showSentinel, onLoadMore]);
 
   // Searches can match commits beyond the currently loaded page, especially
   // when the user pastes a SHA. Page ahead in the background while filtered.

@@ -20,12 +20,7 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 import { AnnotatableContent } from './AnnotatableContent';
-import {
-  type AnnotationPosition,
-  type PlanComment,
-  collectTextNodes,
-  highlightTextInDom,
-} from './plan-annotations';
+import type { PlanComment } from './plan-annotations';
 
 // Re-export so existing importers (ExitPlanModeCard, stories) keep working.
 export type { PlanComment, AnnotationPosition } from './plan-annotations';
@@ -53,6 +48,37 @@ const _log = createClientLogger('PlanReviewDialog');
 const PROSE_CLASSES =
   'prose prose-xs prose-invert prose-headings:text-foreground prose-headings:font-semibold prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0 prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5 prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2 prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0 prose-ul:my-0.5 prose-ol:my-0.5 prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1 prose-strong:text-foreground max-w-none';
 
+function planHeadingProps(children: React.ReactNode, titleToId: Map<string, number>) {
+  const text = String(children ?? '');
+  const sectionId = titleToId.get(text);
+  return sectionId != null
+    ? {
+        id: `plan-review-section-${sectionId}`,
+        'data-section-id': sectionId,
+      }
+    : {};
+}
+
+function createPlanMarkdownComponents(titleToId: Map<string, number>) {
+  return {
+    h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+      <h1 {...props} {...planHeadingProps(children, titleToId)}>
+        {children}
+      </h1>
+    ),
+    h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+      <h2 {...props} {...planHeadingProps(children, titleToId)}>
+        {children}
+      </h2>
+    ),
+    h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+      <h3 {...props} {...planHeadingProps(children, titleToId)}>
+        {children}
+      </h3>
+    ),
+  };
+}
+
 /* ── Markdown renderer with scroll-spy anchors on headings ──────────── */
 
 function PlanMarkdownWithAnchors({ plan, sections }: { plan: string; sections: PlanSection[] }) {
@@ -64,56 +90,7 @@ function PlanMarkdownWithAnchors({ plan, sections }: { plan: string; sections: P
     return map;
   }, [sections]);
 
-  const components = useMemo(
-    () => ({
-      h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => {
-        const text = String(children ?? '');
-        const sectionId = titleToId.get(text);
-        return (
-          <h1
-            {...props}
-            {...(sectionId != null && {
-              id: `plan-review-section-${sectionId}`,
-              'data-section-id': sectionId,
-            })}
-          >
-            {children}
-          </h1>
-        );
-      },
-      h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => {
-        const text = String(children ?? '');
-        const sectionId = titleToId.get(text);
-        return (
-          <h2
-            {...props}
-            {...(sectionId != null && {
-              id: `plan-review-section-${sectionId}`,
-              'data-section-id': sectionId,
-            })}
-          >
-            {children}
-          </h2>
-        );
-      },
-      h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => {
-        const text = String(children ?? '');
-        const sectionId = titleToId.get(text);
-        return (
-          <h3
-            {...props}
-            {...(sectionId != null && {
-              id: `plan-review-section-${sectionId}`,
-              'data-section-id': sectionId,
-            })}
-          >
-            {children}
-          </h3>
-        );
-      },
-    }),
-    [titleToId],
-  );
+  const components = useMemo(() => createPlanMarkdownComponents(titleToId), [titleToId]);
 
   return (
     <Suspense

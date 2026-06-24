@@ -12,9 +12,10 @@ import {
 } from 'dockview-react';
 import { useTheme } from 'next-themes';
 import {
-  type FunctionComponent,
   type ReactNode,
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -45,6 +46,16 @@ const themeFunnyDark: DockviewTheme = {
   colorScheme: 'dark',
   tabGroupIndicator: 'none',
 };
+
+type HeaderActionsRef = { current: ReactNode };
+
+type BottomHeaderActionsContextValue = {
+  prefix: HeaderActionsRef;
+  left: HeaderActionsRef;
+  right: HeaderActionsRef;
+};
+
+const BottomHeaderActionsContext = createContext<BottomHeaderActionsContextValue | null>(null);
 
 /** A single tab inside the right-pane group (fixed set — not closeable). */
 export type RightTabSpec = {
@@ -299,6 +310,14 @@ export function DockviewLayout({
   bottomLeftActionsRef.current = bottomLeftActions;
   const bottomRightActionsRef = useRef(bottomRightActions);
   bottomRightActionsRef.current = bottomRightActions;
+  const bottomHeaderActions = useMemo(
+    () => ({
+      prefix: bottomPrefixActionsRef,
+      left: bottomLeftActionsRef,
+      right: bottomRightActionsRef,
+    }),
+    [],
+  );
 
   const setHostRef = useCallback((id: string, el: HTMLElement | null) => {
     setHosts((prev) => (prev[id] === el ? prev : { ...prev, [id]: el }));
@@ -328,37 +347,6 @@ export function DockviewLayout({
     () => ({
       'right-tab': RightTabHeader,
     }),
-    [],
-  );
-
-  // Bottom-group header action renderers. These are global (dockview invokes
-  // them for every group), so we conditionally render based on group id.
-  const PrefixHeaderActions = useMemo<FunctionComponent<IDockviewHeaderActionsProps>>(
-    () =>
-      function PrefixHeaderActions({ group }) {
-        if (!isBottomGroup(group)) return null;
-        return (
-          <BottomGroupMarker group={group}>
-            {bottomPrefixActionsRef.current ?? null}
-          </BottomGroupMarker>
-        );
-      },
-    [],
-  );
-  const LeftHeaderActions = useMemo<FunctionComponent<IDockviewHeaderActionsProps>>(
-    () =>
-      function LeftHeaderActions({ group }) {
-        if (!isBottomGroup(group)) return null;
-        return <>{bottomLeftActionsRef.current ?? null}</>;
-      },
-    [],
-  );
-  const RightHeaderActions = useMemo<FunctionComponent<IDockviewHeaderActionsProps>>(
-    () =>
-      function RightHeaderActions({ group }) {
-        if (!isBottomGroup(group)) return null;
-        return <>{bottomRightActionsRef.current ?? null}</>;
-      },
     [],
   );
 
@@ -1082,17 +1070,19 @@ export function DockviewLayout({
 
   return (
     <>
-      <DockviewReact
-        components={components}
-        tabComponents={tabComponents}
-        prefixHeaderActionsComponent={PrefixHeaderActions}
-        leftHeaderActionsComponent={LeftHeaderActions}
-        rightHeaderActionsComponent={RightHeaderActions}
-        onReady={onReady}
-        theme={theme}
-        singleTabMode="default"
-        className="h-full w-full"
-      />
+      <BottomHeaderActionsContext.Provider value={bottomHeaderActions}>
+        <DockviewReact
+          components={components}
+          tabComponents={tabComponents}
+          prefixHeaderActionsComponent={PrefixHeaderActions}
+          leftHeaderActionsComponent={LeftHeaderActions}
+          rightHeaderActionsComponent={RightHeaderActions}
+          onReady={onReady}
+          theme={theme}
+          singleTabMode="default"
+          className="h-full w-full"
+        />
+      </BottomHeaderActionsContext.Provider>
       {hosts[PANEL_LEFT] && createPortal(left, hosts[PANEL_LEFT])}
       {hosts[PANEL_CENTER] && createPortal(center, hosts[PANEL_CENTER])}
       {top !== undefined && hosts[PANEL_TOP] && createPortal(top, hosts[PANEL_TOP])}
@@ -1132,6 +1122,32 @@ function BottomGroupMarker({
     return () => el.removeAttribute('data-bottom-group');
   }, [group]);
   return <>{children}</>;
+}
+
+function useBottomHeaderActions() {
+  const actions = useContext(BottomHeaderActionsContext);
+  if (!actions) {
+    throw new Error('Bottom header actions must be rendered within DockviewLayout');
+  }
+  return actions;
+}
+
+function PrefixHeaderActions({ group }: IDockviewHeaderActionsProps) {
+  const actions = useBottomHeaderActions();
+  if (!isBottomGroup(group)) return null;
+  return <BottomGroupMarker group={group}>{actions.prefix.current ?? null}</BottomGroupMarker>;
+}
+
+function LeftHeaderActions({ group }: IDockviewHeaderActionsProps) {
+  const actions = useBottomHeaderActions();
+  if (!isBottomGroup(group)) return null;
+  return <>{actions.left.current ?? null}</>;
+}
+
+function RightHeaderActions({ group }: IDockviewHeaderActionsProps) {
+  const actions = useBottomHeaderActions();
+  if (!isBottomGroup(group)) return null;
+  return <>{actions.right.current ?? null}</>;
 }
 
 function isBottomGroup(group: DockviewGroupPanel): boolean {

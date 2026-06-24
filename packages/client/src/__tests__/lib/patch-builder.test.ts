@@ -59,7 +59,6 @@ describe('buildPatchFromSelection', () => {
   test('includes only selected changes in the patch', () => {
     const parsed = parseRawDiff(RAW);
     const delLine = parsed.allLines.find((l) => l.type === 'del')!;
-    const addLine = parsed.allLines.find((l) => l.type === 'add')!;
 
     const patch = buildPatchFromSelection(parsed, new Set([delLine.index]));
 

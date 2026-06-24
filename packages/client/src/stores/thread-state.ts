@@ -16,12 +16,7 @@ import type {
   ThreadStage,
 } from '@funny/shared';
 
-import type {
-  AgentInitInfo,
-  CompactionEvent,
-  ContextUsage,
-  ThreadWithMessages,
-} from './thread-types';
+import type { AgentInitInfo, ContextUsage, ThreadWithMessages } from './thread-types';
 
 export interface ThreadState {
   // ── Single source of truth ─────────────────────────────────

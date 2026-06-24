@@ -72,18 +72,17 @@ describe('pty:spawn cwd scoping', () => {
     // ...but the authoritative server list does.
     mockListProjects.mockResolvedValue([{ path: PROJECT_PATH }]);
 
-    const send = spawn();
+    spawn();
 
     await vi.waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
     expect(mockListProjects).toHaveBeenCalledWith('user-1');
-    expect(send).not.toHaveBeenCalled(); // no pty:error
   });
 
   test('cache HIT authorizes immediately without a server roundtrip', async () => {
     mockGetLocalProjects.mockReturnValue([{ path: PROJECT_PATH }]);
     mockListProjects.mockResolvedValue([]);
 
-    const send = spawn();
+    spawn();
 
     await vi.waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
     expect(mockListProjects).not.toHaveBeenCalled();

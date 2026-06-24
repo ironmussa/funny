@@ -243,14 +243,15 @@ export function MermaidBlock({ chart }: { chart: string }) {
   const { svg, error } = useMermaidSvg(chart);
   const [expanded, setExpanded] = useState(false);
   const pz = useMermaidPanZoom();
+  const { fit } = pz;
   // Memoize the fit-on-mount ref so React only re-attaches when the SVG
   // actually changes — otherwise every render (pan/zoom state change) would
   // refire fit() and reset the user's view.
   const fitOnMount = useCallback(
     (el: HTMLDivElement | null) => {
-      if (el && svg) pz.fit();
+      if (el && svg) fit();
     },
-    [svg, pz.fit],
+    [svg, fit],
   );
 
   if (error) {
@@ -468,14 +469,15 @@ export function MermaidExpandedDialog({
   const pz = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
   const [copiedImage, setCopiedImage] = useState(false);
+  const { fit } = pz;
   // See MermaidBlock — same memoization rationale. The svg arg is gated on
   // `open` so closing the dialog doesn't refit a stale view.
   const dialogSvg = open ? svg : '';
   const fitOnMount = useCallback(
     (el: HTMLDivElement | null) => {
-      if (el && dialogSvg) pz.fit();
+      if (el && dialogSvg) fit();
     },
-    [dialogSvg, pz.fit],
+    [dialogSvg, fit],
   );
 
   const handleCopyImage = useCallback(async () => {

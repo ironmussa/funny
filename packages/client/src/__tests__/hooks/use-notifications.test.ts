@@ -23,10 +23,7 @@ describe('use-notifications', () => {
   test('showAgentNotification returns not-granted when permission is default', () => {
     Object.defineProperty(window, 'Notification', {
       configurable: true,
-      value: class {
-        static permission = 'default';
-        constructor(_title: string, _opts?: NotificationOptions) {}
-      },
+      value: Object.assign(function NotificationMock() {}, { permission: 'default' }),
     });
 
     const result = showAgentNotification('funny', 'Agent finished', { force: true });
@@ -70,10 +67,7 @@ describe('use-notifications', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: false });
     Object.defineProperty(window, 'Notification', {
       configurable: true,
-      value: class {
-        static permission = 'granted';
-        constructor(_title: string, _opts?: NotificationOptions) {}
-      },
+      value: Object.assign(function NotificationMock() {}, { permission: 'granted' }),
     });
 
     const result = showAgentNotification('funny', 'Agent finished');

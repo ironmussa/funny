@@ -183,6 +183,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
     setReviewPaneOpen,
     setConfirmDialog,
   });
+  const refreshReview = review.refresh;
 
   const refreshAll = useCallback(async () => {
     const gitStore = useGitStatusStore.getState();
@@ -193,8 +194,8 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       void gitStore.fetchProjectStatus(projectModeId, true);
       void gitStore.fetchForProject(projectModeId, true);
     }
-    await review.refresh();
-  }, [effectiveThreadId, projectModeId, threadProjectId, review.refresh]);
+    await refreshReview();
+  }, [effectiveThreadId, projectModeId, threadProjectId, refreshReview]);
 
   // Sync the active sub-tab with the URL query param. Kept here rather than in
   // a hook so that dockview tab clicks (which call this) and URL navigation

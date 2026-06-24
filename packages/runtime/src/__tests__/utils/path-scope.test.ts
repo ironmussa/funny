@@ -8,7 +8,6 @@
  * symlink onto a blocked target.
  */
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
 import { resolve } from 'path';
 
 import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'vitest';

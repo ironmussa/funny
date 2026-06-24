@@ -7,12 +7,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import {
-  seedProject,
-  seedRunner,
-  seedRunnerProjectAssignment,
-  seedRunnerTask,
-} from '../helpers/test-db.js';
+import { seedProject, seedRunner, seedRunnerProjectAssignment } from '../helpers/test-db.js';
 
 describe('runner-manager service', () => {
   let t: TestApp;

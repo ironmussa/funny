@@ -6,6 +6,7 @@ import { err } from 'neverthrow';
 import * as dataHandler from '../../services/data-handler.js';
 import * as projectRepository from '../../services/project-repository.js';
 import * as runnerManager from '../../services/runner-manager.js';
+import { clearSocketRate } from '../../services/socketio-rate-limit.js';
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
@@ -50,6 +51,8 @@ describe('socketio browser handlers', () => {
 
   afterEach(async () => {
     mock.restore();
+    clearSocketRate('mock-socket-id:data:fire-and-forget');
+    clearSocketRate('mock-socket-id:data:request-response');
     removeRunnerClient('runner-1');
     await closeSocketIOServer();
   });
@@ -281,5 +284,42 @@ describe('socketio runner handlers', () => {
     await socket.trigger('data:insert_message', { _requestId: 'req-1', payload: {} });
 
     expect(socket.emitted[0]?.event).toBe('data:response');
+  });
+
+  test('runner data request-response calls are not rate-limited by fire-and-forget streams', async () => {
+    const handleData = spyOn(dataHandler, 'handleDataMessageWithAck').mockImplementation(
+      async (_runnerId, _runnerUserId, data: any) => {
+        if (data.type === 'data:get_thread') {
+          return {
+            type: 'data:get_thread_response',
+            thread: { id: data.threadId, title: 'Thread' },
+          } as any;
+        }
+        return undefined;
+      },
+    );
+
+    const socket = createMockSocket();
+    setupRunnerDataHandlers(socket, 'runner-1', 'user-1');
+
+    for (let i = 0; i < 1_000; i++) {
+      await socket.trigger('data:update_message', {
+        payload: { messageId: `m-${i}`, content: 'streaming' },
+      });
+    }
+
+    await socket.trigger('data:get_thread', { _requestId: 'req-1', threadId: 't-1' });
+
+    expect(socket.emitted.at(-1)).toEqual({
+      event: 'data:response',
+      data: {
+        requestId: 'req-1',
+        response: {
+          type: 'data:get_thread_response',
+          thread: { id: 't-1', title: 'Thread' },
+        },
+      },
+    });
+    expect(handleData).toHaveBeenCalledTimes(1_001);
   });
 });

@@ -4,6 +4,10 @@ import type { Socket } from 'socket.io';
 import { log } from '../../lib/logger.js';
 import { isRateLimited } from '../socketio-rate-limit.js';
 
+const DATA_RATE_LIMIT_WINDOW_MS = 10_000;
+const FIRE_AND_FORGET_DATA_LIMIT = 1_000;
+const REQUEST_RESPONSE_DATA_LIMIT = 5_000;
+
 /**
  * Data persistence handlers for a runner socket (shared `data:response` channel).
  */
@@ -31,13 +35,19 @@ export function setupRunnerDataHandlers(
         return;
       }
       const requestId = msg._requestId;
+      const expectsResponse = !!requestId || typeof ack === 'function';
+      const rateLimitKey = expectsResponse
+        ? `${socket.id}:data:request-response`
+        : `${socket.id}:data:fire-and-forget`;
+      const rateLimit = expectsResponse ? REQUEST_RESPONSE_DATA_LIMIT : FIRE_AND_FORGET_DATA_LIMIT;
 
-      if (isRateLimited(socket.id, 1_000, 10_000)) {
+      if (isRateLimited(rateLimitKey, rateLimit, DATA_RATE_LIMIT_WINDOW_MS)) {
         log.warn('Data event rate-limited — dropping', {
           namespace: 'socketio',
           runnerId,
           type: eventName,
           requestId,
+          expectsResponse,
         });
         const errorResponse = { error: 'Rate limit exceeded', success: false };
         if (requestId) {

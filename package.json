@@ -1,19 +1,19 @@
 {
   "name": "@ironmussa/funny",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": false,
   "packageManager": "bun@1.3.10",
-  "description": "Local and team workspace for orchestrating Claude and Codex coding agents across isolated git worktrees",
+  "description": "Local and team workspace for orchestrating coding agents across isolated git worktrees",
   "license": "MIT",
   "author": "Anthropic",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ironmussa/funny.git"
+    "url": "git+https://github.com/ironmussa/funny.git"
   },
   "bin": {
-    "funny": "./bin/funny.js",
-    "funny-runtime": "./packages/runtime/bin/funny-server.js",
-    "funny-server": "./packages/server/bin/funny-server.js"
+    "funny": "bin/funny.js",
+    "funny-runtime": "packages/runtime/bin/funny-server.js",
+    "funny-server": "packages/server/bin/funny-server.js"
   },
   "workspaces": [
     "packages/*"

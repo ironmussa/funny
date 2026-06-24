@@ -18,6 +18,8 @@
  *     environment contains an old team URL.
  *  5. bin/funny.js: local start is all-in-one (server + loopback runner), while
  *     `--team` starts the runtime as a runner-only process.
+ *  6. bin/funny.js: local start opens the browser after the server is listening,
+ *     while `--team` keeps runner-only startup terminal-only.
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -84,5 +86,20 @@ describe('runner connect resilience wiring', () => {
     expect(src).toMatch(/TEAM_SERVER_URL: serverUrl/);
     expect(src).toMatch(/FUNNY_LOOPBACK_RUNNER_USERNAME: loopbackRunnerUsername/);
     expect(src).toMatch(/WS_TUNNEL_ONLY: process\.env\.WS_TUNNEL_ONLY \|\| 'true'/);
+  });
+
+  test('CLI opens the local server URL after startup unless disabled', () => {
+    const src = read('bin/funny.js');
+    expect(src).toMatch(/'no-open': \{\s*type: 'boolean'/);
+    expect(src).toMatch(/function resolveBrowserUrl\(\)/);
+    expect(src).toMatch(/function chromeOpenCommands\(url\)/);
+    expect(src).toMatch(/'Google Chrome'/);
+    expect(src).toMatch(/google-chrome/);
+    expect(src).toMatch(
+      /if \(values\['no-open'\] \|\| values\.open === false \|\| process\.env\.CI === 'true'\) return/,
+    );
+    expect(src).toMatch(/if \(isTeamMode\) \{\s*await startRuntimeInThisProcess\(\)/);
+    expect(src).toMatch(/await import\(entry\.path\);\s*\n\s*openBrowser\(resolveBrowserUrl\(\)\)/);
+    expect(src).not.toMatch(/startRuntimeInThisProcess\(\);\s*\n\s*openBrowser/);
   });
 });

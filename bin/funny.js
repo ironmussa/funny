@@ -96,6 +96,14 @@ const { values } = parseArgs({
       type: 'boolean',
       default: false,
     },
+    open: {
+      type: 'boolean',
+      default: true,
+    },
+    'no-open': {
+      type: 'boolean',
+      default: false,
+    },
     help: {
       type: 'boolean',
     },
@@ -133,6 +141,7 @@ Options:
   --token <token>            Runner invite token for team server registration
   --secret <secret>          Shared RUNNER_AUTH_SECRET — classic runner registration only
   --local                    Start standalone; cannot be combined with --team
+  --no-open                  Do not open the browser after local startup
   --help                     Show this help message
 
 Runner Mode:
@@ -324,6 +333,49 @@ function startLocalRuntime(serverUrl) {
   });
 }
 
+function resolveBrowserUrl() {
+  const host = values.host === '0.0.0.0' || values.host === '::' ? '127.0.0.1' : values.host;
+  return `http://${host}:${values.port}`;
+}
+
+function chromeOpenCommands(url) {
+  switch (process.platform) {
+    case 'darwin':
+      return [['open', '-a', 'Google Chrome', url]];
+    case 'win32':
+      return [['cmd', '/c', 'start', 'chrome', url]];
+    default:
+      return [
+        ['google-chrome', url],
+        ['google-chrome-stable', url],
+        ['chromium-browser', url],
+        ['chromium', url],
+        ['xdg-open', url],
+      ];
+  }
+}
+
+function openBrowser(url) {
+  if (values['no-open'] || values.open === false || process.env.CI === 'true') return;
+
+  for (const cmd of chromeOpenCommands(url)) {
+    try {
+      const child = Bun.spawn({
+        cmd,
+        stdout: 'ignore',
+        stderr: 'ignore',
+      });
+      child.unref();
+      console.log(`[funny] Opening ${url}`);
+      return;
+    } catch {
+      // Try the next browser opener.
+    }
+  }
+
+  console.warn(`[funny] Could not open Chrome automatically. Open ${url} in your browser.`);
+}
+
 if (isTeamMode) {
   await startRuntimeInThisProcess();
 } else {
@@ -338,6 +390,7 @@ if (isTeamMode) {
   ensureLoopbackRunnerOptIn();
   console.log(`[funny] Starting from ${entry.label}...`);
   await import(entry.path);
+  openBrowser(resolveBrowserUrl());
   startLocalRuntime(localServerUrl);
 }
 

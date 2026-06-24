@@ -1,19 +1,25 @@
 # funny
 
-> Parallel Claude Code agent orchestration powered by git worktrees
+> Local-first workspace for running coding agents in parallel across isolated git worktrees
 
-funny is a web UI for orchestrating multiple [Claude Code](https://claude.ai/code) agents in parallel. It uses git worktrees to let each agent work on its own branch simultaneously without conflicts. Think of it as a Codex App clone powered by the [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`).
+funny is a local and team workspace for running coding agents side by side. It starts each thread in its own git worktree, streams the agent session into a web UI, and gives you the review, terminal, browser, and project controls needed to keep many tasks moving at once.
+
+Claude is built in, but funny is no longer a Claude-only or cloud-only surface. You can run Claude, Codex, Gemini, Pi, Cursor, opencode, Deep Agent, and other ACP-compatible providers from the same project, with project defaults, provider keys, and Claude execution profiles for different accounts or subscriptions.
 
 ## Features
 
-- **Parallel agent execution** — Run multiple Claude Code agents simultaneously on different branches
-- **Git worktree isolation** — Each agent gets its own isolated working directory
+- **Multi-provider agents** — Run Claude, Codex, Gemini, Pi, Cursor, opencode, Deep Agent, or installed ACP providers from one workspace
+- **Claude execution profiles** — Bind projects to different Claude config directories and subscription logins
+- **Parallel execution** — Run multiple coding agents simultaneously on different branches
+- **Git worktree isolation** — Each thread gets its own isolated working directory
 - **Real-time monitoring** — WebSocket-based live updates for all agent activities
 - **Git integration** — Built-in diff viewer, staging, commits, and PR creation
+- **Team collaboration** — Share threads with project members as viewers, commenters, or editors
+- **Browser annotator panel** — Open any URL, inspect DOM details, mark screenshots, and send the context into a thread
 - **Kanban board** — Drag-and-drop task management with columns (backlog, in progress, review, done, archived)
 - **Search** — Find threads by title, branch name, status, or message content with real-time filtering
 - **Analytics dashboard** — Track task creation, completion rates, stage distribution, and cost metrics over time
-- **Agent providers** — Drive Codex, Gemini, Cursor, opencode and other ACP agents alongside Claude; trim or extend the set from Settings → Providers
+- **Visualizer plugins** — Render Mermaid, CSV, and installable rich previews for files or fenced code blocks
 - **MCP support** — Model Context Protocol integration
 - **Automation scheduling** — Cron-based recurring tasks
 - **Mobile support** — Responsive mobile view with touch-friendly navigation for on-the-go monitoring
@@ -50,16 +56,20 @@ bun start
 ## Requirements
 
 - **Bun** >= 1.0.0 (install from [bun.sh](https://bun.sh))
-- **Claude CLI** installed and authenticated ([claude.ai/code](https://claude.ai/code))
 - **Git** installed and configured
+- At least one authenticated agent provider:
+  - Claude: [Claude CLI](https://claude.ai/code)
+  - Codex: OpenAI API key and a Codex ACP binary
+  - Gemini: Gemini CLI / API key
+  - Pi, Cursor, opencode, Deep Agent, or another installed ACP provider
 
 ## Usage
 
-funny has two modes: **local** (solo, everything on your machine) and **team** (multiple users collaborating via a central server).
+funny has two deployment shapes: **local** (solo, everything on your machine) and **team** (multiple users collaborating through a central server while agents still run on each user's runner).
 
 ### Local Mode (Single User)
 
-This is the default. Everything runs on your machine — UI, database, git operations, and Claude agents.
+This is the default. Everything runs on your machine — UI, database, git operations, browser sessions, and agent processes.
 
 ```bash
 # Quick start (no installation)
@@ -90,6 +100,16 @@ Team mode lets multiple users collaborate on shared projects. It requires two co
 
 1. **Central server** (`funny-server`) — Runs on a shared machine. Manages users, projects, memberships, and coordinates runners.
 2. **Local runner** (`funny --team <url>`) — Each team member runs a runner that connects to the central server.
+
+In team mode, projects have memberships and threads can be shared with specific project members. The owner can grant **Viewer**, **Commenter**, or **Editor** access, revoke access, and copy an identity-gated deep link. Shared threads appear in **Shared with me** for the recipient.
+
+Access levels are intentionally narrow:
+
+- **Viewer** — read the thread and existing comments
+- **Commenter** — read the thread and post comments
+- **Editor** — comment, read git status/diff/log, and send follow-up messages to the agent
+
+Git write actions such as commit, push, PR creation, stage changes, and destructive operations stay owner-only.
 
 #### Step 1: Start the central server
 
@@ -123,10 +143,10 @@ The runner prints a short device-link code. In the central server UI, open **Set
 This starts a runner-only process. The UI, auth, projects, and thread state live on the central server; the runner connects back to:
 
 - Receive dispatched tasks from the central server
-- Run git operations and Claude agents on the member's machine
+- Run git operations and agent providers on the member's machine
 - Stream terminal/browser/agent events back to the central server
 
-Each member's git operations and Claude agents run **on their own machine**, in their own local repos. The central server only coordinates — it never touches your filesystem.
+Each member's git operations and agent providers run **on their own machine**, in their own local repos. The central server only coordinates — it never touches your filesystem.
 
 #### Team mode architecture
 
@@ -290,6 +310,18 @@ Find threads quickly using the search bar. Search matches against:
 
 Results highlight matching text. Combine search with filters for status, git state, and mode to narrow results further. Filters sync to URL query parameters so you can share filtered views.
 
+## Sharing & Comments
+
+Thread sharing is available in team mode for normal project threads. From the thread header, owners can open **Share**, pick a project member, choose an access level, and copy a deep link. Links are not public URLs; the server checks the signed-in user and the thread share grant before showing the thread.
+
+The **Shared with me** sidebar section lists threads another user has shared with you. Shared threads preserve the same thread UI, but unsafe controls are hidden or blocked according to your grant:
+
+- **Viewer** grants read-only access to the conversation and comments.
+- **Commenter** adds the ability to post in the thread comments panel.
+- **Editor** adds follow-up messages to the agent plus read-only git views (`status`, `diff`, `log`).
+
+The comments panel is a flat, thread-level discussion shared by the owner and granted users. It shows a badge in the thread header, supports live updates, and keeps deletion owner-only.
+
 ## Analytics
 
 The analytics dashboard provides an overview of task activity and costs:
@@ -316,7 +348,7 @@ The sidebar automatically converts to a slide-out drawer on mobile via the shadc
 
 ## Browser Annotator Panel
 
-A side panel that lets you load any URL, mark it up visually (pin / region / draw), and send the annotations as a new thread to a Claude agent. **The panel is per-project** — open it from the `AppWindow` icon in the project header (next to Terminal / Review / Tests). Sends go to the project you opened it from; there's no project selector inside the panel.
+A side panel that lets you load any URL, mark it up visually (pin / region / draw), and send the annotations as a new thread to the selected agent provider. **The panel is per-project** — open it from the `AppWindow` icon in the project header (next to Terminal / Review / Tests). Sends go to the project you opened it from; there's no project selector inside the panel.
 
 **How it works:** the runner spawns a real Chromium subprocess via Playwright's bundled binary and streams JPEG frames via [CDP `Page.startScreencast`](https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-startScreencast) to a `<canvas>`. Loads **any URL** (no X-Frame-Options limit). Input (mouse / keyboard) is forwarded via `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent`. DOM inspection (selector / test-id / component name / computed styles) runs in the page context via `Runtime.evaluate` using helpers from [`@funny/shared/dom/extract`](packages/shared/src/dom/extract.ts) — the same source the Chrome extension consumes.
 
@@ -365,22 +397,29 @@ Full guide — installing, managing, and **creating** plugins (the `@funny/plugi
 
 ## Agent Providers
 
-Besides Claude, funny can drive other coding agents over **ACP** (Agent Client Protocol) — Codex, Gemini, Cursor, opencode, and more. These are **agent providers**: each is a small declarative manifest pointing at an agent CLI already installed on your **runner**. You can trim which built-in providers appear, and install third-party ones — without touching the core. Claude is always available.
+funny can drive multiple coding agents from the same project. Claude runs through the Claude Agent SDK, Deep Agent runs through its own integration, and ACP providers run through small declarative manifests that point at an agent CLI already installed on your **runner**. Bundled ACP providers include Codex, Gemini, Pi, Cursor, and opencode; third-party providers can be installed without touching the core. Claude is always available.
 
 Manage everything from **Settings → Providers** (gear icon at the bottom of the sidebar → **Providers**, or open `/preferences/providers` directly):
 
-- **Built-in providers** — toggle each bundled ACP provider (Codex / Gemini / pi / Cursor / opencode) on or off with **Enable / Disable**. The change is live (no restart) and updates the model picker immediately. It's **session-scoped** — see `FUNNY_PROVIDERS` below to make a lean set the default.
+- **Built-in providers** — toggle each bundled ACP provider (Codex / Gemini / Pi / Cursor / opencode) on or off with **Enable / Disable**. The change is live (no restart) and updates the model picker immediately. It's **session-scoped** — see `FUNNY_PROVIDERS` below to make a lean set the default.
 - **Installed providers** — install a third-party provider from a git repo or a local path on the runner, or remove one. On install, funny discloses the exact binary the provider will launch.
+- **Provider keys** — store per-user keys such as GitHub, OpenAI, Gemini, MiniMax, zAI, and xAI so runners can inject the right environment for the selected provider.
 
 ```bash
 # On the RUNNER, choose which built-in ACP providers are active by default.
 # Comma-separated ids; Claude is always on. Unset = all built-ins (no change).
-FUNNY_PROVIDERS=claude,codex   # only Codex appears in the picker (besides Claude)
+FUNNY_PROVIDERS=codex,pi   # only Codex and Pi appear in the picker alongside Claude
 ```
 
 Where it shows: the **model picker** (in the New Thread dialog and the prompt input) lists only the active providers. Disable a provider — or leave it out of `FUNNY_PROVIDERS` — and it disappears from the picker. Re-enable it from Settings → Providers and it comes back, no restart.
 
 > **Runner-owned & full trust** — providers live on your runner and let funny spawn the binary they declare. Install only providers you trust. Built-in toggles are session-scoped; set `FUNNY_PROVIDERS` on the runner to persist a lean default across restarts.
+
+## Claude Execution Profiles
+
+Claude profiles let you use different Claude subscription logins per project without swapping global credentials. Create profiles from **Settings → Agent Profiles** by giving each profile a name and `CLAUDE_CONFIG_DIR`; funny shows the matching login command so you can authenticate that directory. Then bind a project to a profile from the project's settings.
+
+When a Claude thread starts, funny injects the bound profile's `CLAUDE_CONFIG_DIR`, snapshots the profile on the thread, and leaves other providers unaffected.
 
 ## Development
 
@@ -465,7 +504,7 @@ run `bun run dev` as usual, or prefix any command with `PORTLESS=0`.
 
 - **`packages/shared`** — Shared TypeScript types and runner protocol definitions
 - **`packages/core`** — Reusable agent orchestration and git logic
-- **`packages/runtime`** — Hono HTTP server with [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (port 3001)
+- **`packages/runtime`** — Runner-side Hono HTTP server that starts local agent providers, browser sessions, terminals, and git operations (port 3001)
 - **`packages/client`** — React 19 + Vite SPA (port 5173 in dev)
 - **`packages/server`** — Team coordination server (users, projects, memberships, runner management)
 - **`packages/runner`** — Runner module for connecting to the central server
@@ -475,7 +514,7 @@ run `bun run dev` as usual, or prefix any command with `PORTLESS=0`.
 **Server:**
 
 - Hono (HTTP framework)
-- [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`)
+- Claude Agent SDK and ACP provider processes
 - Drizzle ORM + SQLite
 - WebSocket (real-time updates)
 
@@ -574,12 +613,8 @@ MIT
 ## Support
 
 - [GitHub Issues](https://github.com/ironmussa/funny/issues)
-- [Claude Code Documentation](https://claude.ai/code)
+- Provider docs for the agent CLI you run on your runner
 
 ## Contributing
 
 Contributions are welcome! Please read [CLAUDE.md](./CLAUDE.md) for development guidelines.
-
----
-
-Built with [Claude Code](https://claude.ai/code)

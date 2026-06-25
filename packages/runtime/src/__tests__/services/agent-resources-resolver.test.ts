@@ -4,10 +4,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const { listSkillResourcesForProvider, listCustomCommandResourcesForProvider, listMcpServers } =
   vi.hoisted(() => ({
-    listSkillResourcesForProvider: vi.fn<(p: string, path?: string) => AgentResource[]>(() => []),
-    listCustomCommandResourcesForProvider: vi.fn<(p: string, path?: string) => AgentResource[]>(
-      () => [],
-    ),
+    listSkillResourcesForProvider: vi.fn<
+      (p: string, path?: string, options?: { claudeConfigDir?: string }) => AgentResource[]
+    >(() => []),
+    listCustomCommandResourcesForProvider: vi.fn<
+      (p: string, path?: string, options?: { claudeConfigDir?: string }) => AgentResource[]
+    >(() => []),
     listMcpServers: vi.fn(),
   }));
 
@@ -61,8 +63,12 @@ describe('resolveAgentResources — skills', () => {
     // Codex's own skill is usable; Claude's skill is not even scanned.
     expect(res.resources.map((r) => r.name)).toContain('imagegen');
     expect(res.resources.find((r) => r.name === 'skill-creator')).toBeUndefined();
-    expect(listSkillResourcesForProvider).toHaveBeenCalledWith('codex', '/p');
-    expect(listSkillResourcesForProvider).not.toHaveBeenCalledWith('claude', '/p');
+    expect(listSkillResourcesForProvider).toHaveBeenCalledWith('codex', '/p', {
+      claudeConfigDir: undefined,
+    });
+    expect(
+      listSkillResourcesForProvider.mock.calls.some(([provider]) => provider === 'claude'),
+    ).toBe(false);
   });
 
   test('Settings inventory shows Claude skills under Claude even when targeting Codex', async () => {
@@ -125,7 +131,9 @@ describe('resolveAgentResources — MCP', () => {
       await resolveAgentResources({ provider: 'claude', phase: 'runtime', projectPath: '/p' })
     )._unsafeUnwrap();
     expect(res.resources.find((r) => r.name === 'ctx7')?.usable).toBe(true);
-    expect(listMcpServers).toHaveBeenCalledWith('/p', 'claude');
+    expect(listMcpServers).toHaveBeenCalledWith('/p', 'claude', {
+      claudeConfigDir: undefined,
+    });
   });
 
   test('runtime lists MCP for the requested provider', async () => {
@@ -134,7 +142,9 @@ describe('resolveAgentResources — MCP', () => {
       await resolveAgentResources({ provider: 'codex', phase: 'runtime', projectPath: '/p' })
     )._unsafeUnwrap();
     expect(res.resources.find((r) => r.name === 'ctx7')?.usable).toBe(true);
-    expect(listMcpServers).toHaveBeenCalledWith('/p', 'codex');
+    expect(listMcpServers).toHaveBeenCalledWith('/p', 'codex', {
+      claudeConfigDir: undefined,
+    });
   });
 
   test('MCP is unsupported for llm-api (no transports)', async () => {

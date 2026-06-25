@@ -56,6 +56,11 @@ export interface BranchPRInfo {
   prState: 'OPEN' | 'MERGED' | 'CLOSED';
 }
 
+function branchHeadRefName(branch: string): string {
+  const ownerSeparator = branch.indexOf(':');
+  return ownerSeparator === -1 ? branch : branch.slice(ownerSeparator + 1);
+}
+
 // ── Functions ────────────────────────────────────────────────
 
 /**
@@ -357,16 +362,18 @@ export async function getPRForBranch(
         '--state',
         'all',
         '--json',
-        'number,url,state',
+        'number,url,state,headRefName',
         '--limit',
-        '1',
+        '10',
       ],
       { cwd, timeout: 10_000, reject: false, env },
     );
     if (result.exitCode !== 0 || !result.stdout.trim()) return null;
     const data = JSON.parse(result.stdout);
     if (!Array.isArray(data) || data.length === 0) return null;
-    const pr = data[0];
+    const expectedHeadRef = branchHeadRefName(branch);
+    const pr = data.find((candidate) => candidate?.headRefName === expectedHeadRef);
+    if (!pr) return null;
     return {
       prNumber: pr.number,
       prUrl: pr.url,

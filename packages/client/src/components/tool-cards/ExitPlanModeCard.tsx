@@ -37,7 +37,7 @@ const LazyMarkdown = lazy(() =>
   })),
 );
 import { PlanReviewDialog, type PlanComment } from './PlanReviewDialog';
-import { useCurrentProjectPath, useCurrentThreadProviderModel } from './utils';
+import { useCurrentProjectId, useCurrentProjectPath, useCurrentThreadProviderModel } from './utils';
 
 const cardLog = createClientLogger('ExitPlanMode');
 
@@ -80,12 +80,14 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const editorRef = useRef<PromptEditorHandle>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const cwd = useCurrentProjectPath();
+  const projectId = useCurrentProjectId();
   const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
 
   // Provider-scoped skills/commands for slash commands (single cache; lazy —
   // these cards mount in bulk, so only fetch on the first `/`).
   const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
     projectPath: cwd,
+    projectId,
     provider: threadProvider,
     model: threadModel,
     mode: 'lazy',

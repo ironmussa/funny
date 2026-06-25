@@ -22,6 +22,10 @@ export function useCurrentProjectPath(): string | undefined {
   );
 }
 
+export function useCurrentProjectId(): string | undefined {
+  return useThreadProjectId();
+}
+
 /**
  * Hook returning the active thread's effective provider/model — used by tool
  * cards so their slash-command loaders resolve provider-scoped Agent Resources

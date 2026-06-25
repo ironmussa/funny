@@ -497,6 +497,7 @@ export function usePromptInputState({
   );
   const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
     projectPath: composerProjectPath,
+    projectId: selectedProjectId ?? undefined,
     provider: currentProvider,
     model: currentModel,
     mode: 'eager',

@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { okAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+import type { HonoEnv } from '../../types/hono-env.js';
+
 const {
   mockListSkills,
   mockListProjectSkills,
@@ -11,6 +13,7 @@ const {
   mockAddSkill,
   mockRemoveSkill,
   mockResolveAgentResources,
+  mockResolveEffectiveProfile,
   MOCK_RECOMMENDED,
 } = vi.hoisted(() => ({
   mockListSkills: vi.fn(),
@@ -21,6 +24,7 @@ const {
   mockAddSkill: vi.fn(),
   mockRemoveSkill: vi.fn(),
   mockResolveAgentResources: vi.fn(),
+  mockResolveEffectiveProfile: vi.fn(),
   MOCK_RECOMMENDED: [
     {
       name: 'find-skills',
@@ -45,6 +49,14 @@ vi.mock('../../services/agent-resources/resolver.js', () => ({
   resolveAgentResources: mockResolveAgentResources,
 }));
 
+vi.mock('../../services/service-registry.js', () => ({
+  getServices: () => ({
+    agentProfiles: {
+      resolveEffectiveProfile: mockResolveEffectiveProfile,
+    },
+  }),
+}));
+
 // Bypass path-scope authorization in unit tests — it requires a running
 // RuntimeServiceProvider which is covered in integration tests.
 vi.mock('../../utils/path-scope.js', () => ({
@@ -56,7 +68,7 @@ vi.mock('../../utils/path-scope.js', () => ({
 import skillsApp from '../../routes/skills.js';
 
 describe('Skills Routes', () => {
-  let app: Hono;
+  let app: Hono<HonoEnv>;
 
   beforeEach(() => {
     mockListSkills.mockReset();
@@ -65,6 +77,7 @@ describe('Skills Routes', () => {
     mockListDirectClaudeSkills.mockReset();
     mockListPluginCommands.mockReset();
     mockRemoveSkill.mockReset();
+    mockResolveEffectiveProfile.mockReset();
 
     mockListSkills.mockReturnValue([
       { name: 'test-skill', description: 'A test skill', source: 'github', scope: 'global' },
@@ -75,8 +88,9 @@ describe('Skills Routes', () => {
     mockListPluginCommands.mockReturnValue([]);
     mockAddSkill.mockImplementation(async () => {});
     mockRemoveSkill.mockImplementation(() => {});
+    mockResolveEffectiveProfile.mockResolvedValue({ profile: null, env: {} });
 
-    app = new Hono();
+    app = new Hono<HonoEnv>();
     app.route('/skills', skillsApp);
   });
 
@@ -160,12 +174,41 @@ describe('Skills Routes', () => {
         '/skills/resources?provider=codex&model=gpt-5.5&phase=settings&projectPath=/tmp/p',
       );
       expect(res.status).toBe(200);
-      expect(mockResolveAgentResources).toHaveBeenCalledWith({
-        provider: 'codex',
-        model: 'gpt-5.5',
-        phase: 'settings',
-        projectPath: '/tmp/p',
+      expect(mockResolveAgentResources).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'codex',
+          model: 'gpt-5.5',
+          phase: 'settings',
+          projectPath: '/tmp/p',
+        }),
+      );
+    });
+
+    test('passes profile-specific Claude config through when projectId is provided', async () => {
+      const profiledApp = new Hono<HonoEnv>();
+      profiledApp.use('*', async (c, next) => {
+        c.set('userId', 'user-1');
+        await next();
       });
+      profiledApp.route('/skills', skillsApp);
+      mockResolveEffectiveProfile.mockResolvedValue({
+        profile: { id: 'profile-1', provider: 'claude' },
+        env: { CLAUDE_CONFIG_DIR: '/tmp/claude-work' },
+      });
+
+      const res = await profiledApp.request(
+        '/skills/resources?provider=claude&projectId=proj-1&phase=settings&projectPath=/tmp/p',
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockResolveEffectiveProfile).toHaveBeenCalledWith('proj-1', 'user-1');
+      expect(mockResolveAgentResources).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'claude',
+          projectId: 'proj-1',
+          claudeConfigDir: '/tmp/claude-work',
+        }),
+      );
     });
 
     test('rejects an invalid phase by falling back to composer', async () => {

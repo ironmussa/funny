@@ -1,5 +1,8 @@
+import type { ResolvedAgentExecutionProfileResponse } from '@funny/shared';
 import { err, ok } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const noResolvedProfile: ResolvedAgentExecutionProfileResponse = { profile: null, env: {} };
 
 const mocks = vi.hoisted(() => ({
   orchestrator: {
@@ -58,7 +61,12 @@ const mocks = vi.hoisted(() => ({
     async (_userId?: string, _keyId?: string): Promise<string | undefined> => undefined,
   ),
   getGitIdentity: vi.fn(async (): Promise<{ name: string; email: string } | null> => null),
-  resolveEffectiveProfile: vi.fn(async () => ({ profile: null, env: {} })),
+  resolveEffectiveProfile: vi.fn(
+    async (): Promise<ResolvedAgentExecutionProfileResponse> => ({
+      profile: null,
+      env: {},
+    }),
+  ),
   threadEventBusEmit: vi.fn(),
   threadEventBusOn: vi.fn(),
   remoteGetAgentTemplate: vi.fn(),
@@ -91,7 +99,7 @@ vi.mock('../../services/agent-startup/recover-context.js', () => ({
 }));
 
 vi.mock('../../services/agent-startup/load-mcp-servers.js', () => ({
-  loadProjectMcpServers: () => mocks.loadProjectMcpServers(),
+  loadProjectMcpServers: (...args: unknown[]) => mocks.loadProjectMcpServers(...args),
 }));
 
 vi.mock('../../services/thread-context.js', async (importOriginal) => {
@@ -210,7 +218,7 @@ describe('AgentLifecycleManager', () => {
     mocks.remoteGetAgentTemplate.mockResolvedValue(undefined);
     mocks.getProviderKey.mockResolvedValue(undefined);
     mocks.findPermissionRule.mockResolvedValue(undefined);
-    mocks.resolveEffectiveProfile.mockResolvedValue({ profile: null, env: {} });
+    mocks.resolveEffectiveProfile.mockResolvedValue(noResolvedProfile);
     mocks.runSensitivePathBypass.mockResolvedValue({ output: 'bypassed' });
     mocks.startSpan.mockReturnValue({
       traceId: 'trace-1',
@@ -361,6 +369,31 @@ describe('AgentLifecycleManager', () => {
         'permission denied',
       );
       expect(mocks.orchestrator.startAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('startAgent — project MCP profile', () => {
+    test('loads project MCP servers from the active Claude profile config directory', async () => {
+      seedProjectThread();
+      mocks.resolveEffectiveProfile.mockResolvedValue({
+        profile: {
+          id: 'profile-1',
+          name: 'Work',
+          provider: 'claude',
+          config: { claude: { configDir: '/tmp/claude-work' } },
+          createdAt: '2026-06-24T00:00:00.000Z',
+          updatedAt: '2026-06-24T00:00:00.000Z',
+        },
+        env: { CLAUDE_CONFIG_DIR: '/tmp/claude-work' },
+      });
+
+      const manager = createManager();
+      await manager.startAgent('thread-1', 'hello', '/tmp/repo', 'sonnet', 'autoEdit');
+
+      expect(mocks.resolveEffectiveProfile).toHaveBeenCalledWith('proj-1', 'user-1');
+      expect(mocks.loadProjectMcpServers).toHaveBeenCalledWith('thread-1', '/tmp/repo', 'claude', {
+        claudeConfigDir: '/tmp/claude-work',
+      });
     });
   });
 

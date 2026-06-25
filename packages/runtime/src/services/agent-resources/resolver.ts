@@ -43,7 +43,7 @@ import {
 export function resolveAgentResources(
   input: ResolveAgentResourcesInput,
 ): ResultAsync<AgentResourcesResult, DomainError> {
-  const { provider, model, phase, projectPath, sessionCommands } = input;
+  const { provider, model, phase, projectPath, sessionCommands, claudeConfigDir } = input;
   const descriptor = getProviderResourceDescriptor(provider);
 
   // Each provider scans only its OWN filesystem skills/commands. For composer/
@@ -55,9 +55,13 @@ export function resolveAgentResources(
   const candidates: AgentResource[] = [];
   for (const p of providersToScan) {
     const d = getProviderResourceDescriptor(p);
-    if (d.skills !== 'none') candidates.push(...listSkillResourcesForProvider(p, projectPath));
+    if (d.skills !== 'none') {
+      candidates.push(...listSkillResourcesForProvider(p, projectPath, { claudeConfigDir }));
+    }
     if (d.customCommands !== 'none') {
-      candidates.push(...listCustomCommandResourcesForProvider(p, projectPath));
+      candidates.push(
+        ...listCustomCommandResourcesForProvider(p, projectPath, { claudeConfigDir }),
+      );
     }
   }
 
@@ -80,7 +84,7 @@ export function resolveAgentResources(
   // can shell out to provider CLIs, so keep it off the render-critical path.
   const mcpResult: ResultAsync<McpServer[], DomainError> =
     projectPath && phase !== 'composer'
-      ? listMcpServers(projectPath, provider)
+      ? listMcpServers(projectPath, provider, { claudeConfigDir })
       : okAsync<McpServer[], DomainError>([]);
 
   return mcpResult

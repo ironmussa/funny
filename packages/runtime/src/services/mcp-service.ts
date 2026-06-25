@@ -9,7 +9,6 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { execute, ProcessExecutionError } from '@funny/core/git';
@@ -19,6 +18,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { getClaudeBinaryPath } from '../utils/claude-binary.js';
+import { claudeConfigJsonPath, claudeProfileEnv } from '../utils/claude-profile-paths.js';
 
 function getCodexBinaryPath(): string {
   return process.env.CODEX_BINARY_PATH || process.env.CODEX_BIN || 'codex';
@@ -73,19 +73,28 @@ function getDisabledUserMcpNames(
   return new Set([...(settings.disabledMcpServers ?? []), ...(config.disabledMcpServers ?? [])]);
 }
 
-const CLAUDE_CONFIG_PATH = join(homedir(), '.claude.json');
+interface ClaudeProfileOptions {
+  claudeConfigDir?: string;
+}
 
-async function readClaudeConfig(): Promise<ClaudeConfig> {
+async function readClaudeConfig(options: ClaudeProfileOptions = {}): Promise<ClaudeConfig> {
   try {
-    const raw = await readFile(CLAUDE_CONFIG_PATH, 'utf-8');
+    const raw = await readFile(claudeConfigJsonPath(options.claudeConfigDir), 'utf-8');
     return JSON.parse(raw) as ClaudeConfig;
   } catch {
     return {};
   }
 }
 
-async function writeClaudeConfig(config: ClaudeConfig): Promise<void> {
-  await writeFile(CLAUDE_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+async function writeClaudeConfig(
+  config: ClaudeConfig,
+  options: ClaudeProfileOptions = {},
+): Promise<void> {
+  await writeFile(
+    claudeConfigJsonPath(options.claudeConfigDir),
+    JSON.stringify(config, null, 2),
+    'utf-8',
+  );
 }
 
 function getProjectSettings(config: ClaudeConfig, projectPath: string): ClaudeProjectSettings {
@@ -130,6 +139,7 @@ async function readMcpJson(projectPath: string): Promise<
 export function listMcpServers(
   projectPath: string,
   provider: AgentProvider = 'claude',
+  options: ClaudeProfileOptions = {},
 ): ResultAsync<McpServer[], DomainError> {
   if (provider === 'codex') return listCodexMcpServers(projectPath);
   if (provider !== 'claude') {
@@ -137,10 +147,13 @@ export function listMcpServers(
       internal(String(error)),
     );
   }
-  return listClaudeMcpServers(projectPath);
+  return listClaudeMcpServers(projectPath, options);
 }
 
-function listClaudeMcpServers(projectPath: string): ResultAsync<McpServer[], DomainError> {
+function listClaudeMcpServers(
+  projectPath: string,
+  options: ClaudeProfileOptions = {},
+): ResultAsync<McpServer[], DomainError> {
   const binary = getClaudeBinaryPath();
 
   return ResultAsync.fromPromise(
@@ -149,6 +162,7 @@ function listClaudeMcpServers(projectPath: string): ResultAsync<McpServer[], Dom
         // Get active servers from CLI
         const result = await execute(binary, ['mcp', 'list'], {
           cwd: projectPath,
+          env: claudeProfileEnv(options.claudeConfigDir),
           reject: false,
           timeout: 15_000,
         });
@@ -161,7 +175,10 @@ function listClaudeMcpServers(projectPath: string): ResultAsync<McpServer[], Dom
         }
 
         // Read config files to find disabled servers and annotate sources
-        const [config, mcpJson] = await Promise.all([readClaudeConfig(), readMcpJson(projectPath)]);
+        const [config, mcpJson] = await Promise.all([
+          readClaudeConfig(options),
+          readMcpJson(projectPath),
+        ]);
 
         const settings = getProjectSettings(config, projectPath);
         const disabledProjectNames = new Set(settings.disabledMcpjsonServers ?? []);
@@ -386,6 +403,7 @@ export function toggleMcpServer(opts: {
   projectPath: string;
   provider?: AgentProvider;
   disabled: boolean;
+  claudeConfigDir?: string;
 }): ResultAsync<void, DomainError> {
   if (opts.provider === 'codex') {
     return ResultAsync.fromPromise(
@@ -396,7 +414,7 @@ export function toggleMcpServer(opts: {
 
   return ResultAsync.fromPromise(
     (async () => {
-      const config = await readClaudeConfig();
+      const config = await readClaudeConfig(opts);
       const settings = ensureProjectSettings(config, opts.projectPath);
       const mcpJson = await readMcpJson(opts.projectPath);
 
@@ -452,7 +470,7 @@ export function toggleMcpServer(opts: {
         }
       }
 
-      await writeClaudeConfig(config);
+      await writeClaudeConfig(config, opts);
       log.info('Toggled MCP server', {
         namespace: 'mcp-service',
         name: opts.name,
@@ -609,6 +627,7 @@ export function addMcpServer(opts: {
   env?: Record<string, string>;
   scope?: 'project' | 'user';
   projectPath: string;
+  claudeConfigDir?: string;
 }): ResultAsync<void, DomainError> {
   if (opts.provider === 'codex') return addCodexMcpServer(opts);
 
@@ -656,7 +675,11 @@ export function addMcpServer(opts: {
   log.info('Adding MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
 
   return ResultAsync.fromPromise(
-    execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 30_000 }).then(() => undefined),
+    execute(binary, cliArgs, {
+      cwd: opts.projectPath,
+      env: claudeProfileEnv(opts.claudeConfigDir),
+      timeout: 30_000,
+    }).then(() => undefined),
     (error) => {
       if (error instanceof ProcessExecutionError) {
         return processError(error.message, error.exitCode, error.stderr);
@@ -738,6 +761,7 @@ export function removeMcpServer(opts: {
   projectPath: string;
   provider?: AgentProvider;
   scope?: 'project' | 'user';
+  claudeConfigDir?: string;
 }): ResultAsync<void, DomainError> {
   if (opts.provider === 'codex') return removeCodexMcpServer(opts);
 
@@ -753,7 +777,11 @@ export function removeMcpServer(opts: {
   log.info('Removing MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
 
   return ResultAsync.fromPromise(
-    execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 15_000 }).then(() => undefined),
+    execute(binary, cliArgs, {
+      cwd: opts.projectPath,
+      env: claudeProfileEnv(opts.claudeConfigDir),
+      timeout: 15_000,
+    }).then(() => undefined),
     (error) => {
       if (error instanceof ProcessExecutionError) {
         return processError(error.message, error.exitCode, error.stderr);

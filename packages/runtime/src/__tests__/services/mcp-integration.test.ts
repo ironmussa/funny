@@ -49,8 +49,8 @@ function useClaudeConfigStore(initial: Record<string, unknown>) {
   let config = structuredClone(initial);
 
   fsMocks.readFile.mockImplementation(async (path) => {
-    if (String(path).endsWith('.claude.json')) return JSON.stringify(config);
     if (String(path).endsWith('.mcp.json')) throw new Error('ENOENT');
+    if (String(path).endsWith('.json')) return JSON.stringify(config);
     throw new Error(`unexpected read: ${path}`);
   });
 
@@ -299,5 +299,54 @@ describe('MCP list + toggle integration', () => {
       }),
     ]);
     expect(fsMocks.readFile).not.toHaveBeenCalled();
+  });
+
+  test('listMcpServers uses the selected Claude profile env and config file', async () => {
+    useClaudeConfigStore({
+      mcpServers: {
+        work: { type: 'http', url: 'https://mcp.example.test/mcp' },
+      },
+      projects: { [PROJECT]: {} },
+    });
+
+    stubCliList('work: https://mcp.example.test/mcp (HTTP) - ✓ Connected\n');
+
+    const result = await listMcpServers(PROJECT, 'claude', {
+      claudeConfigDir: '/home/user/.claude-work',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(executeMock).toHaveBeenCalledWith(
+      '/usr/bin/claude',
+      ['mcp', 'list'],
+      expect.objectContaining({
+        cwd: PROJECT,
+        env: { CLAUDE_CONFIG_DIR: '/home/user/.claude-work' },
+      }),
+    );
+    expect(fsMocks.readFile).toHaveBeenCalledWith('/home/user/.claude-work.json', 'utf-8');
+  });
+
+  test('toggleMcpServer writes profile-specific Claude config', async () => {
+    useClaudeConfigStore({
+      mcpServers: {
+        codegraph: { type: 'stdio', command: 'codegraph', args: ['serve', '--mcp'] },
+      },
+      projects: { [PROJECT]: {} },
+    });
+
+    const result = await toggleMcpServer({
+      name: 'codegraph',
+      projectPath: PROJECT,
+      disabled: true,
+      claudeConfigDir: '/home/user/.claude-work',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(fsMocks.writeFile).toHaveBeenCalledWith(
+      '/home/user/.claude-work.json',
+      expect.any(String),
+      'utf-8',
+    );
   });
 });

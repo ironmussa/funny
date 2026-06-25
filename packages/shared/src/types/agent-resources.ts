@@ -172,10 +172,13 @@ export function resourceUsableByProvider(
 
 export interface ResolveAgentResourcesInput {
   projectPath?: string;
+  projectId?: string;
   provider: AgentProvider;
   model?: string;
   threadId?: string;
   phase: ResourcePhase;
+  /** Claude profile config directory resolved from the selected project profile. */
+  claudeConfigDir?: string;
   /**
    * Session-reported slash command names (no leading slash), if the thread has
    * an active session. Authoritative source for built-in / dynamic commands.

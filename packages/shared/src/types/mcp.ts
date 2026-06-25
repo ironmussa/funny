@@ -36,6 +36,8 @@ export interface McpAddRequest {
   env?: Record<string, string>;
   scope?: 'project' | 'user';
   projectPath: string;
+  /** Optional project id used to resolve provider-specific execution profiles. */
+  projectId?: string;
 }
 
 // ─── MCP OAuth ──────────────────────────────────────────
@@ -44,6 +46,8 @@ export interface McpOAuthStartRequest {
   serverName: string;
   provider?: AgentProvider;
   projectPath: string;
+  /** Optional project id used to resolve provider-specific execution profiles. */
+  projectId?: string;
 }
 
 export interface McpOAuthStartResponse {
@@ -54,5 +58,7 @@ export interface McpRemoveRequest {
   name: string;
   provider?: AgentProvider;
   projectPath: string;
+  /** Optional project id used to resolve provider-specific execution profiles. */
+  projectId?: string;
   scope?: 'project' | 'user';
 }

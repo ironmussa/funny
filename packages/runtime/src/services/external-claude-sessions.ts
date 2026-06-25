@@ -25,6 +25,14 @@ const MAX_JSONL_FILES_PER_CWD = 8;
 const MAX_PROJECT_SESSION_FILES = 200;
 const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
 const IDE_OPENED_FILE_RE = /<ide_opened_file>[\s\S]*?<\/ide_opened_file>/g;
+const PREVIEWABLE_ASSETS_BLOCK_RE = /\[PREVIEWABLE ASSETS\][\s\S]*?\[\/PREVIEWABLE ASSETS\]/g;
+const LOCAL_COMMAND_CAVEAT_BLOCK_RE =
+  /<local-command-caveat>[\s\S]*?(?:<\/local-command-caveat>|$)/g;
+const CONTEXT_RECOVERY_PREFIX =
+  '[SYSTEM NOTE: Your previous session cannot be resumed. Below is the conversation history to restore context.';
+const RESUME_NOTE_PREFIX =
+  '[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution.';
+const RECOVERED_USER_MESSAGE_MARKER = 'USER (new message):';
 const CLAUDE_CODE_SYNTHETIC_AUTHOR = 'Claude Code';
 let dismissedSessionIdsCache: Set<string> | null = null;
 
@@ -113,6 +121,7 @@ interface SessionMetadata {
   lastPrompt: string | null;
   startedAt: string | null;
   updatedAt: string | null;
+  hasDisplayableContent: boolean;
 }
 
 interface ClaudeProject {
@@ -566,6 +575,7 @@ function listProjectClaudeSessions(
     if (!project) continue;
 
     const running = runningBySessionId.get(metadata.sessionId);
+    if (!running && !metadata.hasDisplayableContent) continue;
     const cwd = metadata.cwd ?? running?.cwd ?? null;
     const id = `claude:${metadata.sessionId}`;
     sessionsById.set(id, {
@@ -623,6 +633,7 @@ export function readExternalClaudeTranscript(
     lastPrompt: null,
     startedAt: null,
     updatedAt: null,
+    hasDisplayableContent: false,
   };
   let startedAt: string | null = null;
 
@@ -639,10 +650,14 @@ export function readExternalClaudeTranscript(
       startedAt ??= entry.timestamp;
       metadata.updatedAt = entry.timestamp;
     }
-    if (entry.type === 'last-prompt' && entry.lastPrompt) metadata.lastPrompt = entry.lastPrompt;
+    if (entry.type === 'last-prompt' && entry.lastPrompt) {
+      const lastPrompt = contentToText(entry.lastPrompt);
+      if (lastPrompt) metadata.lastPrompt = lastPrompt;
+    }
 
     const message = entryToTranscriptMessage(entry, messages.length, toolCallsByClaudeId);
     if (message) {
+      metadata.hasDisplayableContent = true;
       messages.push(message);
       if (message.role === 'user' && !metadata.lastPrompt) {
         metadata.lastPrompt = firstLine(message.content);
@@ -800,9 +815,11 @@ function parseClaudeJsonl(path: string, fallbackSessionId: string): SessionMetad
     lastPrompt: null,
     startedAt: null,
     updatedAt: null,
+    hasDisplayableContent: false,
   };
+  const toolCallsByClaudeId = new Map<string, ExternalClaudeTranscriptToolCall>();
 
-  for (const line of raw.split('\n').slice(-120)) {
+  for (const [index, line] of raw.split('\n').entries()) {
     if (!line.trim()) continue;
     const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
     if (!parsed.ok) continue;
@@ -814,10 +831,20 @@ function parseClaudeJsonl(path: string, fallbackSessionId: string): SessionMetad
       metadata.startedAt ??= entry.timestamp;
       metadata.updatedAt = entry.timestamp;
     }
-    if (entry.type === 'last-prompt' && entry.lastPrompt) metadata.lastPrompt = entry.lastPrompt;
+    if (entry.type === 'last-prompt' && entry.lastPrompt) {
+      const lastPrompt = contentToText(entry.lastPrompt);
+      if (lastPrompt) metadata.lastPrompt = lastPrompt;
+    }
     const message = entry.message;
     if (!metadata.lastPrompt && entry.type === 'user' && message?.content !== undefined) {
       metadata.lastPrompt = firstLine(contentToText(message.content));
+    }
+    if (!metadata.hasDisplayableContent) {
+      metadata.hasDisplayableContent = !!entryToTranscriptMessage(
+        entry,
+        index,
+        toolCallsByClaudeId,
+      );
     }
   }
 
@@ -997,7 +1024,7 @@ function contentToText(content: unknown): string {
             .filter(Boolean)
             .join('\n\n');
 
-  return stripIdeOpenedFileMarkers(text);
+  return stripClaudeInternalPromptMarkers(stripIdeOpenedFileMarkers(text));
 }
 
 function blockToText(block: unknown): string {
@@ -1053,6 +1080,52 @@ function stripIdeOpenedFileMarkers(value: string): string {
     .replace(IDE_OPENED_FILE_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function stripClaudeInternalPromptMarkers(value: string): string {
+  if (!containsClaudeInternalPromptMarker(value)) return value;
+
+  const trimmedStart = value.trimStart();
+  if (trimmedStart.startsWith(CONTEXT_RECOVERY_PREFIX)) {
+    const markerIndex = trimmedStart.lastIndexOf(RECOVERED_USER_MESSAGE_MARKER);
+    if (markerIndex === -1) return '';
+    return trimmedStart
+      .slice(markerIndex + RECOVERED_USER_MESSAGE_MARKER.length)
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  if (trimmedStart.startsWith(RESUME_NOTE_PREFIX)) {
+    const noteEnd = trimmedStart.indexOf(']');
+    return (noteEnd === -1 ? '' : trimmedStart.slice(noteEnd + 1))
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  const stripped = value
+    .replace(PREVIEWABLE_ASSETS_BLOCK_RE, '')
+    .replace(LOCAL_COMMAND_CAVEAT_BLOCK_RE, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const remaining = stripped.trimStart();
+  if (
+    remaining.startsWith('[PREVIEWABLE ASSETS]') ||
+    remaining.startsWith('<local-command-caveat>')
+  ) {
+    return '';
+  }
+
+  return stripped;
+}
+
+function containsClaudeInternalPromptMarker(value: string): boolean {
+  return (
+    value.includes('[PREVIEWABLE ASSETS]') ||
+    value.includes('<local-command-caveat>') ||
+    value.includes(CONTEXT_RECOVERY_PREFIX) ||
+    value.includes(RESUME_NOTE_PREFIX)
+  );
 }
 
 function firstLine(value: string): string | null {

@@ -265,18 +265,38 @@ threadRoutes.get('/', async (c) => {
   const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
   const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
 
-  const { threads, total } = await threadRepo.listThreads({
-    projectId: projectId || undefined,
-    designId: designId || undefined,
-    userId,
-    includeArchived,
-    organizationId: orgId,
-    isScratch,
-    limit,
-    offset,
+  // Span on the native list path (mirrors GET /:id). Its start_time_ms reveals
+  // WHEN the server began handling each sidebar list during app refresh — if the
+  // ~28 per-project lists start spread across the load window the bottleneck is
+  // upstream (browser per-origin socket queue / proxy); if they start clustered
+  // but the span durations stack, it's server-side DB serialization.
+  const span = startSpan('GET /api/threads', {
+    attributes: {
+      'thread.project_id': projectId ?? null,
+      'thread.limit': limit,
+      'thread.offset': offset,
+    },
   });
+  try {
+    const { threads, total } = await threadRepo.listThreads({
+      projectId: projectId || undefined,
+      designId: designId || undefined,
+      userId,
+      includeArchived,
+      organizationId: orgId,
+      isScratch,
+      limit,
+      offset,
+    });
 
-  return c.json({ threads, total, hasMore: offset + threads.length < total });
+    span.attributes['thread.count'] = threads.length;
+    span.attributes['thread.total'] = Number(total);
+    span.end('ok');
+    return c.json({ threads, total, hasMore: offset + threads.length < total });
+  } catch (e) {
+    span.end('error', e instanceof Error ? e.message : String(e));
+    throw e;
+  }
 });
 
 // GET /api/threads/scratch — list the current user's scratch threads

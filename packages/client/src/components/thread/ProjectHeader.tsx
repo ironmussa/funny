@@ -1111,6 +1111,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                           <ThreadTitle
                             as="span"
                             title={activeThreadTitle ?? ''}
+                            density="title"
                             className="text-sm font-medium"
                             containerClassName="max-w-full"
                           />

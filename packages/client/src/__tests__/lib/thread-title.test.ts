@@ -4,6 +4,8 @@ import {
   cleanThreadTitle,
   parseLeadingPromptCommand,
   parseLeadingSlashCommand,
+  parseLinearIssueReference,
+  parseThreadTitleForDisplay,
 } from '@/lib/thread-title';
 
 describe('cleanThreadTitle', () => {
@@ -114,5 +116,52 @@ describe('parseLeadingPromptCommand', () => {
       command: null,
       rest: '!',
     });
+  });
+});
+
+describe('parseLinearIssueReference', () => {
+  test('extracts a Linear issue URL and hides it from the display title', () => {
+    expect(
+      parseLinearIssueReference(
+        'fix https://linear.app/goliiive-v3/issue/GOL-728/core-catalogo-publico-con today',
+      ),
+    ).toEqual({
+      issueKey: 'GOL-728',
+      url: 'https://linear.app/goliiive-v3/issue/GOL-728/core-catalogo-publico-con',
+      displayTitle: 'fix today',
+    });
+  });
+
+  test('trims trailing punctuation from the URL', () => {
+    expect(
+      parseLinearIssueReference('https://linear.app/goliiive-v3/issue/gol-773/example.'),
+    ).toEqual({
+      issueKey: 'GOL-773',
+      url: 'https://linear.app/goliiive-v3/issue/gol-773/example',
+      displayTitle: '',
+    });
+  });
+
+  test('ignores non-Linear URLs', () => {
+    expect(parseLinearIssueReference('https://example.com/goliiive-v3/issue/GOL-773/example')).toBe(
+      null,
+    );
+  });
+});
+
+describe('parseThreadTitleForDisplay', () => {
+  test('normalizes attachments, leading commands, and Linear issue references in one pass', () => {
+    const parsed = parseThreadTitleForDisplay(
+      '<referenced-files>\n<file path="src/a.ts" />\n</referenced-files>\n/fix-linear https://linear.app/goliiive-v3/issue/GOL-733/example revisar',
+    );
+
+    expect(parsed.attachedFiles.map((f) => f.path)).toEqual(['src/a.ts']);
+    expect(parsed.leadingCommand).toEqual({
+      kind: 'slash',
+      command: 'fix-linear',
+      rest: 'https://linear.app/goliiive-v3/issue/GOL-733/example revisar',
+    });
+    expect(parsed.linearIssue?.issueKey).toBe('GOL-733');
+    expect(parsed.visibleText).toBe('revisar');
   });
 });

@@ -26,6 +26,7 @@ import { useProfileStore } from '@/stores/profile-store';
 
 import {
   getQuestions,
+  useCurrentProjectId,
   useCurrentProjectPath,
   useCurrentThreadProviderModel,
   type Question,
@@ -154,6 +155,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   const otherEditorRef = useRef<PromptEditorHandle>(null);
   const otherEditorContainerRef = useRef<HTMLDivElement>(null);
   const cwd = useCurrentProjectPath();
+  const projectId = useCurrentProjectId();
   const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
@@ -202,6 +204,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   // bulk and most are never typed into, so only fetch on the first `/`). ──
   const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
     projectPath: cwd,
+    projectId,
     provider: threadProvider,
     model: threadModel,
     mode: 'lazy',

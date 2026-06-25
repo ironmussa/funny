@@ -146,15 +146,15 @@ function LiveStepRow({ step }: { step: GitProgressStep }) {
  * A completed step is "covered" if a persisted event of the mapped type exists.
  */
 const STEP_TO_EVENT_TYPES: Record<string, string[]> = {
-  unstage: ['git:unstaged'],
-  stage: ['git:staged'],
+  unstage: ['git:unstage'],
+  stage: ['git:stage'],
   hooks: ['workflow:hooks'],
-  commit: ['git:committed'],
+  commit: ['git:commit'],
   review: ['workflow:review'],
   fix: ['workflow:fix'],
-  push: ['git:pushed'],
+  push: ['git:push'],
   pr: ['workflow:pr'],
-  merge: ['git:merged'],
+  merge: ['git:merge'],
 };
 
 /** Check if a progress step is already represented by a persisted event */
@@ -206,6 +206,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
     >
       {/* Header row — clickable to expand/collapse */}
       <button
+        type="button"
         data-testid="workflow-event-group-toggle"
         onClick={() => setExpanded(!expanded)}
         className={cn(

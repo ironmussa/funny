@@ -5,6 +5,7 @@
 
 import type { ThreadEvent } from '@funny/shared';
 import {
+  ChevronRight,
   GitCommit,
   Upload,
   GitMerge,
@@ -17,10 +18,11 @@ import {
   ArchiveRestore,
   RotateCcw,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { timeAgo } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 
 function parseEventData(data: string | Record<string, unknown>): Record<string, any> {
   if (typeof data === 'string') {
@@ -49,15 +51,28 @@ const eventConfig: Record<string, { icon: typeof GitCommit; label: string }> = {
 
 export const GitEventCard = memo(function GitEventCard({ event }: { event: ThreadEvent }) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const metadata = useMemo(() => parseEventData(event.data), [event.data]);
   const config = eventConfig[event.type];
   if (!config) return null;
 
   const Icon = config.icon;
-  const metadata = parseEventData(event.data);
+  const output = typeof metadata.output === 'string' ? metadata.output.trim() : '';
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
-      <div className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+        className="hover:bg-accent/30 flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
+      >
+        <ChevronRight
+          className={cn(
+            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
+            expanded && 'rotate-90',
+          )}
+        />
         <Icon className="icon-xs text-muted-foreground shrink-0" />
         <span className="text-foreground shrink-0 font-mono font-medium">{config.label}</span>
         {metadata.message && (
@@ -66,14 +81,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
           </span>
         )}
         {metadata.title && metadata.url && (
-          <a
-            href={metadata.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono hover:underline"
-          >
-            {metadata.title}
-          </a>
+          <span className="text-muted-foreground min-w-0 truncate font-mono">{metadata.title}</span>
         )}
         {metadata.sourceBranch && metadata.targetBranch && (
           <span className="text-muted-foreground font-mono">
@@ -85,17 +93,24 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
             {metadata.paths.length === 1 ? metadata.paths[0] : `${metadata.paths.length} files`}
           </span>
         )}
-        {metadata.output && !metadata.paths && !metadata.message && !metadata.title && (
+        {output && !metadata.paths && !metadata.message && !metadata.title && (
           <span className="text-muted-foreground min-w-0 truncate font-mono">
-            {metadata.output.split('\n')[0].slice(0, 80)}
+            {output.split('\n')[0].slice(0, 80)}
           </span>
         )}
         {event.createdAt && (
-          <span className="text-muted-foreground ml-auto shrink-0">
+          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
             {timeAgo(event.createdAt, t)}
           </span>
         )}
-      </div>
+      </button>
+      {expanded && (
+        <div className="border-border/40 border-t px-3 py-2">
+          <pre className="text-muted-foreground max-h-[40vh] overflow-auto font-mono text-xs leading-relaxed whitespace-pre-wrap">
+            {output || JSON.stringify(metadata, null, 2)}
+          </pre>
+        </div>
+      )}
     </div>
   );
 });

@@ -1,5 +1,15 @@
 import { parseReferencedFiles, type ReferencedItem } from './parse-referenced-files';
 
+const LINEAR_ISSUE_URL_RE =
+  /https?:\/\/linear\.app\/[^\s)]+\/issue\/([a-z][a-z0-9]+-\d+)(?:\/[^\s)]*)?/i;
+const TRAILING_URL_PUNCTUATION_RE = /[.,;:!?)\]]+$/;
+
+export interface LinearIssueReference {
+  issueKey: string;
+  url: string;
+  displayTitle: string;
+}
+
 /**
  * Strip the leading `<referenced-files>` XML block (added when files are
  * attached via the paperclip) from a thread title and surface the attached
@@ -46,6 +56,51 @@ export function cleanThreadTitle(title: string): {
     };
   }
   return { displayTitle: title, attachedFiles: files };
+}
+
+export function parseLinearIssueReference(title: string): LinearIssueReference | null {
+  const match = LINEAR_ISSUE_URL_RE.exec(title);
+  if (!match) return null;
+
+  const matchedUrl = match[0];
+  const url = matchedUrl.replace(TRAILING_URL_PUNCTUATION_RE, '');
+  const displayTitle =
+    `${title.slice(0, match.index)} ${title.slice(match.index + matchedUrl.length)}`
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  return {
+    issueKey: match[1].toUpperCase(),
+    url,
+    displayTitle,
+  };
+}
+
+export interface ParsedThreadTitle {
+  displayTitle: string;
+  attachedFiles: ReferencedItem[];
+  leadingCommand: {
+    kind: LeadingPromptCommandKind;
+    command: string | null;
+    rest: string;
+  };
+  linearIssue: LinearIssueReference | null;
+  visibleText: string;
+}
+
+export function parseThreadTitleForDisplay(title: string): ParsedThreadTitle {
+  const { displayTitle, attachedFiles } = cleanThreadTitle(title);
+  const leadingCommand = parseLeadingPromptCommand(displayTitle);
+  const commandRest = leadingCommand.kind === 'slash' ? leadingCommand.rest : displayTitle;
+  const linearIssue = parseLinearIssueReference(commandRest);
+
+  return {
+    displayTitle,
+    attachedFiles,
+    leadingCommand,
+    linearIssue,
+    visibleText: linearIssue?.displayTitle ?? commandRest,
+  };
 }
 
 /**

@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { LinearIssueBadge } from '@/components/LinearIssueBadge';
 import { Badge } from '@/components/ui/badge';
 import { CommandLineChip, FileChip, SkillChip } from '@/components/ui/chip';
 import {
@@ -23,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { EFFORT_LEVELS } from '@/lib/providers';
+import { parseLinearIssueReference } from '@/lib/thread-title';
 import { resolveModelLabel, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -79,13 +81,20 @@ function ReferencedFileChip({ item }: { item: ReferencedItem }) {
 
 /** Renders a slash command / skill chip inline (inverse variant for dark card). */
 function UserMessageSkillChip({ name }: { name: string }) {
-  return <SkillChip name={name} variant="inverse" data-testid="user-message-slash-command" />;
+  return (
+    <SkillChip name={name} variant="inverse" size="sm" data-testid="user-message-slash-command" />
+  );
 }
 
 /** Renders a command-line chip for `!` commands (inverse variant for dark card). */
 function UserMessageCommandLineChip({ command }: { command: string }) {
   return (
-    <CommandLineChip command={command} variant="inverse" data-testid="user-message-command-line" />
+    <CommandLineChip
+      command={command}
+      variant="inverse"
+      size="sm"
+      data-testid="user-message-command-line"
+    />
   );
 }
 
@@ -161,18 +170,32 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
         trailing = trailingMatch[0];
         url = url.slice(0, -trailing.length);
       }
-      parts.push(
-        <a
-          key={`url-${match.index}`}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-background/70 decoration-background/45 hover:text-background hover:decoration-background/75 underline underline-offset-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {url}
-        </a>,
-      );
+      const linearIssue = parseLinearIssueReference(url);
+      if (linearIssue) {
+        parts.push(
+          <LinearIssueBadge
+            key={`linear-${match.index}`}
+            issueKey={linearIssue.issueKey}
+            issueUrl={linearIssue.url}
+            size="xs"
+            variant="inverse"
+            data-testid="user-message-linear-issue"
+          />,
+        );
+      } else {
+        parts.push(
+          <a
+            key={`url-${match.index}`}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-background/70 decoration-background/45 hover:text-background hover:decoration-background/75 underline underline-offset-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {url}
+          </a>,
+        );
+      }
       if (trailing) parts.push(trailing);
       lastIndex = match.index + match[0].length;
     } else {
@@ -460,26 +483,38 @@ export function UserMessageCard({
                   </DropdownMenuItem>
                 )}
                 {onRewind && (
-                  <DropdownMenuItem
-                    data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
-                    disabled={forkDisabled || rewindDisabled}
-                    title={rewindDisabled ? rewindDisabledReason : undefined}
-                    onSelect={() => onRewind()}
-                  >
-                    <Undo2 className="icon-xs" />
-                    {t('thread.rewindCodeToHere', 'Rewind code to here')}
-                  </DropdownMenuItem>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
+                        disabled={forkDisabled || rewindDisabled}
+                        onSelect={() => onRewind()}
+                      >
+                        <Undo2 className="icon-xs" />
+                        {t('thread.rewindCodeToHere', 'Rewind code to here')}
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    {rewindDisabled && rewindDisabledReason ? (
+                      <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
+                    ) : null}
+                  </Tooltip>
                 )}
                 {onForkAndRewind && (
-                  <DropdownMenuItem
-                    data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
-                    disabled={forkDisabled || rewindDisabled}
-                    title={rewindDisabled ? rewindDisabledReason : undefined}
-                    onSelect={() => onForkAndRewind()}
-                  >
-                    <RotateCcw className="icon-xs" />
-                    {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
-                  </DropdownMenuItem>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
+                        disabled={forkDisabled || rewindDisabled}
+                        onSelect={() => onForkAndRewind()}
+                      >
+                        <RotateCcw className="icon-xs" />
+                        {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    {rewindDisabled && rewindDisabledReason ? (
+                      <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
+                    ) : null}
+                  </Tooltip>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>

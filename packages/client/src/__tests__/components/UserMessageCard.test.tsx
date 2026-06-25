@@ -74,6 +74,15 @@ describe('UserMessageCard', () => {
     expect(screen.getAllByText('a.ts').length).toBeGreaterThan(0);
   });
 
+  test('renders referenced file chips without native browser tooltips', () => {
+    const content =
+      '<referenced-files>\n<file path="src/modules/storyproducer/components/RelayClipPlayer.tsx" />\n</referenced-files>\nUse @src/modules/storyproducer/components/RelayClipPlayer.tsx';
+
+    renderWithProviders(<UserMessageCard content={content} data-testid="msg-file-tooltip" />);
+
+    expect(screen.getByTestId('file-chip')).not.toHaveAttribute('title');
+  });
+
   test('renders leading exclamation commands as command-line chips', () => {
     renderWithProviders(
       <UserMessageCard content={'! bun test --filter auth\nReview output'} data-testid="msg-cmd" />,
@@ -82,6 +91,7 @@ describe('UserMessageCard', () => {
     const commandChip = screen.getByTestId('user-message-command-line');
     expect(commandChip).toHaveTextContent('>');
     expect(commandChip).toHaveTextContent('bun test --filter auth');
+    expect(commandChip).not.toHaveAttribute('title');
     expect(screen.getByText(/Review output/)).toBeInTheDocument();
   });
 
@@ -101,6 +111,20 @@ describe('UserMessageCard', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link.className).toContain('text-background/70');
     expect(link.className).not.toContain('text-sky');
+  });
+
+  test('renders Linear issue URLs as parsed issue badges', () => {
+    const url = 'https://linear.app/goliiive-v3/issue/GOL-733/example';
+    renderWithProviders(
+      <UserMessageCard content={`/fix-linear ${url}`} data-testid="msg-linear-url" />,
+    );
+
+    expect(screen.getByTestId('user-message-slash-command')).toHaveTextContent('fix-linear');
+    expect(screen.getByTestId('user-message-slash-command')).toHaveClass('h-5');
+    expect(screen.getByTestId('user-message-linear-issue')).toHaveTextContent('GOL-733');
+    expect(screen.getByTestId('user-message-linear-issue')).toHaveClass('h-5');
+    expect(screen.getByTestId('user-message-linear-issue')).toHaveClass('text-background/70');
+    expect(screen.queryByRole('link', { name: url })).not.toBeInTheDocument();
   });
 
   test('renders model and permission badges', () => {

@@ -1,12 +1,21 @@
-import { Code2, FileText, FolderOpen, Loader2, X, Zap, type LucideIcon } from 'lucide-react';
-import type { MouseEvent } from 'react';
+import { Code2, ExternalLink, FileText, FolderOpen, Loader2, X, Zap } from 'lucide-react';
+import type { ComponentType, MouseEvent, ReactNode } from 'react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export type ChipVariant = 'default' | 'inverse';
+export type ChipSize = 'xs' | 'sm' | 'xxs';
+export type ChipIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 const CHIP_BASE =
-  'mx-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 align-middle font-mono text-xs whitespace-nowrap';
+  'mx-0.5 inline-flex items-center gap-1 rounded align-middle font-mono leading-none whitespace-nowrap focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none';
+
+const CHIP_SIZES: Record<ChipSize, string> = {
+  xs: 'px-1.5 py-0.5 text-xs',
+  sm: 'h-5 px-1.5 text-xs',
+  xxs: 'h-4 gap-0.5 rounded-[3px] px-1 text-[10px]',
+};
 
 const CHIP_VARIANTS: Record<ChipVariant, string> = {
   // Light surface (e.g. prompt editor) — semi-transparent foreground tint
@@ -15,10 +24,27 @@ const CHIP_VARIANTS: Record<ChipVariant, string> = {
   inverse: 'bg-background/20 text-background/70',
 };
 
+function withChipTooltip(content: ReactNode, title?: string) {
+  if (!title) return content;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
+        {title}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 interface ChipProps {
-  icon: LucideIcon;
-  label: string;
+  icon?: ChipIcon;
+  label: ReactNode;
+  href?: string;
+  ariaLabel?: string;
+  showExternalIcon?: boolean;
   variant?: ChipVariant;
+  size?: ChipSize;
   title?: string;
   className?: string;
   'data-testid'?: string;
@@ -28,26 +54,56 @@ interface ChipProps {
 export function Chip({
   icon: Icon,
   label,
+  href,
+  ariaLabel,
+  showExternalIcon,
   variant = 'default',
+  size = 'xs',
   title,
   className,
   ...props
 }: ChipProps) {
-  return (
-    <span
-      data-testid={props['data-testid']}
-      title={title}
-      className={cn(CHIP_BASE, CHIP_VARIANTS[variant], className)}
-    >
-      <Icon className="icon-xs shrink-0" />
+  const content = (
+    <>
+      {Icon ? <Icon className="icon-xs shrink-0" aria-hidden={true} /> : null}
       {label}
-    </span>
+      {href && showExternalIcon ? (
+        <ExternalLink className="icon-xs shrink-0" aria-hidden={true} />
+      ) : null}
+    </>
+  );
+  const chipClassName = cn(CHIP_BASE, CHIP_SIZES[size], CHIP_VARIANTS[variant], className);
+
+  if (href) {
+    return withChipTooltip(
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        aria-label={ariaLabel}
+        data-testid={props['data-testid']}
+        className={chipClassName}
+      >
+        {content}
+      </a>,
+      title,
+    );
+  }
+
+  return withChipTooltip(
+    <span data-testid={props['data-testid']} aria-label={ariaLabel} className={chipClassName}>
+      {content}
+    </span>,
+    title,
   );
 }
 
 interface SkillChipProps {
   name: string;
   variant?: ChipVariant;
+  size?: ChipSize;
   className?: string;
   'data-testid'?: string;
 }
@@ -56,17 +112,26 @@ interface SkillChipProps {
 export function SkillChip({
   name,
   variant,
+  size,
   className,
   'data-testid': testId = 'skill-chip',
 }: SkillChipProps) {
   return (
-    <Chip icon={Zap} label={name} variant={variant} className={className} data-testid={testId} />
+    <Chip
+      icon={Zap}
+      label={name}
+      variant={variant}
+      size={size}
+      className={className}
+      data-testid={testId}
+    />
   );
 }
 
 interface CommandLineChipProps {
   command: string;
   variant?: ChipVariant;
+  size?: ChipSize;
   className?: string;
   'data-testid'?: string;
 }
@@ -75,20 +140,27 @@ interface CommandLineChipProps {
 export function CommandLineChip({
   command,
   variant,
+  size = 'xs',
   className,
   'data-testid': testId = 'command-line-chip',
 }: CommandLineChipProps) {
-  return (
+  return withChipTooltip(
     <span
       data-testid={testId}
-      title={command}
-      className={cn(CHIP_BASE, CHIP_VARIANTS[variant ?? 'default'], 'max-w-full', className)}
+      className={cn(
+        CHIP_BASE,
+        CHIP_SIZES[size],
+        CHIP_VARIANTS[variant ?? 'default'],
+        'max-w-full',
+        className,
+      )}
     >
       <span aria-hidden="true" className="shrink-0 font-semibold">
         &gt;
       </span>
       <span className="min-w-0 truncate">{command}</span>
-    </span>
+    </span>,
+    command,
   );
 }
 
@@ -99,6 +171,7 @@ interface FileChipProps {
   /** Full path shown on hover. */
   title?: string;
   variant?: ChipVariant;
+  size?: ChipSize;
   className?: string;
   'data-testid'?: string;
 }
@@ -109,6 +182,7 @@ export function FileChip({
   type,
   title,
   variant,
+  size,
   className,
   'data-testid': testId = 'file-chip',
 }: FileChipProps) {
@@ -117,6 +191,7 @@ export function FileChip({
       icon={type === 'folder' ? FolderOpen : FileText}
       label={name}
       variant={variant}
+      size={size}
       title={title}
       className={className}
       data-testid={testId}
@@ -127,6 +202,7 @@ export function FileChip({
 interface SymbolChipProps {
   name: string;
   variant?: ChipVariant;
+  size?: ChipSize;
   className?: string;
   'data-testid'?: string;
 }
@@ -135,11 +211,19 @@ interface SymbolChipProps {
 export function SymbolChip({
   name,
   variant,
+  size,
   className,
   'data-testid': testId = 'symbol-chip',
 }: SymbolChipProps) {
   return (
-    <Chip icon={Code2} label={name} variant={variant} className={className} data-testid={testId} />
+    <Chip
+      icon={Code2}
+      label={name}
+      variant={variant}
+      size={size}
+      className={className}
+      data-testid={testId}
+    />
   );
 }
 
@@ -176,10 +260,9 @@ export function AttachmentChip({
   className,
   'data-testid': testId,
 }: AttachmentChipProps) {
-  return (
+  return withChipTooltip(
     <div
       data-testid={testId}
-      title={title}
       className={cn(
         'group inline-flex h-7 items-center gap-1.5 rounded font-mono text-xs',
         CHIP_VARIANTS[variant],
@@ -205,6 +288,7 @@ export function AttachmentChip({
           <X className="icon-xs" />
         </button>
       )}
-    </div>
+    </div>,
+    title,
   );
 }

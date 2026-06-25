@@ -2,14 +2,23 @@ import { Paperclip } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CommandLineChip, SkillChip } from '@/components/ui/chip';
+import { LinearIssueBadge } from '@/components/LinearIssueBadge';
+import { CommandLineChip, SkillChip, type ChipSize } from '@/components/ui/chip';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
-import { cleanThreadTitle, parseLeadingPromptCommand } from '@/lib/thread-title';
+import { parseThreadTitleForDisplay } from '@/lib/thread-title';
 import { cn } from '@/lib/utils';
 
 const URL_LIKE_RE = /^[a-z][a-z0-9+.-]*:\/\/\S+/i;
+type ThreadTitleDensity = 'default' | 'compact' | 'title';
+
+const TOKEN_DENSITY: Record<ThreadTitleDensity, { chipSize: ChipSize; linearSize: 'xs' | 'xxs' }> =
+  {
+    default: { chipSize: 'xs', linearSize: 'xxs' },
+    compact: { chipSize: 'xxs', linearSize: 'xxs' },
+    title: { chipSize: 'sm', linearSize: 'xs' },
+  };
 
 interface ThreadAttachmentsBadgeProps {
   files: ReferencedItem[];
@@ -80,6 +89,8 @@ interface ThreadTitleProps {
   containerClassName?: string;
   /** Multi-line title (e.g. kanban cards). Aligns badge to the start. */
   multiline?: boolean;
+  /** Controls the size of parsed command / issue chips. */
+  density?: ThreadTitleDensity;
   /** `data-testid` for the attachment badge */
   badgeTestId?: string;
   /** Stop click propagation on the badge */
@@ -98,14 +109,17 @@ export function ThreadTitle({
   className,
   containerClassName,
   multiline,
+  density = 'default',
   badgeTestId,
   stopBadgePropagation,
 }: ThreadTitleProps) {
-  const { displayTitle, attachedFiles } = useMemo(() => cleanThreadTitle(title), [title]);
-  const leadingCommand = useMemo(() => parseLeadingPromptCommand(displayTitle), [displayTitle]);
-  const text = leadingCommand.kind === 'slash' ? leadingCommand.rest : displayTitle;
+  const { attachedFiles, leadingCommand, linearIssue, visibleText } = useMemo(
+    () => parseThreadTitleForDisplay(title),
+    [title],
+  );
+  const tokenSize = TOKEN_DENSITY[density];
   const titleClass = cn(
-    !URL_LIKE_RE.test(text.trimStart()) && 'first-letter:uppercase',
+    !URL_LIKE_RE.test(visibleText.trimStart()) && 'first-letter:uppercase',
     multiline ? 'flex-1' : 'min-w-0 flex-1 truncate',
     className,
   );
@@ -123,6 +137,7 @@ export function ThreadTitle({
       {leadingCommand.kind === 'slash' && leadingCommand.command && (
         <SkillChip
           name={leadingCommand.command}
+          size={tokenSize.chipSize}
           className="mx-0 shrink-0"
           data-testid="thread-title-slash-command"
         />
@@ -130,17 +145,26 @@ export function ThreadTitle({
       {leadingCommand.kind === 'shell' && leadingCommand.command && (
         <CommandLineChip
           command={leadingCommand.command}
+          size={tokenSize.chipSize}
           className="mx-0 min-w-0"
           data-testid="thread-title-command-line"
         />
       )}
       {leadingCommand.kind !== 'shell' &&
-        text &&
+        visibleText &&
         (search !== undefined ? (
-          <HighlightText text={text} query={search} className={titleClass} />
+          <HighlightText text={visibleText} query={search} className={titleClass} />
         ) : (
-          <span className={titleClass}>{text}</span>
+          <span className={titleClass}>{visibleText}</span>
         ))}
+      {leadingCommand.kind !== 'shell' && linearIssue && (
+        <LinearIssueBadge
+          issueKey={linearIssue.issueKey}
+          issueUrl={linearIssue.url}
+          size={tokenSize.linearSize}
+          data-testid="thread-title-linear-issue"
+        />
+      )}
       <ThreadAttachmentsBadge
         files={attachedFiles}
         className={multiline ? 'mt-0.5' : undefined}

@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, FolderOpen } from 'lucide-react';
+import { ArrowLeft, FolderOpen } from 'lucide-react';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -21,15 +21,6 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
-
-const LINEAR_URL_RE = /https?:\/\/linear\.app\/[^\s)]+/i;
-
-function extractLinearUrl(text: string | undefined | null): string | null {
-  if (!text) return null;
-  const match = text.match(LINEAR_URL_RE);
-  if (!match) return null;
-  return match[0].replace(/[.,;:!?)\]]+$/, '');
-}
 
 function TitleEditor({
   activeThreadId,
@@ -74,10 +65,6 @@ function TitleEditor({
     }
   }, [isEditingTitle]);
 
-  useEffect(() => {
-    setIsEditingTitle(false);
-  }, [activeThreadId]);
-
   if (isEditingTitle) {
     return (
       <span className="inline-grid max-w-full min-w-0 justify-start justify-items-start">
@@ -110,31 +97,26 @@ function TitleEditor({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
           data-testid="header-thread-title"
           onClick={startEditingTitle}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              startEditingTitle();
-            }
-          }}
-          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text"
+          className="hover:text-accent-foreground block max-w-full min-w-0 cursor-text appearance-none bg-transparent p-0 text-left"
         >
           <ThreadTitle
             as="span"
             title={activeThreadTitle ?? ''}
+            density="title"
             className="text-sm font-medium"
             containerClassName="max-w-full"
           />
-        </span>
+        </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-xl wrap-break-word">
         <ThreadTitle
           as="span"
           title={activeThreadTitle ?? ''}
+          density="title"
           className="text-xs"
           containerClassName="max-w-full"
         />
@@ -219,7 +201,6 @@ function BackButtons({
 }
 
 export function HeaderLeftSection() {
-  const { t } = useTranslation();
   const navigate = useStableNavigate();
   const activeThreadId = useThreadId();
   const activeThreadProjectId = useThreadProjectId();
@@ -236,7 +217,6 @@ export function HeaderLeftSection() {
   const projects = useProjectStore((s) => s.projects);
   const projectId = activeThreadProjectId ?? selectedProjectId;
   const project = projects.find((p) => p.id === projectId);
-  const linearUrl = extractLinearUrl(activeThreadTitle);
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -276,6 +256,7 @@ export function HeaderLeftSection() {
           {activeThreadId && (
             <BreadcrumbItem className="max-w-[240px] min-w-0 sm:max-w-[360px] md:max-w-[520px]">
               <TitleEditor
+                key={activeThreadId}
                 activeThreadId={activeThreadId}
                 activeThreadProjectId={activeThreadProjectId}
                 activeThreadTitle={activeThreadTitle}
@@ -309,22 +290,6 @@ export function HeaderLeftSection() {
           )}
         </BreadcrumbList>
       </Breadcrumb>
-      {linearUrl && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <a
-              href={linearUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="header-linear-link"
-              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex size-7 shrink-0 items-center justify-center rounded-md"
-            >
-              <ExternalLink className="icon-base" />
-            </a>
-          </TooltipTrigger>
-          <TooltipContent>{t('thread.openLinearTask', 'Open Linear task')}</TooltipContent>
-        </Tooltip>
-      )}
     </div>
   );
 }

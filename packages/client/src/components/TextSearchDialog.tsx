@@ -15,7 +15,8 @@ import { FileExtensionIcon } from '@/lib/file-icons';
 import { metric } from '@/lib/telemetry';
 import { cn } from '@/lib/utils';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
-import { useThreadCore } from '@/stores/thread-context';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadId } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('text-search-dialog');
@@ -67,8 +68,15 @@ export function TextSearchDialog({ open, onOpenChange }: TextSearchDialogProps) 
 
 function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) {
   const { t } = useTranslation();
-  const threadCore = useThreadCore();
-  const threadId = threadCore?.id ?? null;
+  const threadId = useThreadId() ?? null;
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const projects = useProjectStore((s) => s.projects);
+  const projectPath = projects.find((p) => p.id === selectedProjectId)?.path ?? null;
+  const searchTarget = useMemo(
+    () => (threadId ? { threadId } : projectPath ? { path: projectPath } : null),
+    [threadId, projectPath],
+  );
+  const searchScopeKey = threadId ? `thread:${threadId}` : projectPath ? `path:${projectPath}` : '';
 
   const persisted = useUIStore((s) => s.textSearchState);
   const setPersisted = useUIStore((s) => s.setTextSearchState);
@@ -101,11 +109,17 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
   }, [query, caseSensitive, wholeWord, regex, include, exclude, setPersisted]);
 
   const runSearch = useCallback(async () => {
-    if (!threadId) return;
+    if (!searchTarget) {
+      setResponse(null);
+      setError(null);
+      setSearching(false);
+      return;
+    }
     const q = query.trim();
     if (!q) {
       setResponse(null);
       setError(null);
+      setSearching(false);
       return;
     }
     const seq = ++inflightSeq.current;
@@ -113,7 +127,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
     setError(null);
 
     const result = await api.searchText({
-      threadId,
+      ...searchTarget,
       query: q,
       caseSensitive,
       wholeWord,
@@ -135,7 +149,16 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
     });
     setResponse(result.value);
     setActiveRow(0);
-  }, [threadId, query, caseSensitive, wholeWord, regex, include, exclude]);
+  }, [searchTarget, query, caseSensitive, wholeWord, regex, include, exclude]);
+
+  useEffect(() => {
+    setResponse(null);
+    setError(null);
+    setSearching(false);
+    setCollapsed({});
+    setActiveRow(0);
+    inflightSeq.current += 1;
+  }, [searchScopeKey]);
 
   // Debounced search on any input change while open.
   useEffect(() => {
@@ -226,7 +249,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
     [flatRows, activeRow, activateRow],
   );
 
-  const hasThread = !!threadId;
+  const hasSearchScope = !!searchTarget;
   const totalMatches = response?.totalMatches ?? 0;
   const fileCount = response?.files.length ?? 0;
   const resultLabel = query.trim()
@@ -298,8 +321,10 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
             style={{ maxHeight: LIST_MAX_HEIGHT_PX }}
             data-testid="text-search-results"
           >
-            {!hasThread ? (
-              <EmptyRow text={t('textSearch.noThread', 'Open a thread to search its files')} />
+            {!hasSearchScope ? (
+              <EmptyRow
+                text={t('textSearch.noScope', 'Open a thread or project to search its files')}
+              />
             ) : error ? (
               <EmptyRow text={error} />
             ) : !query.trim() ? (

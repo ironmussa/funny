@@ -90,13 +90,14 @@ export const browseApi = {
       body: JSON.stringify({ path }),
     }),
   /**
-   * Full-text search across the thread's working directory (VSCode-style
-   * "Search in Files"). Runs ripgrep on the runner and groups matches by file.
-   * Truncates at `maxResults` (default 1000) and surfaces a `truncated` flag
-   * so the UI can prompt for a more specific query.
+   * Full-text search across a thread cwd or selected project path
+   * (VSCode-style "Search in Files"). Runs ripgrep on the runner and groups
+   * matches by file. Truncates at `maxResults` (default 1000) and surfaces a
+   * `truncated` flag so the UI can prompt for a more specific query.
    */
   searchText: (params: {
-    threadId: string;
+    threadId?: string;
+    path?: string;
     query: string;
     caseSensitive?: boolean;
     wholeWord?: boolean;
@@ -105,7 +106,9 @@ export const browseApi = {
     exclude?: string;
     maxResults?: number;
   }) => {
-    const qs = new URLSearchParams({ threadId: params.threadId, q: params.query });
+    const qs = new URLSearchParams({ q: params.query });
+    if (params.threadId) qs.set('threadId', params.threadId);
+    if (params.path) qs.set('path', params.path);
     if (params.caseSensitive) qs.set('caseSensitive', 'true');
     if (params.wholeWord) qs.set('wholeWord', 'true');
     if (params.regex) qs.set('regex', 'true');

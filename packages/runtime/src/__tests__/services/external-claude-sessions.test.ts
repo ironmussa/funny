@@ -37,11 +37,12 @@ function writeClaudeLog(homeDir: string, cwd: string, sessionId: string) {
     join(projectDir, `${sessionId}.jsonl`),
     [
       JSON.stringify({
-        type: 'assistant',
+        type: 'user',
         sessionId,
         cwd,
         gitBranch: 'feature/external',
         timestamp: '2026-06-23T12:00:00.000Z',
+        message: { role: 'user', content: 'continue the refactor' },
       }),
       JSON.stringify({
         type: 'last-prompt',
@@ -117,6 +118,43 @@ describe('external Claude sessions', () => {
     });
   });
 
+  test('keeps a visible prompt title when a later last-prompt only has internal markers', () => {
+    const homeDir = makeHome();
+    const cwd = '/work/funny';
+    const sessionId = 'session-visible-then-internal';
+    const projectDir = join(homeDir, '.claude/projects', cwd.replace(/[\\/]/g, '-'));
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          type: 'user',
+          sessionId,
+          cwd,
+          gitBranch: 'feature/external',
+          timestamp: '2026-06-23T12:00:00.000Z',
+          message: { role: 'user', content: 'inspect the sidebar' },
+        }),
+        JSON.stringify({
+          type: 'last-prompt',
+          sessionId,
+          lastPrompt: '[PREVIEWABLE ASSETS]\n- screenshot.png\n[/PREVIEWABLE ASSETS]',
+        }),
+      ].join('\n'),
+    );
+
+    const sessions = listExternalClaudeSessions({
+      homeDir,
+      currentPid: 999,
+      now: new Date('2026-06-23T12:10:00.000Z'),
+      psOutput: '42 1 00:10:00 claude claude',
+      getCwd: () => cwd,
+    });
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.lastPrompt).toBe('inspect the sidebar');
+  });
+
   test('syncs project Claude sessions as normal empty thread shells', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';
@@ -164,6 +202,58 @@ describe('external Claude sessions', () => {
         threadId: createdThread.id,
       }),
     );
+  });
+
+  test('does not sync project Claude sessions that only contain internal prompt markers', async () => {
+    const homeDir = makeHome();
+    const cwd = '/work/funny';
+    const sessionId = 'session-internal-only';
+    const projectDir = join(homeDir, '.claude/projects', cwd.replace(/[\\/]/g, '-'));
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          type: 'user',
+          sessionId,
+          cwd,
+          gitBranch: 'feature/external',
+          timestamp: '2026-06-23T12:00:00.000Z',
+          message: {
+            role: 'user',
+            content:
+              '[PREVIEWABLE ASSETS]\n- screenshot.png\n[/PREVIEWABLE ASSETS]\n\n<local-command-caveat>Use local context.</local-command-caveat>',
+          },
+        }),
+        JSON.stringify({
+          type: 'last-prompt',
+          sessionId,
+          lastPrompt: '[PREVIEWABLE ASSETS]\n- screenshot.png\n[/PREVIEWABLE ASSETS]',
+        }),
+      ].join('\n'),
+    );
+    const createThread = vi.fn(async (_thread: Record<string, any>) => undefined);
+
+    setServices({
+      projects: {
+        listProjects: vi.fn(async () => [{ id: 'project-1', name: 'funny', path: cwd }]),
+      },
+      threads: {
+        getThreadByExternalRequestId: vi.fn(async () => undefined),
+        getThreadBySessionId: vi.fn(async () => undefined),
+        createThread,
+        insertMessage: vi.fn(),
+      },
+      wsBroker: { emitToUser: vi.fn() },
+    } as any);
+
+    const result = await syncExternalClaudeSessionThreads(
+      { userId: 'user-1', projectId: 'project-1' },
+      { homeDir, currentPid: 999, psOutput: '' },
+    );
+
+    expect(result.threadIds).toEqual([]);
+    expect(createThread).not.toHaveBeenCalled();
   });
 
   test('hydrates an existing external Claude shell without creating a second thread', async () => {

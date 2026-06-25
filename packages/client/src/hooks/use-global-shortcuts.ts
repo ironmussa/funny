@@ -210,9 +210,21 @@ export function useGlobalShortcuts(
       if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'L' || e.key === 'l')) {
         e.preventDefault();
         e.stopPropagation();
-        const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
+        const threadState = useThreadStore.getState();
+        const activeThread =
+          threadState.activeThread ??
+          (threadState.selectedThreadId
+            ? (threadState.threadsById[threadState.selectedThreadId] ?? null)
+            : null);
+        const activeThreadProjectId = activeThread?.projectId ?? null;
         const projectId = activeThreadProjectId ?? useProjectStore.getState().selectedProjectId;
-        navigate(buildPath(projectId ? `/list?project=${projectId}` : '/list'));
+        const params = new URLSearchParams();
+        if (projectId) params.set('project', projectId);
+        if (activeThread?.id && activeThread.projectId === projectId) {
+          params.set('returnThread', activeThread.id);
+        }
+        const qs = params.toString();
+        navigate(buildPath(qs ? `/list?${qs}` : '/list'));
         return;
       }
 

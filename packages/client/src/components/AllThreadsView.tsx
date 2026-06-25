@@ -11,6 +11,7 @@ import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
+import { buildThreadPath } from '@/navigation/thread-paths';
 import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -70,6 +71,8 @@ export function AllThreadsView() {
     if (dirParam) params.dir = dirParam;
     const scratchParam = searchParams.get('scratch');
     if (scratchParam) params.scratch = scratchParam;
+    const returnThreadParam = searchParams.get('returnThread');
+    if (returnThreadParam && proj === projectFilter) params.returnThread = returnThreadParam;
     return params;
   };
 
@@ -427,6 +430,24 @@ export function AllThreadsView() {
     setSearchParams(buildSearchParams({ cs: value }), { replace: true });
   };
 
+  const handleBack = useCallback(() => {
+    const returnThreadId = searchParams.get('returnThread');
+    if (returnThreadId) {
+      const returnThread = useThreadStore.getState().threadsById[returnThreadId];
+      if (returnThread) {
+        navigate(buildThreadPath(returnThread));
+        return;
+      }
+      if (projectFilter) {
+        navigate(buildPath(`/projects/${projectFilter}/threads/${returnThreadId}`));
+        return;
+      }
+    }
+    if (projectFilter) {
+      navigate(buildPath(`/projects/${projectFilter}`));
+    }
+  }, [navigate, projectFilter, searchParams]);
+
   const hasActiveFilters =
     statusFilter.size > 0 ||
     gitFilter.size > 0 ||
@@ -484,9 +505,8 @@ export function AllThreadsView() {
       <div className="border-border flex items-center gap-3 border-b px-4 py-3">
         {projectFilter && (
           <TooltipIconButton
-            onClick={() => {
-              navigate(buildPath(`/projects/${projectFilter}`));
-            }}
+            data-testid="all-threads-back"
+            onClick={handleBack}
             className="text-muted-foreground hover:text-foreground"
             tooltip={t('common.back')}
           >

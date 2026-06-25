@@ -73,8 +73,8 @@ test.describe('12. Command Palette', () => {
     await expect(page.getByTestId('command-palette-search')).not.toBeVisible();
   });
 
-  test('12.5b Ctrl+Shift+F navigates to /list', async ({ authedPage: page }) => {
-    await page.keyboard.press('Control+Shift+f');
+  test('12.5b Ctrl+Shift+L navigates to /list', async ({ authedPage: page }) => {
+    await page.keyboard.press('Control+Shift+l');
     await page.waitForTimeout(500);
 
     await expect(page).toHaveURL(/\/list/);

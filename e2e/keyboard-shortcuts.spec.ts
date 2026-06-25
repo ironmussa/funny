@@ -29,9 +29,24 @@ test.describe('B. Keyboard Shortcuts', () => {
     await expect(page.getByTestId('command-palette-search')).not.toBeVisible();
   });
 
-  test('B.3 Ctrl+Shift+F navigates to global search', async ({ authedPage: page }) => {
-    await page.keyboard.press('Control+Shift+f');
+  test('B.3 Ctrl+Shift+L navigates to global search', async ({ authedPage: page }) => {
+    await page.keyboard.press('Control+Shift+l');
     await expect(page).toHaveURL(/\/list/);
+  });
+
+  test('B.3b Ctrl+Shift+L from a thread returns to that thread from list back', async ({
+    authedPage: page,
+  }) => {
+    await page.goto(`/projects/${projectId}/threads/${threadId}`);
+    await expect(page.getByTestId('prompt-textarea')).toBeVisible();
+
+    await page.keyboard.press('Control+Shift+l');
+    await expect(page).toHaveURL(
+      new RegExp(`/list\\?project=${projectId}&returnThread=${threadId}`),
+    );
+
+    await page.getByTestId('all-threads-back').click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/threads/${threadId}`));
   });
 
   test('B.4 Escape in NewThread dialog closes it', async ({ authedPage: page }) => {

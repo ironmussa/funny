@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 
@@ -268,17 +269,23 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             {breadcrumbs.map((crumb, i) => (
               <div key={crumb.path} className="flex shrink-0 items-center gap-0.5">
                 {i > 0 && <ChevronRight className="icon-xs text-muted-foreground/50 shrink-0" />}
-                <button
-                  onClick={() => loadDir(crumb.path)}
-                  className={`hover:bg-accent hover:text-foreground max-w-[120px] truncate rounded px-1 py-0.5 text-xs transition-colors ${
-                    i === breadcrumbs.length - 1
-                      ? 'text-foreground font-medium'
-                      : 'text-muted-foreground'
-                  }`}
-                  title={crumb.path}
-                >
-                  {crumb.label}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => loadDir(crumb.path)}
+                      className={`hover:bg-accent hover:text-foreground max-w-[120px] truncate rounded px-1 py-0.5 text-xs transition-colors ${
+                        i === breadcrumbs.length - 1
+                          ? 'text-foreground font-medium'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {crumb.label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
+                    {crumb.path}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -304,17 +311,20 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         {roots.length > 0 && (
           <div className="border-border flex gap-1 border-b px-4 py-1.5">
             {roots.map((root) => (
-              <Button
-                key={root}
-                variant="ghost"
-                size="sm"
-                onClick={() => loadDir(root)}
-                className="text-muted-foreground h-6 px-2 text-xs"
-                title={root}
-              >
-                <HardDrive className="icon-xs mr-1" />
-                {root.replace(':\\', '')}
-              </Button>
+              <Tooltip key={root}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => loadDir(root)}
+                    className="text-muted-foreground h-6 px-2 text-xs"
+                  >
+                    <HardDrive className="icon-xs mr-1" />
+                    {root.replace(':\\', '')}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="font-mono">{root}</TooltipContent>
+              </Tooltip>
             ))}
           </div>
         )}

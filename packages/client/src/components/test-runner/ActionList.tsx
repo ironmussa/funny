@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef } from 'react';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface ActionListProps {
@@ -139,15 +140,21 @@ export function ActionList({
               <ActionIcon action={action} />
             </div>
             <div className="min-w-0 flex-1">
-              <div
-                className={cn(
-                  'truncate font-mono',
-                  action.error ? 'text-destructive' : 'text-foreground',
-                )}
-                title={action.title}
-              >
-                {shortTitle(action.title)}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      'truncate font-mono',
+                      action.error ? 'text-destructive' : 'text-foreground',
+                    )}
+                  >
+                    {shortTitle(action.title)}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
+                  {action.title}
+                </TooltipContent>
+              </Tooltip>
               {action.duration != null && (
                 <div className="text-muted-foreground mt-0.5">{formatMs(action.duration)}</div>
               )}

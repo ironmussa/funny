@@ -59,17 +59,31 @@ export function AvailableMcpServers({
       return;
     }
     setLoading(true);
-    const result = await api.listMcpServers(projectPath, provider);
+    const result = await api.listMcpServers(projectPath, provider, projectId);
     setServers(result.isOk() ? result.value.servers : []);
     setLoading(false);
-  }, [projectPath, provider]);
+  }, [projectPath, projectId, provider]);
 
   useEffect(() => {
-    const loadKey = projectPath ? `${projectPath}:${provider}` : undefined;
+    const loadKey = projectPath ? `${projectPath}:${provider}:${projectId ?? ''}` : undefined;
     if (loadKey === prevLoadKeyRef.current) return;
     prevLoadKeyRef.current = loadKey;
-    void load();
-  }, [projectPath, provider, load]);
+    // Listing MCP servers makes the runner shell out to the provider CLI (~seconds)
+    // and is purely informational chrome below the composer — not needed for the
+    // thread to be usable. Defer to idle so it doesn't hold a socket while the
+    // on-screen thread is still loading its messages.
+    let idleId: number | undefined;
+    if (typeof requestIdleCallback === 'function') {
+      idleId = requestIdleCallback(() => void load(), { timeout: 4000 });
+    } else {
+      idleId = window.setTimeout(() => void load(), 500);
+    }
+    return () => {
+      if (idleId === undefined) return;
+      if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+  }, [projectPath, provider, projectId, load]);
 
   if (!projectPath) return null;
 

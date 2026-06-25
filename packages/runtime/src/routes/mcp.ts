@@ -21,6 +21,7 @@ import {
   RECOMMENDED_SERVERS,
 } from '../services/mcp-service.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resolveClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { requireProjectPath } from '../utils/path-scope.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { parseJsonBody } from '../validation/request.js';
@@ -30,6 +31,7 @@ const app = new Hono<HonoEnv>();
 
 const toggleMcpServerSchema = z.object({
   projectPath: z.string().min(1, 'projectPath is required'),
+  projectId: z.string().min(1).optional(),
   provider: agentProviderSchema.default('claude'),
   disabled: z.boolean(),
 });
@@ -37,6 +39,7 @@ const toggleMcpServerSchema = z.object({
 const mcpOAuthStartSchema = z.object({
   serverName: z.string().min(1, 'serverName is required'),
   projectPath: z.string().min(1, 'projectPath is required'),
+  projectId: z.string().min(1).optional(),
   provider: agentProviderSchema.default('claude'),
 });
 
@@ -48,13 +51,19 @@ const mcpOAuthTokenSchema = mcpOAuthStartSchema.extend({
 app.get('/servers', async (c) => {
   const projectPath = c.req.query('projectPath');
   const provider = c.req.query('provider') ?? 'claude';
+  const projectId = c.req.query('projectId') || undefined;
   if (!projectPath)
     return resultToResponse(c, err(badRequest('projectPath query parameter required')));
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await listMcpServers(projectPath, provider);
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId,
+    userId: c.get('userId'),
+  });
+  const result = await listMcpServers(projectPath, provider, profileOptions);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ servers: result.value });
 });
@@ -68,7 +77,13 @@ app.post('/servers', async (c) => {
   const denied = await requireProjectPath(parsed.value.projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await addMcpServer(parsed.value);
+  const provider = parsed.value.provider ?? 'claude';
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId: parsed.value.projectId,
+    userId: c.get('userId'),
+  });
+  const result = await addMcpServer({ ...parsed.value, provider, ...profileOptions });
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
@@ -78,6 +93,7 @@ app.delete('/servers/:name', async (c) => {
   const name = c.req.param('name');
   const projectPath = c.req.query('projectPath');
   const provider = c.req.query('provider') ?? 'claude';
+  const projectId = c.req.query('projectId') || undefined;
   const scope = c.req.query('scope') as 'project' | 'user' | undefined;
 
   if (!projectPath)
@@ -86,7 +102,12 @@ app.delete('/servers/:name', async (c) => {
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await removeMcpServer({ name, projectPath, provider, scope });
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId,
+    userId: c.get('userId'),
+  });
+  const result = await removeMcpServer({ name, projectPath, provider, scope, ...profileOptions });
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
@@ -96,12 +117,23 @@ app.patch('/servers/:name/toggle', async (c) => {
   const name = c.req.param('name');
   const parsed = await parseJsonBody(c, toggleMcpServerSchema);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectPath, provider, disabled } = parsed.value;
+  const { projectPath, projectId, provider, disabled } = parsed.value;
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const result = await toggleMcpServer({ name, projectPath, provider, disabled });
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId,
+    userId: c.get('userId'),
+  });
+  const result = await toggleMcpServer({
+    name,
+    projectPath,
+    provider,
+    disabled,
+    ...profileOptions,
+  });
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
@@ -115,12 +147,17 @@ app.get('/recommended', (c) => {
 app.post('/oauth/start', async (c) => {
   const parsed = await parseJsonBody(c, mcpOAuthStartSchema);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { serverName, projectPath, provider } = parsed.value;
+  const { serverName, projectPath, projectId, provider } = parsed.value;
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const serversResult = await listMcpServers(projectPath, provider);
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId,
+    userId: c.get('userId'),
+  });
+  const serversResult = await listMcpServers(projectPath, provider, profileOptions);
   if (serversResult.isErr()) return resultToResponse(c, serversResult);
   const servers = serversResult.value;
 
@@ -153,7 +190,13 @@ app.post('/oauth/start', async (c) => {
     usedForwardedHost: Boolean(fwdHost),
   });
 
-  const oauthResult = await startOAuthFlow(serverName, server.url, projectPath, callbackBaseUrl);
+  const oauthResult = await startOAuthFlow(
+    serverName,
+    server.url,
+    projectPath,
+    callbackBaseUrl,
+    profileOptions,
+  );
   if (oauthResult.isErr()) return resultToResponse(c, oauthResult);
   return c.json({ authUrl: oauthResult.value.authUrl });
 });
@@ -162,12 +205,17 @@ app.post('/oauth/start', async (c) => {
 app.post('/oauth/token', async (c) => {
   const parsed = await parseJsonBody(c, mcpOAuthTokenSchema);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { serverName, projectPath, provider, token } = parsed.value;
+  const { serverName, projectPath, projectId, provider, token } = parsed.value;
 
   const denied = await requireProjectPath(projectPath, c.get('userId'));
   if (denied) return denied;
 
-  const serversResult = await listMcpServers(projectPath, provider);
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId,
+    userId: c.get('userId'),
+  });
+  const serversResult = await listMcpServers(projectPath, provider, profileOptions);
   if (serversResult.isErr()) return resultToResponse(c, serversResult);
   const servers = serversResult.value;
 
@@ -176,7 +224,7 @@ app.post('/oauth/token', async (c) => {
   if (!server.url) return resultToResponse(c, err(badRequest(`Server "${serverName}" has no URL`)));
 
   // Remove and re-add with Authorization header (best-effort remove)
-  await removeMcpServer({ name: serverName, projectPath, provider });
+  await removeMcpServer({ name: serverName, projectPath, provider, ...profileOptions });
 
   const addResult = await addMcpServer({
     name: serverName,
@@ -185,6 +233,7 @@ app.post('/oauth/token', async (c) => {
     url: server.url,
     headers: { Authorization: `Bearer ${token}` },
     projectPath,
+    ...profileOptions,
   });
   if (addResult.isErr()) return resultToResponse(c, addResult);
 

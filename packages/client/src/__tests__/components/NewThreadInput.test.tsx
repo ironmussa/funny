@@ -181,7 +181,7 @@ describe('NewThreadInput', () => {
     renderWithProviders(<NewThreadInput />);
 
     await waitFor(() => {
-      expect(mockListMcpServers).toHaveBeenCalledWith('/repo-two', 'codex');
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo-two', 'codex', 'p2');
     });
   });
 
@@ -266,7 +266,7 @@ describe('NewThreadInput', () => {
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
 
     await waitFor(() => {
-      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex');
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex', 'p1');
     });
     expect(mockListMcpServers).toHaveBeenCalledTimes(1);
 
@@ -275,7 +275,7 @@ describe('NewThreadInput', () => {
 
     fireEvent.click(screen.getByTestId('mock-other-provider-model'));
     await waitFor(() => {
-      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude');
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude', 'p1');
     });
     expect(mockListMcpServers).toHaveBeenCalledTimes(2);
   });

@@ -21,6 +21,7 @@ import { api } from '@/lib/api';
  */
 export interface UseSlashSkillsOptions {
   projectPath?: string;
+  projectId?: string;
   provider?: string;
   model?: string;
   mode?: 'eager' | 'lazy';
@@ -42,6 +43,7 @@ export interface UseSlashSkillsResult {
 
 export function useSlashSkills({
   projectPath,
+  projectId,
   provider,
   model,
   mode = 'eager',
@@ -59,6 +61,7 @@ export function useSlashSkills({
   const fetchSkills = useCallback(async (): Promise<PromptSlashResource[]> => {
     const result = await api.listAgentResources({
       projectPath,
+      projectId,
       provider,
       model,
       phase: 'composer',
@@ -79,7 +82,7 @@ export function useSlashSkills({
       if (!existing || skill.scope === 'project') deduped.set(skill.name, skill);
     }
     return Array.from(deduped.values());
-  }, [projectPath, provider, model]);
+  }, [projectPath, projectId, provider, model]);
 
   const runLoad = useCallback((): Promise<PromptSlashResource[]> => {
     if (loadPromiseRef.current) return loadPromiseRef.current;

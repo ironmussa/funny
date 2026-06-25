@@ -334,13 +334,14 @@ describe('API Client', () => {
   });
 
   describe('Agent Resources', () => {
-    test('listAgentResources encodes provider, model, phase, and projectPath', async () => {
+    test('listAgentResources encodes provider, model, phase, projectPath, and projectId', async () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ provider: 'codex', resources: [], hidden: [] }),
       );
 
       const result = await api.listAgentResources({
         projectPath: '/tmp/p',
+        projectId: 'project-1',
         provider: 'codex',
         model: 'gpt-5.5',
         phase: 'composer',
@@ -352,6 +353,7 @@ describe('API Client', () => {
       expect(url).toContain('model=gpt-5.5');
       expect(url).toContain('phase=composer');
       expect(url).toContain('projectPath=%2Ftmp%2Fp');
+      expect(url).toContain('projectId=project-1');
     });
 
     test('listAgentResources omits the query string when no options given', async () => {
@@ -363,6 +365,21 @@ describe('API Client', () => {
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toContain('/skills/resources');
       expect(url).not.toContain('?');
+    });
+  });
+
+  describe('MCP', () => {
+    test('listMcpServers includes projectId when provided', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ servers: [] }));
+
+      const result = await api.listMcpServers('/tmp/p', 'claude', 'project-1');
+
+      expect(result.isOk()).toBe(true);
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/mcp/servers?');
+      expect(url).toContain('projectPath=%2Ftmp%2Fp');
+      expect(url).toContain('provider=claude');
+      expect(url).toContain('projectId=project-1');
     });
   });
 });

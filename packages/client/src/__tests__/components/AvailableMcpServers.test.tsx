@@ -67,7 +67,7 @@ describe('AvailableMcpServers', () => {
     );
     expect(screen.queryByTestId('available-mcp-disabled-one')).not.toBeInTheDocument();
     expect(screen.queryByTestId('available-mcp-broken')).not.toBeInTheDocument();
-    expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude');
+    expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude', undefined);
   });
 
   test('labels MCP tooltip details and only applies warning color to auth issues', async () => {
@@ -174,7 +174,7 @@ describe('AvailableMcpServers', () => {
     renderMcpList(<AvailableMcpServers projectPath="/repo" provider="codex" />);
 
     await waitFor(() => {
-      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex');
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex', undefined);
     });
   });
 });

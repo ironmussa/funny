@@ -21,6 +21,7 @@ import {
   RECOMMENDED_SKILLS,
 } from '../services/skills-service.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resolveClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { requireProjectPath } from '../utils/path-scope.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { addSkillSchema, validate } from '../validation/schemas.js';
@@ -36,6 +37,7 @@ const VALID_PHASES: ResourcePhase[] = ['settings', 'composer', 'runtime'];
 // `agent:init`), so this endpoint covers filesystem + MCP resolution.
 app.get('/resources', async (c) => {
   const provider = c.req.query('provider') || 'claude';
+  const projectId = c.req.query('projectId') || undefined;
   const model = c.req.query('model') || undefined;
   const phaseParam = c.req.query('phase');
   const phase: ResourcePhase = VALID_PHASES.includes(phaseParam as ResourcePhase)
@@ -47,7 +49,19 @@ app.get('/resources', async (c) => {
     if (denied) return denied;
   }
 
-  const result = await resolveAgentResources({ provider, model, phase, projectPath });
+  const profileOptions = await resolveClaudeProfileRouteOptions({
+    provider,
+    projectId,
+    userId: c.get('userId'),
+  });
+  const result = await resolveAgentResources({
+    provider,
+    model,
+    phase,
+    projectPath,
+    projectId,
+    ...profileOptions,
+  });
   if (result.isErr()) return resultToResponse(c, result);
   return c.json(result.value);
 });

@@ -423,35 +423,36 @@ export function McpServerSettings() {
   const [adding, setAdding] = useState(false);
 
   // Derive project path directly (no useEffect + setState cascade)
-  const projectPath = (() => {
+  const selectedProject = (() => {
     if (selectedProjectId) {
-      const project = projects.find((p) => p.id === selectedProjectId);
-      return project?.path ?? null;
+      return projects.find((p) => p.id === selectedProjectId) ?? null;
     }
-    return projects.length > 0 ? projects[0].path : null;
+    return projects[0] ?? null;
   })();
+  const projectPath = selectedProject?.path ?? null;
+  const projectId = selectedProject?.id;
 
   const loadServers = useCallback(async () => {
     if (!projectPath) return;
     setLoading(true);
     setError(null);
-    const result = await api.listMcpServers(projectPath, selectedProvider);
+    const result = await api.listMcpServers(projectPath, selectedProvider, projectId);
     if (result.isOk()) {
       setServers(result.value.servers);
     } else {
       setError(result.error.message);
     }
     setLoading(false);
-  }, [projectPath, selectedProvider]);
+  }, [projectPath, projectId, selectedProvider]);
 
   // Load servers when projectPath changes (track previous to avoid duplicate calls)
   const prevProjectPathRef = useRef<string | null>(null);
   useEffect(() => {
-    const loadKey = projectPath ? `${projectPath}:${selectedProvider}` : null;
+    const loadKey = projectPath ? `${projectPath}:${selectedProvider}:${projectId ?? ''}` : null;
     if (!projectPath || loadKey === prevProjectPathRef.current) return;
     prevProjectPathRef.current = loadKey;
     loadServers();
-  }, [projectPath, selectedProvider, loadServers]);
+  }, [projectPath, selectedProvider, projectId, loadServers]);
 
   // Load recommended servers once on mount
   const recommendedLoadedRef = useRef(false);
@@ -473,7 +474,7 @@ export function McpServerSettings() {
     const name = confirmRemoveName;
     setConfirmRemoveName(null);
     setRemovingName(name);
-    const result = await api.removeMcpServer(name, projectPath, selectedProvider);
+    const result = await api.removeMcpServer(name, projectPath, selectedProvider, projectId);
     if (result.isErr()) {
       setError(result.error.message);
     } else {
@@ -485,7 +486,13 @@ export function McpServerSettings() {
   const handleToggle = async (name: string, disabled: boolean) => {
     if (!projectPath) return;
     setTogglingName(name);
-    const result = await api.toggleMcpServer(name, projectPath, disabled, selectedProvider);
+    const result = await api.toggleMcpServer(
+      name,
+      projectPath,
+      disabled,
+      selectedProvider,
+      projectId,
+    );
     if (result.isErr()) {
       setError(result.error.message);
     } else {
@@ -505,6 +512,7 @@ export function McpServerSettings() {
       command: server.command,
       args: server.args,
       projectPath,
+      projectId,
     });
     if (result.isErr()) {
       setError(result.error.message);
@@ -523,6 +531,7 @@ export function McpServerSettings() {
       provider: selectedProvider,
       type: addType,
       projectPath,
+      projectId,
     };
     if (addType === 'http' || addType === 'sse') {
       data.url = addUrl;
@@ -549,7 +558,7 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setAuthenticatingName(server.name);
     setError(null);
-    const result = await api.startMcpOAuth(server.name, projectPath, selectedProvider);
+    const result = await api.startMcpOAuth(server.name, projectPath, selectedProvider, projectId);
     if (result.isErr()) {
       setError(result.error.message);
       setAuthenticatingName(null);
@@ -601,7 +610,13 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setSettingTokenName(server.name);
     setError(null);
-    const result = await api.setMcpToken(server.name, projectPath, token, selectedProvider);
+    const result = await api.setMcpToken(
+      server.name,
+      projectPath,
+      token,
+      selectedProvider,
+      projectId,
+    );
     if (result.isErr()) {
       setError(result.error.message);
     } else {

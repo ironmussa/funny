@@ -18,14 +18,29 @@ import { type DomainError, processError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { defaultClaudeConfigDir, normalizeClaudeConfigDir } from '../utils/claude-profile-paths.js';
 
 const AGENTS_DIR = join(homedir(), '.agents');
 const SKILLS_DIR = join(AGENTS_DIR, 'skills');
 const LOCK_FILE = join(AGENTS_DIR, '.skill-lock.json');
 const CLAUDE_SKILLS_DIR = join(homedir(), '.claude', 'skills');
-const PLUGINS_DIR = join(homedir(), '.claude', 'plugins');
-const INSTALLED_PLUGINS_FILE = join(PLUGINS_DIR, 'installed_plugins.json');
 const CODEX_SKILLS_DIR = join(homedir(), '.codex', 'skills');
+
+interface ClaudeResourceScanOptions {
+  claudeConfigDir?: string;
+}
+
+function claudeConfigDir(options: ClaudeResourceScanOptions = {}): string {
+  return normalizeClaudeConfigDir(options.claudeConfigDir) ?? defaultClaudeConfigDir();
+}
+
+function claudeSkillsDir(options: ClaudeResourceScanOptions = {}): string {
+  return join(claudeConfigDir(options), 'skills');
+}
+
+function installedPluginsFile(options: ClaudeResourceScanOptions = {}): string {
+  return join(claudeConfigDir(options), 'plugins', 'installed_plugins.json');
+}
 
 interface LockFileSkill {
   source: string;
@@ -214,11 +229,15 @@ export function listProjectCommands(projectPath: string): Skill[] {
  * List skills from ~/.claude/skills/ that are NOT already in the lock file
  * (lock file entries are symlinked here from ~/.agents/skills/).
  */
-export function listDirectClaudeSkills(lockFileNames: Set<string>): Skill[] {
-  if (!existsSync(CLAUDE_SKILLS_DIR)) return [];
+export function listDirectClaudeSkills(
+  lockFileNames: Set<string>,
+  options: ClaudeResourceScanOptions = {},
+): Skill[] {
+  const skillsDir = claudeSkillsDir(options);
+  if (!existsSync(skillsDir)) return [];
 
   try {
-    const entries = readdirSync(CLAUDE_SKILLS_DIR, { withFileTypes: true });
+    const entries = readdirSync(skillsDir, { withFileTypes: true });
     const skills: Skill[] = [];
 
     for (const entry of entries) {
@@ -227,7 +246,7 @@ export function listDirectClaudeSkills(lockFileNames: Set<string>): Skill[] {
       // Skip entries already covered by the lock file
       if (lockFileNames.has(entry.name)) continue;
 
-      const fullPath = join(CLAUDE_SKILLS_DIR, entry.name);
+      const fullPath = join(skillsDir, entry.name);
       const skillMdPath = join(fullPath, 'SKILL.md');
       if (!existsSync(skillMdPath)) continue;
 
@@ -260,11 +279,12 @@ interface InstalledPluginsFile {
  * Reads ~/.claude/plugins/installed_plugins.json and scans each plugin's
  * commands/*.md and skills/SKILL.md directories.
  */
-export function listPluginCommands(): Skill[] {
-  if (!existsSync(INSTALLED_PLUGINS_FILE)) return [];
+export function listPluginCommands(options: ClaudeResourceScanOptions = {}): Skill[] {
+  const pluginsFile = installedPluginsFile(options);
+  if (!existsSync(pluginsFile)) return [];
 
   try {
-    const raw = readFileSync(INSTALLED_PLUGINS_FILE, 'utf-8');
+    const raw = readFileSync(pluginsFile, 'utf-8');
     const data: InstalledPluginsFile = JSON.parse(raw);
     const skills: Skill[] = [];
 
@@ -366,8 +386,9 @@ const CODEX_ONLY: AgentResource['compatibleProviders'] = ['codex'];
 export function listSkillResourcesForProvider(
   provider: string,
   projectPath?: string,
+  options: ClaudeResourceScanOptions = {},
 ): AgentResource[] {
-  if (provider === 'claude') return listClaudeSkillResources(projectPath);
+  if (provider === 'claude') return listClaudeSkillResources(projectPath, options);
   if (provider === 'codex') return listCodexSkillResources(projectPath);
   return [];
 }
@@ -381,8 +402,9 @@ export function listSkillResourcesForProvider(
 export function listCustomCommandResourcesForProvider(
   provider: string,
   projectPath?: string,
+  options: ClaudeResourceScanOptions = {},
 ): AgentResource[] {
-  if (provider === 'claude') return listClaudeCustomCommandResources(projectPath);
+  if (provider === 'claude') return listClaudeCustomCommandResources(projectPath, options);
   return [];
 }
 
@@ -453,10 +475,13 @@ export function listCodexSkillResources(projectPath?: string): AgentResource[] {
  * All Claude skills (model-invoked) from every filesystem source — lock file,
  * direct ~/.claude/skills, project .claude/skills, and plugin skills/ dirs.
  */
-export function listClaudeSkillResources(projectPath?: string): AgentResource[] {
+export function listClaudeSkillResources(
+  projectPath?: string,
+  options: ClaudeResourceScanOptions = {},
+): AgentResource[] {
   const lockFileSkills = listSkills();
   const lockFileNames = new Set(lockFileSkills.map((s) => s.name));
-  const directSkills = listDirectClaudeSkills(lockFileNames);
+  const directSkills = listDirectClaudeSkills(lockFileNames, options);
   const projectSkills = projectPath ? listProjectSkills(projectPath) : [];
 
   const resources: AgentResource[] = [];
@@ -469,7 +494,7 @@ export function listClaudeSkillResources(projectPath?: string): AgentResource[] 
   for (const s of projectSkills) {
     resources.push(skillToResource(s, 'skill', 'claude-project'));
   }
-  for (const r of scanPluginResources()) {
+  for (const r of scanPluginResources(options)) {
     if (r.kind === 'skill') resources.push(r);
   }
   return resources;
@@ -480,13 +505,16 @@ export function listClaudeSkillResources(projectPath?: string): AgentResource[] 
  * plugin commands/ dirs. Built-in commands are NOT here — they come from the
  * live session, never the filesystem.
  */
-export function listClaudeCustomCommandResources(projectPath?: string): AgentResource[] {
+export function listClaudeCustomCommandResources(
+  projectPath?: string,
+  options: ClaudeResourceScanOptions = {},
+): AgentResource[] {
   const resources: AgentResource[] = [];
   const projectCommands = projectPath ? listProjectCommands(projectPath) : [];
   for (const c of projectCommands) {
     resources.push(skillToResource(c, 'slash-command', 'claude-project', 'custom'));
   }
-  for (const r of scanPluginResources()) {
+  for (const r of scanPluginResources(options)) {
     if (r.kind === 'slash-command') resources.push(r);
   }
   return resources;
@@ -519,11 +547,12 @@ function skillToResource(
  * (commands/*.md) or `skill` (skills/SKILL.md). Mirrors {@link listPluginCommands}
  * but keeps the two kinds distinct instead of flattening both into `Skill[]`.
  */
-function scanPluginResources(): AgentResource[] {
-  if (!existsSync(INSTALLED_PLUGINS_FILE)) return [];
+function scanPluginResources(options: ClaudeResourceScanOptions = {}): AgentResource[] {
+  const pluginsFile = installedPluginsFile(options);
+  if (!existsSync(pluginsFile)) return [];
 
   try {
-    const raw = readFileSync(INSTALLED_PLUGINS_FILE, 'utf-8');
+    const raw = readFileSync(pluginsFile, 'utf-8');
     const data: InstalledPluginsFile = JSON.parse(raw);
     const resources: AgentResource[] = [];
 

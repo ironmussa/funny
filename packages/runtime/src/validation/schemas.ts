@@ -421,6 +421,7 @@ export const addMcpServerSchema = z.object({
   env: z.record(z.string(), z.string()).optional(),
   scope: z.enum(['project', 'user']).optional(),
   projectPath: z.string().min(1),
+  projectId: z.string().min(1).optional(),
 });
 
 export const mergeSchema = z.object({

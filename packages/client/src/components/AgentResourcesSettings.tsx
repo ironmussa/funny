@@ -95,13 +95,20 @@ export function AgentResourcesSettings() {
   const [hidden, setHidden] = useState<AgentResource[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const projectPath = selectedProjectId
-    ? (projects.find((p) => p.id === selectedProjectId)?.path ?? undefined)
-    : (projects[0]?.path ?? undefined);
+  const selectedProject = selectedProjectId
+    ? projects.find((p) => p.id === selectedProjectId)
+    : projects[0];
+  const projectPath = selectedProject?.path;
+  const projectId = selectedProject?.id;
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await api.listAgentResources({ projectPath, provider, phase: 'settings' });
+    const result = await api.listAgentResources({
+      projectPath,
+      projectId,
+      provider,
+      phase: 'settings',
+    });
     if (result.isOk()) {
       setResources(result.value.resources);
       setHidden(result.value.hidden);
@@ -111,7 +118,7 @@ export function AgentResourcesSettings() {
       setHidden([]);
     }
     setLoading(false);
-  }, [projectPath, provider]);
+  }, [projectPath, projectId, provider]);
 
   useEffect(() => {
     load();

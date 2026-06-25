@@ -49,6 +49,7 @@ interface OAuthPendingState {
   serverName: string;
   projectPath: string;
   serverUrl: string;
+  claudeConfigDir?: string;
   codeVerifier: string;
   tokenEndpoint: string;
   clientId: string;
@@ -177,9 +178,10 @@ export function startOAuthFlow(
   serverUrl: string,
   projectPath: string,
   callbackBaseUrl: string,
+  opts: { claudeConfigDir?: string } = {},
 ): ResultAsync<{ authUrl: string; state: string }, DomainError> {
   return ResultAsync.fromPromise(
-    startOAuthFlowImpl(serverName, serverUrl, projectPath, callbackBaseUrl),
+    startOAuthFlowImpl(serverName, serverUrl, projectPath, callbackBaseUrl, opts),
     (err) => {
       if ((err as DomainError).type) return err as DomainError;
       return internal(String((err as Error)?.message ?? err));
@@ -192,6 +194,7 @@ async function startOAuthFlowImpl(
   serverUrl: string,
   projectPath: string,
   callbackBaseUrl: string,
+  opts: { claudeConfigDir?: string },
 ): Promise<{ authUrl: string; state: string }> {
   const redirectUri = `${callbackBaseUrl}/api/mcp/oauth/callback`;
 
@@ -277,6 +280,7 @@ async function startOAuthFlowImpl(
     serverName,
     projectPath,
     serverUrl,
+    claudeConfigDir: opts.claudeConfigDir,
     codeVerifier,
     tokenEndpoint: authMeta.token_endpoint,
     clientId,
@@ -384,7 +388,11 @@ export async function handleOAuthCallback(
     });
 
     // Update Claude CLI config: remove and re-add with Authorization header
-    await removeMcpServer({ name: pending.serverName, projectPath: pending.projectPath });
+    await removeMcpServer({
+      name: pending.serverName,
+      projectPath: pending.projectPath,
+      claudeConfigDir: pending.claudeConfigDir,
+    });
 
     const addResult = await addMcpServer({
       name: pending.serverName,
@@ -392,6 +400,7 @@ export async function handleOAuthCallback(
       url: pending.serverUrl,
       headers: { Authorization: `Bearer ${tokens.access_token}` },
       projectPath: pending.projectPath,
+      claudeConfigDir: pending.claudeConfigDir,
     });
     if (addResult.isErr()) {
       throw new Error(addResult.error.message);

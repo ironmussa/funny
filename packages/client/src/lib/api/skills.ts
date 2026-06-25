@@ -14,12 +14,14 @@ export const skillsApi = {
   // composer (it already holds them from `agent:init`).
   listAgentResources: (opts: {
     projectPath?: string;
+    projectId?: string;
     provider?: string;
     model?: string;
     phase?: ResourcePhase;
   }) => {
     const qs = new URLSearchParams();
     if (opts.projectPath) qs.set('projectPath', opts.projectPath);
+    if (opts.projectId) qs.set('projectId', opts.projectId);
     if (opts.provider) qs.set('provider', opts.provider);
     if (opts.model) qs.set('model', opts.model);
     if (opts.phase) qs.set('phase', opts.phase);

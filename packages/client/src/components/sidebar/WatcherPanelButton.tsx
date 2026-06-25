@@ -211,7 +211,6 @@ function JobRow({
                   setConfirmKill(true);
                 }}
                 aria-label="Kill job"
-                title="Kill this process"
               >
                 <X className="icon-sm" />
               </Button>

@@ -16,6 +16,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { CodeViewer } from '@/components/ui/code-viewer';
@@ -23,6 +24,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -70,6 +72,17 @@ function shortenUrl(url: string): string {
   } catch {
     return url;
   }
+}
+
+function DetailTooltip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] font-mono break-all">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 const CONSOLE_LEVEL_STYLES: Record<string, string> = {
@@ -194,10 +207,12 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
               </span>
               <span className="min-w-0 flex-1 break-all whitespace-pre-wrap">{entry.text}</span>
               {entry.url && (
-                <span className="text-muted-foreground shrink-0" title={entry.url}>
-                  {shortenUrl(entry.url)}
-                  {entry.line != null ? `:${entry.line}` : ''}
-                </span>
+                <DetailTooltip label={entry.url}>
+                  <span className="text-muted-foreground shrink-0">
+                    {shortenUrl(entry.url)}
+                    {entry.line != null ? `:${entry.line}` : ''}
+                  </span>
+                </DetailTooltip>
               )}
             </div>
           ))}
@@ -362,10 +377,11 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                     entry.failed && 'text-red-500',
                     entry.status && entry.status >= 400 && 'text-red-500',
                   )}
-                  title={entry.url}
                   data-testid={`network-row-${entry.id}`}
                 >
-                  {getUrlName(entry.url)}
+                  <DetailTooltip label={entry.url}>
+                    <span className="block truncate">{getUrlName(entry.url)}</span>
+                  </DetailTooltip>
                 </div>
               ))}
             </div>
@@ -402,8 +418,10 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                       />
                     </td>
                     <td className="text-muted-foreground px-3 py-1">{entry.method}</td>
-                    <td className="max-w-[300px] truncate px-3 py-1" title={entry.url}>
-                      {shortenUrl(entry.url)}
+                    <td className="max-w-[300px] px-3 py-1">
+                      <DetailTooltip label={entry.url}>
+                        <span className="block truncate">{shortenUrl(entry.url)}</span>
+                      </DetailTooltip>
                     </td>
                     <td className="text-muted-foreground px-3 py-1">{entry.resourceType ?? '-'}</td>
                     <td className="text-muted-foreground px-3 py-1 text-right">
@@ -447,7 +465,14 @@ function StatusBadge({
   failed?: boolean;
   errorText?: string;
 }) {
-  if (failed) return <span title={errorText}>ERR</span>;
+  if (failed && errorText) {
+    return (
+      <DetailTooltip label={errorText}>
+        <span>ERR</span>
+      </DetailTooltip>
+    );
+  }
+  if (failed) return <span>ERR</span>;
   if (!status) return <span className="text-muted-foreground">...</span>;
   return (
     <span

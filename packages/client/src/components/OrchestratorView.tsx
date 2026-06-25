@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -168,9 +169,16 @@ export function OrchestratorView() {
                       {run.nextRetryAtMs && <span>retry {formatRelative(run.nextRetryAtMs)}</span>}
                     </div>
                     {run.lastError && (
-                      <div className="text-destructive mt-1 truncate text-xs" title={run.lastError}>
-                        {run.lastError}
-                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="text-destructive mt-1 truncate text-xs">
+                            {run.lastError}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
+                          {run.lastError}
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                 </li>

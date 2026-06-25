@@ -823,12 +823,16 @@ export function PinnedPRCard({
           <div className="flex flex-col gap-2">
             {Array.from(threadsByFile.entries()).map(([filePath, fileThreads]) => (
               <div key={filePath} className="flex flex-col gap-1.5">
-                <div
-                  className="text-muted-foreground truncate font-mono text-[10px]"
-                  title={filePath}
-                >
-                  {filePath}
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="text-muted-foreground truncate font-mono text-[10px]">
+                      {filePath}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
+                    {filePath}
+                  </TooltipContent>
+                </Tooltip>
                 {fileThreads.map((th) => {
                   const resolving = resolvingNodeId === th.node_id;
                   return (

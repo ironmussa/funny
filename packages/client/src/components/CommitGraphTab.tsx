@@ -1287,9 +1287,14 @@ function GraphCommitRow({
                           {parentLabel.branchLabels.length > 0 ? (
                             <ul className="list-disc space-y-0.5 pl-4">
                               {parentLabel.branchLabels.map((branch) => (
-                                <li key={branch} title={branch}>
-                                  {middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}
-                                </li>
+                                <Tooltip key={branch}>
+                                  <TooltipTrigger asChild>
+                                    <li>{middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}</li>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+                                    {branch}
+                                  </TooltipContent>
+                                </Tooltip>
                               ))}
                             </ul>
                           ) : null}

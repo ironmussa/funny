@@ -187,13 +187,23 @@ function BranchRefDetail({
 
       <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         <dt className="text-muted-foreground">{t('graph.local', 'Local')}</dt>
-        <dd className="min-w-0 truncate font-mono" title={localLabel}>
-          {localLabel}
-        </dd>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <dd className="min-w-0 truncate font-mono">{localLabel}</dd>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+            {localLabel}
+          </TooltipContent>
+        </Tooltip>
         <dt className="text-muted-foreground">{t('graph.origin', 'Origin')}</dt>
-        <dd className="min-w-0 truncate font-mono" title={remoteLabel}>
-          {remoteLabel}
-        </dd>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <dd className="min-w-0 truncate font-mono">{remoteLabel}</dd>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+            {remoteLabel}
+          </TooltipContent>
+        </Tooltip>
         {summary ? (
           <>
             <dt className="text-muted-foreground">{t('graph.state', 'State')}</dt>

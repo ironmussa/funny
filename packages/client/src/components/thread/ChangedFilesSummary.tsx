@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { DiffStats } from '@/components/DiffStats';
 import { ExpandedDiffDialog } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
@@ -166,15 +167,21 @@ export function ChangedFilesSummary({
             // nothing (stat-less files), so the list doesn't get uneven spacing.
             className="flex min-h-6 items-center gap-2"
           >
-            <button
-              type="button"
-              onClick={() => setExpandedFile(f.path)}
-              title={f.path}
-              className="text-muted-foreground hover:text-foreground min-w-0 flex-1 truncate text-left font-mono transition-colors hover:underline"
-              data-testid={`changed-files-open-${f.path}`}
-            >
-              {f.path}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setExpandedFile(f.path)}
+                  className="text-muted-foreground hover:text-foreground min-w-0 flex-1 truncate text-left font-mono transition-colors hover:underline"
+                  data-testid={`changed-files-open-${f.path}`}
+                >
+                  {f.path}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
+                {f.path}
+              </TooltipContent>
+            </Tooltip>
             <DiffStats
               linesAdded={f.additions ?? 0}
               linesDeleted={f.deletions ?? 0}

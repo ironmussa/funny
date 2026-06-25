@@ -1,6 +1,7 @@
 import type { WSTestActionData } from '@funny/shared';
 import { useMemo } from 'react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface ActionTimelineProps {
@@ -76,24 +77,33 @@ export function ActionTimeline({
             ? 'bg-destructive'
             : (CATEGORY_COLORS[action.category] ?? 'bg-gray-400');
 
+          const tooltipLabel = `${action.title} (${formatTimeLabel(dur)})`;
+
           return (
-            <div
-              key={action.id}
-              className={cn(
-                'absolute top-0 h-full cursor-pointer rounded-[1px] transition-opacity',
-                colorClass,
-                isActive ? 'opacity-100 ring-1 ring-foreground/40' : 'opacity-60 hover:opacity-90',
-              )}
-              style={{
-                left: `${Math.min(left, 99.5)}%`,
-                width: `${Math.max(width, 0.5)}%`,
-              }}
-              onMouseEnter={() => onHover(origIndex)}
-              onMouseLeave={() => onHover(-1)}
-              onClick={() => onSelect(origIndex === selectedIndex ? -1 : origIndex)}
-              title={`${action.title} (${formatTimeLabel(dur)})`}
-              data-testid={`timeline-marker-${action.id}`}
-            />
+            <Tooltip key={action.id}>
+              <TooltipTrigger asChild>
+                <div
+                  className={cn(
+                    'absolute top-0 h-full cursor-pointer rounded-[1px] transition-opacity',
+                    colorClass,
+                    isActive
+                      ? 'opacity-100 ring-1 ring-foreground/40'
+                      : 'opacity-60 hover:opacity-90',
+                  )}
+                  style={{
+                    left: `${Math.min(left, 99.5)}%`,
+                    width: `${Math.max(width, 0.5)}%`,
+                  }}
+                  onMouseEnter={() => onHover(origIndex)}
+                  onMouseLeave={() => onHover(-1)}
+                  onClick={() => onSelect(origIndex === selectedIndex ? -1 : origIndex)}
+                  data-testid={`timeline-marker-${action.id}`}
+                />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
+                {tooltipLabel}
+              </TooltipContent>
+            </Tooltip>
           );
         })}
 

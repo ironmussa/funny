@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface SearchBarProps {
@@ -188,43 +189,55 @@ export function SearchBar({
         {label}
       </span>
       {onCaseSensitiveChange && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => onCaseSensitiveChange(!caseSensitive)}
-          aria-pressed={caseSensitive}
-          title={`Match case (${caseSensitive ? 'on' : 'off'}) — Alt+C`}
-          className={cn(caseSensitive && 'bg-accent text-accent-foreground')}
-          data-testid={`${testIdPrefix}-case-sensitive`}
-        >
-          <CaseSensitive className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onCaseSensitiveChange(!caseSensitive)}
+              aria-pressed={caseSensitive}
+              className={cn(caseSensitive && 'bg-accent text-accent-foreground')}
+              data-testid={`${testIdPrefix}-case-sensitive`}
+            >
+              <CaseSensitive className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{`Match case (${caseSensitive ? 'on' : 'off'}) - Alt+C`}</TooltipContent>
+        </Tooltip>
       )}
       {onWholeWordChange && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => onWholeWordChange(!wholeWord)}
-          aria-pressed={wholeWord}
-          title={`Match whole word (${wholeWord ? 'on' : 'off'}) — Alt+W`}
-          className={cn(wholeWord && 'bg-accent text-accent-foreground')}
-          data-testid={`${testIdPrefix}-whole-word`}
-        >
-          <WholeWord className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onWholeWordChange(!wholeWord)}
+              aria-pressed={wholeWord}
+              className={cn(wholeWord && 'bg-accent text-accent-foreground')}
+              data-testid={`${testIdPrefix}-whole-word`}
+            >
+              <WholeWord className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{`Match whole word (${wholeWord ? 'on' : 'off'}) - Alt+W`}</TooltipContent>
+        </Tooltip>
       )}
       {onRegexChange && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => onRegexChange(!regex)}
-          aria-pressed={regex}
-          title={`Use regular expression (${regex ? 'on' : 'off'}) — Alt+R`}
-          className={cn(regex && 'bg-accent text-accent-foreground')}
-          data-testid={`${testIdPrefix}-regex`}
-        >
-          <Regex className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onRegexChange(!regex)}
+              aria-pressed={regex}
+              className={cn(regex && 'bg-accent text-accent-foreground')}
+              data-testid={`${testIdPrefix}-regex`}
+            >
+              <Regex className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{`Use regular expression (${regex ? 'on' : 'off'}) - Alt+R`}</TooltipContent>
+        </Tooltip>
       )}
       {showNav && (
         <>

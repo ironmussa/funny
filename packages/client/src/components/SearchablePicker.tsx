@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface SearchablePickerItem {
@@ -185,11 +186,21 @@ export function SearchablePicker({
             triggerClassName ??
             'text-muted-foreground hover:bg-muted hover:text-foreground flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs transition-colors focus-visible:outline-hidden'
           }
-          title={triggerTitle}
           tabIndex={-1}
         >
           {icon ?? <GitBranch className="icon-xs shrink-0" />}
-          <span className="truncate font-mono">{displayValue}</span>
+          {triggerTitle ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="truncate font-mono">{displayValue}</span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+                {triggerTitle}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="truncate font-mono">{displayValue}</span>
+          )}
           <ChevronDown className="icon-xs shrink-0 opacity-60" />
         </button>
       </PopoverTrigger>

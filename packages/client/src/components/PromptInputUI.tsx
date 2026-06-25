@@ -205,7 +205,12 @@ export const ModelSelect = memo(function ModelSelect({
                           }}
                         >
                           {lead(isSelected && effort === e.value)}
-                          <span title={e.description}>{e.label}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>{e.label}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{e.description}</TooltipContent>
+                          </Tooltip>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuSubContent>
@@ -1177,12 +1182,16 @@ export const PromptInputUI = memo(function PromptInputUI({
                           <span className="text-muted-foreground shrink-0 text-[10px] font-medium tracking-wide uppercase">
                             #{index + 1}
                           </span>
-                          <p
-                            className="text-muted-foreground min-w-0 flex-1 truncate text-xs"
-                            title={message.content}
-                          >
-                            {message.content}
-                          </p>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+                                {message.content}
+                              </p>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
+                              {message.content}
+                            </TooltipContent>
+                          </Tooltip>
                           <div className="flex shrink-0 items-center gap-0.5">
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1356,12 +1365,14 @@ export const PromptInputUI = memo(function PromptInputUI({
               <div className="flex flex-wrap gap-2">
                 {templateVars.map((v) => (
                   <div key={v.name} className="flex items-center gap-1.5">
-                    <label
-                      className="text-muted-foreground text-[10px] font-medium"
-                      title={v.description || v.name}
-                    >
-                      {v.name}
-                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <label className="text-muted-foreground text-[10px] font-medium">
+                          {v.name}
+                        </label>
+                      </TooltipTrigger>
+                      <TooltipContent>{v.description || v.name}</TooltipContent>
+                    </Tooltip>
                     <Input
                       value={templateVarValues[v.name] ?? v.defaultValue ?? ''}
                       onChange={(e) =>

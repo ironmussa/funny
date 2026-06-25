@@ -2,6 +2,7 @@ import { SiGithub } from '@icons-pack/react-simple-icons';
 import { FolderOpen, GitBranch, Globe, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { api } from '@/lib/api';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
@@ -71,16 +72,20 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
   return (
     <>
       {project && (
-        <span
-          className="flex max-w-[140px] min-w-0 items-center gap-1 md:max-w-[200px]"
-          title={project.name}
-        >
-          <FolderOpen className="size-4 shrink-0" />
-          <span className="flex min-w-0 items-center font-medium">
-            <span className="truncate">{project.name.slice(0, -8)}</span>
-            <span className="shrink-0">{project.name.slice(-8)}</span>
-          </span>
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="flex max-w-[140px] min-w-0 items-center gap-1 md:max-w-[200px]">
+              <FolderOpen className="size-4 shrink-0" />
+              <span className="flex min-w-0 items-center font-medium">
+                <span className="truncate">{project.name.slice(0, -8)}</span>
+                <span className="shrink-0">{project.name.slice(-8)}</span>
+              </span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] break-all">
+            {project.name}
+          </TooltipContent>
+        </Tooltip>
       )}
       {project && remoteUrl && (
         <>
@@ -99,16 +104,22 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
               </>
             );
             return browseUrl ? (
-              <a
-                href={browseUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:bg-muted hover:text-foreground flex max-w-[180px] min-w-0 items-center gap-1 rounded px-1 py-0.5 transition-colors md:max-w-[280px]"
-                data-testid="new-thread-repo-link"
-                title={browseUrl}
-              >
-                {content}
-              </a>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={browseUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:bg-muted hover:text-foreground flex max-w-[180px] min-w-0 items-center gap-1 rounded px-1 py-0.5 transition-colors md:max-w-[280px]"
+                    data-testid="new-thread-repo-link"
+                  >
+                    {content}
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
+                  {browseUrl}
+                </TooltipContent>
+              </Tooltip>
             ) : (
               <span className="flex max-w-[180px] min-w-0 items-center gap-1 md:max-w-[280px]">
                 {content}

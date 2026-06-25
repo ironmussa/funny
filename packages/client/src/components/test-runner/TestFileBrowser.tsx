@@ -26,6 +26,7 @@ import {
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { openFileInExternalEditor, getEditorLabel } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
@@ -117,9 +118,14 @@ function SpecItem({
         ) : (
           <StatusDot status={fileStatus} />
         )}
-        <span className="font-mono-explorer flex-1 truncate text-xs" title={spec.title}>
-          {spec.title}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="font-mono-explorer flex-1 truncate text-xs">{spec.title}</span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
+            {spec.title}
+          </TooltipContent>
+        </Tooltip>
         {!hasMultipleProjects &&
           (isRunning && fileStatus === 'running' ? (
             <TooltipIconButton
@@ -232,12 +238,16 @@ function SuiteItem({
           className={cn('icon-sm shrink-0 transition-transform', isExpanded && 'rotate-90')}
         />
         <StatusDot status={fileStatus} />
-        <span
-          className="font-mono-explorer flex-1 truncate text-xs font-medium"
-          title={suite.title}
-        >
-          {suite.title}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="font-mono-explorer flex-1 truncate text-xs font-medium">
+              {suite.title}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
+            {suite.title}
+          </TooltipContent>
+        </Tooltip>
       </div>
       {isExpanded && (
         <>

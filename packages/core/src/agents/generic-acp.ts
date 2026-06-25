@@ -37,6 +37,7 @@ import {
   parseACPPreambleTitle,
 } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
+import { buildAgentChildEnv } from './reap-orphaned-agents.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
@@ -191,7 +192,9 @@ export class GenericACPProcess extends BaseAgentProcess {
     const child = spawn(command, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: this.options.cwd,
-      env: { ...process.env, ...this.options.env },
+      // Stamp FUNNY_AGENT_OWNER=<runtime pid> so a future instance can reap this
+      // agent if the runtime dies (full --watch restart) and orphans it.
+      env: buildAgentChildEnv(this.options.env),
       signal: this.abortController.signal,
       shell: process.platform === 'win32',
       // Lead our own process group (POSIX) so kill() can reap the whole tree,

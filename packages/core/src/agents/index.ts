@@ -57,6 +57,15 @@ export {
 } from './provider-extensions.js';
 export { GenericACPProcess } from './generic-acp.js';
 export {
+  AGENT_OWNER_ENV,
+  buildAgentChildEnv,
+  reapOrphanedAgents,
+  selectReapablePids,
+  parseOwnerFromEnviron,
+  parsePgrpFromStat,
+  type ProcEntry,
+} from './reap-orphaned-agents.js';
+export {
   resolveSDKCli,
   resolveSDKCliPath,
   type ResolvedSDKCli,

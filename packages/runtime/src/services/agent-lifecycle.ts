@@ -14,6 +14,7 @@
 import { mkdirSync } from 'node:fs';
 
 import type { AgentOrchestrator } from '@funny/core/agents';
+import { reapOrphanedAgents } from '@funny/core/agents';
 import { syncClaudeProjectAssets } from '@funny/core/ports';
 import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
@@ -42,7 +43,25 @@ export class AgentLifecycleManager {
     private state: AgentStateTracker,
     private eventRouter: AgentEventRouter,
   ) {
+    // Adopt agents preserved across an in-process hot-reload (globalThis snapshot)...
     this.adoptSurvivingProcesses();
+    // ...then reap agents leaked by a FULL restart, where the snapshot was lost
+    // and their processes orphaned. Adopted/live agents are owned by this (alive)
+    // PID, so the reaper keeps them; only owner-dead orphans are killed.
+    try {
+      const reaped = reapOrphanedAgents((pids) =>
+        log.warn(`Reaped ${pids.length} orphaned agent process(es) from a previous runtime`, {
+          namespace: 'agent',
+          pids,
+        }),
+      );
+      if (reaped > 0) metric('agent.orphans_reaped', reaped);
+    } catch (err) {
+      log.warn('Orphaned-agent reaper failed', {
+        namespace: 'agent',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /** Access the run spans map (shared with AgentEventRouter) */
@@ -266,10 +285,21 @@ export class AgentLifecycleManager {
       }
     }
 
+    const resolvedAgentProfile =
+      thread?.projectId && thread?.userId
+        ? await getServices().agentProfiles.resolveEffectiveProfile(thread.projectId, thread.userId)
+        : { profile: null, env: {} };
+    const activeAgentProfile =
+      resolvedAgentProfile.profile && resolvedAgentProfile.profile.provider === provider
+        ? resolvedAgentProfile
+        : { profile: null, env: {} };
+
     // Load project MCP servers when none were explicitly provided.
     // For scratch threads there is no project — skip MCP project context.
     if (!mcpServers && project?.path) {
-      mcpServers = await loadProjectMcpServers(threadId, project.path, provider);
+      mcpServers = await loadProjectMcpServers(threadId, project.path, provider, {
+        claudeConfigDir: activeAgentProfile.env.CLAUDE_CONFIG_DIR,
+      });
     }
 
     // Resolve agent template (Deep Agent only)
@@ -419,15 +449,6 @@ export class AgentLifecycleManager {
 
     // Resolve per-user API keys and git identity for agent subprocesses.
     let agentEnv: Record<string, string> | undefined;
-    const resolvedAgentProfile =
-      thread?.projectId && thread?.userId
-        ? await getServices().agentProfiles.resolveEffectiveProfile(thread.projectId, thread.userId)
-        : { profile: null, env: {} };
-    const activeAgentProfile =
-      resolvedAgentProfile.profile && resolvedAgentProfile.profile.provider === provider
-        ? resolvedAgentProfile
-        : { profile: null, env: {} };
-
     if (thread?.userId) {
       const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');
       const relevantKeys = PROVIDER_KEY_REGISTRY.filter(

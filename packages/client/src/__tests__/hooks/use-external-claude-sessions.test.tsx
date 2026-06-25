@@ -37,6 +37,10 @@ describe('external Claude sessions sync', () => {
     vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
 
     const { unmount } = renderHook(() => useExternalClaudeSessionsSync());
+    // Initial sync is deferred to idle (setTimeout fallback under jsdom).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
     await flushMicrotasks();
 
     expect(api.listExternalClaudeSessions).toHaveBeenCalledTimes(1);
@@ -66,6 +70,9 @@ describe('external Claude sessions sync', () => {
     const a = renderHook(() => useExternalClaudeSessionsSync());
     const b = renderHook(() => useExternalClaudeSessionsSync());
     const c = renderHook(() => useExternalClaudeSessionsSync());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
     await flushMicrotasks();
 
     expect(api.listExternalClaudeSessions).toHaveBeenCalledTimes(1);
@@ -82,6 +89,9 @@ describe('external Claude sessions sync', () => {
     expect(loaded.result.current).toBe(false);
 
     const sync = renderHook(() => useExternalClaudeSessionsSync());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
     await flushMicrotasks();
 
     expect(loaded.result.current).toBe(true);

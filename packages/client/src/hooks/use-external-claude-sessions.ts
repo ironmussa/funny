@@ -86,11 +86,28 @@ export function loadExternalClaudeSessions(
  */
 export function useExternalClaudeSessionsSync(): void {
   useEffect(() => {
-    void loadExternalClaudeSessions({});
+    // The initial sync makes the runner scan EVERY project (~1.5s) — it is not
+    // on the critical path for first paint, so defer it to idle. Otherwise it
+    // holds one of the browser's ~6 sockets during app refresh and competes
+    // with the on-screen thread's own loads. The 15s polling interval is
+    // unaffected.
+    let idleId: number | undefined;
+    const kickoff = () => void loadExternalClaudeSessions({});
+    if (typeof requestIdleCallback === 'function') {
+      idleId = requestIdleCallback(kickoff, { timeout: 3000 });
+    } else {
+      idleId = window.setTimeout(kickoff, 500);
+    }
     const interval = window.setInterval(() => {
       void loadExternalClaudeSessions({ force: true });
     }, REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      if (idleId !== undefined) {
+        if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
+        else window.clearTimeout(idleId);
+      }
+    };
   }, []);
 }
 

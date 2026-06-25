@@ -3,8 +3,10 @@ import type { DomainError } from '@funny/shared/errors';
 import type { Result } from 'neverthrow';
 import { create } from 'zustand';
 
+import { parseRoute } from '@/hooks/route-parser';
 import { projectsApi } from '@/lib/api/projects';
 import { threadsApi } from '@/lib/api/threads';
+import { metric, startSpan } from '@/lib/telemetry';
 
 import { useAuthStore } from './auth-store';
 import {
@@ -108,10 +110,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (_loadProjectsPromise) return _loadProjectsPromise;
 
     _loadProjectsPromise = (async () => {
+      // Telemetry envelope for the whole load. Each milestone below is recorded
+      // as a gauge in ms-since-t0 so Abbacchio can graph the spread between the
+      // FIRST project's threads landing and the LAST — the progressive publish
+      // (vs. a Promise.all barrier) is exactly what compresses that gap.
+      const loadSpan = startSpan('projects.load');
+      const t0 = Date.now();
       try {
         const { activeOrgId, activeOrgName } = useAuthStore.getState();
         const result = await projectsApi.listProjects(activeOrgId);
-        if (result.isErr()) return;
+        if (result.isErr()) {
+          loadSpan.end('ERROR', 'listProjects failed');
+          return;
+        }
         // When an org is active, all returned projects belong to that org.
         // Mark them as team projects with the org name so the sidebar shows badges.
         const projects = activeOrgId
@@ -135,34 +146,102 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
         if (pruned) persistExpandedProjects(expanded);
         set({ projects, initialized: true });
+        // Project names are now on screen.
+        metric('projects.count', projects.length, { type: 'gauge' });
+        metric('projects.list_ms', Date.now() - t0, { type: 'gauge' });
 
-        // Fire git status + branch fetches immediately in parallel with thread
-        // loading (async-parallel). Previously these waited until ALL threads
-        // finished loading, adding unnecessary latency to sidebar diff stats.
-        const { expandedProjects, fetchBranch } = get();
-        for (const p of projects) {
-          fetchGitStatusForProject(p.id);
-          if (expandedProjects.has(p.id)) {
-            fetchBranch(p.id);
-          }
-        }
+        // The browser caps concurrent connections per origin (~6), so whatever
+        // we dispatch first wins the sockets. The user's directive: load the
+        // thread that's ON SCREEN first, then everything else. So the active
+        // project (from the URL) is hoisted to the front of the thread-list
+        // fan-out, and git status / branches are deferred to idle (below) so
+        // they don't starve the lists — Abbacchio showed the eager git loop
+        // kicking off ~28 background git.fetch_remote (2s each) that saturated
+        // the runner's git pool and stalled the sidebar lists ~1.5s.
+        const activeProjectId = parseRoute(window.location.pathname).projectId;
+        const ordered =
+          activeProjectId && projects.some((p) => p.id === activeProjectId)
+            ? [
+                ...projects.filter((p) => p.id === activeProjectId),
+                ...projects.filter((p) => p.id !== activeProjectId),
+              ]
+            : projects;
 
-        // Load threads for all projects in parallel, then batch-update the store
-        // in a single set() call to avoid N separate re-renders (one per project).
-        Promise.all(
-          projects.map(async (p) => {
+        // Load threads for all projects in parallel, but publish each project's
+        // rows as soon as they arrive. A single slow project should not keep
+        // the first visible thread hidden during app refresh.
+        let firstPublished = false;
+        const publishProjectThreads = async (p: Project, dispatchOrder: number) => {
+          // Dispatch instant (relative to t0): all lists are mapped synchronously,
+          // so these should cluster near list_ms. If list_latency_ms is far larger
+          // than the server-side span (~9ms), the delta is time spent waiting in the
+          // browser's per-origin connection queue — i.e. socket starvation, not the
+          // server or the Promise.all barrier.
+          const dispatchMs = Date.now() - t0;
+          metric('projects.list_dispatch_ms', dispatchMs, {
+            type: 'gauge',
+            attributes: { projectId: p.id, dispatchOrder: String(dispatchOrder) },
+          });
+          const fetchStart = Date.now();
+          try {
             const result = await threadsApi.listThreads(p.id, false, 50);
-            return {
-              projectId: p.id,
-              threads: result.isOk() ? result.value.threads : null,
-              total: result.isOk() ? result.value.total : 0,
-            };
-          }),
-        )
-          .then((results) => {
-            batchUpdateThreads(results);
-          })
-          .catch(() => {});
+            metric('projects.list_latency_ms', Date.now() - fetchStart, {
+              type: 'gauge',
+              attributes: { projectId: p.id, dispatchOrder: String(dispatchOrder) },
+            });
+            const threads = result.isOk() ? result.value.threads : null;
+            batchUpdateThreads([
+              {
+                projectId: p.id,
+                threads,
+                total: result.isOk() ? result.value.total : 0,
+              },
+            ]);
+            const elapsed = Date.now() - t0;
+            // First tree rows on screen — the milestone the progressive
+            // publish advances ahead of the slowest project.
+            if (!firstPublished) {
+              firstPublished = true;
+              metric('projects.first_threads_ms', elapsed, { type: 'gauge' });
+            }
+            metric('projects.threads_published_ms', elapsed, {
+              type: 'gauge',
+              attributes: {
+                projectId: p.id,
+                threadCount: String(threads?.length ?? 0),
+              },
+            });
+          } catch {
+            // Keep project loading resilient to per-project thread failures.
+          }
+        };
+        const publishPromises = ordered.map((p, i) => publishProjectThreads(p, i));
+        // Close the load envelope once every project has settled. The gap
+        // between projects.first_threads_ms and projects.all_threads_ms is the
+        // window the fix shrinks perceptually.
+        void Promise.all(publishPromises).then(() => {
+          metric('projects.all_threads_ms', Date.now() - t0, { type: 'gauge' });
+          loadSpan.end('OK');
+        });
+
+        // Git status + branches are NOT on the critical path for showing the
+        // sidebar thread rows, and they trigger the runner's expensive remote
+        // fetch. Defer them to idle so the thread lists (and the active thread's
+        // detail fetch) claim the socket pool first; diff stats fill in after.
+        const { expandedProjects, fetchBranch } = get();
+        const fireGitStatus = () => {
+          for (const p of ordered) {
+            fetchGitStatusForProject(p.id);
+            if (expandedProjects.has(p.id)) {
+              fetchBranch(p.id);
+            }
+          }
+        };
+        if (typeof requestIdleCallback === 'function') {
+          requestIdleCallback(fireGitStatus, { timeout: 2000 });
+        } else {
+          setTimeout(fireGitStatus, 200);
+        }
       } finally {
         _loadProjectsPromise = null;
       }

@@ -11,6 +11,7 @@ const {
   mockFetchForProject,
   mockProjectsApi,
   mockThreadsApi,
+  mockBatchUpdateThreads,
 } = vi.hoisted(() => ({
   mockLoadThreadsForProject: vi.fn().mockResolvedValue(undefined),
   mockClearProjectThreads: vi.fn(),
@@ -30,6 +31,7 @@ const {
   mockThreadsApi: {
     listThreads: vi.fn(),
   },
+  mockBatchUpdateThreads: vi.fn(),
 }));
 
 // Mock the API barrel (for any leftover consumers) and the specific sub-modules
@@ -41,7 +43,7 @@ vi.mock('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
 vi.mock('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
 
 vi.mock('@/stores/store-bridge', () => ({
-  batchUpdateThreads: vi.fn(),
+  batchUpdateThreads: (...args: any[]) => mockBatchUpdateThreads(...args),
   ensureThreadsLoaded: (projectId: string) => {
     // Mimic the bridge logic: only call loadThreadsForProject if not already loaded
     if (!mockThreadsByProject.current[projectId]) {
@@ -87,6 +89,9 @@ describe('ProjectStore', () => {
     });
     vi.clearAllMocks();
     mockThreadsByProject.current = {};
+    mockThreadsApi.listThreads.mockReturnValue(
+      okAsync({ threads: [], total: 0, hasMore: false }) as any,
+    );
   });
 
   describe('Initial state', () => {
@@ -134,6 +139,63 @@ describe('ProjectStore', () => {
 
       expect(mockListThreads).toHaveBeenCalledWith('p1', false, 50);
       expect(mockListThreads).toHaveBeenCalledWith('p2', false, 50);
+    });
+
+    test('publishes each project threads as soon as that request resolves', async () => {
+      const projects = [makeProject({ id: 'p1' }), makeProject({ id: 'p2' })];
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+
+      let resolveP1: (value: any) => void = () => {};
+      let resolveP2: (value: any) => void = () => {};
+      mockThreadsApi.listThreads.mockImplementation((projectId: string) => {
+        if (projectId === 'p1') {
+          return new Promise((resolve) => {
+            resolveP1 = resolve;
+          });
+        }
+        return new Promise((resolve) => {
+          resolveP2 = resolve;
+        });
+      });
+
+      await useProjectStore.getState().loadProjects();
+
+      resolveP1(okAsync({ threads: [{ id: 't1' }], total: 1, hasMore: false }) as any);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockBatchUpdateThreads).toHaveBeenCalledWith([
+        { projectId: 'p1', threads: [{ id: 't1' }], total: 1 },
+      ]);
+      expect(mockBatchUpdateThreads).toHaveBeenCalledTimes(1);
+
+      resolveP2(okAsync({ threads: [{ id: 't2' }], total: 1, hasMore: false }) as any);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockBatchUpdateThreads).toHaveBeenCalledWith([
+        { projectId: 'p2', threads: [{ id: 't2' }], total: 1 },
+      ]);
+    });
+
+    test('loads the on-screen (active) project first so it wins the socket pool', async () => {
+      // Active project from the URL is p2, which is NOT first in the array.
+      window.history.pushState({}, '', '/projects/p2/threads/t1');
+      const projects = [
+        makeProject({ id: 'p1' }),
+        makeProject({ id: 'p2' }),
+        makeProject({ id: 'p3' }),
+      ];
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+      mockThreadsApi.listThreads.mockReturnValue(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
+
+      await useProjectStore.getState().loadProjects();
+
+      // The first listThreads dispatch must be the active project, ahead of the
+      // others, so the visible thread's project claims a socket first.
+      expect(mockThreadsApi.listThreads.mock.calls[0][0]).toBe('p2');
+
+      window.history.pushState({}, '', '/');
     });
 
     test('handles API errors gracefully', async () => {

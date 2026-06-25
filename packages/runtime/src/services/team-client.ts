@@ -1296,14 +1296,13 @@ export async function remoteDeleteMessagesAfter(
   return response.deletedCount ?? 0;
 }
 
-/** Save a thread event on the server (fire-and-forget) */
+/** Save a thread event on the server and wait for persistence confirmation. */
 export async function remoteSaveThreadEvent(
   threadId: string,
   type: string,
   data: Record<string, unknown>,
 ): Promise<void> {
-  if (!state.socket?.connected) return;
-  state.socket.emit('data:save_thread_event', {
+  await sendDataMessage('data:save_thread_event', {
     payload: { threadId, eventType: type, data },
   });
 }

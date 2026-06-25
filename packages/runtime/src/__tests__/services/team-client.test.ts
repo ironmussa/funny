@@ -153,8 +153,24 @@ describe('team-client', () => {
     ]);
   });
 
-  test('remoteSaveThreadEvent does not throw when socket is disconnected', async () => {
+  test('remoteSaveThreadEvent waits for server persistence ack', async () => {
+    await initTeamMode('http://127.0.0.1:3001');
+
     await expect(remoteSaveThreadEvent('t1', 'evt', { x: 1 })).resolves.toBeUndefined();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith(
+      'data:save_thread_event',
+      expect.objectContaining({
+        payload: { threadId: 't1', eventType: 'evt', data: { x: 1 } },
+        _requestId: expect.any(String),
+      }),
+    );
+  });
+
+  test('remoteSaveThreadEvent rejects when socket is disconnected', async () => {
+    await expect(remoteSaveThreadEvent('t1', 'evt', { x: 1 })).rejects.toThrow(
+      'Socket.IO not initialized',
+    );
   });
 
   test('flushPendingMessageUpdates is safe when queue is empty', () => {

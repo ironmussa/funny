@@ -24,7 +24,7 @@ describe('loadProjectMcpServers — provider scoping', () => {
     const result = await loadProjectMcpServers('t1', '/p', 'claude');
     expect(result).toBeDefined();
     expect(result?.ctx7).toMatchObject({ type: 'stdio', command: 'ctx7' });
-    expect(listMcpServers).toHaveBeenCalledWith('/p', 'claude');
+    expect(listMcpServers).toHaveBeenCalledWith('/p', 'claude', {});
   });
 
   test('a provider with no MCP support gets nothing injected', async () => {
@@ -43,6 +43,6 @@ describe('loadProjectMcpServers — provider scoping', () => {
   test('Codex reads the Codex MCP inventory', async () => {
     const result = await loadProjectMcpServers('t1', '/p', 'codex');
     expect(result).toBeDefined();
-    expect(listMcpServers).toHaveBeenCalledWith('/p', 'codex');
+    expect(listMcpServers).toHaveBeenCalledWith('/p', 'codex', {});
   });
 });

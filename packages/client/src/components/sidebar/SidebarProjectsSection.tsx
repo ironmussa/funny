@@ -1,6 +1,6 @@
 import type { Project, Thread } from '@funny/shared';
 import { ChevronRight, FolderPlus } from 'lucide-react';
-import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -42,12 +42,11 @@ interface Props extends ProjectItemHandlers {
   expandedProjects: Set<string>;
   threadsByProject: Record<string, Thread[] | undefined>;
   scrollRef: RefObject<HTMLDivElement | null>;
-  topSentinelRef: RefObject<HTMLDivElement | null>;
 }
 
 /**
  * Projects header (with "add project" button) + scrollable projects list +
- * top fade gradient. Extracted from Sidebar.tsx so it doesn't need to import
+ * scroll-edge fade. Extracted from Sidebar.tsx so it doesn't need to import
  * ProjectItem, Skeleton, Button, Tooltip, FolderPlus, SidebarContent,
  * shallow-compare directly.
  */
@@ -58,7 +57,6 @@ export function SidebarProjectsSection({
   expandedProjects,
   threadsByProject,
   scrollRef,
-  topSentinelRef,
   ...handlers
 }: Props) {
   const { t } = useTranslation();
@@ -66,10 +64,7 @@ export function SidebarProjectsSection({
   // Single global poll that syncs external Claude Code sessions across every
   // project — mounted once here, not per ProjectItem.
   useExternalClaudeSessionsSync();
-  const [scrolled, setScrolled] = useState(false);
-  const [atBottom, setAtBottom] = useState(true);
   const [closedExpanded, setClosedExpanded] = useState(false);
-  const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
 
   const { onCloseProject, onReopenProject, ...sharedHandlers } = handlers;
 
@@ -82,25 +77,6 @@ export function SidebarProjectsSection({
     }
     return { activeProjects: active, closedProjects: closed };
   }, [projects]);
-
-  useEffect(() => {
-    const root = scrollRef.current;
-    const top = topSentinelRef.current;
-    const bottom = bottomSentinelRef.current;
-    if (!root || !top || !bottom) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.target === top) setScrolled(root.scrollTop > 0);
-          else if (entry.target === bottom) setAtBottom(entry.isIntersecting);
-        }
-      },
-      { root, threshold: 0 },
-    );
-    io.observe(top);
-    io.observe(bottom);
-    return () => io.disconnect();
-  }, [scrollRef, topSentinelRef]);
 
   // Memoize per-project thread lists, preserving referential identity for
   // projects whose threads didn't change visually.
@@ -162,20 +138,8 @@ export function SidebarProjectsSection({
       </div>
       <SidebarContent
         ref={scrollRef}
-        className="relative px-2 contain-paint"
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          setScrolled(el.scrollTop > 0);
-          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 1);
-        }}
+        className="fade-y fade-size-sm fade-range-sm relative px-2 contain-paint"
       >
-        <div ref={topSentinelRef} aria-hidden className="h-px shrink-0" />
-        <div
-          className={cn(
-            'sticky top-0 left-0 right-0 h-8 -mt-px -mb-8 bg-linear-to-b from-sidebar to-transparent pointer-events-none z-10 shrink-0',
-            scrolled ? 'opacity-100' : 'opacity-0',
-          )}
-        />
         {!projectsInitialized && projects.length === 0 && (
           <div
             aria-hidden
@@ -253,13 +217,6 @@ export function SidebarProjectsSection({
             </CollapsibleContent>
           </Collapsible>
         )}
-        <div
-          className={cn(
-            'sticky bottom-0 left-0 right-0 h-8 -mt-8 bg-linear-to-t from-sidebar to-transparent pointer-events-none z-10 shrink-0 transition-opacity',
-            atBottom ? 'opacity-0' : 'opacity-100',
-          )}
-        />
-        <div ref={bottomSentinelRef} aria-hidden className="h-2 shrink-0" />
       </SidebarContent>
     </>
   );

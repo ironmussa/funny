@@ -2,8 +2,23 @@
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import 'tw-fade';
 
 @custom-variant dark (&:is(.dark *));
+
+@layer utilities {
+  :where(.overflow-y-auto, .overflow-y-scroll) {
+    @apply fade-y fade-size-sm fade-range-sm;
+  }
+
+  :where(.overflow-x-auto, .overflow-x-scroll) {
+    @apply fade-x fade-size-sm fade-range-sm;
+  }
+
+  :where(.overflow-auto, .overflow-scroll) {
+    @apply fade-xy fade-size-sm fade-range-sm;
+  }
+}
 
 @theme inline {
   --font-sans: var(--font-sans);

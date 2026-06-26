@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { useEffect, useState, type RefObject } from 'react';
+import { useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -10,7 +10,6 @@ import { ThreadList } from './ThreadList';
 
 interface Props {
   scrollRef: RefObject<HTMLDivElement | null>;
-  topSentinelRef: RefObject<HTMLDivElement | null>;
   onRenameThread: (projectId: string, threadId: string, newTitle: string) => void;
   onArchiveThread: (
     threadId: string,
@@ -23,34 +22,16 @@ interface Props {
 
 /**
  * The "Activity" pane at the top of AppSidebar — own scroll area with a sticky
- * top fade gradient that reflects scroll state via an IntersectionObserver
- * sentinel. Collapsible (matches Quick Chats section behavior).
+ * scroll-edge fade. Collapsible (matches Quick Chats section behavior).
  */
 export function SidebarThreadsSection({
   scrollRef,
-  topSentinelRef,
   onRenameThread,
   onArchiveThread,
   onDeleteThread,
 }: Props) {
   const { t } = useTranslation();
-  const [scrolled, setScrolled] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
-
-  useEffect(() => {
-    if (!isExpanded) return;
-    const root = scrollRef.current;
-    const sentinel = topSentinelRef.current;
-    if (!root || !sentinel) return;
-    const io = new IntersectionObserver(
-      () => {
-        setScrolled(root.scrollTop > 0);
-      },
-      { root, threshold: 0 },
-    );
-    io.observe(sentinel);
-    return () => io.disconnect();
-  }, [scrollRef, topSentinelRef, isExpanded]);
 
   return (
     <Collapsible
@@ -73,20 +54,7 @@ export function SidebarThreadsSection({
         </h2>
       </CollapsibleTrigger>
       <CollapsibleContent className="data-[state=open]:animate-slide-down flex min-h-0 flex-1 flex-col">
-        <ScrollArea
-          viewportRef={scrollRef}
-          viewportProps={{
-            onScroll: (e) => setScrolled((e.currentTarget as HTMLDivElement).scrollTop > 0),
-          }}
-          className="relative min-h-0 flex-1 px-2 pb-2"
-        >
-          <div ref={topSentinelRef} aria-hidden className="h-px shrink-0" />
-          <div
-            className={cn(
-              'sticky top-0 left-0 right-0 h-8 -mt-px -mb-8 bg-linear-to-b from-sidebar to-transparent pointer-events-none z-10',
-              scrolled ? 'opacity-100' : 'opacity-0',
-            )}
-          />
+        <ScrollArea viewportRef={scrollRef} className="relative min-h-0 flex-1 px-2 pb-2">
           <ThreadList
             onRenameThread={onRenameThread}
             onArchiveThread={onArchiveThread}

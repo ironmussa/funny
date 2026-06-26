@@ -113,7 +113,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
   async function getThreadWithMessages(
     id: string,
     messageLimit?: number,
-    opts: { messageProgress?: number } = {},
+    opts: { messageProgress?: number; messageAnchorId?: string } = {},
   ) {
     const thread = await dbGet(db.select().from(schema.threads).where(eq(schema.threads.id, id)));
     if (!thread) return null;
@@ -135,11 +135,38 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
 
     if (messageLimit) {
       const maxStart = Math.max(0, (total ?? 0) - messageLimit);
+      let targetIndex: number | undefined;
       const progress =
         typeof opts.messageProgress === 'number'
           ? Math.min(1, Math.max(0, opts.messageProgress))
           : 1;
-      windowStart = Math.round(maxStart * progress);
+      const anchorId =
+        opts.messageAnchorId && !(typeof opts.messageProgress === 'number' && progress >= 0.999)
+          ? opts.messageAnchorId
+          : undefined;
+      if (anchorId) {
+        const anchorMessage =
+          (await dbGet(
+            db
+              .select({ timestamp: schema.messages.timestamp })
+              .from(schema.messages)
+              .where(and(eq(schema.messages.threadId, id), eq(schema.messages.id, anchorId)))
+              .limit(1),
+          )) ??
+          (await dbGet(
+            db
+              .select({ timestamp: schema.messages.timestamp })
+              .from(schema.toolCalls)
+              .innerJoin(schema.messages, eq(schema.toolCalls.messageId, schema.messages.id))
+              .where(and(eq(schema.messages.threadId, id), eq(schema.toolCalls.id, anchorId)))
+              .limit(1),
+          ));
+        if (anchorMessage) {
+          targetIndex = await countMessagesBefore(id, anchorMessage.timestamp);
+        }
+      }
+      targetIndex ??= Math.round(Math.max(0, (total ?? 0) - 1) * progress);
+      windowStart = Math.min(maxStart, Math.max(0, targetIndex - Math.floor(messageLimit / 2)));
       const rows = await dbAll(
         db
           .select()

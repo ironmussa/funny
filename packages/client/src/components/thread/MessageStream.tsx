@@ -15,7 +15,10 @@ import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { LoadingState } from '@/components/ui/loading-state';
-import { loadThreadScrollProgress, saveThreadScrollProgress } from '@/lib/thread-scroll-position';
+import {
+  loadThreadScrollPosition as loadStoredThreadScrollPosition,
+  saveThreadScrollPosition as saveStoredThreadScrollPosition,
+} from '@/lib/thread-scroll-position';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { selectLastMessage, selectFirstMessage } from '@/stores/thread-selectors';
@@ -25,6 +28,7 @@ import {
   MemoizedMessageList,
   EMPTY_MESSAGES,
   type MemoizedMessageListHandle,
+  type MessageListScrollAnchor,
 } from './MemoizedMessageList';
 import type { MessageStreamHandle, MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
@@ -58,6 +62,7 @@ type ThreadScrollPosition = {
   scrollProgress: number;
   atBottom: boolean;
   userHasScrolledUp: boolean;
+  anchor: MessageListScrollAnchor | null;
 };
 
 export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>(
@@ -245,13 +250,20 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         const atLoadedBottom = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
         const atThreadBottom = atLoadedBottom && !hasMoreAfter;
         const scrollProgress = atThreadBottom ? 1 : getThreadScrollProgress(viewport);
+        const anchor = atThreadBottom
+          ? null
+          : (messageListRef.current?.captureVisibleAnchor() ?? null);
 
         threadScrollPositionsRef.current!.set(id, {
           scrollProgress,
           atBottom: atThreadBottom,
           userHasScrolledUp: userHasScrolledUp.current,
+          anchor,
         });
-        saveThreadScrollProgress(id, scrollProgress);
+        saveStoredThreadScrollPosition(id, {
+          progress: scrollProgress,
+          anchor,
+        });
       },
       [getThreadScrollProgress, hasMoreAfter],
     );
@@ -264,14 +276,15 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       (viewport: HTMLDivElement, id: string) => {
         if (threadIdRef.current !== id) return;
 
-        const storedProgress = loadThreadScrollProgress(id);
+        const storedPosition = loadStoredThreadScrollPosition(id);
         const saved =
           threadScrollPositionsRef.current!.get(id) ??
-          (storedProgress !== undefined
+          (storedPosition
             ? {
-                scrollProgress: storedProgress,
-                atBottom: storedProgress >= 0.999,
-                userHasScrolledUp: storedProgress < 0.999,
+                scrollProgress: storedPosition.progress,
+                atBottom: storedPosition.progress >= 0.999,
+                userHasScrolledUp: storedPosition.progress < 0.999,
+                anchor: storedPosition.anchor ?? null,
               }
             : undefined);
 
@@ -287,6 +300,29 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
         }
 
         scrollingToBottomRef.current = false;
+        const restoredAnchor = saved.anchor
+          ? (messageListRef.current?.restoreScrollAnchor(saved.anchor) ?? false)
+          : false;
+        if (restoredAnchor) {
+          rememberScrollTop(viewport);
+          userHasScrolledUp.current = saved.userHasScrolledUp;
+          updateStickyMetrics(viewport);
+          updateScrollDownButton(
+            viewport,
+            getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX,
+          );
+          requestAnimationFrame(() => {
+            if (threadIdRef.current !== id) return;
+            rememberScrollTop(viewport);
+            updateStickyMetrics(viewport);
+            updateScrollDownButton(
+              viewport,
+              getDistanceFromBottom(viewport) <= STICKY_BOTTOM_THRESHOLD_PX,
+            );
+          });
+          return;
+        }
+
         const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
         viewport.scrollTop = getLocalScrollProgress(saved.scrollProgress) * maxScrollTop;
         rememberScrollTop(viewport);

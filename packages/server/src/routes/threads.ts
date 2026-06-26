@@ -102,6 +102,7 @@ const orchestratorWorkflowEventBodySchema = z
 const threadDetailQuerySchema = z.object({
   messageLimit: z.coerce.number().int().min(1).max(200).optional(),
   messageProgress: z.coerce.number().min(0).max(1).optional(),
+  messageAnchorId: z.string().min(1).optional(),
 });
 
 // Read at call time, not module load — the test harness sets this in a
@@ -334,13 +335,14 @@ threadRoutes.get('/:id', async (c) => {
   const userId = c.get('userId') as string;
   const parsedQuery = parseQuery(c, threadDetailQuerySchema);
   if (parsedQuery.isErr()) return c.json({ error: parsedQuery.error.message }, 400);
-  const { messageLimit, messageProgress } = parsedQuery.value;
+  const { messageLimit, messageProgress, messageAnchorId } = parsedQuery.value;
 
   const span = startSpan('GET /api/threads/:id', {
     attributes: {
       'thread.id': id,
       'thread.message_limit': messageLimit ?? null,
       'thread.message_progress': messageProgress ?? null,
+      'thread.message_anchor_id': messageAnchorId ?? null,
     },
   });
   try {
@@ -364,7 +366,7 @@ threadRoutes.get('/:id', async (c) => {
     });
     const [result, queuedCount, queuedNext] = await Promise.all([
       messageRepo
-        .getThreadWithMessages(id, messageLimit, { messageProgress })
+        .getThreadWithMessages(id, messageLimit, { messageProgress, messageAnchorId })
         .finally(() => fetchSpan.end('ok')),
       messageQueueRepo.queueCount(id).finally(() => queueCountSpan.end('ok')),
       messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),

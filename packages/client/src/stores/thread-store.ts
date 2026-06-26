@@ -38,6 +38,7 @@ import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 import { metric, startSpan } from '@/lib/telemetry';
+import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 
 import {
   expandProject,
@@ -257,6 +258,17 @@ const refreshLog = createClientLogger('thread-refresh');
 const selectLog = createClientLogger('thread-select');
 
 type LocalMessage = import('@funny/shared').Message & { toolCalls?: any[] };
+const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
+
+function getThreadScrollFetchOptions(threadId: string) {
+  return loadThreadScrollFetchOptions(threadId);
+}
+
+function userMessageDedupKey(message: Pick<LocalMessage, 'role' | 'content' | 'images'>): string {
+  return message.role === 'user'
+    ? `${message.content}\u0000${JSON.stringify(message.images ?? [])}`
+    : '';
+}
 
 /** Merge fresh server messages into the local cache.
  *  Fresh messages are the source of truth for their timestamp window — they
@@ -270,11 +282,21 @@ function mergeMessagesById(local: LocalMessage[], fresh: LocalMessage[]): LocalM
   const oldest = Math.min(...freshTimes);
   const newest = Math.max(...freshTimes);
   const freshIds = new Set(fresh.map((m) => m.id));
+  const freshUserKeys = new Set(
+    fresh.filter((m) => m.role === 'user').map((m) => userMessageDedupKey(m)),
+  );
 
   const before: LocalMessage[] = [];
   const after: LocalMessage[] = [];
   for (const m of local) {
     if (freshIds.has(m.id)) continue;
+    if (
+      m.role === 'user' &&
+      m.id.startsWith(DEQUEUED_MESSAGE_ID_PREFIX) &&
+      freshUserKeys.has(userMessageDedupKey(m))
+    ) {
+      continue;
+    }
     const t = new Date(m.timestamp).getTime();
     if (t < oldest) before.push(m);
     else if (t > newest) after.push(m);
@@ -548,9 +570,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           const queuePatch =
             queuedCount > 0
               ? {
-                  queuedCountByThread: { ...state.queuedCountByThread, [threadId]: queuedCount },
+                  queuedCountByThread: {
+                    ...state.queuedCountByThread,
+                    [threadId]: queuedCount,
+                  },
                   queuedNextMessageByThread: queuedNextMessage
-                    ? { ...state.queuedNextMessageByThread, [threadId]: queuedNextMessage }
+                    ? {
+                        ...state.queuedNextMessageByThread,
+                        [threadId]: queuedNextMessage,
+                      }
                     : state.queuedNextMessageByThread,
                 }
               : {};
@@ -605,7 +633,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const result = await api.archiveThread(threadId, true);
     if (result.isErr()) {
       guardOptimisticBoardWrite(threadId, { archived: false });
-      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, archived: false })));
+      set((state) =>
+        mutations.patchThread(state, threadId, (t) => ({
+          ...t,
+          archived: false,
+        })),
+      );
       return;
     }
     cleanupThreadActor(threadId);
@@ -616,7 +649,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     guardOptimisticBoardWrite(threadId, { archived: false, stage });
     set((state) =>
-      mutations.patchThread(state, threadId, (t) => ({ ...t, archived: false, stage })),
+      mutations.patchThread(state, threadId, (t) => ({
+        ...t,
+        archived: false,
+        stage,
+      })),
     );
 
     const archiveResult = await api.archiveThread(threadId, false);
@@ -635,7 +672,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const stageResult = await api.updateThreadStage(threadId, stage);
     if (stageResult.isErr()) {
       guardOptimisticBoardWrite(threadId, { stage: oldStage });
-      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage: oldStage })));
+      set((state) =>
+        mutations.patchThread(state, threadId, (t) => ({
+          ...t,
+          stage: oldStage,
+        })),
+      );
     }
   },
 
@@ -646,7 +688,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const result = await api.renameThread(threadId, title);
     if (result.isErr()) {
-      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, title: oldTitle })));
+      set((state) =>
+        mutations.patchThread(state, threadId, (t) => ({
+          ...t,
+          title: oldTitle,
+        })),
+      );
     }
   },
 
@@ -657,7 +704,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const result = await api.pinThread(threadId, pinned);
     if (result.isErr()) {
-      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, pinned: oldPinned })));
+      set((state) =>
+        mutations.patchThread(state, threadId, (t) => ({
+          ...t,
+          pinned: oldPinned,
+        })),
+      );
     }
   },
 
@@ -670,7 +722,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const result = await api.updateThreadStage(threadId, stage);
     if (result.isErr()) {
       guardOptimisticBoardWrite(threadId, { stage: oldStage });
-      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage: oldStage })));
+      set((state) =>
+        mutations.patchThread(state, threadId, (t) => ({
+          ...t,
+          stage: oldStage,
+        })),
+      );
     }
   },
 
@@ -778,7 +835,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     set((state) => ({
       // Sidebar status — keeps the row badge in sync regardless of bucket.
-      ...mutations.patchThread(state, threadId, (t) => ({ ...t, status: newStatus })),
+      ...mutations.patchThread(state, threadId, (t) => ({
+        ...t,
+        status: newStatus,
+      })),
       // Payload patch — also mirrors to activeThread when this is the
       // selected thread.
       ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
@@ -826,7 +886,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const threadId = active.id;
 
     set((state) =>
-      mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: true })),
+      mutations.applyThreadDataPatch(state, threadId, (t) => ({
+        ...t,
+        loadingMore: true,
+      })),
     );
 
     const result = await api.getThreadMessages(threadId, oldestMessage.timestamp, 50);
@@ -837,7 +900,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     if (result.isErr()) {
       set((state) =>
-        mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: false })),
+        mutations.applyThreadDataPatch(state, threadId, (t) => ({
+          ...t,
+          loadingMore: false,
+        })),
       );
       return;
     }
@@ -875,7 +941,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const threadId = active.id;
 
     set((state) =>
-      mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: true })),
+      mutations.applyThreadDataPatch(state, threadId, (t) => ({
+        ...t,
+        loadingMore: true,
+      })),
     );
 
     const result = await api.getThreadMessages(threadId, newestMessage.timestamp, 50, 'after');
@@ -885,7 +954,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     if (result.isErr()) {
       set((state) =>
-        mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: false })),
+        mutations.applyThreadDataPatch(state, threadId, (t) => ({
+          ...t,
+          loadingMore: false,
+        })),
       );
       return;
     }
@@ -934,7 +1006,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
       const oldestMessage = entry.messages[0];
       set((state) =>
-        mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: true })),
+        mutations.applyThreadDataPatch(state, threadId, (t) => ({
+          ...t,
+          loadingMore: true,
+        })),
       );
 
       const result = await api.getThreadMessages(threadId, oldestMessage.timestamp, PAGE_SIZE);
@@ -944,7 +1019,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
       if (result.isErr()) {
         set((state) =>
-          mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, loadingMore: false })),
+          mutations.applyThreadDataPatch(state, threadId, (t) => ({
+            ...t,
+            loadingMore: false,
+          })),
         );
         return false;
       }
@@ -975,7 +1053,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if (!active) return;
     const threadId = active.id;
     const [result, eventsResult] = await Promise.all([
-      api.getThread(threadId, 50),
+      api.getThread(threadId, 50, undefined, getThreadScrollFetchOptions(threadId)),
       api.getThreadEvents(threadId),
     ]);
     if (result.isErr()) return; // silently ignore
@@ -1171,7 +1249,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if (get().threadDataById[threadId]) return;
     if (prev > 0) return; // a sibling registration is racing the same fetch
 
-    const result = await api.getThread(threadId, 50);
+    const result = await api.getThread(
+      threadId,
+      50,
+      undefined,
+      getThreadScrollFetchOptions(threadId),
+    );
     if (result.isErr()) return;
 
     // Refcount may have dropped while fetching (unmount, race) — only land
@@ -1270,7 +1353,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         idx >= 0 ? prev.map((s, i) => (i === idx ? { ...s, ...step } : s)) : [...prev, step];
 
       return {
-        setupProgressByThread: { ...state.setupProgressByThread, [threadId]: next },
+        setupProgressByThread: {
+          ...state.setupProgressByThread,
+          [threadId]: next,
+        },
         // Mirror onto the loaded payload (right pane OR live column). The
         // patch is a no-op when the thread isn't loaded.
         ...mutations.applyThreadDataPatch(state, threadId, (t) =>

@@ -1,8 +1,11 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
-import { useRef } from 'react';
+import { createRef, useRef, type RefObject } from 'react';
 import { beforeEach, describe, test, expect, vi } from 'vitest';
 
-import { MemoizedMessageList } from '@/components/thread/MemoizedMessageList';
+import {
+  MemoizedMessageList,
+  type MemoizedMessageListHandle,
+} from '@/components/thread/MemoizedMessageList';
 
 import { mockT } from '../helpers/mock-i18n';
 
@@ -75,6 +78,7 @@ const virtualizerMockState = vi.hoisted(() => ({
   lastOptions: undefined as any,
   measureCalls: 0,
   scrollToIndexCalls: [] as { index: number; opts?: { align?: string } }[],
+  scrollToOffsetCalls: [] as { offset: number; opts?: { align?: string } }[],
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -102,6 +106,10 @@ vi.mock('@tanstack/react-virtual', () => ({
       measureElement: () => {},
       scrollToIndex: (index: number, opts?: { align?: string }) => {
         virtualizerMockState.scrollToIndexCalls.push({ index, opts });
+      },
+      getOffsetForIndex: (index: number) => [index * 120, 'start'] as const,
+      scrollToOffset: (offset: number, opts?: { align?: string }) => {
+        virtualizerMockState.scrollToOffsetCalls.push({ offset, opts });
       },
       measure: () => {
         virtualizerMockState.measureCalls += 1;
@@ -142,10 +150,12 @@ function Harness({
   messages,
   leadingUserMessage,
   viewportHeight,
+  listRef,
 }: {
   messages: any[];
   leadingUserMessage?: any;
   viewportHeight?: number;
+  listRef?: RefObject<MemoizedMessageListHandle | null>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   if (!scrollRef.current && viewportHeight !== undefined) {
@@ -171,6 +181,7 @@ function Harness({
       data-testid="viewport"
     >
       <MemoizedMessageList
+        ref={listRef}
         messages={messages}
         leadingUserMessage={leadingUserMessage}
         threadId="t1"
@@ -193,6 +204,7 @@ describe('MemoizedMessageList virtualization', () => {
     virtualizerMockState.lastOptions = undefined;
     virtualizerMockState.measureCalls = 0;
     virtualizerMockState.scrollToIndexCalls = [];
+    virtualizerMockState.scrollToOffsetCalls = [];
   });
 
   test('keeps mounted item rows bounded for a long loaded thread', async () => {
@@ -343,6 +355,87 @@ describe('MemoizedMessageList virtualization', () => {
     expect(
       viewport.querySelector<HTMLElement>('[data-virtual-row-key="a1"]')?.style.transform,
     ).not.toBe('translateY(0px)');
+  });
+
+  test('captures and restores a visible virtual row anchor', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 3;
+    const listRef = createRef<MemoizedMessageListHandle>();
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockImplementation(function (this: Element) {
+      if (this.getAttribute('data-testid') === 'viewport') {
+        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+      }
+      const rowKey = this.getAttribute('data-virtual-row-key');
+      if (rowKey === 'm0') return { top: -120, bottom: -20, height: 100 } as DOMRect;
+      if (rowKey === 'm1') return { top: 40, bottom: 160, height: 120 } as DOMRect;
+      if (rowKey === 'm2') return { top: 170, bottom: 290, height: 120 } as DOMRect;
+      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+    });
+
+    try {
+      const { getByTestId } = render(
+        <Harness messages={makeMessages(6)} viewportHeight={300} listRef={listRef} />,
+      );
+      const viewport = getByTestId('viewport');
+
+      await waitFor(() =>
+        expect(viewport.querySelector('[data-virtual-row-key="m1"]')).toBeTruthy(),
+      );
+
+      const anchor = listRef.current?.captureVisibleAnchor();
+      expect(anchor).toEqual({ key: 'm1', offsetFromViewportTop: 40 });
+      if (!anchor) throw new Error('Expected a visible anchor');
+
+      (viewport as HTMLDivElement).scrollTop = 100;
+      rectSpy.mockImplementation(function (this: Element) {
+        if (this.getAttribute('data-testid') === 'viewport') {
+          return { top: 0, bottom: 300, height: 300 } as DOMRect;
+        }
+        if (this.getAttribute('data-virtual-row-key') === 'm1') {
+          return { top: 75, bottom: 195, height: 120 } as DOMRect;
+        }
+        return { top: 0, bottom: 0, height: 0 } as DOMRect;
+      });
+
+      expect(listRef.current?.restoreScrollAnchor(anchor)).toBe(true);
+      expect((viewport as HTMLDivElement).scrollTop).toBe(135);
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  test('restores an unmounted virtual row anchor by estimated offset before drift correction', async () => {
+    virtualizerMockState.start = 3;
+    virtualizerMockState.visibleCount = 2;
+    const listRef = createRef<MemoizedMessageListHandle>();
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockImplementation(function (this: Element) {
+      if (this.getAttribute('data-testid') === 'viewport') {
+        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+      }
+      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+    });
+
+    try {
+      const { getByTestId } = render(
+        <Harness messages={makeMessages(6)} viewportHeight={300} listRef={listRef} />,
+      );
+      await waitFor(() =>
+        expect(getByTestId('viewport').querySelector('[data-virtual-row-key="m3"]')).toBeTruthy(),
+      );
+
+      expect(listRef.current?.restoreScrollAnchor({ key: 'm1', offsetFromViewportTop: 40 })).toBe(
+        true,
+      );
+
+      expect(virtualizerMockState.scrollToOffsetCalls).toEqual([
+        { offset: 80, opts: { align: 'start' } },
+      ]);
+      expect(virtualizerMockState.scrollToIndexCalls).toEqual([]);
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 
   test('clicking a sticky user card scrolls to the original virtual row when it is not mounted', async () => {

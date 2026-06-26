@@ -416,6 +416,29 @@ describe('thread store actions', () => {
       expect(merged.map((m) => m.id)).toEqual(['real-id', 'reply']);
     });
 
+    test('drops dequeued follow-up duplicate even when local timestamp is newer', async () => {
+      const realFollowUp = {
+        id: 'real-follow-up',
+        threadId: 't1',
+        role: 'user',
+        content: 'same follow-up',
+        timestamp: '2026-01-01T00:00:02.000Z',
+      };
+      const localDequeuedCopy = {
+        ...realFollowUp,
+        id: 'dequeued-local-copy',
+        timestamp: '2026-01-01T00:00:10.000Z',
+      };
+      setActiveThread([localDequeuedCopy]);
+
+      mockGetThread.mockReturnValue(okAsync({ ...baseThread, messages: [realFollowUp] }));
+
+      await useThreadStore.getState().refreshActiveThread();
+
+      const merged = useThreadStore.getState().activeThread!.messages;
+      expect(merged.map((m) => m.id)).toEqual(['real-follow-up']);
+    });
+
     test('preserves WS message that lands between fetch and set', async () => {
       // Regression: refreshActiveThread used to capture activeThread before
       // its `await api.getThread()`, so a WS agent:message that mutated

@@ -3,6 +3,10 @@ import { createRef, forwardRef, useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
+import {
+  loadThreadScrollFetchOptions,
+  saveThreadScrollPosition,
+} from '@/lib/thread-scroll-position';
 
 import { mockT } from '../helpers/mock-i18n';
 
@@ -43,6 +47,10 @@ const memoizedMessageListLifecycle = vi.hoisted(() => ({
   unmounts: 0,
   captureScrollAnchorCalls: 0,
   restoreScrollAnchorCalls: 0,
+  captureVisibleAnchorCalls: 0,
+  restoredAnchors: [] as any[],
+  visibleAnchor: null as { key: string; offsetFromViewportTop: number } | null,
+  restoreScrollAnchorResult: true,
   hasHiddenItems: false,
 }));
 
@@ -65,8 +73,14 @@ vi.mock('@/components/thread/MemoizedMessageList', () => ({
       captureScrollAnchor: () => {
         memoizedMessageListLifecycle.captureScrollAnchorCalls += 1;
       },
-      restoreScrollAnchor: () => {
+      restoreScrollAnchor: (anchor?: any) => {
         memoizedMessageListLifecycle.restoreScrollAnchorCalls += 1;
+        memoizedMessageListLifecycle.restoredAnchors.push(anchor);
+        return memoizedMessageListLifecycle.restoreScrollAnchorResult;
+      },
+      captureVisibleAnchor: () => {
+        memoizedMessageListLifecycle.captureVisibleAnchorCalls += 1;
+        return memoizedMessageListLifecycle.visibleAnchor;
       },
     }));
 
@@ -161,6 +175,10 @@ describe('MessageStream sticky bottom', () => {
     memoizedMessageListLifecycle.unmounts = 0;
     memoizedMessageListLifecycle.captureScrollAnchorCalls = 0;
     memoizedMessageListLifecycle.restoreScrollAnchorCalls = 0;
+    memoizedMessageListLifecycle.captureVisibleAnchorCalls = 0;
+    memoizedMessageListLifecycle.restoredAnchors = [];
+    memoizedMessageListLifecycle.visibleAnchor = null;
+    memoizedMessageListLifecycle.restoreScrollAnchorResult = true;
     memoizedMessageListLifecycle.hasHiddenItems = false;
   });
 
@@ -936,5 +954,129 @@ describe('MessageStream sticky bottom', () => {
     });
 
     expect(viewport.scrollTop).toBe(1000);
+  });
+
+  test('prefers the saved visible row anchor over scroll progress when returning to a thread', () => {
+    let scrollHeight = 2000;
+    memoizedMessageListLifecycle.visibleAnchor = {
+      key: 'm-anchor',
+      offsetFromViewportTop: -24,
+    };
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 750;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    scrollHeight = 700;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="short"
+        status="idle"
+        messages={makeMessages('short thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    scrollHeight = 2500;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread with more measured height')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(memoizedMessageListLifecycle.restoreScrollAnchorCalls).toBeGreaterThan(0);
+    expect(memoizedMessageListLifecycle.restoredAnchors).toContain(
+      memoizedMessageListLifecycle.visibleAnchor,
+    );
+    expect(viewport.scrollTop).not.toBe(1000);
+  });
+
+  test('restores a persisted visible row anchor when mounting a thread', () => {
+    saveThreadScrollPosition('persisted', {
+      progress: 0.42,
+      anchor: { key: 'm-persisted', offsetFromViewportTop: 32 },
+    });
+    const { container } = render(
+      <MessageStream
+        threadId="persisted"
+        status="idle"
+        messages={makeMessages('persisted thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => 2000,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(memoizedMessageListLifecycle.restoredAnchors).toContainEqual({
+      key: 'm-persisted',
+      offsetFromViewportTop: 32,
+    });
+  });
+
+  test('stores bottom scroll without a visible row anchor', () => {
+    memoizedMessageListLifecycle.visibleAnchor = {
+      key: 'm-visible-top',
+      offsetFromViewportTop: 16,
+    };
+    const { container } = render(
+      <MessageStream
+        threadId="bottom-saved"
+        status="idle"
+        messages={makeMessages('bottom thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => 2000,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 1500;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadThreadScrollFetchOptions('bottom-saved')).toEqual({
+      messageProgress: 1,
+    });
   });
 });

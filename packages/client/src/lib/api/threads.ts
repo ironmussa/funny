@@ -54,12 +54,15 @@ export const threadsApi = {
     id: string,
     messageLimit?: number,
     signal?: AbortSignal,
-    opts: { messageProgress?: number } = {},
+    opts: { messageProgress?: number; messageAnchorId?: string } = {},
   ) => {
     const params = new URLSearchParams();
     if (messageLimit) params.set('messageLimit', String(messageLimit));
     if (opts.messageProgress !== undefined) {
       params.set('messageProgress', String(opts.messageProgress));
+    }
+    if (opts.messageAnchorId) {
+      params.set('messageAnchorId', opts.messageAnchorId);
     }
     const qs = params.toString();
     return request<ThreadWithMessages>(`/threads/${id}${qs ? `?${qs}` : ''}`, { signal });

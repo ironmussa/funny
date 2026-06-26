@@ -29,7 +29,7 @@ function ScrollArea({
       <ScrollAreaPrimitive.Viewport
         ref={viewportRef}
         className={cn(
-          'h-full w-full rounded-[inherit] [&>div]:block! [&>div]:min-w-0!',
+          'fade-y fade-size-sm fade-range-sm h-full w-full rounded-[inherit] [&>div]:block! [&>div]:min-w-0!',
           viewportClassName,
         )}
         {...restViewportProps}

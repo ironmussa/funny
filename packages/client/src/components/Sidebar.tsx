@@ -89,8 +89,6 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
 
   const projectsScrollRef = useRef<HTMLDivElement>(null);
   const threadsScrollRef = useRef<HTMLDivElement>(null);
-  const threadsTopSentinelRef = useRef<HTMLDivElement>(null);
-  const projectsTopSentinelRef = useRef<HTMLDivElement>(null);
 
   useSidebarScrollSync({
     selectedProjectId,
@@ -158,7 +156,6 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
 
         <SidebarThreadsSection
           scrollRef={threadsScrollRef}
-          topSentinelRef={threadsTopSentinelRef}
           onRenameThread={handleRenameThread}
           onArchiveThread={handleArchiveThreadFromList}
           onDeleteThread={handleDeleteThreadFromList}
@@ -171,7 +168,6 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
           expandedProjects={expandedProjects}
           threadsByProject={threadsByProject}
           scrollRef={projectsScrollRef}
-          topSentinelRef={projectsTopSentinelRef}
           onToggle={handleToggleProject}
           onSelectProject={handleSelectProject}
           onNewThread={handleNewThread}

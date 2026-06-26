@@ -489,6 +489,8 @@ export async function handleDataMessageWithAck(
           {
             messageProgress:
               typeof data.messageProgress === 'number' ? data.messageProgress : undefined,
+            messageAnchorId:
+              typeof data.messageAnchorId === 'string' ? data.messageAnchorId : undefined,
           },
         );
         return {

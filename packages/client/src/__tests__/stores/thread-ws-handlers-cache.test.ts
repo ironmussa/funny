@@ -390,6 +390,46 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(userMsgs).toHaveLength(1);
   });
 
+  test('handleWSMessage consumes buffer when refreshed assistant already follows user msg', () => {
+    const userContent = 'Also PAR-007 and PAR-008';
+    const state = makeState({
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [
+            { id: 'm-user', role: 'user', content: userContent, threadId: THREAD_ID },
+            {
+              id: 'm-asst',
+              role: 'assistant',
+              content: '',
+              threadId: THREAD_ID,
+              toolCalls: [],
+            },
+          ],
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    handleWSMessage(get, set, THREAD_ID, {
+      messageId: 'm-asst',
+      role: 'assistant',
+      content: 'Let me run those tests.',
+    });
+
+    handleWSResult(get, set, THREAD_ID, { status: 'failed', cost: 0, duration: 1 });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userMsgs = msgs.filter((m: any) => m.role === 'user' && m.content === userContent);
+    expect(userMsgs).toHaveLength(1);
+  });
+
   test('handleWSMessage does NOT inject buffer when incoming role is user', () => {
     // Regression: bug 4 — when the agent:message event is itself a user
     // message (ingest-mapper / external sources), the buffer injection used

@@ -214,6 +214,85 @@ describe('getThreadWithMessages', () => {
     expect(result!.total).toBe(10);
   });
 
+  test('centers the initial window around a saved scroll progress target', async () => {
+    for (let i = 0; i < 10; i++) {
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 4, {
+      messageProgress: 0.25,
+    });
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['m0', 'm1', 'm2', 'm3']);
+    expect(result!.windowStart).toBe(0);
+    expect(result!.hasMore).toBe(false);
+    expect(result!.hasMoreAfter).toBe(true);
+  });
+
+  test('loads the initial window around a saved message anchor', async () => {
+    for (let i = 0; i < 10; i++) {
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 4, {
+      messageProgress: 0,
+      messageAnchorId: 'm7',
+    });
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['m5', 'm6', 'm7', 'm8']);
+    expect(result!.windowStart).toBe(5);
+    expect(result!.hasMore).toBe(true);
+    expect(result!.hasMoreAfter).toBe(true);
+  });
+
+  test('ignores a stale anchor when saved scroll progress is at the bottom', async () => {
+    for (let i = 0; i < 10; i++) {
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'user',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 4, {
+      messageProgress: 1,
+      messageAnchorId: 'm2',
+    });
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['m6', 'm7', 'm8', 'm9']);
+    expect(result!.windowStart).toBe(6);
+    expect(result!.hasMore).toBe(true);
+    expect(result!.hasMoreAfter).toBe(false);
+  });
+
+  test('loads the initial window around a saved tool-call anchor', async () => {
+    for (let i = 0; i < 10; i++) {
+      seedMessage(deps.db, {
+        id: `m${i}`,
+        role: 'assistant',
+        content: `msg-${i}`,
+        timestamp: ts(i),
+      });
+    }
+    seedToolCall(deps.db, { id: 'tc7', messageId: 'm7', name: 'Read' });
+
+    const result = await repo.getThreadWithMessages('t1', 4, {
+      messageProgress: 0,
+      messageAnchorId: 'tc7',
+    });
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['m5', 'm6', 'm7', 'm8']);
+    expect(result!.messages[2].toolCalls?.map((tc: any) => tc.id)).toEqual(['tc7']);
+    expect(result!.windowStart).toBe(5);
+  });
+
   test('hasMore is false when all messages fit in limit', async () => {
     await repo.insertMessage({
       threadId: 't1',

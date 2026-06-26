@@ -568,6 +568,7 @@ export interface DataGetThreadWithMessages {
   threadId: string;
   messageLimit?: number;
   messageProgress?: number;
+  messageAnchorId?: string;
 }
 
 /** Runner → Server: get paginated messages for a thread.

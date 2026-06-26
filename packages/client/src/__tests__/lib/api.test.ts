@@ -103,6 +103,24 @@ describe('API Client', () => {
       expect(result._unsafeUnwrap().id).toBe('t1');
     });
 
+    test('getThread includes scroll window hints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ id: 't1', title: 'Thread', messages: [] }),
+      );
+
+      await api.getThread('t1', 50, undefined, {
+        messageProgress: 0.25,
+        messageAnchorId: 'm7',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/threads/t1?messageLimit=50&messageProgress=0.25&messageAnchorId=m7',
+        ),
+        expect.anything(),
+      );
+    });
+
     test('createThread calls POST /api/threads', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 't1' }, 201));
 

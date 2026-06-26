@@ -221,7 +221,13 @@ export interface MemoizedMessageListHandle {
   expandToItem: (id: string) => void;
   hasHiddenItems: () => boolean;
   captureScrollAnchor: () => void;
-  restoreScrollAnchor: () => void;
+  restoreScrollAnchor: (anchor?: MessageListScrollAnchor) => boolean;
+  captureVisibleAnchor: () => MessageListScrollAnchor | null;
+}
+
+export interface MessageListScrollAnchor {
+  key: string;
+  offsetFromViewportTop: number;
 }
 
 /** Custom comparator for MemoizedMessageList — avoids re-renders when only
@@ -714,65 +720,78 @@ export const MemoizedMessageList = memo(
           );
 
     // ── Scroll anchor: capture/restore for jank-free scroll preservation ──
-    const scrollAnchorRef = useRef<{
-      key: string;
-      offsetFromViewportTop: number;
-    } | null>(null);
+    const scrollAnchorRef = useRef<MessageListScrollAnchor | null>(null);
 
-    const captureScrollAnchor = useCallback(() => {
+    const captureVisibleAnchor = useCallback(() => {
       const viewport = scrollRef.current;
       const container = itemContainerRef.current;
-      if (!viewport || !container) return;
+      if (!viewport || !container) return null;
 
       const vpRect = viewport.getBoundingClientRect();
       const rows = container.querySelectorAll<HTMLElement>('[data-virtual-row-key]');
       for (const row of rows) {
         const rect = row.getBoundingClientRect();
         if (rect.bottom > vpRect.top) {
-          scrollAnchorRef.current = {
+          return {
             key: row.dataset.virtualRowKey!,
             offsetFromViewportTop: rect.top - vpRect.top,
           };
-          return;
         }
       }
+      return null;
     }, [scrollRef]);
 
-    const restoreScrollAnchor = useCallback(() => {
-      const viewport = scrollRef.current;
-      const container = itemContainerRef.current;
-      const anchor = scrollAnchorRef.current;
-      if (!viewport || !container || !anchor) return;
+    const captureScrollAnchor = useCallback(() => {
+      scrollAnchorRef.current = captureVisibleAnchor();
+    }, [captureVisibleAnchor]);
 
-      const applyDrift = () => {
-        const el = container.querySelector<HTMLElement>(
-          `[data-virtual-row-key="${CSS.escape(anchor.key)}"]`,
-        );
-        if (!el) return false;
-        const vpRect = viewport.getBoundingClientRect();
-        const rect = el.getBoundingClientRect();
-        const currentOffset = rect.top - vpRect.top;
-        const drift = currentOffset - anchor.offsetFromViewportTop;
-        viewport.scrollTop += drift;
+    const restoreScrollAnchor = useCallback(
+      (providedAnchor?: MessageListScrollAnchor) => {
+        const viewport = scrollRef.current;
+        const container = itemContainerRef.current;
+        const anchor = providedAnchor ?? scrollAnchorRef.current;
+        if (!viewport || !container || !anchor) return false;
+
+        const applyDrift = () => {
+          const el = container.querySelector<HTMLElement>(
+            `[data-virtual-row-key="${CSS.escape(anchor.key)}"]`,
+          );
+          if (!el) return false;
+          const vpRect = viewport.getBoundingClientRect();
+          const rect = el.getBoundingClientRect();
+          const currentOffset = rect.top - vpRect.top;
+          const drift = currentOffset - anchor.offsetFromViewportTop;
+          viewport.scrollTop += drift;
+          return true;
+        };
+
+        if (applyDrift()) {
+          if (!providedAnchor) scrollAnchorRef.current = null;
+          return true;
+        }
+
+        const index = rowKeyIndexMap.get(anchor.key);
+        if (index === undefined) {
+          if (!providedAnchor) scrollAnchorRef.current = null;
+          return false;
+        }
+        const offsetForIndex = rowVirtualizer.getOffsetForIndex(index, 'start')?.[0];
+        if (typeof offsetForIndex === 'number') {
+          rowVirtualizer.scrollToOffset(
+            Math.max(0, offsetForIndex + leadingStickySpacerHeight - anchor.offsetFromViewportTop),
+            { align: 'start' },
+          );
+        } else {
+          rowVirtualizer.scrollToIndex(index, { align: 'start' });
+        }
+        requestAnimationFrame(() => {
+          applyDrift();
+          if (!providedAnchor) scrollAnchorRef.current = null;
+        });
         return true;
-      };
-
-      if (applyDrift()) {
-        scrollAnchorRef.current = null;
-        return;
-      }
-
-      const index = rowKeyIndexMap.get(anchor.key);
-      if (index === undefined) {
-        scrollAnchorRef.current = null;
-        return;
-      }
-      rowVirtualizer.scrollToIndex(index, { align: 'start' });
-      requestAnimationFrame(() => {
-        applyDrift();
-        scrollAnchorRef.current = null;
-      });
-    }, [rowKeyIndexMap, rowVirtualizer, scrollRef]);
+      },
+      [leadingStickySpacerHeight, rowKeyIndexMap, rowVirtualizer, scrollRef],
+    );
 
     const stickyScrollOffset =
       rowVirtualizer.scrollOffset ?? scrollRef.current?.scrollTop ?? listScrollMargin;
@@ -872,8 +891,15 @@ export const MemoizedMessageList = memo(
         hasHiddenItems: () => (rowVirtualizer.getVirtualItems()[0]?.index ?? 0) > 0,
         captureScrollAnchor,
         restoreScrollAnchor,
+        captureVisibleAnchor,
       }),
-      [itemIndexMap, rowVirtualizer, captureScrollAnchor, restoreScrollAnchor],
+      [
+        itemIndexMap,
+        rowVirtualizer,
+        captureScrollAnchor,
+        restoreScrollAnchor,
+        captureVisibleAnchor,
+      ],
     );
 
     const measureVirtualRowElement = useCallback(

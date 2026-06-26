@@ -2,6 +2,8 @@ import type { ThreadWithMessages } from '@funny/shared';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { saveThreadScrollPosition } from '@/lib/thread-scroll-position';
+
 const { mockGetThread, mockGetThreadEvents } = vi.hoisted(() => ({
   mockGetThread: vi.fn(),
   mockGetThreadEvents: vi.fn(),
@@ -29,6 +31,32 @@ function fakeThread(id: string): ThreadWithMessages {
     title: 't',
     status: 'completed',
     messages: [],
+  } as unknown as ThreadWithMessages;
+}
+
+function fakeThreadWindow(
+  id: string,
+  windowStart: number,
+  count: number,
+  total: number,
+): ThreadWithMessages {
+  return {
+    ...fakeThread(id),
+    messages: Array.from({ length: count }, (_, index) => {
+      const messageIndex = windowStart + index;
+      return {
+        id: `m${messageIndex}`,
+        threadId: id,
+        role: 'assistant',
+        content: `message ${messageIndex}`,
+        timestamp: `2026-01-01T00:00:${String(messageIndex).padStart(2, '0')}.000Z`,
+        toolCalls: [],
+      };
+    }),
+    total,
+    windowStart,
+    hasMore: windowStart > 0,
+    hasMoreAfter: windowStart + count < total,
   } as unknown as ThreadWithMessages;
 }
 
@@ -115,6 +143,50 @@ describe('thread-machine-bridge — data actors', () => {
       expect(a.thread.id).toBe(id);
       expect(b.thread.id).toBe(id);
       expect(mockGetThread).toHaveBeenCalledTimes(1);
+
+      cleanupThreadActor(id);
+    });
+
+    test('refetches a loaded actor when its cached window misses the stored scroll position', async () => {
+      const id = uniqueId('scroll-window');
+      mockGetThread.mockReturnValueOnce(okAsync(fakeThreadWindow(id, 50, 5, 100)));
+      mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
+
+      const first = await loadThreadData(id);
+      expect(first.thread.windowStart).toBe(50);
+
+      saveThreadScrollPosition(id, {
+        progress: 0.2,
+        anchor: { key: 'm20', offsetFromViewportTop: 24 },
+      });
+      mockGetThread.mockReturnValueOnce(okAsync(fakeThreadWindow(id, 18, 5, 100)));
+      mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
+
+      const refetched = await loadThreadData(id);
+      expect(mockGetThread).toHaveBeenCalledTimes(2);
+      expect(refetched.thread.windowStart).toBe(18);
+      expect(refetched.thread.messages.map((message) => message.id)).toContain('m20');
+      expect(mockGetThread.mock.calls[1][3]).toMatchObject({
+        messageProgress: 0.2,
+        messageAnchorId: 'm20',
+      });
+
+      cleanupThreadActor(id);
+    });
+
+    test('does not send a stale visible anchor when the stored position is bottom', async () => {
+      const id = uniqueId('bottom-scroll');
+      saveThreadScrollPosition(id, {
+        progress: 1,
+        anchor: { key: 'm20', offsetFromViewportTop: 24 },
+      });
+      mockOk(id);
+
+      await loadThreadData(id);
+
+      expect(mockGetThread.mock.calls.at(-1)?.[3]).toEqual({
+        messageProgress: 1,
+      });
 
       cleanupThreadActor(id);
     });

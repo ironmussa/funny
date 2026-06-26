@@ -156,20 +156,20 @@ interface DequeuedMessageBuffer {
   images?: ImageAttachment[];
 }
 const pendingDequeuedMessages = new Map<string, DequeuedMessageBuffer>();
+const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
 
 /**
- * True when the tail of `messages` already contains a user message with the
- * same content as the buffer entry — meaning the server-loaded payload
- * already shows this dequeued message, so injecting again would duplicate.
- * Scans from the end and stops at the first non-user message so we don't
- * match against unrelated earlier user turns with coincidentally identical
- * content.
+ * True when the user-message run immediately before `insertionIndex` already
+ * contains the buffer entry. This covers both normal appends and the case where
+ * a refreshed assistant message already exists after the real dequeued user
+ * message.
  */
-function tailHasUserMessage(
+function userRunBeforeHasMessage(
   messages: Array<{ role: string; content: string }>,
   content: string,
+  insertionIndex: number = messages.length,
 ): boolean {
-  for (let i = messages.length - 1; i >= 0; i--) {
+  for (let i = insertionIndex - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.role !== 'user') return false;
     if (m.content === content) return true;
@@ -189,12 +189,13 @@ function tailHasUserMessage(
  * assistant messages left the user card invisible for the entire tool phase of
  * the turn — and missing on refresh-less surfaces until the first text landed.
  *
- * Returns [] when nothing is buffered or the tail already shows the same
- * content (server-loaded duplicate, e.g. after a thread refresh).
+ * Returns [] when nothing is buffered or the user-message run immediately
+ * before the insertion point already shows the same content.
  */
 function takeDequeuedUserMessages(
   threadId: string,
   messages: Array<{ role: string; content: string }>,
+  insertionIndex: number = messages.length,
 ): Array<{
   id: string;
   threadId: string;
@@ -206,10 +207,10 @@ function takeDequeuedUserMessages(
   const dequeuedMsg = pendingDequeuedMessages.get(threadId);
   if (!dequeuedMsg) return [];
   pendingDequeuedMessages.delete(threadId);
-  if (tailHasUserMessage(messages, dequeuedMsg.content)) return [];
+  if (userRunBeforeHasMessage(messages, dequeuedMsg.content, insertionIndex)) return [];
   return [
     {
-      id: crypto.randomUUID(),
+      id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
       threadId,
       role: 'user' as MessageRole,
       content: dequeuedMsg.content,
@@ -273,12 +274,21 @@ export function handleWSMessage(
         const existingIdx = t.messages.findIndex((m) => m.id === messageId);
         if (existingIdx >= 0) {
           const updated = [...t.messages];
+          const extraMessages =
+            data.role === 'assistant'
+              ? takeDequeuedUserMessages(threadId, t.messages, existingIdx)
+              : [];
           updated[existingIdx] = {
             ...updated[existingIdx],
             content: data.content,
             ...(data.author ? { author: data.author } : {}),
           };
-          return { ...t, messages: updated };
+          if (extraMessages.length) updated.splice(existingIdx, 0, ...extraMessages);
+          return {
+            ...t,
+            lastUserMessage: extraMessages.at(-1) ?? t.lastUserMessage,
+            messages: updated,
+          };
         }
       }
 
@@ -286,8 +296,8 @@ export function handleWSMessage(
       // an assistant message, prepend the user message so it appears in the
       // correct position. Skip injection when:
       //   - the incoming message is itself the user message (would double it)
-      //   - the tail of the payload already shows a user message with the
-      //     same content (server-loaded duplicate, e.g. after a thread
+      //   - the payload already shows the same user message immediately before
+      //     the insertion point (server-loaded duplicate, e.g. after a thread
       //     refresh; bug 4 — visual duplicate of the dequeued message)
       // Inject the buffered dequeued user card before the agent's first output
       // of the turn. handleWSToolCall does the same — whichever lands first
@@ -729,7 +739,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // any message, the buffer leaks and would inject into a future, unrelated
   // turn. Inject it now as a user message so the user sees what was dequeued,
   // and clear the buffer so it can't contaminate later. Skip injection if the
-  // payload tail already has a matching user message (bug 4 — duplicate when
+  // payload already ends with a matching user message (bug 4 — duplicate when
   // the server-inserted message is already loaded).
   const orphaned = pendingDequeuedMessages.get(threadId);
   if (orphaned) {
@@ -737,13 +747,13 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     if (isHydrated(get(), threadId)) {
       set((s) =>
         mutations.applyThreadDataPatch(s, threadId, (t) => {
-          if (tailHasUserMessage(t.messages, orphaned.content)) return t;
+          if (userRunBeforeHasMessage(t.messages, orphaned.content)) return t;
           return {
             ...t,
             messages: [
               ...t.messages,
               {
-                id: crypto.randomUUID(),
+                id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
                 threadId,
                 role: 'user' as MessageRole,
                 content: orphaned.content,

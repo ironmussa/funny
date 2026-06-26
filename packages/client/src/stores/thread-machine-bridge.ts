@@ -11,6 +11,7 @@ import {
 } from '@funny/shared/thread-machine';
 import { createActor } from 'xstate';
 
+import { loadThreadScrollPosition } from '@/lib/thread-scroll-position';
 import { threadDataMachine, type ThreadDataSnapshot } from '@/machines/thread-data-machine';
 
 export { wsEventToMachineEvent };
@@ -122,6 +123,34 @@ export function isThreadDataLoaded(threadId: string): boolean {
   return actor.getSnapshot().matches('loaded');
 }
 
+function loadedDataContainsStoredScrollPosition(snapshot: ThreadDataSnapshot, threadId: string) {
+  const position = loadThreadScrollPosition(threadId);
+  if (!position) return true;
+
+  const thread = snapshot.thread;
+  const messages = thread.messages ?? [];
+  if (messages.length === 0) return true;
+
+  if (position.progress >= 0.999) {
+    return !(thread.hasMoreAfter ?? false);
+  }
+
+  const anchorKey = position.anchor?.key;
+  if (anchorKey) {
+    const hasAnchor = messages.some(
+      (message) =>
+        message.id === anchorKey ||
+        message.toolCalls?.some((toolCall) => toolCall.id === anchorKey),
+    );
+    if (hasAnchor) return true;
+  }
+
+  const total = thread.total ?? messages.length;
+  const windowStart = thread.windowStart ?? 0;
+  const targetIndex = Math.round(position.progress * Math.max(0, total - 1));
+  return targetIndex >= windowStart && targetIndex < windowStart + messages.length;
+}
+
 /**
  * Hard cap on how long `loadThreadData` will wait for the actor to reach a
  * terminal state. Without a bound, an actor whose fetch never resolves (or
@@ -153,6 +182,14 @@ const LOAD_THREAD_MAX_REATTEMPTS = 5;
  */
 export function loadThreadData(threadId: string): Promise<ThreadDataSnapshot> {
   const actor = getDataActor(threadId);
+  const snapshot = actor.getSnapshot();
+  if (
+    snapshot.matches('loaded') &&
+    snapshot.context.data &&
+    !loadedDataContainsStoredScrollPosition(snapshot.context.data, threadId)
+  ) {
+    actor.send({ type: 'INVALIDATE' });
+  }
 
   return new Promise<ThreadDataSnapshot>((resolve, reject) => {
     let settled = false;

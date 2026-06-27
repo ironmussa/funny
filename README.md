@@ -172,15 +172,15 @@ Team member A                    Team member B
 
 **funny** (local app)
 
-| Option               | Description                               | Default     |
-| -------------------- | ----------------------------------------- | ----------- |
-| `-p, --port <port>`  | Server port                               | `3001`      |
-| `-h, --host <host>`  | Server host                               | `127.0.0.1` |
-| `--auth-mode <mode>` | Authentication mode: `local` or `multi`   | `local`     |
+| Option               | Description                                          | Default     |
+| -------------------- | ---------------------------------------------------- | ----------- |
+| `-p, --port <port>`  | Server port                                          | `3001`      |
+| `-h, --host <host>`  | Server host                                          | `127.0.0.1` |
+| `--auth-mode <mode>` | Authentication mode: `local` or `multi`              | `local`     |
 | `--team <url>`       | Connect this machine as a runner to a central server | -           |
-| `--token <token>`    | Runner invite token for team registration | -           |
-| `--local`            | Start standalone; cannot combine with `--team` | `false` |
-| `--help`             | Show help message                         | -           |
+| `--token <token>`    | Runner invite token for team registration            | -           |
+| `--local`            | Start standalone; cannot combine with `--team`       | `false`     |
+| `--help`             | Show help message                                    | -           |
 
 **funny-server** (team coordination server)
 
@@ -208,19 +208,19 @@ To change the server, pass `--team` with the new URL.
 
 ### Environment Variables
 
-| Variable                 | Description                             | Default            | Used by      |
-| ------------------------ | --------------------------------------- | ------------------ | ------------ |
-| `PORT`                   | Server port                             | `3001` / `3002`    | both         |
-| `HOST`                   | Server hostname                         | `127.0.0.1`        | both         |
-| `AUTH_MODE`              | Authentication mode (`local`/`multi`)   | `local`            | funny        |
-| `ADMIN_USERNAME`         | Bootstrap admin username                | `admin`            | both         |
-| `ADMIN_EMAIL`            | Bootstrap admin email                   | `admin@local.host` | both         |
-| `ADMIN_PASSWORD`         | Bootstrap admin password; generated if unset | -             | both         |
-| `RUNNER_INVITE_TOKEN`    | Runner invite token for `--team` classic flow | -             | funny        |
-| `RUNNER_AUTH_SECRET`     | Shared secret for `--team` classic flow | -                  | funny        |
-| `CORS_ORIGIN`            | Custom CORS origins (comma-separated)   | Auto-configured    | both         |
-| `FUNNY_CENTRAL_DATA_DIR` | Central server data directory           | `~/.funny-central` | funny-server |
-| `LOG_LEVEL`              | Log level (debug/info/warn/error)       | `info`             | funny-server |
+| Variable                 | Description                                   | Default            | Used by      |
+| ------------------------ | --------------------------------------------- | ------------------ | ------------ |
+| `PORT`                   | Server port                                   | `3001` / `3002`    | both         |
+| `HOST`                   | Server hostname                               | `127.0.0.1`        | both         |
+| `AUTH_MODE`              | Authentication mode (`local`/`multi`)         | `local`            | funny        |
+| `ADMIN_USERNAME`         | Bootstrap admin username                      | `admin`            | both         |
+| `ADMIN_EMAIL`            | Bootstrap admin email                         | `admin@local.host` | both         |
+| `ADMIN_PASSWORD`         | Bootstrap admin password; generated if unset  | -                  | both         |
+| `RUNNER_INVITE_TOKEN`    | Runner invite token for `--team` classic flow | -                  | funny        |
+| `RUNNER_AUTH_SECRET`     | Shared secret for `--team` classic flow       | -                  | funny        |
+| `CORS_ORIGIN`            | Custom CORS origins (comma-separated)         | Auto-configured    | both         |
+| `FUNNY_CENTRAL_DATA_DIR` | Central server data directory                 | `~/.funny-central` | funny-server |
+| `LOG_LEVEL`              | Log level (debug/info/warn/error)             | `info`             | funny-server |
 
 ## Orchestrator
 
@@ -454,11 +454,11 @@ which port. [portless](https://github.com/vercel-labs/portless) puts a small
 local proxy in front of the dev servers so each gets a stable, named URL
 instead of a bare port:
 
-| URL | → port | service |
-| --- | --- | --- |
-| `http://funny.localhost` | 5173 | client |
-| `http://api.funny.localhost` | 5002 | server |
-| `http://runner.funny.localhost` | 3003 | runtime |
+| URL                             | → port | service |
+| ------------------------------- | ------ | ------- |
+| `http://funny.localhost`        | 5173   | client  |
+| `http://api.funny.localhost`    | 5002   | server  |
+| `http://runner.funny.localhost` | 3003   | runtime |
 
 We use portless in **static-alias + HTTP (`--no-tls`) mode**: the services keep
 their fixed ports (so the cross-service references — Vite → `:5002`,

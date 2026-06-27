@@ -495,20 +495,20 @@ DATABASE_URL=postgresql://user:pass@db.example.com/funny?sslmode=require
 
 ### `funny` (runner + UI)
 
-| Variable             | Description                                          | Default        | Required          |
-| -------------------- | ---------------------------------------------------- | -------------- | ----------------- |
-| `PORT`               | Port to listen on                                    | `3001`         | No                |
-| `HOST`               | Host to bind to                                      | `127.0.0.1`    | No                |
-| `RUNNER_AUTH_SECRET` | Shared secret for classic `--team` authentication    | Auto-generated | Only for classic flow |
-| `RUNNER_HTTP_URL`    | Runner's own HTTP URL (enables direct HTTP fallback) | —              | No                |
-| `DATABASE_URL`       | PostgreSQL connection URL                            | SQLite         | No                |
-| `CORS_ORIGIN`        | Allowed CORS origins (comma-separated)               | Auto           | No                |
-| `CLAUDE_BINARY_PATH` | Explicit path to the Claude CLI binary               | Auto-detected  | No                |
-| `FUNNY_DATA_DIR`     | Data directory for DB, secrets, keys                 | `~/.funny`     | No                |
-| `OTLP_ENDPOINT`      | OpenTelemetry collector endpoint                     | —              | No                |
-| `FUNNY_AGENT_IDLE_REAP_MS` | Idle window (ms) before a quiescent non-claude agent process tree is reaped to free memory; `0` disables | `600000` (10 min) | No |
-| `FUNNY_AGENT_IDLE_REAP_MS_CLAUDE` | Idle window (ms) for claude agents; off by default since SDK resume preserves prompt cache; `0` disables | `0` (disabled) | No |
-| `FUNNY_AGENT_IDLE_SWEEP_MS` | How often the idle reaper scans for reapable agents | `60000` (1 min) | No |
+| Variable                          | Description                                                                                              | Default           | Required              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------- | --------------------- |
+| `PORT`                            | Port to listen on                                                                                        | `3001`            | No                    |
+| `HOST`                            | Host to bind to                                                                                          | `127.0.0.1`       | No                    |
+| `RUNNER_AUTH_SECRET`              | Shared secret for classic `--team` authentication                                                        | Auto-generated    | Only for classic flow |
+| `RUNNER_HTTP_URL`                 | Runner's own HTTP URL (enables direct HTTP fallback)                                                     | —                 | No                    |
+| `DATABASE_URL`                    | PostgreSQL connection URL                                                                                | SQLite            | No                    |
+| `CORS_ORIGIN`                     | Allowed CORS origins (comma-separated)                                                                   | Auto              | No                    |
+| `CLAUDE_BINARY_PATH`              | Explicit path to the Claude CLI binary                                                                   | Auto-detected     | No                    |
+| `FUNNY_DATA_DIR`                  | Data directory for DB, secrets, keys                                                                     | `~/.funny`        | No                    |
+| `OTLP_ENDPOINT`                   | OpenTelemetry collector endpoint                                                                         | —                 | No                    |
+| `FUNNY_AGENT_IDLE_REAP_MS`        | Idle window (ms) before a quiescent non-claude agent process tree is reaped to free memory; `0` disables | `600000` (10 min) | No                    |
+| `FUNNY_AGENT_IDLE_REAP_MS_CLAUDE` | Idle window (ms) for claude agents; off by default since SDK resume preserves prompt cache; `0` disables | `0` (disabled)    | No                    |
+| `FUNNY_AGENT_IDLE_SWEEP_MS`       | How often the idle reaper scans for reapable agents                                                      | `60000` (1 min)   | No                    |
 
 ### `funny-server` (central server)
 

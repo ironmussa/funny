@@ -26,6 +26,7 @@ mock.module('../../services/ws-relay.js', () => ({
   threadPresenceRoom: (id: string) => `thread:${id}:presence`,
   relayToThreadStream: () => {},
   relayToThreadPresence: () => {},
+  relayToThreadViewers: () => {},
   evictUserFromThread: () => {},
 }));
 

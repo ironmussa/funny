@@ -127,6 +127,7 @@ export function SidebarProjectsSection({
               variant="ghost"
               data-testid="sidebar-add-project"
               size="icon"
+              aria-label={t('sidebar.addProject')}
               className="text-muted-foreground hover:text-foreground size-5"
               onClick={() => navigate(buildPath('/new'))}
             >

@@ -59,7 +59,7 @@ The message timeline has two layers of virtualization:
    init info, `MemoizedMessageList`, status tail, optional prompt-pin spacer,
    and sticky footer.
 3. `MemoizedMessageList` calls `buildGroupedRenderItems(messages, threadEvents,
-   compactionEvents)`.
+compactionEvents)`.
 4. The grouped render items are converted to `virtualRows`. Most rows wrap one
    render item. Extra `session-summary` rows can be inserted after a user
    message section when `sessionChanges` has changed-file summaries for that
@@ -69,7 +69,7 @@ The message timeline has two layers of virtualization:
    margin.
 6. Only `rowVirtualizer.getVirtualItems()` are mounted. Each mounted row is an
    absolutely positioned element translated to `virtualItem.start -
-   listScrollMargin`.
+listScrollMargin`.
 
 ## Render item rules
 

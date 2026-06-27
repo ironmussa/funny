@@ -111,13 +111,7 @@ describe('getGraphLog', () => {
     git(repo, ['add', '.']);
     executeSync(
       'git',
-      [
-        'commit',
-        '--author',
-        'Original Author <author@example.com>',
-        '-m',
-        'rebased feature',
-      ],
+      ['commit', '--author', 'Original Author <author@example.com>', '-m', 'rebased feature'],
       {
         cwd: repo,
         env: {

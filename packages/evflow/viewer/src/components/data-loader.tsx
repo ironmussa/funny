@@ -125,14 +125,14 @@ export function DataLoader() {
       className="flex h-full flex-col items-center justify-center gap-4"
     >
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold text-foreground">evflow Viewer</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-foreground text-2xl font-bold">evflow Viewer</h1>
+        <p className="text-muted-foreground text-sm">
           Drop an evflow model file here (.json or .ts)
         </p>
-        <p className="text-xs text-muted-foreground/70">
-          Supports <code className="rounded bg-muted px-1.5 py-0.5">.json</code> from{' '}
-          <code className="rounded bg-muted px-1.5 py-0.5">model.toJSON()</code> or{' '}
-          <code className="rounded bg-muted px-1.5 py-0.5">.ts</code> source files directly
+        <p className="text-muted-foreground/70 text-xs">
+          Supports <code className="bg-muted rounded px-1.5 py-0.5">.json</code> from{' '}
+          <code className="bg-muted rounded px-1.5 py-0.5">model.toJSON()</code> or{' '}
+          <code className="bg-muted rounded px-1.5 py-0.5">.ts</code> source files directly
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export function DataLoader() {
       )}
 
       <div
-        className="flex h-40 w-80 items-center justify-center rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-muted-foreground/50"
+        className="border-border text-muted-foreground hover:border-muted-foreground/50 flex h-40 w-80 items-center justify-center rounded-xl border-2 border-dashed text-sm transition-colors"
         data-testid="viewer-drop-zone"
       >
         Drop .json or .ts file here

@@ -91,6 +91,7 @@ export function SidebarFooter() {
               variant="ghost"
               size="icon-xs"
               data-testid="sidebar-settings"
+              aria-label={t('settings.title')}
               onClick={openSettings}
               className={cn('size-7 shrink-0 text-muted-foreground', !authUser && 'ml-auto')}
             >

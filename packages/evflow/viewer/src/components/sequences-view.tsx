@@ -38,7 +38,7 @@ export function SequencesView() {
 
   if (sequences.length === 0) {
     return (
-      <div className="p-4 text-sm text-muted-foreground">
+      <div className="text-muted-foreground p-4 text-sm">
         {activeSlice ? `No sequences found for slice "${activeSlice}".` : 'No sequences defined.'}
       </div>
     );
@@ -81,10 +81,10 @@ export function SequencesView() {
                     >
                       <span>{icon}</span>
                       <span>{step}</span>
-                      <span className="text-[10px] text-muted-foreground">{kind}</span>
+                      <span className="text-muted-foreground text-[10px]">{kind}</span>
                     </Badge>
                     {i < seq.steps.length - 1 && (
-                      <span className="mx-0.5 text-xs text-muted-foreground/50">&rarr;</span>
+                      <span className="text-muted-foreground/50 mx-0.5 text-xs">&rarr;</span>
                     )}
                   </span>
                 );

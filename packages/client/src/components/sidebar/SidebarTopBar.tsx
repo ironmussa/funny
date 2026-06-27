@@ -32,6 +32,7 @@ export function SidebarTopBar() {
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-search"
+              aria-label={t('sidebar.search', 'Search')}
               onClick={() => navigate(buildPath('/list'))}
               className="text-muted-foreground"
             >
@@ -47,6 +48,7 @@ export function SidebarTopBar() {
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-kanban"
+              aria-label="Kanban"
               onClick={() => navigate(buildPath('/kanban'))}
               className="text-muted-foreground"
             >
@@ -62,6 +64,7 @@ export function SidebarTopBar() {
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-grid"
+              aria-label="Grid"
               onClick={() => navigate(buildPath('/grid'))}
               className="text-muted-foreground"
             >
@@ -77,6 +80,7 @@ export function SidebarTopBar() {
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-analytics"
+              aria-label={t('sidebar.analytics')}
               onClick={() => navigate(buildPath('/analytics'))}
               className="text-muted-foreground"
             >
@@ -92,6 +96,7 @@ export function SidebarTopBar() {
               size="icon-sm"
               tabIndex={-1}
               data-testid="sidebar-collapse"
+              aria-label={t('sidebar.collapse', 'Collapse sidebar')}
               onClick={toggleSidebar}
               className="text-muted-foreground"
             >

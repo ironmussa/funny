@@ -97,20 +97,25 @@ Use this structure for investigations:
 
 ```md
 Evidence
+
 - run/session/path:
 - key log facts:
 
 Diagnosis
+
 - ...
 
 Harness Changes
+
 - changed/not changed:
 - files:
 
 Verification
+
 - ...
 
 Residual Risk
+
 - ...
 ```
 

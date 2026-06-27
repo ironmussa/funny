@@ -1,8 +1,15 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
-import { test as base, expect, type Page, type APIRequestContext } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type Page,
+  type APIRequestContext,
+  type BrowserContext,
+} from '@playwright/test';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -49,8 +56,12 @@ export class ApiHelper {
       headers: this.headers(),
       data: { name, path: repoPath },
     });
-    expect(res.ok(), `createProject failed: ${res.status()}`).toBeTruthy();
-    return res.json();
+    const body = await res.text();
+    expect(
+      res.ok(),
+      `createProject failed: ${res.status()} path=${repoPath} body=${body}`,
+    ).toBeTruthy();
+    return JSON.parse(body);
   }
 
   async deleteProject(id: string): Promise<void> {
@@ -135,7 +146,7 @@ export class ApiHelper {
 /* ------------------------------------------------------------------ */
 
 export function createTempGitRepo(suffix = ''): string {
-  const tmpBase = process.env.TEMP || process.env.TMP || 'C:\\Temp';
+  const tmpBase = process.env.TEMP || process.env.TMP || os.tmpdir();
   const dir = path.join(tmpBase, `funny-e2e-${Date.now()}${suffix}`);
   fs.mkdirSync(dir, { recursive: true });
   execSync('git init', { cwd: dir, stdio: 'ignore' });
@@ -161,7 +172,72 @@ export function removeTempDir(dir: string): void {
 /*  Bootstrap helper                                                   */
 /* ------------------------------------------------------------------ */
 
-async function fetchBootstrapToken(request: APIRequestContext, baseURL: string): Promise<string> {
+type CachedAuth = {
+  token: string;
+  cookies: Array<{ name: string; value: string; url: string }>;
+};
+
+let cachedAuth: CachedAuth | null = null;
+
+function e2eAdminCredentials() {
+  const username = process.env.E2E_ADMIN_USERNAME ?? process.env.ADMIN_USERNAME ?? 'admin';
+  const password = process.env.E2E_ADMIN_PASSWORD ?? process.env.ADMIN_PASSWORD;
+  if (!password) {
+    throw new Error('E2E_ADMIN_PASSWORD or ADMIN_PASSWORD must be set for authenticated e2e tests');
+  }
+  return { username, password };
+}
+
+function parseSetCookieHeaders(headers: Array<{ name: string; value: string }>, baseURL: string) {
+  return headers
+    .filter((header) => header.name.toLowerCase() === 'set-cookie')
+    .map((header) => {
+      const [pair] = header.value.split(';');
+      const eq = pair.indexOf('=');
+      return {
+        name: pair.slice(0, eq),
+        value: pair.slice(eq + 1),
+        url: baseURL,
+      };
+    })
+    .filter((cookie) => cookie.name && cookie.value);
+}
+
+async function getAdminAuth(request: APIRequestContext, baseURL: string): Promise<CachedAuth> {
+  if (cachedAuth) return cachedAuth;
+
+  const { username, password } = e2eAdminCredentials();
+  const res = await request.post(`${baseURL}/api/auth/sign-in/username`, {
+    data: { username, password },
+  });
+  expect(res.ok(), `admin sign-in failed: ${res.status()}`).toBeTruthy();
+  const body = await res.json();
+  expect(body.token, 'admin sign-in response should include bearer token').toBeTruthy();
+
+  const cookies = parseSetCookieHeaders(res.headersArray(), baseURL);
+  expect(cookies.length, 'admin sign-in response should include session cookies').toBeGreaterThan(
+    0,
+  );
+  const profileRes = await request.put(`${baseURL}/api/profile`, {
+    headers: { Authorization: `Bearer ${body.token}` },
+    data: { setupCompleted: true },
+  });
+  expect(profileRes.ok(), `complete setup failed: ${profileRes.status()}`).toBeTruthy();
+
+  cachedAuth = { token: body.token, cookies };
+  return cachedAuth;
+}
+
+async function addAdminCookies(
+  context: BrowserContext,
+  request: APIRequestContext,
+  baseURL: string,
+) {
+  const auth = await getAdminAuth(request, baseURL);
+  await context.addCookies(auth.cookies);
+}
+
+async function fetchBootstrapMode(request: APIRequestContext, baseURL: string): Promise<string> {
   const maxRetries = 5;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const res = await request.get(`${baseURL}/api/bootstrap`);
@@ -172,10 +248,10 @@ async function fetchBootstrapToken(request: APIRequestContext, baseURL: string):
     }
     expect(res.ok(), `bootstrap failed: ${res.status()}`).toBeTruthy();
     const body = await res.json();
-    expect(body.mode).toBe('local');
-    return body.token;
+    expect(['team', 'standalone']).toContain(body.mode);
+    return body.mode;
   }
-  throw new Error('fetchBootstrapToken: exhausted retries (429 rate limit)');
+  throw new Error('fetchBootstrapMode: exhausted retries (429 rate limit)');
 }
 
 /* ------------------------------------------------------------------ */
@@ -195,8 +271,9 @@ type Fixtures = {
 
 export const test = base.extend<Fixtures>({
   authToken: async ({ request, baseURL }, use) => {
-    const token = await fetchBootstrapToken(request, baseURL!);
-    await use(token);
+    await fetchBootstrapMode(request, baseURL!);
+    const auth = await getAdminAuth(request, baseURL!);
+    await use(auth.token);
   },
 
   api: async ({ request, baseURL, authToken }, use) => {
@@ -204,12 +281,11 @@ export const test = base.extend<Fixtures>({
     await use(helper);
   },
 
-  authedPage: async ({ page, baseURL: _baseURL, authToken: _authToken }, use) => {
-    // Navigate to app — the app fetches /api/bootstrap on its own
-    // We just need to wait for it to finish loading
+  authedPage: async ({ page, baseURL }, use) => {
+    await addAdminCookies(page.context(), page.request, baseURL!);
     await page.goto('/');
-    // Wait for the app shell to be ready (sidebar should appear)
     await page.waitForLoadState('networkidle');
+    await waitForSidebar(page);
     await use(page);
   },
 

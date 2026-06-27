@@ -75,7 +75,7 @@ export function SourcePanel() {
     <div className="flex h-full flex-col" data-testid="viewer-source-panel">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <Code className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <Code className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-xs font-medium">{activeSource.file}</span>
         {activeSource.exportName && (
           <Badge variant="outline" className="shrink-0 text-[10px]">
@@ -83,7 +83,7 @@ export function SourcePanel() {
           </Badge>
         )}
         {activeSource.startLine && (
-          <span className="shrink-0 text-[10px] text-muted-foreground">
+          <span className="text-muted-foreground shrink-0 text-[10px]">
             L{activeSource.startLine}
             {activeSource.endLine ? `–${activeSource.endLine}` : ''}
           </span>
@@ -104,13 +104,13 @@ export function SourcePanel() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {sourceLoading && (
-          <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center gap-2 text-xs">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading source...
           </div>
         )}
         {sourceError && (
-          <div className="p-3 text-xs text-destructive" data-testid="viewer-source-error">
+          <div className="text-destructive p-3 text-xs" data-testid="viewer-source-error">
             {sourceError}
           </div>
         )}

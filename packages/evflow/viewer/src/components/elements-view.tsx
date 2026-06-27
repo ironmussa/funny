@@ -74,7 +74,7 @@ export function ElementsView() {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-6 p-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {elements.length} element{elements.length !== 1 ? 's' : ''}
         </p>
 
@@ -95,7 +95,7 @@ export function ElementsView() {
 
           return (
             <div key={kind}>
-              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h3 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
                 <span>{EVFLOW_ICONS[kind]}</span>
                 <span>{KIND_LABELS[kind]}s</span>
                 <span className="text-muted-foreground/50">({items.length})</span>
@@ -119,12 +119,12 @@ export function ElementsView() {
                   >
                     <span className="text-sm font-medium">{name}</span>
                     {el.description && (
-                      <span className="mt-0.5 w-full truncate text-left text-xs text-muted-foreground">
+                      <span className="text-muted-foreground mt-0.5 w-full truncate text-left text-xs">
                         {el.description}
                       </span>
                     )}
                     {'fields' in el && el.fields && (
-                      <span className="mt-0.5 text-xs text-muted-foreground/60">
+                      <span className="text-muted-foreground/60 mt-0.5 text-xs">
                         {Object.keys(el.fields as Record<string, string>).length} fields
                       </span>
                     )}

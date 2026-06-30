@@ -482,6 +482,103 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(userMsgs).toHaveLength(1);
   });
 
+  test('handleWSResult orphan flush deduplicates when assistant scaffold follows user msg', () => {
+    // Regression: queued follow-up dequeue can insert the real user message in
+    // DB, then a tool-call/assistant placeholder can land before queue_update
+    // reaches the client. If the run fails before visible text, result flushing
+    // must not append a synthetic duplicate after that placeholder.
+    const userContent = 'Also PAR-007 and PAR-008';
+    const state = makeState({
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [
+            { id: 'm-user', role: 'user', content: userContent, threadId: THREAD_ID },
+            {
+              id: 'm-asst',
+              role: 'assistant',
+              content: '',
+              threadId: THREAD_ID,
+              toolCalls: [
+                {
+                  id: 'tc-1',
+                  messageId: 'm-asst',
+                  name: 'Bash',
+                  input: '{}',
+                  timestamp: '2026-01-01T00:00:03.000Z',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    handleWSResult(get, set, THREAD_ID, { status: 'failed', cost: 0, duration: 1 });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userMsgs = msgs.filter((m: any) => m.role === 'user' && m.content === userContent);
+    expect(userMsgs).toHaveLength(1);
+  });
+
+  test('handleWSQueueUpdate injects before trailing assistant scaffold when it arrives late', () => {
+    // startAgent can create the assistant/tool-call scaffold before the
+    // queue_update event carrying dequeuedMessage reaches the client. The
+    // follow-up should become visible immediately and stay ordered before
+    // the new turn's scaffold.
+    const userContent = 'Re-run the failing check';
+    const state = makeState({
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [
+            {
+              id: 'm-asst',
+              role: 'assistant',
+              content: '',
+              threadId: THREAD_ID,
+              toolCalls: [
+                {
+                  id: 'tc-1',
+                  messageId: 'm-asst',
+                  name: 'Bash',
+                  input: '{}',
+                  timestamp: '2026-01-01T00:00:03.000Z',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSQueueUpdate(get, set, THREAD_ID, {
+      threadId: THREAD_ID,
+      queuedCount: 0,
+      dequeuedMessage: userContent,
+    });
+
+    const msgs = state.threadDataById[THREAD_ID].messages;
+    const userIdx = msgs.findIndex((m: any) => m.role === 'user' && m.content === userContent);
+    const toolIdx = msgs.findIndex((m: any) => m.toolCalls?.some((tc: any) => tc.id === 'tc-1'));
+    expect(userIdx).toBe(0);
+    expect(toolIdx).toBe(1);
+
+    handleWSResult(get, set, THREAD_ID, { status: 'failed', cost: 0, duration: 1 });
+    const userMsgs = state.threadDataById[THREAD_ID].messages.filter(
+      (m: any) => m.role === 'user' && m.content === userContent,
+    );
+    expect(userMsgs).toHaveLength(1);
+  });
+
   test('handleWSResult flushes orphaned dequeued message into thread payload', () => {
     // Regression: bug 3a — when a queue:update arrives with a dequeuedMessage
     // but the next agent:message never lands (agent failed immediately after

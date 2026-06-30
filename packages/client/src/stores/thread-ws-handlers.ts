@@ -158,6 +158,10 @@ interface DequeuedMessageBuffer {
 const pendingDequeuedMessages = new Map<string, DequeuedMessageBuffer>();
 const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
 
+function isAssistantScaffold(message: { role: string; content: string; toolCalls?: unknown[] }) {
+  return message.role === 'assistant' && (!message.content || (message.toolCalls?.length ?? 0) > 0);
+}
+
 /**
  * True when the user-message run immediately before `insertionIndex` already
  * contains the buffer entry. This covers both normal appends and the case where
@@ -175,6 +179,60 @@ function userRunBeforeHasMessage(
     if (m.content === content) return true;
   }
   return false;
+}
+
+/**
+ * True when the dequeued user card is already represented in the visible turn.
+ * Unlike `userRunBeforeHasMessage`, this also tolerates trailing assistant
+ * scaffolding (empty assistant rows / tool-call parents). Those rows are often
+ * inserted before the queued-message buffer arrives, and render-items may hide
+ * the empty assistant row, making a later synthetic append look like two user
+ * follow-ups in a row.
+ */
+function dequeuedUserAlreadyShownInTurn(
+  messages: Array<{ role: string; content: string; toolCalls?: unknown[] }>,
+  content: string,
+  insertionIndex: number = messages.length,
+): boolean {
+  if (userRunBeforeHasMessage(messages, content, insertionIndex)) return true;
+
+  let beforeAgentScaffold = insertionIndex;
+  while (beforeAgentScaffold > 0 && isAssistantScaffold(messages[beforeAgentScaffold - 1])) {
+    beforeAgentScaffold -= 1;
+  }
+  if (beforeAgentScaffold === insertionIndex) return false;
+  return userRunBeforeHasMessage(messages, content, beforeAgentScaffold);
+}
+
+function trailingAssistantScaffoldStart(
+  messages: Array<{ role: string; content: string; toolCalls?: unknown[] }>,
+): number {
+  let index = messages.length;
+  while (index > 0 && isAssistantScaffold(messages[index - 1])) {
+    index -= 1;
+  }
+  return index;
+}
+
+function makeDequeuedUserMessage(
+  threadId: string,
+  dequeuedMsg: DequeuedMessageBuffer,
+): {
+  id: string;
+  threadId: string;
+  role: MessageRole;
+  content: string;
+  images?: ImageAttachment[];
+  timestamp: string;
+} {
+  return {
+    id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
+    threadId,
+    role: 'user' as MessageRole,
+    content: dequeuedMsg.content,
+    images: dequeuedMsg.images,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 /**
@@ -207,17 +265,8 @@ function takeDequeuedUserMessages(
   const dequeuedMsg = pendingDequeuedMessages.get(threadId);
   if (!dequeuedMsg) return [];
   pendingDequeuedMessages.delete(threadId);
-  if (userRunBeforeHasMessage(messages, dequeuedMsg.content, insertionIndex)) return [];
-  return [
-    {
-      id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
-      threadId,
-      role: 'user' as MessageRole,
-      content: dequeuedMsg.content,
-      images: dequeuedMsg.images,
-      timestamp: new Date().toISOString(),
-    },
-  ];
+  if (dequeuedUserAlreadyShownInTurn(messages, dequeuedMsg.content, insertionIndex)) return [];
+  return [makeDequeuedUserMessage(threadId, dequeuedMsg)];
 }
 
 // ── Init ────────────────────────────────────────────────────────
@@ -747,20 +796,13 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     if (isHydrated(get(), threadId)) {
       set((s) =>
         mutations.applyThreadDataPatch(s, threadId, (t) => {
-          if (userRunBeforeHasMessage(t.messages, orphaned.content)) return t;
+          if (dequeuedUserAlreadyShownInTurn(t.messages, orphaned.content)) return t;
+          const insertionIndex = trailingAssistantScaffoldStart(t.messages);
+          const messages = t.messages.slice();
+          messages.splice(insertionIndex, 0, makeDequeuedUserMessage(threadId, orphaned));
           return {
             ...t,
-            messages: [
-              ...t.messages,
-              {
-                id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
-                threadId,
-                role: 'user' as MessageRole,
-                content: orphaned.content,
-                images: orphaned.images,
-                timestamp: new Date().toISOString(),
-              },
-            ],
+            messages,
           };
         }),
       );
@@ -827,11 +869,14 @@ export function handleWSQueueUpdate(
   // Buffer dequeued message — will be injected on next agent:message to ensure
   // it appears after the previous agent's response (correct visual ordering).
   // Works for any thread, regardless of which surface holds it.
-  if (data.dequeuedMessage) {
-    pendingDequeuedMessages.set(threadId, {
-      content: data.dequeuedMessage,
-      images: data.dequeuedImages,
-    });
+  const dequeuedMsg = data.dequeuedMessage
+    ? {
+        content: data.dequeuedMessage,
+        images: data.dequeuedImages,
+      }
+    : null;
+  if (dequeuedMsg) {
+    pendingDequeuedMessages.set(threadId, dequeuedMsg);
   }
 
   set((state) => {
@@ -862,11 +907,26 @@ export function handleWSQueueUpdate(
       queuedCountByThread: updatedMap,
       queuedMessagesByThread: updatedQueueMap,
       queuedNextMessageByThread: updatedMessageMap,
-      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
-        ...t,
-        queuedCount: data.queuedCount,
-        queuedNextMessage: data.nextMessage,
-      })),
+      ...mutations.applyThreadDataPatch(state, threadId, (t) => {
+        const nextThread = {
+          ...t,
+          queuedCount: data.queuedCount,
+          queuedNextMessage: data.nextMessage,
+        };
+        if (!dequeuedMsg) return nextThread;
+        if (dequeuedUserAlreadyShownInTurn(t.messages, dequeuedMsg.content)) {
+          pendingDequeuedMessages.delete(threadId);
+          return nextThread;
+        }
+        const insertionIndex = trailingAssistantScaffoldStart(t.messages);
+        if (insertionIndex < t.messages.length) {
+          pendingDequeuedMessages.delete(threadId);
+          const messages = t.messages.slice();
+          messages.splice(insertionIndex, 0, makeDequeuedUserMessage(threadId, dequeuedMsg));
+          return { ...nextThread, messages };
+        }
+        return nextThread;
+      }),
     };
   });
 }

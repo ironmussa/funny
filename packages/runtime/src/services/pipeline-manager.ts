@@ -316,7 +316,7 @@ export async function startPipelineRun(opts: {
   });
 
   // Load and compile the YAML-defined code-review pipeline. The loader
-  // honors `<repoRoot>/.funny/pipelines/code-review.yaml` overrides when
+  // honors `<repoRoot>/.funny/workflows/code-review.yaml` overrides when
   // present, so users can customize the prompt/loop without recompiling
   // funny.
   const codeReview = await getCodeReviewPipeline(cwd, reviewer, corrector);

@@ -9,7 +9,8 @@
  *   - Loops, retries, and approvals work as documented
  */
 
-import { parsePipelineYaml, runPipeline, nullReporter } from '@funny/pipelines';
+import { runPipeline, nullReporter } from '@funny/pipelines';
+import { parseWorkflowYaml } from '@funny/workflows';
 import { describe, expect, test, vi } from 'vitest';
 
 import type { ActionProvider } from '../../pipelines/types.js';
@@ -33,9 +34,9 @@ function mockProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
 }
 
 function compile(yaml: string) {
-  const parsed = parsePipelineYaml(yaml);
+  const parsed = parseWorkflowYaml(yaml);
   if (!parsed.ok) throw new Error(parsed.error.message);
-  return compileYamlPipeline(parsed.pipeline);
+  return compileYamlPipeline(parsed.workflow);
 }
 
 function ctxOf(
@@ -334,13 +335,13 @@ nodes:
 
     const result = await runPipeline(
       pipeline,
-      ctxOf(provider, { threadId: 't-42', nextStage: 'review', actor: 'orchestrator' }),
+      ctxOf(provider, { threadId: 't-42', nextStage: 'review', actor: 'scheduler' }),
     );
     expect(result.outcome).toBe('completed');
     expect(provider.setStage).toHaveBeenCalledWith({
       threadId: 't-42',
       value: 'review',
-      reason: 'advanced by orchestrator',
+      reason: 'advanced by scheduler',
     });
   });
 

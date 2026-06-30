@@ -83,7 +83,7 @@ export function createTestDb() {
       agent_profile_name TEXT,
       agent_profile_provider TEXT,
       file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
-      orchestrator_managed INTEGER NOT NULL DEFAULT 0,
+      scheduler_managed INTEGER NOT NULL DEFAULT 0,
       is_scratch INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL DEFAULT '',
@@ -303,7 +303,7 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
-    CREATE TABLE IF NOT EXISTS orchestrator_runs (
+    CREATE TABLE IF NOT EXISTS scheduler_runs (
       thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
       pipeline_run_id TEXT,
       attempt INTEGER NOT NULL DEFAULT 0,
@@ -375,7 +375,7 @@ export function seedThread(
     title: overrides.title ?? 'Test Thread',
     mode: overrides.mode ?? 'local',
     status: overrides.status ?? 'pending',
-    orchestratorManaged: overrides.orchestratorManaged ?? 1,
+    schedulerManaged: overrides.schedulerManaged ?? 1,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     updatedAt: overrides.updatedAt ?? new Date().toISOString(),
     ...overrides,
@@ -595,7 +595,7 @@ export function seedInviteLink(
   return link;
 }
 
-export function seedOrchestratorRun(
+export function seedSchedulerRun(
   db: ReturnType<typeof createTestDb>['db'],
   overrides: {
     threadId?: string;
@@ -618,7 +618,7 @@ export function seedOrchestratorRun(
     updatedAtMs: now,
     ...overrides,
   };
-  db.insert(schema.orchestratorRuns).values(row).run();
+  db.insert(schema.schedulerRuns).values(row).run();
   return row;
 }
 

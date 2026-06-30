@@ -1103,13 +1103,13 @@ const migrations: Migration[] = [
     },
   },
   {
-    // Orchestrator state: tracks which threads have been
+    // Scheduler state: tracks which threads have been
     // claimed for dispatch, attempt counts for retry/backoff, last
     // event timestamp for stall detection, and aggregated token usage.
-    name: '048_orchestrator_runs',
+    name: '048_scheduler_runs',
     async up() {
       await ctx().exec(sql`
-        CREATE TABLE IF NOT EXISTS orchestrator_runs (
+        CREATE TABLE IF NOT EXISTS scheduler_runs (
           thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
           pipeline_run_id TEXT,
           attempt INTEGER NOT NULL DEFAULT 0,
@@ -1123,12 +1123,12 @@ const migrations: Migration[] = [
         )
       `);
       await ctx().exec(sql`
-        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_user
-        ON orchestrator_runs (user_id)
+        CREATE INDEX IF NOT EXISTS idx_scheduler_runs_user
+        ON scheduler_runs (user_id)
       `);
       await ctx().exec(sql`
-        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_retry
-        ON orchestrator_runs (next_retry_at_ms)
+        CREATE INDEX IF NOT EXISTS idx_scheduler_runs_retry
+        ON scheduler_runs (next_retry_at_ms)
       `);
     },
   },
@@ -1159,12 +1159,12 @@ const migrations: Migration[] = [
     },
   },
   {
-    // Per-thread opt-in flag. When 1, the standalone orchestrator may claim
+    // Per-thread opt-in flag. When 1, the standalone scheduler may claim
     // and dispatch this thread. When 0 (default), threads remain manual —
-    // the orchestrator ignores them in `listEligibleCandidates`.
-    name: '051_threads_orchestrator_managed',
+    // the scheduler ignores them in `listEligibleCandidates`.
+    name: '051_threads_scheduler_managed',
     async up() {
-      await ctx().addColumn('threads', 'orchestrator_managed', 'INTEGER NOT NULL', '0');
+      await ctx().addColumn('threads', 'scheduler_managed', 'INTEGER NOT NULL', '0');
     },
   },
   {
@@ -1339,7 +1339,7 @@ const migrations: Migration[] = [
     // Epoch-ms columns were created as INTEGER (int4, max ~2.1e9) but store
     // millisecond timestamps (~1.7e12), so every insert/compare on Postgres
     // failed with `value "…" is out of range for type integer` — breaking the
-    // watcher scanner and the orchestrator run state. Widen them to bigint on
+    // watcher scanner and the scheduler run state. Widen them to bigint on
     // Postgres only; SQLite's INTEGER is already 8 bytes.
     name: '062_epoch_ms_bigint_pg',
     async up() {
@@ -1347,10 +1347,10 @@ const migrations: Migration[] = [
       const widen: Array<[string, string]> = [
         ['watchers', 'next_wake_at'],
         ['watchers', 'deadline'],
-        ['orchestrator_runs', 'next_retry_at_ms'],
-        ['orchestrator_runs', 'last_event_at_ms'],
-        ['orchestrator_runs', 'claimed_at_ms'],
-        ['orchestrator_runs', 'updated_at_ms'],
+        ['scheduler_runs', 'next_retry_at_ms'],
+        ['scheduler_runs', 'last_event_at_ms'],
+        ['scheduler_runs', 'claimed_at_ms'],
+        ['scheduler_runs', 'updated_at_ms'],
       ];
       for (const [table, column] of widen) {
         await ctx().exec(sql.raw(`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE bigint`));

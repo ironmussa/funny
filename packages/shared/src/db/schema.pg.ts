@@ -103,7 +103,7 @@ export const threads = pgTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
-  orchestratorManaged: integer('orchestrator_managed').notNull().default(0),
+  schedulerManaged: integer('scheduler_managed').notNull().default(0),
   stage: text('stage').notNull().default('backlog'),
   model: text('model').notNull().default(DEFAULT_MODEL),
   initialPrompt: text('initial_prompt'),
@@ -404,10 +404,10 @@ export const pipelineRuns = pgTable('pipeline_runs', {
 });
 
 /**
- * Orchestrator-managed run state.
+ * Scheduler-managed run state.
  * See sqlite schema for column docs.
  */
-export const orchestratorRuns = pgTable('orchestrator_runs', {
+export const schedulerRuns = pgTable('scheduler_runs', {
   threadId: text('thread_id')
     .primaryKey()
     .references(() => threads.id, { onDelete: 'cascade' }),

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useProjectStore } from '@/stores/project-store';
 import { getUrlThreadId, useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 function wrapperFor(route: string) {
   return ({ children }: { children: ReactNode }) => (
@@ -58,5 +59,28 @@ describe('useRouteSync — URL thread id mirror', () => {
     expect(getUrlThreadId()).toBeNull();
     await waitFor(() => expect(selectThread).toHaveBeenCalledWith(null));
     expect(selectProject).toHaveBeenCalledWith(null);
+  });
+
+  test('opens project workflow routes without leaving settings active', async () => {
+    const selectProject = vi.fn();
+    useProjectStore.setState({
+      initialized: true,
+      selectedProjectId: null,
+      selectProject,
+    } as any);
+    useUIStore.setState({
+      settingsOpen: true,
+      activeSettingsPage: 'workflows',
+      analyticsOpen: true,
+    });
+
+    renderHook(() => useRouteSync(), { wrapper: wrapperFor('/projects/p1/workflows') });
+
+    await waitFor(() => {
+      expect(useUIStore.getState().settingsOpen).toBe(false);
+      expect(useUIStore.getState().activeSettingsPage).toBeNull();
+      expect(useUIStore.getState().analyticsOpen).toBe(false);
+    });
+    expect(selectProject).toHaveBeenCalledWith('p1');
   });
 });

@@ -1,7 +1,7 @@
 /**
  * End-to-end tests for the built-in YAML pipelines.
  *
- * Loads the actual YAML files from `pipelines/defaults/`, compiles them,
+ * Loads the actual YAML files from `/workflows/defaults/`, compiles them,
  * and runs them with a mocked ActionProvider. This is the regression
  * suite that replaces the per-pipeline TS test files (commit-pipeline,
  * code-review-pipeline, pre-push-pipeline, code-quality-pipeline) which

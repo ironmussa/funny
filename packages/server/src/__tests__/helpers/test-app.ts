@@ -88,14 +88,14 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { shareRoutes } = await import('../../routes/thread-shares.js');
   const { settingsRoutes } = await import('../../routes/settings.js');
   const { profileRoutes } = await import('../../routes/profile.js');
-  const { orchestratorRoutes } = await import('../../routes/orchestrator.js');
+  const { schedulerRoutes } = await import('../../routes/scheduler.js');
   const { teamSettingsRoutes } = await import('../../routes/team-settings.js');
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
   const { analyticsRoutes } = await import('../../routes/analytics.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
   const { automationRoutes } = await import('../../routes/automations.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
-  const { orchestratorSystemRoutes } = await import('../../routes/orchestrator-system.js');
+  const { schedulerSystemRoutes } = await import('../../routes/scheduler-system.js');
   const { userRoutes } = await import('../../routes/users.js');
 
   app.route('/api/projects', projectRoutes);
@@ -105,8 +105,8 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/threads', threadRoutes);
   app.route('/api/settings', settingsRoutes);
   app.route('/api/profile', profileRoutes);
-  app.route('/api/orchestrator', orchestratorRoutes);
-  app.route('/api/orchestrator/system', orchestratorSystemRoutes);
+  app.route('/api/scheduler', schedulerRoutes);
+  app.route('/api/scheduler/system', schedulerSystemRoutes);
   app.route('/api/team-settings', teamSettingsRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
   app.route('/api/analytics', analyticsRoutes);
@@ -142,7 +142,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
       'project_members',
       'projects',
       'runners',
-      'orchestrator_runs',
+      'scheduler_runs',
       'thread_dependencies',
       'user_profiles',
       'instance_settings',

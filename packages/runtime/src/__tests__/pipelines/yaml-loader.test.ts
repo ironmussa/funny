@@ -1,9 +1,9 @@
 /**
  * YAML loader integration tests.
  *
- * Validates that built-in pipelines load + compile, that user overrides
- * win, that Archon-compat dir is read when enabled, and that malformed
- * user YAMLs surface as warnings (not exceptions).
+ * Validates that built-in workflows load + compile, that project overrides
+ * win from `.funny/workflows`, that legacy `.funny/pipelines` files are ignored,
+ * and that malformed user YAMLs surface as warnings (not exceptions).
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -44,8 +44,8 @@ describe('loadPipelines', () => {
       'code-review',
       'commit',
       'fusion',
-      'orchestrator-thread',
       'pre-push',
+      'scheduler-thread',
     ]);
 
     for (const p of result.pipelines.values()) {
@@ -55,7 +55,7 @@ describe('loadPipelines', () => {
   });
 
   test('user override wins over built-in with the same name', async () => {
-    const userDir = path.join(workDir, '.funny', 'pipelines');
+    const userDir = path.join(workDir, '.funny', 'workflows');
     await mkdir(userDir, { recursive: true });
     await writeFile(
       path.join(userDir, 'commit.yaml'),
@@ -82,74 +82,29 @@ nodes:
     expect(commit?.parsed.description).toBe('User-overridden commit');
   });
 
-  test('archonInterop=false ignores .archon/workflows/', async () => {
-    const archonDir = path.join(workDir, '.archon', 'workflows');
-    await mkdir(archonDir, { recursive: true });
+  test('legacy .funny/pipelines files are ignored', async () => {
+    const legacyDir = path.join(workDir, '.funny', 'pipelines');
+    await mkdir(legacyDir, { recursive: true });
     await writeFile(
-      path.join(archonDir, 'commit.yaml'),
+      path.join(legacyDir, 'commit.yaml'),
       `
 name: commit
-description: Archon override
+description: Legacy override
 nodes:
   - id: noop
     notify:
-      message: "archon version"
+      message: "legacy version"
       `,
       'utf8',
     );
 
     const result = await loadPipelines({ repoRoot: workDir, resolveAgent });
     expect(result.pipelines.get('commit')?.source).toBe('built-in');
-  });
-
-  test('archonInterop=true reads .archon/workflows/, user still wins', async () => {
-    const archonDir = path.join(workDir, '.archon', 'workflows');
-    await mkdir(archonDir, { recursive: true });
-    await writeFile(
-      path.join(archonDir, 'extra.yaml'),
-      `
-name: extra
-description: From archon
-nodes:
-  - id: noop
-    notify: { message: "from archon" }
-      `,
-      'utf8',
-    );
-
-    const result = await loadPipelines({
-      repoRoot: workDir,
-      resolveAgent,
-      archonInterop: true,
-    });
-
-    expect(result.pipelines.get('extra')?.source).toBe('archon');
-
-    // User wins when both layers define the same name.
-    const userDir = path.join(workDir, '.funny', 'pipelines');
-    await mkdir(userDir, { recursive: true });
-    await writeFile(
-      path.join(userDir, 'extra.yaml'),
-      `
-name: extra
-description: From user
-nodes:
-  - id: noop
-    notify: { message: "from user" }
-      `,
-      'utf8',
-    );
-
-    const result2 = await loadPipelines({
-      repoRoot: workDir,
-      resolveAgent,
-      archonInterop: true,
-    });
-    expect(result2.pipelines.get('extra')?.source).toBe('user');
+    expect(result.pipelines.get('commit')?.parsed.description).not.toBe('Legacy override');
   });
 
   test('malformed user YAML produces a warning, not an exception', async () => {
-    const userDir = path.join(workDir, '.funny', 'pipelines');
+    const userDir = path.join(workDir, '.funny', 'workflows');
     await mkdir(userDir, { recursive: true });
     await writeFile(path.join(userDir, 'broken.yaml'), 'not: [valid yaml\nbroken', 'utf8');
 

@@ -1,7 +1,7 @@
 /**
  * YAML → PipelineDefinition compiler.
  *
- * Takes a `ParsedPipeline` (validated YAML from `@funny/pipelines/yaml`)
+ * Takes a `ParsedWorkflow` (validated YAML from `@funny/workflows`)
  * and produces a `PipelineDefinition` runnable by the existing engine.
  *
  * Phase 1 scope:
@@ -30,13 +30,12 @@ import {
   runPipeline,
   type CompiledPredicate,
   type NodeRetryConfig,
-  type ParsedNode,
-  type ParsedPipeline,
   type PipelineDefinition,
   type PipelineNode,
   type TemplateScope,
 } from '@funny/pipelines';
 import type { AgentDefinition } from '@funny/shared';
+import type { ParsedNode, ParsedWorkflow } from '@funny/workflows';
 
 import { approvalNode } from './approval.js';
 import type { PipelineContext } from './types.js';
@@ -108,7 +107,7 @@ export interface CompileOptions {
 // ── Public compile() ────────────────────────────────────────
 
 export function compileYamlPipeline(
-  parsed: ParsedPipeline,
+  parsed: ParsedWorkflow,
   options: CompileOptions = {},
 ): PipelineDefinition<YamlPipelineContext> {
   const ordered = topologicalSort(parsed);
@@ -154,7 +153,7 @@ export function compileYamlPipeline(
 
 // ── Topological sort ────────────────────────────────────────
 
-function topologicalSort(parsed: ParsedPipeline): ParsedNode[] {
+function topologicalSort(parsed: ParsedWorkflow): ParsedNode[] {
   const byId = new Map(parsed.nodes.map((n) => [n.id, n]));
   const sorted: ParsedNode[] = [];
   const visiting = new Set<string>();
@@ -186,7 +185,7 @@ function topologicalSort(parsed: ParsedPipeline): ParsedNode[] {
 
 function buildEngineNode(
   yamlNode: ParsedNode,
-  parsed: ParsedPipeline,
+  parsed: ParsedWorkflow,
   options: CompileOptions,
 ): PipelineNode<YamlPipelineContext> {
   // Approval has its own helper that already wires WS + capture_response.
@@ -261,7 +260,7 @@ function buildEngineNode(
 async function dispatch(
   yamlNode: ParsedNode,
   ctx: YamlPipelineContext,
-  parsed: ParsedPipeline,
+  parsed: ParsedWorkflow,
   options: CompileOptions,
 ): Promise<NodeOutput> {
   const scope = scopeOf(ctx);
@@ -410,7 +409,7 @@ async function dispatch(
 
 function compileRetry(
   yamlNode: ParsedNode,
-  parsed: ParsedPipeline,
+  parsed: ParsedWorkflow,
   options: CompileOptions,
 ): NodeRetryConfig<YamlPipelineContext> | undefined {
   if (!yamlNode.retry) return undefined;
@@ -544,7 +543,7 @@ function coercePermissionMode(
 
 function resolveAgentDefinition(
   opts: NonNullable<ParsedNode['spawn_agent']>,
-  parsed: ParsedPipeline,
+  parsed: ParsedWorkflow,
   options: CompileOptions,
 ): AgentDefinition | undefined {
   if (!opts.agent) return undefined;

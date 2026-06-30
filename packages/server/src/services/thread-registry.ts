@@ -114,7 +114,7 @@ export async function getRunnerForThread(
 
 /**
  * Whether `threadId` is owned by `userId`. Used to gate runner-reported side
- * effects (status updates, terminal/orchestrator events) so a runner can only
+ * effects (status updates, terminal/scheduler events) so a runner can only
  * act on threads belonging to its own owner — the relay target check alone
  * (`allowRunnerEvent`) does not validate the nested `event.threadId`.
  */

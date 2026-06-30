@@ -263,7 +263,7 @@ describe('Thread Routes (Integration)', () => {
 
       const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
         value: 'running',
-        reason: 'orchestrator-dispatch',
+        reason: 'scheduler-dispatch',
       });
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -767,14 +767,12 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
-  describe('POST /api/threads/:id/orchestrator/workflow-event', () => {
+  describe('POST /api/threads/:id/scheduler/workflow-event', () => {
     test('relays workflow events to the authenticated user', async () => {
-      const res = await t
-        .requestAs('user-1')
-        .post('/api/threads/t-any/orchestrator/workflow-event', {
-          event: 'workflow:step',
-          data: { step: 1 },
-        });
+      const res = await t.requestAs('user-1').post('/api/threads/t-any/scheduler/workflow-event', {
+        event: 'workflow:step',
+        data: { step: 1 },
+      });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true });
       expect(relayCalls).toHaveLength(1);
@@ -787,11 +785,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('rejects events that do not start with workflow:', async () => {
-      const res = await t
-        .requestAs('user-1')
-        .post('/api/threads/t-any/orchestrator/workflow-event', {
-          event: 'agent:result',
-        });
+      const res = await t.requestAs('user-1').post('/api/threads/t-any/scheduler/workflow-event', {
+        event: 'agent:result',
+      });
       expect(res.status).toBe(400);
       expect(relayCalls).toHaveLength(0);
     });

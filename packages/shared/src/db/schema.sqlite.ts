@@ -92,7 +92,7 @@ export const threads = sqliteTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
-  orchestratorManaged: integer('orchestrator_managed').notNull().default(0),
+  schedulerManaged: integer('scheduler_managed').notNull().default(0),
   stage: text('stage').notNull().default('backlog'),
   model: text('model').notNull().default(DEFAULT_MODEL),
   initialPrompt: text('initial_prompt'),
@@ -394,14 +394,14 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
 });
 
 /**
- * Orchestrator-managed run state.
+ * Scheduler-managed run state.
  *
  * One row per actively claimed thread. Removed (released) when the
  * underlying pipeline reaches a terminal outcome (completed, failed,
  * cancelled). `pipeline_run_id` ties back to `pipelineRuns.id` once
  * the dispatcher hands the thread to `@funny/pipelines`.
  */
-export const orchestratorRuns = sqliteTable('orchestrator_runs', {
+export const schedulerRuns = sqliteTable('scheduler_runs', {
   threadId: text('thread_id')
     .primaryKey()
     .references(() => threads.id, { onDelete: 'cascade' }),

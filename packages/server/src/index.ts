@@ -46,7 +46,7 @@ if (!process.env.RUNNER_AUTH_SECRET) {
 }
 
 // Security CR-1: the three shared secrets cross independent trust boundaries
-// (runner↔server, orchestrator↔server, external webhook→runner). Reusing one
+// (runner↔server, scheduler↔server, external webhook→runner). Reusing one
 // value across them means compromise of any single path leaks all three.
 // Refuse to boot when any two are set to the same value.
 {
@@ -55,7 +55,7 @@ if (!process.env.RUNNER_AUTH_SECRET) {
   const presentSecrets = {
     RUNNER_AUTH_SECRET: process.env.RUNNER_AUTH_SECRET,
     INGEST_WEBHOOK_SECRET: process.env.INGEST_WEBHOOK_SECRET,
-    ORCHESTRATOR_AUTH_SECRET: process.env.ORCHESTRATOR_AUTH_SECRET,
+    SCHEDULER_AUTH_SECRET: process.env.SCHEDULER_AUTH_SECRET,
   };
   const duplicates = findDuplicateSecretPairs(presentSecrets);
   if (duplicates.length > 0) {
@@ -121,7 +121,7 @@ app.use('*', cors({ origin: corsOrigins, credentials: true }));
 // origin WITHOUT preflight) unless the Origin matches the allowlist. JSON
 // requests are unaffected because they require CORS preflight and so are
 // already gated by the same allowlist via the `cors()` middleware above.
-// Runner/orchestrator/proxy traffic is JSON-only, so this is invisible to
+// Runner/scheduler/proxy traffic is JSON-only, so this is invisible to
 // them.
 app.use('*', csrf({ origin: corsOrigins }));
 app.use(
@@ -277,8 +277,8 @@ const { analyticsRoutes } = await import('./routes/analytics.js');
 const { pipelineRoutes } = await import('./routes/pipelines.js');
 const { designRoutes, designProjectRoutes } = await import('./routes/designs.js');
 const { agentTemplateRoutes } = await import('./routes/agent-templates.js');
-const { orchestratorRoutes } = await import('./routes/orchestrator.js');
-const { orchestratorSystemRoutes } = await import('./routes/orchestrator-system.js');
+const { schedulerRoutes } = await import('./routes/scheduler.js');
+const { schedulerSystemRoutes } = await import('./routes/scheduler-system.js');
 const { watcherRoutes } = await import('./routes/watchers.js');
 const { jobRoutes } = await import('./routes/jobs.js');
 const { userRoutes } = await import('./routes/users.js');
@@ -306,10 +306,10 @@ app.route('/api/projects', designProjectRoutes);
 app.route('/api/agent-templates', agentTemplateRoutes);
 app.route('/api/watchers', watcherRoutes);
 app.route('/api/jobs', jobRoutes);
-// System routes mounted FIRST so /api/orchestrator/system/* matches them
-// before the user-scoped /api/orchestrator/* tree.
-app.route('/api/orchestrator/system', orchestratorSystemRoutes);
-app.route('/api/orchestrator', orchestratorRoutes);
+// System routes mounted FIRST so /api/scheduler/system/* matches them
+// before the user-scoped /api/scheduler/* tree.
+app.route('/api/scheduler/system', schedulerSystemRoutes);
+app.route('/api/scheduler', schedulerRoutes);
 
 const { extensionRoutes } = await import('./routes/extensions.js');
 app.route('/api/extensions', extensionRoutes);
@@ -419,9 +419,9 @@ const HOST = resolveHost(process.env.HOST);
 const { createSocketIOServer, closeSocketIO } = await import('./services/socketio.js');
 const { engine: socketEngine } = createSocketIOServer(authInstance, corsOrigins);
 
-// Orchestrator runs as a separate process (`@funny/thread-orchestrator` binary)
-// that talks to the server via /api/orchestrator/system/*. The server no
-// longer hosts the brain in-process — see README "Running the orchestrator
+// Scheduler runs as a separate process (`@funny/thread-scheduler` binary)
+// that talks to the server via /api/scheduler/system/*. The server no
+// longer hosts the brain in-process — see README "Running the scheduler
 // standalone" for the migration path.
 
 const server = Bun.serve({

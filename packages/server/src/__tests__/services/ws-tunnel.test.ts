@@ -88,7 +88,7 @@ describe('tunnelFetch', () => {
 
     const res = await tunnelFetch('r1', {
       method: 'POST',
-      path: '/api/orchestrator/dispatch',
+      path: '/api/scheduler/dispatch',
       headers: { 'content-type': 'application/json' },
       body: '{"threadId":"t1"}',
     });

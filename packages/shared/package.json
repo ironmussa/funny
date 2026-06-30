@@ -22,6 +22,7 @@
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
     "./socket-events": "./src/socket-events.ts",
+    "./types/workflows": "./src/types/workflows.ts",
     "./auth/roles": "./src/auth/roles.ts",
     "./auth/authorizer": "./src/auth/authorizer.ts",
     "./auth/forwarded-identity": "./src/auth/forwarded-identity.ts",

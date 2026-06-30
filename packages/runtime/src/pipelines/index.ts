@@ -43,4 +43,4 @@ export type { RunnerOptions } from './runner.js';
 
 // Pipeline definitions are no longer exported from here — they live as
 // YAML files under `defaults/` and are loaded by `loadPipelines()`. To
-// override a built-in, place a file at `<repoRoot>/.funny/pipelines/<name>.yaml`.
+// override a built-in, place a file at `<repoRoot>/.funny/workflows/<name>.yaml`.

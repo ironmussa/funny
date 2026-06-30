@@ -23,8 +23,9 @@ function isAnyRouteActive(parsed: ParsedRoute): boolean {
     parsed.globalSearch ||
     parsed.inbox ||
     parsed.analytics ||
+    parsed.workflowsProjectId ||
     parsed.liveColumns ||
-    parsed.orchestrator ||
+    parsed.scheduler ||
     parsed.addProject ||
     parsed.externalClaudeSessionId,
   );

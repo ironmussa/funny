@@ -92,7 +92,7 @@ const threadWorkflowEventBodySchema = z
 
 const threadCreateBodySchema = z.record(z.string(), z.unknown());
 
-const orchestratorWorkflowEventBodySchema = z
+const schedulerWorkflowEventBodySchema = z
   .object({
     event: z.unknown().optional(),
     data: z.unknown().optional(),
@@ -539,7 +539,7 @@ threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
     'stage',
     'archived',
     'pinned',
-    'orchestratorManaged',
+    'schedulerManaged',
     'model',
     'mode',
     'branch',
@@ -557,8 +557,8 @@ threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
   // PostgreSQL integer columns need boolean → integer conversion
   if (typeof updates.pinned === 'boolean') updates.pinned = updates.pinned ? 1 : 0;
   if (typeof updates.archived === 'boolean') updates.archived = updates.archived ? 1 : 0;
-  if (typeof updates.orchestratorManaged === 'boolean') {
-    updates.orchestratorManaged = updates.orchestratorManaged ? 1 : 0;
+  if (typeof updates.schedulerManaged === 'boolean') {
+    updates.schedulerManaged = updates.schedulerManaged ? 1 : 0;
   }
 
   if (Object.keys(updates).length > 0) {
@@ -606,9 +606,9 @@ threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
 
 // ── Lifecycle endpoints used by the YAML pipeline DSL ───────
 //
-// `set_status` / `set_stage` actions in `.funny/pipelines/*.yaml`
+// `set_status` / `set_stage` actions in `.funny/workflows/*.yaml`
 // post to these routes (when the pipeline runs server-side, e.g. in
-// the orchestrator's tunnel adapter). Dedicated endpoints — instead
+// the scheduler's tunnel adapter). Dedicated endpoints — instead
 // of relying on PATCH /:id — give us strict enum validation and a
 // single emission point for the WS event that the kanban UI listens
 // on.
@@ -699,9 +699,9 @@ threadRoutes.patch('/:id/stage', requireThreadOwner, async (c) => {
   return c.json(updated);
 });
 
-// ── Workflow event fan-out (orchestrator-bound) ─────────────
+// ── Workflow event fan-out (scheduler-bound) ─────────────
 //
-// The (co-located) orchestrator binary posts here when a pipeline step
+// The (co-located) scheduler binary posts here when a pipeline step
 // emits a generic message — `notify` actions, log lines, etc. The server
 // persists the event as a thread:event in the DB and broadcasts the same
 // envelope shape used by emitWorkflowEvent in the runtime, so existing
@@ -864,17 +864,17 @@ threadRoutes.post('/idle', (c) => createThreadOnRunner(c, '/api/threads/idle'));
 
 // ── Agent operations (proxied to runner) ─────────────────────────
 
-// POST /api/threads/:id/orchestrator/workflow-event — orchestrator-bound
-// Generic event fan-out for the standalone orchestrator. Mirrors the
-// in-process pipeline-adapter's `notify()` path: the orchestrator pushes
+// POST /api/threads/:id/scheduler/workflow-event — scheduler-bound
+// Generic event fan-out for the standalone scheduler. Mirrors the
+// in-process pipeline-adapter's `notify()` path: the scheduler pushes
 // a workflow event here and the server relays it to the user's browser
 // clients via Socket.IO.
-threadRoutes.post('/:id/orchestrator/workflow-event', async (c) => {
+threadRoutes.post('/:id/scheduler/workflow-event', async (c) => {
   const threadId = c.req.param('id');
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
-  const parsed = await parseJsonBody(c, orchestratorWorkflowEventBodySchema);
+  const parsed = await parseJsonBody(c, schedulerWorkflowEventBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const body = parsed.value;
 

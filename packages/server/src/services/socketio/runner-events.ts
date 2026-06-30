@@ -57,7 +57,7 @@ export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
     // The relay check above validates `msg.userId` (the relay target) but NOT
     // the nested `event.threadId`. These DB writes / event-bus publishes are
     // keyed on that threadId, so a compromised runner could otherwise corrupt
-    // another tenant's thread status or inject spurious terminal/orchestrator
+    // another tenant's thread status or inject spurious terminal/scheduler
     // events. Gate every threadId side effect on ownership by the runner's
     // owner.
     const threadId = event?.threadId as string | undefined;
@@ -107,8 +107,8 @@ export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
         kind,
         error: errorText,
       });
-      const { getOrchestratorEventBuffer } = await import('../orchestrator-event-buffer.js');
-      getOrchestratorEventBuffer().publish({
+      const { getSchedulerEventBuffer } = await import('../scheduler-event-buffer.js');
+      getSchedulerEventBuffer().publish({
         kind: 'agent_terminal',
         threadId: event.threadId,
         payload: { kind, error: errorText },

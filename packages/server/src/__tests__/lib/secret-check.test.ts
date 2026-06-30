@@ -16,7 +16,7 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: 'a-1',
       INGEST_WEBHOOK_SECRET: 'b-2',
-      ORCHESTRATOR_AUTH_SECRET: 'c-3',
+      SCHEDULER_AUTH_SECRET: 'c-3',
     });
     expect(out).toEqual([]);
   });
@@ -25,7 +25,7 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: 'shared',
       INGEST_WEBHOOK_SECRET: 'shared',
-      ORCHESTRATOR_AUTH_SECRET: 'distinct',
+      SCHEDULER_AUTH_SECRET: 'distinct',
     });
     expect(out).toEqual([['RUNNER_AUTH_SECRET', 'INGEST_WEBHOOK_SECRET']]);
   });
@@ -34,24 +34,24 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: 'same',
       INGEST_WEBHOOK_SECRET: 'same',
-      ORCHESTRATOR_AUTH_SECRET: 'same',
+      SCHEDULER_AUTH_SECRET: 'same',
     });
     expect(out).toHaveLength(3);
   });
 
-  test('flags ORCHESTRATOR_AUTH_SECRET == INGEST_WEBHOOK_SECRET (no runner set)', () => {
+  test('flags SCHEDULER_AUTH_SECRET == INGEST_WEBHOOK_SECRET (no runner set)', () => {
     const out = findDuplicateSecretPairs({
       INGEST_WEBHOOK_SECRET: 'x',
-      ORCHESTRATOR_AUTH_SECRET: 'x',
+      SCHEDULER_AUTH_SECRET: 'x',
     });
-    expect(out).toEqual([['INGEST_WEBHOOK_SECRET', 'ORCHESTRATOR_AUTH_SECRET']]);
+    expect(out).toEqual([['INGEST_WEBHOOK_SECRET', 'SCHEDULER_AUTH_SECRET']]);
   });
 
   test('ignores undefined values entirely', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: undefined,
       INGEST_WEBHOOK_SECRET: undefined,
-      ORCHESTRATOR_AUTH_SECRET: 'only',
+      SCHEDULER_AUTH_SECRET: 'only',
     });
     expect(out).toEqual([]);
   });
@@ -60,7 +60,7 @@ describe('findDuplicateSecretPairs (security CR-1)', () => {
     const out = findDuplicateSecretPairs({
       RUNNER_AUTH_SECRET: '',
       INGEST_WEBHOOK_SECRET: '',
-      ORCHESTRATOR_AUTH_SECRET: '',
+      SCHEDULER_AUTH_SECRET: '',
     });
     expect(out).toEqual([]);
   });
@@ -87,9 +87,9 @@ describe('findWeakSecrets (security — forgeable forwarded-identity HMAC key)',
     const out = findWeakSecrets({
       RUNNER_AUTH_SECRET: 'short',
       INGEST_WEBHOOK_SECRET: strong,
-      ORCHESTRATOR_AUTH_SECRET: 'weak',
+      SCHEDULER_AUTH_SECRET: 'weak',
     });
-    expect(out).toEqual(['RUNNER_AUTH_SECRET', 'ORCHESTRATOR_AUTH_SECRET']);
+    expect(out).toEqual(['RUNNER_AUTH_SECRET', 'SCHEDULER_AUTH_SECRET']);
   });
 
   test('ignores undefined / empty (presence is enforced elsewhere)', () => {

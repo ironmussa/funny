@@ -23,6 +23,36 @@ export function useViewRouteSync(
   const location = useLocation();
 
   useEffect(() => {
+    if (!initialized || !parsed.workflowsProjectId) return;
+    const ui = useUIStore.getState();
+    if (
+      ui.settingsOpen ||
+      ui.generalSettingsOpen ||
+      ui.analyticsOpen ||
+      ui.liveColumnsOpen ||
+      ui.schedulerOpen ||
+      ui.testRunnerOpen ||
+      ui.automationInboxOpen ||
+      ui.addProjectOpen ||
+      ui.allThreadsProjectId
+    ) {
+      useUIStore.setState({
+        settingsOpen: false,
+        activeSettingsPage: null,
+        generalSettingsOpen: false,
+        activePreferencesPage: null,
+        analyticsOpen: false,
+        liveColumnsOpen: false,
+        schedulerOpen: false,
+        testRunnerOpen: false,
+        automationInboxOpen: false,
+        addProjectOpen: false,
+        allThreadsProjectId: null,
+      });
+    }
+  }, [initialized, parsed.workflowsProjectId]);
+
+  useEffect(() => {
     if (!initialized) return;
     const ui = useUIStore.getState();
     if (parsed.preferencesPage) {
@@ -91,13 +121,13 @@ export function useViewRouteSync(
   useEffect(() => {
     if (!initialized) return;
     const ui = useUIStore.getState();
-    if (parsed.orchestrator) {
-      if (!ui.orchestratorOpen) ui.setOrchestratorOpen(true);
+    if (parsed.scheduler) {
+      if (!ui.schedulerOpen) ui.setSchedulerOpen(true);
       if (ui.allThreadsProjectId) ui.closeAllThreads();
-    } else if (ui.orchestratorOpen) {
-      ui.setOrchestratorOpen(false);
+    } else if (ui.schedulerOpen) {
+      ui.setSchedulerOpen(false);
     }
-  }, [initialized, parsed.orchestrator]);
+  }, [initialized, parsed.scheduler]);
 
   useEffect(() => {
     if (!initialized) return;

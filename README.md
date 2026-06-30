@@ -222,70 +222,70 @@ To change the server, pass `--team` with the new URL.
 | `FUNNY_CENTRAL_DATA_DIR` | Central server data directory                 | `~/.funny-central` | funny-server |
 | `LOG_LEVEL`              | Log level (debug/info/warn/error)             | `info`             | funny-server |
 
-## Orchestrator
+## Scheduler
 
-The orchestrator is the scheduler that automatically claims eligible threads, dispatches them to the matching runner, and handles retries with exponential backoff. It runs in two loops:
+The scheduler is the standalone process that automatically claims eligible threads, dispatches them to the matching runner, and handles retries with exponential backoff. It runs in two loops:
 
 - **Poll loop** — picks eligible candidates from the DB, sorts them by priority, and dispatches up to the global / per-user concurrency caps.
 - **Reconcile loop** — reattaches in-flight runs after a restart, releases stalled claims, and clears retry entries that are past their backoff.
 
-It runs as **its own process** — the `@funny/thread-orchestrator` binary — and talks to the server over HTTP via `/api/orchestrator/system/*`. This decouples its release cycle from the server, lets it scale or restart independently, and keeps the trust boundary explicit.
+It runs as **its own process** — the `@funny/thread-scheduler` binary — and talks to the server over HTTP via `/api/scheduler/system/*`. This decouples its release cycle from the server, lets it scale or restart independently, and keeps the trust boundary explicit.
 
-> **Migrating from in-process mode?** Earlier versions hosted the orchestrator inside the server gated by `ORCHESTRATOR_ENABLED`. That mode is gone. The brain now must run as a separate process; `ORCHESTRATOR_ENABLED` on the server is no longer read.
+> **Migrating from in-process mode?** Earlier versions hosted the scheduler inside the server gated by `SCHEDULER_ENABLED`. That mode is gone. The brain now must run as a separate process; `SCHEDULER_ENABLED` on the server is no longer read.
 
 ### Setup
 
 1. **On the server**, pick a shared secret (`openssl rand -hex 32`) and set it before starting:
 
    ```bash
-   ORCHESTRATOR_AUTH_SECRET=<long-random-string>
+   SCHEDULER_AUTH_SECRET=<long-random-string>
    ```
 
    The server uses this to authenticate the brain's HTTP calls.
 
-2. **On the orchestrator process**, set the same secret plus the server URL and run the binary:
+2. **On the scheduler process**, set the same secret plus the server URL and run the binary:
 
    ```bash
    FUNNY_SERVER_URL=http://localhost:3001 \
-   ORCHESTRATOR_AUTH_SECRET=<same-secret> \
-   bun run --filter @funny/thread-orchestrator start
+   SCHEDULER_AUTH_SECRET=<same-secret> \
+   bun run --filter @funny/thread-scheduler start
    ```
 
    Or equivalently from the workspace root:
 
    ```bash
-   FUNNY_SERVER_URL=... ORCHESTRATOR_AUTH_SECRET=... bun packages/orchestrator/src/bin/orchestrator.ts
+   FUNNY_SERVER_URL=... SCHEDULER_AUTH_SECRET=... bun packages/scheduler/src/bin/scheduler.ts
    ```
 
 3. The brain auto-starts its loops and begins dispatching. Stop with `SIGTERM` / `SIGINT` for graceful shutdown.
 
-> **Trust boundary.** The shared secret grants the orchestrator cross-tenant access to thread/run state across **all users** — only run it inside a network you trust (same host, private VPC) and treat the secret like a root credential. The server validates the secret and rejects calls without it.
+> **Trust boundary.** The shared secret grants the scheduler cross-tenant access to thread/run state across **all users** — only run it inside a network you trust (same host, private VPC) and treat the secret like a root credential. The server validates the secret and rejects calls without it.
 
 ### Configuration
 
-All knobs are optional with sensible defaults — only override what you need. These all live on the orchestrator process (the server doesn't read them):
+All knobs are optional with sensible defaults — only override what you need. These all live on the scheduler process (the server doesn't read them):
 
 | Variable                      | Description                                                                                | Default        |
 | ----------------------------- | ------------------------------------------------------------------------------------------ | -------------- |
 | `FUNNY_SERVER_URL`            | **Required.** Base URL of the funny server.                                                | —              |
-| `ORCHESTRATOR_AUTH_SECRET`    | **Required.** Must match the server's value.                                               | —              |
-| `ORCHESTRATOR_POLL_MS`        | Poll loop interval (how often eligible threads are scanned).                               | `5000`         |
-| `ORCHESTRATOR_RECONCILE_MS`   | Reconcile loop interval (stall detection, orphan recovery, backoff sweep).                 | `30000`        |
-| `ORCHESTRATOR_MAX_GLOBAL`     | Maximum concurrent dispatched runs across all users.                                       | `16`           |
-| `ORCHESTRATOR_MAX_PER_USER`   | Maximum concurrent dispatched runs per user (tenant fairness cap).                         | `4`            |
-| `ORCHESTRATOR_MAX_BACKOFF_MS` | Cap for exponential retry backoff between failed attempts.                                 | `300000`       |
-| `ORCHESTRATOR_STALL_MS`       | Time without an event before a claimed run is considered stalled.                          | `1800000`      |
-| `ORCHESTRATOR_PIPELINE_NAME`  | Override the default pipeline name passed to the runner.                                   | runner default |
-| `ORCHESTRATOR_LONG_POLL_MS`   | Long-poll timeout for the events stream (the brain reacts to terminal runs via this loop). | `25000`        |
-| `ORCHESTRATOR_LOG_FORMAT`     | `text` (single-line, human-readable) or `json` (ndjson).                                   | `text`         |
-| `ORCHESTRATOR_LOG_LEVEL`      | `debug` / `info` / `warn` / `error`.                                                       | `info`         |
+| `SCHEDULER_AUTH_SECRET`    | **Required.** Must match the server's value.                                               | —              |
+| `SCHEDULER_POLL_MS`        | Poll loop interval (how often eligible threads are scanned).                               | `5000`         |
+| `SCHEDULER_RECONCILE_MS`   | Reconcile loop interval (stall detection, orphan recovery, backoff sweep).                 | `30000`        |
+| `SCHEDULER_MAX_GLOBAL`     | Maximum concurrent dispatched runs across all users.                                       | `16`           |
+| `SCHEDULER_MAX_PER_USER`   | Maximum concurrent dispatched runs per user (tenant fairness cap).                         | `4`            |
+| `SCHEDULER_MAX_BACKOFF_MS` | Cap for exponential retry backoff between failed attempts.                                 | `300000`       |
+| `SCHEDULER_STALL_MS`       | Time without an event before a claimed run is considered stalled.                          | `1800000`      |
+| `SCHEDULER_PIPELINE_NAME`  | Override the default pipeline name passed to the runner.                                   | runner default |
+| `SCHEDULER_LONG_POLL_MS`   | Long-poll timeout for the events stream (the brain reacts to terminal runs via this loop). | `25000`        |
+| `SCHEDULER_LOG_FORMAT`     | `text` (single-line, human-readable) or `json` (ndjson).                                   | `text`         |
+| `SCHEDULER_LOG_LEVEL`      | `debug` / `info` / `warn` / `error`.                                                       | `info`         |
 
 ### Operational notes
 
-- **Runner isolation is preserved.** A user's threads only ever dispatch to that user's own runner. If the user's runner is offline, the orchestrator skips the candidate (it does not fall back to another user's runner).
-- **Crash-safe.** In-flight dispatches are tracked in the `orchestrator_runs` table. After a restart the reconcile loop reattaches them so work isn't double-dispatched or silently dropped.
-- **Don't run two brains.** Only one orchestrator process should be active at a time — multiple brains will race to claim the same threads.
-- **Stop to debug.** Stopping the orchestrator process pauses new dispatches immediately; in-flight runs keep going on the runner side and are reconciled on next start.
+- **Runner isolation is preserved.** A user's threads only ever dispatch to that user's own runner. If the user's runner is offline, the scheduler skips the candidate (it does not fall back to another user's runner).
+- **Crash-safe.** In-flight dispatches are tracked in the `scheduler_runs` table. After a restart the reconcile loop reattaches them so work isn't double-dispatched or silently dropped.
+- **Don't run two brains.** Only one scheduler process should be active at a time — multiple brains will race to claim the same threads.
+- **Stop to debug.** Stopping the scheduler process pauses new dispatches immediately; in-flight runs keep going on the runner side and are reconciled on next start.
 
 ## Kanban Board
 

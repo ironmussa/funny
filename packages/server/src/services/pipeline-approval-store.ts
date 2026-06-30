@@ -2,7 +2,7 @@
  * Server-side pipeline approval store.
  *
  * Mirrors the runtime store but lives in the server process so that an
- * orchestrator binary calling server-native endpoints can long-poll on
+ * scheduler binary calling server-native endpoints can long-poll on
  * approvals. The `respond` endpoint resolves entries here when present
  * (and falls through to the runner for in-process pipelines).
  */

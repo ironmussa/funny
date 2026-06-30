@@ -25,7 +25,7 @@ export const pipelineRoutes = new Hono<ServerEnv>();
 // These MUST be declared before the `:id` routes below so that the literal
 // `approvals` segment is matched as a path, not as an `:id` parameter.
 //
-// `respond` is dual-tracked: server store first (orchestrator-originated),
+// `respond` is dual-tracked: server store first (scheduler-originated),
 // then proxied to the runner (in-process pipeline-adapter).
 
 pipelineRoutes.post(
@@ -90,11 +90,11 @@ pipelineRoutes.get(
   proxyToRunner,
 );
 
-// ── Orchestrator-bound endpoints ──────────────────────────────
+// ── Scheduler-bound endpoints ──────────────────────────────
 //
-// Called by the (co-located) orchestrator binary using the
-// X-Orchestrator-Auth header + X-Forwarded-User. Required for the
-// standalone orchestrator to push progress and request approvals
+// Called by the (co-located) scheduler binary using the
+// X-Scheduler-Auth header + X-Forwarded-User. Required for the
+// standalone scheduler to push progress and request approvals
 // without a database, as the in-process pipeline-adapter does today.
 
 const MAX_APPROVAL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -164,8 +164,8 @@ const updatePipelineBodySchema = z
   })
   .passthrough();
 
-// POST /api/pipelines/orchestrator/approvals/request — long-poll
-pipelineRoutes.post('/orchestrator/approvals/request', async (c) => {
+// POST /api/pipelines/scheduler/approvals/request — long-poll
+pipelineRoutes.post('/scheduler/approvals/request', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
@@ -261,10 +261,10 @@ pipelineRoutes.post('/orchestrator/approvals/request', async (c) => {
   return c.json({ ok: true, approvalId, decision: payload.decision, text: payload.text });
 });
 
-// POST /api/pipelines/orchestrator/progress — fan out step / completion events
+// POST /api/pipelines/scheduler/progress — fan out step / completion events
 //
 // `kind: "step"` emits pipeline:stage_update; `kind: "completed"` emits pipeline:run_completed.
-pipelineRoutes.post('/orchestrator/progress', async (c) => {
+pipelineRoutes.post('/scheduler/progress', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
 
@@ -316,7 +316,7 @@ pipelineRoutes.post('/orchestrator/progress', async (c) => {
     },
   });
 
-  log.debug('Orchestrator progress relayed', {
+  log.debug('Scheduler progress relayed', {
     namespace: 'pipeline-routes',
     userId,
     threadId,

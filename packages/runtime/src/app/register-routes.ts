@@ -10,14 +10,15 @@ import { gitRoutes } from '../routes/git.js';
 import { githubRoutes } from '../routes/github.js';
 import { jobRoutes } from '../routes/jobs.js';
 import mcpRoutes from '../routes/mcp.js';
-import { orchestratorRuntimeRoutes } from '../routes/orchestrator.js';
 import { pipelineRuntimeRoutes } from '../routes/pipelines.js';
 import pluginRoutes from '../routes/plugins.js';
 import { projectRoutes } from '../routes/projects.js';
+import { schedulerRuntimeRoutes } from '../routes/scheduler.js';
 import skillsRoutes from '../routes/skills.js';
 import { testRoutes } from '../routes/tests.js';
 import { textSearchRoutes } from '../routes/text-search.js';
 import { threadRoutes } from '../routes/threads.js';
+import { workflowRuntimeRoutes } from '../routes/workflows.js';
 import { worktreeRoutes } from '../routes/worktrees.js';
 import type { HonoEnv } from '../types/hono-env.js';
 
@@ -46,7 +47,8 @@ export function registerRoutes(app: Hono<HonoEnv>): void {
   app.route('/api/automations', automationRoutes);
   app.route('/api/jobs', jobRoutes);
   app.route('/api/pipelines', pipelineRuntimeRoutes);
-  app.route('/api/orchestrator', orchestratorRuntimeRoutes);
+  app.route('/api/scheduler', schedulerRuntimeRoutes);
+  app.route('/api/workflows', workflowRuntimeRoutes);
   app.route('/api/projects', designProjectRoutes);
   app.route('/api/browser-session', browserSessionRoutes);
   app.route('/api/search', textSearchRoutes);

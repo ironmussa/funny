@@ -6,7 +6,7 @@
  *
  * Files excluded from coverage (see bunfig.toml):
  *   - src/routes/designs.ts, agent-templates.ts
- *   - src/routes/pipelines.ts (orchestrator approval/progress pending)
+ *   - src/routes/pipelines.ts (scheduler approval/progress pending)
  */
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';

@@ -1,0 +1,89 @@
+# Built-in Fusion pipeline (Mixture-of-Agents).
+#
+# Sends the question to a PANEL of models in parallel, then a JUDGE node
+# synthesizes their answers into one. This is the classic Mixture-of-Agents
+# / "LLM council" shape, grounded in:
+#   - Mixture-of-Agents (Wang et al., 2024) — heterogeneous panel + aggregator
+#   - LLM-Blender (Jiang et al., 2023) — fuse (don't select), compare (don't score)
+#   - More Agents Is All You Need (Li et al., 2024) — parallel sampling helps
+#
+# The three proposers carry NO `depends_on`, so the DAG engine runs them
+# concurrently (one level). `synthesize` depends on all three, so it runs in
+# the next level once the panel finishes — wall-clock ≈ slowest proposer, not
+# the sum. See packages/pipelines/src/engine.ts (runDag).
+#
+# Customizing: copy this file to `<repo>/.funny/workflows/fusion.yaml` and
+# edit. The biggest quality lever is PANEL DIVERSITY — heterogeneous model
+# *families* beat three tiers of one family, because correlated errors don't
+# cancel. With other providers configured you can do, per node:
+#     spawn_agent: { provider: codex,  model: gpt-5.5,    prompt: '{{question}}' }
+#     spawn_agent: { provider: gemini, model: gemini-3-pro, prompt: '{{question}}' }
+# The default panel below uses Claude tiers so it works on a fresh install.
+
+name: fusion
+description: Mixture-of-Agents — query a panel of models in parallel, then synthesize
+
+inputs:
+  question: { type: string, required: true }
+
+nodes:
+  # ── Panel (level 0 — runs concurrently) ──────────────────────
+  # `on_error: continue` makes the panel fault-tolerant: a dead proposer
+  # becomes an empty output and the judge still proceeds with a quorum.
+  - id: proposer-a
+    on_error: continue
+    spawn_agent:
+      model: sonnet
+      prompt: '{{question}}'
+
+  - id: proposer-b
+    on_error: continue
+    spawn_agent:
+      model: opus
+      prompt: '{{question}}'
+
+  - id: proposer-c
+    on_error: continue
+    spawn_agent:
+      model: haiku
+      prompt: '{{question}}'
+
+  # ── Judge (level 1 — waits for the whole panel) ──────────────
+  # Answers are anonymized ("Respuesta 1/2/3") so the judge can't favor a
+  # model by name. The prompt asks it to COMPARE and FUSE, never to score or
+  # pick a single winner.
+  - id: synthesize
+    depends_on: [proposer-a, proposer-b, proposer-c]
+    spawn_agent:
+      model: opus
+      prompt: |
+        Eres un sintetizador experto en un consejo de modelos. Te paso las
+        respuestas de varios expertos a la misma pregunta del usuario.
+
+        Pregunta original:
+        {{question}}
+
+        --- Respuestas del panel (anónimas) ---
+        Respuesta 1:
+        {{proposer-a.output}}
+
+        Respuesta 2:
+        {{proposer-b.output}}
+
+        Respuesta 3:
+        {{proposer-c.output}}
+        --- fin del panel ---
+
+        Primero, analiza internamente (no lo muestres como lista final):
+          1. Consenso de alta confianza: en qué coinciden la mayoría.
+          2. Contradicciones críticas entre respuestas.
+          3. Aportes únicos presentes en una sola respuesta.
+          4. Puntos ciegos que ninguna cubrió.
+
+        Algunas respuestas pueden venir vacías (un experto falló); ignóralas.
+
+        Luego redacta UNA respuesta final unificada, precisa y autocontenida.
+        Reglas:
+          - FUSIONA lo mejor de cada una; NO elijas una sola ni resumas a secas.
+          - COMPARA en vez de calificar con puntajes.
+          - Resuelve las contradicciones razonando, no promediando.

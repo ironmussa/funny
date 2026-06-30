@@ -141,6 +141,11 @@ export function approvalNode<T extends PipelineContext>(
 
       const timeoutMs = typeof opts.timeoutMs === 'function' ? opts.timeoutMs(ctx) : opts.timeoutMs;
 
+      ctx.progress.onStepProgress(name, {
+        status: 'running',
+        metadata: { workflowStatus: 'waiting_approval' },
+      });
+
       const decision = await ctx.provider.requestApproval({
         gateId: name,
         message,

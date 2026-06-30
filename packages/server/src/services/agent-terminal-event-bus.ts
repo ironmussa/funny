@@ -5,7 +5,7 @@
  * @domain layer: application
  *
  * Tiny in-process event bus for agent-terminal events
- * (`completed` / `failed` / `stopped`). The orchestrator's
+ * (`completed` / `failed` / `stopped`). The scheduler's
  * dispatcher subscribes per-threadId; the Socket.IO `runner:agent_event`
  * handler publishes when a runner reports `agent:result`.
  *

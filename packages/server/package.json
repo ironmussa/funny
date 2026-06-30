@@ -29,7 +29,7 @@
     "@abbacchio/transport": "^0.2.0",
     "@funny/core": "workspace:*",
     "@funny/shared": "workspace:*",
-    "@funny/thread-orchestrator": "workspace:*",
+    "@funny/thread-scheduler": "workspace:*",
     "@ironmussa/funny-runtime": "workspace:*",
     "@socket.io/bun-engine": "^0.1.0",
     "better-auth": "^1.6.19",

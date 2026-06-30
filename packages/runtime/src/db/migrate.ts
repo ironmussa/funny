@@ -835,13 +835,13 @@ const migrations: Migration[] = [
     },
   },
   {
-    // Orchestrator state: tracks which threads have been
+    // Scheduler state: tracks which threads have been
     // claimed for dispatch, attempt counts for retry/backoff, last
     // event timestamp for stall detection, and aggregated token usage.
-    name: '051_orchestrator_runs',
+    name: '051_scheduler_runs',
     async up() {
       await exec(sql`
-        CREATE TABLE IF NOT EXISTS orchestrator_runs (
+        CREATE TABLE IF NOT EXISTS scheduler_runs (
           thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
           pipeline_run_id TEXT,
           attempt INTEGER NOT NULL DEFAULT 0,
@@ -855,12 +855,12 @@ const migrations: Migration[] = [
         )
       `);
       await exec(sql`
-        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_user
-        ON orchestrator_runs (user_id)
+        CREATE INDEX IF NOT EXISTS idx_scheduler_runs_user
+        ON scheduler_runs (user_id)
       `);
       await exec(sql`
-        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_retry
-        ON orchestrator_runs (next_retry_at_ms)
+        CREATE INDEX IF NOT EXISTS idx_scheduler_runs_retry
+        ON scheduler_runs (next_retry_at_ms)
       `);
     },
   },
@@ -881,16 +881,16 @@ const migrations: Migration[] = [
     },
   },
   {
-    // Drop orchestrator state tables from the runtime DB. These were
-    // created by 051/052 in an earlier architecture where the orchestrator
+    // Drop scheduler state tables from the runtime DB. These were
+    // created by 051/052 in an earlier architecture where the scheduler
     // was imagined to live in the runtime; now the brain is a separate
     // process that owns its tables on the SERVER's DB. The runtime never
     // read or wrote these tables, so the drop is safe.
-    name: '053_drop_orchestrator_runs',
+    name: '053_drop_scheduler_runs',
     async up() {
-      await exec(sql`DROP INDEX IF EXISTS idx_orchestrator_runs_user`);
-      await exec(sql`DROP INDEX IF EXISTS idx_orchestrator_runs_retry`);
-      await exec(sql`DROP TABLE IF EXISTS orchestrator_runs`);
+      await exec(sql`DROP INDEX IF EXISTS idx_scheduler_runs_user`);
+      await exec(sql`DROP INDEX IF EXISTS idx_scheduler_runs_retry`);
+      await exec(sql`DROP TABLE IF EXISTS scheduler_runs`);
     },
   },
   {
@@ -910,9 +910,9 @@ const migrations: Migration[] = [
     },
   },
   {
-    name: '056_threads_orchestrator_managed',
+    name: '056_threads_scheduler_managed',
     async up() {
-      await addColumn('threads', 'orchestrator_managed', 'INTEGER NOT NULL', '0');
+      await addColumn('threads', 'scheduler_managed', 'INTEGER NOT NULL', '0');
     },
   },
   {

@@ -1,0 +1,34 @@
+# Built-in commit pipeline.
+#
+# Runs `git commit`; on pre-commit hook failure, spawns a fixer agent and
+# retries up to `max_attempts` times.
+#
+# Inputs are limited to string fields because Mustache interpolation only
+# expands strings — boolean/number knobs (amend, no_verify, max_attempts)
+# are kept as literals in this file. To customize per-repo, copy this file
+# to `.funny/workflows/commit.yaml` and edit. The YAML loader prefers a
+# user-supplied file over the built-in default with the same `name`.
+
+name: commit
+description: Commit with auto-fix on pre-commit hook failure
+
+inputs:
+  commit_message: { type: string, required: true }
+
+nodes:
+  - id: commit
+    git_commit:
+      message: '{{commit_message}}'
+    retry:
+      max_attempts: 3
+      before_retry:
+        agent: precommit-fixer
+        prompt: |
+          A pre-commit hook failed with the following error:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          Diagnose and fix the issue. After fixing, stage the changes with `git add`.
+          Do NOT create a git commit — just fix and stage.

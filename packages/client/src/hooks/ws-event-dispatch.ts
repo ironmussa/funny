@@ -340,27 +340,33 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       });
       break;
     }
+    case 'workflow:node_state': {
+      import('@/stores/workflow-run-store').then(({ useWorkflowRunStore }) => {
+        useWorkflowRunStore.getState().handleNodeState(data);
+      });
+      break;
+    }
     case 'thread:claimed': {
-      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
-        useOrchestratorStore.getState().handleClaimed(threadId, data);
+      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
+        useSchedulerStore.getState().handleClaimed(threadId, data);
       });
       break;
     }
     case 'thread:dispatched': {
-      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
-        useOrchestratorStore.getState().handleDispatched(threadId, data);
+      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
+        useSchedulerStore.getState().handleDispatched(threadId, data);
       });
       break;
     }
     case 'thread:retry-queued': {
-      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
-        useOrchestratorStore.getState().handleRetryQueued(threadId, data);
+      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
+        useSchedulerStore.getState().handleRetryQueued(threadId, data);
       });
       break;
     }
     case 'thread:released': {
-      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
-        useOrchestratorStore.getState().handleReleased(threadId);
+      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
+        useSchedulerStore.getState().handleReleased(threadId);
       });
       break;
     }
@@ -749,6 +755,7 @@ const ALL_EVENT_TYPES = [
   'pipeline:run_completed',
   'pipeline:approval_requested',
   'pipeline:approval_resolved',
+  'workflow:node_state',
   'thread:claimed',
   'thread:dispatched',
   'thread:retry-queued',

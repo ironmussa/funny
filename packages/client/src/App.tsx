@@ -106,11 +106,14 @@ const AddProjectView = lazy(() =>
 const AnalyticsView = lazy(() =>
   import('@/components/AnalyticsView').then((m) => ({ default: m.AnalyticsView })),
 );
+const WorkflowsView = lazy(() =>
+  import('@/components/WorkflowsSettings').then((m) => ({ default: m.WorkflowsView })),
+);
 const LiveColumnsView = lazy(() =>
   import('@/components/LiveColumnsView').then((m) => ({ default: m.LiveColumnsView })),
 );
-const OrchestratorView = lazy(() =>
-  import('@/components/OrchestratorView').then((m) => ({ default: m.OrchestratorView })),
+const SchedulerView = lazy(() =>
+  import('@/components/SchedulerView').then((m) => ({ default: m.SchedulerView })),
 );
 const ExternalClaudeSessionView = lazy(() =>
   import('@/components/ExternalClaudeSessionView').then((m) => ({
@@ -148,7 +151,7 @@ export function App() {
   const addProjectOpen = useUIStore((s) => s.addProjectOpen);
   const analyticsOpen = useUIStore((s) => s.analyticsOpen);
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
-  const orchestratorOpen = useUIStore((s) => s.orchestratorOpen);
+  const schedulerOpen = useUIStore((s) => s.schedulerOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   // App-wide thread context is anchored to the URL (route-driven). The chat
   // pane uses the deferred displayThreadId below for INP; everything else
@@ -175,14 +178,16 @@ export function App() {
   const { pathname } = useLocation();
   const parsedRoute = useMemo(() => parseRoute(pathname), [pathname]);
   const externalClaudeSessionId = parsedRoute.externalClaudeSessionId;
+  const workflowsProjectId = parsedRoute.workflowsProjectId;
 
   // --- Right panel layout ---
   const isFullScreenView =
     settingsOpen ||
     generalSettingsOpen ||
     analyticsOpen ||
+    !!workflowsProjectId ||
     liveColumnsOpen ||
-    orchestratorOpen ||
+    schedulerOpen ||
     !!externalClaudeSessionId ||
     testRunnerOpen ||
     automationInboxOpen ||
@@ -303,7 +308,9 @@ export function App() {
           {isFullScreenView && (
             <Suspense>
               <div className="absolute inset-0 z-10 flex">
-                {generalSettingsOpen ? (
+                {workflowsProjectId ? (
+                  <WorkflowsView projectId={workflowsProjectId} />
+                ) : generalSettingsOpen ? (
                   <GeneralSettingsView />
                 ) : settingsOpen ? (
                   <SettingsDetailView />
@@ -311,8 +318,8 @@ export function App() {
                   <AnalyticsView />
                 ) : liveColumnsOpen ? (
                   <LiveColumnsView />
-                ) : orchestratorOpen ? (
-                  <OrchestratorView />
+                ) : schedulerOpen ? (
+                  <SchedulerView />
                 ) : externalClaudeSessionId ? (
                   <ExternalClaudeSessionView sessionId={externalClaudeSessionId} />
                 ) : testRunnerOpen ? (
@@ -352,9 +359,10 @@ export function App() {
       generalSettingsOpen,
       isFullScreenView,
       liveColumnsOpen,
-      orchestratorOpen,
+      schedulerOpen,
       settingsOpen,
       testRunnerOpen,
+      workflowsProjectId,
     ],
   );
 

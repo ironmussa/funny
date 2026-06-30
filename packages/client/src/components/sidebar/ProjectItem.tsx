@@ -18,6 +18,7 @@ import {
   EyeOff,
   RotateCcw,
   Zap,
+  Waypoints,
 } from 'lucide-react';
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -504,6 +505,17 @@ export const ProjectItem = memo(function ProjectItem({
                 >
                   <BarChart3 className="icon-sm" />
                   {t('sidebar.analytics')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid="project-menu-workflows"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenDropdown(false);
+                    navigate(buildPath(`/projects/${project.id}/workflows`));
+                  }}
+                >
+                  <Waypoints className="icon-sm" />
+                  {t('sidebar.workflows')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   data-testid="project-menu-view-designs"

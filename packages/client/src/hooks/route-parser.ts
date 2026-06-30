@@ -11,11 +11,12 @@ export type ParsedRoute = {
   globalSearch: boolean;
   inbox: boolean;
   analytics: boolean;
+  workflowsProjectId: string | null;
   liveColumns: boolean;
   addProject: boolean;
   designId: string | null;
   designsList: boolean;
-  orchestrator: boolean;
+  scheduler: boolean;
   scratchNew: boolean;
   externalClaudeSessionId: string | null;
 };
@@ -30,11 +31,12 @@ function blank(orgSlug: string | null): ParsedRoute {
     globalSearch: false,
     inbox: false,
     analytics: false,
+    workflowsProjectId: null,
     liveColumns: false,
     addProject: false,
     designId: null,
     designsList: false,
-    orchestrator: false,
+    scheduler: false,
     scratchNew: false,
     externalClaudeSessionId: null,
   };
@@ -46,6 +48,15 @@ export function parseRoute(pathname: string): ParsedRoute {
   const preferencesMatch = matchPath('/preferences/:pageId', p);
   if (preferencesMatch) {
     return { ...blank(orgSlug), preferencesPage: preferencesMatch.params.pageId! };
+  }
+
+  const legacyProjectWorkflowsMatch = matchPath('/projects/:projectId/settings/workflows', p);
+  if (legacyProjectWorkflowsMatch) {
+    return {
+      ...blank(orgSlug),
+      projectId: legacyProjectWorkflowsMatch.params.projectId!,
+      workflowsProjectId: legacyProjectWorkflowsMatch.params.projectId!,
+    };
   }
 
   const projectSettingsMatch = matchPath('/projects/:projectId/settings/:pageId', p);
@@ -80,6 +91,15 @@ export function parseRoute(pathname: string): ParsedRoute {
     };
   }
 
+  const projectWorkflowsMatch = matchPath('/projects/:projectId/workflows', p);
+  if (projectWorkflowsMatch) {
+    return {
+      ...blank(orgSlug),
+      projectId: projectWorkflowsMatch.params.projectId!,
+      workflowsProjectId: projectWorkflowsMatch.params.projectId!,
+    };
+  }
+
   const threadMatch = matchPath('/projects/:projectId/threads/:threadId', p);
   if (threadMatch) {
     return {
@@ -109,7 +129,7 @@ export function parseRoute(pathname: string): ParsedRoute {
 
   if (p === '/analytics') return { ...blank(orgSlug), analytics: true };
   if (p === '/grid') return { ...blank(orgSlug), liveColumns: true };
-  if (p === '/orchestrator') return { ...blank(orgSlug), orchestrator: true };
+  if (p === '/scheduler') return { ...blank(orgSlug), scheduler: true };
   if (p === '/new') return { ...blank(orgSlug), addProject: true };
   if (p === '/scratch/new') return { ...blank(orgSlug), scratchNew: true };
 

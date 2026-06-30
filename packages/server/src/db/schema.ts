@@ -22,7 +22,7 @@ export {
   mcpOauthTokens,
   pipelines,
   pipelineRuns,
-  orchestratorRuns,
+  schedulerRuns,
   threadDependencies,
   watchers,
   jobs,

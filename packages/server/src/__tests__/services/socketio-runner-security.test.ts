@@ -45,7 +45,7 @@ describe('socketio runner namespace security', () => {
 
   test('gates threadId side effects on thread ownership before status/event writes', () => {
     // The relay check validates msg.userId, not the nested event.threadId.
-    // updateThreadStatus / terminal+orchestrator publishes must be gated on
+    // updateThreadStatus / terminal+scheduler publishes must be gated on
     // threadBelongsToUser(threadId, runnerUserId) so a runner cannot mutate
     // another tenant's thread.
     expect(source).toMatch(/threadBelongsToUser\(\s*threadId\s*,\s*ctx\.runnerUserId\s*\)/);

@@ -9,15 +9,16 @@ import { extensionsApi } from './api/extensions';
 import { gitApi } from './api/git';
 import { githubApi } from './api/github';
 import { mcpApi } from './api/mcp';
-import { orchestratorApi } from './api/orchestrator';
 import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
 import { projectsApi } from './api/projects';
+import { schedulerApi } from './api/scheduler';
 import { skillsApi } from './api/skills';
 import { systemApi } from './api/system';
 import { teamApi } from './api/team';
 import { testsApi } from './api/tests';
 import { threadsApi } from './api/threads';
+import { workflowsApi } from './api/workflows';
 import { worktreesApi } from './api/worktrees';
 
 // Re-export shared helpers/types consumed outside api.ts
@@ -32,10 +33,11 @@ export const api = {
   ...gitApi, // Git (thread + project scoped) and Git Workflow
   ...mcpApi, // MCP Servers
   ...worktreesApi, // Worktrees
+  ...workflowsApi, // Versioned workflow YAML designer
   ...skillsApi, // Skills + Plugins
   ...automationsApi, // Automations
   ...pipelinesApi, // Pipelines
-  ...orchestratorApi, // Orchestrator queue
+  ...schedulerApi, // Scheduler queue
   ...agentExecutionProfilesApi, // Agent execution profiles
   ...agentTemplatesApi, // Agent Templates (per-user, Deep Agent only)
   ...browseApi, // Browse (filesystem)

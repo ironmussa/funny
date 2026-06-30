@@ -83,7 +83,7 @@ export function createTestDb() {
       agent_template_id TEXT,
       template_variables TEXT,
       file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
-      orchestrator_managed INTEGER NOT NULL DEFAULT 0,
+      scheduler_managed INTEGER NOT NULL DEFAULT 0,
       runtime TEXT NOT NULL DEFAULT 'local',
       container_url TEXT,
       container_name TEXT,
@@ -193,7 +193,7 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
-    CREATE TABLE IF NOT EXISTS orchestrator_runs (
+    CREATE TABLE IF NOT EXISTS scheduler_runs (
       thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
       pipeline_run_id TEXT,
       attempt INTEGER NOT NULL DEFAULT 0,

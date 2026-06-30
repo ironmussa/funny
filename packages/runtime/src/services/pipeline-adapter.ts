@@ -15,7 +15,7 @@
 
 import { gitRead, runHookCommand, invalidateStatusCache } from '@funny/core/git';
 import type { ProgressReporter, StepProgressData } from '@funny/pipelines';
-import type { AgentModel, PermissionMode, WSEvent } from '@funny/shared';
+import type { AgentModel, PermissionMode, WSEvent, WorkflowNodeRunStatus } from '@funny/shared';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
@@ -505,6 +505,7 @@ export interface RuntimeProgressReporterOpts {
   pipelineId?: string;
   runId?: string;
   workflowId?: string;
+  workflowName?: string;
 }
 
 /**
@@ -517,7 +518,22 @@ export class RuntimeProgressReporter implements ProgressReporter {
   constructor(private opts: RuntimeProgressReporterOpts) {}
 
   onStepProgress(stepId: string, data: StepProgressData): void {
-    const { userId, threadId, pipelineId, runId } = this.opts;
+    const { userId, threadId, pipelineId, runId, workflowName } = this.opts;
+
+    if (workflowName && runId) {
+      wsBroker.emitToUser(userId, {
+        type: 'workflow:node_state',
+        threadId,
+        data: {
+          runId,
+          workflowName,
+          nodeId: stepId,
+          status: workflowStatusOf(data),
+          message: data.error,
+          metadata: data.metadata,
+        },
+      } as WSEvent);
+    }
 
     if (pipelineId && runId) {
       wsBroker.emitToUser(userId, {
@@ -561,6 +577,11 @@ export class RuntimeProgressReporter implements ProgressReporter {
       } as WSEvent);
     }
   }
+}
+
+function workflowStatusOf(data: StepProgressData): WorkflowNodeRunStatus {
+  if (data.metadata?.workflowStatus === 'waiting_approval') return 'waiting_approval';
+  return data.status;
 }
 
 // ── Helpers ──────────────────────────────────────────────────

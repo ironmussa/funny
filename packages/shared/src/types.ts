@@ -252,6 +252,24 @@ export type {
 } from './types/pipelines.js';
 
 export type {
+  WorkflowSource,
+  WorkflowNodeRunStatus,
+  WorkflowDiagnostic,
+  WorkflowSummary,
+  WorkflowGraphDto,
+  WorkflowDefinitionResponse,
+  WorkflowListResponse,
+  WorkflowValidateRequest,
+  WorkflowValidateResponse,
+  WorkflowSaveRequest,
+  WorkflowSaveResponse,
+  WorkflowRunRequest,
+  WorkflowRunResponse,
+  WorkflowCancelResponse,
+  WorkflowNodeRunState,
+} from './types/workflows.js';
+
+export type {
   AutomationSchedule,
   RunTriageStatus,
   Automation,
@@ -636,7 +654,7 @@ export interface WSCommentDeletedData {
 export interface WSThreadUpdatedData {
   status?: string;
   archived?: number;
-  orchestratorManaged?: number;
+  schedulerManaged?: number;
   branch?: string | null;
   worktreePath?: string | null;
   mode?: string;
@@ -786,6 +804,7 @@ export type WSEvent =
   | { type: 'thread:queue_update'; threadId: string; data: WSQueueUpdateData }
   | { type: 'workflow:step'; threadId: string; data: WSWorkflowStepData }
   | { type: 'workflow:status'; threadId: string; data: WSWorkflowStatusData }
+  | { type: 'workflow:node_state'; threadId: string; data: WorkflowNodeRunState }
   | { type: 'thread:event'; threadId: string; data: WSThreadEventData }
   | { type: 'git:workflow_progress'; threadId: string; data: WSGitWorkflowProgressData }
   | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData }
@@ -979,3 +998,4 @@ import type {
   WSTestErrorData,
 } from './types/test.js';
 import type { ThreadEvent } from './types/thread-events.js';
+import type { WorkflowNodeRunState } from './types/workflows.js';

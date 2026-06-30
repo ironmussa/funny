@@ -57,28 +57,10 @@ export type {
 } from './types.js';
 export { nullReporter } from './types.js';
 
-// ── YAML schema, parser, templating, predicates ─────────────
+// ── Templating and predicates ───────────────────────────────
 //
-// These are domain-agnostic — they handle the YAML shape and the
-// expression engines. Compiling a parsed YAML into a runnable
-// `PipelineDefinition` lives in the consumer (runtime), where the
-// `ActionProvider` interface is bound to real implementations.
-
-export {
-  pipelineSchema,
-  type ParsedPipeline,
-  type ParsedNode,
-  type ParsedInputDef,
-  type ParsedRetry,
-  type ParsedLoop,
-} from './yaml/schema.js';
-
-export {
-  parsePipelineYaml,
-  formatParseError,
-  type ParseResult,
-  type ParseError,
-} from './yaml/parse.js';
+// The Funny-specific workflow YAML schema/parser lives in @funny/workflows.
+// The engine keeps only reusable expression helpers here.
 
 export {
   interpolate,

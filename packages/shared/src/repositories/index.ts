@@ -22,12 +22,12 @@ export {
 export { createStageHistoryRepository, type StageHistoryDeps } from './stage-history.js';
 export { createDesignRepository, type DesignRepositoryDeps } from './design-repository.js';
 export {
-  createOrchestratorRunRepository,
-  type OrchestratorRunRepositoryDeps,
-  type OrchestratorRunRepository,
-  type OrchestratorRunRow,
+  createSchedulerRunRepository,
+  type SchedulerRunRepositoryDeps,
+  type SchedulerRunRepository,
+  type SchedulerRunRow,
   type ClaimArgs,
-} from './orchestrator-run-repository.js';
+} from './scheduler-run-repository.js';
 export {
   createWatcherRepository,
   type WatcherRepositoryDeps,

@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { ConflictActionBar } from '@/components/virtual-diff/ConflictActionBar';
@@ -611,192 +612,214 @@ export const VirtualDiff = memo(function VirtualDiff({
       className={cn('flex flex-col', showMinimap ? 'flex-1 min-w-0' : className)}
       data-testid={props['data-testid']}
     >
-      {/* Vertical scroll area */}
       <div
-        ref={scrollCallbackRef}
-        className={cn(
-          'flex-1 min-h-0 relative',
-          needsHScroll ? 'overflow-y-auto overflow-x-hidden' : 'overflow-auto',
-        )}
-        onMouseDown={selectable ? handleDragMouseDown : undefined}
-        onMouseMove={selectable ? handleDragMouseMove : undefined}
-        onMouseUp={selectable ? handleDragMouseUp : undefined}
-        onClickCapture={
-          selectable
-            ? (e) => {
-                const target = e.target as HTMLElement;
-                if (target.closest('[data-gutter]')) {
-                  e.stopPropagation();
-                  e.preventDefault();
-                }
-              }
-            : undefined
+        className="relative min-h-0 flex-1 overflow-hidden"
+        style={
+          {
+            '--diff-scrollbar-gutter': '12px',
+          } as CSSProperties
         }
+        data-testid="diff-scroll-frame"
       >
-        {/* Sticky hunk header overlay */}
-        {stickyHunk && (
-          <div
-            className={cn(
-              'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-(length:--diff-font-size) text-muted-foreground backdrop-blur-xs border-b border-border/50 px-1',
-            )}
-            style={{ height: rowHeight, marginBottom: -rowHeight }}
-            data-testid="diff-sticky-hunk"
-          >
-            {selectable && stickyHunk.hunkStartIdx != null ? (
-              (() => {
-                const indices = hunkLineMap.get(stickyHunk.hunkStartIdx!) ?? [];
-                const count = indices.filter((idx) => selectedLines?.has(idx)).length;
-                const allChecked = indices.length > 0 && count === indices.length;
-                const isPartial = count > 0 && count < indices.length;
-                return (
-                  <span className="flex w-5 shrink-0 items-center justify-center">
-                    <TriCheckbox
-                      state={isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'}
-                      onToggle={() => {
-                        if (indices.length > 0) onHunkToggle?.(indices);
-                      }}
-                      data-testid="diff-sticky-hunk-checkbox"
-                    />
-                  </span>
-                );
-              })()
-            ) : selectable ? (
-              <span className="w-5 shrink-0" />
-            ) : null}
-            <span className={cn(gutterWidth, 'shrink-0')} />
-            <span className="truncate">{stickyHunk.text}</span>
-          </div>
-        )}
+        {/* Vertical scroll area */}
         <div
-          style={{
-            height: virtualizer.getTotalSize(),
-            minWidth: '100%',
-            // In split/three-pane mode, horizontal scroll is handled via CSS
-            // translateX on each pane's text — the container must stay at 100%
-            // so flex-1 columns divide the *visible* width equally.
-            // Only unified mode needs to expand the container for native h-scroll.
-            width: maxContentWidth > 0 && !needsHScroll ? maxContentWidth : '100%',
-            position: 'relative',
-          }}
+          ref={scrollCallbackRef}
+          className={cn(
+            'scroll-fade-none scrollbar-visible h-full min-h-0 relative',
+            needsHScroll ? 'overflow-y-auto overflow-x-hidden' : 'overflow-auto',
+          )}
+          style={{ scrollbarGutter: 'stable' }}
+          data-testid="diff-scroll-area"
+          onMouseDown={selectable ? handleDragMouseDown : undefined}
+          onMouseMove={selectable ? handleDragMouseMove : undefined}
+          onMouseUp={selectable ? handleDragMouseUp : undefined}
+          onClickCapture={
+            selectable
+              ? (e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest('[data-gutter]')) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }
+                }
+              : undefined
+          }
         >
-          {virtualizer.getVirtualItems().map((vItem) => {
-            const row = renderRows[vItem.index];
-
-            const rowH = rowHeightMap?.get(vItem.index) ?? rowHeight;
-            return (
-              <div
-                key={vItem.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  ...(wordWrap ? { minHeight: rowH } : { height: rowH }),
-                  transform: `translateY(${vItem.start}px)`,
-                }}
-                {...(wordWrap
-                  ? { ref: virtualizer.measureElement, 'data-index': vItem.index }
-                  : {})}
-              >
-                {row.type === 'conflict-actions' ? (
-                  <ConflictActionBar block={row.block} onResolve={onResolveConflict} />
-                ) : row.type === 'hunk' ? (
-                  <div
-                    className={cn(
-                      'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
-                    )}
-                    style={{ height: rowHeight }}
-                  >
-                    {selectable && row.hunkStartIdx != null ? (
-                      (() => {
-                        const indices = hunkLineMap.get(row.hunkStartIdx!) ?? [];
-                        const count = indices.filter((idx) => selectedLines?.has(idx)).length;
-                        const allChecked = indices.length > 0 && count === indices.length;
-                        const isPartial = count > 0 && count < indices.length;
-                        return (
-                          <span className="flex w-5 shrink-0 items-center justify-center">
-                            <TriCheckbox
-                              state={
-                                isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'
-                              }
-                              onToggle={() => {
-                                if (indices.length > 0) onHunkToggle?.(indices);
-                              }}
-                              data-testid={`diff-hunk-checkbox-${row.hunkStartIdx}`}
-                            />
-                          </span>
-                        );
-                      })()
-                    ) : selectable ? (
-                      <span className="w-5 shrink-0" />
-                    ) : null}
-                    <span className={cn(gutterWidth, 'shrink-0')} />
-                    <span className="truncate">{row.text}</span>
-                  </div>
-                ) : row.type === 'fold' ? (
-                  <button
-                    className={cn(
-                      'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
-                    )}
-                    style={{ height: rowHeight }}
-                    onClick={() => toggleFold(row.sectionIdx)}
-                    data-testid="diff-fold-toggle"
-                  >
-                    {selectable && <span className="w-5 shrink-0" />}
-                    <span className={cn(gutterWidth, 'shrink-0')} />
-                    <span className="truncate">
-                      @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ ·{' '}
-                      {row.lineCount} lines hidden
+          {/* Sticky hunk header overlay */}
+          {stickyHunk && (
+            <div
+              className={cn(
+                'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-(length:--diff-font-size) text-muted-foreground backdrop-blur-xs border-b border-border/50 px-1',
+              )}
+              style={{ height: rowHeight, marginBottom: -rowHeight }}
+              data-testid="diff-sticky-hunk"
+            >
+              {selectable && stickyHunk.hunkStartIdx != null ? (
+                (() => {
+                  const indices = hunkLineMap.get(stickyHunk.hunkStartIdx!) ?? [];
+                  const count = indices.filter((idx) => selectedLines?.has(idx)).length;
+                  const allChecked = indices.length > 0 && count === indices.length;
+                  const isPartial = count > 0 && count < indices.length;
+                  return (
+                    <span className="flex w-5 shrink-0 items-center justify-center">
+                      <TriCheckbox
+                        state={isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'}
+                        onToggle={() => {
+                          if (indices.length > 0) onHunkToggle?.(indices);
+                        }}
+                        data-testid="diff-sticky-hunk-checkbox"
+                      />
                     </span>
-                  </button>
-                ) : row.type === 'three-pane-triple' ? (
-                  <ThreePaneRow
-                    left={row.triple.left}
-                    center={row.triple.center}
-                    right={row.triple.right}
-                    lang={highlightLang}
-                    wrap={wordWrap}
-                    searchQuery={searchQuery}
-                    searchCaseSensitive={searchCaseSensitive}
-                    matchOffset={searchMatchData?.prefixSum[vItem.index]}
-                    currentMatchIdx={currentMatchIndex}
-                  />
-                ) : row.type === 'split-pair' ? (
-                  <SplitRow
-                    left={row.pair.left}
-                    right={row.pair.right}
-                    lang={highlightLang}
-                    wrap={wordWrap}
-                    searchQuery={searchQuery}
-                    searchCaseSensitive={searchCaseSensitive}
-                    matchOffset={searchMatchData?.prefixSum[vItem.index]}
-                    currentMatchIdx={currentMatchIndex}
-                  />
-                ) : (
-                  <UnifiedRow
-                    line={row.line}
-                    lineIdx={row.lineIdx}
-                    lang={highlightLang}
-                    wrap={wordWrap}
-                    searchQuery={searchQuery}
-                    searchCaseSensitive={searchCaseSensitive}
-                    matchOffset={searchMatchData?.prefixSum[vItem.index]}
-                    currentMatchIdx={currentMatchIndex}
-                    selectable={selectable}
-                    selected={selectable ? selectedLines?.has(row.lineIdx) : undefined}
-                    onToggle={onLineToggle}
-                  />
-                )}
-              </div>
-            );
-          })}
+                  );
+                })()
+              ) : selectable ? (
+                <span className="w-5 shrink-0" />
+              ) : null}
+              <span className={cn(gutterWidth, 'shrink-0')} />
+              <span className="truncate">{stickyHunk.text}</span>
+            </div>
+          )}
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              minWidth: '100%',
+              // In split/three-pane mode, horizontal scroll is handled via CSS
+              // translateX on each pane's text — the container must stay at 100%
+              // so flex-1 columns divide the *visible* width equally.
+              // Only unified mode needs to expand the container for native h-scroll.
+              width: maxContentWidth > 0 && !needsHScroll ? maxContentWidth : '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((vItem) => {
+              const row = renderRows[vItem.index];
+
+              const rowH = rowHeightMap?.get(vItem.index) ?? rowHeight;
+              return (
+                <div
+                  key={vItem.index}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    ...(wordWrap ? { minHeight: rowH } : { height: rowH }),
+                    transform: `translateY(${vItem.start}px)`,
+                  }}
+                  {...(wordWrap
+                    ? { ref: virtualizer.measureElement, 'data-index': vItem.index }
+                    : {})}
+                >
+                  {row.type === 'conflict-actions' ? (
+                    <ConflictActionBar block={row.block} onResolve={onResolveConflict} />
+                  ) : row.type === 'hunk' ? (
+                    <div
+                      className={cn(
+                        'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
+                      )}
+                      style={{ height: rowHeight }}
+                    >
+                      {selectable && row.hunkStartIdx != null ? (
+                        (() => {
+                          const indices = hunkLineMap.get(row.hunkStartIdx!) ?? [];
+                          const count = indices.filter((idx) => selectedLines?.has(idx)).length;
+                          const allChecked = indices.length > 0 && count === indices.length;
+                          const isPartial = count > 0 && count < indices.length;
+                          return (
+                            <span className="flex w-5 shrink-0 items-center justify-center">
+                              <TriCheckbox
+                                state={
+                                  isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'
+                                }
+                                onToggle={() => {
+                                  if (indices.length > 0) onHunkToggle?.(indices);
+                                }}
+                                data-testid={`diff-hunk-checkbox-${row.hunkStartIdx}`}
+                              />
+                            </span>
+                          );
+                        })()
+                      ) : selectable ? (
+                        <span className="w-5 shrink-0" />
+                      ) : null}
+                      <span className={cn(gutterWidth, 'shrink-0')} />
+                      <span className="truncate">{row.text}</span>
+                    </div>
+                  ) : row.type === 'fold' ? (
+                    <button
+                      className={cn(
+                        'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
+                      )}
+                      style={{ height: rowHeight }}
+                      onClick={() => toggleFold(row.sectionIdx)}
+                      data-testid="diff-fold-toggle"
+                    >
+                      {selectable && <span className="w-5 shrink-0" />}
+                      <span className={cn(gutterWidth, 'shrink-0')} />
+                      <span className="truncate">
+                        @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ ·{' '}
+                        {row.lineCount} lines hidden
+                      </span>
+                    </button>
+                  ) : row.type === 'three-pane-triple' ? (
+                    <ThreePaneRow
+                      left={row.triple.left}
+                      center={row.triple.center}
+                      right={row.triple.right}
+                      lang={highlightLang}
+                      wrap={wordWrap}
+                      searchQuery={searchQuery}
+                      searchCaseSensitive={searchCaseSensitive}
+                      matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                      currentMatchIdx={currentMatchIndex}
+                    />
+                  ) : row.type === 'split-pair' ? (
+                    <SplitRow
+                      left={row.pair.left}
+                      right={row.pair.right}
+                      lang={highlightLang}
+                      wrap={wordWrap}
+                      searchQuery={searchQuery}
+                      searchCaseSensitive={searchCaseSensitive}
+                      matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                      currentMatchIdx={currentMatchIndex}
+                    />
+                  ) : (
+                    <UnifiedRow
+                      line={row.line}
+                      lineIdx={row.lineIdx}
+                      lang={highlightLang}
+                      wrap={wordWrap}
+                      searchQuery={searchQuery}
+                      searchCaseSensitive={searchCaseSensitive}
+                      matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                      currentMatchIdx={currentMatchIndex}
+                      selectable={selectable}
+                      selected={selectable ? selectedLines?.has(row.lineIdx) : undefined}
+                      onToggle={onLineToggle}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
+        <div
+          className="scroll-fade-edge scroll-fade-edge-top"
+          aria-hidden="true"
+          data-testid="diff-fade-top"
+        />
+        <div
+          className="scroll-fade-edge scroll-fade-edge-bottom"
+          aria-hidden="true"
+          data-testid="diff-fade-bottom"
+        />
       </div>
       {/* Single horizontal scrollbar for split/three-pane mode */}
       {needsHScroll && (
         <div
           ref={hScrollBarRef}
-          className="shrink-0 overflow-x-auto overflow-y-hidden"
+          className="scroll-fade-none scrollbar-visible shrink-0 overflow-x-auto overflow-y-hidden"
           style={{ height: 10 }}
           data-testid="diff-h-scrollbar"
         >

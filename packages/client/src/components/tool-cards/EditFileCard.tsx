@@ -8,7 +8,7 @@ import { VirtualDiff } from '@/components/VirtualDiff';
 import { api } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings-store';
+import { DIFF_ROW_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
 import { useThreadId } from '@/stores/thread-context';
 
 import { ExpandedDiffDialog } from './ExpandedDiffDialog';
@@ -92,6 +92,7 @@ export function EditFileCard({
 }) {
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+  const fontSize = useSettingsStore((s) => s.fontSize);
   const filePath = parsed.file_path as string | undefined;
   const projectPath = useCurrentProjectPath();
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
@@ -105,7 +106,7 @@ export function EditFileCard({
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);
   const [diffMounted, setDiffMounted] = useState(false);
   const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);
-  const diffSlotRef = useRef<HTMLDivElement | null>(null);
+  const diffObserverRef = useRef<IntersectionObserver | null>(null);
 
   // `snippetBaseLine` only feeds the rendered diff (computeUnifiedDiff /
   // baseLine prop), which itself is gated behind `diffMounted`. Reading the
@@ -130,26 +131,33 @@ export function EditFileCard({
     };
   }, [diffMounted, filePath, newString]);
 
-  useEffect(() => {
-    if (!expanded || diffMounted) return;
-    const el = diffSlotRef.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === 'undefined') {
-      setDiffMounted(true);
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setDiffMounted(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: '600px 0px' },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [expanded, diffMounted]);
+  const diffSlotRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      diffObserverRef.current?.disconnect();
+      diffObserverRef.current = null;
+
+      if (!el || !expanded || diffMounted) return;
+      if (typeof IntersectionObserver === 'undefined') {
+        setDiffMounted(true);
+        return;
+      }
+
+      const io = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            setDiffMounted(true);
+            io.disconnect();
+          }
+        },
+        { rootMargin: '600px 0px' },
+      );
+      diffObserverRef.current = io;
+      io.observe(el);
+    },
+    [diffMounted, expanded],
+  );
+
+  useEffect(() => () => diffObserverRef.current?.disconnect(), []);
 
   const requestFullDiff = useCallback(
     async (
@@ -177,11 +185,18 @@ export function EditFileCard({
     if (!hasDiff) return '';
     return computeUnifiedDiff(oldString || '', newString || '', snippetBaseLine);
   }, [hasDiff, oldString, newString, snippetBaseLine]);
+  const inlineDiffSlotHeight = useMemo(() => {
+    if (!hasDiff) return undefined;
+    const rowHeight = DIFF_ROW_HEIGHT_PX[fontSize];
+    const lineCount = Math.max(1, unifiedDiff.split('\n').length);
+    return Math.max(64, lineCount * rowHeight);
+  }, [fontSize, hasDiff, unifiedDiff]);
 
   return (
     <div className="border-border w-full min-w-0 overflow-hidden rounded-lg border text-sm">
       <div className="flex w-full items-center overflow-hidden">
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
           className="hover:bg-accent/30 flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
         >
@@ -290,7 +305,11 @@ export function EditFileCard({
         )}
       </div>
       {expanded && hasDiff && (
-        <div ref={diffSlotRef} className="border-border/40 max-h-[50vh] overflow-hidden border-t">
+        <div
+          ref={diffSlotRef}
+          className="border-border/40 max-h-[50vh] overflow-hidden border-t"
+          style={{ height: inlineDiffSlotHeight }}
+        >
           {diffMounted ? (
             <VirtualDiff
               unifiedDiff={unifiedDiff}

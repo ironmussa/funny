@@ -1,5 +1,5 @@
 import type { FileDiffSummary, ThreadEvent } from '@funny/shared';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type VirtualItem, type Virtualizer } from '@tanstack/react-virtual';
 import {
   useState,
   useRef,
@@ -215,6 +215,25 @@ function getElementBottomRelativeToContainer(element: HTMLElement, container: HT
   const elementRect = element.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
   return elementRect.bottom - containerRect.top;
+}
+
+function shouldAdjustScrollPositionOnItemSizeChange<
+  TScrollElement extends Element | Window,
+  TItemElement extends Element,
+>(item: VirtualItem, _delta: number, instance: Virtualizer<TScrollElement, TItemElement>) {
+  // TanStack keeps programmatic scroll state on the instance. Preserve those
+  // adjustments for scrollToIndex/scrollToOffset, but avoid first-measurement
+  // scrollTop writes while the user is actively scrolling by hand.
+  const isProgrammaticScroll = Boolean(
+    (instance as unknown as { scrollState?: unknown }).scrollState,
+  );
+  const isFirstMeasurement = !instance.itemSizeCache.has(item.key);
+
+  if (isFirstMeasurement && instance.isScrolling && !isProgrammaticScroll) {
+    return false;
+  }
+
+  return item.start < (instance.scrollOffset ?? 0);
 }
 
 export interface MemoizedMessageListHandle {
@@ -658,6 +677,8 @@ export const MemoizedMessageList = memo(
         return height;
       },
     });
+    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange =
+      shouldAdjustScrollPositionOnItemSizeChange;
 
     const measureRowsEvent = useEffectEvent(() => {
       rowVirtualizer.measure();
@@ -1087,14 +1108,7 @@ export const MemoizedMessageList = memo(
 
         if (item.type === 'workflow-event-group') {
           return (
-            <div
-              key={key}
-              data-item-key={key}
-              style={{
-                contentVisibility: 'auto',
-                containIntrinsicSize: 'auto 32px',
-              }}
-            >
+            <div key={key} data-item-key={key}>
               <WorkflowEventGroup events={item.events} />
             </div>
           );
@@ -1102,14 +1116,7 @@ export const MemoizedMessageList = memo(
 
         if (item.type === 'thread-event') {
           return (
-            <div
-              key={key}
-              data-item-key={key}
-              style={{
-                contentVisibility: 'auto',
-                containIntrinsicSize: 'auto 32px',
-              }}
-            >
+            <div key={key} data-item-key={key}>
               <GitEventCard event={item.event} />
             </div>
           );
@@ -1117,14 +1124,7 @@ export const MemoizedMessageList = memo(
 
         if (item.type === 'compaction-event') {
           return (
-            <div
-              key={key}
-              data-item-key={key}
-              style={{
-                contentVisibility: 'auto',
-                containIntrinsicSize: 'auto 32px',
-              }}
-            >
+            <div key={key} data-item-key={key}>
               <CompactionEventCard event={item.event} />
             </div>
           );

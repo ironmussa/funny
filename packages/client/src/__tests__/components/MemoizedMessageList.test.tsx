@@ -75,6 +75,7 @@ const virtualizerMockState = vi.hoisted(() => ({
   start: undefined as number | undefined,
   visibleCount: 12,
   scrollOffset: 0,
+  instance: null as any,
   lastOptions: undefined as any,
   measureCalls: 0,
   scrollToIndexCalls: [] as { index: number; opts?: { align?: string } }[],
@@ -100,7 +101,7 @@ vi.mock('@tanstack/react-virtual', () => ({
       };
     });
 
-    return {
+    const instance = {
       getVirtualItems: () => virtualItems,
       getTotalSize: () => count * 120,
       measureElement: () => {},
@@ -115,7 +116,12 @@ vi.mock('@tanstack/react-virtual', () => ({
         virtualizerMockState.measureCalls += 1;
       },
       scrollOffset: virtualizerMockState.scrollOffset,
+      isScrolling: false,
+      itemSizeCache: new Map(),
+      scrollState: null,
     };
+    virtualizerMockState.instance = instance;
+    return instance;
   },
 }));
 
@@ -149,11 +155,15 @@ function makeMessagesWithToolCalls(toolCalls: any[]) {
 function Harness({
   messages,
   leadingUserMessage,
+  threadEvents,
+  compactionEvents,
   viewportHeight,
   listRef,
 }: {
   messages: any[];
   leadingUserMessage?: any;
+  threadEvents?: any[];
+  compactionEvents?: any[];
   viewportHeight?: number;
   listRef?: RefObject<MemoizedMessageListHandle | null>;
 }) {
@@ -184,6 +194,8 @@ function Harness({
         ref={listRef}
         messages={messages}
         leadingUserMessage={leadingUserMessage}
+        threadEvents={threadEvents}
+        compactionEvents={compactionEvents}
         threadId="t1"
         knownIds={new Set()}
         prefersReducedMotion={true}
@@ -201,6 +213,7 @@ describe('MemoizedMessageList virtualization', () => {
     virtualizerMockState.start = undefined;
     virtualizerMockState.visibleCount = 12;
     virtualizerMockState.scrollOffset = 0;
+    virtualizerMockState.instance = null;
     virtualizerMockState.lastOptions = undefined;
     virtualizerMockState.measureCalls = 0;
     virtualizerMockState.scrollToIndexCalls = [];
@@ -471,6 +484,87 @@ describe('MemoizedMessageList virtualization', () => {
     const row = viewport.querySelector<HTMLElement>('[data-item-key="think-1"]')!;
     expect(row.style.contentVisibility).toBe('');
     expect(row.style.containIntrinsicSize).toBe('');
+  });
+
+  test('does not use content-visibility placeholders for event rows', async () => {
+    const threadEvents = [
+      {
+        id: 'workflow-started',
+        type: 'workflow:started',
+        data: { workflowId: 'wf1', action: 'commit' },
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'workflow-commit',
+        type: 'git:commit',
+        data: { workflowId: 'wf1', message: 'commit changes' },
+        createdAt: '2026-01-01T00:00:01.000Z',
+      },
+      {
+        id: 'git-push',
+        type: 'git:push',
+        data: { message: 'pushed branch' },
+        createdAt: '2026-01-01T00:00:02.000Z',
+      },
+    ];
+    const compactionEvents = [
+      {
+        timestamp: '2026-01-01T00:00:03.000Z',
+        preTokens: 12000,
+        trigger: 'manual',
+      },
+    ];
+
+    const { getByTestId } = render(
+      <Harness messages={[]} threadEvents={threadEvents} compactionEvents={compactionEvents} />,
+    );
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() =>
+      expect(viewport.querySelector('[data-item-key="workflow-workflow-started"]')).toBeTruthy(),
+    );
+
+    for (const key of [
+      'workflow-workflow-started',
+      'git-push',
+      'compact-2026-01-01T00:00:03.000Z',
+    ]) {
+      const row = viewport.querySelector<HTMLElement>(`[data-item-key="${key}"]`)!;
+      expect(row.style.contentVisibility).toBe('');
+      expect(row.style.containIntrinsicSize).toBe('');
+    }
+  });
+
+  test('does not compensate first row measurements during manual scroll', async () => {
+    render(<Harness messages={makeMessages(4)} />);
+
+    await waitFor(() =>
+      expect(virtualizerMockState.instance?.shouldAdjustScrollPositionOnItemSizeChange).toEqual(
+        expect.any(Function),
+      ),
+    );
+
+    const virtualizer = virtualizerMockState.instance;
+    const item = {
+      key: 'm0',
+      index: 0,
+      start: 120,
+      end: 220,
+      size: 100,
+      lane: 0,
+    };
+
+    virtualizer.isScrolling = true;
+    virtualizer.scrollOffset = 240;
+    virtualizer.itemSizeCache.clear();
+    expect(virtualizer.shouldAdjustScrollPositionOnItemSizeChange(item, 80, virtualizer)).toBe(
+      false,
+    );
+
+    virtualizer.isScrolling = false;
+    expect(virtualizer.shouldAdjustScrollPositionOnItemSizeChange(item, 80, virtualizer)).toBe(
+      true,
+    );
   });
 
   test('uses resize observer border-box height for virtual row measurements', async () => {

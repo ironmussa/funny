@@ -2,6 +2,7 @@ import type { Project, Thread } from '@funny/shared';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
+import { useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ProjectItem } from '@/components/sidebar/ProjectItem';
@@ -89,6 +90,11 @@ const externalThread: Thread = {
   updatedAt: '2026-06-23T12:06:00.000Z',
   completedAt: '2026-06-23T12:06:00.000Z',
 };
+
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location-pathname">{location.pathname}</div>;
+}
 
 describe('ProjectItem external Claude sessions', () => {
   beforeEach(() => {
@@ -195,5 +201,42 @@ describe('ProjectItem external Claude sessions', () => {
       expect(api.dismissExternalClaudeSession).toHaveBeenCalledWith('session-1');
     });
     expect(onDeleteThread).toHaveBeenCalledWith('project-1', 'thread-external', 'como estas?');
+  });
+
+  test('opens workflow settings from the project actions menu', async () => {
+    renderWithProviders(
+      <>
+        <ProjectItem
+          project={project}
+          threads={[]}
+          threadsLoaded
+          isExpanded={false}
+          isSelected={false}
+          onToggle={vi.fn()}
+          onSelectProject={vi.fn()}
+          onNewThread={vi.fn()}
+          onRenameProject={vi.fn()}
+          onDeleteProject={vi.fn()}
+          onSelectThread={vi.fn()}
+          onRenameThread={vi.fn()}
+          onArchiveThread={vi.fn()}
+          onPinThread={vi.fn()}
+          onDeleteThread={vi.fn()}
+          onShowAllThreads={vi.fn()}
+          onShowIssues={vi.fn()}
+        />
+        <LocationProbe />
+      </>,
+      { route: '/projects/project-1' },
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('project-more-actions-project-1'));
+    fireEvent.click(await screen.findByTestId('project-menu-workflows'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-pathname')).toHaveTextContent(
+        '/projects/project-1/workflows',
+      );
+    });
   });
 });

@@ -304,10 +304,10 @@ export const threadsApi = {
       method: 'PATCH',
       body: JSON.stringify({ pinned }),
     }),
-  setOrchestratorManaged: (threadId: string, orchestratorManaged: boolean) =>
+  setSchedulerManaged: (threadId: string, schedulerManaged: boolean) =>
     request<Thread>(`/threads/${threadId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ orchestratorManaged }),
+      body: JSON.stringify({ schedulerManaged }),
     }),
   renameThread: (threadId: string, title: string) =>
     request<Thread>(`/threads/${threadId}`, {

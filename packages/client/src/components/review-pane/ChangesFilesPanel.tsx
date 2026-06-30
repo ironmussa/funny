@@ -90,6 +90,7 @@ interface ChangesFilesPanelProps {
   // List state
   loading: boolean;
   loadError: boolean;
+  loadErrorMessage: string | null;
   refresh: () => void;
   fileSearch: string;
   treeRows: TreeRow[];
@@ -150,6 +151,7 @@ export function ChangesFilesPanel({
   handleExpandAllFolders,
   loading,
   loadError,
+  loadErrorMessage,
   refresh,
   fileSearch,
   treeRows,
@@ -268,6 +270,7 @@ export function ChangesFilesPanel({
             testId="review-load-error"
             icon={AlertTriangle}
             title={t('review.loadFailed', 'Failed to load changes')}
+            description={loadErrorMessage}
             action={
               <Button
                 variant="outline"

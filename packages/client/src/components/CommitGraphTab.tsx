@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
+  AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
   GitBranch,
@@ -162,6 +163,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
 
   const [entries, setEntries] = useState<GraphEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
+  const [logErrorMessage, setLogErrorMessage] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [allBranches, setAllBranches] = useState(true);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
@@ -198,6 +200,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       if (!hasGitContext || loadingRef.current) return null;
       loadingRef.current = true;
       setLogLoading(true);
+      if (!append) setLogErrorMessage(null);
       const started = performance.now();
       const signal = abortRef.current?.signal;
       const result = effectiveThreadId
@@ -210,6 +213,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       let out: { entries: GraphEntry[]; hasMore: boolean } | null = null;
       if (result.isOk()) {
         const { entries: next, hasMore: more, unpushedHashes, unpulledHashes = [] } = result.value;
+        setLogErrorMessage(null);
         const merged = append ? [...entriesRef.current, ...next] : next;
         // Keep the synchronous mirror current so the next append builds on the
         // freshly-loaded page without waiting for a React re-render.
@@ -234,6 +238,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         out = { entries: merged, hasMore: more };
       } else if (result.error.message !== 'Request aborted') {
         log.warn('graph-log load failed', { error: result.error.message });
+        setLogErrorMessage(result.error.message);
         toast.error(
           t('review.logFailed', {
             message: result.error.message,
@@ -267,6 +272,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     entriesRef.current = [];
     setEntries([]);
     setHasMore(false);
+    setLogErrorMessage(null);
     setUnpushed(new Set());
     setUnpulled(new Set());
     setRebaseEvents([]);
@@ -607,6 +613,25 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       <div className="flex flex-1 flex-col overflow-y-auto" ref={scrollRef}>
         {logLoading && entries.length === 0 ? (
           <LoadingState testId="graph-loading" label={t('review.loadingLog', 'Loading commits…')} />
+        ) : logErrorMessage ? (
+          <EmptyState
+            testId="graph-load-error"
+            icon={AlertTriangle}
+            title={t('review.logLoadFailed', 'Failed to load history')}
+            description={logErrorMessage}
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshLog}
+                className="gap-1.5"
+                data-testid="graph-retry"
+              >
+                <RefreshCw className="icon-xs" />
+                {t('common.retry', 'Retry')}
+              </Button>
+            }
+          />
         ) : displayEntries.length === 0 ? (
           isFiltering ? (
             <EmptyState

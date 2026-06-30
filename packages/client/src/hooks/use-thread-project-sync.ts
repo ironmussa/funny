@@ -15,8 +15,9 @@ function isOverlayActive(parsed: ParsedRoute): boolean {
     parsed.settingsPage ||
     parsed.inbox ||
     parsed.analytics ||
+    parsed.workflowsProjectId ||
     parsed.liveColumns ||
-    parsed.orchestrator ||
+    parsed.scheduler ||
     parsed.addProject ||
     parsed.scratchNew ||
     parsed.globalSearch ||

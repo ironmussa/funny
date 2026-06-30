@@ -268,20 +268,20 @@ export const KanbanCard = memo(function KanbanCard({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
-                  data-testid={`kanban-card-toggle-orchestrator-${thread.id}`}
+                  data-testid={`kanban-card-toggle-scheduler-${thread.id}`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const next = !thread.orchestratorManaged;
-                    const result = await api.setOrchestratorManaged(thread.id, next);
+                    const next = !thread.schedulerManaged;
+                    const result = await api.setSchedulerManaged(thread.id, next);
                     if (result.isErr()) {
                       toastError(result.error);
                     }
                   }}
                 >
                   <Workflow className="icon-sm" />
-                  {thread.orchestratorManaged
-                    ? t('sidebar.disableOrchestrator', 'Disable orchestrator')
-                    : t('sidebar.enableOrchestrator', 'Enable orchestrator')}
+                  {thread.schedulerManaged
+                    ? t('sidebar.disableScheduler', 'Disable scheduler')
+                    : t('sidebar.enableScheduler', 'Enable scheduler')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

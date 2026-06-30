@@ -51,7 +51,7 @@ commitRoutes.post('/project/:projectId/commit', async (c) => {
   );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
-  // Best-effort SHA capture for orchestrator / automation consumers.
+  // Best-effort SHA capture for scheduler / automation consumers.
   const sha = await gitRead(['rev-parse', 'HEAD'], { cwd, reject: false })
     .then((r) => (r.exitCode === 0 ? r.stdout.trim() : undefined))
     .catch(() => undefined);

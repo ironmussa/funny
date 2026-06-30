@@ -5,8 +5,15 @@
  * @domain layer: infrastructure
  */
 
-import { getPRForBranch, git, type BranchPRInfo, type GitIdentityOptions } from '@funny/core/git';
-import { ok } from 'neverthrow';
+import {
+  getPRForBranch,
+  git,
+  gitRead,
+  type BranchPRInfo,
+  type GitIdentityOptions,
+} from '@funny/core/git';
+import { badRequest, type DomainError } from '@funny/shared/errors';
+import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { startSpan } from '../../lib/telemetry.js';
@@ -185,4 +192,26 @@ export async function requireProjectCwd(
   const projectResult = await requireProject(projectId, userId, organizationId ?? undefined);
   if (projectResult.isErr()) return projectResult.map(() => '');
   return ok(projectResult.value.path);
+}
+
+/**
+ * Validate that a path is a real checked-out work tree before serving UI data
+ * that depends on working-tree state. Bare repositories can still answer some
+ * history commands, but changes and graph context become misleading/incomplete.
+ */
+export async function requireGitWorkingTree(cwd: string): Promise<Result<void, DomainError>> {
+  const result = await gitRead(['rev-parse', '--is-inside-work-tree'], {
+    cwd,
+    reject: false,
+  });
+  if (result.exitCode === 0 && result.stdout.trim() === 'true') {
+    return ok(undefined);
+  }
+
+  const detail = (result.stderr || result.stdout || 'not a git working tree').trim();
+  return err(
+    badRequest(
+      `Git working tree unavailable: ${detail}. This path may be a bare repository or not a checked-out worktree.`,
+    ),
+  );
 }

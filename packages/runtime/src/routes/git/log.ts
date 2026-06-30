@@ -28,7 +28,12 @@ import { resolveIdentity } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
-import { getCachedPR, requireProjectCwd, schedulePRLookup } from './helpers.js';
+import {
+  getCachedPR,
+  requireGitWorkingTree,
+  requireProjectCwd,
+  schedulePRLookup,
+} from './helpers.js';
 
 export const logRoutes = new Hono<HonoEnv>();
 
@@ -235,6 +240,8 @@ logRoutes.get('/project/:projectId/log', async (c) => {
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
   const { limit, skip } = parseLogPaging(c);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.log', { projectId }, () => getLog(cwd, limit + 1, undefined, skip)),
@@ -252,6 +259,8 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
   const { limit, skip } = parseLogPaging(c);
   const all = c.req.query('all') !== 'false';
   const identity = await resolveIdentity(userId);
@@ -360,6 +369,8 @@ logRoutes.get('/:threadId/log', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
 
   const { limit, skip } = parseLogPaging(c);
   const all = c.req.query('all') === 'true';
@@ -384,6 +395,8 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
 
   const { limit, skip } = parseLogPaging(c);
   // Graph view defaults to all refs so divergent branches show; opt out with all=false.

@@ -4,16 +4,21 @@
 @custom-variant dark (&:is(.dark *));
 
 @layer utilities {
-  :where(.overflow-y-auto, .overflow-y-scroll) {
+  :where(.overflow-y-auto, .overflow-y-scroll):not(.scroll-fade-none) {
     @apply fade-y fade-size-sm fade-range-sm;
   }
 
-  :where(.overflow-x-auto, .overflow-x-scroll) {
+  :where(.overflow-x-auto, .overflow-x-scroll):not(.scroll-fade-none) {
     @apply fade-x fade-size-sm fade-range-sm;
   }
 
-  :where(.overflow-auto, .overflow-scroll) {
+  :where(.overflow-auto, .overflow-scroll):not(.scroll-fade-none) {
     @apply fade-xy fade-size-sm fade-range-sm;
+  }
+
+  .scroll-fade-none {
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 

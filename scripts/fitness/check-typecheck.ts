@@ -33,7 +33,7 @@ const PROJECTS = [
   'packages/harness/tsconfig.json',
   'packages/agent/tsconfig.json',
   'packages/sdk/tsconfig.json',
-  'packages/orchestrator/tsconfig.json',
+  'packages/scheduler/tsconfig.json',
 ];
 
 const REFRESH = process.argv.includes('--refresh');

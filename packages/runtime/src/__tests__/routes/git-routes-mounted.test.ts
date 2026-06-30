@@ -179,7 +179,13 @@ describe('gitRoutes (mounted)', () => {
       }),
     );
     mocks.commit.mockReturnValue(okAsync('committed'));
-    mocks.gitRead.mockResolvedValue({ exitCode: 0, stdout: 'abc123def\n' });
+    mocks.gitRead.mockImplementation((args: string[]) =>
+      Promise.resolve(
+        args[0] === 'rev-parse' && args[1] === '--is-inside-work-tree'
+          ? { exitCode: 0, stdout: 'true\n', stderr: '' }
+          : { exitCode: 0, stdout: 'abc123def\n', stderr: '' },
+      ),
+    );
     mocks.push.mockReturnValue(okAsync('pushed to origin'));
     mocks.pull.mockReturnValue(okAsync('already up to date'));
     mocks.fetchRemote.mockReturnValue(okAsync(undefined));
@@ -377,6 +383,23 @@ describe('gitRoutes (mounted)', () => {
       excludePatterns: undefined,
       maxFiles: undefined,
     });
+  });
+
+  test('GET /api/git/project/:projectId/diff/summary returns work-tree errors', async () => {
+    mocks.gitRead.mockResolvedValueOnce({
+      exitCode: 128,
+      stdout: '',
+      stderr: 'fatal: this operation must be run in a work tree',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/diff/summary');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error:
+        'Git working tree unavailable: fatal: this operation must be run in a work tree. This path may be a bare repository or not a checked-out worktree.',
+    });
+    expect(mocks.getDiffSummary).not.toHaveBeenCalled();
   });
 
   test('GET /api/git/project/:projectId/status returns sync summary', async () => {
@@ -1069,6 +1092,22 @@ describe('gitRoutes (mounted)', () => {
     expect(mocks.getUnpulledHashes).toHaveBeenCalledWith('/tmp/repo');
   });
 
+  test('GET /api/git/project/:projectId/log returns work-tree errors', async () => {
+    mocks.gitRead.mockResolvedValueOnce({
+      exitCode: 128,
+      stdout: '',
+      stderr: 'fatal: this operation must be run in a work tree',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/log');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('fatal: this operation must be run in a work tree');
+    expect(mocks.getLog).not.toHaveBeenCalled();
+    expect(mocks.getUnpushedHashes).not.toHaveBeenCalled();
+    expect(mocks.getUnpulledHashes).not.toHaveBeenCalled();
+  });
+
   test('GET /api/git/project/:projectId/log projects unpushed hashes within the window', async () => {
     const app = makeApp();
 
@@ -1143,6 +1182,20 @@ describe('gitRoutes (mounted)', () => {
       skip: 0,
       all: true,
     });
+  });
+
+  test('GET /api/git/project/:projectId/graph-log returns work-tree errors', async () => {
+    mocks.gitRead.mockResolvedValueOnce({
+      exitCode: 128,
+      stdout: '',
+      stderr: 'fatal: this operation must be run in a work tree',
+    });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/project/p1/graph-log');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('fatal: this operation must be run in a work tree');
+    expect(mocks.getGraphLog).not.toHaveBeenCalled();
   });
 
   test('GET /api/git/project/:projectId/graph-log annotates branch refs with cached PR metadata', async () => {

@@ -22,7 +22,7 @@ import { validateFilePaths } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
-import { requireProjectCwd } from './helpers.js';
+import { requireGitWorkingTree, requireProjectCwd } from './helpers.js';
 
 export const diffRoutes = new Hono<HonoEnv>();
 
@@ -36,6 +36,8 @@ diffRoutes.get('/project/:projectId/diff/summary', async (c) => {
   if (!existsSync(cwd)) {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
   const excludeRaw = c.req.query('exclude');
   const excludePatterns = excludeRaw
     ? excludeRaw
@@ -165,6 +167,8 @@ diffRoutes.get('/:threadId/diff/summary', async (c) => {
   if (!existsSync(cwd)) {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
   const excludeRaw = c.req.query('exclude');
   const excludePatterns = excludeRaw
     ? excludeRaw
@@ -308,6 +312,8 @@ diffRoutes.get('/:threadId/diff', async (c) => {
   if (!existsSync(cwd)) {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
   const span = requestSpan(c, 'git.diff', { threadId: c.req.param('threadId') });
   const diffResult = await getDiff(cwd);
   span.end(

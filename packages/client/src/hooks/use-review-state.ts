@@ -153,9 +153,11 @@ export function useReviewState(args: UseReviewStateArgs) {
     loadingDiff,
     loading,
     loadError,
+    loadErrorMessage,
     truncatedInfo,
     setDiffCache,
     setLoadError,
+    setLoadErrorMessage,
     abortRef,
     needsRefreshRef,
     refresh,
@@ -337,6 +339,7 @@ export function useReviewState(args: UseReviewStateArgs) {
     setFileSearch('');
     setHasRebaseConflict(false);
     setLoadError(false);
+    setLoadErrorMessage(null);
     setSelectedAction('commit');
 
     if (reviewPaneOpen) {
@@ -448,9 +451,11 @@ export function useReviewState(args: UseReviewStateArgs) {
     loadingDiff,
     loading,
     loadError,
+    loadErrorMessage,
     truncatedInfo,
     setDiffCache,
     setLoadError,
+    setLoadErrorMessage,
     abortRef,
     needsRefreshRef,
     refresh,

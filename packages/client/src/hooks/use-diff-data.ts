@@ -41,11 +41,13 @@ export interface UseDiffDataResult {
   loadingDiff: string | null;
   loading: boolean;
   loadError: boolean;
+  loadErrorMessage: string | null;
   truncatedInfo: { total: number; truncated: boolean };
 
   // Setters (used by the parent's gitContextKey reset effect)
   setDiffCache: Dispatch<SetStateAction<Map<string, string>>>;
   setLoadError: Dispatch<SetStateAction<boolean>>;
+  setLoadErrorMessage: Dispatch<SetStateAction<string | null>>;
 
   // Refs (passed into peer hooks like useStashState that share request lifecycle)
   abortRef: React.MutableRefObject<AbortController | null>;
@@ -115,6 +117,7 @@ export function useDiffData({
   });
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
 
   // AbortController for in-flight git requests. Aborted when the git context
   // changes (thread/project switch) to prevent piling up stale requests that
@@ -152,6 +155,7 @@ export function useDiffData({
 
     setLoading(true);
     setLoadError(false);
+    setLoadErrorMessage(null);
 
     // Fire git status refresh in parallel (don't await — it updates its own store).
     if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
@@ -242,6 +246,7 @@ export function useDiffData({
       } else {
         console.error('Failed to load diff summary:', result.error);
         setLoadError(true);
+        setLoadErrorMessage(result.error.message);
       }
     } finally {
       // Only the live refresh owns `loading`. A superseded refresh leaves the
@@ -425,9 +430,11 @@ export function useDiffData({
     loadingDiff,
     loading,
     loadError,
+    loadErrorMessage,
     truncatedInfo,
     setDiffCache,
     setLoadError,
+    setLoadErrorMessage,
     abortRef,
     needsRefreshRef,
     refresh,

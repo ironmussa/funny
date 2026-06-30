@@ -1,4 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
+import { badRequest } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, ok, okAsync } from 'neverthrow';
 import { useState } from 'react';
@@ -166,7 +167,7 @@ describe('useDiffData', () => {
   test('retries recovery after a failed initial refresh once fresh git status arrives', async () => {
     // The first refresh fails — e.g. the runner was still reconnecting on app
     // entry — so the panel lands in loadError with an empty summary.
-    gitApiMock.getDiffSummary.mockReturnValueOnce(errAsync('runner offline'));
+    gitApiMock.getDiffSummary.mockReturnValueOnce(errAsync(badRequest('runner offline')));
 
     const { result, rerender } = renderHook(
       (props: { dirtyFileCount: number }) =>
@@ -181,6 +182,7 @@ describe('useDiffData', () => {
     await waitFor(() => {
       expect(result.current.loadError).toBe(true);
     });
+    expect(result.current.loadErrorMessage).toBe('runner offline');
     expect(result.current.summaries).toEqual([]);
 
     // Fresh git status reports a dirty worktree. Recovery must retry even though
@@ -192,6 +194,8 @@ describe('useDiffData', () => {
         { path: 'Dockerfile.dev', status: 'modified', staged: false },
       ]);
     });
+    expect(result.current.loadError).toBe(false);
+    expect(result.current.loadErrorMessage).toBeNull();
   });
 
   test('loads the initial summary when the review pane mounts open with empty state', async () => {

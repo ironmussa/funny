@@ -88,6 +88,7 @@ export function ChangesPanel() {
           handleExpandAllFolders: ctx.handleExpandAllFolders,
           loading: ctx.loading,
           loadError: ctx.loadError,
+          loadErrorMessage: ctx.loadErrorMessage,
           refresh: ctx.refresh,
           fileSearch: ctx.fileSearch,
           treeRows: ctx.treeRows,

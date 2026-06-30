@@ -148,7 +148,7 @@ describe('UserMessageCard', () => {
     expect(timestamp).toBeInTheDocument();
     expect(screen.getByTestId('msg-4').className).toContain('grid grid-cols-[minmax(0,1fr)_auto]');
     expect(timestamp.parentElement).toHaveAttribute('data-testid', 'user-message-side-meta');
-    expect(timestamp.parentElement?.className).toContain('justify-end');
+    expect(timestamp.parentElement?.className).toContain('justify-between');
   });
 
   test('keeps actions and timestamp in the same right-side column', () => {
@@ -221,6 +221,29 @@ describe('UserMessageCard', () => {
     fireEvent.click(screen.getByTestId('user-message-fork-msg-5'));
 
     expect(onFork).toHaveBeenCalledTimes(1);
+  });
+
+  test('copies the visible message content from the actions menu', () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    renderWithProviders(
+      <UserMessageCard
+        content={
+          '<referenced-files>\n<file path="src/utils.ts" />\n</referenced-files>\nCopy this text'
+        }
+        onFork={vi.fn()}
+        data-testid="msg-copy"
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('user-message-actions-menu-msg-copy'));
+    fireEvent.click(screen.getByTestId('user-message-copy-content-msg-copy'));
+
+    expect(writeText).toHaveBeenCalledWith('Copy this text');
   });
 
   test('disables rewind actions when rewindDisabled is true', () => {

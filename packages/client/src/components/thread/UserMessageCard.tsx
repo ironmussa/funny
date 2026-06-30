@@ -1,5 +1,13 @@
 import type { AgentModel, EffortLevel, PermissionMode } from '@funny/shared';
-import { ChevronRight, ChevronDown, GitBranch, Undo2, RotateCcw, MoreVertical } from 'lucide-react';
+import {
+  ChevronRight,
+  ChevronDown,
+  GitBranch,
+  Undo2,
+  RotateCcw,
+  MoreVertical,
+  Copy,
+} from 'lucide-react';
 import {
   useState,
   useRef,
@@ -21,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { EFFORT_LEVELS } from '@/lib/providers';
@@ -321,6 +330,8 @@ export function UserMessageCard({
 }: UserMessageCardProps) {
   const { t } = useTranslation();
   const { files, inlineContent, fileMap } = parseReferencedFiles(content);
+  const [, copyToClipboard] = useCopyToClipboard();
+  const visibleContent = inlineContent.trim();
 
   const allImages = images?.map((i, j) => ({
     src: `data:${i.source.media_type};base64,${i.source.data}`,
@@ -331,7 +342,8 @@ export function UserMessageCard({
   // in the prompt text. Surface any referenced file that isn't already rendered
   // inline so the user can see what was sent.
   const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
-  const hasThreadActions = Boolean(onFork || onRewind || onForkAndRewind);
+  const hasCopyableContent = visibleContent.length > 0;
+  const hasThreadActions = Boolean(hasCopyableContent || onFork || onRewind || onForkAndRewind);
   const hasFooterBadges = Boolean(model || permissionMode);
   const hasSideMeta = Boolean(hasThreadActions || timestamp);
   let sideMetaJustify = 'justify-start';
@@ -405,7 +417,7 @@ export function UserMessageCard({
         )}
 
         {/* Message content with inline file chips */}
-        <UserMessageContent content={inlineContent.trim()} fileMap={fileMap} />
+        <UserMessageContent content={visibleContent} fileMap={fileMap} />
 
         {/* Metadata: model and permission mode */}
         {hasFooterBadges && (
@@ -449,13 +461,13 @@ export function UserMessageCard({
                     <button
                       type="button"
                       data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
-                      disabled={forkDisabled}
+                      disabled={forkDisabled && !hasCopyableContent}
                       onClick={(e) => e.stopPropagation()}
                       className={cn(
                         'flex h-6 w-6 items-center justify-center rounded',
                         'bg-background/10 text-background/70 transition-opacity hover:bg-background/20 hover:text-background',
                         'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
-                        forkDisabled && 'cursor-not-allowed opacity-50',
+                        forkDisabled && !hasCopyableContent && 'cursor-not-allowed opacity-50',
                       )}
                       aria-label={t('thread.threadActions', 'Thread actions')}
                     >
@@ -472,6 +484,15 @@ export function UserMessageCard({
                 className="w-64"
                 onClick={(e) => e.stopPropagation()}
               >
+                {hasCopyableContent && (
+                  <DropdownMenuItem
+                    data-testid={`user-message-copy-content-${props['data-testid'] ?? ''}`}
+                    onSelect={() => copyToClipboard(visibleContent)}
+                  >
+                    <Copy className="icon-xs" />
+                    {t('thread.copyContent', 'Copy content')}
+                  </DropdownMenuItem>
+                )}
                 {onFork && (
                   <DropdownMenuItem
                     data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}

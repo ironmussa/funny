@@ -49,7 +49,7 @@ function DropdownMenuContent({
   );
 }
 const dropdownMenuItemVariants = cva(
-  'relative flex cursor-pointer select-none items-center rounded-sm outline-hidden transition-colors focus-visible:bg-accent focus-visible:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
+  'relative flex cursor-pointer select-none items-center rounded-sm outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
   {
     variants: {
       size: {
@@ -118,7 +118,7 @@ function DropdownMenuSeparator({
   );
 }
 const dropdownMenuSubTriggerVariants = cva(
-  'flex cursor-pointer select-none items-center rounded-sm outline-hidden focus-visible:bg-accent data-[state=open]:bg-accent',
+  'flex cursor-pointer select-none items-center rounded-sm outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground',
   {
     variants: {
       size: {

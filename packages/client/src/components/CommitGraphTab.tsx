@@ -8,7 +8,17 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+  type UIEvent,
+  type WheelEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -26,6 +36,7 @@ import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useElementWidth } from '@/hooks/use-element-width';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
@@ -33,6 +44,11 @@ import type { GitRebaseReflogEventDTO, GraphRefDTO } from '@/lib/api/git';
 import { authorAvatarUrl } from '@/lib/author-avatar';
 import { useCachedAvatar } from '@/lib/avatar-cache';
 import { createClientLogger } from '@/lib/client-logger';
+import {
+  graphGutterViewportWidth,
+  graphRefLeaderLineXRange,
+  renderedGraphLaneCount,
+} from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
 import { commitMatchesQuery } from '@/lib/git-history-search';
 import {
@@ -125,10 +141,6 @@ function rebaseLinkNodeEdgeX(lane: number): number {
   return graphNodeX(lane) + LANE_WIDTH / 2 + 2;
 }
 
-export function renderedGraphLaneCount(layoutLaneCount: number): number {
-  return Math.max(layoutLaneCount, 1);
-}
-
 /**
  * Branch-graph view of git history. Separate from {@link CommitHistoryTab}
  * (the flat list) — this one renders a GitKraken-style lane graph on the left
@@ -165,6 +177,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [logLoading, setLogLoading] = useState(false);
   const [logErrorMessage, setLogErrorMessage] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const hasMoreRef = useRef(false);
   const [allBranches, setAllBranches] = useState(true);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
@@ -177,11 +190,14 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [githubAvatarBySha, setGithubAvatarBySha] = useState<Map<string, string>>(new Map());
   const avatarByEmail = useEmailAvatars(entries);
   const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
+  const [graphScrollLeft, setGraphScrollLeft] = useState(0);
+  const graphScrollLeftRef = useRef(0);
 
   // Search bar (always visible): a list FILTER over the loaded commits, matching
   // the commit's subject, body, or any branch/tag ref it carries (see
   // commitMatchesQuery).
   const [searchQuery, setSearchQuery] = useState('');
+  const searchQueryRef = useRef('');
 
   const loadingRef = useRef(false);
   const loadedRef = useRef(false);
@@ -219,6 +235,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         // freshly-loaded page without waiting for a React re-render.
         entriesRef.current = merged;
         setEntries(merged);
+        hasMoreRef.current = more;
         setHasMore(more);
         setUnpushed((prev) => {
           if (!append) return new Set(unpushedHashes);
@@ -258,6 +275,33 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     loadLog(entries.length, true);
   }, [hasMore, entries.length, loadLog]);
 
+  const loadFilteredHistory = useCallback(async () => {
+    if (!hasMoreRef.current || loadingRef.current) return;
+    let nextSkip = entriesRef.current.length;
+    while (
+      searchQueryRef.current.trim().length > 0 &&
+      hasMoreRef.current &&
+      nextSkip < FILTER_MAX_SCAN
+    ) {
+      const result = await loadLog(nextSkip, true);
+      if (!result?.hasMore) return;
+      const loadedLength = entriesRef.current.length;
+      if (loadedLength <= nextSkip) return;
+      nextSkip = loadedLength;
+    }
+  }, [loadLog]);
+
+  const updateSearchQuery = useCallback(
+    (nextQuery: string) => {
+      searchQueryRef.current = nextQuery;
+      setSearchQuery(nextQuery);
+      if (nextQuery.trim().length > 0) {
+        void loadFilteredHistory();
+      }
+    },
+    [loadFilteredHistory],
+  );
+
   const refreshLog = useCallback(() => {
     loadedRef.current = true;
     loadLog(0, false);
@@ -271,6 +315,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     loadedRef.current = false;
     entriesRef.current = [];
     setEntries([]);
+    hasMoreRef.current = false;
     setHasMore(false);
     setLogErrorMessage(null);
     setUnpushed(new Set());
@@ -278,6 +323,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     setRebaseEvents([]);
     setSelectedRebaseEvent(null);
     // Drop the filter query — it belongs to the old context.
+    searchQueryRef.current = '';
     setSearchQuery('');
     if (visible && hasGitContext) {
       loadedRef.current = true;
@@ -428,6 +474,39 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     return 0;
   }, [displayEntries, laneCount, layout.rows, rebaseCopyLinks]);
   const gutterWidth = laneGutterWidth + rebaseRailWidth;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const graphHorizontalScrollRef = useRef<HTMLDivElement>(null);
+  const rootWidth = useElementWidth(rootRef);
+  const graphViewportWidth = graphGutterViewportWidth(gutterWidth, rootWidth);
+  const graphMaxScrollLeft = Math.max(0, gutterWidth - graphViewportWidth);
+  const clampedGraphScrollLeft = Math.min(graphScrollLeft, graphMaxScrollLeft);
+  const updateGraphScrollLeft = useCallback(
+    (nextScrollLeft: number) => {
+      const clampedScrollLeft = Math.max(0, Math.min(graphMaxScrollLeft, nextScrollLeft));
+      const scrollElement = graphHorizontalScrollRef.current;
+      if (scrollElement && Math.round(scrollElement.scrollLeft) !== Math.round(clampedScrollLeft)) {
+        scrollElement.scrollLeft = clampedScrollLeft;
+      }
+      graphScrollLeftRef.current = clampedScrollLeft;
+      setGraphScrollLeft(clampedScrollLeft);
+    },
+    [graphMaxScrollLeft],
+  );
+  const handleGraphGutterWheel = useCallback(
+    (event: WheelEvent<HTMLDivElement>) => {
+      if (graphMaxScrollLeft <= 0) return;
+      const delta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.shiftKey
+            ? event.deltaY
+            : 0;
+      if (delta === 0) return;
+      event.preventDefault();
+      updateGraphScrollLeft(graphScrollLeftRef.current + delta);
+    },
+    [graphMaxScrollLeft, updateGraphScrollLeft],
+  );
 
   // Working-tree status drives the WIP "Uncommitted changes" node above the list
   // and the dashed stub that ties the HEAD row up to it. Lifted here (rather than
@@ -467,19 +546,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     if (lastIndex >= entries.length - 5) loadMore();
   }, [lastIndex, entries.length, showSentinel, loadMore]);
 
-  // ── Search filter ────────────────────────────────────────────────────────
-  // The filter can only match commits that are loaded, but the log is paginated.
-  // While a query is active, eagerly page through history (bounded) so matches
-  // deeper than the first page still surface without the user scrolling.
-  useEffect(() => {
-    if (!isFiltering || !hasMore || loadingRef.current) return;
-    if (entries.length >= FILTER_MAX_SCAN) return;
-    void loadLog(entries.length, true);
-  }, [isFiltering, hasMore, entries.length, loadLog]);
-
   const clearSearch = useCallback(() => {
-    setSearchQuery('');
-  }, []);
+    updateSearchQuery('');
+  }, [updateSearchQuery]);
 
   const selectedCommit = entries.find((e) => e.hash === selectedHash);
   const branchSummaries = useMemo(() => summarizeGraphBranches(entries), [entries]);
@@ -568,6 +637,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
 
   return (
     <div
+      ref={rootRef}
       className="flex h-full w-full min-w-0 flex-col overflow-hidden"
       data-testid="commit-graph-tab"
     >
@@ -582,7 +652,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       <div className="border-sidebar-border bg-background border-b px-2 py-1">
         <SearchBar
           query={searchQuery}
-          onQueryChange={setSearchQuery}
+          onQueryChange={updateSearchQuery}
           totalMatches={displayEntries.length}
           loading={isFiltering && logLoading}
           onClose={isFiltering ? clearSearch : undefined}
@@ -606,11 +676,14 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           firstRow={layout.rows[0]}
           laneCount={laneCount}
           gutterWidth={gutterWidth}
+          graphViewportWidth={graphViewportWidth}
+          graphScrollLeft={clampedGraphScrollLeft}
+          onGraphGutterWheel={handleGraphGutterWheel}
           rowHeight={baseRowH}
         />
       )}
 
-      <div className="flex flex-1 flex-col overflow-y-auto" ref={scrollRef}>
+      <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto" ref={scrollRef}>
         {logLoading && entries.length === 0 ? (
           <LoadingState testId="graph-loading" label={t('review.loadingLog', 'Loading commits…')} />
         ) : logErrorMessage ? (
@@ -654,6 +727,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
               entries={displayEntries}
               layoutRows={layout.rows}
               gutterWidth={gutterWidth}
+              graphViewportWidth={graphViewportWidth}
+              graphScrollLeft={clampedGraphScrollLeft}
               rowHeightFor={rowHeightFor}
             />
             {virtualItems.map((virtualRow) => {
@@ -689,6 +764,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   graphRow={layout.rows[virtualRow.index]}
                   laneCount={laneCount}
                   gutterWidth={gutterWidth}
+                  graphViewportWidth={graphViewportWidth}
+                  graphScrollLeft={clampedGraphScrollLeft}
+                  onGraphGutterWheel={handleGraphGutterWheel}
                   selected={selectedHash === entry.hash}
                   avatarUrl={
                     githubAvatarBySha.get(entry.hash) ?? avatarByEmail.get(entry.authorEmail)
@@ -724,6 +802,15 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         )}
       </div>
 
+      {graphMaxScrollLeft > 0 && (
+        <GraphGutterHorizontalScroller
+          scrollbarRef={graphHorizontalScrollRef}
+          graphViewportWidth={graphViewportWidth}
+          gutterWidth={gutterWidth}
+          onScrollLeftChange={updateGraphScrollLeft}
+        />
+      )}
+
       <CommitDetailDialog
         selectedCommit={selectedCommit}
         selectedHash={selectedHash}
@@ -751,12 +838,16 @@ function RebaseCopyLinksOverlay({
   entries,
   layoutRows,
   gutterWidth,
+  graphViewportWidth,
+  graphScrollLeft,
   rowHeightFor,
 }: {
   links: RebaseCopyLink[];
   entries: GraphEntry[];
   layoutRows: GraphRow[];
   gutterWidth: number;
+  graphViewportWidth: number;
+  graphScrollLeft: number;
   rowHeightFor: (entry: GraphEntry) => number;
 }) {
   const markerId = useId();
@@ -811,63 +902,72 @@ function RebaseCopyLinksOverlay({
   const width = Math.max(gutterWidth + 12, maxRailX + 12, LANE_WIDTH * 4);
 
   return (
-    <svg
-      className="pointer-events-none absolute top-0 left-0 z-20"
-      style={{ width, height: nextTop, overflow: 'visible' }}
-      width={width}
-      height={nextTop}
-      aria-hidden="true"
+    <div
+      className="pointer-events-none absolute top-0 left-0 z-20 overflow-hidden"
+      style={{ width: 12 + graphViewportWidth, height: nextTop }}
       data-testid="graph-rebase-copy-links"
     >
-      <defs>
-        <marker
-          id={markerId}
-          markerWidth="6"
-          markerHeight="6"
-          refX="5"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <path d="M 0 0 L 6 3 L 0 6 z" fill="var(--terminal-yellow)" />
-        </marker>
-      </defs>
-      {visibleLinks.map(({ link, source, target }) => {
-        const railLane = rebaseCopyLinkRailLane({
-          sourceLane: source.lane,
-          targetLane: target.lane,
-        });
-        const railX = rebaseCopyLinkRailX({
-          laneGutterWidth: railLane * LANE_WIDTH,
-          railWidth: REBASE_LINK_RAIL_WIDTH,
-        });
-        const y2 = target.top + target.nodeY;
-        const x1 = rebaseLinkNodeEdgeX(source.lane);
-        const y1 = source.top + source.nodeY;
-        const x2 = rebaseLinkNodeEdgeX(target.lane);
-        return (
-          <g key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}>
-            <path
-              d={roundedRebaseCopyLinkPath({
-                sourceX: x1,
-                sourceY: y1,
-                targetX: x2,
-                targetY: y2,
-                railX,
-              })}
-              fill="none"
-              stroke="var(--terminal-yellow)"
-              strokeWidth={1.4}
-              strokeDasharray="3 3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              markerEnd={`url(#${markerId})`}
-              opacity={0.9}
-            />
-          </g>
-        );
-      })}
-    </svg>
+      <svg
+        style={{
+          width,
+          height: nextTop,
+          overflow: 'visible',
+          transform: `translateX(-${graphScrollLeft}px)`,
+        }}
+        width={width}
+        height={nextTop}
+        aria-hidden="true"
+      >
+        <defs>
+          <marker
+            id={markerId}
+            markerWidth="6"
+            markerHeight="6"
+            refX="5"
+            refY="3"
+            orient="auto"
+            markerUnits="strokeWidth"
+          >
+            <path d="M 0 0 L 6 3 L 0 6 z" fill="var(--terminal-yellow)" />
+          </marker>
+        </defs>
+        {visibleLinks.map(({ link, source, target }) => {
+          const railLane = rebaseCopyLinkRailLane({
+            sourceLane: source.lane,
+            targetLane: target.lane,
+          });
+          const railX = rebaseCopyLinkRailX({
+            laneGutterWidth: railLane * LANE_WIDTH,
+            railWidth: REBASE_LINK_RAIL_WIDTH,
+          });
+          const y2 = target.top + target.nodeY;
+          const x1 = rebaseLinkNodeEdgeX(source.lane);
+          const y1 = source.top + source.nodeY;
+          const x2 = rebaseLinkNodeEdgeX(target.lane);
+          return (
+            <g key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}>
+              <path
+                d={roundedRebaseCopyLinkPath({
+                  sourceX: x1,
+                  sourceY: y1,
+                  targetX: x2,
+                  targetY: y2,
+                  railX,
+                })}
+                fill="none"
+                stroke="var(--terminal-yellow)"
+                strokeWidth={1.4}
+                strokeDasharray="3 3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                markerEnd={`url(#${markerId})`}
+                opacity={0.9}
+              />
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -960,6 +1060,46 @@ function GraphToolbar({
   );
 }
 
+export function GraphGutterHorizontalScroller({
+  scrollbarRef,
+  graphViewportWidth,
+  gutterWidth,
+  onScrollLeftChange,
+}: {
+  scrollbarRef?: Ref<HTMLDivElement>;
+  graphViewportWidth: number;
+  gutterWidth: number;
+  onScrollLeftChange: (scrollLeft: number) => void;
+}) {
+  const { t } = useTranslation();
+
+  const handleScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      onScrollLeftChange(event.currentTarget.scrollLeft);
+    },
+    [onScrollLeftChange],
+  );
+
+  return (
+    <div
+      className="border-sidebar-border bg-background shrink-0 border-t py-1 pr-2 pl-3"
+      data-testid="graph-gutter-horizontal-scroll"
+    >
+      <div
+        ref={scrollbarRef}
+        aria-label={t('graph.gutterHorizontalScroll', 'Scroll graph lanes')}
+        title={t('graph.gutterHorizontalScroll', 'Scroll graph lanes')}
+        className="scroll-fade-none scrollbar-visible overflow-x-auto overflow-y-hidden"
+        style={{ width: graphViewportWidth, height: 10 }}
+        onScroll={handleScroll}
+        data-testid="graph-gutter-horizontal-scrollbar"
+      >
+        <div style={{ width: gutterWidth, height: 1 }} />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Synthetic top-of-graph row for the working tree's uncommitted changes
  * (GitKraken-style "WIP" node). Pinned above the scroll list and shown only when
@@ -971,12 +1111,18 @@ export function GraphWipRow({
   firstRow,
   laneCount,
   gutterWidth,
+  graphViewportWidth = gutterWidth,
+  graphScrollLeft = 0,
+  onGraphGutterWheel,
   rowHeight,
 }: {
   status: NonNullable<ReturnType<typeof useWorkingTreeStatus>['status']>;
   firstRow: GraphRow | undefined;
   laneCount: number;
   gutterWidth: number;
+  graphViewportWidth?: number;
+  graphScrollLeft?: number;
+  onGraphGutterWheel?: (event: WheelEvent<HTMLDivElement>) => void;
   rowHeight: number;
 }) {
   const { t } = useTranslation();
@@ -994,34 +1140,40 @@ export function GraphWipRow({
       className="hover:bg-accent/50 flex w-full shrink-0 cursor-pointer items-center gap-2 overflow-hidden pr-2 pl-3 text-left transition-colors"
       data-testid="graph-wip-row"
     >
-      <div style={{ width: gutterWidth }} className="shrink-0 self-stretch">
-        <svg
-          width={gutterWidth}
-          height={rowHeight}
-          style={{ width: gutterWidth, height: rowHeight, overflow: 'visible' }}
-          aria-hidden="true"
-        >
-          {/* Dashed connector heading down toward the HEAD commit below. */}
-          <line
-            x1={cx}
-            y1={cy}
-            x2={cx}
-            y2={rowHeight}
-            stroke={stroke}
-            strokeWidth={1.6}
-            strokeDasharray="2 2"
-          />
-          {/* Hollow dashed node = work not yet committed. */}
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="hsl(var(--background))"
-            stroke={stroke}
-            strokeWidth={1.6}
-            strokeDasharray="2 2"
-          />
-        </svg>
+      <div
+        style={{ width: graphViewportWidth }}
+        className="shrink-0 self-stretch overflow-hidden"
+        onWheel={onGraphGutterWheel}
+      >
+        <div style={{ width: gutterWidth, transform: `translateX(-${graphScrollLeft}px)` }}>
+          <svg
+            width={gutterWidth}
+            height={rowHeight}
+            style={{ width: gutterWidth, height: rowHeight, overflow: 'visible' }}
+            aria-hidden="true"
+          >
+            {/* Dashed connector heading down toward the HEAD commit below. */}
+            <line
+              x1={cx}
+              y1={cy}
+              x2={cx}
+              y2={rowHeight}
+              stroke={stroke}
+              strokeWidth={1.6}
+              strokeDasharray="2 2"
+            />
+            {/* Hollow dashed node = work not yet committed. */}
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="hsl(var(--background))"
+              stroke={stroke}
+              strokeWidth={1.6}
+              strokeDasharray="2 2"
+            />
+          </svg>
+        </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
         <span className="text-foreground truncate text-xs leading-tight font-medium">
@@ -1044,6 +1196,9 @@ function GraphCommitRow({
   graphRow,
   laneCount,
   gutterWidth,
+  graphViewportWidth,
+  graphScrollLeft,
+  onGraphGutterWheel,
   selected,
   avatarUrl,
   committerAvatarUrl,
@@ -1071,6 +1226,9 @@ function GraphCommitRow({
   graphRow: GraphRow | undefined;
   laneCount: number;
   gutterWidth: number;
+  graphViewportWidth: number;
+  graphScrollLeft: number;
+  onGraphGutterWheel: (event: WheelEvent<HTMLDivElement>) => void;
   selected: boolean;
   avatarUrl: string | undefined;
   committerAvatarUrl: string | undefined;
@@ -1219,8 +1377,15 @@ function GraphCommitRow({
             // px geometry from the row's padding-box origin (absolute inset-0).
             // Horizontal: pl-3 (12) + gutter + gap-2 (8) + info pl-1 (4).
             const avatarR = Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
-            const nodeX = 12 + graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2;
-            const chipLeftX = 12 + gutterWidth + 8 + 4;
+            const nodeX = 12 + graphRow.commitLane * LANE_WIDTH + LANE_WIDTH / 2 - graphScrollLeft;
+            const chipLeftX = 12 + graphViewportWidth + 8 + 4;
+            const leaderLine = graphRefLeaderLineXRange({
+              nodeX,
+              avatarR,
+              graphViewportWidth,
+              chipLeftX,
+            });
+            if (!leaderLine) return null;
             return (
               <svg
                 className="pointer-events-none absolute inset-0"
@@ -1228,9 +1393,9 @@ function GraphCommitRow({
                 aria-hidden="true"
               >
                 <line
-                  x1={nodeX + avatarR}
+                  x1={leaderLine.x1}
                   y1={chipCenterY}
-                  x2={chipLeftX}
+                  x2={leaderLine.x2}
                   y2={chipCenterY}
                   stroke={lanePastel}
                   strokeWidth={1.6}
@@ -1252,83 +1417,94 @@ function GraphCommitRow({
               2 * Math.min(LANE_WIDTH / 2, Math.max(6, Math.round(rowHeight * 0.15)));
             const nodeHitboxSize = hasDistinctCommitter ? avatarDiameter + 8 : avatarDiameter;
             return (
-              <div style={{ width: gutterWidth }} className="relative shrink-0 self-stretch">
-                <GraphGutter
-                  row={graphRow}
-                  laneCount={laneCount}
-                  height={rowHeight}
-                  avatarUrl={cachedAvatarUrl}
-                  authorName={entry.author}
-                  committerAvatarUrl={cachedCommitterAvatarUrl}
-                  committerName={hasDistinctCommitter ? entry.committer : undefined}
-                  connectUp={connectToWip}
-                  nodeYFrac={nodeYFrac}
-                />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      aria-hidden
-                      className="absolute -translate-x-1/2 -translate-y-1/2"
-                      style={{
-                        left: nodeCenterX,
-                        top: nodeYFrac * rowHeight,
-                        width: nodeHitboxSize,
-                        height: nodeHitboxSize,
-                      }}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <div className="flex flex-col gap-0.5">
-                      <span>
-                        {t('graph.nodeAuthor', {
-                          author: entry.author,
-                          defaultValue: `Author: ${entry.author}`,
-                        })}
-                      </span>
-                      {hasDistinctCommitter ? (
+              <div
+                style={{ width: graphViewportWidth }}
+                className="shrink-0 self-stretch overflow-hidden"
+                onWheel={onGraphGutterWheel}
+              >
+                <div
+                  style={{ width: gutterWidth, transform: `translateX(-${graphScrollLeft}px)` }}
+                  className="relative h-full"
+                >
+                  <GraphGutter
+                    row={graphRow}
+                    laneCount={laneCount}
+                    height={rowHeight}
+                    avatarUrl={cachedAvatarUrl}
+                    authorName={entry.author}
+                    committerAvatarUrl={cachedCommitterAvatarUrl}
+                    committerName={hasDistinctCommitter ? entry.committer : undefined}
+                    connectUp={connectToWip}
+                    nodeYFrac={nodeYFrac}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        aria-hidden
+                        className="absolute -translate-x-1/2 -translate-y-1/2"
+                        style={{
+                          left: nodeCenterX,
+                          top: nodeYFrac * rowHeight,
+                          width: nodeHitboxSize,
+                          height: nodeHitboxSize,
+                        }}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <div className="flex flex-col gap-0.5">
                         <span>
-                          {t('graph.nodeCommitter', {
-                            committer: entry.committer,
-                            defaultValue: `Committed by: ${entry.committer}`,
+                          {t('graph.nodeAuthor', {
+                            author: entry.author,
+                            defaultValue: `Author: ${entry.author}`,
                           })}
                         </span>
-                      ) : null}
-                      {forkedFromRefLabel ? (
-                        <span>
-                          {t('graph.nodeBranchedFrom', {
-                            branch: forkedFromRefLabel,
-                            defaultValue: `Branched from: ${forkedFromRefLabel}`,
-                          })}
-                        </span>
-                      ) : null}
-                      {parentLabel ? (
-                        <>
+                        {hasDistinctCommitter ? (
                           <span>
-                            {t('graph.nodeParent', {
-                              parent: parentLabel.commit,
-                              defaultValue: `Parent: ${parentLabel.commit}`,
+                            {t('graph.nodeCommitter', {
+                              committer: entry.committer,
+                              defaultValue: `Committed by: ${entry.committer}`,
                             })}
                           </span>
-                          {parentLabel.branchLabels.length > 0 ? (
-                            <ul className="list-disc space-y-0.5 pl-4">
-                              {parentLabel.branchLabels.map((branch) => (
-                                <Tooltip key={branch}>
-                                  <TooltipTrigger asChild>
-                                    <li>{middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}</li>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-                                    {branch}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </>
-                      ) : null}
-                      {unpushed && <span>{t('history.unpushed', 'Not pushed')}</span>}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
+                        ) : null}
+                        {forkedFromRefLabel ? (
+                          <span>
+                            {t('graph.nodeBranchedFrom', {
+                              branch: forkedFromRefLabel,
+                              defaultValue: `Branched from: ${forkedFromRefLabel}`,
+                            })}
+                          </span>
+                        ) : null}
+                        {parentLabel ? (
+                          <>
+                            <span>
+                              {t('graph.nodeParent', {
+                                parent: parentLabel.commit,
+                                defaultValue: `Parent: ${parentLabel.commit}`,
+                              })}
+                            </span>
+                            {parentLabel.branchLabels.length > 0 ? (
+                              <ul className="list-disc space-y-0.5 pl-4">
+                                {parentLabel.branchLabels.map((branch) => (
+                                  <Tooltip key={branch}>
+                                    <TooltipTrigger asChild>
+                                      <li>
+                                        {middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}
+                                      </li>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+                                      {branch}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </>
+                        ) : null}
+                        {unpushed && <span>{t('history.unpushed', 'Not pushed')}</span>}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
             );
           })()}

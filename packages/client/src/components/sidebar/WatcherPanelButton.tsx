@@ -174,19 +174,15 @@ function JobRow({
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            role="button"
-            tabIndex={0}
-            onClick={openLog}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openLog();
-              }
-            }}
-            className="hover:bg-accent flex cursor-pointer items-start justify-between gap-2 rounded-md px-2 py-1.5"
+            className="hover:bg-accent flex items-start justify-between gap-2 rounded-md px-2 py-1.5"
             data-testid={`job-row-${job.id}`}
           >
-            <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={openLog}
+              className="focus-visible:ring-ring min-w-0 flex-1 cursor-pointer rounded-sm text-left outline-none focus-visible:ring-1"
+              aria-label={`Open output for ${job.label || job.command}`}
+            >
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-sm font-medium">{job.label || job.command}</span>
                 <Badge variant={jobStatusVariant(job.status)} className={CHIP_CLASS}>
@@ -199,7 +195,7 @@ function JobRow({
                 {!isRunning ? ` · ended ${timeAgo(job.updatedAt, t)}` : null}
               </p>
               <p className="text-muted-foreground/70 truncate font-mono text-xs">{job.command}</p>
-            </div>
+            </button>
             {isRunning ? (
               <Button
                 variant="ghost"
@@ -260,26 +256,26 @@ export function WatcherPanelButton() {
   const loadJobs = useJobStore((s) => s.loadJobs);
 
   const watchers = useMemo(() => {
-    const rank = (s: WatcherStatus) => (ACTIVE_STATUSES.includes(s) ? 0 : 1);
-    return Object.values(watchersById).sort(
-      (a, b) => rank(a.status) - rank(b.status) || b.createdAt.localeCompare(a.createdAt),
-    );
+    return Object.values(watchersById).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [watchersById]);
 
   const jobs = useMemo(() => {
-    return Object.values(jobsById).sort(
-      (a, b) =>
-        (a.status === 'running' ? 0 : 1) - (b.status === 'running' ? 0 : 1) ||
-        b.startedAt.localeCompare(a.startedAt),
-    );
+    return Object.values(jobsById).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }, [jobsById]);
 
-  const activeCount = useMemo(
-    () =>
-      watchers.filter((w) => ACTIVE_STATUSES.includes(w.status)).length +
-      jobs.filter((j) => j.status === 'running').length,
-    [watchers, jobs],
+  const activeWatchers = useMemo(
+    () => watchers.filter((w) => ACTIVE_STATUSES.includes(w.status)),
+    [watchers],
   );
+  const historicalWatchers = useMemo(
+    () => watchers.filter((w) => !ACTIVE_STATUSES.includes(w.status)),
+    [watchers],
+  );
+  const runningJobs = useMemo(() => jobs.filter((j) => j.status === 'running'), [jobs]);
+  const historicalJobs = useMemo(() => jobs.filter((j) => j.status !== 'running'), [jobs]);
+
+  const activeCount = activeWatchers.length + runningJobs.length;
+  const totalCount = watchers.length + jobs.length;
 
   // Load once on mount so the per-thread clocks (ThreadWatcherIndicator) are
   // correct without the user opening the panel. WS job:*/watcher:* events keep
@@ -312,31 +308,33 @@ export function WatcherPanelButton() {
         />
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 p-1" data-testid="watcher-panel">
-        {jobs.length === 0 && watchers.length === 0 ? (
+        {totalCount === 0 ? (
           <p className="text-muted-foreground px-2 py-4 text-center text-sm">
             No background activity yet.
           </p>
         ) : (
-          <ScrollArea className={cn('max-h-96', jobs.length + watchers.length > 6 && 'h-96')}>
-            {jobs.length > 0 && (
+          <ScrollArea className={cn('max-h-96', totalCount > 6 && 'h-96')}>
+            {activeCount > 0 && (
               <>
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
-                  Background jobs
-                </div>
+                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Active</div>
                 <div className="flex flex-col gap-0.5">
-                  {jobs.map((j) => (
+                  {runningJobs.map((j) => (
                     <JobRow key={j.id} job={j} scopeId={scopeId} onOpened={() => setOpen(false)} />
+                  ))}
+                  {activeWatchers.map((w) => (
+                    <WatcherRow key={w.id} watcher={w} now={now} />
                   ))}
                 </div>
               </>
             )}
-            {watchers.length > 0 && (
+            {historicalJobs.length + historicalWatchers.length > 0 && (
               <>
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
-                  Watchers
-                </div>
+                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">History</div>
                 <div className="flex flex-col gap-0.5">
-                  {watchers.map((w) => (
+                  {historicalJobs.map((j) => (
+                    <JobRow key={j.id} job={j} scopeId={scopeId} onOpened={() => setOpen(false)} />
+                  ))}
+                  {historicalWatchers.map((w) => (
                     <WatcherRow key={w.id} watcher={w} now={now} />
                   ))}
                 </div>

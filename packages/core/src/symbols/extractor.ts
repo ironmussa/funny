@@ -1,3 +1,4 @@
+import { createRequire } from 'module';
 import { join, dirname } from 'path';
 
 import { internal, type DomainError } from '@funny/shared/errors';
@@ -7,18 +8,47 @@ import type { SymbolInfo, SymbolKind } from './types.js';
 
 // ── Lazy-loaded tree-sitter ──────────────────────────────────
 
-let Parser: typeof import('web-tree-sitter').Parser | null = null;
+type TreeSitterParserConstructor = {
+  init: () => Promise<void>;
+  new (): any;
+  Language?: { load: (path: string) => Promise<any> };
+};
+
+let Parser: TreeSitterParserConstructor | null = null;
+let LanguageLoader: { load: (path: string) => Promise<any> } | null = null;
 let parserReady = false;
+let parserInitPromise: Promise<TreeSitterParserConstructor> | null = null;
 const languageCache = new Map<string, any>();
+const requireFromCore = createRequire(import.meta.url);
 
-async function ensureParser(): Promise<typeof import('web-tree-sitter').Parser> {
+async function ensureParser(): Promise<TreeSitterParserConstructor> {
   if (Parser && parserReady) return Parser;
+  if (parserInitPromise) return parserInitPromise;
 
-  const mod = await import('web-tree-sitter');
-  Parser = mod.Parser;
-  await Parser.init();
-  parserReady = true;
-  return Parser;
+  parserInitPromise = (async () => {
+    const mod = requireFromCore('web-tree-sitter');
+    const moduleExports = mod as {
+      Parser?: TreeSitterParserConstructor;
+      Language?: { load: (path: string) => Promise<any> };
+      default?: TreeSitterParserConstructor;
+    };
+    const parser =
+      moduleExports.Parser ?? moduleExports.default ?? (mod as TreeSitterParserConstructor);
+    await parser.init();
+
+    Parser = moduleExports.Parser ?? moduleExports.default ?? (mod as TreeSitterParserConstructor);
+    LanguageLoader = moduleExports.Language ?? Parser.Language ?? null;
+    if (!LanguageLoader) {
+      throw new Error('web-tree-sitter language loader is unavailable');
+    }
+    parserReady = true;
+    return Parser;
+  })().catch((error) => {
+    parserInitPromise = null;
+    throw error;
+  });
+
+  return parserInitPromise;
 }
 
 // ── Extension → language mapping ─────────────────────────────
@@ -64,15 +94,14 @@ async function loadLanguage(langName: string): Promise<any> {
   // Try to resolve from tree-sitter-wasms package
   let wasmPath: string;
   try {
-    const treeSitterWasmsPath = require.resolve('tree-sitter-wasms/package.json');
+    const treeSitterWasmsPath = requireFromCore.resolve('tree-sitter-wasms/package.json');
     wasmPath = join(dirname(treeSitterWasmsPath), 'out', wasmFileName);
   } catch {
     // Fallback: resolve relative to node_modules
     wasmPath = join(process.cwd(), 'node_modules', 'tree-sitter-wasms', 'out', wasmFileName);
   }
 
-  const { Language } = await import('web-tree-sitter');
-  const lang = await Language.load(wasmPath);
+  const lang = await LanguageLoader!.load(wasmPath);
   languageCache.set(langName, lang);
   return lang;
 }

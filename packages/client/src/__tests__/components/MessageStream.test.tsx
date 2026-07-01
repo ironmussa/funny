@@ -956,6 +956,62 @@ describe('MessageStream sticky bottom', () => {
     expect(viewport.scrollTop).toBe(1000);
   });
 
+  test('captures the outgoing thread scroll position when switching threads', () => {
+    let scrollHeight = 2000;
+    const ref = createRef<MessageStreamHandle>();
+    const { container, rerender } = render(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+      viewport.scrollTop = 750;
+    });
+
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="short"
+        status="idle"
+        messages={makeMessages('short thread')}
+        onSend={() => {}}
+      />,
+    );
+
+    scrollHeight = 700;
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    scrollHeight = 2500;
+    rerender(
+      <MessageStream
+        ref={ref}
+        threadId="long"
+        status="idle"
+        messages={makeMessages('long thread again')}
+        onSend={() => {}}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(1000);
+  });
+
   test('prefers the saved visible row anchor over scroll progress when returning to a thread', () => {
     let scrollHeight = 2000;
     memoizedMessageListLifecycle.visibleAnchor = {

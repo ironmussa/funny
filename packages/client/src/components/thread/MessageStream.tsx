@@ -243,8 +243,8 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     );
 
     const saveThreadScrollPosition = useCallback(
-      (id: string, viewport: HTMLDivElement) => {
-        if (threadIdRef.current !== id) return;
+      (id: string, viewport: HTMLDivElement, options: { allowInactiveThread?: boolean } = {}) => {
+        if (!options.allowInactiveThread && threadIdRef.current !== id) return;
 
         const distanceFromBottom = getDistanceFromBottom(viewport);
         const atLoadedBottom = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
@@ -415,8 +415,48 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       return () => {
         cancelled = true;
         cancelAnimationFrame(firstRafId);
+        const lastKnownScrollTop = lastScrollTopRef.current;
+        if (lastKnownScrollTop === null || Math.abs(viewport.scrollTop - lastKnownScrollTop) > 1) {
+          saveThreadScrollPosition(threadId, viewport, { allowInactiveThread: true });
+        }
       };
+      // The cleanup must capture the outgoing thread's pagination context. Adding
+      // saveThreadScrollPosition as a dependency would re-run restoration during
+      // pagination/layout updates instead of only on thread switches.
+      // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
     }, [threadId]);
+
+    // After a thread switch the virtualized list measures its real row heights
+    // over several frames, so content can grow after the restore burst above.
+    // If we restored to the bottom, keep it pinned only while the list settles.
+    useEffect(() => {
+      if (typeof ResizeObserver === 'undefined') return;
+      const viewport = scrollViewportRef.current;
+      const content = contentStackRef.current;
+      if (!viewport || !content || !threadId) return;
+
+      let stopped = false;
+      const repinIfAtBottom = () => {
+        if (stopped || userHasScrolledUp.current) return;
+        const saved = threadScrollPositionsRef.current!.get(threadId);
+        // Undefined saved position == first visit, which restores to bottom.
+        if (saved && !saved.atBottom) return;
+        pinViewportToBottom(viewport);
+      };
+
+      const ro = new ResizeObserver(repinIfAtBottom);
+      ro.observe(content);
+      const stopTimer = setTimeout(() => {
+        stopped = true;
+        ro.disconnect();
+      }, 700);
+
+      return () => {
+        stopped = true;
+        clearTimeout(stopTimer);
+        ro.disconnect();
+      };
+    }, [threadId, pinViewportToBottom]);
 
     handleViewportScrollRef.current = () => {
       const viewport = scrollViewportRef.current;

@@ -5,9 +5,14 @@ import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import {
   GraphCommitSyncMarkers,
   GraphCommitTime,
+  GraphGutterHorizontalScroller,
   GraphWipRow,
-  renderedGraphLaneCount,
 } from '@/components/CommitGraphTab';
+import {
+  graphGutterViewportWidth,
+  graphRefLeaderLineXRange,
+  renderedGraphLaneCount,
+} from '@/lib/commit-graph-layout';
 import {
   inferUnpulledHashesFromGraphEntries,
   type FoldedRef,
@@ -80,6 +85,64 @@ describe('renderedGraphLaneCount', () => {
   test('reserves every computed lane instead of capping the graph gutter', () => {
     expect(renderedGraphLaneCount(18)).toBe(18);
     expect(renderedGraphLaneCount(0)).toBe(1);
+  });
+});
+
+describe('graphGutterViewportWidth', () => {
+  test('keeps wide branch graphs from consuming the commit text column', () => {
+    expect(graphGutterViewportWidth(544, 780)).toBe(320);
+    expect(graphGutterViewportWidth(160, 780)).toBe(160);
+    expect(graphGutterViewportWidth(544, 220)).toBe(92);
+    expect(graphGutterViewportWidth(544, 0)).toBe(544);
+  });
+});
+
+describe('GraphGutterHorizontalScroller', () => {
+  test('renders a native bottom scrollbar for wide branch graphs', () => {
+    const onScrollLeftChange = vi.fn();
+    renderWithProviders(
+      <GraphGutterHorizontalScroller
+        graphViewportWidth={120}
+        gutterWidth={320}
+        onScrollLeftChange={onScrollLeftChange}
+      />,
+    );
+
+    expect(screen.queryByTestId('graph-gutter-horizontal-range')).not.toBeInTheDocument();
+
+    const frame = screen.getByTestId('graph-gutter-horizontal-scroll');
+    const scrollbar = screen.getByTestId('graph-gutter-horizontal-scrollbar');
+    expect(frame).toHaveClass('border-t');
+    expect(scrollbar).toHaveClass('scrollbar-visible', 'overflow-x-auto');
+    expect(scrollbar).toHaveStyle({ width: '120px', height: '10px' });
+
+    Object.defineProperty(scrollbar, 'scrollLeft', { configurable: true, value: 64 });
+    fireEvent.scroll(scrollbar);
+    expect(onScrollLeftChange).toHaveBeenCalledWith(64);
+  });
+});
+
+describe('graphRefLeaderLineXRange', () => {
+  test('keeps the visible connector when the branch node scrolls off the left edge', () => {
+    expect(
+      graphRefLeaderLineXRange({
+        nodeX: -24,
+        avatarR: 8,
+        graphViewportWidth: 120,
+        chipLeftX: 144,
+      }),
+    ).toEqual({ x1: 12, x2: 144 });
+  });
+
+  test('omits the connector when the branch node is still off the right edge', () => {
+    expect(
+      graphRefLeaderLineXRange({
+        nodeX: 160,
+        avatarR: 8,
+        graphViewportWidth: 120,
+        chipLeftX: 144,
+      }),
+    ).toBeNull();
   });
 });
 

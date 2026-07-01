@@ -30,7 +30,7 @@
     "portless:list": "portless list",
     "dev:portless": "bun run portless:routes && bun run dev",
     "dev:server": "cd packages/server && bun --env-file ../../.env --watch src/index.ts",
-    "dev:runtime": "bun --env-file ../../.env --watch --cwd packages/runtime src/index.ts",
+    "dev:runtime": "cd packages/runtime && bun --env-file ../../.env src/dev-watch.ts",
     "dev:client": "cd packages/client && npx vite",
     "dev:scheduler": "bun --env-file ./.env --watch packages/scheduler/src/bin/scheduler.ts",
     "dev:api-acp": "bun --watch --cwd packages/api-acp src/index.ts",

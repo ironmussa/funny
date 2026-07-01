@@ -192,12 +192,13 @@ describe('gitCommitPersistenceHandler', () => {
 });
 
 describe('stageTransitionOnAgentStartHandler', () => {
-  test('filter accepts backlog/planning/review stages only', async () => {
+  test('filter accepts running backlog/planning/review threads only', async () => {
     const ctx = makeCtx({
       getThread: vi.fn(async () => ({
         id: 't-1',
         projectId: 'p-1',
         userId: 'u-1',
+        status: 'running',
         stage: 'backlog',
       })),
     });
@@ -213,7 +214,22 @@ describe('stageTransitionOnAgentStartHandler', () => {
       id: 't-1',
       projectId: 'p-1',
       userId: 'u-1',
+      status: 'running',
       stage: 'in_progress',
+    });
+    expect(
+      await stageTransitionOnAgentStartHandler.filter!(
+        { threadId: 't-1', userId: 'u-1', projectId: 'p-1' },
+        ctx,
+      ),
+    ).toBe(false);
+
+    (ctx.getThread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 't-1',
+      projectId: 'p-1',
+      userId: 'u-1',
+      status: 'completed',
+      stage: 'review',
     });
     expect(
       await stageTransitionOnAgentStartHandler.filter!(
@@ -229,6 +245,7 @@ describe('stageTransitionOnAgentStartHandler', () => {
         id: 't-1',
         projectId: 'p-1',
         userId: 'u-1',
+        status: 'running',
         stage: 'planning',
       })),
     });
@@ -244,6 +261,26 @@ describe('stageTransitionOnAgentStartHandler', () => {
       threadId: 't-1',
       data: { status: 'running', stage: 'in_progress' },
     });
+  });
+
+  test('does not revive a thread that completed before action runs', async () => {
+    const ctx = makeCtx({
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: 'p-1',
+        userId: 'u-1',
+        status: 'completed',
+        stage: 'review',
+      })),
+    });
+
+    await stageTransitionOnAgentStartHandler.action(
+      { threadId: 't-1', userId: 'u-1', projectId: 'p-1' },
+      ctx,
+    );
+
+    expect(ctx.updateThread).not.toHaveBeenCalled();
+    expect(ctx.emitToUser).not.toHaveBeenCalled();
   });
 });
 

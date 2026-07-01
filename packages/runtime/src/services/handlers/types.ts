@@ -33,6 +33,7 @@ interface HandlerThread {
   id: string;
   projectId: string;
   userId: string;
+  status?: string | null;
   stage?: string | null;
   model?: string | null;
   provider?: string | null;

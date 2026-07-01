@@ -5,11 +5,12 @@
  * @domain layer: application
  * @domain consumes: agent:started
  *
- * Auto-transitions thread stage to 'in_progress' when an agent starts,
- * if the thread is currently in backlog, planning, or review.
+ * Auto-transitions running backlog/planning/review threads to in_progress when
+ * an agent starts.
  */
 
 import type { AgentStartedEvent } from '../thread-event-bus.js';
+import { transitionThreadLifecycle } from '../thread-lifecycle-machine.js';
 import type { EventHandler } from './types.js';
 
 export const stageTransitionOnAgentStartHandler: EventHandler<'agent:started'> = {
@@ -19,17 +20,21 @@ export const stageTransitionOnAgentStartHandler: EventHandler<'agent:started'> =
   async filter(event: AgentStartedEvent, ctx) {
     const thread = await ctx.getThread(event.threadId);
     if (!thread) return false;
-    return thread.stage === 'backlog' || thread.stage === 'planning' || thread.stage === 'review';
+    return transitionThreadLifecycle(thread, { type: 'AGENT_STARTED' }) !== null;
   },
 
   async action(event: AgentStartedEvent, ctx) {
     const thread = await ctx.getThread(event.threadId);
     if (!thread) return;
-    await ctx.updateThread(event.threadId, { stage: 'in_progress' });
-    ctx.emitToUser(event.userId, {
-      type: 'agent:status',
-      threadId: event.threadId,
-      data: { status: 'running', stage: 'in_progress' },
-    });
+    const transition = transitionThreadLifecycle(thread, { type: 'AGENT_STARTED' });
+    if (!transition) return;
+    await ctx.updateThread(event.threadId, transition.updates);
+    if (transition.clientStatus) {
+      ctx.emitToUser(event.userId, {
+        type: 'agent:status',
+        threadId: event.threadId,
+        data: transition.clientStatus,
+      });
+    }
   },
 };

@@ -40,12 +40,14 @@ function useDiffHarness({
   dirtyFileCount,
   linesAdded,
   linesDeleted,
+  currentBranch,
 }: {
   initialSummaries?: FileDiffSummary[];
   initialSelectedFile?: string | null;
   dirtyFileCount?: number;
   linesAdded?: number;
   linesDeleted?: number;
+  currentBranch?: string;
 } = {}) {
   const [summaries, setSummaries] = useState<FileDiffSummary[]>(initialSummaries);
   const [selectedFile, setSelectedFile] = useState<string | null>(initialSelectedFile);
@@ -58,6 +60,7 @@ function useDiffHarness({
     selectedFile,
     expandedFile: null,
     reviewPaneOpen: true,
+    currentBranch,
     summaries,
     setSummaries,
     submoduleExpansions: new Map(),
@@ -214,6 +217,47 @@ describe('useDiffData', () => {
         expect.any(AbortSignal),
       );
     });
+    await waitFor(() => {
+      expect(result.current.summaries).toEqual([
+        { path: 'Dockerfile.dev', status: 'modified', staged: false },
+      ]);
+    });
+  });
+
+  test('recovers an empty early summary when the branch hydrates after a thread switch', async () => {
+    gitApiMock.getDiffSummary
+      .mockReturnValueOnce(
+        okAsync({
+          files: [],
+          total: 0,
+          truncated: false,
+        }),
+      )
+      .mockReturnValue(
+        okAsync({
+          files: [{ path: 'Dockerfile.dev', status: 'modified', staged: false }],
+          total: 1,
+          truncated: false,
+        }),
+      );
+
+    const { result, rerender } = renderHook(
+      (props: { currentBranch?: string }) =>
+        useDiffHarness({
+          initialSummaries: [],
+          initialSelectedFile: null,
+          currentBranch: props.currentBranch,
+        }),
+      { initialProps: { currentBranch: undefined as string | undefined } },
+    );
+
+    await waitFor(() => {
+      expect(gitApiMock.getDiffSummary).toHaveBeenCalledTimes(1);
+    });
+    expect(result.current.summaries).toEqual([]);
+
+    rerender({ currentBranch: 'main' });
+
     await waitFor(() => {
       expect(result.current.summaries).toEqual([
         { path: 'Dockerfile.dev', status: 'modified', staged: false },

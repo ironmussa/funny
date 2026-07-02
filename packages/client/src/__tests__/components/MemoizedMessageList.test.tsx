@@ -331,6 +331,75 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelector('[data-item-key="m2"]')).toBeTruthy();
   });
 
+  test('pushes the sticky section context up as the next user row reaches it', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 4;
+    // Rows are 120px in the mock: next user row m2 starts at 240. With the
+    // sticky content measuring 100px, offset 180 leaves 60px of headroom, so
+    // the sticky copy must be pushed up by 40px.
+    virtualizerMockState.scrollOffset = 180;
+
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockImplementation(function (this: Element) {
+      const height = this.closest('[data-testid="sticky-section-context"]') ? 100 : 0;
+      return {
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: height,
+        width: 0,
+        height,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+
+    try {
+      const { getByTestId } = render(<Harness messages={makeMessages(6)} />);
+
+      await waitFor(() =>
+        expect(getByTestId('sticky-section-content').style.transform).toBe('translateY(-40px)'),
+      );
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  test('does not push the sticky section context while the next user row is far below', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 4;
+    // Next user row m2 (start 240) is 110px below the offset, beyond the
+    // 100px sticky content height, so no push applies.
+    virtualizerMockState.scrollOffset = 130;
+
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockImplementation(function (this: Element) {
+      const height = this.closest('[data-testid="sticky-section-context"]') ? 100 : 0;
+      return {
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: height,
+        width: 0,
+        height,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+
+    try {
+      const { getByTestId } = render(<Harness messages={makeMessages(6)} />);
+
+      await waitFor(() => expect(getByTestId('sticky-section-content')).toBeTruthy());
+      await act(async () => {});
+      expect(getByTestId('sticky-section-content').style.transform).toBe('');
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
   test('uses leading user context when the owner row is outside the loaded window', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 2;

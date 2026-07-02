@@ -110,7 +110,10 @@ vi.mock('@/hooks/use-review-actions', () => ({
   useReviewActions: () => ({}),
 }));
 
-function baseArgs(currentBranch: string | undefined) {
+function baseArgs(
+  currentBranch: string | undefined,
+  reviewSubTab: 'changes' | 'graph' = 'changes',
+) {
   return {
     effectiveThreadId: undefined,
     projectModeId: 'p1',
@@ -127,7 +130,7 @@ function baseArgs(currentBranch: string | undefined) {
     unpushedCommitCount: 0,
     remoteCheckProjectId: 'p1',
     reviewPaneOpen: true,
-    reviewSubTab: 'changes' as const,
+    reviewSubTab,
     setReviewPaneOpen: vi.fn(),
     setConfirmDialog: vi.fn(),
   };
@@ -163,5 +166,21 @@ describe('useReviewState reset effect', () => {
     rerender('feature/x');
     await waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(2));
     expect(abortSpy).toHaveBeenCalled();
+  });
+
+  test('refreshes when the already-open review pane switches back to the Changes tab', async () => {
+    const { rerender } = renderHook(
+      (tab: 'changes' | 'graph') => useReviewState(baseArgs('main', tab)),
+      {
+        initialProps: 'graph' as 'changes' | 'graph',
+      },
+    );
+
+    // Mount still performs the normal context refresh.
+    await waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(1));
+
+    rerender('changes');
+
+    await waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(2));
   });
 });

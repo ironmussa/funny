@@ -11,6 +11,7 @@ import {
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { gitApi } from '@/lib/api/git';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
+import { metric } from '@/lib/telemetry';
 import { useGitStatusStore } from '@/stores/git-status-store';
 
 interface UseDiffDataArgs {
@@ -20,6 +21,8 @@ interface UseDiffDataArgs {
   selectedFile: string | null;
   expandedFile: string | null;
   reviewPaneOpen: boolean;
+  /** Branch known for the current git context; local-thread checkout hydrates async. */
+  currentBranch?: string;
   /** ReviewPane owns this state (consumed by many places); we read + write it. */
   summaries: FileDiffSummary[];
   setSummaries: Dispatch<SetStateAction<FileDiffSummary[]>>;
@@ -81,6 +84,7 @@ export function useDiffData({
   selectedFile,
   expandedFile,
   reviewPaneOpen,
+  currentBranch,
   summaries,
   setSummaries,
   submoduleExpansions,
@@ -170,10 +174,35 @@ export function useDiffData({
       // reset / thread switch): don't write state. The `finally` below still
       // clears `loading` when this is the live epoch, so the panel can't get
       // stuck on the spinner.
-      if (refreshEpochRef.current !== epoch || signal.aborted) return;
+      if (refreshEpochRef.current !== epoch || signal.aborted) {
+        // Permanent diagnostic: a discarded refresh is the prime suspect when
+        // the Changes tab shows "No changes" on a dirty tree (result arrived
+        // but was thrown away by the epoch/abort guard). See instrumentation
+        // notes in packages/client/CLAUDE.md.
+        metric('review.refresh_outcome', 1, {
+          attributes: {
+            outcome: signal.aborted ? 'aborted' : 'superseded',
+            threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
+          },
+        });
+        // This refresh's result was thrown away, so `summaries` may still be the
+        // empty array the reset effect left behind. Release the ensure-loaded
+        // latch so its backstop effect re-fires and reloads the *settled*
+        // context — otherwise a summary discarded during a thread switch leaves
+        // the Changes tab stuck on "No changes" even though the tree is dirty.
+        ensureLoadedKeyRef.current = null;
+        return;
+      }
 
       if (result.isOk()) {
         const data = result.value;
+        metric('review.refresh_outcome', 1, {
+          attributes: {
+            outcome: 'applied',
+            files: String(data.files.length),
+            threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
+          },
+        });
 
         // Determine which visible files to reload before state updates so we can
         // fire their diff requests in parallel with React batching.
@@ -245,6 +274,13 @@ export function useDiffData({
         if (diffPromises.length > 0) await Promise.all(diffPromises);
       } else {
         console.error('Failed to load diff summary:', result.error);
+        metric('review.refresh_outcome', 1, {
+          attributes: {
+            outcome: 'error',
+            error: result.error.message,
+            threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
+          },
+        });
         setLoadError(true);
         setLoadErrorMessage(result.error.message);
       }
@@ -401,6 +437,7 @@ export function useDiffData({
 
     const key = [
       effectiveThreadId ?? projectModeId ?? 'unknown',
+      currentBranch ?? 'unknown-branch',
       dirtyFileCount ?? 0,
       linesAdded ?? 0,
       linesDeleted ?? 0,
@@ -413,6 +450,7 @@ export function useDiffData({
     hasGitContext,
     effectiveThreadId,
     projectModeId,
+    currentBranch,
     dirtyFileCount,
     linesAdded,
     linesDeleted,

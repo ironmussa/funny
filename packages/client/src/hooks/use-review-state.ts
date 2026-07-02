@@ -17,6 +17,7 @@ import { useGenerateCommitMsg } from '@/hooks/use-generate-commit-msg';
 import { usePublishState } from '@/hooks/use-publish-state';
 import { useReviewActions } from '@/hooks/use-review-actions';
 import { useStashState } from '@/hooks/use-stash-state';
+import { metric } from '@/lib/telemetry';
 import type { ProjectGitStatus } from '@/stores/git-status-store';
 import type { ReviewSubTab } from '@/stores/ui-store';
 
@@ -139,6 +140,7 @@ export function useReviewState(args: UseReviewStateArgs) {
     selectedFile,
     expandedFile,
     reviewPaneOpen,
+    currentBranch,
     summaries,
     setSummaries,
     submoduleExpansions,
@@ -164,6 +166,27 @@ export function useReviewState(args: UseReviewStateArgs) {
     loadDiffForFile,
     requestFullDiff,
   } = diffData;
+
+  // The Changes tab stays mounted while the user visits History/Stash/PRs, so
+  // returning to it does not naturally remount or reload its diff summary. Treat
+  // tab activation as a visibility event and refresh the working-tree snapshot.
+  const prevReviewSubTabRef = useRef<ReviewSubTab | undefined>(undefined);
+  useEffect(() => {
+    const previousTab = prevReviewSubTabRef.current;
+    prevReviewSubTabRef.current = reviewSubTab;
+
+    if (previousTab === undefined || previousTab === 'changes' || reviewSubTab !== 'changes') {
+      return;
+    }
+
+    if (!hasGitContext) return;
+
+    if (reviewPaneOpen) {
+      void refresh();
+    } else {
+      needsRefreshRef.current = true;
+    }
+  }, [reviewSubTab, hasGitContext, reviewPaneOpen, refresh, needsRefreshRef]);
 
   const stash = useStashState({
     hasGitContext,
@@ -327,7 +350,23 @@ export function useReviewState(args: UseReviewStateArgs) {
     prevGitContextKeyRef.current = gitContextKey;
     prevCurrentBranchRef.current = currentBranch;
 
-    if (isInitialBranchHydration) return;
+    if (isInitialBranchHydration) {
+      metric('review.reset_gate', 1, { attributes: { decision: 'skip-branch-hydration' } });
+      return;
+    }
+
+    // Permanent diagnostic: this effect is the primary refresh trigger on a
+    // thread/project switch. If the Changes tab shows a stale "No changes", the
+    // most common cause is this effect either not running (gitContextKey didn't
+    // change because the right pane follows a different id) or deferring the
+    // refresh because reviewPaneOpen is stale-false. See packages/client/CLAUDE.md.
+    metric('review.reset_gate', 1, {
+      attributes: {
+        decision: reviewPaneOpen ? 'refresh' : 'defer',
+        contextChanged: String(contextChanged),
+        threadId: effectiveThreadId ?? projectModeId ?? 'unknown',
+      },
+    });
 
     abortRef.current?.abort();
     abortGenerate();

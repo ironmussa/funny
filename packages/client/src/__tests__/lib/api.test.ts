@@ -72,6 +72,33 @@ describe('API Client', () => {
     });
   });
 
+  describe('Circuit breaker', () => {
+    test('runner proxy 502/504 responses do not open the server circuit', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockJsonResponse({ error: 'No runner connected' }, 502))
+        .mockResolvedValueOnce(mockJsonResponse({ error: 'Runner timed out' }, 504))
+        .mockResolvedValueOnce(mockJsonResponse({ error: 'Runner timed out' }, 504));
+
+      await api.getGitStatuses('p1');
+      await api.getGitStatuses('p1');
+      await api.getGitStatuses('p1');
+
+      expect(useCircuitBreakerStore.getState().state).toBe('closed');
+      expect(useCircuitBreakerStore.getState().failureCount).toBe(0);
+    });
+
+    test('central server 500 responses still open the server circuit', async () => {
+      mockFetch.mockResolvedValue(mockJsonResponse({ error: 'Internal server error' }, 500));
+
+      await api.getGitStatuses('p1');
+      await api.getGitStatuses('p1');
+      await api.getGitStatuses('p1');
+
+      expect(useCircuitBreakerStore.getState().state).toBe('open');
+      expect(useCircuitBreakerStore.getState().failureCount).toBe(3);
+    });
+  });
+
   describe('Threads', () => {
     test('listThreads without projectId', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse([]));

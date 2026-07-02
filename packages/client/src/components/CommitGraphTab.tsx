@@ -51,6 +51,7 @@ import {
 } from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
 import { commitMatchesQuery } from '@/lib/git-history-search';
+import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import {
   githubBrowseBaseUrl as resolveGithubBrowseBaseUrl,
   githubCommitUrlForRemoteCommit,
@@ -205,6 +206,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // Synchronous mirror of the loaded entries so the background pager can append
   // without a stale closure over React state.
   const entriesRef = useRef<GraphEntry[]>([]);
+  const loadedLogSkipRef = useRef(0);
 
   const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${allBranches}`;
 
@@ -230,7 +232,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       if (result.isOk()) {
         const { entries: next, hasMore: more, unpushedHashes, unpulledHashes = [] } = result.value;
         setLogErrorMessage(null);
-        const merged = append ? [...entriesRef.current, ...next] : next;
+        loadedLogSkipRef.current = append ? skip + next.length : next.length;
+        const merged = append
+          ? mergeLogEntriesByHash(entriesRef.current, next)
+          : uniqueLogEntriesByHash(next);
         // Keep the synchronous mirror current so the next append builds on the
         // freshly-loaded page without waiting for a React re-render.
         entriesRef.current = merged;
@@ -272,12 +277,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
 
   const loadMore = useCallback(() => {
     if (!hasMore || loadingRef.current) return;
-    loadLog(entries.length, true);
-  }, [hasMore, entries.length, loadLog]);
+    loadLog(loadedLogSkipRef.current, true);
+  }, [hasMore, loadLog]);
 
   const loadFilteredHistory = useCallback(async () => {
     if (!hasMoreRef.current || loadingRef.current) return;
-    let nextSkip = entriesRef.current.length;
+    let nextSkip = loadedLogSkipRef.current;
     while (
       searchQueryRef.current.trim().length > 0 &&
       hasMoreRef.current &&
@@ -285,9 +290,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     ) {
       const result = await loadLog(nextSkip, true);
       if (!result?.hasMore) return;
-      const loadedLength = entriesRef.current.length;
-      if (loadedLength <= nextSkip) return;
-      nextSkip = loadedLength;
+      const loadedSkip = loadedLogSkipRef.current;
+      if (loadedSkip <= nextSkip) return;
+      nextSkip = loadedLogSkipRef.current;
     }
   }, [loadLog]);
 
@@ -314,6 +319,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     loadingRef.current = false;
     loadedRef.current = false;
     entriesRef.current = [];
+    loadedLogSkipRef.current = 0;
     setEntries([]);
     hasMoreRef.current = false;
     setHasMore(false);

@@ -11,6 +11,7 @@ import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-s
 import { EmptyState } from '@/components/ui/empty-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api, type PullStrategy } from '@/lib/api';
+import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import { githubBrowseBaseUrl as resolveGithubBrowseBaseUrl } from '@/lib/github-url';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
@@ -59,6 +60,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [unpushedHashes, setUnpushedHashes] = useState<Set<string>>(new Set());
   const loadedRef = useRef(false);
   const loadingRef = useRef(false);
+  const loadedLogSkipRef = useRef(0);
 
   const [pullInProgress, setPullInProgress] = useState(false);
   const [pullStrategyDialog, setPullStrategyDialog] = useState<{
@@ -145,7 +147,10 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       }
       if (result.isOk()) {
         const { entries, hasMore: more, unpushedHashes: hashes } = result.value;
-        setLogEntries((prev) => (append ? [...prev, ...entries] : entries));
+        loadedLogSkipRef.current = append ? skip + entries.length : entries.length;
+        setLogEntries((prev) =>
+          append ? mergeLogEntriesByHash(prev, entries) : uniqueLogEntriesByHash(entries),
+        );
         setHasMore(more);
         if (hashes) {
           setUnpushedHashes((prev) => {
@@ -173,8 +178,8 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
   const loadMore = useCallback(() => {
     if (!hasMore || loadingRef.current) return;
-    loadLog(logEntries.length, true);
-  }, [hasMore, logEntries.length, loadLog]);
+    loadLog(loadedLogSkipRef.current, true);
+  }, [hasMore, loadLog]);
 
   const refreshLog = useCallback(() => {
     loadedRef.current = false;
@@ -196,6 +201,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
     if (!isInitialMount && visible && hasGitContext) {
       setLogLoading(true);
     }
+    loadedLogSkipRef.current = 0;
     setLogEntries([]);
     setHasMore(false);
     setUnpushedHashes(new Set());

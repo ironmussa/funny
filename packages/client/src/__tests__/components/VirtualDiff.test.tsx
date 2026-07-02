@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
 import { VirtualDiff } from '@/components/VirtualDiff';
@@ -12,7 +12,7 @@ const SIMPLE_DIFF = `diff --git a/src/example.ts b/src/example.ts
 `;
 
 describe('VirtualDiff', () => {
-  test('keeps visible scrollbars while rendering edge fade overlays', () => {
+  test('keeps visible scrollbars without global scroll masks', () => {
     render(<VirtualDiff unifiedDiff={SIMPLE_DIFF} viewMode="split" />);
 
     expect(screen.getByTestId('diff-scroll-area')).toHaveClass(
@@ -27,15 +27,42 @@ describe('VirtualDiff', () => {
     expect(screen.getByTestId('diff-scroll-frame')).toHaveStyle({
       '--diff-scrollbar-gutter': '12px',
     });
-    expect(screen.getByTestId('diff-fade-top')).toHaveClass(
-      'scroll-fade-edge',
-      'scroll-fade-edge-top',
-    );
+    expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-left')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-right')).not.toBeInTheDocument();
+  });
+
+  test('renders vertical edge fades only when scrolled away from that edge', () => {
+    render(<VirtualDiff unifiedDiff={SIMPLE_DIFF} viewMode="split" />);
+
+    const scrollArea = screen.getByTestId('diff-scroll-area');
+    Object.defineProperty(scrollArea, 'clientHeight', { configurable: true, value: 100 });
+    Object.defineProperty(scrollArea, 'scrollHeight', { configurable: true, value: 220 });
+    Object.defineProperty(scrollArea, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    fireEvent.scroll(scrollArea);
+    expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
     expect(screen.getByTestId('diff-fade-bottom')).toHaveClass(
       'scroll-fade-edge',
       'scroll-fade-edge-bottom',
     );
-    expect(screen.queryByTestId('diff-fade-left')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('diff-fade-right')).not.toBeInTheDocument();
+
+    scrollArea.scrollTop = 40;
+    fireEvent.scroll(scrollArea);
+    expect(screen.getByTestId('diff-fade-top')).toHaveClass(
+      'scroll-fade-edge',
+      'scroll-fade-edge-top',
+    );
+    expect(screen.getByTestId('diff-fade-bottom')).toBeInTheDocument();
+
+    scrollArea.scrollTop = 120;
+    fireEvent.scroll(scrollArea);
+    expect(screen.getByTestId('diff-fade-top')).toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
   });
 });

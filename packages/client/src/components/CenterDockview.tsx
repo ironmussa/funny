@@ -131,6 +131,8 @@ export function CenterDockview({
   initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
 
   const isTabbedRight = !!(rightTabs && rightTabs.length > 0);
+  const rightPaneOpenRef = useRef(rightPaneOpen);
+  rightPaneOpenRef.current = rightPaneOpen;
   const rightTabsRef = useRef(rightTabs);
   rightTabsRef.current = rightTabs;
   const onActiveRightTabChangeRef = useRef(onActiveRightTabChange);
@@ -302,6 +304,24 @@ export function CenterDockview({
       }
       if (!restored) {
         buildDefaultLayout(event.api);
+      } else {
+        // Reconcile the restored right panels with the open flag. The flag
+        // (`right_pane_open`) is written synchronously on toggle while the
+        // layout snapshot is debounced — and the close path removes panels
+        // while the persister is suppressed by `isAnimatingRef` — so after a
+        // reload the stored layout can still contain right panels the flag
+        // says are closed. Restoring them verbatim renders a zombie pane:
+        // visible on screen, but every `reviewPaneOpen`-gated refresh (context
+        // reset, ensure-loaded backstop, auto-refresh) stays off, leaving the
+        // Changes tab stuck on a stale "No changes" for dirty worktrees.
+        const hasRight = event.api.panels.some((p) => isRightPanelId(p.id));
+        if (!rightPaneOpenRef.current && hasRight) {
+          removeRightPanels(event.api);
+          schedulePersistLayout(event.api);
+        } else if (rightPaneOpenRef.current && !hasRight) {
+          addRightPanels(event.api);
+          schedulePersistLayout(event.api);
+        }
       }
 
       event.api.onDidActivePanelChange((panel) => {
@@ -322,7 +342,13 @@ export function CenterDockview({
         schedulePersistLayout(event.api);
       });
     },
-    [buildDefaultLayout, reconcileAfterRestore, schedulePersistLayout],
+    [
+      addRightPanels,
+      buildDefaultLayout,
+      reconcileAfterRestore,
+      removeRightPanels,
+      schedulePersistLayout,
+    ],
   );
 
   // Animated right-pane toggle (mirrors DockviewLayout's animation).
@@ -342,22 +368,33 @@ export function CenterDockview({
     const stored = readStoredSize(STORAGE_KEY_RIGHT_WIDTH);
     return stored ?? initialRightWidthRef.current;
   }, []);
-  const onRightAnimating = useCallback((animating: boolean, api: DockviewApi) => {
-    isAnimatingRef.current = animating;
-    const r = api.panels.find((p) => isRightPanelId(p.id));
-    if (!r) return;
-    if (animating) {
-      r.group.api.setConstraints({
-        minimumWidth: 0,
-        maximumWidth: Number.MAX_SAFE_INTEGER,
-      });
-    } else {
-      r.group.api.setConstraints({
-        minimumWidth: 100,
-        maximumWidth: Number.MAX_SAFE_INTEGER,
-      });
-    }
-  }, []);
+  const onRightAnimating = useCallback(
+    (animating: boolean, api: DockviewApi) => {
+      isAnimatingRef.current = animating;
+      if (!animating) {
+        // The close path removes the right panels while `isAnimatingRef` is
+        // still true, so the onDidLayoutChange persister skips that change —
+        // without this explicit persist the stored layout keeps the right
+        // panels forever and every reload restores a pane the open flag says
+        // is closed (see the reconcile in onReady).
+        schedulePersistLayout(api);
+      }
+      const r = api.panels.find((p) => isRightPanelId(p.id));
+      if (!r) return;
+      if (animating) {
+        r.group.api.setConstraints({
+          minimumWidth: 0,
+          maximumWidth: Number.MAX_SAFE_INTEGER,
+        });
+      } else {
+        r.group.api.setConstraints({
+          minimumWidth: 100,
+          maximumWidth: Number.MAX_SAFE_INTEGER,
+        });
+      }
+    },
+    [schedulePersistLayout],
+  );
   useAnimatedPanelToggle({
     apiRef,
     open: rightPaneOpen,

@@ -140,6 +140,19 @@ function createMockDockviewApi(): MockDockviewApi {
   return api;
 }
 
+/** The mock's `addPanel` is typed as a bare `Mock`, which TS won't call directly. */
+function addPanelTo(
+  api: MockDockviewApi,
+  options: {
+    id: string;
+    component: string;
+    params?: { hostId?: string };
+    position?: { direction?: string; referencePanel?: string };
+  },
+) {
+  (api.addPanel as unknown as (o: typeof options) => void)(options);
+}
+
 function reviewTabs(): RightTabSpec[] {
   return [
     { id: 'changes', title: 'Changes', content: <div>Commit buttons</div> },
@@ -186,5 +199,106 @@ describe('CenterDockview right tabs', () => {
 
     expect(changesContent).toHaveAttribute('hidden');
     expect(graphContent).not.toHaveAttribute('hidden');
+  });
+
+  // Regression: the open flag (`right_pane_open`) persists synchronously while
+  // the layout snapshot is debounced/suppressed, so after a reload the stored
+  // layout can still contain right panels the flag says are closed. Restoring
+  // them verbatim rendered a "zombie" review pane — visible, but with every
+  // reviewPaneOpen-gated refresh off, leaving the Changes tab stuck on a stale
+  // "No changes" for dirty worktrees.
+  test('removes restored right panels when the pane flag says closed', async () => {
+    localStorage.setItem('center-dockview.layout.v1', JSON.stringify({ grid: {}, panels: {} }));
+    const api = dockviewMock.api!;
+    api.fromJSON = vi.fn(() => {
+      addPanelTo(api, { id: 'thread', component: 'thread' });
+      addPanelTo(api, {
+        id: 'right:changes',
+        component: 'right-tab',
+        params: { hostId: 'right:changes' },
+        position: { direction: 'right' },
+      });
+      addPanelTo(api, {
+        id: 'right:graph',
+        component: 'right-tab',
+        params: { hostId: 'right:graph' },
+        position: { direction: 'within', referencePanel: 'right:changes' },
+      });
+    });
+
+    render(
+      <CenterDockview
+        thread={<div>Thread</div>}
+        rightTabs={reviewTabs()}
+        activeRightTab="changes"
+        rightPaneOpen={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(api.panels.map((panel) => panel.id)).toEqual(['thread']);
+    });
+  });
+
+  test('re-adds right panels when the flag says open but the restored layout lost them', async () => {
+    localStorage.setItem('center-dockview.layout.v1', JSON.stringify({ grid: {}, panels: {} }));
+    const api = dockviewMock.api!;
+    api.fromJSON = vi.fn(() => {
+      addPanelTo(api, { id: 'thread', component: 'thread' });
+    });
+
+    render(
+      <CenterDockview
+        thread={<div>Thread</div>}
+        rightTabs={reviewTabs()}
+        activeRightTab="changes"
+        rightPaneOpen
+      />,
+    );
+
+    await waitFor(() => {
+      expect(api.panels.map((panel) => panel.id)).toEqual([
+        'thread',
+        'right:changes',
+        'right:graph',
+      ]);
+    });
+  });
+
+  // Regression: the close path removes panels while the layout persister is
+  // suppressed (isAnimatingRef), so the stored layout kept the right panels
+  // forever — the entry point for the zombie-pane divergence above.
+  test('persists the layout after the pane closes', async () => {
+    const api = dockviewMock.api!;
+    const { rerender } = render(
+      <CenterDockview
+        thread={<div>Thread</div>}
+        rightTabs={reviewTabs()}
+        activeRightTab="changes"
+        rightPaneOpen
+      />,
+    );
+
+    await waitFor(() => {
+      expect(api.panels.some((panel) => panel.id === 'right:changes')).toBe(true);
+    });
+    expect(localStorage.getItem('center-dockview.layout.v1')).toBeNull();
+
+    rerender(
+      <CenterDockview
+        thread={<div>Thread</div>}
+        rightTabs={reviewTabs()}
+        activeRightTab="changes"
+        rightPaneOpen={false}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(api.panels.some((panel) => panel.id === 'right:changes')).toBe(false);
+        expect(localStorage.getItem('center-dockview.layout.v1')).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
   });
 });

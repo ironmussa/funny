@@ -1,9 +1,34 @@
+import { render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
 import {
   buildSlashSuggestionItems,
   getSuggestionLoadingLabel,
+  PromptEditor,
 } from '@/components/prompt-editor/PromptEditor';
+
+describe('PromptEditor', () => {
+  test('opts the prompt editor out of the global scroll fade mask', () => {
+    const originalElementFromPoint = document.elementFromPoint;
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => document.body,
+    });
+
+    try {
+      render(<PromptEditor />);
+
+      const editor = screen.getByTestId('prompt-editor');
+      expect(editor).toHaveClass('overflow-y-auto');
+      expect(editor).toHaveClass('scroll-fade-none');
+    } finally {
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: originalElementFromPoint,
+      });
+    }
+  });
+});
 
 describe('buildSlashSuggestionItems', () => {
   test('returns SDK slash commands before skills have loaded', () => {

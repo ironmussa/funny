@@ -60,6 +60,8 @@ const BUILTIN_SLASH_DESCRIPTIONS: Record<string, string> = {
   vim: 'Toggle vim editing mode',
 };
 const BUILTIN_SLASH_FALLBACK = 'Built-in command';
+const PROMPT_EDITOR_INPUT_CLASS =
+  'w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden min-h-[3.75rem] max-h-[35vh] overflow-y-auto scroll-fade-none';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -1059,8 +1061,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       attributes: {
         'data-testid': 'prompt-editor',
         'aria-label': 'Message',
-        class:
-          'w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden min-h-[3.75rem] max-h-[35vh] overflow-y-auto',
+        class: PROMPT_EDITOR_INPUT_CLASS,
         role: 'textbox',
       },
       handleKeyDown: (_view, event) => {

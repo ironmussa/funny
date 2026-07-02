@@ -405,6 +405,7 @@
       "mergeHint": "Keep all commits",
       "rebaseAndMerge": "Rebase and merge",
       "rebaseHint": "Rebase commits onto the base",
+      "lastCommitBy": "Last commit by",
       "mergeFailed": "Failed to merge pull request"
     },
     "ci": {

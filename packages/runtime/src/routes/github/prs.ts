@@ -2,6 +2,7 @@ import { getRemoteUrl } from '@funny/core/git';
 import type {
   GitHubPR,
   GitHubUserRef,
+  PRCommit,
   PRDetail,
   PRFilterOptions,
   PRSortKey,
@@ -101,7 +102,42 @@ export function mapSearchItemToPR(item: any): GitHubPR {
       ? item.assignees.map((a: any) => ({ login: a.login, avatar_url: a.avatar_url }))
       : [],
     merged_at: item.pull_request?.merged_at ?? null,
+    last_commit: null,
   };
+}
+
+export function mapCommitToPRCommit(commit: any): PRCommit {
+  return {
+    sha: commit.sha ?? '',
+    message: commit.commit?.message ?? '',
+    author: commit.author
+      ? { login: commit.author.login, avatar_url: commit.author.avatar_url }
+      : null,
+    author_name: commit.commit?.author?.name ?? null,
+    date: commit.commit?.committer?.date ?? commit.commit?.author?.date ?? '',
+  };
+}
+
+export async function addLastCommitToPRs(
+  prs: GitHubPR[],
+  owner: string,
+  repo: string,
+  fetchGitHubPath: (path: string) => Promise<Response>,
+): Promise<GitHubPR[]> {
+  return Promise.all(
+    prs.map(async (pr) => {
+      const sha = pr.head?.sha;
+      if (!sha) return { ...pr, last_commit: null };
+
+      try {
+        const res = await fetchGitHubPath(`/repos/${owner}/${repo}/commits/${sha}`);
+        if (!res.ok) return { ...pr, last_commit: null };
+        return { ...pr, last_commit: mapCommitToPRCommit(await res.json()) };
+      } catch {
+        return { ...pr, last_commit: null };
+      }
+    }),
+  );
 }
 
 // ── GET /prs — list GitHub pull requests for a project ──────
@@ -156,10 +192,20 @@ prRoutes.get('/prs', async (c) => {
     }
 
     const prs = (await res.json()) as GitHubPR[];
+    const fetchPath = (path: string): Promise<Response> =>
+      token
+        ? githubApiFetch(path, token)
+        : fetch(`${GITHUB_API}${path}`, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          });
+    const prsWithLastCommit = await addLastCommitToPRs(prs, parsed.owner, parsed.repo, fetchPath);
     const linkHeader = res.headers.get('Link') || '';
     const hasMore = linkHeader.includes('rel="next"');
 
-    return c.json({ prs, hasMore, owner: parsed.owner, repo: parsed.repo });
+    return c.json({ prs: prsWithLastCommit, hasMore, owner: parsed.owner, repo: parsed.repo });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }

@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { PRBadge } from '@/components/PRBadge';
+import { getLastCommitAuthor } from '@/components/pull-requests/last-commit-author';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -680,6 +681,7 @@ export function PinnedPRCard({
 
   const isMerged = merged || !!pr.merged_at;
   const canMerge = pr.state === 'open' && !pr.draft && !isMerged;
+  const lastCommitAuthor = getLastCommitAuthor(pr);
 
   const mergeMethods: Array<{ method: MergeMethod; label: string; hint: string }> = [
     {
@@ -717,6 +719,34 @@ export function PinnedPRCard({
                 data-testid={`pinned-pr-link-${pr.number}`}
               />
               <span className="text-sm font-semibold">{pr.title}</span>
+            </div>
+            <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
+              {pr.user && (
+                <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
+              )}
+              {pr.user ? <span>&middot;</span> : null}
+              <span>
+                {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at)}
+              </span>
+              {lastCommitAuthor ? (
+                <>
+                  <span>&middot;</span>
+                  <span>{t('review.pullRequests.lastCommitBy', 'Last commit by')}</span>
+                  <AuthorBadge
+                    name={lastCommitAuthor.name}
+                    avatarUrl={lastCommitAuthor.avatarUrl}
+                    size="xs"
+                  />
+                </>
+              ) : null}
+              {pr.draft ? (
+                <>
+                  <span>&middot;</span>
+                  <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] leading-none">
+                    {t('review.pullRequests.draft', 'Draft')}
+                  </Badge>
+                </>
+              ) : null}
             </div>
           </div>
           {isMerged && (

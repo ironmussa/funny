@@ -402,6 +402,7 @@
       "mergeHint": "Manter todos os commits",
       "rebaseAndMerge": "Rebase e merge",
       "rebaseHint": "Rebasear os commits sobre a base",
+      "lastCommitBy": "Último commit por",
       "mergeFailed": "Falha ao mesclar o pull request"
     },
     "ci": {

@@ -35,6 +35,7 @@ import {
 } from '@/lib/render-items';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildToolCallDiffFallbacks } from '@/lib/tool-call-diff-fallbacks';
+import { cn } from '@/lib/utils';
 import {
   useSettingsStore,
   PROSE_FONT_SIZE_PX,
@@ -292,6 +293,7 @@ function messageListAreEqual(
     prev.changeSummaryRunning === next.changeSummaryRunning &&
     prev.onSessionReverted === next.onSessionReverted &&
     (prev.threadStatus === 'waiting') === (next.threadStatus === 'waiting') &&
+    prev.prefersReducedMotion === next.prefersReducedMotion &&
     prev.snapshotMap === next.snapshotMap &&
     prev.onSend === next.onSend &&
     prev.onOpenLightbox === next.onOpenLightbox &&
@@ -347,7 +349,7 @@ export const MemoizedMessageList = memo(
       threadId,
       threadStatus,
       knownIds: _knownIds,
-      prefersReducedMotion: _prefersReducedMotion,
+      prefersReducedMotion,
       snapshotMap,
       onSend,
       onOpenLightbox,
@@ -623,6 +625,16 @@ export const MemoizedMessageList = memo(
       return map;
     }, [virtualRows]);
 
+    const userRowVirtualIndices = useMemo(() => {
+      const indices: number[] = [];
+      virtualRows.forEach((row, index) => {
+        if (row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user') {
+          indices.push(index);
+        }
+      });
+      return indices;
+    }, [virtualRows]);
+
     const itemIndexMap = useMemo(() => {
       const groupedIdIndexMap = buildRenderItemIdIndexMap(groupedItems);
       const groupedToVirtualIndex = new Map<number, number>();
@@ -879,6 +891,44 @@ export const MemoizedMessageList = memo(
       visibleMountedSectionUserId !== candidateHiddenSectionUserItem.msg.id
         ? candidateHiddenSectionUserItem
         : null;
+
+    const [stickyContentHeight, setStickyContentHeight] = useState(0);
+    useLayoutEffect(() => {
+      const el = stickySectionContentRef.current;
+      if (!el) {
+        setStickyContentHeight((prev) => (prev === 0 ? prev : 0));
+        return;
+      }
+      const measure = () => {
+        const next = el.getBoundingClientRect().height;
+        setStickyContentHeight((prev) => (Math.abs(prev - next) > 1 ? next : prev));
+      };
+      measure();
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+      // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
+    }, [hiddenSectionUserItem?.msg.id]);
+
+    // Smooth section handoff: as the next section's user card scrolls up to
+    // meet the docked sticky copy, push the copy out of the viewport instead
+    // of letting the incoming card slide underneath it and swap with a pop.
+    let stickyPushPx = 0;
+    if (hiddenSectionUserItem && firstVisibleVirtualItem && stickyContentHeight > 0) {
+      const nextUserRowIndex = userRowVirtualIndices.find(
+        (index) => index >= firstVisibleVirtualItem.index,
+      );
+      if (nextUserRowIndex !== undefined) {
+        const nextUserRowStart =
+          visibleVirtualItems.find((item) => item.index === nextUserRowIndex)?.start ??
+          rowVirtualizer.getOffsetForIndex(nextUserRowIndex, 'start')?.[0];
+        if (typeof nextUserRowStart === 'number') {
+          const nextUserRowViewportTop =
+            nextUserRowStart + leadingStickySpacerHeight - stickyScrollOffset;
+          stickyPushPx = Math.min(0, Math.round(nextUserRowViewportTop - stickyContentHeight));
+        }
+      }
+    }
 
     useLayoutEffect(() => {
       if (!shouldReserveLeadingStickySpace) {
@@ -1218,12 +1268,18 @@ export const MemoizedMessageList = memo(
       >
         {hiddenSectionUserItem ? (
           <div
+            key={hiddenSectionUserItem.msg.id}
             data-testid="sticky-section-context"
-            className="pointer-events-none sticky top-0 z-50 h-0"
+            className={cn(
+              'pointer-events-none sticky top-0 z-50 h-0',
+              !prefersReducedMotion && 'animate-in fade-in',
+            )}
           >
             <div
               ref={stickySectionContentRef}
+              data-testid="sticky-section-content"
               className="pointer-events-auto relative z-50 pt-3 pb-3"
+              style={stickyPushPx < 0 ? { transform: `translateY(${stickyPushPx}px)` } : undefined}
             >
               {renderUserMessage(hiddenSectionUserItem, {
                 includeItemKey: false,

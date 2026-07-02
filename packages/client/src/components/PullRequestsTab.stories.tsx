@@ -53,7 +53,10 @@ const mockPRs: GitHubPR[] = [
     },
     created_at: daysAgo(5),
     updated_at: daysAgo(5),
-    head: { ref: 'dependabot/bun/typescript-6.0.3', label: 'ironmussa:typescript-6.0.3' },
+    head: {
+      ref: 'dependabot/bun/typescript-6.0.3',
+      label: 'ironmussa:typescript-6.0.3',
+    },
     base: { ref: 'master', label: 'ironmussa:master' },
     draft: false,
     labels: [
@@ -73,7 +76,10 @@ const mockPRs: GitHubPR[] = [
     },
     created_at: hoursAgo(6),
     updated_at: hoursAgo(2),
-    head: { ref: 'feat/incoming-commits', label: 'ironmussa:feat/incoming-commits' },
+    head: {
+      ref: 'feat/incoming-commits',
+      label: 'ironmussa:feat/incoming-commits',
+    },
     base: { ref: 'master', label: 'ironmussa:master' },
     draft: true,
     labels: [{ name: 'enhancement', color: 'a2eeef' }],
@@ -86,7 +92,10 @@ const mergedPR: GitHubPR = {
   title: 'refactor: extract git operations into core package',
   state: 'closed',
   html_url: 'https://github.com/ironmussa/funny/pull/12',
-  user: { login: 'argenisleon', avatar_url: 'https://avatars.githubusercontent.com/u/3957324?v=4' },
+  user: {
+    login: 'argenisleon',
+    avatar_url: 'https://avatars.githubusercontent.com/u/3957324?v=4',
+  },
   created_at: daysAgo(8),
   updated_at: daysAgo(7),
   head: { ref: 'refactor/core-git', label: 'ironmussa:refactor/core-git' },
@@ -103,7 +112,10 @@ const branchPR: GitHubPR = {
   body: 'Adds open/closed/all, branch-focus, loading, error and empty states for `PullRequestsTab`.',
   state: 'open',
   html_url: 'https://github.com/ironmussa/funny/pull/31',
-  user: { login: 'argenisleon', avatar_url: 'https://avatars.githubusercontent.com/u/3957324?v=4' },
+  user: {
+    login: 'argenisleon',
+    avatar_url: 'https://avatars.githubusercontent.com/u/3957324?v=4',
+  },
   created_at: hoursAgo(3),
   updated_at: hoursAgo(1),
   head: { ref: 'feat/prs-storybook', label: 'ironmussa:feat/prs-storybook' },
@@ -328,7 +340,7 @@ type Story = StoryObj<typeof meta>;
 
 // ── Stories ─────────────────────────────────────────────────
 
-/** Open pull requests on the default branch — the Open/Closed/All listing. */
+/** Pull requests on the default branch — the All/Open/Closed listing. */
 export const OpenList: Story = {
   name: 'Open List',
   render: () => {
@@ -371,12 +383,9 @@ export const ErrorState: Story = {
   },
 };
 
-/**
- * On a feature branch with a matching PR — branch-focus mode pins the PR at the
- * top (review threads + conversation) instead of showing the flat list.
- */
+/** On a feature branch with a matching PR — the current branch stays grouped first. */
 export const BranchFocus: Story = {
-  name: 'Branch Focus (PR pinned)',
+  name: 'Feature Branch (PR grouped)',
   render: () => {
     seedThreadOnBranch('feat/prs-storybook');
     return (
@@ -385,9 +394,9 @@ export const BranchFocus: Story = {
   },
 };
 
-/** On a feature branch with no PR yet — branch-focus empty state + escape hatch. */
+/** On a feature branch with no PR yet — the full PR list still shows by default. */
 export const BranchFocusEmpty: Story = {
-  name: 'Branch Focus (no PR)',
+  name: 'Feature Branch (no PR)',
   render: () => {
     seedThreadOnBranch('feat/orphan-branch');
     return <PullRequestsTabWrapper threadId="thread-1" mockFetchOpts={{ prs: mockPRs }} />;
@@ -404,7 +413,11 @@ export const NoProject: Story = {
       initialized: true,
       branchByProject: {},
     });
-    useThreadStore.setState({ threadDataById: {}, selectedThreadId: null, activeThread: null });
+    useThreadStore.setState({
+      threadDataById: {},
+      selectedThreadId: null,
+      activeThread: null,
+    });
     return <PullRequestsTabWrapper />;
   },
 };

@@ -403,6 +403,7 @@
       "mergeHint": "Mantener todos los commits",
       "rebaseAndMerge": "Rebase y merge",
       "rebaseHint": "Rebasar los commits sobre la base",
+      "lastCommitBy": "Último commit por",
       "mergeFailed": "Error al hacer merge del pull request"
     },
     "ci": {

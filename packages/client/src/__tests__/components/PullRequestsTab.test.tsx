@@ -1,5 +1,5 @@
 import type { GitHubPR, GitStatusInfo, Thread } from '@funny/shared';
-import { waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -75,7 +75,10 @@ function makePR(overrides: Partial<GitHubPR> = {}): GitHubPR {
     body: null,
     state: 'open',
     html_url: 'https://github.com/acme/repo/pull/51',
-    user: { login: 'argenisleon', avatar_url: 'https://example.test/avatar.png' },
+    user: {
+      login: 'argenisleon',
+      avatar_url: 'https://example.test/avatar.png',
+    },
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:01:00.000Z',
     head: { ref: 'feature/pr-branch', label: 'acme:feature/pr-branch' },
@@ -145,5 +148,48 @@ describe('PullRequestsTab', () => {
         useGitStatusStore.getState().statusByBranch['project-1:feature/pr-branch']?.prNumber,
       ).toBe(51);
     });
+  });
+
+  test('loads open pull requests by default without branch toolbar controls', async () => {
+    apiMock.githubPRs.mockReturnValue(
+      okAsync({
+        prs: [
+          makePR(),
+          makePR({
+            number: 52,
+            head: { ref: 'other-branch', label: 'acme:other-branch' },
+            last_commit: {
+              sha: 'abc123',
+              message: 'fix: handle edge case',
+              author: { login: 'alice', avatar_url: 'https://example.test/alice.png' },
+              author_name: 'Raw Author',
+              date: '2026-01-01T00:01:00.000Z',
+            },
+          }),
+        ],
+        hasMore: false,
+        owner: 'acme',
+        repo: 'repo',
+      }),
+    );
+
+    renderWithProviders(
+      <ThreadProvider threadId="thread-pr">
+        <PullRequestsTab visible />
+      </ThreadProvider>,
+    );
+
+    await waitFor(() => {
+      expect(apiMock.githubPRs).toHaveBeenCalledWith(
+        'project-1',
+        expect.objectContaining({ state: 'open' }),
+      );
+    });
+    expect(screen.queryByTestId('prs-toggle-view-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('prs-branch-focus-indicator')).not.toBeInTheDocument();
+    expect(screen.getByTestId('prs-state-trigger')).toHaveTextContent('Open');
+    expect(screen.getByText(/Updated/)).toBeInTheDocument();
+    expect(screen.getByText('Last commit by')).toBeInTheDocument();
+    expect(screen.getByText('alice')).toBeInTheDocument();
   });
 });

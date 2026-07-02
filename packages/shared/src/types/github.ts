@@ -56,7 +56,7 @@ export interface GitHubPR {
   } | null;
   created_at: string;
   updated_at: string;
-  head: { ref: string; label: string };
+  head: { ref: string; label: string; sha?: string };
   base: { ref: string; label: string };
   draft: boolean;
   labels: Array<{
@@ -78,6 +78,8 @@ export interface GitHubPR {
     avatar_url: string;
   }>;
   merged_at: string | null;
+  /** Last commit currently at the PR head. Present when the list endpoint can resolve head.sha. */
+  last_commit?: PRCommit | null;
 }
 
 /** A user reference used to populate the PR filter dropdowns. */
@@ -261,6 +263,8 @@ export interface PRCommit {
     login: string;
     avatar_url: string;
   } | null;
+  /** Raw git author name, used when the commit is not linked to a GitHub user. */
+  author_name?: string | null;
   date: string;
 }
 

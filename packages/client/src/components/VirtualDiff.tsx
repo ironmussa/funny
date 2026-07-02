@@ -79,6 +79,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   const [collapsedState, setCollapsedState] = useState<Map<number, boolean>>(new Map());
   const [pretextReady, setPretextReady] = useState(false);
   const [diffContainerWidth, setDiffContainerWidth] = useState(0);
+  const [fadeEdges, setFadeEdges] = useState({ top: false, bottom: false });
 
   const parsed = useMemo(() => parseUnifiedDiff(unifiedDiff), [unifiedDiff]);
 
@@ -504,11 +505,39 @@ export const VirtualDiff = memo(function VirtualDiff({
 
   // Single horizontal scrollbar for split/three-pane (only when not wrapping)
   const hSpacerWidth = useHorizontalScroll(scrollRef, hScrollBarRef, needsHScroll, maxContentWidth);
+  const totalSize = virtualizer.getTotalSize();
 
   const effectiveLang = langReady ? lang : 'plaintext';
   const tooManyLines = parsed.lines.length > HIGHLIGHT_MAX_LINES;
   const highlightLang = tooManyLines ? 'plaintext' : effectiveLang;
   const hasLines = parsed.lines.length > 0;
+
+  const updateFadeEdges = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    const next = {
+      top: el.scrollTop > 1,
+      bottom: maxScrollTop - el.scrollTop > 1,
+    };
+
+    setFadeEdges((prev) => (prev.top === next.top && prev.bottom === next.bottom ? prev : next));
+  }, []);
+  const updateFadeEdgesRef = useRef(updateFadeEdges);
+  updateFadeEdgesRef.current = updateFadeEdges;
+
+  useLayoutEffect(() => {
+    updateFadeEdges();
+  }, [updateFadeEdges, totalSize, maxContentWidth, diffContainerWidth, wordWrap, viewMode]);
+
+  useEffect(() => {
+    const el = scrollElement;
+    if (!el) return;
+    const handleScroll = () => updateFadeEdgesRef.current();
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [scrollElement]);
 
   // ── Drag-select (GitHub Desktop-style click+drag on checkboxes) ──
   const dragRef = useRef<{
@@ -681,7 +710,7 @@ export const VirtualDiff = memo(function VirtualDiff({
           )}
           <div
             style={{
-              height: virtualizer.getTotalSize(),
+              height: totalSize,
               minWidth: '100%',
               // In split/three-pane mode, horizontal scroll is handled via CSS
               // translateX on each pane's text — the container must stay at 100%
@@ -747,6 +776,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                     </div>
                   ) : row.type === 'fold' ? (
                     <button
+                      type="button"
                       className={cn(
                         'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
                       )}
@@ -804,16 +834,20 @@ export const VirtualDiff = memo(function VirtualDiff({
             })}
           </div>
         </div>
-        <div
-          className="scroll-fade-edge scroll-fade-edge-top"
-          aria-hidden="true"
-          data-testid="diff-fade-top"
-        />
-        <div
-          className="scroll-fade-edge scroll-fade-edge-bottom"
-          aria-hidden="true"
-          data-testid="diff-fade-bottom"
-        />
+        {fadeEdges.top && (
+          <div
+            className="scroll-fade-edge scroll-fade-edge-top"
+            aria-hidden="true"
+            data-testid="diff-fade-top"
+          />
+        )}
+        {fadeEdges.bottom && (
+          <div
+            className="scroll-fade-edge scroll-fade-edge-bottom"
+            aria-hidden="true"
+            data-testid="diff-fade-bottom"
+          />
+        )}
       </div>
       {/* Single horizontal scrollbar for split/three-pane mode */}
       {needsHScroll && (
@@ -842,11 +876,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   return (
     <div className={cn('flex', className)}>
       {diffContent}
-      <DiffMinimap
-        lines={parsed.lines}
-        scrollElement={scrollElement}
-        totalSize={virtualizer.getTotalSize()}
-      />
+      <DiffMinimap lines={parsed.lines} scrollElement={scrollElement} totalSize={totalSize} />
     </div>
   );
 });

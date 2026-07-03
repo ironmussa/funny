@@ -131,6 +131,19 @@ describe('shouldCheckoutBranchForThreadSelect', () => {
     ).toBe(false);
   });
 
+  test('returns false for scratch or projectless threads', () => {
+    expect(
+      shouldCheckoutBranchForThreadSelect(
+        { mode: 'local', isScratch: true, projectId: '', branch: 'main' },
+        null,
+      ),
+    ).toBe(false);
+
+    expect(shouldCheckoutBranchForThreadSelect({ mode: 'local', branch: 'main' }, null)).toBe(
+      false,
+    );
+  });
+
   test('returns false when target and active share the same branch', () => {
     expect(
       shouldCheckoutBranchForThreadSelect(

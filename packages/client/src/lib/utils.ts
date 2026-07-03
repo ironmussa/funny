@@ -60,6 +60,7 @@ export function resolveLocalThreadBranch(thread: {
 
 type ThreadBranchIdentity = {
   mode?: string;
+  isScratch?: boolean;
   projectId?: string;
   branch?: string | null;
   baseBranch?: string | null;
@@ -75,6 +76,7 @@ export function shouldCheckoutBranchForThreadSelect(
   target: ThreadBranchIdentity,
   active: ThreadBranchIdentity | null | undefined,
 ): boolean {
+  if (target.isScratch || !target.projectId) return false;
   if (target.mode !== 'local') return false;
   const targetBranch = resolveLocalThreadBranch(target);
   if (!targetBranch) return false;

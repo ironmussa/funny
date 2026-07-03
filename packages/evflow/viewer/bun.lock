@@ -28,7 +28,6 @@
         "@vitejs/plugin-react": "^4.5.2",
         "postcss": "^8.5.15",
         "tailwindcss": "^4.3.1",
-        "tw-fade": "^0.6.0",
         "typescript": "^5.8.2",
         "vite": "^6.4.3",
       },
@@ -463,8 +462,6 @@
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
     "tinyglobby": ["tinyglobby@0.2.15", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.3" } }, "sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ=="],
-
-    "tw-fade": ["tw-fade@0.6.0", "", { "peerDependencies": { "tailwindcss": ">=4.0.0" }, "optionalPeers": ["tailwindcss"] }, "sha512-V6UIfsVngw7EWC+K8H3QDU217SOyqe8L65/sje+3NTpnFWcPixZLEGehP5D8dVkuR4N/4gDlB654PWqV6OHbig=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

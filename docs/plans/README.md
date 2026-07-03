@@ -4,6 +4,7 @@ Active or proposed features that are not yet fully documented in code. **Complet
 
 > `openspec/` exists locally for OpenSpec workflow but is **gitignored**. Use this directory for plans that should live in version control.
 
-| Plan                                   | Status                                                              |
-| -------------------------------------- | ------------------------------------------------------------------- |
-| [observability.md](./observability.md) | Not started — `@funny/observability` package + local Victoria stack |
+| Plan                                                       | Status                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| [memory-optimization.md](./memory-optimization.md)         | Active — prioritized memory/performance backlog                     |
+| [observability.md](./observability.md)                     | Not started — `@funny/observability` package + local Victoria stack |

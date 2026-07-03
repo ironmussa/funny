@@ -72,7 +72,7 @@ export function ElementsView() {
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea edgeFade className="h-full">
       <div className="space-y-6 p-4">
         <p className="text-muted-foreground text-sm">
           {elements.length} element{elements.length !== 1 ? 's' : ''}
@@ -95,7 +95,7 @@ export function ElementsView() {
 
           return (
             <div key={kind}>
-              <h3 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
+              <h3 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
                 <span>{EVFLOW_ICONS[kind]}</span>
                 <span>{KIND_LABELS[kind]}s</span>
                 <span className="text-muted-foreground/50">({items.length})</span>

@@ -61,7 +61,7 @@ export function SequencesView() {
   })();
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea edgeFade className="h-full">
       <div className="space-y-6 p-4">
         {sequences.map((seq) => (
           <div key={seq.name} className="space-y-2" data-testid={`viewer-sequence-${seq.name}`}>

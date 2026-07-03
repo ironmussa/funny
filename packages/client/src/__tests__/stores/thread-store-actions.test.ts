@@ -439,6 +439,32 @@ describe('thread store actions', () => {
       expect(merged.map((m) => m.id)).toEqual(['real-follow-up']);
     });
 
+    test('drops optimistic follow-up duplicate even when local timestamp is newer', async () => {
+      // Clock-skew variant of the previous case: the optimistic bubble's
+      // browser timestamp lands AFTER the fresh window's newest message, so
+      // the window rule alone would keep it alongside the persisted copy.
+      const realFollowUp = {
+        id: 'real-follow-up',
+        threadId: 't1',
+        role: 'user',
+        content: 'same follow-up',
+        timestamp: '2026-01-01T00:00:02.000Z',
+      };
+      const localOptimisticCopy = {
+        ...realFollowUp,
+        id: 'optimistic-local-copy',
+        timestamp: '2026-01-01T00:00:10.000Z',
+      };
+      setActiveThread([localOptimisticCopy]);
+
+      mockGetThread.mockReturnValue(okAsync({ ...baseThread, messages: [realFollowUp] }));
+
+      await useThreadStore.getState().refreshActiveThread();
+
+      const merged = useThreadStore.getState().activeThread!.messages;
+      expect(merged.map((m) => m.id)).toEqual(['real-follow-up']);
+    });
+
     test('preserves WS message that lands between fetch and set', async () => {
       // Regression: refreshActiveThread used to capture activeThread before
       // its `await api.getThread()`, so a WS agent:message that mutated
@@ -988,6 +1014,9 @@ describe('thread store actions', () => {
       const payload = useThreadStore.getState().threadDataById.t1;
       expect(payload.messages).toHaveLength(1);
       expect(payload.messages[0].content).toBe('hello world');
+      // The optimistic id prefix is what lets merge/pagination reconcile the
+      // bubble with its persisted copy — see loadNewerMessages tests.
+      expect(payload.messages[0].id.startsWith('optimistic-')).toBe(true);
       expect(payload.status).toBe('running');
       expect(useThreadStore.getState().threadsById.t1.status).toBe('running');
     });
@@ -1161,6 +1190,168 @@ describe('thread store actions', () => {
       await useThreadStore.getState().loadOlderMessages();
 
       expect(useThreadStore.getState().threadDataById.t1.loadingMore).toBe(false);
+    });
+  });
+
+  describe('loadNewerMessages', () => {
+    test('appends newer messages and updates hasMoreAfter', async () => {
+      const oldest = {
+        id: 'm1',
+        threadId: 't1',
+        role: 'assistant' as const,
+        content: 'oldest',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const thread = {
+        ...baseThread,
+        hasMoreAfter: true,
+        loadingMore: false,
+        messages: [oldest],
+      };
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread as any,
+        threadDataById: { t1: thread as any },
+      } as any);
+      mockGetThreadMessages.mockReturnValue(
+        okAsync({
+          messages: [
+            {
+              id: 'm2',
+              threadId: 't1',
+              role: 'assistant',
+              content: 'newer',
+              timestamp: '2026-01-02T00:00:00.000Z',
+            },
+          ],
+          hasMoreAfter: false,
+        }),
+      );
+
+      await useThreadStore.getState().loadNewerMessages();
+
+      expect(mockGetThreadMessages).toHaveBeenCalledWith(
+        't1',
+        '2026-01-01T00:00:00.000Z',
+        50,
+        'after',
+      );
+      const payload = useThreadStore.getState().threadDataById.t1;
+      expect(payload.messages.map((m: { id: string }) => m.id)).toEqual(['m1', 'm2']);
+      expect(payload.hasMoreAfter).toBe(false);
+      expect(payload.loadingMore).toBe(false);
+    });
+
+    test('reconciles the optimistic follow-up with its persisted copy instead of duplicating it', async () => {
+      // Regression: sending a follow-up while the window still has
+      // hasMoreAfter=true made the post-send bottom-pin fetch return the
+      // persisted copy of the very message just appended optimistically —
+      // id-only dedup let it through, rendering the user card twice until a
+      // later refresh dropped the optimistic bubble.
+      const previousTurn = {
+        id: 'a1',
+        threadId: 't1',
+        role: 'assistant' as const,
+        content: 'done',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const optimistic = {
+        id: 'optimistic-1111',
+        threadId: 't1',
+        role: 'user' as const,
+        content: 'follow-up',
+        timestamp: '2026-01-01T00:00:02.000Z',
+        model: 'gpt-5.5',
+        effort: 'high',
+      };
+      const thread = {
+        ...baseThread,
+        hasMoreAfter: true,
+        loadingMore: false,
+        messages: [previousTurn, optimistic],
+        lastUserMessage: optimistic,
+      };
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread as any,
+        threadDataById: { t1: thread as any },
+      } as any);
+      mockGetThreadMessages.mockReturnValue(
+        okAsync({
+          messages: [
+            {
+              id: 'real-id',
+              threadId: 't1',
+              role: 'user',
+              content: 'follow-up',
+              timestamp: '2026-01-01T00:00:02.500Z',
+            },
+            {
+              id: 'a2',
+              threadId: 't1',
+              role: 'assistant',
+              content: 'ack',
+              timestamp: '2026-01-01T00:00:03.000Z',
+            },
+          ],
+          hasMoreAfter: false,
+        }),
+      );
+
+      await useThreadStore.getState().loadNewerMessages();
+
+      const payload = useThreadStore.getState().threadDataById.t1;
+      expect(payload.messages.map((m: { id: string }) => m.id)).toEqual(['a1', 'real-id', 'a2']);
+      expect(
+        payload.messages.filter((m: { content: string }) => m.content === 'follow-up'),
+      ).toHaveLength(1);
+      // The reconciled row keeps the optimistic extras (model/effort chips).
+      expect(payload.messages[1].model).toBe('gpt-5.5');
+      expect(payload.messages[1].effort).toBe('high');
+      expect(payload.lastUserMessage?.id).toBe('real-id');
+    });
+
+    test('does not reconcile same-content history under a non-optimistic id', async () => {
+      // A real (persisted) user message that happens to repeat content — e.g.
+      // "continue" sent twice — must NOT be collapsed; only local echo ids
+      // (optimistic-/dequeued-) are reconcilable.
+      const persistedContinue = {
+        id: 'u1',
+        threadId: 't1',
+        role: 'user' as const,
+        content: 'continue',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const thread = {
+        ...baseThread,
+        hasMoreAfter: true,
+        loadingMore: false,
+        messages: [persistedContinue],
+      };
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread as any,
+        threadDataById: { t1: thread as any },
+      } as any);
+      mockGetThreadMessages.mockReturnValue(
+        okAsync({
+          messages: [
+            {
+              id: 'u2',
+              threadId: 't1',
+              role: 'user',
+              content: 'continue',
+              timestamp: '2026-01-02T00:00:00.000Z',
+            },
+          ],
+          hasMoreAfter: false,
+        }),
+      );
+
+      await useThreadStore.getState().loadNewerMessages();
+
+      const payload = useThreadStore.getState().threadDataById.t1;
+      expect(payload.messages.map((m: { id: string }) => m.id)).toEqual(['u1', 'u2']);
     });
   });
 

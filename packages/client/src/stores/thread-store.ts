@@ -260,6 +260,21 @@ const selectLog = createClientLogger('thread-select');
 type LocalMessage = import('@funny/shared').Message & { toolCalls?: any[] };
 const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
 
+/** Id prefix for user bubbles appended locally by `appendOptimisticMessage`.
+ *  The persisted copy of the same message arrives later under a server id, so
+ *  merge/pagination must reconcile the two by content — the prefix is what
+ *  tells them a local message is a reconcilable echo rather than history. */
+export const OPTIMISTIC_MESSAGE_ID_PREFIX = 'optimistic-';
+
+/** True for local-only user messages (optimistic bubble or dequeued echo)
+ *  that a server-persisted copy with the same content should supersede. */
+function isLocalEchoUserMessage(m: Pick<LocalMessage, 'id' | 'role'>): boolean {
+  return (
+    m.role === 'user' &&
+    (m.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX) || m.id.startsWith(DEQUEUED_MESSAGE_ID_PREFIX))
+  );
+}
+
 function getThreadScrollFetchOptions(threadId: string) {
   return loadThreadScrollFetchOptions(threadId);
 }
@@ -290,11 +305,7 @@ function mergeMessagesById(local: LocalMessage[], fresh: LocalMessage[]): LocalM
   const after: LocalMessage[] = [];
   for (const m of local) {
     if (freshIds.has(m.id)) continue;
-    if (
-      m.role === 'user' &&
-      m.id.startsWith(DEQUEUED_MESSAGE_ID_PREFIX) &&
-      freshUserKeys.has(userMessageDedupKey(m))
-    ) {
+    if (isLocalEchoUserMessage(m) && freshUserKeys.has(userMessageDedupKey(m))) {
       continue;
     }
     const t = new Date(m.timestamp).getTime();
@@ -813,7 +824,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     }
 
     const newMessage = {
-      id: crypto.randomUUID(),
+      id: `${OPTIMISTIC_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
       threadId,
       role: 'user' as MessageRole,
       content: messageContent,
@@ -966,10 +977,37 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     set((state) =>
       mutations.applyThreadDataPatch(state, threadId, (t) => {
         const existingIds = new Set(t.messages.map((m) => m.id));
-        const newMessages = newerMessages.filter((m) => !existingIds.has(m.id));
+        // A just-sent follow-up lives locally as an optimistic bubble whose
+        // random id never matches the persisted row, and the persisted copy is
+        // always newer than the bubble's timestamp — so it lands in this
+        // 'after' page. Reconcile it onto the bubble (adopting the server id)
+        // instead of appending a second identical user card.
+        let baseMessages = t.messages;
+        let lastUserMessage = t.lastUserMessage;
+        const appended: typeof newerMessages = [];
+        for (const m of newerMessages) {
+          if (existingIds.has(m.id)) continue;
+          const echoIdx =
+            m.role === 'user'
+              ? baseMessages.findIndex(
+                  (lm) =>
+                    isLocalEchoUserMessage(lm) &&
+                    userMessageDedupKey(lm) === userMessageDedupKey(m),
+                )
+              : -1;
+          if (echoIdx >= 0) {
+            const reconciled = { ...baseMessages[echoIdx], ...m };
+            const echoId = baseMessages[echoIdx].id;
+            baseMessages = baseMessages.map((lm, i) => (i === echoIdx ? reconciled : lm));
+            if (lastUserMessage?.id === echoId) lastUserMessage = reconciled;
+            continue;
+          }
+          appended.push(m);
+        }
         return {
           ...t,
-          messages: [...t.messages, ...newMessages],
+          messages: [...baseMessages, ...appended],
+          lastUserMessage,
           hasMore: result.value.hasMore ?? t.hasMore,
           hasMoreAfter: hasMoreAfter ?? false,
           totalMessages: total ?? t.totalMessages,

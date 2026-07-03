@@ -1,9 +1,10 @@
 import type { ThreadEvent, WaitingReason } from '@funny/shared';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import type { AgentInitInfo, CompactionEvent } from '@/stores/thread-store';
 
 export interface MessageStreamProps {
+  ref?: Ref<MessageStreamHandle>;
   threadId: string;
   status: string;
   messages: any[];

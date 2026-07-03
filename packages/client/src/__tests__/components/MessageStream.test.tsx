@@ -1,5 +1,5 @@
 import { act, render } from '@testing-library/react';
-import { createRef, forwardRef, useEffect, useImperativeHandle } from 'react';
+import { createRef, useEffect, useImperativeHandle, type Ref } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
@@ -38,10 +38,13 @@ const memoizedMessageListLifecycle = vi.hoisted(() => ({
 
 vi.mock('@/components/thread/MemoizedMessageList', () => ({
   EMPTY_MESSAGES: [],
-  MemoizedMessageList: forwardRef(function MockMemoizedMessageList(
-    { messages }: { messages: any[] },
+  MemoizedMessageList: function MockMemoizedMessageList({
+    messages,
     ref,
-  ) {
+  }: {
+    messages: any[];
+    ref?: Ref<any>;
+  }) {
     useEffect(() => {
       memoizedMessageListLifecycle.mounts += 1;
       return () => {
@@ -75,7 +78,7 @@ vi.mock('@/components/thread/MemoizedMessageList', () => ({
         ))}
       </div>
     );
-  }),
+  },
 }));
 
 vi.mock('@/components/thread/AgentStatusCards', () => ({
@@ -144,6 +147,14 @@ function setScrollMetrics(
   });
 }
 
+/** Simulate a genuine user scroll: real input (wheel) always precedes the
+ *  scroll event in a browser, which ends the post-switch settle window. */
+function userScroll(viewport: HTMLElement, top: number) {
+  viewport.dispatchEvent(new Event('wheel'));
+  viewport.scrollTop = top;
+  viewport.dispatchEvent(new Event('scroll'));
+}
+
 describe('MessageStream sticky bottom', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -209,8 +220,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 500;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 500);
     });
 
     scrollHeight = 1300;
@@ -253,8 +263,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 500;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 500);
       vi.runOnlyPendingTimers();
     });
 
@@ -299,8 +308,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 500;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 500);
       vi.runOnlyPendingTimers();
     });
 
@@ -317,8 +325,7 @@ describe('MessageStream sticky bottom', () => {
     );
 
     act(() => {
-      viewport.scrollTop = 600;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 600);
       vi.runOnlyPendingTimers();
     });
 
@@ -361,8 +368,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 0;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 0);
     });
 
     scrollHeight = 2000;
@@ -403,8 +409,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 900;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 900);
     });
 
     scrollHeight = 700;
@@ -420,8 +425,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 50;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 50);
     });
 
     scrollHeight = 2000;
@@ -546,15 +550,13 @@ describe('MessageStream sticky bottom', () => {
     });
 
     act(() => {
-      viewport.scrollTop = 80;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 80);
     });
     loadOlder.mockClear();
     memoizedMessageListLifecycle.captureScrollAnchorCalls = 0;
 
     act(() => {
-      viewport.scrollTop = 120;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 120);
     });
 
     expect(loadOlder).not.toHaveBeenCalled();
@@ -590,10 +592,8 @@ describe('MessageStream sticky bottom', () => {
     });
 
     act(() => {
-      viewport.scrollTop = 300;
-      viewport.dispatchEvent(new Event('scroll'));
-      viewport.scrollTop = 100;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 300);
+      userScroll(viewport, 100);
     });
 
     expect(loadOlder).toHaveBeenCalledTimes(1);
@@ -628,10 +628,8 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 300;
-      viewport.dispatchEvent(new Event('scroll'));
-      viewport.scrollTop = 100;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 300);
+      userScroll(viewport, 100);
     });
 
     expect(loadOlder).toHaveBeenCalledTimes(1);
@@ -666,8 +664,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 650;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 650);
     });
 
     expect(loadNewer).toHaveBeenCalledTimes(1);
@@ -702,8 +699,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 650;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 650);
     });
 
     expect(loadNewer).toHaveBeenCalledTimes(1);
@@ -771,8 +767,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 500;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 500);
       vi.advanceTimersByTime(300);
     });
 
@@ -840,10 +835,8 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 300;
-      viewport.dispatchEvent(new Event('scroll'));
-      viewport.scrollTop = 100;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 300);
+      userScroll(viewport, 100);
     });
 
     expect(loadOlder).toHaveBeenCalledTimes(1);
@@ -901,8 +894,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 750;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 750);
     });
 
     scrollHeight = 700;
@@ -938,7 +930,7 @@ describe('MessageStream sticky bottom', () => {
     expect(viewport.scrollTop).toBe(1000);
   });
 
-  test('captures the outgoing thread scroll position when switching threads', () => {
+  test('a browser clamp during the thread switch cannot poison the outgoing position', () => {
     let scrollHeight = 2000;
     const ref = createRef<MessageStreamHandle>();
     const { container, rerender } = render(
@@ -958,9 +950,15 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 750;
+      userScroll(viewport, 750);
     });
 
+    // Switching to a shorter thread: the keyed message list swaps to the new
+    // content BEFORE the switch effect cleanup runs, and the browser clamps
+    // scrollTop to the new max scroll. Neither may overwrite the outgoing
+    // thread's saved position (progress 0.5).
+    scrollHeight = 700;
+    viewport.scrollTop = 200;
     rerender(
       <MessageStream
         ref={ref}
@@ -971,7 +969,6 @@ describe('MessageStream sticky bottom', () => {
       />,
     );
 
-    scrollHeight = 700;
     act(() => {
       vi.runOnlyPendingTimers();
     });
@@ -992,6 +989,117 @@ describe('MessageStream sticky bottom', () => {
     });
 
     expect(viewport.scrollTop).toBe(1000);
+  });
+
+  test('ignores layout-induced scroll events while a thread switch settles', () => {
+    let scrollHeight = 800;
+    const { container, rerender } = render(
+      <MessageStream
+        threadId="settle"
+        status="idle"
+        messages={makeMessages('settle thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      // Flush only the rAF restore burst; keep the mocked clock inside the
+      // settle window (other pending timers would advance it past 700ms).
+      vi.advanceTimersByTime(50);
+    });
+    expect(viewport.scrollTop).toBe(800);
+
+    // The virtualizer measures real row heights right after the switch: the
+    // content grows and the browser fires a scroll event at the stale
+    // scrollTop. No user input was involved, so the saved bottom position
+    // must survive and the thread must still restore pinned to the bottom.
+    scrollHeight = 3000;
+    act(() => {
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(loadThreadScrollFetchOptions('settle')).toEqual({ messageProgress: 1 });
+
+    rerender(
+      <MessageStream
+        threadId="other"
+        status="idle"
+        messages={makeMessages('other thread')}
+        onSend={() => {}}
+      />,
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    rerender(
+      <MessageStream
+        threadId="settle"
+        status="idle"
+        messages={makeMessages('settle thread')}
+        onSend={() => {}}
+      />,
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(3000);
+  });
+
+  test('honors a user scroll that lands inside the settle window', () => {
+    const scrollHeight = 2000;
+    const { container, rerender } = render(
+      <MessageStream
+        threadId="eager"
+        status="idle"
+        messages={makeMessages('eager thread')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => scrollHeight,
+      clientHeight: () => 500,
+    });
+
+    // Scroll up immediately after the switch, before the settle window ends.
+    // Real input (wheel) precedes the scroll event, so it must be saved.
+    act(() => {
+      vi.runOnlyPendingTimers();
+      userScroll(viewport, 300);
+    });
+
+    rerender(
+      <MessageStream
+        threadId="other"
+        status="idle"
+        messages={makeMessages('other thread')}
+        onSend={() => {}}
+      />,
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    rerender(
+      <MessageStream
+        threadId="eager"
+        status="idle"
+        messages={makeMessages('eager thread')}
+        onSend={() => {}}
+      />,
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(viewport.scrollTop).toBe(300);
   });
 
   test('prefers the saved visible row anchor over scroll progress when returning to a thread', () => {
@@ -1018,8 +1126,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 750;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 750);
     });
 
     scrollHeight = 700;
@@ -1109,8 +1216,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       vi.runOnlyPendingTimers();
-      viewport.scrollTop = 1500;
-      viewport.dispatchEvent(new Event('scroll'));
+      userScroll(viewport, 1500);
     });
 
     expect(loadThreadScrollFetchOptions('bottom-saved')).toEqual({

@@ -70,7 +70,10 @@ export function AllThreadsThreadList({
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const [highlightState, setHighlightState] = useState<{
+    threadId: string | null;
+    search: string;
+  }>({ threadId: null, search });
 
   const actions = useSidebarActions();
   const {
@@ -89,9 +92,25 @@ export function AllThreadsThreadList({
     overscan: 10,
   });
 
-  useEffect(() => {
-    setHighlightIndex(-1);
-  }, [search, threads]);
+  const highlightedThreadId = useMemo(() => {
+    if (highlightState.search !== search) return null;
+    if (!highlightState.threadId) return null;
+    return threads.some((thread) => thread.id === highlightState.threadId)
+      ? highlightState.threadId
+      : null;
+  }, [highlightState, search, threads]);
+
+  const setHighlightedThreadId = useCallback(
+    (threadId: string | null) => {
+      setHighlightState({ threadId, search });
+    },
+    [search],
+  );
+
+  const highlightIndex = useMemo(
+    () => threads.findIndex((thread) => thread.id === highlightedThreadId),
+    [highlightedThreadId, threads],
+  );
 
   const handleThreadSelect = useCallback(
     async (thread: Thread) => {
@@ -121,19 +140,19 @@ export function AllThreadsThreadList({
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         const next = highlightIndex < threads.length - 1 ? highlightIndex + 1 : 0;
-        setHighlightIndex(next);
+        setHighlightedThreadId(threads[next]?.id ?? null);
         virtualizer.scrollToIndex(next, { align: 'auto' });
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         const prev = highlightIndex > 0 ? highlightIndex - 1 : threads.length - 1;
-        setHighlightIndex(prev);
+        setHighlightedThreadId(threads[prev]?.id ?? null);
         virtualizer.scrollToIndex(prev, { align: 'auto' });
       } else if (e.key === 'Enter' && highlightIndex >= 0 && highlightIndex < threads.length) {
         e.preventDefault();
         void handleThreadSelect(threads[highlightIndex]);
       }
     },
-    [handleThreadSelect, highlightIndex, threads, virtualizer],
+    [handleThreadSelect, highlightIndex, setHighlightedThreadId, threads, virtualizer],
   );
 
   useEffect(() => {
@@ -215,14 +234,14 @@ export function AllThreadsThreadList({
                   data-index={v.index}
                   data-testid={`all-threads-thread-item-${thread.id}`}
                   ref={virtualizer.measureElement}
-                  onMouseMove={() => setHighlightIndex(v.index)}
+                  onMouseMove={() => setHighlightedThreadId(thread.id)}
                   className="absolute top-0 left-0 w-full px-0.5 pb-1"
                   style={{ transform: `translateY(${v.start}px)` }}
                 >
                   <ThreadItem
                     thread={thread}
                     projectPath={projectInfo?.path ?? ''}
-                    isSelected={activeThreadId === thread.id || highlightIndex === v.index}
+                    isSelected={activeThreadId === thread.id || highlightedThreadId === thread.id}
                     subtitle={
                       isScratch(thread)
                         ? undefined

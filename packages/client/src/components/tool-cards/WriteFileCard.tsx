@@ -64,14 +64,12 @@ export function WriteFileCard({
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
+        className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
       >
         <ChevronRight
-          className={cn(
-            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-            expanded && 'rotate-90',
-          )}
+          className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
         {!hideLabel && <FileText className="icon-xs text-muted-foreground shrink-0" />}
         {!hideLabel && (
@@ -130,7 +128,7 @@ export function WriteFileCard({
       {expanded && content != null && (
         <ScrollArea
           className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh]' }}
+          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
           <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
             <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>

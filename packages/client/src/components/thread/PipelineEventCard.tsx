@@ -174,6 +174,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
           <>
             {detail}
             <button
+              type="button"
               data-testid={`pipeline-link-reviewer-${metadata.reviewerThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.reviewerThreadId)}
@@ -219,6 +220,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
           <>
             {detail}
             <button
+              type="button"
               data-testid={`pipeline-link-corrector-${metadata.correctorThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.correctorThreadId)}
@@ -280,6 +282,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
           <>
             {detail}
             <button
+              type="button"
               data-testid={`pipeline-link-fixer-${metadata.fixerThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.fixerThreadId)}
@@ -380,22 +383,20 @@ function PrecommitHooksCard({
   return (
     <div
       data-testid="pipeline-event-pipeline:precommit_hooks"
-      className="w-full overflow-hidden rounded-md text-xs transition-colors"
+      className="w-full overflow-hidden rounded-md text-xs"
     >
       {/* Header row — clickable to expand/collapse */}
       <button
+        type="button"
         data-testid="pipeline-precommit-hooks-toggle"
         className={cn(
-          'flex w-full items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/30',
+          'flex w-full items-center gap-2 px-3 py-1.5 hover:bg-accent/30',
           isOpen && 'bg-accent/20',
         )}
         onClick={() => setIsOpen(!isOpen)}
       >
         <ChevronRight
-          className={cn(
-            'icon-xs shrink-0 text-muted-foreground transition-transform',
-            isOpen && 'rotate-90',
-          )}
+          className={cn('icon-xs shrink-0 text-muted-foreground', isOpen && 'rotate-90')}
         />
         <Icon className="icon-xs text-muted-foreground shrink-0" />
         <span className="text-muted-foreground shrink-0 font-mono font-medium">

@@ -89,6 +89,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
   const { threads, totalCount } = useMemo(() => {
     const result: EnrichedThread[] = [];
+    const seenThreadIds = new Set<string>();
     const projectMap = new Map(
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
@@ -99,8 +100,10 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       projectPath: string,
       projectColor?: string,
     ) => {
+      if (seenThreadIds.has(thread.id)) return;
       if (!VISIBLE_STATUSES.has(thread.status) || thread.archived || thread.stage === 'done')
         return;
+      seenThreadIds.add(thread.id);
       const enriched: EnrichedThread = {
         ...thread,
         projectName,

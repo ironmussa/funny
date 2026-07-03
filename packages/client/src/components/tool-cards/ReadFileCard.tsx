@@ -176,10 +176,7 @@ export function ReadFileCard({
       >
         {hasOutput ? (
           <ChevronRight
-            className={cn(
-              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-              expanded && 'rotate-90',
-            )}
+            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
         ) : (
           <span className="icon-xs shrink-0" />
@@ -236,7 +233,7 @@ export function ReadFileCard({
       {expanded && hasOutput && (
         <ScrollArea
           className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh]' }}
+          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
           <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
             <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>

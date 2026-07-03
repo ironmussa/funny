@@ -210,15 +210,12 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
         data-testid="workflow-event-group-toggle"
         onClick={() => setExpanded(!expanded)}
         className={cn(
-          'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/30',
+          'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs hover:bg-accent/30',
           expanded && 'bg-accent/20',
         )}
       >
         <ChevronRight
-          className={cn(
-            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-            expanded && 'rotate-90',
-          )}
+          className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
         {status.running ? (
           <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />

@@ -100,7 +100,6 @@ vi.mock('@/components/prompt-editor/PromptEditor', () => {
       return (
         <textarea
           data-testid="prompt-editor"
-          role="textbox"
           aria-label="Message"
           value={value}
           onChange={(e: any) => {
@@ -176,6 +175,39 @@ describe('PromptInput', () => {
       expect.objectContaining({ model: 'opus-4.8', mode: 'autoEdit' }),
       undefined,
     );
+  });
+
+  test('notifies the selected default provider on mount for new threads', async () => {
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Test',
+          path: '/tmp/test',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 0,
+          defaultProvider: 'codex',
+          defaultModel: 'gpt-5.5',
+        },
+      ],
+      selectedProjectId: 'p1',
+      selectedThreadId: null,
+      activeThread: null,
+    } as any);
+    const onProviderChange = vi.fn();
+
+    renderWithProviders(
+      <PromptInput
+        onSubmit={vi.fn()}
+        isNewThread
+        projectId="p1"
+        onProviderChange={onProviderChange}
+      />,
+    );
+
+    await waitFor(() => expect(onProviderChange).toHaveBeenCalledWith('codex'));
+    expect(onProviderChange).toHaveBeenCalledTimes(1);
   });
 
   test('Shift+Enter does not trigger submit', () => {

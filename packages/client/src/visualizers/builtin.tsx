@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 
 import { MediaLoadError } from '@/components/MediaLoadError';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,7 @@ const MermaidBlock = lazy(() =>
 const CsvTable = lazy(() => import('@/components/CsvTable').then((m) => ({ default: m.CsvTable })));
 
 function VisualizerFallback() {
-  return <div className="bg-muted/50 h-8 animate-pulse rounded" />;
+  return <div className="bg-muted/50 h-8 rounded" />;
 }
 
 function MermaidVisualizer({ source }: VisualizerProps) {
@@ -39,16 +39,15 @@ function CsvVisualizer({ source, fill }: VisualizerProps) {
  * it ships inline rather than lazy-loaded.
  */
 function VideoVisualizer({ src, fill }: VisualizerProps) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
+  const [failedSrc, setFailedSrc] = useState<string | undefined>();
   if (!src) return null;
-  if (failed) return <MediaLoadError probeUrl={src} fill={fill} />;
+  if (failedSrc === src) return <MediaLoadError probeUrl={src} fill={fill} />;
   return (
     <video
       controls
       src={src}
       data-testid="visualizer-video"
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(src)}
       className={cn('w-full bg-gray-950 object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
     >
       Your browser does not support the video element.
@@ -66,17 +65,16 @@ function VideoVisualizer({ src, fill }: VisualizerProps) {
  * path (markdown-components.tsx skips the binary deferral for image kinds).
  */
 function ImageVisualizer({ src, fill }: VisualizerProps) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
+  const [failedSrc, setFailedSrc] = useState<string | undefined>();
   if (!src) return null;
-  if (failed) return <MediaLoadError probeUrl={src} fill={fill} />;
+  if (failedSrc === src) return <MediaLoadError probeUrl={src} fill={fill} />;
   return (
     <img
       src={src}
       alt="preview"
       loading="lazy"
       data-testid="visualizer-image"
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(src)}
       className={cn('w-full bg-muted/30 object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
     />
   );

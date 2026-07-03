@@ -67,7 +67,7 @@ export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabl
               strokeWidth={STROKE}
               strokeLinecap="round"
               strokeDasharray={`${dash} ${CIRC}`}
-              className={cn('transition-[stroke-dasharray] duration-500', color)}
+              className={color}
             />
           </svg>
           <span className="leading-none tabular-nums">{Math.round(clamped)}% de contexto</span>

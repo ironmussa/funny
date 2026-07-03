@@ -279,7 +279,7 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
           'Reduces false merge conflicts using semantic analysis',
         )}
       >
-        <div className="bg-muted h-8 w-[140px] animate-pulse rounded-md" />
+        <div className="bg-muted h-8 w-[140px] rounded-md" />
       </SettingRow>
     );
   }

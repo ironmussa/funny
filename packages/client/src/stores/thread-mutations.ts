@@ -29,6 +29,17 @@ function timeValue(value: string | undefined): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+function uniqueThreadIds(threads: Thread[]): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const thread of threads) {
+    if (seen.has(thread.id)) continue;
+    seen.add(thread.id);
+    ids.push(thread.id);
+  }
+  return ids;
+}
+
 function reconcileIncomingThread(existing: Thread | undefined, incoming: Thread): Thread {
   if (!existing) return incoming;
 
@@ -101,7 +112,7 @@ export function replaceProjectThreads(
   threads: Thread[],
   total: number,
 ): Partial<ThreadState> {
-  const newIds = threads.map((t) => t.id);
+  const newIds = uniqueThreadIds(threads);
   const incoming = new Set(newIds);
   // Preserve archived threads already resident in this bucket that the
   // incoming page omits (a non-archived reload, or a refresh right after a
@@ -139,7 +150,9 @@ export function appendProjectThreads(
   const existingSet = new Set(existing);
   const appended: string[] = [];
   for (const t of threads) {
-    if (!existingSet.has(t.id)) appended.push(t.id);
+    if (existingSet.has(t.id)) continue;
+    existingSet.add(t.id);
+    appended.push(t.id);
   }
   return {
     threadsById: withThreadsUpserted(state.threadsById, threads),
@@ -177,7 +190,7 @@ export function replaceScratchThreads(
 ): Partial<ThreadState> {
   return {
     threadsById: withThreadsUpserted(state.threadsById, threads),
-    scratchThreadIds: threads.map((t) => t.id),
+    scratchThreadIds: uniqueThreadIds(threads),
     scratchThreadTotal: total ?? threads.length,
   };
 }
@@ -192,7 +205,7 @@ export function replaceSharedThreads(
 ): Partial<ThreadState> {
   return {
     threadsById: withThreadsUpserted(state.threadsById, threads),
-    sharedThreadIds: threads.map((t) => t.id),
+    sharedThreadIds: uniqueThreadIds(threads),
     sharedThreadTotal: total ?? threads.length,
   };
 }
@@ -230,13 +243,15 @@ export function removeThread(state: ThreadState, threadId: string): Partial<Thre
     const ids = state.threadIdsByProject[pid];
     if (ids.includes(threadId)) {
       const next = ids.filter((id) => id !== threadId);
-      patch.threadIdsByProject = { ...state.threadIdsByProject, [pid]: next };
+      patch.threadIdsByProject = {
+        ...(patch.threadIdsByProject ?? state.threadIdsByProject),
+        [pid]: next,
+      };
       const prevTotal = state.threadTotalByProject[pid] ?? next.length;
       patch.threadTotalByProject = {
-        ...state.threadTotalByProject,
+        ...(patch.threadTotalByProject ?? state.threadTotalByProject),
         [pid]: Math.max(0, prevTotal - 1),
       };
-      break;
     }
   }
   return patch;

@@ -32,16 +32,19 @@ export function RunningThreads() {
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const runningThreads = useMemo(() => {
     const result: RunningThread[] = [];
+    const seenThreadIds = new Set<string>();
     const projectMap = new Map(
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
+        if (seenThreadIds.has(thread.id)) continue;
         if (
           (thread.status === 'running' || thread.status === 'waiting') &&
           thread.stage !== 'done'
         ) {
+          seenThreadIds.add(thread.id);
           const project = projectMap.get(projectId);
           result.push({
             ...thread,
@@ -70,7 +73,7 @@ export function RunningThreads() {
     <ThreadGroup
       title={t('sidebar.activeThreads')}
       count={runningThreads.length}
-      iconElement={<span className="bg-status-info size-1.5 shrink-0 animate-pulse rounded-full" />}
+      iconElement={<span className="bg-status-info size-1.5 shrink-0 rounded-full" />}
       data-testid="sidebar-running-threads"
     >
       {runningThreads.map((thread) => {

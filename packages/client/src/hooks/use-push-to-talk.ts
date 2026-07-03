@@ -105,7 +105,7 @@ export function usePushToTalk({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur-sm', handleBlur);
+      window.removeEventListener('blur', handleBlur);
       if (pttStopTimerRef.current) clearTimeout(pttStopTimerRef.current);
     };
   }, [enabled, containerRef]);

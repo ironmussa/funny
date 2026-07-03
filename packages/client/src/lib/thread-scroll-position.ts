@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'funny.threadScrollProgress.v1';
+const MAX_STORED_THREAD_SCROLL_POSITIONS = 200;
 
 export type StoredThreadScrollAnchor = {
   key: string;
@@ -21,6 +22,14 @@ type StoredThreadScroll = Record<string, StoredThreadScrollValue>;
 let cached: StoredThreadScroll | null = null;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let pagehideListenerAttached = false;
+
+export function __resetThreadScrollPositionForTests(): void {
+  cached = null;
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+}
 
 function readAll(): StoredThreadScroll {
   if (cached) return cached;
@@ -124,9 +133,18 @@ export function saveThreadScrollPosition(
   ) {
     return;
   }
+
+  delete next[threadId];
   next[threadId] = {
     progress: nextProgress,
     anchor: nextAnchor,
   };
+
+  const keys = Object.keys(next);
+  const overflow = keys.length - MAX_STORED_THREAD_SCROLL_POSITIONS;
+  for (let i = 0; i < overflow; i++) {
+    delete next[keys[i]];
+  }
+
   scheduleFlush();
 }

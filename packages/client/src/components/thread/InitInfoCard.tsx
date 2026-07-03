@@ -166,8 +166,8 @@ const McpToolGroup = memo(function McpToolGroup({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="bg-primary/10 hover:bg-primary/20 inline-flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors">
-        <ChevronRight className={cn('icon-xs transition-transform', open && 'rotate-90')} />
+      <CollapsibleTrigger className="bg-primary/10 hover:bg-primary/20 inline-flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-0.5 text-xs">
+        <ChevronRight className={cn('icon-xs', open && 'rotate-90')} />
         {serverName} ({toolNames.length})
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1 flex flex-wrap gap-1">

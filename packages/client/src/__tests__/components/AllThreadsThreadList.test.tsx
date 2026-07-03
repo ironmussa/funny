@@ -1,5 +1,6 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
+import type { KeyboardEvent, MutableRefObject } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AllThreadsThreadList } from '@/components/all-threads/AllThreadsThreadList';
@@ -84,6 +85,39 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   } as Thread;
 }
 
+function makeList(
+  threads: Thread[],
+  onSearchKeyDownRef: MutableRefObject<((e: KeyboardEvent) => void) | null>,
+) {
+  return (
+    <AllThreadsThreadList
+      threads={threads}
+      search=""
+      caseSensitive={false}
+      contentSnippets={new Map()}
+      emptyMessage="No threads"
+      searchEmptyMessage="No matches"
+      projectFilter={null}
+      projectInfoById={{
+        'project-1': { name: 'Funny', path: '/repo/funny', color: '#0ea5e9' },
+      }}
+      hasMore={false}
+      loadingMore={false}
+      onEndReached={vi.fn()}
+      onSearchKeyDownRef={onSearchKeyDownRef}
+    />
+  );
+}
+
+function expectThreadHighlighted(threadId: string, highlighted: boolean) {
+  const row = screen.getByTestId(`thread-item-${threadId}`).parentElement;
+  if (highlighted) {
+    expect(row?.className).toContain('bg-accent text-foreground');
+  } else {
+    expect(row?.className).not.toContain('bg-accent text-foreground');
+  }
+}
+
 describe('AllThreadsThreadList', () => {
   beforeEach(() => {
     useGitStatusStore.setState({
@@ -141,5 +175,49 @@ describe('AllThreadsThreadList', () => {
     expect(screen.getByTestId(`thread-item-${thread.id}`)).toHaveTextContent(
       /important content match/i,
     );
+  });
+
+  test('keeps keyboard highlight on the same thread when thread rows update', () => {
+    const first = makeThread({
+      id: 'thread-1',
+      title: 'First thread',
+      completedAt: '2026-01-03T00:00:00.000Z',
+    });
+    const second = makeThread({
+      id: 'thread-2',
+      title: 'Second thread',
+      completedAt: '2026-01-02T00:00:00.000Z',
+    });
+    const onSearchKeyDownRef: MutableRefObject<((e: KeyboardEvent) => void) | null> = {
+      current: null,
+    };
+    const { rerender } = renderWithProviders(makeList([first, second], onSearchKeyDownRef));
+
+    act(() => {
+      onSearchKeyDownRef.current?.({
+        key: 'ArrowDown',
+        preventDefault: vi.fn(),
+      } as unknown as KeyboardEvent);
+    });
+
+    expectThreadHighlighted('thread-1', true);
+    expectThreadHighlighted('thread-2', false);
+
+    rerender(
+      makeList(
+        [
+          second,
+          {
+            ...first,
+            title: 'First thread with refreshed message preview',
+            completedAt: '2026-01-04T00:00:00.000Z',
+          },
+        ],
+        onSearchKeyDownRef,
+      ),
+    );
+
+    expectThreadHighlighted('thread-1', true);
+    expectThreadHighlighted('thread-2', false);
   });
 });

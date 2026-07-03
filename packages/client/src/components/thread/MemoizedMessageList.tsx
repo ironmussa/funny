@@ -14,7 +14,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useMinuteTick } from '@/hooks/use-minute-tick';
 import {
   getCachedPrepared,
   isPretextReady,
@@ -35,7 +34,6 @@ import {
 } from '@/lib/render-items';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildToolCallDiffFallbacks } from '@/lib/tool-call-diff-fallbacks';
-import { cn } from '@/lib/utils';
 import {
   useSettingsStore,
   PROSE_FONT_SIZE_PX,
@@ -265,7 +263,6 @@ function messageListAreEqual(
     threadId: string;
     threadStatus?: string;
     knownIds: Set<string>;
-    prefersReducedMotion: boolean | null;
     snapshotMap: Map<string, number>;
     onSend: any;
     onOpenLightbox: any;
@@ -293,7 +290,6 @@ function messageListAreEqual(
     prev.changeSummaryRunning === next.changeSummaryRunning &&
     prev.onSessionReverted === next.onSessionReverted &&
     (prev.threadStatus === 'waiting') === (next.threadStatus === 'waiting') &&
-    prev.prefersReducedMotion === next.prefersReducedMotion &&
     prev.snapshotMap === next.snapshotMap &&
     prev.onSend === next.onSend &&
     prev.onOpenLightbox === next.onOpenLightbox &&
@@ -320,7 +316,6 @@ export const MemoizedMessageList = memo(
       threadId: string;
       threadStatus?: string;
       knownIds: Set<string>;
-      prefersReducedMotion: boolean | null;
       snapshotMap: Map<string, number>;
       onSend: (prompt: string, opts: { model: string; mode: string }) => void;
       onOpenLightbox: (images: { src: string; alt: string }[], index: number) => void;
@@ -349,7 +344,6 @@ export const MemoizedMessageList = memo(
       threadId,
       threadStatus,
       knownIds: _knownIds,
-      prefersReducedMotion,
       snapshotMap,
       onSend,
       onOpenLightbox,
@@ -368,11 +362,6 @@ export const MemoizedMessageList = memo(
     ref,
   ) {
     const { t } = useTranslation();
-    // Re-render every 60s so timeAgo timestamps in tool cards stay fresh.
-    // Needed here (not just in ThreadView) because the custom memo comparator
-    // blocks parent-driven re-renders when only the tick changes.
-    useMinuteTick();
-
     // ── Font config: dynamic based on global font size setting ──
     const globalFontSize = useSettingsStore((s) => s.fontSize);
     const fontConfig = useMemo<FontConfig>(
@@ -1029,9 +1018,9 @@ export const MemoizedMessageList = memo(
           const tc = ti.tc;
           return (
             <div
-              key={tc.id}
               data-tool-call-id={tc.id}
               {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
+              key={tc.id}
             >
               <ToolCallCard
                 name={tc.name}
@@ -1062,9 +1051,9 @@ export const MemoizedMessageList = memo(
               : -1;
           return (
             <div
-              key={ti.calls[0].id}
               data-tool-call-id={ti.calls[0].id}
               {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
+              key={ti.calls[0].id}
             >
               <ToolCallGroup
                 name={ti.name}
@@ -1270,10 +1259,7 @@ export const MemoizedMessageList = memo(
           <div
             key={hiddenSectionUserItem.msg.id}
             data-testid="sticky-section-context"
-            className={cn(
-              'pointer-events-none sticky top-0 z-50 h-0',
-              !prefersReducedMotion && 'animate-in fade-in',
-            )}
+            className="pointer-events-none sticky top-0 z-50 h-0"
           >
             <div
               ref={stickySectionContentRef}
@@ -1294,7 +1280,6 @@ export const MemoizedMessageList = memo(
 
           return (
             <div
-              key={virtualItem.key}
               ref={measureVirtualRowElement}
               data-index={virtualItem.index}
               data-virtual-row-key={row.key}
@@ -1303,6 +1288,7 @@ export const MemoizedMessageList = memo(
               row.item.msg.role === 'user'
                 ? { 'data-section-msg-id': row.item.msg.id }
                 : {})}
+              key={virtualItem.key}
               className="absolute top-0 left-0 z-0 w-full"
               style={{
                 transform: `translateY(${

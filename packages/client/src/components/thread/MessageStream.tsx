@@ -1,5 +1,4 @@
 import { ArrowDown } from 'lucide-react';
-import { useReducedMotion } from 'motion/react';
 import {
   useState,
   useRef,
@@ -100,13 +99,10 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       onVisibleMessageChange,
       compact = false,
       footer,
-      prefersReducedMotion: prefersReducedMotionProp,
       className,
     } = props;
 
     const { t } = useTranslation();
-    const systemReducedMotion = useReducedMotion();
-    const prefersReducedMotion = prefersReducedMotionProp ?? systemReducedMotion;
 
     const isRunning = status === 'running';
     const hasPagination = pagination != null;
@@ -808,7 +804,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               threadId={threadId}
               threadStatus={status}
               knownIds={knownIds}
-              prefersReducedMotion={prefersReducedMotion}
               snapshotMap={snapshotMap}
               onSend={onSend}
               onOpenLightbox={effectiveOpenLightbox}
@@ -833,7 +828,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             isRunning={isRunning}
             isExternal={isExternal}
             compact={compact}
-            prefersReducedMotion={prefersReducedMotion}
             resultInfo={resultInfo}
             model={model}
             permissionMode={permissionMode}

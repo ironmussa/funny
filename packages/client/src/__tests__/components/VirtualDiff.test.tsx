@@ -33,7 +33,7 @@ describe('VirtualDiff', () => {
     expect(screen.queryByTestId('diff-fade-right')).not.toBeInTheDocument();
   });
 
-  test('renders vertical edge fades only when scrolled away from that edge', () => {
+  test('does not render vertical edge fades while scrolling', () => {
     render(<VirtualDiff unifiedDiff={SIMPLE_DIFF} viewMode="split" />);
 
     const scrollArea = screen.getByTestId('diff-scroll-area');
@@ -47,22 +47,16 @@ describe('VirtualDiff', () => {
 
     fireEvent.scroll(scrollArea);
     expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
-    expect(screen.getByTestId('diff-fade-bottom')).toHaveClass(
-      'scroll-fade-edge',
-      'scroll-fade-edge-bottom',
-    );
+    expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
 
     scrollArea.scrollTop = 40;
     fireEvent.scroll(scrollArea);
-    expect(screen.getByTestId('diff-fade-top')).toHaveClass(
-      'scroll-fade-edge',
-      'scroll-fade-edge-top',
-    );
-    expect(screen.getByTestId('diff-fade-bottom')).toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
 
     scrollArea.scrollTop = 120;
     fireEvent.scroll(scrollArea);
-    expect(screen.getByTestId('diff-fade-top')).toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
     expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
   });
 });

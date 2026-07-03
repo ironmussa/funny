@@ -112,6 +112,22 @@ describe('selectThreadsForProject — stable references', () => {
     expect(a).toEqual([]);
     expect(a).toBe(b);
   });
+
+  test('de-dupes duplicate ids while preserving first occurrence order', () => {
+    const t1 = makeThread('t1');
+    const t2 = makeThread('t2');
+    const ids = ['t1', 't1', 't2', 't1'];
+    const state = makeState({
+      threadsById: { t1, t2 },
+      threadIdsByProject: { p1: ids },
+    });
+
+    const a = selectThreadsForProject(state, 'p1');
+    const b = selectThreadsForProject(state, 'p1');
+
+    expect(a).toEqual([t1, t2]);
+    expect(a).toBe(b);
+  });
 });
 
 describe('selectScratchThreads — stable references', () => {
@@ -182,5 +198,15 @@ describe('selectThreadsByProject — empty buckets', () => {
     const b = selectThreadsByProject(state);
     expect(a).toEqual({});
     expect(a).toBe(b);
+  });
+
+  test('ignores the legacy empty-project bucket', () => {
+    const t1 = makeThread('t1');
+    const state = makeState({
+      threadsById: { t1 },
+      threadIdsByProject: { '': ['t1'], p1: ['t1'] },
+    });
+
+    expect(selectThreadsByProject(state)).toEqual({ p1: [t1] });
   });
 });

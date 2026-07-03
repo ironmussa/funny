@@ -80,10 +80,12 @@ import {
 } from '@/lib/rebase-link-path';
 import { metric } from '@/lib/telemetry';
 import { middleTruncate } from '@/lib/text-truncate';
+import { useThreadById } from '@/lib/thread-selectors';
 import { shortRelativeDate } from '@/lib/thread-utils';
+import { canLoadGitHistory } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
-import { useThreadProjectId } from '@/stores/thread-context';
+import { useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('commit-graph');
@@ -172,7 +174,15 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const effectiveThreadId = useRightPaneThreadId() || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const threadProjectId = useThreadProjectId();
-  const hasGitContext = !!(effectiveThreadId || projectModeId);
+  const lightThread = useThreadById(effectiveThreadId);
+  const threadIsScratch = useThreadSelector((t) => t?.isScratch);
+  const gitThread = effectiveThreadId
+    ? {
+        projectId: threadProjectId ?? lightThread?.projectId ?? '',
+        isScratch: threadIsScratch ?? lightThread?.isScratch,
+      }
+    : null;
+  const hasGitContext = !!projectModeId || canLoadGitHistory(gitThread);
 
   const [entries, setEntries] = useState<GraphEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
@@ -208,7 +218,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const entriesRef = useRef<GraphEntry[]>([]);
   const loadedLogSkipRef = useRef(0);
 
-  const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${allBranches}`;
+  const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${
+    gitThread?.projectId ?? projectModeId ?? ''
+  }::${allBranches}`;
 
   const loadLog = useCallback(
     async (
@@ -366,7 +378,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   }, [visible, hasGitContext, effectiveThreadId, projectModeId]);
 
   // Resolve the GitHub browse base URL so commit hashes can deep-link.
-  const remoteCheckProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
+  const remoteCheckProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
   useEffect(() => {
     if (!remoteCheckProjectId) {
       setGithubBrowseBaseUrl(null);
@@ -389,7 +401,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
 
   // Walk the GitHub commit-author endpoint, anchored at the first uncovered SHA,
   // to fill in avatar URLs (same strategy as the History list).
-  const ghProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
+  const ghProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
   useEffect(() => {
     if (!ghProjectId || entries.length === 0) return;
     const firstMissing = entries.find(

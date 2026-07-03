@@ -41,12 +41,7 @@ export function SidebarSharedSection() {
             className="flex min-w-0 flex-1 cursor-pointer items-center gap-0 px-2 py-1 text-left text-xs"
           >
             <span className="-ml-0.5 shrink-0 rounded p-0.5">
-              <ChevronRight
-                className={cn(
-                  'icon-sm transition-transform duration-200',
-                  isExpanded && 'rotate-90',
-                )}
-              />
+              <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
             </span>
             <span className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5">
               <Users className="icon-sm text-muted-foreground shrink-0" />
@@ -57,7 +52,7 @@ export function SidebarSharedSection() {
           </CollapsibleTrigger>
         </div>
 
-        <CollapsibleContent className="data-[state=open]:animate-slide-down">
+        <CollapsibleContent>
           <div className="mt-0.5 min-w-0">
             {sharedThreads.map((thread) => (
               <SharedThreadRow

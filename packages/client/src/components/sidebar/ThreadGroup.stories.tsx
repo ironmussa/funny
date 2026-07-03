@@ -135,7 +135,7 @@ export const ActiveThreads: Story = {
   args: {
     title: 'Active',
     count: 2,
-    iconElement: <span className="bg-status-info size-1.5 shrink-0 animate-pulse rounded-full" />,
+    iconElement: <span className="bg-status-info size-1.5 shrink-0 rounded-full" />,
     children: null,
   },
   render: (args) => (
@@ -375,9 +375,7 @@ export const FullActivitySection: Story = {
       <ThreadGroup
         title="Active"
         count={1}
-        iconElement={
-          <span className="bg-status-info size-1.5 shrink-0 animate-pulse rounded-full" />
-        }
+        iconElement={<span className="bg-status-info size-1.5 shrink-0 rounded-full" />}
       >
         <ThreadItem
           thread={makeThread({

@@ -1,5 +1,4 @@
 import { ListTodo, X, ChevronDown, ChevronUp, Circle, CircleDot, CircleCheck } from 'lucide-react';
-import { m } from 'motion/react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,43 +30,35 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
     const wrapper = container.firstElementChild?.firstElementChild as HTMLElement | null;
     if (!wrapper || scrollTargetIdx >= wrapper.children.length) return;
     const el = wrapper.children[scrollTargetIdx] as HTMLElement;
-    requestAnimationFrame(() => {
+    const frameId = requestAnimationFrame(() => {
       const targetTop = el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2;
-      container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+      container.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' });
     });
+    return () => cancelAnimationFrame(frameId);
   }, [scrollTargetIdx, minimized, todos]);
 
   return (
-    <m.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="border-border bg-card/95 absolute top-1/2 right-4 z-20 w-64 -translate-y-1/2 rounded-lg border shadow-lg backdrop-blur-xs"
-    >
+    <div className="border-border bg-card/95 absolute top-1/2 right-4 z-20 w-64 -translate-y-1/2 rounded-lg border shadow-lg backdrop-blur-xs">
       {/* Header */}
       <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
         <ListTodo className="icon-sm text-muted-foreground" />
         <span className="flex-1 text-xs font-medium">{t('todoPanel.title')}</span>
-        <m.span
-          key={`${progress.completed}/${progress.total}`}
-          initial={{ scale: 1.2 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.2 }}
+        <span
           className={cn(
-            'text-xs font-mono px-1.5 py-0.5 rounded-full transition-colors duration-300',
+            'text-xs font-mono px-1.5 py-0.5 rounded-full',
             allDone
               ? 'bg-status-success/10 text-status-success/80'
               : 'bg-muted text-muted-foreground',
           )}
         >
           {progress.completed}/{progress.total}
-        </m.span>
+        </span>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
               onClick={() => setMinimized((v) => !v)}
-              className="text-muted-foreground hover:bg-muted rounded p-0.5 transition-colors"
+              className="text-muted-foreground hover:bg-muted rounded p-0.5"
               aria-label={minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
             >
               {minimized ? <ChevronDown className="icon-xs" /> : <ChevronUp className="icon-xs" />}
@@ -80,8 +71,9 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
               onClick={onDismiss}
-              className="text-muted-foreground hover:bg-muted rounded p-0.5 transition-colors"
+              className="text-muted-foreground hover:bg-muted rounded p-0.5"
               aria-label={t('todoPanel.dismiss')}
             >
               <X className="icon-xs" />
@@ -96,47 +88,32 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           {/* Progress bar */}
           <div className="px-3 pt-2">
             <div className="bg-muted h-1 overflow-hidden rounded-full">
-              <m.div
+              <div
                 className={cn(
                   'h-full rounded-full',
                   allDone ? 'bg-status-success/80' : 'bg-status-info/80',
                 )}
-                initial={false}
-                animate={{ width: `${pct}%` }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
+                style={{ width: `${pct}%` }}
               />
             </div>
           </div>
 
-          {/* Animated todo list */}
           <ScrollArea viewportRef={listRef} className="max-h-64">
             <div className="space-y-1 px-3 py-1 pb-2">
-              {todos.map((todo, i) => (
-                <m.div
-                  key={todo.content}
-                  className="flex items-start gap-2"
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.2, delay: i * 0.03 }}
-                >
-                  <m.div
-                    className="mt-0.5 shrink-0"
-                    key={`${todo.content}-${todo.status}`}
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
-                  >
+              {todos.map((todo) => (
+                <div key={todo.content} className="flex items-start gap-2">
+                  <div className="mt-0.5 shrink-0" key={`${todo.content}-${todo.status}`}>
                     {todo.status === 'completed' ? (
                       <CircleCheck className="icon-sm text-status-success/80" />
                     ) : todo.status === 'in_progress' ? (
-                      <CircleDot className="icon-sm text-status-info animate-pulse" />
+                      <CircleDot className="icon-sm text-status-info" />
                     ) : (
                       <Circle className="icon-sm text-muted-foreground/50" />
                     )}
-                  </m.div>
+                  </div>
                   <span
                     className={cn(
-                      'text-xs leading-relaxed transition-all duration-300',
+                      'text-xs leading-relaxed',
                       todo.status === 'completed' && 'text-muted-foreground line-through',
                       todo.status === 'in_progress' && 'text-foreground font-medium',
                       todo.status === 'pending' && 'text-muted-foreground',
@@ -144,12 +121,12 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                   >
                     {todo.content}
                   </span>
-                </m.div>
+                </div>
               ))}
             </div>
           </ScrollArea>
         </>
       )}
-    </m.div>
+    </div>
   );
 }

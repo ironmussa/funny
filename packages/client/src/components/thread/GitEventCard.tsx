@@ -65,13 +65,10 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
-        className="hover:bg-accent/30 flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
+        className="hover:bg-accent/30 flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
       >
         <ChevronRight
-          className={cn(
-            'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-            expanded && 'rotate-90',
-          )}
+          className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
         <Icon className="icon-xs text-muted-foreground shrink-0" />
         <span className="text-foreground shrink-0 font-mono font-medium">{config.label}</span>

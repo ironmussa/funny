@@ -196,15 +196,27 @@ export function usePromptInputState({
     () => parseUnifiedModel(unifiedModel),
     [unifiedModel],
   );
+  const lastNotifiedProviderRef = useRef<string | undefined>(undefined);
+  const notifyProviderChange = useCallback(
+    (nextProvider: string) => {
+      if (lastNotifiedProviderRef.current === nextProvider) return;
+      lastNotifiedProviderRef.current = nextProvider;
+      onProviderChange?.(nextProvider);
+    },
+    [onProviderChange],
+  );
+  useEffect(() => {
+    notifyProviderChange(currentProvider);
+  }, [currentProvider, notifyProviderChange]);
   const setUnifiedModel = useCallback(
     (nextUnifiedModel: string) => {
       const nextProvider = parseUnifiedModel(nextUnifiedModel).provider;
       if (nextProvider !== currentProvider) {
-        onProviderChange?.(nextProvider);
+        notifyProviderChange(nextProvider);
       }
       setUnifiedModelRaw(nextUnifiedModel);
     },
-    [currentProvider, onProviderChange],
+    [currentProvider, notifyProviderChange],
   );
   const effortOptions = useMemo(
     () => getEffortLevels(currentModel, currentProvider),

@@ -74,11 +74,13 @@ function connect() {
     metric('ws.connected', 1, { attributes: { transport } });
     // Track transport upgrades (polling → websocket) so we can correlate
     // dropped trailing events with sockets that never finished upgrading.
-    socket.io.engine?.on('upgrade', (t: any) => {
+    const engine = socket.io.engine;
+    const handleTransportUpgrade = (t: any) => {
       const name = typeof t === 'string' ? t : (t?.name ?? 'unknown');
       wsLog.info('Socket.IO transport upgraded', { transport: name });
       metric('ws.transport_upgrade', 1, { attributes: { transport: name } });
-    });
+    };
+    engine?.on('upgrade', handleTransportUpgrade);
 
     useCircuitBreakerStore.getState().recordSuccess();
     // Only resync threads on RECONNECT. On the initial connect the cold-load
@@ -149,6 +151,7 @@ function connect() {
     if (useRunnerStatusStore.getState().status === 'online') void requestPtyList();
 
     socket.once('disconnect', () => {
+      engine?.off('upgrade', handleTransportUpgrade);
       unsubRunnerStatus();
     });
   });

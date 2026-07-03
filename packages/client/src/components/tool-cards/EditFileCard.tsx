@@ -198,13 +198,10 @@ export function EditFileCard({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="hover:bg-accent/30 flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
+          className="hover:bg-accent/30 flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
         >
           <ChevronRight
-            className={cn(
-              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-              expanded && 'rotate-90',
-            )}
+            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
           {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
           {!hideLabel && (

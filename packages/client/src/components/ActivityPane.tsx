@@ -160,7 +160,7 @@ function InlineTodoList({
         <div className="bg-muted h-1 flex-1 overflow-hidden rounded-full">
           <div
             className={cn(
-              'h-full rounded-full transition-all duration-500',
+              'h-full rounded-full',
               allDone ? 'bg-status-success/80' : 'bg-status-info/80',
             )}
             style={{ width: `${pct}%` }}
@@ -187,7 +187,7 @@ function InlineTodoList({
             {todo.status === 'completed' ? (
               <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
             ) : todo.status === 'in_progress' ? (
-              <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0 animate-pulse" />
+              <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0" />
             ) : (
               <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
             )}

@@ -6,6 +6,7 @@ import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
+import { canLoadGitHistory } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -108,13 +109,22 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
   const selectedThreadId = useRightPaneThreadId();
   const effectiveThreadId = selectedThreadId || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
-  const hasGitContext = !!(effectiveThreadId || projectModeId);
-  const gitContextKey = effectiveThreadId || projectModeId;
 
   const worktreePath = useThreadWorktreePath();
   const threadProjectId = useThreadProjectId();
   const projectsForPath = useProjectStore((s) => s.projects);
   const lightThread = useThreadById(selectedThreadId ?? undefined);
+  const threadIsScratch = useThreadSelector((t) => t?.isScratch);
+  const gitThread = effectiveThreadId
+    ? {
+        projectId: threadProjectId ?? lightThread?.projectId ?? '',
+        isScratch: threadIsScratch ?? lightThread?.isScratch,
+      }
+    : null;
+  const hasGitContext = !!projectModeId || canLoadGitHistory(gitThread);
+  const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${
+    gitThread?.projectId ?? projectModeId ?? ''
+  }`;
   const basePath = useMemo(
     () =>
       resolveBasePath({
@@ -135,7 +145,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
     return resolveThreadBranch(t);
   });
   const projectBranch = useProjectStore((s) => {
-    const pid = projectModeId ?? threadProjectId;
+    const pid = projectModeId ?? gitThread?.projectId;
     return pid ? s.branchByProject[pid] : undefined;
   });
   const currentBranch = threadBranch || projectBranch;
@@ -146,13 +156,13 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
     projectModeId ? s.statusByProject[projectModeId] : undefined,
   );
   const gitStatus = threadGitStatus ?? projectGitStatus;
-  const prProjectId = threadProjectId ?? selectedProjectId ?? '';
+  const prProjectId = projectModeId ?? gitThread?.projectId ?? '';
   const { threads: prThreads } = usePRDetail(
     prProjectId || undefined,
     gitStatus?.prNumber ?? undefined,
   );
   const unpushedCommitCount = gitStatus?.unpushedCommitCount ?? 0;
-  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
+  const remoteCheckProjectId = projectModeId ?? gitThread?.projectId ?? null;
 
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 

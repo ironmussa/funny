@@ -79,7 +79,6 @@ export const VirtualDiff = memo(function VirtualDiff({
   const [collapsedState, setCollapsedState] = useState<Map<number, boolean>>(new Map());
   const [pretextReady, setPretextReady] = useState(false);
   const [diffContainerWidth, setDiffContainerWidth] = useState(0);
-  const [fadeEdges, setFadeEdges] = useState({ top: false, bottom: false });
 
   const parsed = useMemo(() => parseUnifiedDiff(unifiedDiff), [unifiedDiff]);
 
@@ -512,33 +511,6 @@ export const VirtualDiff = memo(function VirtualDiff({
   const highlightLang = tooManyLines ? 'plaintext' : effectiveLang;
   const hasLines = parsed.lines.length > 0;
 
-  const updateFadeEdges = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
-    const next = {
-      top: el.scrollTop > 1,
-      bottom: maxScrollTop - el.scrollTop > 1,
-    };
-
-    setFadeEdges((prev) => (prev.top === next.top && prev.bottom === next.bottom ? prev : next));
-  }, []);
-  const updateFadeEdgesRef = useRef(updateFadeEdges);
-  updateFadeEdgesRef.current = updateFadeEdges;
-
-  useLayoutEffect(() => {
-    updateFadeEdges();
-  }, [updateFadeEdges, totalSize, maxContentWidth, diffContainerWidth, wordWrap, viewMode]);
-
-  useEffect(() => {
-    const el = scrollElement;
-    if (!el) return;
-    const handleScroll = () => updateFadeEdgesRef.current();
-    el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, [scrollElement]);
-
   // ── Drag-select (GitHub Desktop-style click+drag on checkboxes) ──
   const dragRef = useRef<{
     active: boolean;
@@ -726,6 +698,9 @@ export const VirtualDiff = memo(function VirtualDiff({
               const rowH = rowHeightMap?.get(vItem.index) ?? rowHeight;
               return (
                 <div
+                  {...(wordWrap
+                    ? { ref: virtualizer.measureElement, 'data-index': vItem.index }
+                    : {})}
                   key={vItem.index}
                   style={{
                     position: 'absolute',
@@ -735,9 +710,6 @@ export const VirtualDiff = memo(function VirtualDiff({
                     ...(wordWrap ? { minHeight: rowH } : { height: rowH }),
                     transform: `translateY(${vItem.start}px)`,
                   }}
-                  {...(wordWrap
-                    ? { ref: virtualizer.measureElement, 'data-index': vItem.index }
-                    : {})}
                 >
                   {row.type === 'conflict-actions' ? (
                     <ConflictActionBar block={row.block} onResolve={onResolveConflict} />
@@ -834,20 +806,6 @@ export const VirtualDiff = memo(function VirtualDiff({
             })}
           </div>
         </div>
-        {fadeEdges.top && (
-          <div
-            className="scroll-fade-edge scroll-fade-edge-top"
-            aria-hidden="true"
-            data-testid="diff-fade-top"
-          />
-        )}
-        {fadeEdges.bottom && (
-          <div
-            className="scroll-fade-edge scroll-fade-edge-bottom"
-            aria-hidden="true"
-            data-testid="diff-fade-bottom"
-          />
-        )}
       </div>
       {/* Single horizontal scrollbar for split/three-pane mode */}
       {needsHScroll && (

@@ -116,7 +116,7 @@ const HooksEventCard = memo(function HooksEventCard({
         type="button"
         data-testid="workflow-hooks-toggle"
         className={cn(
-          'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors',
+          'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs',
           hasError && 'cursor-pointer hover:bg-accent/30',
         )}
         onClick={() => hasError && setExpanded(!expanded)}
@@ -143,7 +143,7 @@ const HooksEventCard = memo(function HooksEventCard({
         {hasError && (
           <ChevronRight
             className={cn(
-              'ml-auto icon-xs shrink-0 text-muted-foreground transition-transform',
+              'ml-auto icon-xs shrink-0 text-muted-foreground',
               expanded && 'rotate-90',
             )}
           />
@@ -246,6 +246,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
           </span>
           {metadata.reviewerThreadId && (
             <button
+              type="button"
               data-testid={`workflow-link-reviewer-${metadata.reviewerThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.reviewerThreadId)}
@@ -271,6 +272,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
           </span>
           {metadata.correctorThreadId && (
             <button
+              type="button"
               data-testid={`workflow-link-corrector-${metadata.correctorThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.correctorThreadId)}
@@ -299,6 +301,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
           </span>
           {metadata.fixerThreadId && (
             <button
+              type="button"
               data-testid={`workflow-link-fixer-${metadata.fixerThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
               onClick={() => navigateToThread(metadata.fixerThreadId)}

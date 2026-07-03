@@ -50,6 +50,8 @@ let pendingMessages = new Map<string, BufferedMessage>();
 let pendingToolOutputs: Array<{ threadId: string; data: any }> = [];
 let pendingStatuses = new Map<string, BufferedMessage>();
 let rafId: number | null = null;
+let fallbackFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const FALLBACK_FLUSH_MS = 250;
 
 function pendingMessageKey(threadId: string, data: any): string {
   // Fall back to threadId when messageId is missing (defensive — server should
@@ -63,8 +65,23 @@ const lastStatusByThread = new Map<string, string>();
 
 const FILE_MODIFYING_TOOLS = new Set(['Write', 'Edit', 'Bash']);
 
+function cancelScheduledFlush(): void {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+  if (fallbackFlushTimer) {
+    clearTimeout(fallbackFlushTimer);
+    fallbackFlushTimer = null;
+  }
+}
+
 function flushBatch() {
   rafId = null;
+  if (fallbackFlushTimer) {
+    clearTimeout(fallbackFlushTimer);
+    fallbackFlushTimer = null;
+  }
 
   const msgs = Array.from(pendingMessages.values());
   const toolOutputs = pendingToolOutputs.slice();
@@ -109,6 +126,13 @@ function flushBatch() {
 function scheduleFlush() {
   if (rafId === null) {
     rafId = requestAnimationFrame(flushBatch);
+  }
+  if (fallbackFlushTimer === null) {
+    fallbackFlushTimer = setTimeout(() => {
+      fallbackFlushTimer = null;
+      cancelScheduledFlush();
+      flushBatch();
+    }, FALLBACK_FLUSH_MS);
   }
 }
 
@@ -186,10 +210,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         attributes: { status: resultStatus },
       });
 
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
+      cancelScheduledFlush();
       const msgs = Array.from(pendingMessages.values());
       const toolOutputs = pendingToolOutputs.slice();
       const statuses2 = Array.from(pendingStatuses.values());
@@ -225,10 +246,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         });
       }
       const hasPendingTC = pendingMessages.size > 0;
-      if (hasPendingTC && rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
+      if (hasPendingTC) cancelScheduledFlush();
       startTransition(() => {
         if (hasPendingTC) {
           const msgs2 = Array.from(pendingMessages.values());
@@ -904,10 +922,7 @@ export function disconnectAllRemote() {
 
 /** Reset all batching + dedup state. Called by useWS teardown. */
 export function clearWSDispatchState(): void {
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId);
-    rafId = null;
-  }
+  cancelScheduledFlush();
   pendingMessages.clear();
   pendingToolOutputs = [];
   pendingStatuses.clear();

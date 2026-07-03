@@ -14,6 +14,7 @@ const log = createClientLogger('direct-media');
  * fresh sign before that happens.
  */
 const SIGNED_URL_REFRESH_SKEW_MS = 30_000;
+const MAX_SIGNED_CACHE_ENTRIES = 200;
 
 /** True when a cached signed URL still has comfortably more than the skew left. */
 function signedUrlIsFresh(url: string): boolean {
@@ -44,17 +45,42 @@ let directMediaDisabled = false;
  */
 const signedCache = new Map<string, string>();
 
+function pruneSignedCache(): void {
+  for (const [path, url] of signedCache) {
+    if (!signedUrlIsFresh(url)) signedCache.delete(path);
+  }
+
+  while (signedCache.size > MAX_SIGNED_CACHE_ENTRIES) {
+    const oldest = signedCache.keys().next();
+    if (oldest.done) break;
+    signedCache.delete(oldest.value);
+  }
+}
+
 /** Test seam: clear the latched flag + cache between cases. */
 export function __resetDirectMediaForTests(): void {
   directMediaDisabled = false;
   signedCache.clear();
 }
 
+export function __cacheSignedMediaForTests(path: string, url: string): void {
+  signedCache.set(path, url);
+  pruneSignedCache();
+}
+
+export function __hasSignedMediaForTests(path: string): boolean {
+  return signedCache.has(path);
+}
+
 async function signMedia(path: string): Promise<string | null> {
   if (directMediaDisabled) return null;
   const cached = signedCache.get(path);
   if (cached) {
-    if (signedUrlIsFresh(cached)) return cached;
+    if (signedUrlIsFresh(cached)) {
+      signedCache.delete(path);
+      signedCache.set(path, cached);
+      return cached;
+    }
     // Expired or within the refresh skew — drop it and mint a fresh one below.
     signedCache.delete(path);
   }
@@ -73,6 +99,7 @@ async function signMedia(path: string): Promise<string | null> {
       return null;
     }
     signedCache.set(path, data.url);
+    pruneSignedCache();
     return data.url;
   } catch (e) {
     log.debug('direct-media sign failed — using proxied url', { error: String(e) });

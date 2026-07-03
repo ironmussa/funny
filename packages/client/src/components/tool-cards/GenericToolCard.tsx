@@ -78,15 +78,12 @@ export function GenericToolCard({
       <button
         type="button"
         aria-expanded={expanded}
-        className="hover:bg-accent/30 w-full cursor-pointer rounded-md text-left transition-colors"
+        className="hover:bg-accent/30 w-full cursor-pointer rounded-md text-left"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
           <ChevronRight
-            className={cn(
-              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-              expanded && 'rotate-90',
-            )}
+            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
           {!hideLabel &&
             (isTodo ? (
@@ -139,7 +136,7 @@ export function GenericToolCard({
       {expanded && (
         <ScrollArea
           className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh]' }}
+          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
           {isTodo && todos ? (
             <div className="px-3 pb-2">
@@ -193,6 +190,7 @@ export function GenericToolCard({
               {onRespond && !output && (
                 <div className="flex justify-end pt-2">
                   <button
+                    type="button"
                     onClick={() => onRespond('Accepted')}
                     className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors"
                   >
@@ -282,6 +280,7 @@ function FileLink({
           </a>
         ) : (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               openFileInEditor(filePath, defaultEditor);

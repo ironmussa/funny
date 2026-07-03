@@ -54,13 +54,16 @@ export function RecentThreads({
   const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   const { recentThreads, totalCount } = useMemo(() => {
     const result: FinishedThread[] = [];
+    const seenThreadIds = new Set<string>();
     const projectMap = new Map(
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
+        if (seenThreadIds.has(thread.id)) continue;
         if (FINISHED_STATUSES.has(thread.status) && !thread.archived && thread.stage !== 'done') {
+          seenThreadIds.add(thread.id);
           const project = projectMap.get(projectId);
           result.push({
             ...thread,

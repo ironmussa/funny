@@ -86,16 +86,15 @@ export function shouldCheckoutBranchForThreadSelect(
 
 /**
  * Top inset used when scrolling sidebar items into view, so the row doesn't
- * end up tucked under the edge mask (fade-size-sm = 32px) at the top of the
- * scroll container. Includes a few pixels of breathing room.
+ * end up flush against the top of the scroll container. Includes a few pixels
+ * of breathing room.
  */
-export const SIDEBAR_SCROLL_TOP_OFFSET = 36;
+export const SIDEBAR_SCROLL_TOP_OFFSET = 16;
 
 /**
  * Scroll a sidebar row into view inside its scroll container, keeping it
- * clear of the top fade mask. Mimics native `scrollIntoView`
- * `block: 'start' | 'nearest'` semantics but applies a top offset so the
- * row is never hidden in the transparent edge.
+ * clear of the top edge. Mimics native `scrollIntoView`
+ * `block: 'start' | 'nearest'` semantics but applies a top offset.
  */
 export function scrollSidebarItemIntoView(
   root: HTMLElement,

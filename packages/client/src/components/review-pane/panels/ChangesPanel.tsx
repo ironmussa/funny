@@ -24,7 +24,7 @@ export function ChangesPanel() {
         prSummary={
           ctx.gitStatus?.prNumber
             ? {
-                projectId: ctx.threadProjectId ?? ctx.selectedProjectId ?? '',
+                projectId: ctx.remoteCheckProjectId ?? '',
                 prNumber: ctx.gitStatus.prNumber,
                 prUrl: ctx.gitStatus.prUrl ?? '',
                 prState: ctx.gitStatus.prState ?? 'OPEN',

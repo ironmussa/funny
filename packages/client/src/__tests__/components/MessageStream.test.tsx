@@ -24,24 +24,6 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('motion/react', () => {
-  const filterMotionProps = (props: any) =>
-    Object.fromEntries(
-      Object.entries(props).filter(
-        ([k]) => !['initial', 'animate', 'transition', 'exit', 'layout'].includes(k),
-      ),
-    );
-  const m = {
-    div: ({ children, ...props }: any) => <div {...filterMotionProps(props)}>{children}</div>,
-    span: ({ children, ...props }: any) => <span {...filterMotionProps(props)}>{children}</span>,
-  };
-  return {
-    m,
-    motion: m,
-    useReducedMotion: () => true,
-  };
-});
-
 const memoizedMessageListLifecycle = vi.hoisted(() => ({
   mounts: 0,
   unmounts: 0,

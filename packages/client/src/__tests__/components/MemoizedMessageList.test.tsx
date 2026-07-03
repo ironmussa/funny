@@ -17,10 +17,6 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/hooks/use-minute-tick', () => ({
-  useMinuteTick: () => {},
-}));
-
 vi.mock('@/hooks/use-pretext', () => ({
   getCachedPrepared: () => null,
   isPretextReady: () => false,
@@ -198,7 +194,6 @@ function Harness({
         compactionEvents={compactionEvents}
         threadId="t1"
         knownIds={new Set()}
-        prefersReducedMotion={true}
         snapshotMap={new Map()}
         onSend={() => {}}
         onOpenLightbox={() => {}}

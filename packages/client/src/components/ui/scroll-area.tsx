@@ -4,22 +4,47 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 interface ScrollAreaProps extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {
+  edgeFade?: boolean;
   viewportRef?: React.Ref<HTMLDivElement>;
   viewportProps?: Omit<
     React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Viewport>,
     'ref' | 'children'
-  >;
+  > &
+    React.HTMLAttributes<HTMLDivElement>;
 }
 
 function ScrollArea({
   className,
   children,
+  edgeFade: _edgeFade,
   viewportRef,
   viewportProps,
   ref,
   ...props
 }: ScrollAreaProps & { ref?: React.Ref<React.ComponentRef<typeof ScrollAreaPrimitive.Root>> }) {
-  const { className: viewportClassName, ...restViewportProps } = viewportProps ?? {};
+  const {
+    className: viewportClassName,
+    onScroll: onViewportScroll,
+    ...restViewportProps
+  } = viewportProps ?? {};
+  const viewportNodeRef = React.useRef<HTMLDivElement | null>(null);
+
+  const setViewportRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      viewportNodeRef.current = node;
+      if (typeof viewportRef === 'function') {
+        viewportRef(node);
+      } else if (viewportRef) {
+        (viewportRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      }
+    },
+    [viewportRef],
+  );
+
+  const handleViewportScroll: React.UIEventHandler<HTMLDivElement> = (event) => {
+    onViewportScroll?.(event);
+  };
+
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}
@@ -27,11 +52,12 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
-        ref={viewportRef}
+        ref={setViewportRef}
         className={cn(
-          'fade-y fade-size-sm fade-range-sm h-full w-full rounded-[inherit] [&>div]:block! [&>div]:min-w-0!',
+          'h-full w-full rounded-[inherit] [&>div]:block! [&>div]:min-w-0!',
           viewportClassName,
         )}
+        onScroll={handleViewportScroll}
         {...restViewportProps}
       >
         {children}

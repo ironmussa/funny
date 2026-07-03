@@ -181,6 +181,23 @@ describe('ThreadList', () => {
     expect(screen.getByTestId('thread-scratch-badge-scratch-1')).toBeInTheDocument();
   });
 
+  test('renders a thread once when stale state lists it in project and scratch buckets', () => {
+    const thread = makeThread('dupe-1', {
+      status: 'completed',
+      title: 'Only once',
+    });
+
+    useThreadStore.setState({
+      threadsById: { 'dupe-1': thread },
+      threadIdsByProject: { p1: ['dupe-1'] },
+      scratchThreadIds: ['dupe-1'],
+    } as any);
+
+    renderWithProviders(<ThreadList {...noopHandlers} />);
+
+    expect(screen.getAllByTestId('thread-item-dupe-1')).toHaveLength(1);
+  });
+
   test('navigates to thread route on select', async () => {
     const thread = makeThread('t-nav', {
       status: 'running',

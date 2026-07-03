@@ -5,6 +5,7 @@ import {
   canConvertToWorktree,
   canDoGitOps,
   canFetchGitStatus,
+  canLoadGitHistory,
   canShowPowerline,
   canCommentShare,
   canSteerShare,
@@ -62,6 +63,22 @@ describe('canDoGitOps / canShowPowerline / canFetchGitStatus', () => {
     expect(canDoGitOps(null)).toBe(false);
     expect(canShowPowerline(undefined)).toBe(false);
     expect(canFetchGitStatus(null)).toBe(false);
+  });
+});
+
+describe('canLoadGitHistory', () => {
+  test('allows git history for normal threads with a project', () => {
+    expect(canLoadGitHistory(makeThread({ projectId: 'p-1', isScratch: false }))).toBe(true);
+  });
+
+  test('blocks git history for scratch or projectless threads', () => {
+    expect(canLoadGitHistory(makeThread({ projectId: '', isScratch: true }))).toBe(false);
+    expect(canLoadGitHistory(makeThread({ projectId: '', isScratch: false }))).toBe(false);
+  });
+
+  test('blocks git history when thread is missing', () => {
+    expect(canLoadGitHistory(null)).toBe(false);
+    expect(canLoadGitHistory(undefined)).toBe(false);
   });
 });
 

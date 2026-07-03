@@ -1,5 +1,14 @@
-import { Cloud, CloudCheck, Download, Monitor, Tag, Upload } from 'lucide-react';
-import { Fragment, type ComponentType } from 'react';
+import {
+  CheckCircle2,
+  Cloud,
+  CloudCheck,
+  Download,
+  Monitor,
+  RefreshCw,
+  Tag,
+  Upload,
+} from 'lucide-react';
+import { type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -139,33 +148,79 @@ function tooltipForRef(
     .join(' · ');
 }
 
-function branchChipStatusLabel(
+function branchChipStatusMeta(
   t: ReturnType<typeof useTranslation>['t'],
   ref: FoldedRef,
   summary: GraphBranchSummary | undefined,
 ) {
-  if (ref.kind === 'tag') return t('graph.tag', 'Tag');
+  if (ref.kind === 'tag') return null;
   if (!summary) {
     return null;
   }
 
   switch (summary.state) {
     case 'synced':
-      return null;
+      return {
+        icon: CheckCircle2,
+        label: null,
+        tooltip: branchStateLabel(t, summary),
+      };
     case 'ahead':
-      return ref.kind === 'local' ? String(summary.ahead) : null;
+      return ref.kind === 'local'
+        ? {
+            icon: Upload,
+            label: String(summary.ahead),
+            tooltip: branchStateLabel(t, summary),
+          }
+        : null;
     case 'behind':
-      return ref.kind === 'remote' ? String(summary.behind) : null;
+      return ref.kind === 'remote'
+        ? {
+            icon: Download,
+            label: String(summary.behind),
+            tooltip: branchStateLabel(t, summary),
+          }
+        : null;
     case 'diverged':
-      return t('graph.branchChipDiverged', 'Diverged');
+      return {
+        icon: RefreshCw,
+        label: `${summary.ahead}/${summary.behind}`,
+        tooltip: branchStateLabel(t, summary),
+      };
     case 'local-only':
-      return null;
+      return ref.kind === 'local'
+        ? {
+            icon: Upload,
+            label: null,
+            tooltip: branchStateLabel(t, summary),
+          }
+        : null;
     case 'remote-only':
-      return null;
+      return ref.kind === 'remote'
+        ? {
+            icon: Download,
+            label: null,
+            tooltip: branchStateLabel(t, summary),
+          }
+        : null;
   }
 }
 
-function BranchRefDetail({
+function branchActionForRef(ref: FoldedRef, summary: GraphBranchSummary | undefined) {
+  if (!summary) return null;
+  if (
+    ref.kind === 'local' &&
+    (summary.primaryAction === 'push' || summary.primaryAction === 'publish')
+  ) {
+    return { icon: Upload, key: `push:${summary.branch}`, type: 'push' as const };
+  }
+  if (ref.kind === 'remote' && summary.primaryAction === 'pull' && summary.isCurrent) {
+    return { icon: Download, key: `pull:${summary.branch}`, type: 'pull' as const };
+  }
+  return null;
+}
+
+function BranchChipStatus({
   ref,
   summary,
 }: {
@@ -173,8 +228,49 @@ function BranchRefDetail({
   summary: GraphBranchSummary | undefined;
 }) {
   const { t } = useTranslation();
+  const status = branchChipStatusMeta(t, ref, summary);
+  if (!status) return null;
+
+  const StatusIcon = status.icon;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-black/15 px-1 py-px text-[9px] leading-none font-semibold"
+          data-testid={`graph-branch-status-${ref.name}`}
+        >
+          <StatusIcon
+            className="icon-2xs"
+            aria-hidden="true"
+            data-testid={`graph-branch-status-icon-${ref.name}`}
+          />
+          {status.label ? <span>{status.label}</span> : null}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">{status.tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function BranchRefDetail({
+  ref,
+  summary,
+  actionInProgress,
+  onPushBranch,
+  onPullCurrentBranch,
+}: {
+  ref: FoldedRef;
+  summary: GraphBranchSummary | undefined;
+  actionInProgress: string | null;
+  onPushBranch: (branch: string) => void;
+  onPullCurrentBranch: (branch: string) => void;
+}) {
+  const { t } = useTranslation();
   const localLabel = summary?.localRef ?? t('graph.notPresent', 'Not present');
   const remoteLabel = summary?.remoteRef ?? t('graph.notPresent', 'Not present');
+  const action = branchActionForRef(ref, summary);
+  const ActionIcon = action?.icon;
+  const busy = !!action && actionInProgress === action.key;
 
   return (
     <div className="flex flex-col gap-3 text-xs" data-testid={`graph-branch-detail-${ref.name}`}>
@@ -217,6 +313,32 @@ function BranchRefDetail({
           </>
         ) : null}
       </dl>
+
+      {summary && action && ActionIcon ? (
+        <div className="border-border/70 flex border-t pt-3">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            aria-label={branchActionTooltip(t, summary)}
+            className="h-7 gap-1.5 px-2 text-xs"
+            disabled={!!actionInProgress}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (action.type === 'push') onPushBranch(summary.branch);
+              else onPullCurrentBranch(summary.branch);
+            }}
+            data-testid={`graph-branch-action-${summary.branch}`}
+          >
+            <ActionIcon
+              className={cn('icon-sm', busy && 'animate-pulse')}
+              data-testid={`graph-branch-action-icon-${summary.branch}`}
+            />
+            {branchActionLabel(t, summary)}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -249,99 +371,58 @@ export function GraphRefChips({
       {refs.map((ref) => {
         const branchName = branchNameForRef(ref);
         const summary = branchName ? branchSummaryByName.get(branchName) : undefined;
-        const isPushAction =
-          ref.kind === 'local' &&
-          !!summary &&
-          (summary.primaryAction === 'push' || summary.primaryAction === 'publish');
-        const isPullAction =
-          ref.kind === 'remote' &&
-          !!summary &&
-          summary.primaryAction === 'pull' &&
-          summary.isCurrent;
-        const actionKey = isPullAction ? `pull:${branchName}` : `push:${branchName}`;
-        const busy = !!branchName && actionInProgress === actionKey;
         const Icon = iconForRef(ref);
-        const ActionIcon = isPullAction ? Download : Upload;
-        const statusLabel = branchChipStatusLabel(t, ref, summary);
         const displayName = displayNameForRef(ref);
 
         return (
-          <Fragment key={`${ref.kind}:${ref.name}`}>
-            <div
-              className="inline-flex min-w-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
-              style={{ backgroundColor: color, color: textColor }}
-              data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
-            >
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="focus-visible:ring-ring/70 inline-flex min-w-0 items-center gap-0.5 rounded-full px-0.5 text-left outline-hidden focus-visible:ring-1"
-                    aria-label={tooltipForRef(t, ref, summary)}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    data-testid={`graph-branch-info-${ref.name}`}
-                  >
-                    <Icon className="icon-2xs shrink-0" aria-hidden="true" />
-                    <span
-                      className={cn(
-                        'truncate text-[10px] leading-tight font-medium whitespace-nowrap',
-                        ref.kind === 'local' && ref.isCurrent && 'font-bold',
-                      )}
-                    >
-                      {hasSearchQuery ? (
-                        <HighlightText text={displayName} query={searchQuery} />
-                      ) : (
-                        displayName
-                      )}
-                    </span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  side="bottom"
-                  align="start"
-                  className="w-72 p-3"
+          <div
+            key={`${ref.kind}:${ref.name}`}
+            className="inline-flex min-w-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
+            style={{ backgroundColor: color, color: textColor }}
+            data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
+          >
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="focus-visible:ring-ring/70 inline-flex min-w-0 items-center gap-0.5 rounded-full px-0.5 text-left outline-hidden focus-visible:ring-1"
+                  aria-label={tooltipForRef(t, ref, summary)}
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
+                  data-testid={`graph-branch-info-${ref.name}`}
                 >
-                  <BranchRefDetail ref={ref} summary={summary} />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {(isPushAction || isPullAction) && branchName && summary ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="xs"
-                    aria-label={branchActionTooltip(t, summary)}
-                    className="h-auto min-h-0 shrink-0 gap-0.5 rounded-full px-1.5 py-px text-[10px] leading-tight font-semibold [&_svg]:!size-2.5"
-                    disabled={!!actionInProgress}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (isPushAction) onPushBranch(branchName);
-                      else onPullCurrentBranch(branchName);
-                    }}
-                    data-testid={`graph-branch-action-${branchName}`}
-                  >
-                    {statusLabel ? (
-                      <span data-testid={`graph-branch-status-${ref.name}`}>{statusLabel}</span>
-                    ) : (
-                      <span>{branchActionLabel(t, summary)}</span>
+                  <Icon className="icon-2xs shrink-0" aria-hidden="true" />
+                  <span
+                    className={cn(
+                      'truncate text-[10px] leading-tight font-medium whitespace-nowrap',
+                      ref.kind === 'local' && ref.isCurrent && 'font-bold',
                     )}
-                    <ActionIcon
-                      className={cn(busy && 'animate-pulse')}
-                      data-testid={`graph-branch-action-icon-${branchName}`}
-                    />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">{branchActionTooltip(t, summary)}</TooltipContent>
-              </Tooltip>
-            ) : null}
-          </Fragment>
+                  >
+                    {hasSearchQuery ? (
+                      <HighlightText text={displayName} query={searchQuery} />
+                    ) : (
+                      displayName
+                    )}
+                  </span>
+                  <BranchChipStatus ref={ref} summary={summary} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="bottom"
+                align="start"
+                className="w-72 p-3"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <BranchRefDetail
+                  ref={ref}
+                  summary={summary}
+                  actionInProgress={actionInProgress}
+                  onPushBranch={onPushBranch}
+                  onPullCurrentBranch={onPullCurrentBranch}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
         );
       })}
     </div>

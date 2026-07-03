@@ -26,10 +26,7 @@ export function ContextUsageBar({ cumulativeInputTokens }: Props) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div className="bg-muted mx-4 mt-1 mb-0 h-1 cursor-default rounded-full">
-          <div
-            className={cn('h-full rounded-full transition-all duration-500', color)}
-            style={{ width: `${pct}%` }}
-          />
+          <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
         </div>
       </TooltipTrigger>
       <TooltipContent>

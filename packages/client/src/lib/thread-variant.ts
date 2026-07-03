@@ -13,6 +13,7 @@ import type { Thread } from '@funny/shared';
  */
 
 type ThreadLike = Pick<Thread, 'isScratch'> | null | undefined;
+type ThreadGitContextLike = Pick<Thread, 'isScratch' | 'projectId'> | null | undefined;
 
 // ── Identity ─────────────────────────────────────────────────────
 
@@ -60,6 +61,16 @@ export function canConvertToWorktree(
  * request entirely at the client chokepoint.
  */
 export function canFetchGitStatus(thread: ThreadLike): boolean {
+  return canDoGitOps(thread);
+}
+
+/**
+ * Whether git history/graph calls are valid for this thread. Unlike status,
+ * history endpoints resolve the owning project before reading git data, so a
+ * projectless scratch/draft thread must be treated as "no git context".
+ */
+export function canLoadGitHistory(thread: ThreadGitContextLike): boolean {
+  if (!thread?.projectId) return false;
   return canDoGitOps(thread);
 }
 

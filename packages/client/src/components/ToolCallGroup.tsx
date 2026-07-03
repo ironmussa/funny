@@ -61,15 +61,13 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="hover:bg-accent/30 w-full overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors"
+        className="hover:bg-accent/30 w-full overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
       >
         <div className="flex items-center gap-2">
           <ChevronRight
-            className={cn(
-              'icon-xs shrink-0 text-muted-foreground transition-transform duration-150',
-              expanded && 'rotate-90',
-            )}
+            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
           {isTodo ? (
             <ListTodo className="icon-xs text-muted-foreground shrink-0" />

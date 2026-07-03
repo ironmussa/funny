@@ -204,29 +204,17 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-branch-status-feat/video')).toHaveTextContent('2');
     expect(screen.getByTestId('graph-branch-status-feat/video')).not.toHaveTextContent('Push');
     expect(screen.getByTestId('graph-branch-status-feat/video')).not.toHaveTextContent('↑');
+    expect(screen.getByTestId('graph-branch-status-icon-feat/video')).toHaveClass('lucide-upload');
     expect(screen.getByTestId('graph-ref-chip-local:feat/video')).toHaveClass(
       'hover:brightness-90',
     );
     expect(screen.getByTestId('graph-branch-info-feat/video').className).not.toContain(
       'hover:bg-background/20',
     );
-    expect(screen.getByTestId('graph-ref-chip-local:feat/video')).not.toContainElement(
-      screen.getByTestId('graph-branch-action-feat/video'),
-    );
-    expect(screen.getByTestId('graph-ref-chip-local:feat/video')).not.toContainElement(
+    expect(screen.getByTestId('graph-ref-chip-local:feat/video')).toContainElement(
       screen.getByTestId('graph-branch-status-feat/video'),
     );
-    expect(screen.getByTestId('graph-branch-action-feat/video')).toContainElement(
-      screen.getByTestId('graph-branch-status-feat/video'),
-    );
-    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass('bg-primary');
-    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass(
-      'text-primary-foreground',
-    );
-    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass('px-1.5');
-    expect(screen.getByTestId('graph-branch-action-feat/video').className).not.toContain(
-      'bg-sky-950',
-    );
+    expect(screen.queryByTestId('graph-branch-action-feat/video')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('graph-branch-info-feat/video'));
 
@@ -237,6 +225,8 @@ describe('GraphRefChips', () => {
       'origin/feat/video',
     );
     expect(screen.getByTestId('graph-branch-detail-feat/video')).toHaveTextContent('Ahead 2');
+    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveTextContent('Push');
+    expect(screen.getByTestId('graph-branch-action-feat/video')).toHaveClass('bg-primary');
     expect(screen.getByTestId('graph-branch-action-icon-feat/video')).toHaveClass('lucide-upload');
 
     fireEvent.click(screen.getByTestId('graph-branch-action-feat/video'));
@@ -281,10 +271,13 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-branch-status-origin/main')).toHaveTextContent('3');
     expect(screen.getByTestId('graph-branch-status-origin/main')).not.toHaveTextContent('Pull');
     expect(screen.getByTestId('graph-branch-status-origin/main')).not.toHaveTextContent('↓');
-    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('bg-primary');
-    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('text-primary-foreground');
-    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('px-1.5');
-    expect(screen.getByTestId('graph-branch-action-main').className).not.toContain('bg-amber-950');
+    expect(screen.getByTestId('graph-branch-status-icon-origin/main')).toHaveClass(
+      'lucide-download',
+    );
+    expect(screen.getByTestId('graph-ref-chip-remote:origin/main')).toContainElement(
+      screen.getByTestId('graph-branch-status-origin/main'),
+    );
+    expect(screen.queryByTestId('graph-branch-action-main')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('graph-branch-info-origin/main'));
 
@@ -292,6 +285,8 @@ describe('GraphRefChips', () => {
       'origin/main',
     );
     expect(screen.getByTestId('graph-branch-detail-origin/main')).toHaveTextContent('Behind 3');
+    expect(screen.getByTestId('graph-branch-action-main')).toHaveTextContent('Pull');
+    expect(screen.getByTestId('graph-branch-action-main')).toHaveClass('bg-primary');
     expect(screen.getByTestId('graph-branch-action-icon-main')).toHaveClass('lucide-download');
 
     fireEvent.click(screen.getByTestId('graph-branch-action-main'));
@@ -300,7 +295,7 @@ describe('GraphRefChips', () => {
     expect(onPushBranch).not.toHaveBeenCalled();
   });
 
-  test('does not show a redundant Origin status on remote-only branch chips', () => {
+  test('shows remote-only status on the remote branch chip', () => {
     const refs: FoldedRef[] = [{ kind: 'remote', name: 'origin/feature', isCurrent: false }];
     const branch: GraphBranchSummary = {
       branch: 'feature',
@@ -330,10 +325,13 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-branch-info-origin/feature')).not.toHaveTextContent(
       'origin/feature',
     );
-    expect(screen.queryByTestId('graph-branch-status-origin/feature')).not.toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-status-origin/feature')).toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-status-icon-origin/feature')).toHaveClass(
+      'lucide-download',
+    );
   });
 
-  test('does not render redundant Local or Synced status chips', () => {
+  test('shows local-only and synced status icons inside branch chips', () => {
     const refs: FoldedRef[] = [
       { kind: 'local', name: 'main', isCurrent: true, syncedRemote: 'origin/main' },
       { kind: 'local', name: 'draft', isCurrent: false },
@@ -380,9 +378,12 @@ describe('GraphRefChips', () => {
 
     expect(screen.getByTestId('graph-ref-chip-local:main')).toBeInTheDocument();
     expect(screen.getByTestId('graph-ref-chip-local:draft')).toBeInTheDocument();
-    expect(screen.queryByTestId('graph-branch-status-main')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('graph-branch-status-draft')).not.toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-status-main')).toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-status-icon-main')).toHaveClass('lucide-circle-check');
+    expect(screen.getByTestId('graph-branch-status-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-status-icon-draft')).toHaveClass('lucide-upload');
     expect(screen.queryByTestId('graph-branch-action-main')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('graph-branch-action-draft')).not.toBeInTheDocument();
   });
 });
 

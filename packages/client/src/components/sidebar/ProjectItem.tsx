@@ -397,9 +397,7 @@ export const ProjectItem = memo(function ProjectItem({
               onToggle(project.id);
             }}
           >
-            <ChevronRight
-              className={cn('icon-sm transition-transform duration-200', isExpanded && 'rotate-90')}
-            />
+            <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
           </CollapsibleTrigger>
           <button
             type="button"
@@ -598,7 +596,7 @@ export const ProjectItem = memo(function ProjectItem({
         </div>
       </div>
 
-      <CollapsibleContent className="data-[state=open]:animate-slide-down">
+      <CollapsibleContent>
         <div className="mt-0.5 min-w-0">
           {threads.length === 0 && !threadsLoaded && (
             <div

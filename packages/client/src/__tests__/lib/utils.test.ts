@@ -98,7 +98,7 @@ describe('resolveLocalThreadBranch', () => {
 });
 
 describe('scrollSidebarItemIntoView', () => {
-  test('scrolls item below the top fade mask when block is start', () => {
+  test('scrolls item below the top inset when block is start', () => {
     const root = document.createElement('div');
     Object.defineProperty(root, 'clientHeight', { value: 400 });
     root.scrollTo = vi.fn();

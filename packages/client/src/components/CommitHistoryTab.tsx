@@ -13,6 +13,8 @@ import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-p
 import { api, type PullStrategy } from '@/lib/api';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import { githubBrowseBaseUrl as resolveGithubBrowseBaseUrl } from '@/lib/github-url';
+import { useThreadById } from '@/lib/thread-selectors';
+import { canLoadGitHistory } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
@@ -41,7 +43,16 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const selectedProjectId = useRightPaneProjectId();
   const effectiveThreadId = useRightPaneThreadId() || undefined;
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
-  const hasGitContext = !!(effectiveThreadId || projectModeId);
+  const threadProjectId = useThreadProjectId();
+  const lightThread = useThreadById(effectiveThreadId);
+  const threadIsScratch = useThreadSelector((t) => t?.isScratch);
+  const gitThread = effectiveThreadId
+    ? {
+        projectId: threadProjectId ?? lightThread?.projectId ?? '',
+        isScratch: threadIsScratch ?? lightThread?.isScratch,
+      }
+    : null;
+  const hasGitContext = !!projectModeId || canLoadGitHistory(gitThread);
 
   const baseBranch = useThreadSelector((t) => t?.baseBranch);
   const threadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
@@ -93,17 +104,18 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
-  const threadProjectId = useThreadProjectId();
   const projectBranch = useProjectStore((s) => {
-    const pid = projectModeId ?? selectedProjectId ?? threadProjectId;
+    const pid = projectModeId ?? gitThread?.projectId ?? selectedProjectId;
     return pid ? s.branchByProject[pid] : undefined;
   });
   const isWorktreeMode = useThreadSelector((t) => t?.mode === 'worktree');
   const effectiveBranch = isWorktreeMode ? threadBranch : projectBranch;
 
-  const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${effectiveBranch ?? ''}`;
+  const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${
+    gitThread?.projectId ?? projectModeId ?? ''
+  }::${effectiveBranch ?? ''}`;
 
-  const remoteCheckProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
+  const remoteCheckProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
   const projectPathForPublish = useProjectStore((s) => {
     if (!remoteCheckProjectId) return '';
     return s.projects.find((p) => p.id === remoteCheckProjectId)?.path ?? '';
@@ -241,7 +253,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   }, [gitContextKey]);
 
   // Walk GitHub commit author endpoint anchored at the first uncovered SHA.
-  const ghProjectId = projectModeId ?? selectedProjectId ?? threadProjectId ?? null;
+  const ghProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
   useEffect(() => {
     if (!ghProjectId || logEntries.length === 0) return;
     const firstMissing = logEntries.find(

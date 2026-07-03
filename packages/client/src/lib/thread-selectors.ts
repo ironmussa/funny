@@ -45,18 +45,29 @@ function deriveProjectArray(
 ): Thread[] {
   if (!ids || ids.length === 0) return EMPTY_THREADS;
   const cached = _projectArrayCache.get(ids);
-  if (cached && cached.length === ids.length) {
+  if (cached) {
     let allSame = true;
+    const seen = new Set<string>();
+    let cachedIndex = 0;
     for (let i = 0; i < ids.length; i++) {
-      if (cached[i] !== threadsById[ids[i]]) {
+      const id = ids[i];
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const thread = threadsById[id];
+      if (!thread) continue;
+      if (cached[cachedIndex] !== thread) {
         allSame = false;
         break;
       }
+      cachedIndex++;
     }
-    if (allSame) return cached;
+    if (allSame && cachedIndex === cached.length) return cached;
   }
   const result: Thread[] = [];
+  const seen = new Set<string>();
   for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
     const t = threadsById[id];
     if (t) result.push(t);
   }
@@ -79,6 +90,7 @@ function deriveThreadsByProject(
   if (pids.length === 0) return EMPTY_THREADS_BY_PROJECT;
   const result: Record<string, Thread[]> = {};
   for (const pid of pids) {
+    if (!pid) continue;
     result[pid] = deriveProjectArray(threadsById, threadIdsByProject[pid]);
   }
   return result;

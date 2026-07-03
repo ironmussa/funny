@@ -53,7 +53,7 @@ export function ThinkCard({
       </div>
       <ScrollArea
         className="border-border/40 border-t"
-        viewportProps={{ className: 'max-h-[50vh]' }}
+        viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
       >
         <div className="px-4 py-3" data-testid="think-card-content">
           <div className={markdownProseClassName}>

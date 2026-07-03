@@ -22,7 +22,7 @@ interface Props {
 
 /**
  * The "Activity" pane at the top of AppSidebar — own scroll area with a sticky
- * scroll-edge fade. Collapsible (matches Quick Chats section behavior).
+ * collapsible container (matches Quick Chats section behavior).
  */
 export function SidebarThreadsSection({
   scrollRef,
@@ -46,14 +46,12 @@ export function SidebarThreadsSection({
           'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
         )}
       >
-        <ChevronRight
-          className={cn('icon-sm transition-transform duration-200', isExpanded && 'rotate-90')}
-        />
+        <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
         <h2 className="text-xs font-semibold tracking-wider uppercase">
           {t('sidebar.threadsTitle')}
         </h2>
       </CollapsibleTrigger>
-      <CollapsibleContent className="data-[state=open]:animate-slide-down flex min-h-0 flex-1 flex-col">
+      <CollapsibleContent className="flex min-h-0 flex-1 flex-col">
         <ScrollArea viewportRef={scrollRef} className="relative min-h-0 flex-1 px-2 pb-2">
           <ThreadList
             onRenameThread={onRenameThread}

@@ -57,9 +57,18 @@ export function getThreadsByProject(): Record<string, any[]> {
   if (!state.threadIdsByProject) return {};
   const result: Record<string, any[]> = {};
   for (const pid in state.threadIdsByProject) {
+    if (!pid) continue;
     const ids = state.threadIdsByProject[pid];
     if (!ids) continue;
-    result[pid] = ids.map((id: string) => state.threadsById[id]).filter(Boolean);
+    const seen = new Set<string>();
+    result[pid] = ids
+      .filter((id: string) => {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .map((id: string) => state.threadsById[id])
+      .filter(Boolean);
   }
   return result;
 }
@@ -110,8 +119,14 @@ export function batchUpdateThreads(
   const nextIdsByProject = { ...state.threadIdsByProject };
   const nextTotals = { ...state.threadTotalByProject };
   for (const { projectId, threads, total } of updates) {
-    if (!threads) continue;
-    const newIds = threads.map((t) => t.id);
+    if (!projectId || !threads) continue;
+    const seen = new Set<string>();
+    const newIds: string[] = [];
+    for (const t of threads) {
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      newIds.push(t.id);
+    }
     const prevIds = state.threadIdsByProject[projectId];
     // Skip if the ID array is identical (same order, same length) — the
     // server returned the same list, no need to thrash references.

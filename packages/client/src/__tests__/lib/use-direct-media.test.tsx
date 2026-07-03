@@ -1,7 +1,12 @@
 import { renderHook, waitFor, cleanup, act } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { __resetDirectMediaForTests, useResolvedMediaSrc } from '@/lib/use-direct-media';
+import {
+  __cacheSignedMediaForTests,
+  __hasSignedMediaForTests,
+  __resetDirectMediaForTests,
+  useResolvedMediaSrc,
+} from '@/lib/use-direct-media';
 
 const TTL = 5 * 60 * 1000; // server's MEDIA_URL_DEFAULT_TTL_MS
 
@@ -75,5 +80,20 @@ describe('useResolvedMediaSrc signed-URL cache', () => {
 
     // A second failure on the proxied URL is a genuine error (false).
     expect(result.current.onError()).toBe(false);
+  });
+
+  test('evicts the oldest signed URLs when the session cache reaches its cap', async () => {
+    const now = Date.now();
+    for (let index = 0; index < 201; index++) {
+      __cacheSignedMediaForTests(`/img-${index}.png`, signedUrl(now + TTL, `cached-${index}`));
+    }
+
+    expect(__hasSignedMediaForTests('/img-0.png')).toBe(false);
+    expect(__hasSignedMediaForTests('/img-1.png')).toBe(true);
+
+    const fetchMock = mockSign(signedUrl(now + TTL, 'refetched'));
+    const firstAgain = renderHook(() => useResolvedMediaSrc('/img-0.png'));
+    await waitFor(() => expect(firstAgain.result.current.src).toContain('sig=refetched'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

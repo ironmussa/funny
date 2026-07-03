@@ -12,7 +12,7 @@ export function TodoList({ todos }: { todos: TodoItem[] }) {
           {todo.status === 'completed' ? (
             <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
           ) : todo.status === 'in_progress' ? (
-            <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0 animate-pulse" />
+            <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0" />
           ) : (
             <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
           )}

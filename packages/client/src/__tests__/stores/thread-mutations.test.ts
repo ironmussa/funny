@@ -111,6 +111,17 @@ describe('thread-mutations — project buckets', () => {
     expect(patch.threadIdsByProject!.p1).toEqual(['arch']);
   });
 
+  test('replaceProjectThreads de-dupes duplicate ids from a fetched page', () => {
+    const state = emptyState();
+    const first = makeThread('t1', { title: 'First copy' });
+    const second = makeThread('t1', { title: 'Second copy' });
+
+    const patch = replaceProjectThreads(state, 'p1', [first, second, makeThread('t2')], 3);
+
+    expect(patch.threadIdsByProject!.p1).toEqual(['t1', 't2']);
+    expect(patch.threadsById!.t1.title).toBe('Second copy');
+  });
+
   test('replaceProjectThreads does not revert an optimistically archived card from a stale page', () => {
     const state = emptyState({
       ...seedThreads({ p1: [makeThread('t1', { archived: true, stage: 'in_progress' })] }),
@@ -188,7 +199,12 @@ describe('thread-mutations — project buckets', () => {
     expect(emptyAppend.threadIdsByProject).toBeUndefined();
     expect(emptyAppend.threadTotalByProject!.p1).toBe(5);
 
-    const dupAppend = appendProjectThreads(state, 'p1', [t1, makeThread('t2')], 2);
+    const dupAppend = appendProjectThreads(
+      state,
+      'p1',
+      [t1, makeThread('t2'), makeThread('t2')],
+      2,
+    );
     expect(dupAppend.threadIdsByProject!.p1).toEqual(['t1', 't2']);
     expect(dupAppend.threadsById!.t2).toBeDefined();
   });
@@ -223,6 +239,19 @@ describe('thread-mutations — scratch bucket', () => {
     expect(patch.scratchThreadIds).toEqual(['s1', 's2']);
     expect(patch.scratchThreadTotal).toBe(10);
     expect(patch.threadsById!.s1.isScratch).toBe(true);
+  });
+
+  test('replaceScratchThreads de-dupes duplicate ids from a fetched page', () => {
+    const threads = [
+      makeThread('s1', { projectId: '', isScratch: true }),
+      makeThread('s1', { projectId: '', isScratch: true, title: 'newer row' }),
+      makeThread('s2', { projectId: '', isScratch: true }),
+    ];
+
+    const patch = replaceScratchThreads(emptyState(), threads, 3);
+
+    expect(patch.scratchThreadIds).toEqual(['s1', 's2']);
+    expect(patch.threadsById!.s1.title).toBe('newer row');
   });
 
   test('prependScratchThread adds to front and increments total', () => {

@@ -81,6 +81,30 @@ describe('store-bridge', () => {
       expect(state.threadTotalByProject['p1']).toBe(1);
     });
 
+    test('batchUpdateThreads de-dupes duplicate ids in a project update', async () => {
+      const bridge = await freshBridge();
+
+      const threadStore = createMockStore({
+        threadsById: {} as Record<string, any>,
+        threadIdsByProject: {} as Record<string, string[]>,
+        threadTotalByProject: {} as Record<string, number>,
+      });
+
+      bridge.registerThreadStore(threadStore as any);
+
+      bridge.batchUpdateThreads([
+        {
+          projectId: 'p1',
+          threads: [{ id: 't1', title: 'old' }, { id: 't1', title: 'new' }, { id: 't2' }],
+          total: 3,
+        },
+      ]);
+
+      const state = threadStore.getState();
+      expect(state.threadIdsByProject['p1']).toEqual(['t1', 't2']);
+      expect(state.threadsById['t1'].title).toBe('new');
+    });
+
     test('batchUpdateThreads only updates changed entries', async () => {
       const bridge = await freshBridge();
 
@@ -154,7 +178,10 @@ describe('store-bridge', () => {
       const t2 = { id: 't2', projectId: 'p2', title: 'two' };
       const threadStore = createMockStore({
         threadsById: { t1, t2 } as Record<string, any>,
-        threadIdsByProject: { p1: ['t1'], p2: ['t2'] } as Record<string, string[]>,
+        threadIdsByProject: { p1: ['t1', 't1'], p2: ['t2'], '': ['t1'] } as Record<
+          string,
+          string[]
+        >,
       });
 
       bridge.registerThreadStore(threadStore as any);

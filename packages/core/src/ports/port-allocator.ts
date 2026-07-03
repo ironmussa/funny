@@ -10,6 +10,8 @@ export interface PortAllocation {
   envVars: string[];
 }
 
+type PortAvailabilityChecker = (port: number) => Promise<boolean>;
+
 export function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer();
@@ -21,12 +23,16 @@ export function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
-export async function findAvailablePort(basePort: number, exclude: Set<number>): Promise<number> {
+export async function findAvailablePort(
+  basePort: number,
+  exclude: Set<number>,
+  isAvailable: PortAvailabilityChecker = isPortAvailable,
+): Promise<number> {
   for (let offset = 0; offset < MAX_SCAN_RANGE; offset++) {
     const candidate = basePort + offset;
     if (candidate > 65535) break;
     if (exclude.has(candidate)) continue;
-    if (await isPortAvailable(candidate)) return candidate;
+    if (await isAvailable(candidate)) return candidate;
   }
   throw new Error(
     `Could not find available port near ${basePort} (scanned ${MAX_SCAN_RANGE} ports)`,
@@ -36,12 +42,13 @@ export async function findAvailablePort(basePort: number, exclude: Set<number>):
 export async function allocatePorts(
   groups: FunnyPortGroup[],
   exclude: Set<number> = new Set(),
+  isAvailable: PortAvailabilityChecker = isPortAvailable,
 ): Promise<PortAllocation[]> {
   const allocated: PortAllocation[] = [];
   const usedPorts = new Set(exclude);
 
   for (const group of groups) {
-    const port = await findAvailablePort(group.basePort, usedPorts);
+    const port = await findAvailablePort(group.basePort, usedPorts, isAvailable);
     usedPorts.add(port);
     allocated.push({
       groupName: group.name,

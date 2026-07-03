@@ -4,57 +4,83 @@
  * Tests port availability checking and allocation logic.
  */
 import { describe, test, expect } from 'bun:test';
-import { createServer } from 'net';
+import { createServer, type Server } from 'net';
 
 import { isPortAvailable, findAvailablePort, allocatePorts } from '../ports/port-allocator.js';
+
+async function bindEphemeralPort(): Promise<
+  { port: number; close: () => Promise<void> } | undefined
+> {
+  const server = createServer();
+
+  return await new Promise((resolve) => {
+    server.once('error', () => {
+      resolve(undefined);
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => resolve(undefined));
+        return;
+      }
+
+      resolve({
+        port: address.port,
+        close: () => closeServer(server),
+      });
+    });
+  });
+}
+
+async function closeServer(server: Server): Promise<void> {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}
 
 describe('port-allocator', () => {
   describe('isPortAvailable', () => {
     test('returns true for an available port', async () => {
-      // Use a high port that is very likely free
-      const available = await isPortAvailable(59123);
+      const bound = await bindEphemeralPort();
+      if (!bound) return;
+
+      await bound.close();
+      const available = await isPortAvailable(bound.port);
       expect(available).toBe(true);
     });
 
     test('returns false for a port in use', async () => {
-      const server = createServer();
-      await new Promise<void>((resolve) => {
-        server.listen(59124, '127.0.0.1', () => resolve());
-      });
+      const bound = await bindEphemeralPort();
+      if (!bound) return;
 
       try {
-        const available = await isPortAvailable(59124);
+        const available = await isPortAvailable(bound.port);
         expect(available).toBe(false);
       } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await bound.close();
       }
     });
   });
 
   describe('findAvailablePort', () => {
     test('returns the base port when it is available', async () => {
-      const port = await findAvailablePort(59200, new Set());
+      const port = await findAvailablePort(59200, new Set(), async () => true);
       expect(port).toBe(59200);
     });
 
     test('skips excluded ports', async () => {
-      const port = await findAvailablePort(59300, new Set([59300, 59301]));
+      const port = await findAvailablePort(59300, new Set([59300, 59301]), async () => true);
       expect(port).toBe(59302);
     });
 
     test('skips ports that are in use', async () => {
-      const server = createServer();
-      await new Promise<void>((resolve) => {
-        server.listen(59400, '127.0.0.1', () => resolve());
-      });
+      const unavailablePorts = new Set([59400]);
 
-      try {
-        const port = await findAvailablePort(59400, new Set());
-        expect(port).not.toBe(59400);
-        expect(port).toBeGreaterThan(59400);
-      } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-      }
+      const port = await findAvailablePort(
+        59400,
+        new Set(),
+        async (candidate) => !unavailablePorts.has(candidate),
+      );
+
+      expect(port).toBe(59401);
     });
 
     test('throws when no port found in scan range', async () => {
@@ -64,7 +90,7 @@ describe('port-allocator', () => {
         exclude.add(65400 + i);
       }
 
-      await expect(findAvailablePort(65400, exclude)).rejects.toThrow(
+      await expect(findAvailablePort(65400, exclude, async () => true)).rejects.toThrow(
         /Could not find available port/,
       );
     });
@@ -77,21 +103,21 @@ describe('port-allocator', () => {
         { name: 'db', basePort: 59600, envVars: ['DB_PORT'] },
       ];
 
-      const allocations = await allocatePorts(groups);
+      const allocations = await allocatePorts(groups, new Set(), async () => true);
 
       expect(allocations).toHaveLength(2);
       expect(allocations[0].groupName).toBe('api');
-      expect(allocations[0].port).toBeGreaterThanOrEqual(59500);
+      expect(allocations[0].port).toBe(59500);
       expect(allocations[0].envVars).toEqual(['API_PORT']);
       expect(allocations[1].groupName).toBe('db');
-      expect(allocations[1].port).toBeGreaterThanOrEqual(59600);
+      expect(allocations[1].port).toBe(59600);
     });
 
     test('avoids already excluded ports', async () => {
       const groups = [{ name: 'web', basePort: 59700, envVars: ['WEB_PORT'] }];
       const exclude = new Set([59700]);
 
-      const allocations = await allocatePorts(groups, exclude);
+      const allocations = await allocatePorts(groups, exclude, async () => true);
       expect(allocations[0].port).toBe(59701);
     });
 
@@ -102,9 +128,9 @@ describe('port-allocator', () => {
         { name: 'backend', basePort: 59800, envVars: ['BACKEND_PORT'] },
       ];
 
-      const allocations = await allocatePorts(groups);
-      expect(allocations[0].port).toBeGreaterThanOrEqual(59800);
-      expect(allocations[1].port).toBeGreaterThan(allocations[0].port);
+      const allocations = await allocatePorts(groups, new Set(), async () => true);
+      expect(allocations[0].port).toBe(59800);
+      expect(allocations[1].port).toBe(59801);
       expect(allocations[0].port).not.toBe(allocations[1].port);
     });
 
@@ -118,7 +144,7 @@ describe('port-allocator', () => {
         { name: 'service', basePort: 59900, envVars: ['PORT', 'SERVICE_PORT', 'APP_PORT'] },
       ];
 
-      const allocations = await allocatePorts(groups);
+      const allocations = await allocatePorts(groups, new Set(), async () => true);
       expect(allocations[0].envVars).toEqual(['PORT', 'SERVICE_PORT', 'APP_PORT']);
     });
   });

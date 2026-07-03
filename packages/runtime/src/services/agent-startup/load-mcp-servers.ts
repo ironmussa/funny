@@ -38,7 +38,11 @@ export async function loadProjectMcpServers(
     }
 
     const enabledServers = serverListResult.value.filter(
-      (s) => !s.disabled && descriptor.mcp.transports.includes(s.type),
+      (s) =>
+        !s.disabled &&
+        s.status !== 'needs_auth' &&
+        s.status !== 'error' &&
+        descriptor.mcp.transports.includes(s.type),
     );
     if (enabledServers.length === 0) return undefined;
 

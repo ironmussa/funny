@@ -241,6 +241,27 @@ describe('MCP list + toggle integration', () => {
     ]);
   });
 
+  test('parseCodexMcpListOutput marks Codex OAuth servers that are not logged in', () => {
+    const servers = parseCodexMcpListOutput(
+      [
+        'Name     Url                         Bearer Token Env Var  Status   Auth',
+        'railway  https://mcp.railway.com      -                     enabled  Not logged in',
+      ].join('\n'),
+    );
+
+    expect(servers).toEqual([
+      expect.objectContaining({
+        name: 'railway',
+        provider: 'codex',
+        type: 'http',
+        url: 'https://mcp.railway.com',
+        status: 'needs_auth',
+        source: 'user',
+        toggleable: false,
+      }),
+    ]);
+  });
+
   test('parseCodexMcpGetOutput maps streamable_http to HTTP MCP config', () => {
     const server = parseCodexMcpGetOutput(
       'linear',
@@ -299,6 +320,43 @@ describe('MCP list + toggle integration', () => {
       }),
     ]);
     expect(fsMocks.readFile).not.toHaveBeenCalled();
+  });
+
+  test('listMcpServers preserves Codex needs_auth status after reading details', async () => {
+    executeMock.mockImplementation(async (binary, args) => {
+      expect(binary).toBe('codex');
+      if (args[0] === 'mcp' && args[1] === 'list') {
+        return {
+          stdout:
+            'Name     Url                     Bearer Token Env Var  Status   Auth\nrailway  https://mcp.railway.com  -                     enabled  Not logged in\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'mcp' && args[1] === 'get' && args[2] === 'railway') {
+        return {
+          stdout:
+            'railway\n  enabled: true\n  transport: streamable_http\n  url: https://mcp.railway.com\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`unexpected command: ${args.join(' ')}`);
+    });
+
+    const result = await listMcpServers(PROJECT, 'codex');
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value).toEqual([
+      expect.objectContaining({
+        name: 'railway',
+        provider: 'codex',
+        type: 'http',
+        url: 'https://mcp.railway.com',
+        status: 'needs_auth',
+      }),
+    ]);
   });
 
   test('listMcpServers uses the selected Claude profile env and config file', async () => {

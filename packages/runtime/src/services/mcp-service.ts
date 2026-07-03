@@ -291,7 +291,16 @@ function listCodexMcpServers(projectPath: string): ResultAsync<McpServer[], Doma
                 timeout: 15_000,
               });
               if (!getResult.stdout.trim()) return server;
-              return { ...server, ...parseCodexMcpGetOutput(server.name, getResult.stdout) };
+              const parsed = parseCodexMcpGetOutput(server.name, getResult.stdout);
+              return {
+                ...server,
+                ...parsed,
+                disabled: server.disabled || parsed.disabled ? true : undefined,
+                status:
+                  server.status === 'needs_auth' || server.status === 'error'
+                    ? server.status
+                    : (parsed.status ?? server.status),
+              };
             } catch {
               return server;
             }
@@ -345,17 +354,30 @@ export function parseCodexMcpListOutput(output: string): McpServer[] {
 
     const name = parts[0];
     const statusIndex = parts.findIndex((p) => p === 'enabled' || p === 'disabled');
-    const status = statusIndex >= 0 ? parts[statusIndex] : undefined;
+    const enabledState = statusIndex >= 0 ? parts[statusIndex] : undefined;
+    const authState =
+      statusIndex >= 0
+        ? parts
+            .slice(statusIndex + 1)
+            .join(' ')
+            .trim()
+            .toLowerCase()
+        : '';
     const valueParts = statusIndex >= 0 ? parts.slice(1, statusIndex) : parts.slice(1);
     const url = valueParts.find((p) => /^https?:\/\//.test(p));
+    const needsAuth =
+      authState.includes('not logged in') ||
+      authState.includes('needs auth') ||
+      authState.includes('authentication required') ||
+      authState.includes('oauth authorization required');
 
     servers.push({
       name,
       provider: 'codex',
       type: url ? 'http' : 'stdio',
       url,
-      disabled: status === 'disabled' ? true : undefined,
-      status: status === 'enabled' ? 'ok' : undefined,
+      disabled: enabledState === 'disabled' ? true : undefined,
+      status: needsAuth ? 'needs_auth' : enabledState === 'enabled' ? 'ok' : undefined,
       source: 'user',
       toggleable: false,
     });

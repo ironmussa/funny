@@ -40,6 +40,18 @@ describe('loadProjectMcpServers — provider scoping', () => {
     expect(result).toBeUndefined();
   });
 
+  test('auth-blocked servers are excluded', async () => {
+    listMcpServers.mockReturnValue(okAsync([{ ...stdioServer, status: 'needs_auth' }]));
+    const result = await loadProjectMcpServers('t1', '/p', 'claude');
+    expect(result).toBeUndefined();
+  });
+
+  test('errored servers are excluded', async () => {
+    listMcpServers.mockReturnValue(okAsync([{ ...stdioServer, status: 'error' }]));
+    const result = await loadProjectMcpServers('t1', '/p', 'claude');
+    expect(result).toBeUndefined();
+  });
+
   test('Codex reads the Codex MCP inventory', async () => {
     const result = await loadProjectMcpServers('t1', '/p', 'codex');
     expect(result).toBeDefined();

@@ -292,7 +292,8 @@ describe('AgentRunner class', () => {
     runner = new AgentRunner(tmMock, wsMock, factory, () => undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await runner.stopAllAgents();
     resetServices();
   });
 
@@ -314,6 +315,7 @@ describe('AgentRunner class', () => {
     });
 
     test('applies bound agent execution profile env and snapshots it on the thread', async () => {
+      await runner.stopAllAgents();
       resetServices();
       setServices(
         createMockServiceProvider(tmMock, wsMock, {

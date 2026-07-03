@@ -20,7 +20,7 @@ import type { AgentStateTracker } from './agent-state.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { flushPendingMessageUpdates } from './team-client.js';
-import { threadEventBus } from './thread-event-bus.js';
+import { threadEventBus, type AgentCompletedEvent } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
 export class AgentEventRouter {
@@ -33,6 +33,16 @@ export class AgentEventRouter {
   private endRunSpanFn:
     | ((threadId: string, status: 'ok' | 'error', errorMsg?: string) => void)
     | null = null;
+  private readonly agentCompletedListener = (event: AgentCompletedEvent): void => {
+    if (this.runSpans.has(event.threadId)) {
+      const status = event.status === 'completed' ? 'ok' : 'error';
+      this.endRunSpanFn?.(
+        event.threadId,
+        status,
+        event.status !== 'completed' ? event.status : undefined,
+      );
+    }
+  };
 
   constructor(
     private orchestrator: AgentOrchestrator,
@@ -158,16 +168,7 @@ export class AgentEventRouter {
   // ── Event bus subscription ─────────────────────────────────────
 
   private subscribeEventBus(): void {
-    threadEventBus.on('agent:completed', (event) => {
-      if (this.runSpans.has(event.threadId)) {
-        const status = event.status === 'completed' ? 'ok' : 'error';
-        this.endRunSpanFn?.(
-          event.threadId,
-          status,
-          event.status !== 'completed' ? event.status : undefined,
-        );
-      }
-    });
+    threadEventBus.on('agent:completed', this.agentCompletedListener);
   }
 
   // ── Helpers ────────────────────────────────────────────────────
@@ -284,5 +285,6 @@ export class AgentEventRouter {
   destroy(): void {
     clearInterval(this.messageQueueCleanupTimer);
     this.messageQueues.clear();
+    threadEventBus.off('agent:completed', this.agentCompletedListener);
   }
 }

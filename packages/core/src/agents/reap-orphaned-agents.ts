@@ -58,21 +58,31 @@ export interface ProcEntry {
 }
 
 /**
- * Pure decision: of the tagged agent processes, which group-leaders should be
- * reaped. Only process-group leaders are returned (`pid === pgrp`) so killing
- * the group via the negative pid reaps each agent and its MCP grandchildren
- * exactly once; a leader whose owner runtime is still alive is kept.
+ * Pure decision: of the tagged agent processes, which process groups should be
+ * reaped. We group by `pgrp` instead of requiring `pid === pgrp` because the
+ * process-group leader can exit before its children (observed with codex-acp's
+ * node wrapper), leaving live tagged children in an orphaned group. Killing the
+ * negative process-group id still reaps the whole tree exactly once.
+ *
+ * A process group is reaped only when none of its tagged members belong to a
+ * live owner runtime. This avoids killing a currently adopted group if a stale
+ * tagged descendant somehow shares its process group.
  */
 export function selectReapablePids(
   entries: ProcEntry[],
   isAlive: (pid: number) => boolean,
 ): number[] {
-  const reap: number[] = [];
+  const groups = new Map<number, { hasLiveOwner: boolean }>();
   for (const e of entries) {
-    if (e.pid !== e.pgrp) continue; // not a group leader → reaped via its leader
-    if (isAlive(e.ownerPid)) continue; // owner runtime still running → keep
-    reap.push(e.pid);
+    const group = groups.get(e.pgrp) ?? { hasLiveOwner: false };
+    group.hasLiveOwner ||= isAlive(e.ownerPid);
+    groups.set(e.pgrp, group);
   }
+  const reap: number[] = [];
+  for (const [pgrp, group] of groups) {
+    if (!group.hasLiveOwner) reap.push(pgrp);
+  }
+  reap.sort((a, b) => a - b);
   return reap;
 }
 
@@ -116,35 +126,23 @@ function pidIsAlive(pid: number): boolean {
 }
 
 /** SIGTERM the process group, escalating to SIGKILL after `graceMs`. */
-function killPidGroup(pid: number, graceMs = 3000): void {
+function killProcessGroup(pgrp: number, graceMs = 3000): void {
   const signalGroup = (sig: NodeJS.Signals): boolean => {
     try {
-      process.kill(-pid, sig);
+      process.kill(-pgrp, sig);
       return true;
     } catch {
       return false;
     }
   };
-  if (!signalGroup('SIGTERM')) {
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      /* already gone */
-    }
-  }
+  signalGroup('SIGTERM');
   const timer = setTimeout(() => {
-    if (!signalGroup('SIGKILL')) {
-      try {
-        process.kill(pid, 'SIGKILL');
-      } catch {
-        /* already gone */
-      }
-    }
+    signalGroup('SIGKILL');
   }, graceMs);
   timer.unref?.();
 }
 
-/** Collect tagged agent group-leaders from /proc. Returns [] off-Linux. */
+/** Collect tagged agent processes from /proc. Returns [] off-Linux. */
 function scanProcEntries(): ProcEntry[] {
   let names: string[];
   try {
@@ -179,14 +177,14 @@ function scanProcEntries(): ProcEntry[] {
 /**
  * Reap funny-spawned agents whose owner runtime has died. Safe to call on every
  * startup: agents owned by THIS (alive) process or any other running funny
- * instance are kept; only genuinely-orphaned leaders are killed.
+ * instance are kept; only genuinely-orphaned process groups are killed.
  *
  * @returns the number of agent process groups reaped.
  */
 export function reapOrphanedAgents(onReap?: (pids: number[]) => void): number {
   if (process.platform === 'win32') return 0;
   const reapable = selectReapablePids(scanProcEntries(), pidIsAlive);
-  for (const pid of reapable) killPidGroup(pid);
+  for (const pgrp of reapable) killProcessGroup(pgrp);
   if (reapable.length > 0) onReap?.(reapable);
   return reapable.length;
 }

@@ -74,15 +74,28 @@ describe('selectReapablePids', () => {
     expect(selectReapablePids(entries, alive([999]))).toEqual([]);
   });
 
-  test('skips non-leaders (MCP grandchildren) — they die with their leader group', () => {
+  test('deduplicates members of the same orphaned process group', () => {
     const entries: ProcEntry[] = [
-      { pid: 500, pgrp: 500, ownerPid: 13267 }, // leader, owner dead → reap
-      { pid: 511, pgrp: 500, ownerPid: 13267 }, // child of 500 → not a leader
+      { pid: 500, pgrp: 500, ownerPid: 13267 },
+      { pid: 511, pgrp: 500, ownerPid: 13267 },
     ];
     expect(selectReapablePids(entries, alive([]))).toEqual([500]);
   });
 
-  test('reaps multiple orphaned leaders', () => {
+  test('reaps an orphaned process group even when the leader already exited', () => {
+    const entries: ProcEntry[] = [{ pid: 511, pgrp: 500, ownerPid: 13267 }];
+    expect(selectReapablePids(entries, alive([]))).toEqual([500]);
+  });
+
+  test('keeps a process group if any tagged member has a live owner', () => {
+    const entries: ProcEntry[] = [
+      { pid: 511, pgrp: 500, ownerPid: 13267 },
+      { pid: 512, pgrp: 500, ownerPid: 999 },
+    ];
+    expect(selectReapablePids(entries, alive([999]))).toEqual([]);
+  });
+
+  test('reaps multiple orphaned process groups', () => {
     const entries: ProcEntry[] = [
       { pid: 500, pgrp: 500, ownerPid: 1000 },
       { pid: 600, pgrp: 600, ownerPid: 1001 },

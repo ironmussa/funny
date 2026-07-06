@@ -116,7 +116,7 @@ The client ships logs, metrics and traces to [Abbacchio](https://abbacchio.dev) 
 
 - **Logger:** `createClientLogger(namespace)` from `@/lib/client-logger.ts` returns a namespaced logger with `.error / .warn / .info / .debug / .trace` methods.
 - **Metrics & spans:** `metric(name, value, { attributes })` and `startSpan(name, { attributes })` from `@/lib/telemetry.ts`.
-- **OTLP endpoint:** set via `VITE_OTLP_ENDPOINT`. When unset, logging is a no-op (safe to run offline).
+- **OTLP endpoint:** set via `VITE_OTLP_ENDPOINT`. When unset, logging is a no-op (safe to run offline). In development, set `VITE_OTLP_ENABLED=true` to opt into local telemetry; production enables automatically when an endpoint exists unless `VITE_OTLP_ENABLED=false`.
 
 ### Levels and when they fire
 

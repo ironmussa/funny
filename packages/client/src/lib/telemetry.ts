@@ -8,16 +8,15 @@
 
 import { createClient, type AbbacchioClient } from '@abbacchio/browser-transport';
 
-const endpoint = import.meta.env.VITE_OTLP_ENDPOINT as string | undefined;
-const enabled = !!endpoint;
+import { otlpEnabled, otlpEndpoint } from './otlp-config';
 
 let client: AbbacchioClient | null = null;
 
 function getClient(): AbbacchioClient | null {
-  if (!enabled) return null;
+  if (!otlpEnabled || !otlpEndpoint) return null;
   if (!client) {
     client = createClient({
-      endpoint: endpoint!,
+      endpoint: otlpEndpoint,
       serviceName: 'funny-client',
       enabled: true,
     });

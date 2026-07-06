@@ -25,7 +25,8 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
-import { api } from './lib/api';
+import { profileApi } from './lib/api/profile';
+import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
 import { useProfileStore } from './stores/profile-store';
 import { useSettingsStore } from './stores/settings-store';
@@ -108,7 +109,7 @@ function AuthGate() {
     let cancelled = false;
 
     const fetchProfile = () => {
-      api.getProfile().then((res) => {
+      profileApi.getProfile().then((res) => {
         if (cancelled) return;
         if (res.isOk()) {
           const profile = res.value;
@@ -129,17 +130,16 @@ function AuthGate() {
           retries++;
           retryTimeout = setTimeout(fetchProfile, retries * 1000);
         } else {
-          // Profile 401 does not auto-logout (see api.ts). Re-check Better Auth session; if the
-          // cookie never stuck, this clears isAuthenticated and returns to login with a real cause.
+          // The request layer does not auto-logout on initial profile 401.
+          // Re-check Better Auth session; if the cookie never stuck, this clears
+          // isAuthenticated and returns to login with a real cause.
           void useAuthStore
             .getState()
             .initialize()
             .then(() => {
               if (cancelled) return;
               if (!useAuthStore.getState().isAuthenticated) return;
-              if (!setupCompleted) {
-                setSetupCompleted(false);
-              }
+              setSetupCompleted((current) => current ?? false);
             });
         }
       });
@@ -243,11 +243,11 @@ root.render(
       }}
     >
       <AbbacchioProvider
-        endpoint={import.meta.env.VITE_OTLP_ENDPOINT || 'http://localhost:4000'}
+        endpoint={otlpEndpoint ?? ''}
         serviceName="funny-client"
         captureConsole
         level="debug"
-        enabled={!!import.meta.env.VITE_OTLP_ENDPOINT}
+        enabled={otlpEnabled}
         includeUrl={true}
         consoleOptions={{
           captureErrors: true,

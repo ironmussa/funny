@@ -1,6 +1,6 @@
 import { createLogger, type Logger } from '@abbacchio/browser-transport';
 
-const endpoint = import.meta.env.VITE_OTLP_ENDPOINT as string | undefined;
+import { otlpEnabled, otlpEndpoint } from './otlp-config';
 
 // ── Log levels ──────────────────────────────────────────────────
 //
@@ -44,9 +44,9 @@ let shared: Logger | null = null;
 function getLogger(): Logger {
   if (!shared) {
     shared = createLogger({
-      endpoint: endpoint || 'http://localhost:4000',
+      endpoint: otlpEndpoint ?? '',
       serviceName: 'funny-client',
-      enabled: !!endpoint,
+      enabled: otlpEnabled,
       includeUrl: true,
       level: defaultLevel(),
     });

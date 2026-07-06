@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
 import { StatusBadge } from '@/components/StatusBadge';
-import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
+import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList.constants';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
@@ -75,7 +75,10 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
 
   // Track which message/tool-call IDs existed when the thread was loaded, so
   // already-present items skip the entrance animation (matches desktop).
-  const knownIdsRef = useRef<Set<string>>(new Set());
+  const knownIdsRef = useRef<Set<string> | null>(null);
+  if (knownIdsRef.current === null) {
+    knownIdsRef.current = new Set();
+  }
   const prevThreadIdRef = useRef<string | null>(null);
   if (activeThread?.id && activeThread.id !== prevThreadIdRef.current) {
     prevThreadIdRef.current = activeThread.id;
@@ -90,12 +93,12 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   }
 
   const snapshots = useTodoSnapshots();
-  const snapshotMapRef = useRef(new Map<string, number>());
+  const snapshotMapRef = useRef<Map<string, number> | null>(null);
   const snapshotMap = useMemo(() => {
     const next = new Map<string, number>();
     snapshots.forEach((s, i) => next.set(s.toolCallId, i));
     const prev = snapshotMapRef.current;
-    if (prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) {
+    if (prev && prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) {
       return prev;
     }
     snapshotMapRef.current = next;
@@ -118,6 +121,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
         >
           <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-4">
             <button
+              type="button"
               onClick={() => setReviewPaneOpen(false)}
               aria-label={t('common.back', 'Back')}
               className="hover:bg-accent -ml-1 rounded p-1"
@@ -136,6 +140,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
       )}
       <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <button
+          type="button"
           onClick={onBack}
           aria-label={t('common.back', 'Back')}
           className="hover:bg-accent -ml-1 rounded p-1"

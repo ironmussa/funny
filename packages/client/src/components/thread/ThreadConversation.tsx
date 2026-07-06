@@ -4,7 +4,7 @@ import { useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
-import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
+import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList.constants';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { useThreadCheckpoints } from '@/components/thread/use-thread-checkpoints';
 import { useThreadHandlers } from '@/components/thread/use-thread-handlers';

@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ok, okAsync } from 'neverthrow';
+import { StrictMode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
@@ -25,6 +26,16 @@ vi.mock('@/lib/api', () => ({
 
 import { isActiveMcpServer, isVisibleMcpServer } from '@/components/available-mcp-servers-utils';
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+type IdleDeadlineStub = { didTimeout: boolean; timeRemaining: () => number };
 
 function renderMcpList(ui: React.ReactElement) {
   return render(
@@ -154,6 +165,59 @@ describe('AvailableMcpServers', () => {
     expect(spinner).toHaveClass('icon-xs', 'animate-spin');
   });
 
+  test('still loads after StrictMode cancels the initial idle callback', async () => {
+    const originalRequestIdleCallback = globalThis.requestIdleCallback;
+    const originalCancelIdleCallback = globalThis.cancelIdleCallback;
+    const idleCallbacks = new Map<number, (deadline: IdleDeadlineStub) => void>();
+    const canceled = new Set<number>();
+    let nextIdleId = 1;
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb) => {
+        const id = nextIdleId++;
+        idleCallbacks.set(id, cb as (deadline: IdleDeadlineStub) => void);
+        return id;
+      }),
+    );
+    vi.stubGlobal(
+      'cancelIdleCallback',
+      vi.fn((id) => {
+        canceled.add(id as number);
+      }),
+    );
+    mockListMcpServers.mockReturnValue(
+      okAsync({ servers: [{ name: 'github', type: 'stdio', status: 'ok' }] }),
+    );
+
+    try {
+      renderMcpList(
+        <StrictMode>
+          <AvailableMcpServers projectPath="/repo" provider="codex" projectId="p1" />
+        </StrictMode>,
+      );
+
+      await act(async () => {
+        for (const [id, cb] of idleCallbacks) {
+          if (!canceled.has(id)) cb({ didTimeout: false, timeRemaining: () => 50 });
+        }
+      });
+
+      expect(await screen.findByTestId('available-mcp-github')).toBeInTheDocument();
+      expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex', 'p1');
+    } finally {
+      if (originalRequestIdleCallback) {
+        vi.stubGlobal('requestIdleCallback', originalRequestIdleCallback);
+      } else {
+        Reflect.deleteProperty(globalThis, 'requestIdleCallback');
+      }
+      if (originalCancelIdleCallback) {
+        vi.stubGlobal('cancelIdleCallback', originalCancelIdleCallback);
+      } else {
+        Reflect.deleteProperty(globalThis, 'cancelIdleCallback');
+      }
+    }
+  });
+
   test('title links to project MCP settings', async () => {
     mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
 
@@ -176,5 +240,68 @@ describe('AvailableMcpServers', () => {
     await waitFor(() => {
       expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex', undefined);
     });
+  });
+
+  test('ignores stale MCP loads after the selected provider changes', async () => {
+    const originalRequestIdleCallback = globalThis.requestIdleCallback;
+    const originalCancelIdleCallback = globalThis.cancelIdleCallback;
+    const idleCallbacks: Array<(deadline: IdleDeadlineStub) => void> = [];
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb) => {
+        idleCallbacks.push(cb as (deadline: IdleDeadlineStub) => void);
+        return idleCallbacks.length;
+      }),
+    );
+    vi.stubGlobal('cancelIdleCallback', vi.fn());
+    const claudeLoad = deferred<any>();
+    const codexLoad = deferred<any>();
+    mockListMcpServers.mockImplementation((_projectPath, provider) =>
+      provider === 'claude' ? claudeLoad.promise : codexLoad.promise,
+    );
+
+    const view = renderMcpList(<AvailableMcpServers projectPath="/repo" provider="claude" />);
+
+    await act(async () => {
+      idleCallbacks.shift()?.({ didTimeout: false, timeRemaining: () => 50 });
+    });
+    expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'claude', undefined);
+
+    view.rerender(
+      <MemoryRouter>
+        <TooltipProvider delayDuration={0}>
+          <AvailableMcpServers projectPath="/repo" provider="codex" />
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+
+    await act(async () => {
+      idleCallbacks.shift()?.({ didTimeout: false, timeRemaining: () => 50 });
+    });
+    expect(mockListMcpServers).toHaveBeenCalledWith('/repo', 'codex', undefined);
+
+    await act(async () => {
+      codexLoad.resolve(ok({ servers: [{ name: 'codex-mcp', type: 'stdio' }] }));
+      await Promise.resolve();
+    });
+    expect(await screen.findByTestId('available-mcp-codex-mcp')).toBeInTheDocument();
+
+    await act(async () => {
+      claudeLoad.resolve(ok({ servers: [{ name: 'claude-mcp', type: 'stdio' }] }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('available-mcp-codex-mcp')).toBeInTheDocument();
+    expect(screen.queryByTestId('available-mcp-claude-mcp')).not.toBeInTheDocument();
+    if (originalRequestIdleCallback) {
+      vi.stubGlobal('requestIdleCallback', originalRequestIdleCallback);
+    } else {
+      Reflect.deleteProperty(globalThis, 'requestIdleCallback');
+    }
+    if (originalCancelIdleCallback) {
+      vi.stubGlobal('cancelIdleCallback', originalCancelIdleCallback);
+    } else {
+      Reflect.deleteProperty(globalThis, 'cancelIdleCallback');
+    }
   });
 });

@@ -52,36 +52,46 @@ export function AvailableMcpServers({
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(false);
   const prevLoadKeyRef = useRef<string | undefined>(undefined);
+  const requestSeqRef = useRef(0);
 
-  const load = useCallback(async () => {
-    if (!projectPath) {
-      setServers([]);
-      return;
-    }
-    setLoading(true);
-    const result = await api.listMcpServers(projectPath, provider, projectId);
-    setServers(result.isOk() ? result.value.servers : []);
-    setLoading(false);
-  }, [projectPath, projectId, provider]);
+  const load = useCallback(
+    async (requestSeq: number) => {
+      if (!projectPath) {
+        if (requestSeq === requestSeqRef.current) setServers([]);
+        return;
+      }
+      const result = await api.listMcpServers(projectPath, provider, projectId);
+      if (requestSeq !== requestSeqRef.current) return;
+      setServers(result.isOk() ? result.value.servers : []);
+      setLoading(false);
+    },
+    [projectPath, projectId, provider],
+  );
 
   useEffect(() => {
     const loadKey = projectPath ? `${projectPath}:${provider}:${projectId ?? ''}` : undefined;
     if (loadKey === prevLoadKeyRef.current) return;
     prevLoadKeyRef.current = loadKey;
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
+    setLoading(Boolean(projectPath));
     // Listing MCP servers makes the runner shell out to the provider CLI (~seconds)
     // and is purely informational chrome below the composer — not needed for the
     // thread to be usable. Defer to idle so it doesn't hold a socket while the
     // on-screen thread is still loading its messages.
     let idleId: number | undefined;
     if (typeof requestIdleCallback === 'function') {
-      idleId = requestIdleCallback(() => void load(), { timeout: 4000 });
+      idleId = requestIdleCallback(() => void load(requestSeq), { timeout: 4000 });
     } else {
-      idleId = window.setTimeout(() => void load(), 500);
+      idleId = window.setTimeout(() => void load(requestSeq), 500);
     }
     return () => {
       if (idleId === undefined) return;
       if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
       else window.clearTimeout(idleId);
+      if (prevLoadKeyRef.current === loadKey) {
+        prevLoadKeyRef.current = undefined;
+      }
     };
   }, [projectPath, provider, projectId, load]);
 

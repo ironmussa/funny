@@ -19,9 +19,13 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/components/VirtualDiff', () => ({
-  VirtualDiff: ({ 'data-testid': testId }: { 'data-testid'?: string }) => (
-    <div data-testid={testId ?? 'virtual-diff'} />
-  ),
+  VirtualDiff: ({
+    'data-testid': testId,
+    unifiedDiff,
+  }: {
+    'data-testid'?: string;
+    unifiedDiff?: string;
+  }) => <div data-testid={testId ?? 'virtual-diff'} data-unified-diff={unifiedDiff ?? ''} />,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -103,5 +107,44 @@ describe('EditFileCard', () => {
     expect(diff.parentElement).toBe(slot);
     expect(slot.style.height).toBe(reservedHeight);
     expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
+  });
+
+  test('renders Codex changes-map edit calls as diffs', async () => {
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          parsed={{
+            file_path: '/repo/src/app.ts',
+            new_string: 'export const value = 1;\n',
+            changes: {
+              '/repo/src/app.ts': {
+                type: 'add',
+                content: 'export const value = 1;\n',
+              },
+              '/repo/src/config.ts': {
+                type: 'update',
+                unified_diff:
+                  '@@ -1,1 +1,1 @@\n-export const port = 3000;\n+export const port = 5173;',
+              },
+            },
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('/repo/src/app.ts +1')).toBeInTheDocument();
+    const placeholder = screen.getByTestId('edit-file-inline-diff-placeholder');
+    const slot = placeholder.parentElement;
+
+    await act(async () => {
+      intersectionObserverState.callback?.(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+    });
+
+    const diff = await screen.findByTestId('edit-file-inline-diff');
+    expect(diff.parentElement).toBe(slot);
+    expect(diff.getAttribute('data-unified-diff')).toContain('+export const value = 1;');
   });
 });

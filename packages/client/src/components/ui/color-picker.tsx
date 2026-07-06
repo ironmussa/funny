@@ -6,8 +6,8 @@ import {
   createContext,
   type HTMLAttributes,
   memo,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -40,6 +40,16 @@ interface ColorPickerContextValue {
   setColor: (color: ColorInstance) => void;
 }
 
+interface ColorState {
+  hue: number;
+  saturation: number;
+  lightness: number;
+  alpha: number;
+}
+
+const RGB_CHANNEL_KEYS = ['red', 'green', 'blue'] as const;
+const HSL_CHANNEL_KEYS = ['hue', 'saturation', 'lightness'] as const;
+
 const tryParseColor = (input: string): ColorInstance | null => {
   try {
     return Color(input.trim());
@@ -48,10 +58,28 @@ const tryParseColor = (input: string): ColorInstance | null => {
   }
 };
 
+const stateFromColor = (color: ColorInstance): ColorState => {
+  const [hue, saturation, lightness] = color.hsl().array();
+  return {
+    hue: Number.isFinite(hue) ? hue : 0,
+    saturation: Number.isFinite(saturation) ? saturation : 0,
+    lightness: Number.isFinite(lightness) ? lightness : 0,
+    alpha: color.alpha() * 100,
+  };
+};
+
+const rgbaFromState = ({ hue, saturation, lightness, alpha }: ColorState) => {
+  const rgba = Color.hsl(hue, saturation, lightness)
+    .alpha(alpha / 100)
+    .rgb()
+    .array();
+  return [rgba[0], rgba[1], rgba[2], alpha / 100] as [number, number, number, number];
+};
+
 const ColorPickerContext = createContext<ColorPickerContextValue | undefined>(undefined);
 
 export const useColorPicker = () => {
-  const context = useContext(ColorPickerContext);
+  const context = use(ColorPickerContext);
   if (!context) {
     throw new Error('useColorPicker must be used within a ColorPickerProvider');
   }
@@ -71,45 +99,55 @@ export const ColorPicker = ({
   className,
   ...props
 }: ColorPickerProps) => {
-  const selectedColor = Color(value);
-  const defaultColor = Color(defaultValue);
-
-  const [hue, setHue] = useState(selectedColor.hue() || defaultColor.hue() || 0);
-  const [saturation, setSaturation] = useState(
-    selectedColor.saturationl() || defaultColor.saturationl() || 100,
+  const isControlled = value !== undefined;
+  const controlledColor = useMemo(
+    () => (isControlled ? stateFromColor(Color(value)) : null),
+    [isControlled, value],
   );
-  const [lightness, setLightness] = useState(
-    selectedColor.lightness() || defaultColor.lightness() || 50,
+  const [draftColor, setDraftColor] = useState<ColorState>(() =>
+    stateFromColor(Color(isControlled ? value : defaultValue)),
   );
-  const [alpha, setAlpha] = useState(selectedColor.alpha() * 100 || defaultColor.alpha() * 100);
+  const colorState = controlledColor ?? draftColor;
+  const colorStateRef = useRef(colorState);
+  colorStateRef.current = colorState;
   const [mode, setMode] = useState('hex');
 
-  useEffect(() => {
-    if (value) {
-      const color = Color(value);
-      const [h, s, l] = color.hsl().array();
-      setHue(h);
-      setSaturation(s);
-      setLightness(l);
-      setAlpha(color.alpha() * 100);
-    }
-  }, [value]);
+  const commitColorState = useCallback(
+    (next: ColorState) => {
+      colorStateRef.current = next;
+      if (!isControlled) {
+        setDraftColor(next);
+      }
+      onChange?.(rgbaFromState(next));
+    },
+    [isControlled, onChange],
+  );
 
-  useEffect(() => {
-    if (onChange) {
-      const color = Color.hsl(hue, saturation, lightness).alpha(alpha / 100);
-      const rgba = color.rgb().array();
-      onChange([rgba[0], rgba[1], rgba[2], alpha / 100]);
-    }
-  }, [hue, saturation, lightness, alpha, onChange]);
+  const setColorPatch = useCallback(
+    (patch: Partial<ColorState>) => {
+      commitColorState({ ...colorStateRef.current, ...patch });
+    },
+    [commitColorState],
+  );
 
-  const setColor = useCallback((color: ColorInstance) => {
-    const [h, s, l] = color.hsl().array();
-    setHue(Number.isFinite(h) ? h : 0);
-    setSaturation(Number.isFinite(s) ? s : 0);
-    setLightness(Number.isFinite(l) ? l : 0);
-    setAlpha(color.alpha() * 100);
-  }, []);
+  const setHue = useCallback((hue: number) => setColorPatch({ hue }), [setColorPatch]);
+  const setSaturation = useCallback(
+    (saturation: number) => setColorPatch({ saturation }),
+    [setColorPatch],
+  );
+  const setLightness = useCallback(
+    (lightness: number) => setColorPatch({ lightness }),
+    [setColorPatch],
+  );
+  const setAlpha = useCallback((alpha: number) => setColorPatch({ alpha }), [setColorPatch]);
+  const setColor = useCallback(
+    (color: ColorInstance) => {
+      commitColorState(stateFromColor(color));
+    },
+    [commitColorState],
+  );
+
+  const { hue, saturation, lightness, alpha } = colorState;
 
   const contextValue = useMemo(
     () => ({
@@ -125,7 +163,18 @@ export const ColorPicker = ({
       setMode,
       setColor,
     }),
-    [hue, saturation, lightness, alpha, mode, setColor],
+    [
+      hue,
+      saturation,
+      lightness,
+      alpha,
+      mode,
+      setHue,
+      setSaturation,
+      setLightness,
+      setAlpha,
+      setColor,
+    ],
   );
 
   return (
@@ -150,22 +199,27 @@ export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSe
             hsl(${hue}, 100%, 50%)`;
   }, [hue]);
 
-  const onPointerMoveEvent = useEffectEvent((event: PointerEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-    setPositionX(x);
-    setPositionY(y);
-    setSaturation(x * 100);
-    const topLightness = x < 0.01 ? 100 : 50 + 50 * (1 - x);
-    const lightness = topLightness * (1 - y);
-    setLightness(lightness);
-  });
+  const updatePointerPosition = useCallback(
+    (event: PointerEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+      setPositionX(x);
+      setPositionY(y);
+      setSaturation(x * 100);
+      const topLightness = x < 0.01 ? 100 : 50 + 50 * (1 - x);
+      const lightness = topLightness * (1 - y);
+      setLightness(lightness);
+    },
+    [setLightness, setSaturation],
+  );
+
+  const updatePointerPositionEvent = useEffectEvent(updatePointerPosition);
 
   useEffect(() => {
     if (!isDragging) return;
-    const handlePointerMove = (e: PointerEvent) => onPointerMoveEvent(e);
+    const handlePointerMove = (e: PointerEvent) => updatePointerPositionEvent(e);
     const handlePointerUp = () => setIsDragging(false);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
@@ -181,7 +235,7 @@ export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSe
       onPointerDown={(e) => {
         e.preventDefault();
         setIsDragging(true);
-        onPointerMoveEvent(e.nativeEvent);
+        updatePointerPosition(e.nativeEvent);
       }}
       ref={containerRef}
       style={{ background: backgroundGradient }}
@@ -252,19 +306,14 @@ export const ColorPickerAlpha = ({ className, ...props }: ColorPickerAlphaProps)
 export type ColorPickerEyeDropperProps = ComponentProps<typeof Button>;
 
 export const ColorPickerEyeDropper = ({ className, ...props }: ColorPickerEyeDropperProps) => {
-  const { setHue, setSaturation, setLightness, setAlpha } = useColorPicker();
+  const { setColor } = useColorPicker();
 
   const handleEyeDropper = async () => {
     try {
       // @ts-expect-error - EyeDropper API is experimental
       const eyeDropper = new EyeDropper();
       const result = await eyeDropper.open();
-      const color = Color(result.sRGBHex);
-      const [h, s, l] = color.hsl().array();
-      setHue(h);
-      setSaturation(s);
-      setLightness(l);
-      setAlpha(100);
+      setColor(Color(result.sRGBHex));
     } catch {
       // User cancelled or EyeDropper not supported
     }
@@ -312,30 +361,34 @@ type EditableInputProps = Omit<ComponentProps<typeof Input>, 'value' | 'onChange
 };
 
 const EditableInput = ({ value, onCommit, className, ...props }: EditableInputProps) => {
-  const [local, setLocal] = useState(value);
-  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focusedRef = useRef(false);
 
   useEffect(() => {
-    if (!focused) setLocal(value);
-  }, [value, focused]);
+    if (!focusedRef.current && inputRef.current) {
+      inputRef.current.value = value;
+    }
+  }, [value]);
 
   return (
     <Input
       {...props}
-      value={local}
+      defaultValue={value}
+      ref={inputRef}
       className={className}
       onChange={(e) => {
         const v = e.target.value;
-        setLocal(v);
         onCommit(v);
       }}
       onFocus={(e) => {
-        setFocused(true);
+        focusedRef.current = true;
         e.target.select();
       }}
       onBlur={() => {
-        setFocused(false);
-        setLocal(value);
+        focusedRef.current = false;
+        if (inputRef.current) {
+          inputRef.current.value = value;
+        }
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -422,7 +475,7 @@ export const ColorPickerFormat = ({ className, ...props }: ColorPickerFormatProp
               'h-8 rounded-r-none bg-secondary px-2 text-xs shadow-none',
               index && 'rounded-l-none',
             )}
-            key={index}
+            key={RGB_CHANNEL_KEYS[index]}
             type="text"
             value={String(value)}
             onCommit={(raw) => commitChannel(index, raw)}
@@ -478,7 +531,7 @@ export const ColorPickerFormat = ({ className, ...props }: ColorPickerFormatProp
               'h-8 rounded-r-none bg-secondary px-2 text-xs shadow-none',
               index && 'rounded-l-none',
             )}
-            key={index}
+            key={HSL_CHANNEL_KEYS[index]}
             type="text"
             value={String(value)}
             onCommit={(raw) => commitChannel(index, raw)}

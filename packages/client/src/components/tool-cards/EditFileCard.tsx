@@ -1,3 +1,4 @@
+import type { FileDiffSummary, FileStatus } from '@funny/shared';
 import { ChevronRight, FilePen, Maximize2 } from 'lucide-react';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -81,6 +82,99 @@ function computeUnifiedDiff(
   return lines.join('\n');
 }
 
+interface EditChangeEntry {
+  filePath: string;
+  oldValue: string;
+  newValue: string;
+  rawDiff?: string;
+  status: FileStatus;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeUnifiedDiff(filePath: string, diff: string): string {
+  if (diff.startsWith('diff --git') || diff.startsWith('--- ')) return diff;
+  return `--- a/${filePath}\n+++ b/${filePath}\n${diff}`;
+}
+
+function statusForChangeType(type: unknown): FileStatus {
+  if (type === 'add' || type === 'create') return 'added';
+  if (type === 'delete' || type === 'remove') return 'deleted';
+  if (type === 'move' || type === 'rename') return 'renamed';
+  return 'modified';
+}
+
+function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[] {
+  const changes = parsed.changes;
+  if (isRecord(changes)) {
+    const entries: EditChangeEntry[] = [];
+    for (const [filePath, rawChange] of Object.entries(changes)) {
+      if (!filePath || !isRecord(rawChange)) continue;
+
+      const status = statusForChangeType(rawChange.type);
+      const unifiedDiff = rawChange.unified_diff;
+      if (typeof unifiedDiff === 'string' && unifiedDiff.trim()) {
+        const rawDiff = normalizeUnifiedDiff(filePath, unifiedDiff);
+        entries.push({
+          filePath,
+          oldValue: parseDiffOld(rawDiff),
+          newValue: parseDiffNew(rawDiff),
+          rawDiff,
+          status,
+        });
+        continue;
+      }
+
+      const content = rawChange.content;
+      if (typeof content !== 'string') continue;
+      entries.push({
+        filePath,
+        oldValue: status === 'deleted' ? content : '',
+        newValue: status === 'deleted' ? '' : content,
+        status,
+      });
+    }
+    if (entries.length > 0) return entries;
+  }
+
+  const filePath = parsed.file_path;
+  const oldString = parsed.old_string;
+  const newString = parsed.new_string;
+  if (typeof filePath !== 'string' || typeof newString !== 'string') return [];
+  const oldValue = typeof oldString === 'string' ? oldString : '';
+  if (oldValue === newString) return [];
+  return [
+    {
+      filePath,
+      oldValue,
+      newValue: newString,
+      status: typeof oldString === 'string' ? 'modified' : 'added',
+    },
+  ];
+}
+
+function getDialogDiffData(changeEntries: EditChangeEntry[]): {
+  dialogFiles?: FileDiffSummary[];
+  diffCache?: Map<string, string>;
+} {
+  const dialogFiles =
+    changeEntries.length > 1
+      ? changeEntries.map((entry) => ({
+          path: entry.filePath,
+          status: entry.status,
+          staged: false,
+        }))
+      : undefined;
+  const entriesWithRawDiff = changeEntries.filter((entry) => entry.rawDiff);
+  const diffCache =
+    entriesWithRawDiff.length > 0
+      ? new Map(entriesWithRawDiff.map((entry) => [entry.filePath, entry.rawDiff!]))
+      : undefined;
+  return { dialogFiles, diffCache };
+}
+
 export function EditFileCard({
   parsed,
   hideLabel,
@@ -93,11 +187,22 @@ export function EditFileCard({
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
   const fontSize = useSettingsStore((s) => s.fontSize);
-  const filePath = parsed.file_path as string | undefined;
   const projectPath = useCurrentProjectPath();
-  const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
-  const oldString = parsed.old_string as string | undefined;
-  const newString = parsed.new_string as string | undefined;
+  const changeEntries = useMemo(() => getEditChangeEntries(parsed), [parsed]);
+  const [requestedFilePath, setRequestedFilePath] = useState<string | null>(null);
+  const activeEntry =
+    changeEntries.find((entry) => entry.filePath === requestedFilePath) ?? changeEntries[0];
+  const filePath = activeEntry?.filePath;
+  const oldString = activeEntry?.oldValue;
+  const newString = activeEntry?.newValue;
+  const rawDiff = activeEntry?.rawDiff;
+  const displayPath = filePath
+    ? `${makeRelativePath(filePath, projectPath)}${changeEntries.length > 1 ? ` +${changeEntries.length - 1}` : ''}`
+    : undefined;
+  const { dialogFiles, diffCache } = useMemo(
+    () => getDialogDiffData(changeEntries),
+    [changeEntries],
+  );
 
   const threadId = useThreadId();
 
@@ -116,6 +221,7 @@ export function EditFileCard({
   // fetch the file.
   useEffect(() => {
     if (!diffMounted) return;
+    if (rawDiff) return;
     if (!filePath || newString == null) return;
     let cancelled = false;
     api.readFile(filePath).then((result) => {
@@ -129,7 +235,7 @@ export function EditFileCard({
     return () => {
       cancelled = true;
     };
-  }, [diffMounted, filePath, newString]);
+  }, [diffMounted, filePath, newString, rawDiff]);
 
   const diffSlotRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -178,13 +284,14 @@ export function EditFileCard({
   );
 
   const hasDiff = useMemo(() => {
-    return filePath && oldString != null && newString != null && oldString !== newString;
-  }, [filePath, oldString, newString]);
+    return !!activeEntry && oldString != null && newString != null && oldString !== newString;
+  }, [activeEntry, oldString, newString]);
 
   const unifiedDiff = useMemo(() => {
     if (!hasDiff) return '';
+    if (rawDiff) return rawDiff;
     return computeUnifiedDiff(oldString || '', newString || '', snippetBaseLine);
-  }, [hasDiff, oldString, newString, snippetBaseLine]);
+  }, [hasDiff, oldString, newString, rawDiff, snippetBaseLine]);
   const inlineDiffSlotHeight = useMemo(() => {
     if (!hasDiff) return undefined;
     const rowHeight = DIFF_ROW_HEIGHT_PX[fontSize];
@@ -195,20 +302,22 @@ export function EditFileCard({
   return (
     <div className="border-border w-full min-w-0 overflow-hidden rounded-lg border text-sm">
       <div className="flex w-full items-center overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="hover:bg-accent/30 flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
-        >
-          <ChevronRight
-            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
-          />
-          {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
-          {!hideLabel && (
-            <span className="text-foreground shrink-0 font-mono font-medium">
-              {t('tools.editFile')}
-            </span>
-          )}
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="hover:bg-accent/30 flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs"
+          >
+            <ChevronRight
+              className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
+            />
+            {!hideLabel && <FilePen className="icon-xs text-muted-foreground shrink-0" />}
+            {!hideLabel && (
+              <span className="text-foreground shrink-0 font-mono font-medium">
+                {t('tools.editFile')}
+              </span>
+            )}
+          </button>
           {filePath &&
             (() => {
               // When a diff is available, clicking the path opens the diff
@@ -217,23 +326,16 @@ export function EditFileCard({
                 return (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span
-                        role="button"
-                        tabIndex={0}
+                      <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowExpandedDiff(true);
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.stopPropagation();
-                            setShowExpandedDiff(true);
-                          }
-                        }}
-                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
+                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-xs hover:underline"
                       >
                         {displayPath}
-                      </span>
+                      </button>
                     </TooltipTrigger>
                     <TooltipContent>{t('review.expand', 'Expand')}</TooltipContent>
                   </Tooltip>
@@ -256,23 +358,16 @@ export function EditFileCard({
                         {displayPath}
                       </a>
                     ) : (
-                      <span
-                        role="button"
-                        tabIndex={0}
+                      <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           openFileInEditor(filePath, defaultEditor);
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.stopPropagation();
-                            openFileInEditor(filePath, defaultEditor);
-                          }
-                        }}
-                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
+                        className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-xs hover:underline"
                       >
                         {displayPath}
-                      </span>
+                      </button>
                     )}
                   </TooltipTrigger>
                   <TooltipContent>{editorTitle}</TooltipContent>
@@ -284,7 +379,7 @@ export function EditFileCard({
               {displayTime}
             </span>
           )}
-        </button>
+        </div>
         {hasDiff && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -328,6 +423,10 @@ export function EditFileCard({
         oldValue={oldString || ''}
         newValue={newString || ''}
         baseLine={snippetBaseLine}
+        files={dialogFiles}
+        onFileSelect={dialogFiles ? setRequestedFilePath : undefined}
+        diffCache={diffCache}
+        basePath={projectPath}
         onRequestFullDiff={requestFullDiff}
       />
     </div>

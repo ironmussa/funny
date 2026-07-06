@@ -191,6 +191,47 @@ describe('socketio runner handlers', () => {
     expect(relayToUser).toHaveBeenCalled();
   });
 
+  test('agent:result survives the chunk-storm rate limit (stuck-"processing" regression)', async () => {
+    // A streaming burst used to exhaust the per-socket 500-events/10s budget
+    // and silently drop the terminal agent:result with it — the DB (updated
+    // via the data channel) said "completed" while every open tab stayed on
+    // "processing" until a manual refresh.
+    const socket = createMockSocket({ id: 'rate-limit-sock' } as any);
+    const relayToUser = mock((_userId: string, _event: unknown) => {});
+    setupRunnerEventHandlers({
+      socket,
+      runnerId: 'runner-1',
+      runnerUserId: 'user-1',
+      wsRelay: { relayToUser, relayToThreadStream: () => {} } as any,
+    });
+
+    try {
+      for (let i = 0; i < 550; i++) {
+        await socket.trigger(RUNNER_AGENT_EVENT, {
+          userId: 'user-1',
+          event: { type: 'agent:message' },
+        });
+      }
+      const relayedDuringStorm = relayToUser.mock.calls.length;
+      // Sanity: the main cap actually tripped, so the assertion below proves
+      // the bypass (not just an un-exhausted budget).
+      expect(relayedDuringStorm).toBeLessThan(550);
+
+      await socket.trigger(RUNNER_AGENT_EVENT, {
+        userId: 'user-1',
+        event: { type: 'agent:result' },
+      });
+
+      const resultRelayed = relayToUser.mock.calls
+        .slice(relayedDuringStorm)
+        .some(([, event]) => (event as { type?: string })?.type === 'agent:result');
+      expect(resultRelayed).toBe(true);
+    } finally {
+      clearSocketRate('rate-limit-sock');
+      clearSocketRate('rate-limit-sock:critical');
+    }
+  });
+
   test('blocks cross-tenant runner agent events', async () => {
     const socket = createMockSocket();
     const relayToUser = mock((_userId: string, _event: unknown) => {});

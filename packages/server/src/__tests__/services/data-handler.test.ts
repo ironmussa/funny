@@ -8,6 +8,8 @@ import { eq } from 'drizzle-orm';
 
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
 import { upsertProfile } from '../../services/profile-service.js';
+import { setIO } from '../../services/ws-relay.js';
+import { createMockIo } from '../helpers/socketio-test-mocks.js';
 import {
   seedProject,
   seedThread,
@@ -983,6 +985,69 @@ describe('data-handler handleDataMessageWithAck', () => {
     const row = await db.select().from(schema.threads).where(eq(schema.threads.id, 't1')).get();
     expect(row?.status).toBe('running');
     expect(row?.title).toBe('Renamed from runner');
+  });
+
+  describe('update_thread terminal-status broadcast', () => {
+    // The live agent:result relay is lossy (runner tunnel blips, per-socket
+    // rate limit). The data-channel persistence write is the reliable signal
+    // that a run ended, so it must mirror terminal statuses to the owner's
+    // browsers — otherwise a lost result event leaves the UI stuck on
+    // "processing" while the DB already says completed.
+    let capture: ReturnType<typeof createMockIo>['capture'];
+
+    beforeEach(() => {
+      const mockIo = createMockIo();
+      capture = mockIo.capture;
+      setIO(mockIo.io);
+    });
+
+    afterAll(() => {
+      setIO(null as unknown as Parameters<typeof setIO>[0]);
+    });
+
+    test('persisting a terminal status relays thread:updated to the owner', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:update_thread',
+        threadId: 't1',
+        payload: { threadId: 't1', updates: { status: 'completed' } },
+      });
+
+      expect(res).toEqual({ type: 'data:update_thread_response', ok: true });
+      const userEmit = capture.userRoomEmits.find((e) => e.room === 'user:user-1');
+      expect(userEmit?.event).toBe('thread:updated');
+      expect(userEmit?.payload).toMatchObject({
+        type: 'thread:updated',
+        threadId: 't1',
+        data: { status: 'completed' },
+      });
+      // Sharee stream room gets the mirror too (steer/view sharees).
+      expect(capture.userRoomEmits.some((e) => e.room === 'thread:t1:stream')).toBe(true);
+    });
+
+    test('non-terminal status updates do not broadcast', async () => {
+      // 'running' arrives via the live relay; 'waiting' must never be
+      // re-broadcast from here because this payload lacks waitingReason/
+      // permissionRequest and would clobber an on-screen permission prompt.
+      for (const status of ['running', 'waiting']) {
+        await handleDataMessageWithAck('runner-1', 'user-1', {
+          type: 'data:update_thread',
+          threadId: 't1',
+          payload: { threadId: 't1', updates: { status } },
+        });
+      }
+
+      expect(capture.userRoomEmits).toHaveLength(0);
+    });
+
+    test('non-status updates do not broadcast', async () => {
+      await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:update_thread',
+        threadId: 't1',
+        payload: { threadId: 't1', updates: { title: 'Renamed' } },
+      });
+
+      expect(capture.userRoomEmits).toHaveLength(0);
+    });
   });
 
   test('rejects update_thread for another user thread', async () => {

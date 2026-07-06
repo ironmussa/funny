@@ -8,6 +8,7 @@ import type { Socket } from 'socket.io';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import { metric } from '../../lib/telemetry.js';
 import { isRateLimited } from '../socketio-rate-limit.js';
 import { extractRunnerEventUserId, isRunnerEventAllowed } from '../socketio-runner-authz.js';
 
@@ -40,11 +41,54 @@ function createAllowRunnerEvent(ctx: RunnerEventContext) {
   };
 }
 
+// Low-frequency, per-turn events that flip the client out of "processing".
+// Losing one of these leaves every browser stuck on a running spinner until a
+// manual refresh (persistence goes through the separate data channel, so a
+// refresh shows the finished thread — the "it finished but the UI never
+// updated" report). When a chunk storm exhausts the main per-socket cap, these
+// events pass under their own much smaller budget instead of being discarded.
+const CRITICAL_AGENT_EVENT_TYPES = new Set(['agent:status', 'agent:result', 'agent:error']);
+
+// Sampled drop logging: at most one warn per socket per window, carrying the
+// count of drops it stands in for, so a storm is visible without becoming one.
+const DROP_LOG_WINDOW_MS = 10_000;
+const dropLogWindows = new Map<string, { count: number; windowStartedAt: number }>();
+
+function noteDroppedRunnerEvent(ctx: RunnerEventContext, eventType: string): void {
+  metric('ws.runner_event_dropped', 1, { attributes: { eventType } });
+  const now = Date.now();
+  const window = dropLogWindows.get(ctx.socket.id);
+  if (window && now - window.windowStartedAt < DROP_LOG_WINDOW_MS) {
+    window.count++;
+    return;
+  }
+  log.warn('Rate limit dropped runner agent events — browsers miss live updates', {
+    namespace: 'socketio',
+    runnerId: ctx.runnerId,
+    eventType,
+    droppedInPreviousWindow: window?.count ?? 0,
+  });
+  dropLogWindows.set(ctx.socket.id, { count: 1, windowStartedAt: now });
+}
+
+/** Drop per-socket rate/drop-log state on disconnect (called by runner-namespace). */
+export function cleanupRunnerEventState(socketId: string): void {
+  dropLogWindows.delete(socketId);
+}
+
 export function setupRunnerEventHandlers(ctx: RunnerEventContext): void {
   const allowRunnerEvent = createAllowRunnerEvent(ctx);
 
   ctx.socket.on(RUNNER_AGENT_EVENT, async (data: unknown) => {
-    if (isRateLimited(ctx.socket.id, 500, 10_000)) return;
+    if (isRateLimited(ctx.socket.id, 500, 10_000)) {
+      const overflow = parseRunnerAgentEvent(data);
+      const eventType = (overflow?.event as Record<string, unknown> | null)?.type;
+      const isCritical = typeof eventType === 'string' && CRITICAL_AGENT_EVENT_TYPES.has(eventType);
+      if (!isCritical || isRateLimited(`${ctx.socket.id}:critical`, 100, 10_000)) {
+        noteDroppedRunnerEvent(ctx, typeof eventType === 'string' ? eventType : 'unparsed');
+        return;
+      }
+    }
     const msg = parseRunnerAgentEvent(data);
     if (!msg) return;
     if (!allowRunnerEvent(RUNNER_AGENT_EVENT, msg as unknown as Record<string, unknown>)) return;

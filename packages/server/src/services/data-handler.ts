@@ -28,6 +28,7 @@ import { log } from '../lib/logger.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
+import { relayToThreadStream, relayToUser } from './ws-relay.js';
 
 // Create shared repository instances (lazy-initialized)
 let _messageRepo: ReturnType<typeof createMessageRepository> | null = null;
@@ -390,6 +391,36 @@ async function assertDataOwnership(
   return { ok: true };
 }
 
+// Statuses that end a run. Only these are re-broadcast from the persistence
+// path: 'waiting' must NOT be, because the client's status handler would apply
+// it without the waitingReason/permissionRequest payload that only the live
+// agent:status event carries (clobbering an on-screen permission prompt).
+const TERMINAL_THREAD_STATUSES = new Set(['completed', 'failed', 'stopped', 'interrupted']);
+
+/**
+ * Mirror a persisted terminal-status change to the owner's browsers (and the
+ * sharee stream room) as `thread:updated`.
+ *
+ * The live `agent:result`/`agent:status` events travel a lossy path — the
+ * runner drops them while the tunnel is down, and the server's per-socket rate
+ * limit sheds them during chunk storms — while this data-channel write is the
+ * reliable signal that the run actually ended. Without this mirror, a lost
+ * result event leaves every open tab stuck on "processing" until a manual
+ * refresh, even though the DB already says the thread completed.
+ */
+function notifyTerminalStatusPersisted(
+  runnerUserId: string | null,
+  threadId: unknown,
+  updates: unknown,
+): void {
+  const status = (updates as { status?: unknown } | null)?.status;
+  if (!runnerUserId || typeof threadId !== 'string') return;
+  if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
+  const event = { type: 'thread:updated', threadId, data: { status } };
+  relayToUser(runnerUserId, event);
+  relayToThreadStream(threadId, event);
+}
+
 /**
  * Handle a data persistence message from a runner (Socket.IO ack pattern).
  * Returns the response data instead of calling sendToRunner.
@@ -440,6 +471,7 @@ export async function handleDataMessageWithAck(
       case 'data:update_thread': {
         const threadRepo = getThreadRepo();
         await threadRepo.updateThread(data.payload.threadId, data.payload.updates);
+        notifyTerminalStatusPersisted(runnerUserId, data.payload.threadId, data.payload.updates);
         return { type: 'data:update_thread_response', ok: true };
       }
       case 'data:update_message': {

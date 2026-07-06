@@ -4,7 +4,7 @@ import { log } from '../../lib/logger.js';
 import { clearSocketRate } from '../socketio-rate-limit.js';
 import { setupRunnerControlHandlers } from './runner-control.js';
 import { setupRunnerDataHandlers } from './runner-data.js';
-import { setupRunnerEventHandlers } from './runner-events.js';
+import { cleanupRunnerEventState, setupRunnerEventHandlers } from './runner-events.js';
 import { getIO } from './state.js';
 
 /** Pending offline timers — cancelled if the runner reconnects quickly. */
@@ -105,6 +105,8 @@ export function setupRunnerNamespace(): void {
 
     socket.on('disconnect', async (reason) => {
       clearSocketRate(socket.id);
+      clearSocketRate(`${socket.id}:critical`);
+      cleanupRunnerEventState(socket.id);
       log.warn('Runner disconnected from Socket.IO', {
         namespace: 'socketio',
         runnerId,

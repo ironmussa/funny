@@ -43,6 +43,15 @@ describe('socketio runner namespace security', () => {
     );
   });
 
+  test('critical agent events bypass the chunk-storm limit under their own cap', () => {
+    // agent:status/result/error must not be shed with streaming chunks — a
+    // dropped terminal event leaves browsers stuck on "processing" — but the
+    // bypass still needs its own (smaller) budget so it can't be abused as an
+    // unlimited channel.
+    expect(source).toMatch(/CRITICAL_AGENT_EVENT_TYPES/);
+    expect(source).toMatch(/isRateLimited\(`\$\{ctx\.socket\.id\}:critical`,\s*100,\s*10_000\)/);
+  });
+
   test('gates threadId side effects on thread ownership before status/event writes', () => {
     // The relay check validates msg.userId, not the nested event.threadId.
     // updateThreadStatus / terminal+scheduler publishes must be gated on

@@ -56,7 +56,9 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
             messageId,
             error: result.error.message,
           });
-          toast.error(t('thread.forkFailed', 'Failed to fork conversation'));
+          toast.error(
+            result.error.message || t('thread.forkFailed', 'Failed to fork conversation'),
+          );
           return;
         }
         const newThread = result.value;
@@ -125,7 +127,9 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
             messageId,
             error: result.error.message,
           });
-          toast.error(t('thread.forkAndRewindFailed', 'Failed to fork and rewind'));
+          toast.error(
+            result.error.message || t('thread.forkAndRewindFailed', 'Failed to fork and rewind'),
+          );
           return;
         }
         const newThread = result.value.thread;

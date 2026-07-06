@@ -228,6 +228,23 @@ describe('Thread routes — runner proxy', () => {
       });
       expect(res.status).toBe(502);
     });
+
+    test('preserves runner error messages', async () => {
+      tunnelFetch.mockImplementationOnce(async () => ({
+        status: 400,
+        headers: {},
+        body: JSON.stringify({ error: 'Rewind is only available for Claude threads' }),
+      }));
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').post('/api/threads/t1/fork', {
+        messageId: 'm-anchor',
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Rewind is only available for Claude threads' });
+    });
   });
 
   describe('DELETE /api/threads/:id — tenant isolation', () => {

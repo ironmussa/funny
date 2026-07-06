@@ -12,6 +12,7 @@ import {
   TIMESTAMP_HEADER,
   signForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   createThreadRepository,
   createMessageRepository,
@@ -98,6 +99,7 @@ const schedulerWorkflowEventBodySchema = z
     data: z.unknown().optional(),
   })
   .passthrough();
+const runnerErrorBodySchema = z.object({ error: z.string().optional() }).passthrough();
 
 const threadDetailQuerySchema = z.object({
   messageLimit: z.coerce.number().int().min(1).max(200).optional(),
@@ -245,6 +247,12 @@ function buildForwardHeaders(
   headers[TIMESTAMP_HEADER] = String(timestamp);
   headers[NONCE_HEADER] = nonce;
   return headers;
+}
+
+function runnerErrorMessage(body: string): string {
+  const parsed = parseStoredJson(runnerErrorBodySchema, body, 'runner error response');
+  if (parsed.ok && parsed.value.error?.trim()) return parsed.value.error;
+  return body.trim() || 'Runner request failed';
 }
 
 export const threadRoutes = new Hono<ServerEnv>();
@@ -815,9 +823,7 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
       body: JSON.stringify(body),
     });
 
-    if (!result.ok) {
-      return c.json({ error: `Runner error: ${result.body}` }, result.status as any);
-    }
+    if (!result.ok) return c.json({ error: runnerErrorMessage(result.body) }, result.status as any);
 
     const threadData = JSON.parse(result.body);
 
@@ -942,9 +948,7 @@ threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
       body,
     });
 
-    if (!result.ok) {
-      return c.json({ error: `Runner error: ${result.body}` }, result.status as any);
-    }
+    if (!result.ok) return c.json({ error: runnerErrorMessage(result.body) }, result.status as any);
 
     const newThread = JSON.parse(result.body);
     const newThreadId = newThread?.id;

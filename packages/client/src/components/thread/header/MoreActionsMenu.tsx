@@ -1,5 +1,7 @@
+import type { ThreadStage } from '@funny/shared';
 import {
   Activity,
+  AppWindow,
   Check,
   ClipboardList,
   Columns3,
@@ -23,28 +25,59 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { stageConfig } from '@/lib/thread-utils';
+import type { Editor } from '@/stores/settings-store';
 
 import { useMoreActionsMenu } from './use-more-actions-menu';
 
 interface Props {
+  hideTimeline?: boolean;
+  onOpenInEditor?: (editor: Editor) => void;
   onViewOnBoard?: () => void;
 }
 
 type Menu = ReturnType<typeof useMoreActionsMenu>;
+const VISIBLE_STAGES: ThreadStage[] = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+];
 
-function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => void }) {
+function MenuItems({
+  hideTimeline = false,
+  menu,
+  onOpenInEditor,
+  onViewOnBoard,
+}: {
+  hideTimeline?: boolean;
+  menu: Menu;
+  onOpenInEditor?: (editor: Editor) => void;
+  onViewOnBoard?: () => void;
+}) {
   const { t } = useTranslation();
   const {
     threadId,
+    threadStage,
     hasMessages,
+    isScratchThread,
     canConvertToWorktree,
+    canShowBrowserPanel,
+    showStage,
     threadPinned,
     activityActive,
     timelineVisible,
+    browserPanelOpen,
     copiedText,
     copiedTools,
     setDeleteOpen,
@@ -52,22 +85,62 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
     handleConvertToWorktree,
     handleCopy,
     handleOpenInEditor,
+    handleStageChange,
+    handleViewOnBoard,
     togglePin,
     toggleActivity,
+    toggleBrowser,
     toggleTimeline,
   } = menu;
+  const effectiveOpenInEditor = onOpenInEditor ?? handleOpenInEditor;
+  const effectiveViewOnBoard = onViewOnBoard ?? handleViewOnBoard;
   return (
     <>
-      {onViewOnBoard && (
+      {(showStage || (threadId && !isScratchThread)) && (
         <>
-          <DropdownMenuItem
-            data-testid="header-menu-view-board"
-            onClick={onViewOnBoard}
-            className="cursor-pointer"
-          >
-            <Columns3 className="icon-base mr-2" />
-            {t('kanban.viewOnBoard', 'View on Board')}
-          </DropdownMenuItem>
+          {showStage && threadStage && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger data-testid="header-menu-stage">
+                {(() => {
+                  const StageIcon = stageConfig[threadStage].icon;
+                  return <StageIcon className="icon-base mr-2" />;
+                })()}
+                {t('kanban.stage', 'Stage')}
+                <span className="text-muted-foreground ml-auto pl-2 text-xs">
+                  {t(stageConfig[threadStage].labelKey)}
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  {VISIBLE_STAGES.map((stage) => {
+                    const Icon = stageConfig[stage].icon;
+                    return (
+                      <DropdownMenuItem
+                        key={stage}
+                        data-testid={`header-menu-stage-${stage}`}
+                        onClick={() => handleStageChange(stage)}
+                        className="cursor-pointer"
+                      >
+                        <Icon className="icon-base mr-2" />
+                        {t(stageConfig[stage].labelKey)}
+                        {stage === threadStage && <Check className="icon-base ml-auto pl-1" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          )}
+          {threadId && !isScratchThread && (
+            <DropdownMenuItem
+              data-testid="header-menu-view-board"
+              onClick={effectiveViewOnBoard}
+              className="cursor-pointer"
+            >
+              <Columns3 className="icon-base mr-2" />
+              {t('kanban.viewOnBoard', 'View on Board')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
         </>
       )}
@@ -79,7 +152,7 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
         <Activity className={`icon-base mr-2 ${activityActive ? 'text-primary' : ''}`} />
         {t('activity.title', 'Activity')}
       </DropdownMenuItem>
-      {threadId && (
+      {threadId && !hideTimeline && (
         <DropdownMenuItem
           data-testid="header-menu-toggle-timeline"
           onClick={toggleTimeline}
@@ -87,6 +160,16 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
         >
           <Milestone className={`icon-base mr-2 ${timelineVisible ? 'text-primary' : ''}`} />
           {t('thread.toggleTimeline', 'Toggle Timeline')}
+        </DropdownMenuItem>
+      )}
+      {canShowBrowserPanel && (
+        <DropdownMenuItem
+          data-testid="header-menu-browser-panel"
+          onClick={toggleBrowser}
+          className="cursor-pointer"
+        >
+          <AppWindow className={`icon-base mr-2 ${browserPanelOpen ? 'text-primary' : ''}`} />
+          {t('projectHeader.browserPanel', 'Browser annotator')}
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />
@@ -113,7 +196,9 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
         {t('thread.copyWithTools', 'Copy with tool calls')}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <OpenInEditorSubmenu testId="header-menu-open-editor" onPick={handleOpenInEditor} />
+      {!isScratchThread && (
+        <OpenInEditorSubmenu testId="header-menu-open-editor" onPick={effectiveOpenInEditor} />
+      )}
       {threadId && canConvertToWorktree && (
         <>
           <DropdownMenuSeparator />
@@ -176,7 +261,11 @@ function MenuItems({ menu, onViewOnBoard }: { menu: Menu; onViewOnBoard?: () => 
  *
  * Extracted from ProjectHeader.tsx as part of the god-file split.
  */
-export const MoreActionsMenu = memo(function MoreActionsMenu({ onViewOnBoard }: Props) {
+export const MoreActionsMenu = memo(function MoreActionsMenu({
+  hideTimeline = false,
+  onOpenInEditor,
+  onViewOnBoard,
+}: Props) {
   const { t } = useTranslation();
   const menu = useMoreActionsMenu();
   const {
@@ -212,7 +301,12 @@ export const MoreActionsMenu = memo(function MoreActionsMenu({ onViewOnBoard }: 
           <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" {...tooltipMenu.contentProps}>
-          <MenuItems menu={menu} onViewOnBoard={onViewOnBoard} />
+          <MenuItems
+            hideTimeline={hideTimeline}
+            menu={menu}
+            onOpenInEditor={onOpenInEditor}
+            onViewOnBoard={onViewOnBoard}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
       <ConfirmDialog

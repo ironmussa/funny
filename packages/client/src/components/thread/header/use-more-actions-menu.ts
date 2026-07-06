@@ -6,8 +6,10 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { api } from '@/lib/api';
+import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
 import { type Editor } from '@/stores/settings-store';
 import {
@@ -37,10 +39,15 @@ export function useMoreActionsMenu() {
   const threadMode = useThreadSelector((tt) => tt?.mode);
   const threadBranch = useThreadSelector((tt) => (tt ? resolveThreadBranch(tt) : undefined));
   const threadPinned = useThreadSelector((tt) => tt?.pinned);
+  const threadStage = useThreadSelector((tt) => tt?.stage);
   const threadWorktreePath = useThreadWorktreePath();
+  const isScratchThread = useThreadSelector((tt) => variant.isScratch(tt));
   const hasMessages = useThreadSelector((tt) => (tt?.messages?.length ?? 0) > 0);
   const threadStatus = useThreadStatus();
   const pinThread = useThreadStore((s) => s.pinThread);
+  const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
+  const deleteScratchThread = useThreadStore((s) => s.deleteScratchThread);
+  const menuSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const project = useProjectStore((s) =>
     threadProjectId ? s.projects.find((p) => p.id === threadProjectId) : undefined,
   );
@@ -50,9 +57,12 @@ export function useMoreActionsMenu() {
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
   const activityActive = reviewPaneOpen && rightPaneTab === 'activity';
+  const browserPanelOpen = useBrowserPanelStore((s) => s.open);
+  const toggleBrowserPanel = useBrowserPanelStore((s) => s.togglePanel);
 
   const [copiedText, copyText] = useCopyToClipboard();
   const [copiedTools, copyTools] = useCopyToClipboard();
@@ -63,8 +73,11 @@ export function useMoreActionsMenu() {
 
   const isWorktree = threadMode === 'worktree' && !!threadBranch;
   const isBusy = threadStatus === 'running' || threadStatus === 'setting_up';
-  const canConvertToWorktree = threadMode !== 'worktree' && !isBusy;
+  const canConvertToWorktree =
+    useThreadSelector((tt) => variant.canConvertToWorktree(tt)) && !isBusy;
   const sourceBranch = threadBranch || projectBranch;
+  const canShowBrowserPanel = !!menuSelectedProjectId && !isScratchThread;
+  const showStage = !!threadId && !!threadStage && threadStage !== 'archived' && !isScratchThread;
 
   const tooltipMenu = useTooltipMenu();
 
@@ -96,16 +109,28 @@ export function useMoreActionsMenu() {
   const handleDeleteConfirm = useCallback(async () => {
     if (!threadId) return;
     const thread = getThreadById(threadId);
-    const projId = thread?.projectId;
-    const title = thread?.title;
-    if (!projId) return;
+    if (!thread) return;
+    const title = thread.title;
     setDeleteLoading(true);
+    if (variant.isScratch(thread)) {
+      await deleteScratchThread(threadId);
+      setDeleteLoading(false);
+      setDeleteOpen(false);
+      toast.success(t('toast.threadDeleted', { title }));
+      navigate(buildPath('/'));
+      return;
+    }
+    const projId = thread.projectId;
+    if (!projId) {
+      setDeleteLoading(false);
+      return;
+    }
     await useThreadStore.getState().deleteThread(threadId, projId);
     setDeleteLoading(false);
     setDeleteOpen(false);
     toast.success(t('toast.threadDeleted', { title }));
     navigate(buildPath(`/projects/${projId}`));
-  }, [navigate, t, threadId]);
+  }, [deleteScratchThread, navigate, t, threadId]);
 
   const handleCopy = useCallback(
     (includeToolCalls: boolean) => {
@@ -136,8 +161,14 @@ export function useMoreActionsMenu() {
 
   const togglePin = useCallback(() => {
     if (!threadId || !threadProjectId) return;
-    pinThread(threadId, threadProjectId, !threadPinned);
-  }, [pinThread, threadId, threadProjectId, threadPinned]);
+    const next = !threadPinned;
+    pinThread(threadId, threadProjectId, next);
+    toast.success(
+      next
+        ? t('toast.threadPinned', 'Thread pinned')
+        : t('toast.threadUnpinned', 'Thread unpinned'),
+    );
+  }, [pinThread, t, threadId, threadProjectId, threadPinned]);
 
   const toggleActivity = useCallback(() => {
     setActivityPaneOpen(!activityActive);
@@ -147,16 +178,40 @@ export function useMoreActionsMenu() {
     setTimelineVisible(!timelineVisible);
   }, [timelineVisible, setTimelineVisible]);
 
+  const toggleBrowser = useCallback(() => {
+    toggleBrowserPanel();
+  }, [toggleBrowserPanel]);
+
+  const handleViewOnBoard = useCallback(() => {
+    if (!threadId || !threadProjectId) return;
+    setReviewPaneOpen(false);
+    navigate(buildPath(`/kanban?project=${threadProjectId}&highlight=${threadId}`));
+  }, [navigate, setReviewPaneOpen, threadId, threadProjectId]);
+
+  const handleStageChange = useCallback(
+    (stage: NonNullable<typeof threadStage>) => {
+      if (!threadId || !threadProjectId) return;
+      updateThreadStage(threadId, threadProjectId, stage);
+    },
+    [threadId, threadProjectId, updateThreadStage],
+  );
+
   return {
     threadId,
+    threadProjectId,
     threadTitle,
+    threadStage,
     hasMessages,
     isWorktree,
+    isScratchThread,
     canConvertToWorktree,
+    canShowBrowserPanel,
+    showStage,
     threadPinned,
     sourceBranch,
     activityActive,
     timelineVisible,
+    browserPanelOpen,
     copiedText,
     copiedTools,
     deleteOpen,
@@ -171,8 +226,11 @@ export function useMoreActionsMenu() {
     handleDeleteConfirm,
     handleCopy,
     handleOpenInEditor,
+    handleStageChange,
+    handleViewOnBoard,
     togglePin,
     toggleActivity,
     toggleTimeline,
+    toggleBrowser,
   };
 }

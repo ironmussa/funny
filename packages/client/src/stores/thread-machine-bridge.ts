@@ -19,7 +19,17 @@ export type { ThreadDataSnapshot };
 
 // ── Actor registry ──────────────────────────────────────────────
 
+const THREAD_ACTOR_LIMIT = 64;
 const threadActors = new Map<string, ReturnType<typeof createActor<typeof threadMachine>>>();
+
+function evictOldestThreadActorIfNeeded(): void {
+  if (threadActors.size < THREAD_ACTOR_LIMIT) return;
+  const oldestId = threadActors.keys().next().value;
+  if (!oldestId) return;
+  const oldest = threadActors.get(oldestId);
+  oldest?.stop();
+  threadActors.delete(oldestId);
+}
 
 export function getThreadActor(
   threadId: string,
@@ -27,16 +37,21 @@ export function getThreadActor(
   cost: number = 0,
 ) {
   let actor = threadActors.get(threadId);
-  if (!actor) {
-    actor = createActor(threadMachine, {
-      input: { threadId, cost, resumeReason: null } as ThreadContext,
-    });
-    actor.start();
-    if (initialStatus !== 'pending') {
-      actor.send({ type: 'SET_STATUS', status: initialStatus });
-    }
+  if (actor) {
+    threadActors.delete(threadId);
     threadActors.set(threadId, actor);
+    return actor;
   }
+
+  evictOldestThreadActorIfNeeded();
+  actor = createActor(threadMachine, {
+    input: { threadId, cost, resumeReason: null } as ThreadContext,
+  });
+  actor.start();
+  if (initialStatus !== 'pending') {
+    actor.send({ type: 'SET_STATUS', status: initialStatus });
+  }
+  threadActors.set(threadId, actor);
   return actor;
 }
 
@@ -95,6 +110,10 @@ function getDataActor(threadId: string) {
     dataActors.set(threadId, actor);
   }
   return actor;
+}
+
+export function getThreadActorCountForTests(): number {
+  return threadActors.size;
 }
 
 /** Kick off a background prefetch (no-op if already fetching/loaded). */

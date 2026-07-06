@@ -8,6 +8,10 @@
 
 import type { AgentInitInfo } from './thread-types';
 
+const MAX_BUFFERED_INIT_INFOS = 100;
+const MAX_BUFFERED_WS_THREADS = 100;
+const MAX_BUFFERED_WS_EVENTS_PER_THREAD = 200;
+
 // ── ThreadStoreInternals class ──────────────────────────────────
 
 export class ThreadStoreInternals {
@@ -88,13 +92,24 @@ export class ThreadStoreInternals {
   }
 
   setBufferedInitInfo(threadId: string, info: AgentInitInfo): void {
+    if (!this.initInfoBuffer.has(threadId) && this.initInfoBuffer.size >= MAX_BUFFERED_INIT_INFOS) {
+      const oldestId = this.initInfoBuffer.keys().next().value;
+      if (oldestId) this.initInfoBuffer.delete(oldestId);
+    }
     this.initInfoBuffer.set(threadId, info);
   }
 
   // ── WS event buffer ────────────────────────────────────────────
 
   bufferWSEvent(threadId: string, type: string, data: any): void {
+    if (!this.wsEventBuffer.has(threadId) && this.wsEventBuffer.size >= MAX_BUFFERED_WS_THREADS) {
+      const oldestId = this.wsEventBuffer.keys().next().value;
+      if (oldestId) this.wsEventBuffer.delete(oldestId);
+    }
     const buf = this.wsEventBuffer.get(threadId) ?? [];
+    if (buf.length >= MAX_BUFFERED_WS_EVENTS_PER_THREAD) {
+      buf.shift();
+    }
     buf.push({ type, data });
     this.wsEventBuffer.set(threadId, buf);
   }

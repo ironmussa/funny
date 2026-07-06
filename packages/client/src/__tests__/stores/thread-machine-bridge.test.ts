@@ -22,6 +22,8 @@ const {
   invalidateThreadData,
   isThreadDataPrefetched,
   cleanupThreadActor,
+  getThreadActor,
+  getThreadActorCountForTests,
 } = await import('@/stores/thread-machine-bridge');
 
 function fakeThread(id: string): ThreadWithMessages {
@@ -278,6 +280,22 @@ describe('thread-machine-bridge — data actors', () => {
 
     test('cleanup on unknown thread is a no-op', () => {
       expect(() => cleanupThreadActor(uniqueId('cleanup-missing'))).not.toThrow();
+    });
+  });
+
+  describe('thread actors', () => {
+    test('caps the actor registry to avoid retaining every visited thread', () => {
+      const ids = Array.from({ length: 70 }, () => uniqueId('status-actor'));
+
+      for (const id of ids) {
+        getThreadActor(id, 'running');
+      }
+
+      expect(getThreadActorCountForTests()).toBeLessThanOrEqual(64);
+
+      for (const id of ids) {
+        cleanupThreadActor(id);
+      }
     });
   });
 });

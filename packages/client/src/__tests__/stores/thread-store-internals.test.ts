@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 
 import {
+  ThreadStoreInternals,
   getSelectGeneration,
   nextSelectGeneration,
   invalidateSelectThread,
@@ -54,6 +55,21 @@ describe('init info buffer', () => {
     getBufferedInitInfo('t2');
     expect(getBufferedInitInfo('t2')).toBeUndefined();
   });
+
+  test('setBufferedInitInfo caps buffered thread count and evicts oldest info', () => {
+    const internals = new ThreadStoreInternals();
+
+    for (let i = 0; i < 101; i++) {
+      internals.setBufferedInitInfo(`thread-${i}`, {
+        tools: [],
+        cwd: `/tmp/${i}`,
+        model: 'sonnet',
+      });
+    }
+
+    expect(internals.getBufferedInitInfo('thread-0')).toBeUndefined();
+    expect(internals.getBufferedInitInfo('thread-100')?.cwd).toBe('/tmp/100');
+  });
 });
 
 describe('WS event buffer', () => {
@@ -94,6 +110,30 @@ describe('WS event buffer', () => {
     const t2Events = getAndClearWSBuffer('t2');
     expect(t1Events![0].data.content).toBe('from t1');
     expect(t2Events![0].data.content).toBe('from t2');
+  });
+
+  test('bufferWSEvent caps events per thread and keeps newest events', () => {
+    const internals = new ThreadStoreInternals();
+
+    for (let i = 0; i < 205; i++) {
+      internals.bufferWSEvent('busy-thread', 'message', { index: i });
+    }
+
+    const events = internals.getAndClearWSBuffer('busy-thread');
+    expect(events).toHaveLength(200);
+    expect(events![0].data.index).toBe(5);
+    expect(events!.at(-1)!.data.index).toBe(204);
+  });
+
+  test('bufferWSEvent caps buffered thread count and evicts oldest thread', () => {
+    const internals = new ThreadStoreInternals();
+
+    for (let i = 0; i < 101; i++) {
+      internals.bufferWSEvent(`thread-${i}`, 'message', { index: i });
+    }
+
+    expect(internals.getAndClearWSBuffer('thread-0')).toBeUndefined();
+    expect(internals.getAndClearWSBuffer('thread-100')![0].data.index).toBe(100);
   });
 });
 

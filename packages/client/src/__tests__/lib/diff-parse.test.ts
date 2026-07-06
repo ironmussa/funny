@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 
-import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
+import { countDiffStats, parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 
 const unified = [
   'diff --git a/src/a.ts b/src/a.ts',
@@ -23,6 +23,36 @@ describe('parseDiffOld', () => {
 describe('parseDiffNew', () => {
   test('skips headers and reconstructs the right side', () => {
     expect(parseDiffNew(unified)).toBe(['unchanged', 'added', 'tail'].join('\n'));
+  });
+});
+
+describe('countDiffStats', () => {
+  test('counts added/removed lines, ignoring headers', () => {
+    expect(countDiffStats(unified)).toEqual({ additions: 1, deletions: 1 });
+  });
+
+  test('sums across concatenated per-edit diffs (session fallback format)', () => {
+    const concatenated = [
+      '--- a/src/a.ts',
+      '+++ b/src/a.ts',
+      '@@ -1,1 +1,2 @@',
+      '-one',
+      '+uno',
+      '+dos',
+      '--- a/src/a.ts',
+      '+++ b/src/a.ts',
+      '@@ -5,1 +5,1 @@',
+      '-five',
+      '+cinco',
+    ].join('\n');
+    expect(countDiffStats(concatenated)).toEqual({ additions: 3, deletions: 2 });
+  });
+
+  test('returns zeros when there are no hunks', () => {
+    expect(countDiffStats('diff --git a/x b/x\n--- a/x\n+++ b/x')).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
   });
 });
 

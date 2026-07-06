@@ -33,6 +33,31 @@ export function parseDiffOld(unifiedDiff: string): string {
 }
 
 /**
+ * Count added/removed lines in a unified diff. Handles input made of several
+ * concatenated per-file diffs (the session tool-call fallback joins one diff
+ * per edit), using the same header-skipping logic as {@link parseDiffOld}.
+ */
+export function countDiffStats(unifiedDiff: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  let inHunk = false;
+
+  for (const line of unifiedDiff.split('\n')) {
+    if (line.startsWith('@@')) {
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk) continue;
+    if (line.startsWith('---') || line.startsWith('+++')) continue;
+
+    if (line.startsWith('+')) additions++;
+    else if (line.startsWith('-')) deletions++;
+  }
+
+  return { additions, deletions };
+}
+
+/**
  * Parse the new (right) side of a unified diff.
  *
  * Same header-skipping logic as {@link parseDiffOld}, but keeps added (`+`)

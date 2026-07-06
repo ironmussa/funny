@@ -106,6 +106,29 @@ describe('ChangedFilesSummary', () => {
     await waitFor(() => expect(screen.getByTestId('diff-toggle-word-wrap')).toBeInTheDocument());
   });
 
+  test('backfills +/- stats from tool-call diffs when the snapshot is stat-less', () => {
+    // A session that commits before finishing snapshots against a clean working
+    // tree, so its rows arrive without additions/deletions. The card must derive
+    // them from the session's tool-call fallback diffs instead of showing bare
+    // file names.
+    const statless: FileDiffSummary[] = [
+      { path: 'src/main.ts', status: 'modified', staged: false },
+    ];
+    const fallbackDiffs = new Map([
+      [
+        'src/main.ts',
+        '--- a/src/main.ts\n+++ b/src/main.ts\n@@ -1,1 +1,2 @@\n-old\n+new one\n+new two',
+      ],
+    ]);
+    renderWithProviders(
+      <ChangedFilesSummary threadId="t1" files={statless} fallbackDiffs={fallbackDiffs} />,
+    );
+
+    // Derived stats show both in the header total and on the file row.
+    expect(screen.getAllByText('+2')).toHaveLength(2);
+    expect(screen.getAllByText('-1')).toHaveLength(2);
+  });
+
   test('uses the session fallback diff when the live diff is empty', async () => {
     const files = [file('index.ts', 6, 2)];
     const fallbackDiffs = new Map([

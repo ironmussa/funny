@@ -9,7 +9,7 @@ import { ExpandedDiffDialog } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
-import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
+import { countDiffStats, parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
 
 /**
@@ -44,15 +44,31 @@ export function ChangedFilesSummary({
   const [diffCache, setDiffCache] = useState<Map<string, string>>(new Map());
   const [loadingDiff, setLoadingDiff] = useState<string | null>(null);
 
+  // A snapshot taken after the session committed (or reverted) its changes sees
+  // a clean working tree, so its rows arrive stat-less — the +/- would silently
+  // disappear from the card. Backfill those rows from the session's tool-call
+  // diffs, the same source the diff popup already falls back to.
+  const effectiveFiles = useMemo(() => {
+    if (!fallbackDiffs?.size) return files;
+    return files.map((f) => {
+      if (f.additions != null || f.deletions != null) return f;
+      const fallback = fallbackDiffs.get(f.path);
+      if (!fallback) return f;
+      const { additions, deletions } = countDiffStats(fallback);
+      if (additions === 0 && deletions === 0) return f;
+      return { ...f, additions, deletions };
+    });
+  }, [files, fallbackDiffs]);
+
   const totals = useMemo(() => {
     let additions = 0;
     let deletions = 0;
-    for (const f of files) {
+    for (const f of effectiveFiles) {
       additions += f.additions ?? 0;
       deletions += f.deletions ?? 0;
     }
     return { additions, deletions };
-  }, [files]);
+  }, [effectiveFiles]);
 
   const loadDiffForFile = useCallback(
     async (filePath: string) => {
@@ -159,7 +175,7 @@ export function ChangedFilesSummary({
 
       {/* Per-file rows — click a name to open the thread's diff popup */}
       <div className="flex flex-col gap-0.5">
-        {files.map((f) => (
+        {effectiveFiles.map((f) => (
           <div
             key={f.path}
             data-testid={`changed-files-row-${f.path}`}

@@ -77,6 +77,8 @@ export interface GitHubPR {
     login: string;
     avatar_url: string;
   }>;
+  /** Number of commits currently in the pull request. Present when the list endpoint can resolve it. */
+  commits?: number;
   merged_at: string | null;
   /** Last commit currently at the PR head. Present when the list endpoint can resolve head.sha. */
   last_commit?: PRCommit | null;

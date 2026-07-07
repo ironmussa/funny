@@ -40,6 +40,7 @@ function makePR(overrides: Partial<GitHubPR> = {}): GitHubPR {
     updated_at: '2026-01-01T00:01:00.000Z',
     head: { ref: 'feature/pr-branch', label: 'acme:feature/pr-branch' },
     base: { ref: 'qa', label: 'acme:qa' },
+    commits: 2,
     draft: false,
     labels: [],
     merged_at: null,
@@ -97,5 +98,19 @@ describe('PinnedPRCard', () => {
 
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('Unlinked Author')).toBeInTheDocument();
+  });
+
+  test('shows the merge summary and diff link in the header', () => {
+    renderWithProviders(<PinnedPRCard pr={makePR()} projectId="project-1" />);
+
+    const mergeLine = screen.getByTestId('pinned-pr-merge-line-51');
+    expect(mergeLine).toHaveTextContent('argenisleon wants to merge 2 commits into');
+    expect(mergeLine).toHaveTextContent('qa');
+    expect(mergeLine).toHaveTextContent('from');
+    expect(mergeLine).toHaveTextContent('feature/pr-branch');
+    expect(screen.getByTestId('pr-diff-link-51')).toHaveAttribute(
+      'href',
+      'https://github.com/acme/repo/pull/51/files',
+    );
   });
 });

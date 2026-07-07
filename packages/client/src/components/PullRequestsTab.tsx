@@ -12,6 +12,7 @@ import {
   hasActivePRFilters,
   type PRFilterState,
 } from '@/components/pull-requests/PRFilterBar';
+import { PRMergeLine } from '@/components/pull-requests/PRMergeLine';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -272,12 +273,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
         className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
         data-testid={`pr-item-${pr.number}`}
       >
-        <button
-          type="button"
-          onClick={() => setSelectedPR(pr)}
-          className="flex min-w-0 flex-1 flex-col gap-1.5 text-left"
-          data-testid={`pr-item-open-${pr.number}`}
-        >
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-baseline gap-1.5">
             <PRBadge
               prNumber={pr.number}
@@ -286,8 +282,16 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               size="xxs"
               data-testid={`pr-number-link-${pr.number}`}
             />
-            <span className="leading-tight font-medium">{pr.title}</span>
+            <button
+              type="button"
+              onClick={() => setSelectedPR(pr)}
+              className="focus-visible:ring-ring min-w-0 text-left leading-tight font-medium hover:underline focus-visible:ring-1 focus-visible:outline-none"
+              data-testid={`pr-item-open-${pr.number}`}
+            >
+              {pr.title}
+            </button>
           </div>
+          <PRMergeLine pr={pr} data-testid={`pr-merge-line-${pr.number}`} />
           {pr.labels.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {pr.labels.map((label) => {
@@ -332,7 +336,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               </>
             )}
           </div>
-        </button>
+        </div>
         <PRActionsMenu
           prNumber={pr.number}
           branch={pr.head.ref}

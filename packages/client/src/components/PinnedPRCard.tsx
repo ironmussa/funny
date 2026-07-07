@@ -32,6 +32,7 @@ import { AuthorBadge } from '@/components/AuthorBadge';
 import { PRBadge } from '@/components/PRBadge';
 import { getLastCommitAuthor } from '@/components/pull-requests/last-commit-author';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
+import { PRMergeLine } from '@/components/pull-requests/PRMergeLine';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -720,6 +721,7 @@ export function PinnedPRCard({
               />
               <span className="text-sm font-semibold">{pr.title}</span>
             </div>
+            <PRMergeLine pr={pr} data-testid={`pinned-pr-merge-line-${pr.number}`} />
             <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
               {pr.user && (
                 <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />

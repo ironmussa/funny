@@ -160,6 +160,7 @@ describe('addLastCommitToPRs', () => {
           updated_at: '2026-01-02T00:00:00Z',
           head: { ref: 'fix', label: 'o:fix', sha: 'abc123' },
           base: { ref: 'main', label: 'o:main' },
+          commits: 4,
           draft: false,
           labels: [],
           merged_at: null,
@@ -171,6 +172,7 @@ describe('addLastCommitToPRs', () => {
     );
 
     expect(fetchGitHubPath).toHaveBeenCalledWith('/repos/o/r/commits/abc123');
+    expect(pr.commits).toBe(4);
     expect(pr.last_commit?.author?.login).toBe('alice');
     expect(pr.last_commit?.author_name).toBe('Raw Author');
   });

@@ -83,6 +83,7 @@ function makePR(overrides: Partial<GitHubPR> = {}): GitHubPR {
     updated_at: '2026-01-01T00:01:00.000Z',
     head: { ref: 'feature/pr-branch', label: 'acme:feature/pr-branch' },
     base: { ref: 'qa', label: 'acme:qa' },
+    commits: 2,
     draft: false,
     labels: [],
     merged_at: null,
@@ -157,7 +158,9 @@ describe('PullRequestsTab', () => {
           makePR(),
           makePR({
             number: 52,
+            html_url: 'https://github.com/acme/repo/pull/52',
             head: { ref: 'other-branch', label: 'acme:other-branch' },
+            commits: 3,
             last_commit: {
               sha: 'abc123',
               message: 'fix: handle edge case',
@@ -191,5 +194,14 @@ describe('PullRequestsTab', () => {
     expect(screen.getByText(/Updated/)).toBeInTheDocument();
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
+    const mergeLine = screen.getByTestId('pr-merge-line-52');
+    expect(mergeLine).toHaveTextContent('argenisleon wants to merge 3 commits into');
+    expect(mergeLine).toHaveTextContent('qa');
+    expect(mergeLine).toHaveTextContent('from');
+    expect(mergeLine).toHaveTextContent('other-branch');
+    expect(screen.getByTestId('pr-diff-link-52')).toHaveAttribute(
+      'href',
+      'https://github.com/acme/repo/pull/52/files',
+    );
   });
 });

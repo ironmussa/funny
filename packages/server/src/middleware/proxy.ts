@@ -264,6 +264,11 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   const tunnelPath = `${path}${url.search}`;
   const tunnelActive = deps.isRunnerConnected(runnerId);
 
+  // Safe (idempotent, side-effect-free) methods may be retried across
+  // transports without risk of duplicating work. Unsafe methods (POST/PUT/…)
+  // must not be replayed after a tunnel timeout — see the timeout handler below.
+  const isSafeMethod = c.req.method === 'GET' || c.req.method === 'HEAD';
+
   // Local bunx/dev runs register a loopback httpUrl. Prefer direct HTTP for
   // those requests so regular API calls do not compete with high-volume agent
   // stream persistence over the Socket.IO tunnel.
@@ -318,28 +323,46 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       });
     } catch (tunnelErr) {
       // On timeout, the runner already received the request and may still be
-      // processing it. Falling back to direct HTTP would deliver the request
-      // a second time and duplicate side effects (e.g., persisting a user
-      // message twice and enqueuing two prompts on agents that await the
-      // full turn in sendPrompt — Gemini/Codex/Pi). Surface 504 instead.
+      // processing it. For UNSAFE methods, falling back to direct HTTP would
+      // deliver the request a second time and duplicate side effects (e.g.,
+      // persisting a user message twice and enqueuing two prompts on agents
+      // that await the full turn in sendPrompt — Gemini/Codex/Pi). Surface 504.
+      //
+      // Safe methods (GET/HEAD — e.g. /api/files/read) are idempotent and have
+      // no side effects, so a tunnel timeout should NOT dead-end at 504: fall
+      // through to the direct-HTTP block below and retry. This is what makes a
+      // transient tunnel stall on a plain file read recover instead of
+      // surfacing a spurious error to the user.
       if (deps.isTunnelTimeoutError(tunnelErr)) {
-        log.warn('Tunnel request timed out — not falling back', {
+        if (isSafeMethod && httpUrl) {
+          log.warn('Tunnel request timed out — retrying safe method over direct HTTP', {
+            namespace: 'proxy',
+            runnerId,
+            path,
+            method: c.req.method,
+            timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
+          });
+          // fall through to the direct-HTTP fallback below
+        } else {
+          log.warn('Tunnel request timed out — not falling back', {
+            namespace: 'proxy',
+            runnerId,
+            path,
+            method: c.req.method,
+            timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
+          });
+          return c.json(
+            { error: 'Runner did not respond in time. The request may still be processing.' },
+            504,
+          );
+        }
+      } else {
+        log.warn('Tunnel request failed', {
           namespace: 'proxy',
           runnerId,
-          path,
-          method: c.req.method,
-          timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
+          error: (tunnelErr as Error).message,
         });
-        return c.json(
-          { error: 'Runner did not respond in time. The request may still be processing.' },
-          504,
-        );
       }
-      log.warn('Tunnel request failed', {
-        namespace: 'proxy',
-        runnerId,
-        error: (tunnelErr as Error).message,
-      });
     }
   }
 

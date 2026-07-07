@@ -122,6 +122,34 @@ describe('proxyToRunner — tunnel timeout fallback', () => {
     });
   });
 
+  test('falls back to direct HTTP on tunnel timeout for a safe GET (e.g. file read)', async () => {
+    let tunnelCalls = 0;
+    let directFetchCalls = 0;
+    const deps = makeDeps({
+      tunnelFetch: (async (runnerId: string) => {
+        tunnelCalls++;
+        throw new TunnelTimeoutError(runnerId, 30_000);
+      }) as ProxyTransport['tunnelFetch'],
+      directFetch: (async () => {
+        directFetchCalls++;
+        return new Response(JSON.stringify({ content: 'file body' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as ProxyTransport['directFetch'],
+    });
+    const app = buildApp(deps);
+
+    const res = await app.request('/api/files/read?path=/some/file.ts', { method: 'GET' });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ content: 'file body' });
+    expect(tunnelCalls).toBe(1);
+    // The GET is safe/idempotent, so a tunnel timeout retries over direct HTTP
+    // instead of dead-ending at 504.
+    expect(directFetchCalls).toBe(1);
+  });
+
   test('still falls back to direct HTTP on non-timeout tunnel errors', async () => {
     let tunnelCalls = 0;
     let directFetchCalls = 0;

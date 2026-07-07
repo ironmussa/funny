@@ -92,6 +92,7 @@ export {
   getRebaseReflogEvents,
   getCommitBody,
   getCommitFiles,
+  getFileHistory,
   getCommitFileDiff,
   getUnpushedHashes,
   getUnpulledHashes,
@@ -103,6 +104,7 @@ export {
   type GraphRef,
   type GraphRefKind,
   type CommitFileEntry,
+  type FileHistoryEntry,
 } from './log.js';
 
 export {

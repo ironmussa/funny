@@ -2,6 +2,8 @@
  * Commit log and commit detail operations.
  */
 
+import { dirname, relative } from 'node:path';
+
 import { processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
@@ -115,6 +117,18 @@ export interface CommitFileEntry {
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
   additions: number;
   deletions: number;
+}
+
+export interface FileHistoryEntry {
+  hash: string;
+  shortHash: string;
+  author: string;
+  authorEmail: string;
+  relativeDate: string;
+  message: string;
+  status: CommitFileEntry['status'];
+  path: string;
+  previousPath: string | null;
 }
 
 const STATUS_MAP: Record<string, CommitFileEntry['status']> = {
@@ -813,6 +827,85 @@ export function getCommitFiles(
     })(),
     (error) => processError(String(error), 1, ''),
   );
+}
+
+/**
+ * Return the commit history for one file, following renames so the list can
+ * show both movement/rename commits and the original creation commit.
+ */
+export function getFileHistory(
+  filePath: string,
+  limit = 50,
+): ResultAsync<FileHistoryEntry[], DomainError> {
+  const COMMIT_PREFIX = 'FUNNY_FILE_HISTORY_COMMIT';
+  const format = `${COMMIT_PREFIX}%x1F%H%x1F%h%x1F%an%x1F%ae%x1F%cr%x1F%s`;
+
+  return ResultAsync.fromPromise(
+    (async () => {
+      const repoRootResult = await gitRead(['rev-parse', '--show-toplevel'], {
+        cwd: dirname(filePath),
+        reject: false,
+      });
+      if (repoRootResult.exitCode !== 0) return [];
+
+      const repoRoot = repoRootResult.stdout.trim();
+      const repoPath = relative(repoRoot, filePath).replaceAll('\\', '/');
+      if (!repoPath || repoPath.startsWith('..')) return [];
+
+      const result = await gitRead(
+        [
+          'log',
+          '--follow',
+          '--find-renames',
+          `--format=${format}`,
+          '--name-status',
+          '-n',
+          String(limit),
+          '--',
+          repoPath,
+        ],
+        { cwd: repoRoot, reject: false, maxOutputBytes: 1024 * 1024 },
+      );
+      if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+      return parseFileHistoryLog(result.stdout, COMMIT_PREFIX);
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+function parseFileHistoryLog(stdout: string, commitPrefix: string): FileHistoryEntry[] {
+  const entries: FileHistoryEntry[] = [];
+  let current: Omit<FileHistoryEntry, 'status' | 'path' | 'previousPath'> | null = null;
+
+  for (const rawLine of stdout.split('\n')) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+    if (line.startsWith(commitPrefix)) {
+      const [, hash, shortHash, author, authorEmail, relativeDate, message] = line.split('\x1f');
+      current = { hash, shortHash, author, authorEmail, relativeDate, message };
+      continue;
+    }
+    if (!current) continue;
+
+    const change = parseFileHistoryNameStatus(line);
+    if (!change) continue;
+    entries.push({ ...current, ...change });
+  }
+
+  return entries;
+}
+
+function parseFileHistoryNameStatus(
+  line: string,
+): Pick<FileHistoryEntry, 'status' | 'path' | 'previousPath'> | null {
+  const parts = line.split('\t');
+  if (parts.length < 2) return null;
+  const statusChar = parts[0][0];
+  const status = STATUS_MAP[statusChar] || 'modified';
+  if ((statusChar === 'R' || statusChar === 'C') && parts.length >= 3) {
+    return { status, previousPath: parts[1], path: parts[2] };
+  }
+  return { status, previousPath: null, path: parts[1] };
 }
 
 /**

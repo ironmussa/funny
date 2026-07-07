@@ -176,6 +176,18 @@ describe('files routes — git blame', () => {
       },
       stdio: 'pipe',
     });
+  const gitAs = (cwd: string, author: { name: string; email: string }, ...args: string[]) =>
+    execFileSync('git', args, {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: author.name,
+        GIT_AUTHOR_EMAIL: author.email,
+        GIT_COMMITTER_NAME: author.name,
+        GIT_COMMITTER_EMAIL: author.email,
+      },
+      stdio: 'pipe',
+    });
 
   beforeAll(() => {
     const tmp = mkdtempSync(join(tmpdir(), 'funny-blame-test-'));
@@ -192,6 +204,31 @@ describe('files routes — git blame', () => {
     );
     git(repoDir, 'add', 'tracked.ts');
     git(repoDir, 'commit', '-m', 'add tracked.ts');
+
+    writeFileSync(join(repoDir, 'origin.ts'), 'export const moved = true;\n', 'utf-8');
+    gitAs(repoDir, { name: 'Jhonner Creator', email: 'jhonner@test.dev' }, 'add', 'origin.ts');
+    gitAs(
+      repoDir,
+      { name: 'Jhonner Creator', email: 'jhonner@test.dev' },
+      'commit',
+      '-m',
+      'create origin.ts',
+    );
+    mkdirSync(join(repoDir, 'src'), { recursive: true });
+    gitAs(
+      repoDir,
+      { name: 'Jesus Mover', email: 'jesus@test.dev' },
+      'mv',
+      'origin.ts',
+      'src/moved.ts',
+    );
+    gitAs(
+      repoDir,
+      { name: 'Jesus Mover', email: 'jesus@test.dev' },
+      'commit',
+      '-m',
+      'move origin.ts',
+    );
 
     writeFileSync(join(outsideDir, 'secret.txt'), 'TOP SECRET', 'utf-8');
     symlinkSync(join(outsideDir, 'secret.txt'), join(repoDir, 'escape.txt'));
@@ -243,6 +280,32 @@ describe('files routes — git blame', () => {
     const escape = join(repoDir, 'escape.txt');
     const res = await app.request(`/blame?path=${encodeURIComponent(escape)}`);
     expect(res.status).toBe(403);
+  });
+
+  test('GET /history follows file moves back to the creation commit', async () => {
+    const moved = join(repoDir, 'src', 'moved.ts');
+    const res = await app.request(`/history?path=${encodeURIComponent(moved)}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{
+      author: string;
+      message: string;
+      status: string;
+      path: string;
+      previousPath: string | null;
+    }>;
+    expect(body.map((entry) => entry.author)).toEqual(['Jesus Mover', 'Jhonner Creator']);
+    expect(body[0]).toMatchObject({
+      message: 'move origin.ts',
+      status: 'renamed',
+      path: 'src/moved.ts',
+      previousPath: 'origin.ts',
+    });
+    expect(body[1]).toMatchObject({
+      message: 'create origin.ts',
+      status: 'added',
+      path: 'origin.ts',
+      previousPath: null,
+    });
   });
 });
 

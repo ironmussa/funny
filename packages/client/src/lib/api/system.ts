@@ -22,6 +22,18 @@ export interface BlameResponse {
   blamedLineCount: number;
 }
 
+export interface FileHistoryEntry {
+  hash: string;
+  shortHash: string;
+  author: string;
+  authorEmail: string;
+  relativeDate: string;
+  message: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+  path: string;
+  previousPath: string | null;
+}
+
 /** A model advertised by a dynamic-catalog ACP provider (pi / cursor / opencode). */
 export interface AcpModelEntry {
   modelId: string;
@@ -231,6 +243,8 @@ export const systemApi = {
     request<{ content: string }>(`/files/read?path=${encodeURIComponent(path)}`),
   getFileBlame: (path: string) =>
     request<BlameResponse>(`/files/blame?path=${encodeURIComponent(path)}`),
+  getFileHistory: (path: string) =>
+    request<FileHistoryEntry[]>(`/files/history?path=${encodeURIComponent(path)}`),
   writeFile: (path: string, content: string) =>
     request<{ ok: boolean }>('/files/write', {
       method: 'POST',

@@ -162,6 +162,19 @@ function isAssistantScaffold(message: { role: string; content: string; toolCalls
   return message.role === 'assistant' && (!message.content || (message.toolCalls?.length ?? 0) > 0);
 }
 
+function hasAssistantContentAfterLastUser(messages: Array<{ role: string; content?: string }>) {
+  const lastUserIndex = messages.findLastIndex((message) => message.role === 'user');
+  return messages
+    .slice(lastUserIndex + 1)
+    .some((message) => message.role === 'assistant' && !!message.content?.trim());
+}
+
+function resultTextToAssistantMessage(data: any): string | null {
+  if (typeof data?.result !== 'string') return null;
+  const result = data.result.trim();
+  return result.length > 0 ? result : null;
+}
+
 /**
  * True when the user-message run immediately before `insertionIndex` already
  * contains the buffer entry. This covers both normal appends and the case where
@@ -806,6 +819,33 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
           };
         }),
       );
+    }
+  }
+
+  const resultText = resultStatus === 'completed' ? resultTextToAssistantMessage(data) : null;
+  if (resultText && isHydrated(get(), threadId)) {
+    let appendedResultMessage = false;
+    set((s) =>
+      mutations.applyThreadDataPatch(s, threadId, (t) => {
+        if (hasAssistantContentAfterLastUser(t.messages)) return t;
+        appendedResultMessage = true;
+        const message = {
+          id: crypto.randomUUID(),
+          threadId,
+          role: 'assistant' as MessageRole,
+          content: resultText,
+          timestamp: new Date().toISOString(),
+        };
+        return {
+          ...t,
+          messages: [...t.messages, message],
+        };
+      }),
+    );
+
+    if (appendedResultMessage) {
+      const patch = patchSidebarLastAssistant(get, threadId, resultText);
+      if (Object.keys(patch).length > 0) set(patch as any);
     }
   }
 

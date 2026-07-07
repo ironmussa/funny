@@ -2,7 +2,11 @@ import type { ThreadEvent as DomainThreadEvent, ThreadWithMessages } from '@funn
 import { assign, fromPromise, setup } from 'xstate';
 
 import { api } from '@/lib/api';
+import { createClientLogger } from '@/lib/client-logger';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
+import { isExternalClaudeShell } from '@/lib/thread-variant';
+
+const log = createClientLogger('thread-data');
 
 export interface ThreadDataSnapshot {
   thread: ThreadWithMessages;
@@ -36,8 +40,30 @@ export const threadDataMachine = setup({
       ]);
       if (threadResult.isErr()) throw threadResult.error;
       if (eventsResult.isErr()) throw eventsResult.error;
+      let thread = threadResult.value;
+
+      // External Claude Code shells are synced without messages — hydrate the
+      // transcript from the runner on first open, whatever the entry point
+      // (sidebar, Activity, direct URL, Kanban). Non-fatal on failure: the
+      // shell still renders and hydration retries on the next load.
+      if (isExternalClaudeShell(thread) && (thread.messages ?? []).length === 0) {
+        const imported = await api.importExternalClaudeSession(thread.sessionId!, {
+          projectId: thread.projectId || null,
+        });
+        if (imported.isOk()) {
+          const refetched = await api.getThread(input.threadId, 50, signal, scrollOptions);
+          if (refetched.isOk()) thread = refetched.value;
+        } else {
+          log.warn('Failed to hydrate external Claude Code session', {
+            threadId: input.threadId,
+            sessionId: thread.sessionId,
+            error: String(imported.error),
+          });
+        }
+      }
+
       return {
-        thread: threadResult.value,
+        thread,
         events: eventsResult.value.events,
       };
     }),

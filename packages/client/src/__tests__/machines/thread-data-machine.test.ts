@@ -1,8 +1,27 @@
 import type { ThreadEvent as DomainThreadEvent, ThreadWithMessages } from '@funny/shared';
-import { describe, test, expect, vi } from 'vitest';
+import { okAsync, errAsync } from 'neverthrow';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { createActor, fromPromise, waitFor } from 'xstate';
 
+import { api } from '@/lib/api';
 import { threadDataMachine, type ThreadDataSnapshot } from '@/machines/thread-data-machine';
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    getThread: vi.fn(),
+    getThreadEvents: vi.fn(),
+    importExternalClaudeSession: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/client-logger', () => ({
+  createClientLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
 
 function snapshot(thread: Partial<ThreadWithMessages> = {}): ThreadDataSnapshot {
   return {
@@ -216,6 +235,101 @@ describe('threadDataMachine', () => {
       await waitFor(actor, (s) => s.matches('failed'), { timeout: 1000 });
       actor.send({ type: 'PREFETCH' });
       expect(actor.getSnapshot().value).toBe('fetching');
+      actor.stop();
+    });
+  });
+
+  describe('external Claude shell hydration (real fetcher)', () => {
+    // Regression: shells synced from external Claude Code CLI sessions are
+    // created without messages. Opening one via Activity / direct URL / Kanban
+    // must hydrate the transcript — previously only the sidebar click did,
+    // leaving the thread rendering just "Task completed" with no content.
+    const shellThread = {
+      id: 't1',
+      projectId: 'p1',
+      title: 'external shell',
+      status: 'completed',
+      createdBy: 'external',
+      sessionId: 'session-1',
+      externalRequestId: 'claude:session-1',
+      messages: [],
+    } as unknown as ThreadWithMessages;
+
+    const hydratedThread = {
+      ...shellThread,
+      messages: [{ id: 'm1', role: 'user', content: 'hola' }],
+    } as unknown as ThreadWithMessages;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(api.getThreadEvents).mockReturnValue(okAsync({ events: [] }) as any);
+      vi.mocked(api.importExternalClaudeSession).mockReturnValue(
+        okAsync({ imported: true, thread: { id: 't1' } }) as any,
+      );
+    });
+
+    function startRealActor() {
+      const actor = createActor(threadDataMachine, { input: { threadId: 't1' } });
+      actor.start();
+      actor.send({ type: 'LOAD' });
+      return actor;
+    }
+
+    test('imports and refetches when shell has no messages', async () => {
+      vi.mocked(api.getThread)
+        .mockReturnValueOnce(okAsync(shellThread) as any)
+        .mockReturnValueOnce(okAsync(hydratedThread) as any);
+
+      const actor = startRealActor();
+      const final = await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
+
+      expect(api.importExternalClaudeSession).toHaveBeenCalledWith('session-1', {
+        projectId: 'p1',
+      });
+      expect(api.getThread).toHaveBeenCalledTimes(2);
+      expect(final.context.data?.thread.messages).toHaveLength(1);
+      actor.stop();
+    });
+
+    test('does not import when the shell already has messages', async () => {
+      vi.mocked(api.getThread).mockReturnValue(okAsync(hydratedThread) as any);
+
+      const actor = startRealActor();
+      await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
+
+      expect(api.importExternalClaudeSession).not.toHaveBeenCalled();
+      expect(api.getThread).toHaveBeenCalledTimes(1);
+      actor.stop();
+    });
+
+    test('does not import for normal (non-shell) threads without messages', async () => {
+      const normalThread = {
+        id: 't1',
+        projectId: 'p1',
+        title: 'normal',
+        status: 'completed',
+        messages: [],
+      } as unknown as ThreadWithMessages;
+      vi.mocked(api.getThread).mockReturnValue(okAsync(normalThread) as any);
+
+      const actor = startRealActor();
+      await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
+
+      expect(api.importExternalClaudeSession).not.toHaveBeenCalled();
+      actor.stop();
+    });
+
+    test('still loads the shell when the import fails', async () => {
+      vi.mocked(api.getThread).mockReturnValue(okAsync(shellThread) as any);
+      vi.mocked(api.importExternalClaudeSession).mockReturnValue(
+        errAsync(new Error('runner offline')) as any,
+      );
+
+      const actor = startRealActor();
+      const final = await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
+
+      expect(final.context.data?.thread.id).toBe('t1');
+      expect(api.getThread).toHaveBeenCalledTimes(1);
       actor.stop();
     });
   });

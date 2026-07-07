@@ -74,6 +74,27 @@ export function canLoadGitHistory(thread: ThreadGitContextLike): boolean {
   return canDoGitOps(thread);
 }
 
+// ── External Claude Code sessions ────────────────────────────────
+
+/**
+ * True for thread shells synced from an external Claude Code CLI session
+ * (`~/.claude/projects` JSONL). These rows are created WITHOUT messages by
+ * `syncExternalClaudeSessionThreads` and must be hydrated via
+ * `api.importExternalClaudeSession` the first time they are opened —
+ * otherwise the thread view renders only the "Task completed" card.
+ * The thread-data machine performs that hydration on load; sidebar delete
+ * uses this predicate to also dismiss the session on the runner.
+ */
+export function isExternalClaudeShell(
+  thread: Pick<Thread, 'createdBy' | 'sessionId' | 'externalRequestId'> | null | undefined,
+): boolean {
+  return (
+    thread?.createdBy === 'external' &&
+    !!thread.sessionId &&
+    thread.externalRequestId?.startsWith('claude:') === true
+  );
+}
+
 // ── Sharing ──────────────────────────────────────────────────────
 
 /**

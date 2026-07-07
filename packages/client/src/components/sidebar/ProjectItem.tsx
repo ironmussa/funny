@@ -44,6 +44,7 @@ import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { openDirectoryInEditor } from '@/lib/editor-utils';
 import { openProjectTerminal } from '@/lib/open-terminal-tab';
+import { isExternalClaudeShell } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -53,7 +54,6 @@ import {
   gitStatusForThreadFromState,
   gitStatusSidebarFingerprint,
 } from '@/stores/git-status-store';
-import { invalidateThreadData } from '@/stores/thread-machine-bridge';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -109,19 +109,11 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     });
   }, [thread.id, projectId]);
 
-  const handleSelect = useCallback(async () => {
-    if (isExternalClaudeShell(thread) && thread.sessionId) {
-      const result = await api.importExternalClaudeSession(thread.sessionId, {
-        projectId,
-      });
-      if (result.isErr()) {
-        toastError(result.error);
-        return;
-      }
-      invalidateThreadData(thread.id);
-    }
+  // External Claude shells are hydrated by the thread-data machine on load
+  // (see thread-data-machine.ts) — selection just navigates.
+  const handleSelect = useCallback(() => {
     onSelectThread(projectId, thread.id);
-  }, [onSelectThread, projectId, thread]);
+  }, [onSelectThread, projectId, thread.id]);
   const handleRename = useCallback(
     (newTitle: string) => onRenameThread(projectId, thread.id, newTitle),
     [onRenameThread, projectId, thread.id],
@@ -165,14 +157,6 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     </div>
   );
 });
-
-function isExternalClaudeShell(thread: Thread): boolean {
-  return (
-    thread.createdBy === 'external' &&
-    !!thread.sessionId &&
-    thread.externalRequestId?.startsWith('claude:') === true
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────
 

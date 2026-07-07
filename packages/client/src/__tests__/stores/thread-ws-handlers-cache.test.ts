@@ -242,6 +242,87 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(mockInvalidate).toHaveBeenCalledWith(THREAD_ID);
   });
 
+  test('handleWSResult appends result text when the turn has no assistant content', () => {
+    const userMessage = {
+      id: 'u1',
+      threadId: THREAD_ID,
+      role: 'user',
+      content: 'haz la tarea',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    };
+    const state = makeState({
+      activeThread: { ...makeState().activeThread, messages: [userMessage] },
+      threadDataById: {
+        [THREAD_ID]: { ...makeState().activeThread, messages: [userMessage] },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSResult(get, set, THREAD_ID, {
+      status: 'completed',
+      cost: 0,
+      duration: 1,
+      result: 'Contenido final del agente',
+    });
+
+    const messages = state.threadDataById[THREAD_ID].messages;
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      threadId: THREAD_ID,
+      role: 'assistant',
+      content: 'Contenido final del agente',
+    });
+    expect(state.threadsById[THREAD_ID].lastAssistantMessage).toBe('Contenido final del agente');
+  });
+
+  test('handleWSResult does not duplicate result text when assistant content already exists', () => {
+    const userMessage = {
+      id: 'u1',
+      threadId: THREAD_ID,
+      role: 'user',
+      content: 'haz la tarea',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    };
+    const assistantMessage = {
+      id: 'a1',
+      threadId: THREAD_ID,
+      role: 'assistant',
+      content: 'Ya quedó resuelto',
+      timestamp: '2026-01-01T00:00:01.000Z',
+    };
+    const state = makeState({
+      activeThread: { ...makeState().activeThread, messages: [userMessage, assistantMessage] },
+      threadsById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [userMessage, assistantMessage],
+          lastAssistantMessage: 'Ya quedó resuelto',
+        },
+      },
+      threadDataById: {
+        [THREAD_ID]: {
+          ...makeState().activeThread,
+          messages: [userMessage, assistantMessage],
+        },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSResult(get, set, THREAD_ID, {
+      status: 'completed',
+      cost: 0,
+      duration: 1,
+      result: 'Resumen final del runtime',
+    });
+
+    const assistantMessages = state.threadDataById[THREAD_ID].messages.filter(
+      (message: any) => message.role === 'assistant',
+    );
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0].content).toBe('Ya quedó resuelto');
+    expect(state.threadsById[THREAD_ID].lastAssistantMessage).toBe('Ya quedó resuelto');
+  });
+
   test('handleWSStatus updates a scratch thread via threadsById', () => {
     const scratchThread = {
       id: 'scratch-1',

@@ -111,7 +111,7 @@ describe('ProjectItem external Claude sessions', () => {
     vi.mocked(api.openDirectory).mockReturnValue(okAsync({ ok: true }));
   });
 
-  test('renders synced external Claude shells as normal threads and hydrates on click', async () => {
+  test('renders synced external Claude shells as normal threads and selects on click', async () => {
     const onSelectThread = vi.fn();
     const onRenameThread = vi.fn();
     const onArchiveThread = vi.fn();
@@ -161,13 +161,11 @@ describe('ProjectItem external Claude sessions', () => {
     fireEvent.click(externalRow);
 
     await waitFor(() => {
-      expect(api.importExternalClaudeSession).toHaveBeenCalledWith('session-1', {
-        projectId: 'project-1',
-      });
-    });
-    await waitFor(() => {
       expect(onSelectThread).toHaveBeenCalledWith('project-1', 'thread-external');
     });
+    // Hydration moved to the thread-data machine (covers Activity/direct-URL
+    // navigation too) — selection must NOT trigger the import itself.
+    expect(api.importExternalClaudeSession).not.toHaveBeenCalled();
   });
 
   test('dismisses an external Claude shell before normal delete flow', async () => {

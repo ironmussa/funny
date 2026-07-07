@@ -53,6 +53,7 @@
     "build:native": "bun run --cwd packages/native-git build",
     "build:native:debug": "bun run --cwd packages/native-git build:debug",
     "build:sidecar": "bun scripts/build-sidecar.ts",
+    "bench:markdown": "bun packages/client/scripts/benchmark-markdown-renderers.ts",
     "test": "bun scripts/run-tests.ts",
     "prepare": "husky",
     "security:check": "npm run security:secrets && npm run security:audit",
@@ -116,6 +117,7 @@
     "oxfmt": "^0.55.0",
     "oxlint": "^1.70.0",
     "react-doctor": "^0.5.6",
+    "satteri": "^0.9.4",
     "secretlint": "^13.0.2",
     "tailwindcss-animate": "^1.0.7",
     "vitepress": "^2.0.0-alpha.17"

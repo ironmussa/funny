@@ -44,7 +44,7 @@
     "vitest": "^4.1.9"
   },
   "optionalDependencies": {
-    "@agentclientprotocol/sdk": "^0.28.1",
+    "@agentclientprotocol/sdk": "^1.2.1",
     "@funny/native-git": "workspace:*",
     "@langchain/openai": "^1.3.0",
     "deepagents-acp": "^0.1.3"

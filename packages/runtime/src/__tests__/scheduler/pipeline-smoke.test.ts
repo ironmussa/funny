@@ -11,11 +11,7 @@
  *      dispatcher will wire these to `touchLastEvent` for stall detection.
  */
 
-import {
-  runPipeline,
-  type ProgressReporter,
-  type StepProgressData,
-} from '@funny/pipelines';
+import { runPipeline, type ProgressReporter, type StepProgressData } from '@funny/pipelines';
 import { parseWorkflowYaml } from '@funny/workflows';
 import { describe, expect, test, vi } from 'vitest';
 

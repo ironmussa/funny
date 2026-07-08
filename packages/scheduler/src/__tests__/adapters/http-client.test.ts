@@ -58,9 +58,7 @@ describe('HttpSchedulerClient', () => {
     });
 
     await client.get('/runs/due-retries', { now: 12345 });
-    expect(calls[0].url).toBe(
-      'http://server:3001/api/scheduler/system/runs/due-retries?now=12345',
-    );
+    expect(calls[0].url).toBe('http://server:3001/api/scheduler/system/runs/due-retries?now=12345');
   });
 
   test('POST sends JSON body', async () => {

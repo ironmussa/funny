@@ -45,7 +45,7 @@ jobs:
         run: bun run lint
 
       - name: Format check (oxfmt)
-        run: bunx oxfmt --check .
+        run: bun run format:check
 
   test:
     runs-on: ubuntu-latest

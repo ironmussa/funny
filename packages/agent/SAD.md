@@ -2876,14 +2876,15 @@ Each tier defines which agents run. If an agent detects a serious problem, the t
 ```
 
 **Valid transitions:**
-| From | To | Trigger |
-|---|---|---|
-| (running) | ready | `pipeline.completed` { approved: true } |
-| (running) | (outside) | `pipeline.failed` |
-| ready | pending_merge | Director dispatches, Integrator creates PR |
-| pending_merge | pending_merge | Stale PR → rebase → update |
-| pending_merge | ready | PR closed without merge → retry |
-| pending_merge | merge_history | `integration.pr.merged` |
+
+| From          | To            | Trigger                                    |
+| ------------- | ------------- | ------------------------------------------ |
+| (running)     | ready         | `pipeline.completed` { approved: true }    |
+| (running)     | (outside)     | `pipeline.failed`                          |
+| ready         | pending_merge | Director dispatches, Integrator creates PR |
+| pending_merge | pending_merge | Stale PR → rebase → update                 |
+| pending_merge | ready         | PR closed without merge → retry            |
+| pending_merge | merge_history | `integration.pr.merged`                    |
 
 Invalid transitions (the system rejects them):
 

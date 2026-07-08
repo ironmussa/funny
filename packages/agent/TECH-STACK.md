@@ -31,12 +31,13 @@ This document defines the specific libraries, frameworks, and tools for implemen
 - Design patterns (Strategy, Command, State Machine) are expressed naturally with types
 
 **What Bun eliminates from the stack:**
-| Tool | Replaced by |
-|---|---|
-| `tsx` | Bun runs `.ts` directly |
-| `dotenv` | Bun reads `.env` automatically |
-| `@types/node` | Bun includes its own types |
-| `vitest` / `jest` | `bun test` |
+
+| Tool               | Replaced by                                                |
+| ------------------ | ---------------------------------------------------------- |
+| `tsx`              | Bun runs `.ts` directly                                    |
+| `dotenv`           | Bun reads `.env` automatically                             |
+| `@types/node`      | Bun includes its own types                                 |
+| `vitest` / `jest`  | `bun test`                                                 |
 | `node:fs/promises` | `Bun.file()` / `Bun.write()` (though `node:fs` also works) |
 
 ---

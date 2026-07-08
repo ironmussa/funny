@@ -25,8 +25,7 @@ import {
   YamlPipelineLoader,
 } from './scheduler-pipeline-adapters.js';
 
-export type RuntimeSchedulerPipelineDispatcher =
-  SchedulerPipelineDispatcher<YamlPipelineContext>;
+export type RuntimeSchedulerPipelineDispatcher = SchedulerPipelineDispatcher<YamlPipelineContext>;
 
 let _instance: RuntimeSchedulerPipelineDispatcher | null = null;
 
@@ -41,8 +40,6 @@ export function getSchedulerPipelineDispatcher(): RuntimeSchedulerPipelineDispat
 }
 
 /** Test seam — replace the singleton in unit tests. */
-export function setSchedulerPipelineDispatcher(
-  d: RuntimeSchedulerPipelineDispatcher | null,
-): void {
+export function setSchedulerPipelineDispatcher(d: RuntimeSchedulerPipelineDispatcher | null): void {
   _instance = d;
 }

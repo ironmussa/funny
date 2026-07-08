@@ -292,11 +292,7 @@ export class SchedulerService {
       retryCount: plan.toRetry.length,
       stalledCount,
     };
-    this.emitter.emitToUser(
-      '*',
-      'scheduler:tick',
-      summary as unknown as Record<string, unknown>,
-    );
+    this.emitter.emitToUser('*', 'scheduler:tick', summary as unknown as Record<string, unknown>);
     return summary;
   }
 

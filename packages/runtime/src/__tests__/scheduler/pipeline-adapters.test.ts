@@ -18,12 +18,12 @@
 
 import { describe, expect, test } from 'vitest';
 
+import { RuntimeActionProvider } from '../../services/pipeline-adapter.js';
 import {
   RuntimeActionProviderFactory,
   YamlPipelineLoader,
   loadSchedulerPipeline,
 } from '../../services/scheduler-pipeline-adapters.js';
-import { RuntimeActionProvider } from '../../services/pipeline-adapter.js';
 
 describe('YamlPipelineLoader', () => {
   test('loads the built-in scheduler-thread default by name', async () => {

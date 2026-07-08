@@ -21,11 +21,7 @@
  * their own context shape (the runtime uses `YamlPipelineContext`).
  */
 
-import {
-  runPipeline,
-  type PipelineDefinition,
-  type ProgressReporter,
-} from '@funny/pipelines';
+import { runPipeline, type PipelineDefinition, type ProgressReporter } from '@funny/pipelines';
 import type { ParsedInputDef } from '@funny/workflows';
 import { nanoid } from 'nanoid';
 

@@ -74,7 +74,7 @@ await cp(join(coreAgentsDir, 'deepagent-skills'), join(DIST, 'deepagent-skills')
 // Copy built-in pipeline YAMLs to dist/ — read at runtime by yaml-loader.ts
 // via `import.meta.url`. After bundling, `import.meta.url` points at
 // `dist/index.js`, so the loader expects `dist/defaults/`.
-await cp(join(ROOT, 'src/pipelines/defaults'), join(DIST, 'defaults'), {
+await cp(join(ROOT, '..', 'workflows', 'defaults'), join(DIST, 'defaults'), {
   recursive: true,
 });
 

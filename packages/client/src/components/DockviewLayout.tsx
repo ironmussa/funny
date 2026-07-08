@@ -782,7 +782,8 @@ export function DockviewLayout({
       }
 
       // Active panel changes → notify the store(s).
-      event.api.onDidActivePanelChange((panel) => {
+      event.api.onDidActivePanelChange((activePanelEvent) => {
+        const panel = activePanelEvent.panel;
         if (!panel) return;
         if (panel.id.startsWith('right:')) {
           const tabId = panel.id.slice('right:'.length);

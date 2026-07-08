@@ -324,8 +324,9 @@ export function CenterDockview({
         }
       }
 
-      event.api.onDidActivePanelChange((panel) => {
+      event.api.onDidActivePanelChange((activePanelEvent) => {
         if (isMutatingRightRef.current) return;
+        const panel = activePanelEvent.panel;
         if (!panel) return;
         if (panel.id.startsWith('right:')) {
           const tabId = panel.id.slice('right:'.length);

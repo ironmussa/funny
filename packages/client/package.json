@@ -65,7 +65,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "color": "^5.0.3",
-    "dockview-react": "^6.5.0",
+    "dockview-react": "^7.0.2",
     "dompurify": "^3.4.11",
     "highlight.js": "^11.11.1",
     "i18next": "^26.3.1",

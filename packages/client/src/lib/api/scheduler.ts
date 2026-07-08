@@ -15,6 +15,5 @@ export interface SchedulerRun {
 
 export const schedulerApi = {
   listSchedulerRuns: () => request<{ runs: SchedulerRun[] }>('/scheduler/runs'),
-  refreshScheduler: () =>
-    request<{ summary: unknown }>('/scheduler/refresh', { method: 'POST' }),
+  refreshScheduler: () => request<{ summary: unknown }>('/scheduler/refresh', { method: 'POST' }),
 };

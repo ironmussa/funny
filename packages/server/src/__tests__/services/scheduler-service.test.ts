@@ -114,10 +114,7 @@ beforeEach(() => {
   seedProject(testDb.db, { id: 'p1', userId: 'user-1' });
 });
 
-function makeService(
-  overrides: Partial<typeof defaultSchedulerConfig> = {},
-  now?: () => number,
-) {
+function makeService(overrides: Partial<typeof defaultSchedulerConfig> = {}, now?: () => number) {
   return new SchedulerService({
     runRepo,
     threadQuery,

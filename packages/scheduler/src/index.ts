@@ -61,10 +61,7 @@ export {
   type EventStreamEvent,
 } from './adapters/http-event-stream.js';
 export { HttpDispatcher, type HttpDispatcherOptions } from './adapters/http-dispatcher.js';
-export {
-  HttpSchedulerEmitter,
-  type HttpSchedulerEmitterOptions,
-} from './adapters/http-emitter.js';
+export { HttpSchedulerEmitter, type HttpSchedulerEmitterOptions } from './adapters/http-emitter.js';
 
 // ── Standalone composition + logger ────────────────────────
 export { buildStandalone, type StandaloneConfig, type StandaloneInstance } from './standalone.js';

@@ -265,9 +265,9 @@ It runs as **its own process** — the `@funny/thread-scheduler` binary — and 
 
 All knobs are optional with sensible defaults — only override what you need. These all live on the scheduler process (the server doesn't read them):
 
-| Variable                      | Description                                                                                | Default        |
-| ----------------------------- | ------------------------------------------------------------------------------------------ | -------------- |
-| `FUNNY_SERVER_URL`            | **Required.** Base URL of the funny server.                                                | —              |
+| Variable                   | Description                                                                                | Default        |
+| -------------------------- | ------------------------------------------------------------------------------------------ | -------------- |
+| `FUNNY_SERVER_URL`         | **Required.** Base URL of the funny server.                                                | —              |
 | `SCHEDULER_AUTH_SECRET`    | **Required.** Must match the server's value.                                               | —              |
 | `SCHEDULER_POLL_MS`        | Poll loop interval (how often eligible threads are scanned).                               | `5000`         |
 | `SCHEDULER_RECONCILE_MS`   | Reconcile loop interval (stall detection, orphan recovery, backoff sweep).                 | `30000`        |

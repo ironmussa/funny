@@ -14,6 +14,7 @@ import {
   useCurrentProjectPath,
 } from '@/components/tool-cards/utils';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { stripAnsi } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 
 interface ToolCallCardProps {
@@ -49,7 +50,15 @@ export const ToolCallCard = memo(
     const isTodo = isTodoToolName(name);
     const parsed = useMemo(() => formatInput(input), [input]);
     const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
-    const summary = getSummary(isTodo ? 'TodoWrite' : name, parsed, t);
+    const rawSummary = getSummary(isTodo ? 'TodoWrite' : name, parsed, t);
+    // `getSummary` is typed `string | null`, but its `as string` casts are unsafe:
+    // a tool's input field can be a non-string (e.g. a number from an MCP tool), and
+    // that value flows through untouched. Only run ANSI stripping on real strings —
+    // calling `.replace` on a non-string throws and crashes the whole thread view.
+    const summary = useMemo(
+      () => (typeof rawSummary === 'string' ? stripAnsi(rawSummary) : rawSummary),
+      [rawSummary],
+    );
 
     const todos = isTodo ? getTodos(parsed) : null;
     const filePath = getFilePath(name, parsed);

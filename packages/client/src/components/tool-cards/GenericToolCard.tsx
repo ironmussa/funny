@@ -8,7 +8,7 @@ import { getEditorLabel, openFileInEditor, toEditorUri } from '@/components/tool
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
-import { createAnsiConverter } from '@/lib/ansi-to-html';
+import { createAnsiConverter, stripAnsi } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, type Editor } from '@/stores/settings-store';
 
@@ -63,8 +63,7 @@ export function GenericToolCard({
 
   const outputPreview = useMemo(() => {
     if (!output || expanded) return null;
-    // eslint-disable-next-line no-control-regex
-    const clean = output.replace(/\x1b\[[0-9;]*m/g, '');
+    const clean = stripAnsi(output);
     const firstLine = clean
       .split('\n')
       .find((l) => l.trim())
@@ -219,6 +218,14 @@ function formatToolValue(value: unknown): string {
 function ToolValue({ value }: { value: unknown }) {
   const isJson = typeof value !== 'string';
   const text = useMemo(() => formatToolValue(value), [value]);
+  const ansiConverter = useMemo(
+    () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),
+    [],
+  );
+  const html = useMemo(
+    () => (isJson ? null : ansiConverter.toHtml(text)),
+    [ansiConverter, isJson, text],
+  );
   const [highlighted, setHighlighted] = useState<{ text: string; html: string } | null>(null);
 
   useEffect(() => {
@@ -245,10 +252,19 @@ function ToolValue({ value }: { value: unknown }) {
     );
   }
 
+  if (isJson) {
+    return (
+      <pre className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
+        {text}
+      </pre>
+    );
+  }
+
   return (
-    <pre className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-      {text}
-    </pre>
+    <pre
+      className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
+      dangerouslySetInnerHTML={{ __html: html! }}
+    />
   );
 }
 

@@ -11,10 +11,21 @@ import AnsiToHtml from 'ansi-to-html';
 
 export type AnsiConverterOptions = Omit<ConstructorParameters<typeof AnsiToHtml>[0], 'escapeXML'>;
 
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const ANSI_PATTERN = new RegExp(
+  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)|${ESC}[@-_]`,
+  'g',
+);
+
 /**
  * Build an ansi-to-html converter. `escapeXML` is always `true`; callers do
  * not get a knob to turn it off.
  */
 export function createAnsiConverter(options: AnsiConverterOptions = {}): AnsiToHtml {
   return new AnsiToHtml({ ...options, escapeXML: true });
+}
+
+export function stripAnsi(text: string): string {
+  return text.replace(ANSI_PATTERN, '');
 }

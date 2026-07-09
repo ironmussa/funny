@@ -67,18 +67,19 @@ const markdownComponents = {
 
 // Prefetch react-markdown immediately at module load time.
 // By the time ThreadView renders messages, the chunk is already downloaded.
-const _markdownImport = import('react-markdown');
+const markdownImportPromise = import('react-markdown');
 
-// Lazy-load `rehype-sanitize` alongside react-markdown. Security L1: every
-// ReactMarkdown invocation in the app MUST pass this plugin so that an LLM
-// (or anything else upstream) cannot smuggle raw HTML — including <script>,
-// <iframe>, or event handlers — through the renderer.
-const _rehypeSanitizeImport = import('rehype-sanitize');
+// Lazy-load rehype plugins alongside react-markdown. `rehype-raw` lets GitHub-
+// style tags emitted by bots (details/summary/br/etc.) render as HTML, and
+// `rehype-sanitize` must run after it so scripts, iframes, and event handlers
+// cannot reach the DOM.
+const rehypeRawImportPromise = import('rehype-raw');
+const rehypeSanitizeImportPromise = import('rehype-sanitize');
 
 const LazyMarkdownRenderer = lazy(() =>
-  Promise.all([_markdownImport, _rehypeSanitizeImport]).then(
-    ([{ default: ReactMarkdown }, { default: rehypeSanitize }]) => {
-      const rehypePlugins = [rehypeSanitize];
+  Promise.all([markdownImportPromise, rehypeRawImportPromise, rehypeSanitizeImportPromise]).then(
+    ([{ default: ReactMarkdown }, { default: rehypeRaw }, { default: rehypeSanitize }]) => {
+      const rehypePlugins = [rehypeRaw, rehypeSanitize];
       function MarkdownRenderer({ content }: { content: string }) {
         return (
           <ReactMarkdown

@@ -46,4 +46,51 @@ describe('MessageContent', () => {
       'cursor://file/home/u/projects/funny/packages/client/src/lib/editor-utils.ts',
     );
   });
+
+  test('renders sanitized GitHub-style raw HTML in bot markdown', async () => {
+    const content = [
+      '<!-- walkthrough_start -->',
+      '<details><summary>📝 Walkthrough</summary>',
+      '',
+      '| Layer / File(s) | Summary |',
+      '| --- | --- |',
+      '| Batched upsert<br>`app/Http/Controllers/Foo.php` | Uses one update call |',
+      '',
+      '</details>',
+      '<details><summary>🎁 Summarized by CodeRabbit Free</summary>',
+      'Your organization is on the Free plan.',
+      '</details>',
+      '<!-- walkthrough_end -->',
+    ].join('\n');
+
+    const { container } = renderWithProviders(<MessageContent content={content} />);
+
+    expect(await screen.findByText('📝 Walkthrough')).toBeInTheDocument();
+    expect(screen.getByText('🎁 Summarized by CodeRabbit Free')).toBeInTheDocument();
+    expect(container.querySelectorAll('details')).toHaveLength(2);
+    expect(container.querySelector('br')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent('<details>');
+    expect(container).not.toHaveTextContent('</details>');
+  });
+
+  test('sanitizes executable raw HTML after parsing allowed tags', async () => {
+    const { container } = renderWithProviders(
+      <MessageContent
+        content={
+          '<details onclick="alert(1)" open><summary>Safe</summary><a href="javascript:alert(1)" onclick="alert(1)">bad link</a><script>alert(1)</script></details>'
+        }
+      />,
+    );
+
+    expect(await screen.findByText('Safe')).toBeInTheDocument();
+    const details = container.querySelector('details');
+    expect(details).toBeInTheDocument();
+    expect(details).toHaveAttribute('open');
+    expect(details).not.toHaveAttribute('onclick');
+
+    const link = screen.getByText('bad link');
+    expect(link).not.toHaveAttribute('href');
+    expect(link).not.toHaveAttribute('onclick');
+    expect(container.querySelector('script')).not.toBeInTheDocument();
+  });
 });

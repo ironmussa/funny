@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 
-import { createAnsiConverter } from '@/lib/ansi-to-html';
+import { createAnsiConverter, stripAnsi } from '@/lib/ansi-to-html';
 
 describe('createAnsiConverter', () => {
   test('forces escapeXML so < is escaped', () => {
@@ -29,5 +29,11 @@ describe('createAnsiConverter', () => {
     const out = converter.toHtml('\u001b[31mhello\u001b[0m');
     expect(out).toContain('hello');
     expect(out.toLowerCase()).toMatch(/style=.*color/);
+  });
+
+  test('strips ANSI sequences for plain-text previews', () => {
+    expect(stripAnsi('\u001b[2m2026-07-09\u001b[0m \u001b[31mERROR\u001b[0m')).toBe(
+      '2026-07-09 ERROR',
+    );
   });
 });

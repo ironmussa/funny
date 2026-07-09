@@ -1,26 +1,27 @@
 import type { CICheck } from '@funny/shared';
 import {
-  AlertCircle,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Circle,
   Clock,
   ExternalLink,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
   Loader2,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { DiffStats } from '@/components/DiffStats';
-import { PRBadge } from '@/components/PRBadge';
-import { Badge } from '@/components/ui/badge';
+import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
+import { MergeStatus } from '@/components/pull-requests/PRStatusBadges';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
+
+export {
+  MergeStatus,
+  PRStateBadge,
+  ReviewDecisionBadge,
+} from '@/components/pull-requests/PRStatusBadges';
 
 const POLL_INTERVAL = 30_000;
 const MAX_VISIBLE_CHECKS = 6;
@@ -50,109 +51,6 @@ export function CheckIcon({ check }: { check: CICheck }) {
       return <Circle className="text-muted-foreground size-3.5 shrink-0" />;
     default:
       return <Clock className="size-3.5 shrink-0 text-yellow-500" />;
-  }
-}
-
-export function PRStateBadge({
-  state,
-  draft,
-  merged,
-}: {
-  state: string;
-  draft: boolean;
-  merged: boolean;
-}) {
-  if (merged) {
-    return (
-      <Badge
-        variant="outline"
-        size="xxs"
-        className="gap-1 border-purple-500/30 bg-purple-500/15 text-purple-400"
-      >
-        <GitMerge className="size-2.5" />
-        Merged
-      </Badge>
-    );
-  }
-  if (state === 'closed') {
-    return (
-      <Badge
-        variant="outline"
-        size="xxs"
-        className="gap-1 border-red-500/30 bg-red-500/15 text-red-400"
-      >
-        <GitPullRequestClosed className="size-2.5" />
-        Closed
-      </Badge>
-    );
-  }
-  if (draft) {
-    return (
-      <Badge
-        variant="outline"
-        size="xxs"
-        className="border-muted-foreground/30 bg-muted text-muted-foreground gap-1"
-      >
-        <GitPullRequest className="size-2.5" />
-        Draft
-      </Badge>
-    );
-  }
-  return (
-    <Badge
-      variant="outline"
-      size="xxs"
-      className="gap-1 border-green-500/30 bg-green-500/15 text-green-400"
-    >
-      <GitPullRequest className="size-2.5" />
-      Open
-    </Badge>
-  );
-}
-
-export function ReviewDecisionBadge({ decision }: { decision: string | null }) {
-  if (!decision) return null;
-  switch (decision) {
-    case 'APPROVED':
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-green-400">
-          <CheckCircle2 className="size-3.5" /> Approved
-        </span>
-      );
-    case 'CHANGES_REQUESTED':
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-red-400">
-          <AlertCircle className="size-3.5" /> Changes requested
-        </span>
-      );
-    case 'REVIEW_REQUIRED':
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-yellow-400">
-          <Clock className="size-3.5" /> Review required
-        </span>
-      );
-    default:
-      return null;
-  }
-}
-
-export function MergeStatus({ mergeable, merged }: { mergeable: string; merged: boolean }) {
-  if (merged) return null;
-  switch (mergeable) {
-    case 'mergeable':
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-green-400">
-          <GitMerge className="size-3.5" /> Ready to merge
-        </span>
-      );
-    case 'conflicting':
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-red-400">
-          <AlertCircle className="size-3.5" /> Merge conflicts
-        </span>
-      );
-    default:
-      return null;
   }
 }
 
@@ -220,83 +118,49 @@ export function PRSummaryCard({
     !!detail &&
     !detail.merged &&
     (detail.mergeable_state === 'mergeable' || detail.mergeable_state === 'conflicting');
+  const detailPrState = detail?.merged ? 'MERGED' : detail?.state === 'closed' ? 'CLOSED' : prState;
+  const compactPr = detail ?? {
+    number: prNumber,
+    html_url: prUrl,
+    state: prState === 'CLOSED' ? 'closed' : 'open',
+    merged: prState === 'MERGED',
+  };
 
   return (
     <div
       className="border-sidebar-border bg-muted/30 border-b px-3 py-2 text-xs"
       data-testid="pr-summary-card"
     >
-      {/* Line 1: PR title → number → actions */}
-      <div className="flex items-start gap-2">
-        {/* Full title shown (no truncation); number flows inline after the last word */}
-        <div className="min-w-0 flex-1 text-[11px] break-words">
-          {detail ? (
-            <span className="text-foreground font-medium" data-testid="pr-summary-title">
-              {detail.title}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">Pull request</span>
-          )}{' '}
-          <PRBadge
-            prNumber={prNumber}
-            prState={detail?.merged ? 'MERGED' : detail?.state === 'closed' ? 'CLOSED' : prState}
-            prUrl={detail?.html_url ?? prUrl}
-            size="xxs"
-            className="inline-flex align-middle"
-            data-testid="pr-summary-number"
-          />
-        </div>
-        {rateLimited && (
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="shrink-0 text-[11px] text-yellow-500">Rate limited</span>
-            </TooltipTrigger>
-            <TooltipContent>GitHub API rate limit reached. Polling paused.</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-
-      {/* Line 2: state badge → diff stats → review decision */}
-      <div className="mt-1.5 flex items-center gap-2">
-        {detail ? (
-          <PRStateBadge state={detail.state} draft={detail.draft} merged={detail.merged} />
-        ) : (
-          <PRStateBadge
-            state={prState === 'CLOSED' ? 'closed' : 'open'}
-            draft={false}
-            merged={prState === 'MERGED'}
-          />
-        )}
-        {detail && (
-          <DiffStats
-            linesAdded={detail.additions}
-            linesDeleted={detail.deletions}
-            dirtyFileCount={detail.changed_files}
-            variant="pr"
-            size="xxs"
-            tooltips
-          />
-        )}
-        {detail && <ReviewDecisionBadge decision={detail.review_decision} />}
-      </div>
-
-      {/* Merge summary: "<author> wants to merge N commits into <base> from <head>" */}
-      {detail && detail.base.ref && detail.head.ref && (
-        <p
-          className="text-muted-foreground mt-1.5 text-[11px] break-words"
-          data-testid="pr-summary-merge-info"
-        >
-          {detail.user?.login && (
-            <span className="text-foreground font-medium">{detail.user.login}</span>
-          )}{' '}
-          wants to merge{' '}
-          <span className="text-foreground font-medium">
-            {detail.commits} {detail.commits === 1 ? 'commit' : 'commits'}
-          </span>{' '}
-          into <span className="text-foreground font-mono">{detail.base.ref}</span> from{' '}
-          <span className="text-foreground font-mono">{detail.head.ref}</span>
-        </p>
-      )}
+      <PRCompactIdentity
+        pr={compactPr}
+        fallbackState={detailPrState}
+        numberTestId="pr-summary-number"
+        titleTestId="pr-summary-title"
+        mergeLineTestId="pr-summary-merge-info"
+        metaTestId="pr-summary-meta"
+        statusTestId="pr-summary-status"
+        showStateBadge
+        stats={
+          detail
+            ? {
+                additions: detail.additions,
+                deletions: detail.deletions,
+                changedFiles: detail.changed_files,
+              }
+            : null
+        }
+        reviewDecision={detail?.review_decision}
+        titleExtra={
+          rateLimited ? (
+            <Tooltip>
+              <TooltipTrigger>
+                <span className="shrink-0 text-[11px] text-yellow-500">Rate limited</span>
+              </TooltipTrigger>
+              <TooltipContent>GitHub API rate limit reached. Polling paused.</TooltipContent>
+            </Tooltip>
+          ) : null
+        }
+      />
 
       {/* Line 3: CI checks → ready to merge */}
       {detail && (totalChecks > 0 || mergeStatusVisible) && (

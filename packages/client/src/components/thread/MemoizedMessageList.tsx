@@ -459,7 +459,12 @@ export const MemoizedMessageList = memo(
     // Smooth section handoff: as the next section's user card scrolls up to
     // meet the docked sticky copy, push the copy out of the viewport instead
     // of letting the incoming card slide underneath it and swap with a pop.
-    let stickyPushPx = 0;
+    // The push must be applied imperatively on every scroll frame: the
+    // virtualizer only re-renders React when the visible row range changes
+    // (roughly once per row boundary), so a render-driven transform moves in
+    // visible row-sized steps instead of tracking the incoming card.
+    const stickyPushBaseRef = useRef<number | null>(null);
+    let stickyPushBase: number | null = null;
     if (hiddenSectionUserItem && firstVisibleVirtualItem && stickyContentHeight > 0) {
       const nextUserRowIndex = userRowVirtualIndices.find(
         (index) => index >= firstVisibleVirtualItem.index,
@@ -469,12 +474,51 @@ export const MemoizedMessageList = memo(
           visibleVirtualItems.find((item) => item.index === nextUserRowIndex)?.start ??
           rowVirtualizer.getOffsetForIndex(nextUserRowIndex, 'start')?.[0];
         if (typeof nextUserRowStart === 'number') {
-          const nextUserRowViewportTop =
-            nextUserRowStart + leadingStickySpacerHeight - stickyScrollOffset;
-          stickyPushPx = Math.min(0, Math.round(nextUserRowViewportTop - stickyContentHeight));
+          stickyPushBase = nextUserRowStart + leadingStickySpacerHeight - stickyContentHeight;
         }
       }
     }
+    stickyPushBaseRef.current = stickyPushBase;
+
+    const applyStickyPush = useEffectEvent(() => {
+      const el = stickySectionContentRef.current;
+      if (!el) return;
+      const base = stickyPushBaseRef.current;
+      if (base === null) {
+        el.style.transform = '';
+        return;
+      }
+      const scrollOffset =
+        rowVirtualizer.scrollOffset ?? scrollRef.current?.scrollTop ?? listScrollMargin;
+      const push = Math.min(0, Math.round(base - scrollOffset));
+      el.style.transform = push < 0 ? `translateY(${push}px)` : '';
+    });
+
+    const handleViewportScroll = useEffectEvent(() => {
+      applyStickyPush();
+      updateMountedSectionVisibility();
+    });
+
+    // Re-apply after every commit — the push inputs (row offsets, sticky
+    // height) and the sticky copy element itself can change on any render.
+    // The scroll subscription is also re-checked here because scrollRef is
+    // populated by the parent after this component's first layout effects run.
+    const subscribedViewportRef = useRef<HTMLElement | null>(null);
+    useLayoutEffect(() => {
+      applyStickyPush();
+      const viewport = scrollRef.current;
+      if (subscribedViewportRef.current === viewport) return;
+      subscribedViewportRef.current?.removeEventListener('scroll', handleViewportScroll);
+      subscribedViewportRef.current = viewport;
+      viewport?.addEventListener('scroll', handleViewportScroll, { passive: true });
+    });
+
+    useLayoutEffect(() => {
+      return () => {
+        subscribedViewportRef.current?.removeEventListener('scroll', handleViewportScroll);
+        subscribedViewportRef.current = null;
+      };
+    }, []);
 
     useLayoutEffect(() => {
       if (!shouldReserveLeadingStickySpaceValue) {
@@ -589,8 +633,7 @@ export const MemoizedMessageList = memo(
             <div
               ref={stickySectionContentRef}
               data-testid="sticky-section-content"
-              className="pointer-events-auto relative z-50 pt-3 pb-3"
-              style={stickyPushPx < 0 ? { transform: `translateY(${stickyPushPx}px)` } : undefined}
+              className="pointer-events-auto relative z-50 pt-3 pb-3 will-change-transform"
             >
               <UserMessageRenderer
                 item={hiddenSectionUserItem}

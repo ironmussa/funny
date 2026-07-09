@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Schema } from '@tiptap/pm/model';
 import { findSuggestionMatch } from '@tiptap/suggestion';
+import { createRef } from 'react';
 import { describe, expect, test } from 'vitest';
 
 import {
@@ -8,6 +9,7 @@ import {
   buildWorkflowSuggestionItems,
   getSuggestionLoadingLabel,
   PromptEditor,
+  type PromptEditorHandle,
   WORKFLOW_SUGGESTION_MATCH_OPTIONS,
 } from '@/components/prompt-editor/PromptEditor';
 
@@ -31,6 +33,32 @@ describe('PromptEditor', () => {
         value: originalElementFromPoint,
       });
     }
+  });
+
+  test('selects a slash command without fragment conversion errors', async () => {
+    const ref = createRef<PromptEditorHandle>();
+
+    render(<PromptEditor ref={ref} sdkSlashCommands={['compact']} commandProvider="codex" />);
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    act(() => {
+      ref.current?.insertText('/');
+    });
+
+    fireEvent.mouseDown(await screen.findByTestId('slash-item-compact'));
+
+    await waitFor(() => {
+      const paragraph = ref.current?.getJSON()?.content?.[0];
+      expect(paragraph?.content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'slashCommand',
+            attrs: expect.objectContaining({ id: 'compact', label: 'compact' }),
+          }),
+        ]),
+      );
+    });
   });
 });
 

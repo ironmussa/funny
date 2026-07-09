@@ -164,8 +164,9 @@ app.post('/create-directory', async (c) => {
   //   aliases a device and can be abused by a later open/read.
   // - Reject trailing `.` / trailing space which Windows silently strips,
   //   letting `"foo "` masquerade as `"foo"`.
-  // eslint-disable-next-line no-control-regex
-  if (/[/\\<>:"|?*\x00-\x1f]/.test(name)) {
+  const unsafeDirectoryNamePattern = new RegExp(String.raw`[/\\<>:"|?*\u0000-\u001F]`);
+
+  if (unsafeDirectoryNamePattern.test(name)) {
     return c.json({ error: 'Invalid directory name' }, 400);
   }
   if (name === '.' || name === '..') {

@@ -44,7 +44,7 @@ export class GitRuntimeService {
     const span = startSpan('git.fetch_remote', {
       attributes: { projectId, background: true, ...(attrs ?? {}) },
     });
-    fetchRemote(projectPath, identity).match(
+    void fetchRemote(projectPath, identity).match(
       () => {
         span.end('ok');
         this.invalidateProjectStatus(projectId, projectPath);

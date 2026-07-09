@@ -87,7 +87,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   const { initTeamMode, setBrowserWSHandler, setLocalApp } =
     await import('../services/team-client.js');
   setLocalApp(app);
-  setBrowserWSHandler(async (userId, data, respond) => {
+  setBrowserWSHandler((userId, data, respond) => {
     const parsed = data as { type: string; data: any };
     if (!parsed?.type) return;
     if (parsed.type.startsWith('browser-session:')) {

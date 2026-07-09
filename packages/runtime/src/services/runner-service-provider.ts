@@ -22,7 +22,6 @@ function notAvailable(method: string): never {
   throw new Error(`${method} is not available in runner mode — this is a server concern`);
 }
 
-// eslint-disable-next-line max-lines-per-function
 export function createRunnerServiceProvider(): RuntimeServiceProvider {
   return {
     // ── Threads — proxy to server via team-client ────────────

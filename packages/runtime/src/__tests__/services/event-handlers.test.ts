@@ -121,9 +121,9 @@ describe('commentHandler', () => {
 });
 
 describe('threadDeletedWsHandler', () => {
-  test('forwards deletion to the owning user', () => {
+  test('forwards deletion to the owning user', async () => {
     const ctx = makeCtx();
-    threadDeletedWsHandler.action({ threadId: 't-1', projectId: 'p-1', userId: 'u-1' }, ctx);
+    await threadDeletedWsHandler.action({ threadId: 't-1', projectId: 'p-1', userId: 'u-1' }, ctx);
 
     expect(ctx.emitToUser).toHaveBeenCalledWith('u-1', {
       type: 'thread:deleted',
@@ -134,9 +134,9 @@ describe('threadDeletedWsHandler', () => {
 });
 
 describe('threadStageChangedWsHandler', () => {
-  test('broadcasts kanban stage changes', () => {
+  test('broadcasts kanban stage changes', async () => {
     const ctx = makeCtx();
-    threadStageChangedWsHandler.action(
+    await threadStageChangedWsHandler.action(
       {
         threadId: 't-1',
         projectId: 'p-1',
@@ -317,11 +317,11 @@ describe('gitStatusHandler', () => {
   test('debounces git status emission', async () => {
     const ctx = makeCtx();
 
-    gitStatusHandler.action(
+    await gitStatusHandler.action(
       { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/tmp', toolName: 'Write' },
       ctx,
     );
-    gitStatusHandler.action(
+    await gitStatusHandler.action(
       { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/tmp', toolName: 'Write' },
       ctx,
     );
@@ -340,7 +340,7 @@ describe('gitStatusHandler', () => {
   test('enables branch drift detection for Bash tool calls', async () => {
     const ctx = makeCtx();
 
-    gitStatusHandler.action(
+    await gitStatusHandler.action(
       { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/tmp', toolName: 'Bash' },
       ctx,
     );

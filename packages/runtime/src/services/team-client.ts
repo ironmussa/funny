@@ -1956,11 +1956,11 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   }
 
   // Start heartbeat (every 15s)
-  state.heartbeatTimer = setInterval(sendHeartbeat, 15_000);
+  state.heartbeatTimer = setInterval(() => void sendHeartbeat(), 15_000);
   if (state.heartbeatTimer.unref) state.heartbeatTimer.unref();
 
   // Start task polling (every 5s)
-  state.pollTimer = setInterval(pollTasks, 5_000);
+  state.pollTimer = setInterval(() => void pollTasks(), 5_000);
   if (state.pollTimer.unref) state.pollTimer.unref();
 
   // Connect Socket.IO (handles reconnection, heartbeat, transport fallback)

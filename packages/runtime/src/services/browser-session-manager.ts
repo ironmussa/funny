@@ -76,7 +76,6 @@ interface BrowserSession {
   chromeProcess: ChildProcess;
   userDataDir: string;
   /** Lazy-loaded via dynamic import to avoid top-level dep on core. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   chromeSession: any;
   lastHeartbeat: number;
 }

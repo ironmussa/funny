@@ -111,7 +111,6 @@ export function sendMessage(
   return ResultAsync.fromPromise(sendMessageImpl(params), toThreadServiceError);
 }
 
-// eslint-disable-next-line max-lines-per-function
 async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageResult> {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);

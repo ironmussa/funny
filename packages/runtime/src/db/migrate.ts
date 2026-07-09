@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * @domain subdomain: Shared Kernel
  * @domain type: adapter

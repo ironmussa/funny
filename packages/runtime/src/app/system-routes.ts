@@ -401,7 +401,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     void streamReader(proc.stdout as ReadableStream<Uint8Array>, 'stdout');
     void streamReader(proc.stderr as ReadableStream<Uint8Array>, 'stderr');
 
-    proc.exited.then((exitCode) => {
+    void proc.exited.then((exitCode) => {
       nativeGitBuildInProgress = false;
       emitBuild('native-git:build_status', {
         status: exitCode === 0 ? 'completed' : 'failed',

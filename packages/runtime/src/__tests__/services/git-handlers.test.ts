@@ -136,8 +136,11 @@ describe('gitWatcherLifecycleHandlers', () => {
     expect(mocks.startWatching).not.toHaveBeenCalled();
   });
 
-  test('stops watching on thread:deleted', () => {
-    gitWatcherStopHandler.action({ threadId: 't-1', projectId: 'p-1', userId: 'u-1' }, makeCtx());
+  test('stops watching on thread:deleted', async () => {
+    await gitWatcherStopHandler.action(
+      { threadId: 't-1', projectId: 'p-1', userId: 'u-1' },
+      makeCtx(),
+    );
     expect(mocks.stopWatching).toHaveBeenCalledWith('p-1', 't-1');
   });
 
@@ -157,8 +160,8 @@ describe('gitWatcherLifecycleHandlers', () => {
     expect(mocks.startWatching).toHaveBeenCalledWith('p-1', '/repo', 't-1', 'u-1', null);
   });
 
-  test('stops watching on agent:completed except waiting status', () => {
-    gitWatcherStopOnAgentCompletedHandler.action(
+  test('stops watching on agent:completed except waiting status', async () => {
+    await gitWatcherStopOnAgentCompletedHandler.action(
       {
         threadId: 't-1',
         projectId: 'p-1',
@@ -173,7 +176,7 @@ describe('gitWatcherLifecycleHandlers', () => {
     expect(mocks.stopWatching).toHaveBeenCalledWith('p-1', 't-1');
 
     mocks.stopWatching.mockClear();
-    gitWatcherStopOnAgentCompletedHandler.action(
+    await gitWatcherStopOnAgentCompletedHandler.action(
       {
         threadId: 't-1',
         projectId: 'p-1',
@@ -336,8 +339,8 @@ describe('gitTelemetryHandlers', () => {
     vi.clearAllMocks();
   });
 
-  test('records commit/push/merge/pull spans and metrics', () => {
-    gitCommitTelemetryHandler.action(
+  test('records commit/push/merge/pull spans and metrics', async () => {
+    await gitCommitTelemetryHandler.action(
       {
         threadId: 't-1',
         userId: 'u-1',
@@ -348,11 +351,11 @@ describe('gitTelemetryHandlers', () => {
       },
       makeCtx(),
     );
-    gitPushTelemetryHandler.action(
+    await gitPushTelemetryHandler.action(
       { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/repo' },
       makeCtx(),
     );
-    gitMergeTelemetryHandler.action(
+    await gitMergeTelemetryHandler.action(
       {
         threadId: 't-1',
         userId: 'u-1',
@@ -364,7 +367,7 @@ describe('gitTelemetryHandlers', () => {
       },
       makeCtx(),
     );
-    gitPullTelemetryHandler.action(
+    await gitPullTelemetryHandler.action(
       { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/repo', output: '' },
       makeCtx(),
     );
@@ -373,7 +376,7 @@ describe('gitTelemetryHandlers', () => {
     expect(mocks.metric).toHaveBeenCalled();
   });
 
-  test('records stage/unstage/revert file-count metrics', () => {
+  test('records stage/unstage/revert file-count metrics', async () => {
     const base = {
       threadId: 't-1',
       userId: 'u-1',
@@ -382,9 +385,9 @@ describe('gitTelemetryHandlers', () => {
       paths: ['a.ts', 'b.ts'],
     };
 
-    gitStageTelemetryHandler.action(base, makeCtx());
-    gitUnstageTelemetryHandler.action(base, makeCtx());
-    gitRevertTelemetryHandler.action(base, makeCtx());
+    await gitStageTelemetryHandler.action(base, makeCtx());
+    await gitUnstageTelemetryHandler.action(base, makeCtx());
+    await gitRevertTelemetryHandler.action(base, makeCtx());
 
     expect(mocks.metric).toHaveBeenCalledWith(
       'git.operations',
@@ -393,13 +396,13 @@ describe('gitTelemetryHandlers', () => {
     );
   });
 
-  test('records stash and reset-soft metrics', () => {
+  test('records stash and reset-soft metrics', async () => {
     const ctx = makeCtx();
     const base = { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/repo', output: '' };
 
-    gitStashTelemetryHandler.action(base, ctx);
-    gitStashPopTelemetryHandler.action(base, ctx);
-    gitResetSoftTelemetryHandler.action(base, ctx);
+    await gitStashTelemetryHandler.action(base, ctx);
+    await gitStashPopTelemetryHandler.action(base, ctx);
+    await gitResetSoftTelemetryHandler.action(base, ctx);
 
     expect(mocks.metric).toHaveBeenCalledTimes(3);
   });

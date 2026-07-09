@@ -18,7 +18,6 @@ vi.hoisted(() => {
   process.env.WS_TUNNEL_ONLY = 'false';
   // Polyfill Bun.CryptoHasher — the middleware uses it for the cookie hash
   // key, but vitest runs under Node so the global doesn't exist.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const cryptoMod = require('crypto') as typeof import('crypto');
   if (typeof (globalThis as any).Bun === 'undefined') {
     (globalThis as any).Bun = {

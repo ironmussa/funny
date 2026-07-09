@@ -216,7 +216,7 @@ async function startCommandImpl(
           setTimeout(() => {
             // Don't restart if it was manually started in the meantime
             if (activeCommands.has(commandId)) return;
-            startCommand(commandId, command, cwd, projectId, label, {
+            void startCommand(commandId, command, cwd, projectId, label, {
               autoRestart: true,
               maxRestarts: entry.maxRestarts,
               restartWindow: entry.restartWindow,

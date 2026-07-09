@@ -48,7 +48,7 @@
     "test": "bun --bun vitest run",
     "test:coverage": "bun --bun vitest run --coverage",
     "test:bun": "bun --bun vitest run",
-    "lint:promises": "eslint src/",
+    "lint:promises": "node ./scripts/lint-promises.mjs src/",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
@@ -94,6 +94,7 @@
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.6.0",
     "typescript": "^7.0.2",
+    "typescript-eslint-typescript": "npm:typescript@5.9.3",
     "typescript-eslint": "^8.63.0",
     "vitest": "^4.1.9"
   },

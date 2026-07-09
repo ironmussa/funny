@@ -636,8 +636,10 @@ function scanPluginResources(options: ClaudeResourceScanOptions = {}): AgentReso
  * Strip ANSI escape codes from a string.
  */
 function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, '').replace(/\x1b\[\?[0-9;]*[a-zA-Z]/g, '');
+  const ansiColorPattern = new RegExp(String.raw`\u001B\[[0-9;]*m`, 'g');
+  const ansiPrivateModePattern = new RegExp(String.raw`\u001B\[\?[0-9;]*[a-zA-Z]`, 'g');
+
+  return str.replace(ansiColorPattern, '').replace(ansiPrivateModePattern, '');
 }
 
 /**

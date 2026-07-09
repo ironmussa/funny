@@ -45,7 +45,7 @@ export class DaemonPtyBackend implements PtyBackend {
   init(callbacks: PtyBackendCallbacks): void {
     this.callbacks = callbacks;
     // Start connection asynchronously — don't block init
-    this.connectToDaemon();
+    void this.connectToDaemon();
   }
 
   spawn(
@@ -367,7 +367,7 @@ export class DaemonPtyBackend implements PtyBackend {
       }
       // Ensure we're trying to connect
       if (!this.reconnecting) {
-        this.connectToDaemon();
+        void this.connectToDaemon();
       }
     }
   }
@@ -394,7 +394,7 @@ export class DaemonPtyBackend implements PtyBackend {
 
     setTimeout(() => {
       if (!this.connected) {
-        this.connectToDaemon();
+        void this.connectToDaemon();
       }
     }, delay);
   }

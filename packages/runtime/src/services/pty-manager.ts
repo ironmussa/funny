@@ -303,7 +303,7 @@ backend.init({
         namespace: 'pty-manager',
         ptyId,
       });
-      capturePaneAsync(ptyId).then((content) => {
+      void capturePaneAsync(ptyId).then((content) => {
         wsBroker.emitToUser(session.userId, {
           type: 'pty:data' as const,
           threadId: '',
@@ -461,7 +461,7 @@ export function spawnPty(
     // Auto-restore: send the serialized terminal content back to the client.
     // Always emit — even with empty string — so the client exits loading state.
     const session = activeSessions.get(id)!;
-    capturePaneAsync(id).then((content) => {
+    void capturePaneAsync(id).then((content) => {
       if (!session.userId) {
         log.warn('PTY restore for session without userId — dropping', {
           namespace: 'pty-manager',

@@ -543,12 +543,12 @@ export default defineConfig({
 
     // Stream stdout
     if (proc.stdout) {
-      streamLines(proc.stdout, 'stdout', projectId, userId);
+      void streamLines(proc.stdout, 'stdout', projectId, userId);
     }
 
     // Stream stderr
     if (proc.stderr) {
-      streamLines(proc.stderr, 'stderr', projectId, userId);
+      void streamLines(proc.stderr, 'stderr', projectId, userId);
     }
 
     // Try to connect CDP for browser streaming
@@ -679,7 +679,7 @@ function handleActionLine(line: string, projectId: string, userId: string) {
 
       // Resolve bounding box asynchronously (fire-and-forget, then send update)
       if (json.selector && run?.chromeSession) {
-        resolveBoundingBox(run.chromeSession, json.selector).then((bbox) => {
+        void resolveBoundingBox(run.chromeSession, json.selector).then((bbox) => {
           if (bbox) {
             // Send an update with the bounding box
             wsBroker.emitToUser(userId, {

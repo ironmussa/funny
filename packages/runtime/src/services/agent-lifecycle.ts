@@ -1,4 +1,3 @@
-/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Agent Execution
  * @domain subdomain-type: core

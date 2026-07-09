@@ -96,7 +96,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
   // dir. No project lookup involved.
   if (data.scratchThreadId) {
     const scratchThreadId: string = data.scratchThreadId;
-    (async () => {
+    void (async () => {
       try {
         const thread = await tm.getThread(scratchThreadId);
         if (!thread || thread.userId !== userId || !thread.isScratch) {
@@ -232,7 +232,7 @@ function handlePtySignal(data: any): void {
 }
 
 function handlePtyRestore(data: any, send: (msg: any) => void): void {
-  ptyManager.capturePaneAsync(data.id).then((captured) => {
+  void ptyManager.capturePaneAsync(data.id).then((captured) => {
     // Always respond — even with empty string — so the client exits loading state.
     send({
       type: 'pty:data',

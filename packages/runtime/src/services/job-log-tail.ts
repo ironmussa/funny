@@ -19,8 +19,7 @@
 
 // CSI / SGR escape sequences (colors, cursor moves). Mirrors the lightweight
 // strippers already used in skills-service.ts and coverage-gate.ts.
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+const ANSI_RE = new RegExp(String.raw`\u001B\[[0-9;?]*[ -/]*[@-~]`, 'g');
 
 /** Hard ceiling on the persisted tail, in characters. A single line with no
  *  carriage returns can still be arbitrarily large (e.g. one huge JSON blob),

@@ -9,9 +9,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 const { FAKE_HOME } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pathMod = require('path') as typeof import('path');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const osMod = require('os') as typeof import('os');
   return { FAKE_HOME: pathMod.join(osMod.tmpdir(), `funny-claude-files-${Date.now()}`) };
 });

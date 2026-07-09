@@ -97,7 +97,7 @@ export async function isDaemonRunning(): Promise<boolean> {
       let gotPong = false;
       const timeout = setTimeout(() => resolve(false), 2000);
 
-      Bun.connect({
+      void Bun.connect({
         unix: SOCKET_PATH,
         socket: {
           open(socket) {
@@ -236,7 +236,7 @@ export async function stopDaemon(): Promise<void> {
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => resolve(), 3000);
 
-        Bun.connect({
+        void Bun.connect({
           unix: SOCKET_PATH,
           socket: {
             open(socket) {

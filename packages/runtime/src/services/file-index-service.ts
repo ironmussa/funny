@@ -85,7 +85,7 @@ async function getFileIndexImpl(projectPath: string): Promise<FileIndexSnapshot>
 
   // Background staleness refresh — return current snapshot immediately
   if (Date.now() - existing.lastBuiltAt > STALE_TTL_MS && !existing.rebuilding) {
-    refreshIndex(projectPath).match(
+    void refreshIndex(projectPath).match(
       () => undefined,
       (e) =>
         log.warn('File index: background refresh failed', {

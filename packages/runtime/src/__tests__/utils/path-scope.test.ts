@@ -18,9 +18,7 @@ import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'vit
 // hoist time. `require()` works because the test file is CJS-bridged by
 // vitest.
 const { FAKE_HOME } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pathMod = require('path') as typeof import('path');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const osMod = require('os') as typeof import('os');
   return { FAKE_HOME: pathMod.resolve(osMod.tmpdir(), 'funny-path-scope-test-' + Date.now()) };
 });

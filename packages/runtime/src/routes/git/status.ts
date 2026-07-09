@@ -1,4 +1,3 @@
-/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Git Operations
  * @domain subdomain-type: supporting

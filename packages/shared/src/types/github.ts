@@ -162,6 +162,8 @@ export interface PRDetail {
   checks_pending: number;
   created_at: string;
   updated_at: string;
+  /** Last commit currently at the PR head. Present when the detail endpoint can resolve head.sha. */
+  last_commit?: PRCommit | null;
 }
 
 // ─── PR Review Threads (inline comments) ─────────────────

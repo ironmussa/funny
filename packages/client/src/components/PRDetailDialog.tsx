@@ -1,4 +1,4 @@
-import type { FileDiffSummary, GitHubPR, PRCommit, PRFile } from '@funny/shared';
+import type { FileDiffSummary, GitHubPR, PRCommit, PRDetail, PRFile } from '@funny/shared';
 import { FileCode, GitCommitHorizontal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -15,14 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 
-import { BranchBadge } from './BranchBadge';
 import { DiffStats } from './DiffStats';
 import { FileTree } from './FileTree';
-import { PRBadge } from './PRBadge';
-import { PRStateBadge } from './PRSummaryCard';
+import { PinnedPRCard } from './PinnedPRCard';
+import { PRCompactIdentity } from './pull-requests/PRCompactIdentity';
 import { ExpandedDiffView } from './tool-cards/ExpandedDiffDialog';
 
 const log = createClientLogger('pr-detail-dialog');
@@ -62,12 +63,273 @@ interface PRDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   pr: GitHubPR;
+  currentUserLogin?: string;
 }
 
-export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDialogProps) {
+interface PRDetailInfoTabProps {
+  commits: PRCommit[];
+  selectedCommit: string;
+  onSelectedCommitChange: (value: string) => void;
+  totalAdditions: number;
+  totalDeletions: number;
+  displayedFiles: PRFile[];
+  filteredFiles: PRFile[];
+  fileSummaries: FileDiffSummary[];
+  isLoading: boolean;
+  error: string | null;
+  loadingCommitFiles: boolean;
+  fileSearch: string;
+  onFileSearchChange: (value: string) => void;
+  fileSearchCaseSensitive: boolean;
+  onFileSearchCaseSensitiveChange: (value: boolean) => void;
+  selectedFile: string | null;
+  onSelectedFileChange: (filePath: string | null) => void;
+  onRevertFile: (filePath: string) => Promise<void>;
+  diffCache: Map<string, string>;
+  onRequestFullDiff: (
+    filePath: string,
+  ) => Promise<{ oldValue: string; newValue: string; rawDiff?: string } | null>;
+}
+
+function PRDetailInfoTab({
+  commits,
+  selectedCommit,
+  onSelectedCommitChange,
+  totalAdditions,
+  totalDeletions,
+  displayedFiles,
+  filteredFiles,
+  fileSummaries,
+  isLoading,
+  error,
+  loadingCommitFiles,
+  fileSearch,
+  onFileSearchChange,
+  fileSearchCaseSensitive,
+  onFileSearchCaseSensitiveChange,
+  selectedFile,
+  onSelectedFileChange,
+  onRevertFile,
+  diffCache,
+  onRequestFullDiff,
+}: PRDetailInfoTabProps) {
+  return (
+    <TabsContent value="info" className="mt-0 flex min-h-0 flex-1 flex-col">
+      <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2">
+        <Select value={selectedCommit} onValueChange={onSelectedCommitChange}>
+          <SelectTrigger
+            className="h-6 w-auto max-w-[400px] text-[11px]"
+            data-testid="pr-detail-commit-select"
+          >
+            <GitCommitHorizontal className="text-muted-foreground mr-1 size-3 shrink-0" />
+            <SelectValue placeholder="All commits">
+              {selectedCommit === 'all' ? (
+                <span className="text-[11px]">All commits ({commits.length})</span>
+              ) : (
+                <span className="truncate text-[11px]">
+                  {firstLine(
+                    commits.find((c) => c.sha === selectedCommit)?.message ?? selectedCommit,
+                  )}
+                </span>
+              )}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="max-w-[480px]">
+            <SelectItem value="all" data-testid="pr-detail-commit-all">
+              <span className="text-[11px]">All commits ({commits.length})</span>
+            </SelectItem>
+            {commits.map((c) => (
+              <SelectItem
+                key={c.sha}
+                value={c.sha}
+                data-testid={`pr-detail-commit-${shortSha(c.sha)}`}
+              >
+                <div className="flex flex-col gap-0.5 py-0.5">
+                  <span className="truncate text-[11px]">{firstLine(c.message)}</span>
+                  <span className="text-muted-foreground text-[10px]">
+                    <span className="font-mono">{shortSha(c.sha)}</span>
+                    {c.author?.login && <> &middot; {c.author.login}</>}
+                    {c.date && <> &middot; {new Date(c.date).toLocaleDateString()}</>}
+                  </span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DiffStats
+          linesAdded={totalAdditions}
+          linesDeleted={totalDeletions}
+          dirtyFileCount={displayedFiles.length}
+          variant="pr"
+          size="xxs"
+          tooltips
+        />
+      </div>
+
+      {isLoading ? (
+        <LoadingState testId="pr-detail-loading" label="Loading PR data…" />
+      ) : error ? (
+        <div className="text-muted-foreground flex flex-1 items-center justify-center text-xs">
+          {error}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          <div
+            className="border-border flex w-[280px] shrink-0 flex-col border-r"
+            data-testid="pr-detail-file-tree"
+          >
+            {displayedFiles.length > 0 && (
+              <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
+                <SearchBar
+                  query={fileSearch}
+                  onQueryChange={onFileSearchChange}
+                  placeholder="Filter files…"
+                  totalMatches={filteredFiles.length}
+                  resultLabel={fileSearch ? `${filteredFiles.length}/${displayedFiles.length}` : ''}
+                  caseSensitive={fileSearchCaseSensitive}
+                  onCaseSensitiveChange={onFileSearchCaseSensitiveChange}
+                  onClose={fileSearch ? () => onFileSearchChange('') : undefined}
+                  autoFocus={false}
+                  testIdPrefix="pr-detail-file-filter"
+                />
+              </div>
+            )}
+
+            <ScrollArea className="min-h-0 flex-1">
+              {loadingCommitFiles ? (
+                <LoadingState testId="pr-detail-files-loading" label="Loading…" />
+              ) : fileSummaries.length === 0 ? (
+                <div className="text-muted-foreground py-4 text-center text-xs">
+                  {fileSearch ? 'No matching files' : 'No files changed'}
+                </div>
+              ) : (
+                <FileTree
+                  files={fileSummaries}
+                  selectedFile={selectedFile}
+                  onFileClick={onSelectedFileChange}
+                  onRevertFile={onRevertFile}
+                  revertLabel="Revert to base"
+                  diffStatsSize="xxs"
+                  searchQuery={fileSearch}
+                  testIdPrefix="pr-detail"
+                />
+              )}
+            </ScrollArea>
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-col" data-testid="pr-detail-diff-pane">
+            {!selectedFile ? (
+              <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
+                <FileCode className="size-8 opacity-30" />
+                <p className="text-xs">Select a file to view changes</p>
+              </div>
+            ) : (
+              <ExpandedDiffView
+                filePath={selectedFile}
+                oldValue=""
+                newValue=""
+                rawDiff={diffCache.get(selectedFile)}
+                files={fileSummaries}
+                diffCache={diffCache}
+                onFileSelect={onSelectedFileChange}
+                onRequestFullDiff={onRequestFullDiff}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </TabsContent>
+  );
+}
+
+function PRDetailHeader({
+  pr,
+  detail,
+  commitCount,
+  totalAdditions,
+  totalDeletions,
+  changedFiles,
+  onClose,
+}: {
+  pr: GitHubPR;
+  detail?: PRDetail;
+  commitCount: number;
+  totalAdditions: number;
+  totalDeletions: number;
+  changedFiles: number;
+  onClose: () => void;
+}) {
+  const headerPr = detail
+    ? {
+        ...pr,
+        ...detail,
+        head: {
+          ...pr.head,
+          ...detail.head,
+        },
+        base: {
+          ...pr.base,
+          ...detail.base,
+        },
+      }
+    : commitCount > 0
+      ? { ...pr, commits: commitCount }
+      : pr;
+  const stats = detail
+    ? {
+        additions: detail.additions,
+        deletions: detail.deletions,
+        changedFiles: detail.changed_files,
+      }
+    : changedFiles > 0
+      ? {
+          additions: totalAdditions,
+          deletions: totalDeletions,
+          changedFiles,
+        }
+      : null;
+
+  return (
+    <div className="border-border shrink-0 border-b px-4 py-3">
+      <DialogTitle className="sr-only">{pr.title}</DialogTitle>
+      <DialogDescription className="sr-only">
+        Pull request detail with file changes and diffs
+      </DialogDescription>
+      <PRCompactIdentity
+        pr={headerPr}
+        showStateBadge
+        numberTestId="pr-detail-badge"
+        titleTestId="pr-detail-title"
+        mergeLineTestId="pr-detail-merge-line"
+        statusTestId="pr-detail-status"
+        stats={stats}
+        reviewDecision={detail?.review_decision}
+        mergeableState={detail?.mergeable_state}
+        titleExtra={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClose}
+            className="text-muted-foreground shrink-0"
+            data-testid="pr-detail-close"
+          >
+            <X className="icon-xs" />
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+export function PRDetailDialog({
+  open,
+  onOpenChange,
+  projectId,
+  pr,
+  currentUserLogin,
+}: PRDetailDialogProps) {
   const prNumber = pr.number;
-  const prTitle = pr.title;
-  const prUrl = pr.html_url;
+  const { detail } = usePRDetail(projectId, prNumber);
   // Data state
   const [files, setFiles] = useState<PRFile[]>([]);
   const [commits, setCommits] = useState<PRCommit[]>([]);
@@ -82,14 +344,17 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
   const [loadingCommitFiles, setLoadingCommitFiles] = useState(false);
   const [fileSearch, setFileSearch] = useState('');
   const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'conversation'>('info');
 
   // Fetch data when dialog opens
   useEffect(() => {
     if (!open) return;
+    void usePRDetailStore.getState().fetchPRDetail(projectId, prNumber);
     setError(null);
     setSelectedFile(null);
     setSelectedCommit('all');
     setCommitFiles(null);
+    setActiveTab('info');
 
     const loadData = async () => {
       setLoadingFiles(true);
@@ -234,183 +499,78 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
         className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
         data-testid="pr-detail-dialog"
       >
-        {/* ── Header ── */}
-        <div className="border-border shrink-0 border-b px-4 py-3">
-          {/* Row 1: Title + close button */}
-          <div className="flex items-start justify-between gap-2">
-            <DialogTitle className="text-sm leading-tight font-semibold">{prTitle}</DialogTitle>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => onOpenChange(false)}
-              className="text-muted-foreground shrink-0"
-              data-testid="pr-detail-close"
-            >
-              <X className="icon-xs" />
-            </Button>
-          </div>
-          <DialogDescription className="sr-only">
-            Pull request detail with file changes and diffs
-          </DialogDescription>
+        <PRDetailHeader
+          pr={pr}
+          detail={detail}
+          commitCount={commits.length}
+          totalAdditions={totalAdditions}
+          totalDeletions={totalDeletions}
+          changedFiles={displayedFiles.length}
+          onClose={() => onOpenChange(false)}
+        />
 
-          {/* Row 2: author wants to merge N commits into [base] from [head] + PR badge + State badge */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[11px]">
-            <span className="text-muted-foreground">
-              <span className="text-foreground font-medium">{pr.user?.login ?? 'unknown'}</span>
-              {' wants to merge '}
-              {commits.length > 0 ? (
-                <>
-                  {commits.length} commit{commits.length !== 1 ? 's' : ''}
-                </>
-              ) : (
-                'commits'
-              )}
-              {' into '}
-            </span>
-            <BranchBadge branch={pr.base.ref} size="xs" />
-            <span className="text-muted-foreground">from</span>
-            <BranchBadge branch={pr.head.ref} size="xs" />
-            <PRBadge
-              prNumber={prNumber}
-              prState={pr.merged_at ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN'}
-              prUrl={prUrl}
-              size="xxs"
-              data-testid="pr-detail-badge"
-            />
-            <PRStateBadge state={pr.state} draft={pr.draft} merged={!!pr.merged_at} />
-          </div>
-
-          {/* Row 3: Commit selector + DiffStats */}
-          <div className="flex items-center gap-2 pt-1">
-            <Select value={selectedCommit} onValueChange={setSelectedCommit}>
-              <SelectTrigger
-                className="h-6 w-auto max-w-[400px] text-[11px]"
-                data-testid="pr-detail-commit-select"
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as 'info' | 'conversation')}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="border-border shrink-0 border-b px-4 py-2">
+            <TabsList className="h-7 rounded-md p-0.5" data-testid="pr-detail-tabs">
+              <TabsTrigger
+                value="info"
+                onClick={() => setActiveTab('info')}
+                data-testid="pr-detail-tab-info"
               >
-                <GitCommitHorizontal className="text-muted-foreground mr-1 size-3 shrink-0" />
-                <SelectValue placeholder="All commits">
-                  {selectedCommit === 'all' ? (
-                    <span className="text-[11px]">All commits ({commits.length})</span>
-                  ) : (
-                    <span className="truncate text-[11px]">
-                      {firstLine(
-                        commits.find((c) => c.sha === selectedCommit)?.message ?? selectedCommit,
-                      )}
-                    </span>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="max-w-[480px]">
-                <SelectItem value="all" data-testid="pr-detail-commit-all">
-                  <span className="text-[11px]">All commits ({commits.length})</span>
-                </SelectItem>
-                {commits.map((c) => (
-                  <SelectItem
-                    key={c.sha}
-                    value={c.sha}
-                    data-testid={`pr-detail-commit-${shortSha(c.sha)}`}
-                  >
-                    <div className="flex flex-col gap-0.5 py-0.5">
-                      <span className="truncate text-[11px]">{firstLine(c.message)}</span>
-                      <span className="text-muted-foreground text-[10px]">
-                        <span className="font-mono">{shortSha(c.sha)}</span>
-                        {c.author?.login && <> &middot; {c.author.login}</>}
-                        {c.date && <> &middot; {new Date(c.date).toLocaleDateString()}</>}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <DiffStats
-              linesAdded={totalAdditions}
-              linesDeleted={totalDeletions}
-              dirtyFileCount={displayedFiles.length}
-              variant="pr"
-              size="xxs"
-              tooltips
-            />
+                Info
+              </TabsTrigger>
+              <TabsTrigger
+                value="conversation"
+                onClick={() => setActiveTab('conversation')}
+                data-testid="pr-detail-tab-conversation"
+              >
+                Conversation
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </div>
 
-        {/* ── Body ── */}
-        {isLoading ? (
-          <LoadingState testId="pr-detail-loading" label="Loading PR data…" />
-        ) : error ? (
-          <div className="text-muted-foreground flex flex-1 items-center justify-center text-xs">
-            {error}
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1">
-            {/* ── File tree sidebar (reuses existing FileTree component) ── */}
-            <div
-              className="border-border flex w-[280px] shrink-0 flex-col border-r"
-              data-testid="pr-detail-file-tree"
-            >
-              {/* File search */}
-              {displayedFiles.length > 0 && (
-                <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
-                  <SearchBar
-                    query={fileSearch}
-                    onQueryChange={setFileSearch}
-                    placeholder="Filter files…"
-                    totalMatches={filteredFiles.length}
-                    resultLabel={
-                      fileSearch ? `${filteredFiles.length}/${displayedFiles.length}` : ''
-                    }
-                    caseSensitive={fileSearchCaseSensitive}
-                    onCaseSensitiveChange={setFileSearchCaseSensitive}
-                    onClose={fileSearch ? () => setFileSearch('') : undefined}
-                    autoFocus={false}
-                    testIdPrefix="pr-detail-file-filter"
-                  />
-                </div>
-              )}
+          <PRDetailInfoTab
+            commits={commits}
+            selectedCommit={selectedCommit}
+            onSelectedCommitChange={setSelectedCommit}
+            totalAdditions={totalAdditions}
+            totalDeletions={totalDeletions}
+            displayedFiles={displayedFiles}
+            filteredFiles={filteredFiles}
+            fileSummaries={fileSummaries}
+            isLoading={isLoading}
+            error={error}
+            loadingCommitFiles={loadingCommitFiles}
+            fileSearch={fileSearch}
+            onFileSearchChange={setFileSearch}
+            fileSearchCaseSensitive={fileSearchCaseSensitive}
+            onFileSearchCaseSensitiveChange={setFileSearchCaseSensitive}
+            selectedFile={selectedFile}
+            onSelectedFileChange={setSelectedFile}
+            onRevertFile={handleRevertFile}
+            diffCache={diffCache}
+            onRequestFullDiff={handleRequestFullDiff}
+          />
 
-              <ScrollArea className="min-h-0 flex-1">
-                {loadingCommitFiles ? (
-                  <LoadingState testId="pr-detail-files-loading" label="Loading…" />
-                ) : fileSummaries.length === 0 ? (
-                  <div className="text-muted-foreground py-4 text-center text-xs">
-                    {fileSearch ? 'No matching files' : 'No files changed'}
-                  </div>
-                ) : (
-                  <FileTree
-                    files={fileSummaries}
-                    selectedFile={selectedFile}
-                    onFileClick={setSelectedFile}
-                    onRevertFile={handleRevertFile}
-                    revertLabel="Revert to base"
-                    diffStatsSize="xxs"
-                    searchQuery={fileSearch}
-                    testIdPrefix="pr-detail"
-                  />
-                )}
-              </ScrollArea>
-            </div>
-
-            {/* ── Diff viewer ── */}
-            <div className="flex min-w-0 flex-1 flex-col" data-testid="pr-detail-diff-pane">
-              {!selectedFile ? (
-                <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
-                  <FileCode className="size-8 opacity-30" />
-                  <p className="text-xs">Select a file to view changes</p>
-                </div>
-              ) : (
-                <ExpandedDiffView
-                  filePath={selectedFile}
-                  oldValue=""
-                  newValue=""
-                  rawDiff={diffCache.get(selectedFile)}
-                  files={fileSummaries}
-                  diffCache={diffCache}
-                  onFileSelect={setSelectedFile}
-                  onRequestFullDiff={handleRequestFullDiff}
-                />
-              )}
-            </div>
-          </div>
-        )}
+          <TabsContent value="conversation" className="mt-0 min-h-0 flex-1">
+            <ScrollArea className="h-full">
+              <div className="pr-detail-conversation p-4">
+                <style>
+                  {
+                    '.pr-detail-conversation [data-testid^="pinned-pr-card-"] > div:first-child { display: none; }'
+                  }
+                </style>
+                {activeTab === 'conversation' ? (
+                  <PinnedPRCard pr={pr} projectId={projectId} currentUserLogin={currentUserLogin} />
+                ) : null}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

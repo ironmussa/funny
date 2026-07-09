@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, GitPullRequest } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -80,6 +80,7 @@ export function PRBadge({
   );
   const content = (
     <>
+      <GitPullRequest className={config.icon} aria-hidden="true" />
       <span>#{prNumber}</span>
       {showExternalIcon ? <ExternalLink className={config.icon} aria-hidden="true" /> : null}
     </>

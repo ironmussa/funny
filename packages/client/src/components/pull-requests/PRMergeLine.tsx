@@ -1,4 +1,3 @@
-import type { GitHubPR } from '@funny/shared';
 import { ExternalLink, FileCode } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,7 +5,14 @@ import { BranchBadge } from '@/components/BranchBadge';
 import { cn } from '@/lib/utils';
 
 interface PRMergeLineProps {
-  pr: GitHubPR;
+  pr: {
+    number: number;
+    html_url?: string;
+    user: { login: string } | null;
+    head: { ref: string };
+    base: { ref: string };
+    commits?: number;
+  };
   showDiffLink?: boolean;
   className?: string;
   'data-testid'?: string;
@@ -18,7 +24,8 @@ function diffUrl(prUrl: string): string {
 
 export function PRMergeLine({ pr, showDiffLink = true, className, ...props }: PRMergeLineProps) {
   const { t } = useTranslation();
-  const hasMergeInfo = !!pr.base.ref && !!pr.head.ref && typeof pr.commits === 'number';
+  const hasMergeInfo = !!pr.base.ref && !!pr.head.ref;
+  const hasCommitCount = typeof pr.commits === 'number';
 
   if (!hasMergeInfo && (!showDiffLink || !pr.html_url)) return null;
 
@@ -38,7 +45,9 @@ export function PRMergeLine({ pr, showDiffLink = true, className, ...props }: PR
             </span>{' '}
             {t('review.pullRequests.wantsToMerge', 'wants to merge')}{' '}
             <span className="text-foreground font-medium">
-              {pr.commits} {pr.commits === 1 ? 'commit' : 'commits'}
+              {hasCommitCount
+                ? `${pr.commits} ${pr.commits === 1 ? 'commit' : 'commits'}`
+                : t('review.pullRequests.commits', 'commits')}
             </span>{' '}
             {t('review.pullRequests.into', 'into')}
           </span>

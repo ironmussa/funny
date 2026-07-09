@@ -1,6 +1,12 @@
-import type { GitHubPR } from '@funny/shared';
+import type { PRCommit } from '@funny/shared';
 
-export function getLastCommitAuthor(pr: GitHubPR): { name: string; avatarUrl?: string } | null {
+interface PRWithLastCommit {
+  last_commit?: PRCommit | null;
+}
+
+export function getLastCommitAuthor(
+  pr: PRWithLastCommit,
+): { name: string; avatarUrl?: string } | null {
   const commit = pr.last_commit;
   if (!commit) return null;
   if (commit.author?.login) {

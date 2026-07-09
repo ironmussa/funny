@@ -1,10 +1,11 @@
-import type { GitHubPR, GitStatusInfo, Thread } from '@funny/shared';
+import type { GitHubPR, GitStatusInfo, PRDetail, Thread } from '@funny/shared';
 import { screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PullRequestsTab } from '@/components/PullRequestsTab';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -18,9 +19,15 @@ const apiMock = vi.hoisted(() => ({
   githubPRs: vi.fn(),
   githubPRsSearch: vi.fn(),
 }));
+const githubApiMock = vi.hoisted(() => ({
+  githubPRDetail: vi.fn(),
+}));
 
 vi.mock('@/lib/api', () => ({
   api: apiMock,
+}));
+vi.mock('@/lib/api/github', () => ({
+  githubApi: githubApiMock,
 }));
 
 vi.mock('@/components/PinnedPRCard', () => ({
@@ -91,12 +98,56 @@ function makePR(overrides: Partial<GitHubPR> = {}): GitHubPR {
   };
 }
 
+function makeDetail(overrides: Partial<PRDetail> = {}): PRDetail {
+  return {
+    number: 51,
+    title: 'fix(core): throttle public auth token endpoints',
+    body: '',
+    state: 'open',
+    draft: false,
+    merged: false,
+    mergeable_state: 'mergeable',
+    html_url: 'https://github.com/acme/repo/pull/51',
+    additions: 103,
+    deletions: 37,
+    changed_files: 2,
+    commits: 2,
+    head: { ref: 'feature/pr-branch', sha: 'abc123' },
+    base: { ref: 'qa' },
+    user: {
+      login: 'argenisleon',
+      avatar_url: 'https://example.test/avatar.png',
+    },
+    review_decision: null,
+    checks: [],
+    checks_passed: 0,
+    checks_failed: 0,
+    checks_pending: 0,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:01:00.000Z',
+    ...overrides,
+  };
+}
+
 describe('PullRequestsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    usePRDetailStore.getState().clearAll();
     apiMock.githubStatus.mockReturnValue(okAsync({ connected: true, login: 'argenisleon' }));
     apiMock.githubPRFilterOptions.mockReturnValue(okAsync({ labels: [], users: [] }));
     apiMock.githubPRsSearch.mockReturnValue(okAsync({ prs: [], hasMore: false }));
+    githubApiMock.githubPRDetail.mockImplementation((_projectId: string, prNumber: number) =>
+      okAsync(
+        makeDetail({
+          number: prNumber,
+          html_url: `https://github.com/acme/repo/pull/${prNumber}`,
+          head: {
+            ref: prNumber === 52 ? 'other-branch' : 'feature/pr-branch',
+            sha: 'abc123',
+          },
+        }),
+      ),
+    );
 
     const thread = makeThread();
     useProjectStore.setState({
@@ -160,7 +211,7 @@ describe('PullRequestsTab', () => {
             number: 52,
             html_url: 'https://github.com/acme/repo/pull/52',
             head: { ref: 'other-branch', label: 'acme:other-branch' },
-            commits: 3,
+            commits: undefined,
             last_commit: {
               sha: 'abc123',
               message: 'fix: handle edge case',
@@ -191,17 +242,21 @@ describe('PullRequestsTab', () => {
     expect(screen.queryByTestId('prs-toggle-view-all')).not.toBeInTheDocument();
     expect(screen.queryByTestId('prs-branch-focus-indicator')).not.toBeInTheDocument();
     expect(screen.getByTestId('prs-state-trigger')).toHaveTextContent('Open');
-    expect(screen.getByText(/Updated/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Updated/).length).toBeGreaterThan(0);
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
     const mergeLine = screen.getByTestId('pr-merge-line-52');
-    expect(mergeLine).toHaveTextContent('argenisleon wants to merge 3 commits into');
+    expect(mergeLine).toHaveTextContent('argenisleon wants to merge 2 commits into');
     expect(mergeLine).toHaveTextContent('qa');
     expect(mergeLine).toHaveTextContent('from');
     expect(mergeLine).toHaveTextContent('other-branch');
-    expect(screen.getByTestId('pr-diff-link-52')).toHaveAttribute(
-      'href',
-      'https://github.com/acme/repo/pull/52/files',
-    );
+    expect(screen.getByTestId('pr-meta-52')).toHaveTextContent('Updated');
+    await waitFor(() => {
+      expect(screen.getByTestId('pr-status-52')).toHaveTextContent('+103');
+    });
+    expect(screen.getByTestId('pr-status-52')).toHaveTextContent('-37');
+    expect(screen.getByTestId('pr-status-52')).toHaveTextContent('2');
+    expect(screen.getByTestId('pr-status-52')).toHaveTextContent('Ready to merge');
+    expect(screen.queryByTestId('pr-diff-link-52')).not.toBeInTheDocument();
   });
 });

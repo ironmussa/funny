@@ -1,19 +1,17 @@
 import type { GitHubPR, PRFilterOptions } from '@funny/shared';
 import { ExternalLink, GitBranch, GitPullRequest, Loader2, RefreshCw } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AuthorBadge } from '@/components/AuthorBadge';
-import { getLastCommitAuthor } from '@/components/pull-requests/last-commit-author';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
+import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
 import {
   PRFilterBar,
   EMPTY_PR_FILTERS,
   hasActivePRFilters,
   type PRFilterState,
 } from '@/components/pull-requests/PRFilterBar';
-import { PRMergeLine } from '@/components/pull-requests/PRMergeLine';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -24,6 +22,7 @@ import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadId,
@@ -33,26 +32,11 @@ import {
 } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
-import { PinnedPRCard } from './PinnedPRCard';
-import { PRBadge } from './PRBadge';
 import { PRDetailDialog } from './PRDetailDialog';
 
 const log = createClientLogger('pull-requests-tab');
 
 // ── Helpers ──
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
-}
 
 type PRState = 'open' | 'closed' | 'all';
 
@@ -60,6 +44,300 @@ type PRState = 'open' | 'closed' | 'all';
 
 interface PullRequestsTabProps {
   visible?: boolean;
+}
+
+function PullRequestRow({
+  pr,
+  projectId,
+  visible,
+  onOpen,
+  onCreateThread,
+}: {
+  pr: GitHubPR;
+  projectId: string;
+  visible?: boolean;
+  onOpen: (pr: GitHubPR) => void;
+  onCreateThread: (branch: string) => void;
+}) {
+  const { detail } = usePRDetail(projectId, pr.number);
+
+  useEffect(() => {
+    if (!visible) return;
+    void usePRDetailStore.getState().fetchPRDetail(projectId, pr.number);
+  }, [projectId, pr.number, visible]);
+
+  const compactPr = detail
+    ? {
+        ...pr,
+        ...detail,
+        head: {
+          ...pr.head,
+          ...detail.head,
+        },
+        base: {
+          ...pr.base,
+          ...detail.base,
+        },
+      }
+    : pr;
+
+  return (
+    <div
+      className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
+      data-testid={`pr-item-${pr.number}`}
+    >
+      <PRCompactIdentity
+        pr={compactPr}
+        onTitleClick={() => onOpen(pr)}
+        showStateBadge
+        numberTestId={`pr-number-link-${pr.number}`}
+        titleTestId={`pr-item-open-${pr.number}`}
+        mergeLineTestId={`pr-merge-line-${pr.number}`}
+        metaTestId={`pr-meta-${pr.number}`}
+        statusTestId={`pr-status-${pr.number}`}
+        contentAfterMerge={
+          pr.labels.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {pr.labels.map((label) => {
+                const bg = pastelize(`#${label.color}`);
+                return (
+                  <span
+                    key={label.name}
+                    className="rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium"
+                    style={{ backgroundColor: bg, color: contrastText(bg) }}
+                  >
+                    {label.name}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null
+        }
+      />
+      <PRActionsMenu prNumber={pr.number} branch={pr.head.ref} onCreateThread={onCreateThread} />
+    </div>
+  );
+}
+
+function PullRequestsToolbar({
+  loading,
+  onRefresh,
+  filters,
+  onFiltersChange,
+  filterOptions,
+  filterOptionsLoading,
+  state,
+  onStateChange,
+  repoInfo,
+}: {
+  loading: boolean;
+  onRefresh: () => void;
+  filters: PRFilterState;
+  onFiltersChange: (filters: PRFilterState) => void;
+  filterOptions: PRFilterOptions | null;
+  filterOptionsLoading: boolean;
+  state: PRState;
+  onStateChange: (state: PRState) => void;
+  repoInfo: { owner: string; repo: string } | null;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className="border-sidebar-border flex items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5"
+      data-testid="prs-toolbar"
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onRefresh}
+            disabled={loading}
+            className="text-muted-foreground shrink-0"
+            data-testid="prs-refresh"
+          >
+            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
+      </Tooltip>
+
+      <PRFilterBar
+        value={filters}
+        onChange={onFiltersChange}
+        options={filterOptions}
+        optionsLoading={filterOptionsLoading}
+        state={state}
+        onStateChange={onStateChange}
+        showState
+        showBorder={false}
+        className="min-w-max flex-nowrap"
+      />
+
+      <div className="min-w-0 flex-1" />
+
+      {repoInfo ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              className="text-muted-foreground shrink-0"
+              data-testid="prs-open-github"
+            >
+              <a
+                href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="icon-base" />
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t('review.pullRequests.openOnGithub', 'Open on GitHub')}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
+}
+
+function PullRequestsContent({
+  loading,
+  prCount,
+  error,
+  searchMode,
+  state,
+  onRefresh,
+  currentBranchPRs,
+  otherPRs,
+  currentBranch,
+  renderPRRow,
+  hasMore,
+  onLoadMore,
+}: {
+  loading: boolean;
+  prCount: number;
+  error: string | null;
+  searchMode: boolean;
+  state: PRState;
+  onRefresh: () => void;
+  currentBranchPRs: GitHubPR[];
+  otherPRs: GitHubPR[];
+  currentBranch?: string;
+  renderPRRow: (pr: GitHubPR) => ReactNode;
+  hasMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const { t } = useTranslation();
+
+  if (loading && prCount === 0) {
+    return (
+      <LoadingState
+        testId="prs-loading"
+        label={t('review.pullRequests.loading', 'Loading pull requests\u2026')}
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title={error}
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            className="gap-1.5"
+            data-testid="prs-retry"
+          >
+            <RefreshCw className="icon-xs" />
+            {t('common.retry', 'Retry')}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (prCount === 0) {
+    return (
+      <EmptyState
+        icon={GitPullRequest}
+        title={
+          searchMode
+            ? t('review.pullRequests.noMatchingPRs', 'No pull requests match these filters')
+            : state === 'open'
+              ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
+              : state === 'closed'
+                ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
+                : t('review.pullRequests.noPRs', 'No pull requests')
+        }
+      />
+    );
+  }
+
+  return (
+    <ScrollArea className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-col">
+        {currentBranchPRs.length > 0 ? (
+          <>
+            <div
+              className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground flex items-center gap-1.5 border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
+              data-testid="prs-current-branch-header"
+            >
+              <GitBranch className="size-3" />
+              <span className="truncate">
+                {t('review.pullRequests.currentBranch', 'Current branch')}
+                {currentBranch ? (
+                  <>
+                    {' '}
+                    &middot; <bdi>{currentBranch}</bdi>
+                  </>
+                ) : null}
+              </span>
+            </div>
+            <div className="divide-sidebar-border flex flex-col divide-y">
+              {currentBranchPRs.map(renderPRRow)}
+            </div>
+          </>
+        ) : null}
+        {otherPRs.length > 0 ? (
+          <>
+            {currentBranchPRs.length > 0 ? (
+              <div
+                className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
+                data-testid="prs-other-header"
+              >
+                {t('review.pullRequests.otherPRs', 'Other pull requests')}
+              </div>
+            ) : null}
+            <div className="divide-sidebar-border flex flex-col divide-y">
+              {otherPRs.map(renderPRRow)}
+            </div>
+          </>
+        ) : null}
+        {hasMore ? (
+          <div className="flex justify-center py-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onLoadMore}
+              disabled={loading}
+              className="gap-1.5 text-xs"
+              data-testid="prs-load-more"
+            >
+              {loading ? <Loader2 className="icon-xs animate-spin" /> : null}
+              {t('review.pullRequests.loadMore', 'Load more')}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </ScrollArea>
+  );
 }
 
 export function PullRequestsTab({ visible }: PullRequestsTabProps) {
@@ -264,87 +542,16 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
     currentBranchPRUrl,
   ]);
 
-  const renderPRRow = (pr: GitHubPR) => {
-    const prState = pr.merged_at ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN';
-    const lastCommitAuthor = getLastCommitAuthor(pr);
-    return (
-      <div
-        key={pr.number}
-        className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
-        data-testid={`pr-item-${pr.number}`}
-      >
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-baseline gap-1.5">
-            <PRBadge
-              prNumber={pr.number}
-              prState={prState}
-              prUrl={pr.html_url}
-              size="xxs"
-              data-testid={`pr-number-link-${pr.number}`}
-            />
-            <button
-              type="button"
-              onClick={() => setSelectedPR(pr)}
-              className="focus-visible:ring-ring min-w-0 text-left leading-tight font-medium hover:underline focus-visible:ring-1 focus-visible:outline-none"
-              data-testid={`pr-item-open-${pr.number}`}
-            >
-              {pr.title}
-            </button>
-          </div>
-          <PRMergeLine pr={pr} data-testid={`pr-merge-line-${pr.number}`} />
-          {pr.labels.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {pr.labels.map((label) => {
-                const bg = pastelize(`#${label.color}`);
-                return (
-                  <span
-                    key={label.name}
-                    className="rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium"
-                    style={{ backgroundColor: bg, color: contrastText(bg) }}
-                  >
-                    {label.name}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
-            {pr.user && (
-              <AuthorBadge name={pr.user.login} avatarUrl={pr.user.avatar_url} size="xs" />
-            )}
-            <span>&middot;</span>
-            <span>
-              {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at)}
-            </span>
-            {lastCommitAuthor ? (
-              <>
-                <span>&middot;</span>
-                <span>{t('review.pullRequests.lastCommitBy', 'Last commit by')}</span>
-                <AuthorBadge
-                  name={lastCommitAuthor.name}
-                  avatarUrl={lastCommitAuthor.avatarUrl}
-                  size="xs"
-                />
-              </>
-            ) : null}
-            {pr.draft && (
-              <>
-                <span>&middot;</span>
-                <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] leading-none">
-                  {t('review.pullRequests.draft', 'Draft')}
-                </Badge>
-              </>
-            )}
-          </div>
-        </div>
-        <PRActionsMenu
-          prNumber={pr.number}
-          branch={pr.head.ref}
-          onCreateThread={createThreadFromPRBranch}
-        />
-      </div>
-    );
-  };
+  const renderPRRow = (pr: GitHubPR) => (
+    <PullRequestRow
+      key={pr.number}
+      pr={pr}
+      projectId={projectId!}
+      visible={visible}
+      onOpen={setSelectedPR}
+      onCreateThread={createThreadFromPRBranch}
+    />
+  );
 
   if (!projectId) {
     return (
@@ -357,171 +564,32 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="pull-requests-tab">
-      {/* Toolbar */}
-      <div
-        className="border-sidebar-border flex items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5"
-        data-testid="prs-toolbar"
-      >
-        {/* Refresh */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={refresh}
-              disabled={loading}
-              className="text-muted-foreground shrink-0"
-              data-testid="prs-refresh"
-            >
-              <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
-        </Tooltip>
+      <PullRequestsToolbar
+        loading={loading}
+        onRefresh={refresh}
+        filters={filters}
+        onFiltersChange={setFilters}
+        filterOptions={filterOptions}
+        filterOptionsLoading={filterOptionsLoading}
+        state={state}
+        onStateChange={setState}
+        repoInfo={repoInfo}
+      />
 
-        <PRFilterBar
-          value={filters}
-          onChange={setFilters}
-          options={filterOptions}
-          optionsLoading={filterOptionsLoading}
-          state={state}
-          onStateChange={setState}
-          showState
-          showBorder={false}
-          className="min-w-max flex-nowrap"
-        />
-
-        <div className="min-w-0 flex-1" />
-
-        {/* Open on GitHub */}
-        {repoInfo && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                asChild
-                className="text-muted-foreground shrink-0"
-                data-testid="prs-open-github"
-              >
-                <a
-                  href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="icon-base" />
-                </a>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {t('review.pullRequests.openOnGithub', 'Open on GitHub')}
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-
-      {/* Content */}
-      {loading && prs.length === 0 ? (
-        <LoadingState
-          testId="prs-loading"
-          label={t('review.pullRequests.loading', 'Loading pull requests\u2026')}
-        />
-      ) : error ? (
-        <EmptyState
-          title={error}
-          action={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refresh}
-              className="gap-1.5"
-              data-testid="prs-retry"
-            >
-              <RefreshCw className="icon-xs" />
-              {t('common.retry', 'Retry')}
-            </Button>
-          }
-        />
-      ) : prs.length === 0 ? (
-        <EmptyState
-          icon={GitPullRequest}
-          title={
-            searchMode
-              ? t('review.pullRequests.noMatchingPRs', 'No pull requests match these filters')
-              : state === 'open'
-                ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
-                : state === 'closed'
-                  ? t('review.pullRequests.noClosedPRs', 'No closed pull requests')
-                  : t('review.pullRequests.noPRs', 'No pull requests')
-          }
-        />
-      ) : (
-        <ScrollArea className="flex min-h-0 flex-1 flex-col">
-          <div className="flex flex-col">
-            {currentBranchPRs.length > 0 && (
-              <>
-                <div
-                  className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground flex items-center gap-1.5 border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
-                  data-testid="prs-current-branch-header"
-                >
-                  <GitBranch className="size-3" />
-                  <span className="truncate">
-                    {t('review.pullRequests.currentBranch', 'Current branch')}
-                    {currentBranch ? (
-                      <>
-                        {' '}
-                        &middot; <bdi>{currentBranch}</bdi>
-                      </>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  {currentBranchPRs.map((pr) => (
-                    <PinnedPRCard
-                      key={pr.number}
-                      pr={pr}
-                      projectId={projectId}
-                      currentUserLogin={currentUserLogin}
-                      onMerged={refresh}
-                      onCreateThreadForBranch={createThreadFromPRBranch}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-            {otherPRs.length > 0 && (
-              <>
-                {currentBranchPRs.length > 0 && (
-                  <div
-                    className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
-                    data-testid="prs-other-header"
-                  >
-                    {t('review.pullRequests.otherPRs', 'Other pull requests')}
-                  </div>
-                )}
-                <div className="divide-sidebar-border flex flex-col divide-y">
-                  {otherPRs.map(renderPRRow)}
-                </div>
-              </>
-            )}
-            {hasMore && (
-              <div className="flex justify-center py-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={loadMore}
-                  disabled={loading}
-                  className="gap-1.5 text-xs"
-                  data-testid="prs-load-more"
-                >
-                  {loading ? <Loader2 className="icon-xs animate-spin" /> : null}
-                  {t('review.pullRequests.loadMore', 'Load more')}
-                </Button>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      )}
+      <PullRequestsContent
+        loading={loading}
+        prCount={prs.length}
+        error={error}
+        searchMode={searchMode}
+        state={state}
+        onRefresh={refresh}
+        currentBranchPRs={currentBranchPRs}
+        otherPRs={otherPRs}
+        currentBranch={currentBranch}
+        renderPRRow={renderPRRow}
+        hasMore={hasMore}
+        onLoadMore={loadMore}
+      />
 
       {/* PR Detail Dialog */}
       {selectedPR && projectId && (
@@ -532,6 +600,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           }}
           projectId={projectId}
           pr={selectedPR}
+          currentUserLogin={currentUserLogin}
         />
       )}
     </div>

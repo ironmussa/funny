@@ -341,3 +341,10 @@ All UI text — including code in diffs, terminals, Monaco editors, and chat mes
 - **Terminals (xterm.js)**: read font size from the store at creation and add a reactive `useEffect` to sync `terminal.options.fontSize` + `fitAddon.fit()` when the setting changes.
 
 Similarly, all components **MUST** respect the active theme (light/dark). Use CSS variables from the theme (e.g., `hsl(var(--foreground))`, `bg-card`, `text-muted-foreground`) — never hardcode color values like `#1b1b1b` or `rgb(255,255,255)`.
+
+## OpenWiki
+
+Structured documentation for this repository lives in [openwiki/quickstart.md](openwiki/quickstart.md):
+repository overview, architecture, agent-execution flow, pipelines/automation, thread & worktree
+domain rules, integrations/standalone services, operations/auth, and the development workflow.
+Consult it when searching for context about how this codebase works.

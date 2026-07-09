@@ -68,8 +68,11 @@ function PlanReviewTrigger({ plan }: { plan: string }) {
           <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
             Comments ({comments.length})
           </p>
-          {comments.map((c, i) => (
-            <div key={i} className="text-foreground mb-1 text-xs">
+          {comments.map((c) => (
+            <div
+              key={`${c.selectedText}:${c.emoji ?? ''}:${c.comment}`}
+              className="text-foreground mb-1 text-xs"
+            >
               <span className="font-medium">{c.emoji || 'Comment'}</span>:{' '}
               <span className="text-muted-foreground">
                 &quot;{c.selectedText.slice(0, 50)}
@@ -93,6 +96,7 @@ function PlanReviewTrigger({ plan }: { plan: string }) {
           setComments((prev) => [...prev, { selectedText: text, emoji, comment: '' }])
         }
         onRemoveComment={(index) => setComments((prev) => prev.filter((_, i) => i !== index))}
+        onRespond={() => setOpen(false)}
       />
     </div>
   );
@@ -163,6 +167,7 @@ function WithCommentsStory() {
           setComments((prev) => [...prev, { selectedText: text, emoji, comment: '' }])
         }
         onRemoveComment={(index) => setComments((prev) => prev.filter((_, i) => i !== index))}
+        onRespond={() => setOpen(false)}
       />
     </>
   );

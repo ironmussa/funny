@@ -1,4 +1,4 @@
-import { BookOpen, Code, Pencil } from 'lucide-react';
+import { BookOpen, CheckCircle2, Code, MessageSquare, Pencil, XCircle } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,12 +8,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,11 @@ import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 import { AnnotatableContent } from './AnnotatableContent';
 import type { PlanComment } from './plan-annotations';
+import {
+  formatPlanAcceptedResponse,
+  formatPlanCommentsFeedback,
+  PLAN_REJECTED_RESPONSE,
+} from './plan-responses';
 
 // Re-export so existing importers (ExitPlanModeCard, stories) keep working.
 export type { PlanComment, AnnotationPosition } from './plan-annotations';
@@ -43,10 +48,28 @@ const LazyEditor = lazy(async () => {
 
 const LazyReactMarkdown = lazy(() => import('react-markdown'));
 
-const _log = createClientLogger('PlanReviewDialog');
-
 const PROSE_CLASSES =
   'prose prose-xs prose-invert prose-headings:text-foreground prose-headings:font-semibold prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0 prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5 prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2 prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0 prose-ul:my-0.5 prose-ol:my-0.5 prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1 prose-strong:text-foreground max-w-none';
+
+function definePlanEditorTheme(monaco: any) {
+  monaco.editor.defineTheme('funny-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#000000',
+      'editorGutter.background': '#000000',
+      'minimap.background': '#0a0a0a',
+      'editorWidget.background': '#1e1e1e',
+      'editorWidget.border': '#454545',
+      'editorWidget.foreground': '#cccccc',
+      'input.background': '#2a2a2a',
+      'input.foreground': '#cccccc',
+      'input.border': '#454545',
+      focusBorder: '#007acc',
+    },
+  });
+}
 
 function planHeadingProps(children: React.ReactNode, titleToId: Map<string, number>) {
   const text = String(children ?? '');
@@ -131,6 +154,7 @@ function PlanOutline({
           {titled.map((section) => (
             <li key={section.id}>
               <button
+                type="button"
                 onClick={() => onNavigate(section.id)}
                 data-testid={`plan-outline-item-${section.id}`}
                 className={cn(
@@ -162,6 +186,7 @@ export function PlanReviewDialog({
   onAddComment,
   onAddEmoji,
   onRemoveComment,
+  onRespond,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -170,6 +195,7 @@ export function PlanReviewDialog({
   onAddComment: (selectedText: string, comment: string) => void;
   onAddEmoji: (selectedText: string, emoji: string) => void;
   onRemoveComment: (index: number) => void;
+  onRespond?: (answer: string) => void;
 }) {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
@@ -177,48 +203,32 @@ export function PlanReviewDialog({
 
   // ── Edit mode ──
   const [isEditing, setIsEditing] = useState(false);
-  const [editablePlan, setEditablePlan] = useState(plan);
-  const [lastSeenPlan, setLastSeenPlan] = useState(plan);
+  const [editState, setEditState] = useState({ sourcePlan: plan, value: plan });
 
-  // Reset edits when the parent passes a new plan reference.
-  if (plan !== lastSeenPlan) {
-    setLastSeenPlan(plan);
-    setEditablePlan(plan);
-  }
-
-  const activePlan = editablePlan;
+  const activePlan = editState.sourcePlan === plan ? editState.value : plan;
+  const handleEditPlanChange = useCallback(
+    (value: string | undefined) => setEditState({ sourcePlan: plan, value: value || '' }),
+    [plan],
+  );
+  const canRespond = typeof onRespond === 'function';
+  const hasEditedPlan = activePlan.trim() !== plan.trim();
   const sections = useMemo(() => parsePlanSections(activePlan), [activePlan]);
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].level > 0);
 
   const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
 
-  const handleBeforeMount = (monaco: any) => {
-    monaco.editor.defineTheme('funny-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#000000',
-        'editorGutter.background': '#000000',
-        'minimap.background': '#0a0a0a',
-        'editorWidget.background': '#1e1e1e',
-        'editorWidget.border': '#454545',
-        'editorWidget.foreground': '#cccccc',
-        'input.background': '#2a2a2a',
-        'input.foreground': '#cccccc',
-        'input.border': '#454545',
-        focusBorder: '#007acc',
-      },
-    });
-  };
-
   // ── Active section tracking via scroll ──
-  const [activeSectionId, setActiveSectionId] = useState<number | null>(sections[0]?.id ?? null);
+  const [trackedActiveSectionId, setTrackedActiveSectionId] = useState<number | null>(null);
+  const sectionIds = useMemo(() => new Set(sections.map((section) => section.id)), [sections]);
+  const activeSectionId =
+    trackedActiveSectionId != null && sectionIds.has(trackedActiveSectionId)
+      ? trackedActiveSectionId
+      : (sections[0]?.id ?? null);
 
   const handleNavigate = useCallback((id: number) => {
     const el = document.getElementById(`plan-review-section-${id}`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setActiveSectionId(id);
+    setTrackedActiveSectionId(id);
   }, []);
 
   // Scroll spy
@@ -238,13 +248,21 @@ export function PlanReviewDialog({
         const id = Number(el.getAttribute('data-section-id'));
         if (!closest || dist < closest.dist) closest = { id, dist };
       });
-      if (closest) setActiveSectionId((closest as { id: number; dist: number }).id);
+      if (closest) setTrackedActiveSectionId((closest as { id: number; dist: number }).id);
     };
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [open, hasSections]);
 
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  const handleRespond = useCallback(
+    (answer: string) => {
+      onRespond?.(answer);
+      onOpenChange(false);
+    },
+    [onOpenChange, onRespond],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -304,9 +322,9 @@ export function PlanReviewDialog({
                 height="100%"
                 language="markdown"
                 theme={monacoTheme}
-                beforeMount={handleBeforeMount}
-                value={editablePlan}
-                onChange={(value: string | undefined) => setEditablePlan(value || '')}
+                beforeMount={definePlanEditorTheme}
+                value={activePlan}
+                onChange={handleEditPlanChange}
                 options={{
                   minimap: { enabled: false },
                   fontSize: codeFontSizePx,
@@ -345,6 +363,47 @@ export function PlanReviewDialog({
               </div>
             </AnnotatableContent>
           </div>
+        )}
+
+        {canRespond && (
+          <DialogFooter className="border-border shrink-0 items-center gap-2 border-t px-4 py-3 sm:justify-between sm:space-x-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRespond(PLAN_REJECTED_RESPONSE)}
+              data-testid="plan-review-reject"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <XCircle className="icon-xs" />
+              {t('thread.rejectPlan', 'Reject plan')}
+            </Button>
+            <div className="flex items-center gap-2">
+              {planComments.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRespond(formatPlanCommentsFeedback(planComments))}
+                  data-testid="plan-review-send-comments"
+                >
+                  <MessageSquare className="icon-xs" />
+                  {t('plan.sendComments', 'Send {{count}} comments', {
+                    count: planComments.length,
+                  })}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => handleRespond(formatPlanAcceptedResponse(activePlan, plan))}
+                disabled={!activePlan.trim()}
+                data-testid="plan-review-accept"
+              >
+                <CheckCircle2 className="icon-xs" />
+                {hasEditedPlan
+                  ? t('plan.approveRevisedAndStart', 'Approve revised plan and start coding')
+                  : t('plan.approveAndStart', 'Approve plan and start coding')}
+              </Button>
+            </div>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

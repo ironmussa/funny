@@ -725,6 +725,7 @@
     "commentPlaceholder": "Comente sobre esta seção...",
     "yourComments": "Seus comentários",
     "approveAndStart": "Aprovar plano e começar a programar",
+    "approveRevisedAndStart": "Aprovar plano revisado e começar a programar",
     "approveWithComments": "Aprovar plano e enviar {{count}} comentário(s)",
     "tellClaude": "Dizer ao agente o que fazer em vez disso",
     "customPlaceholder": "Descreva o que você quer em vez disso...",

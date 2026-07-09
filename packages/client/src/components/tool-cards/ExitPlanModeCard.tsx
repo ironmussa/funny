@@ -11,11 +11,23 @@ import {
   Loader2,
   Maximize2,
 } from 'lucide-react';
-import { Suspense, lazy, useState, useRef, useEffect, useCallback, memo } from 'react';
+import {
+  Suspense,
+  lazy,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  memo,
+  type RefObject,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import type {
+  PromptEditorHandle,
+  PromptSlashResource,
+} from '@/components/prompt-editor/PromptEditor';
 import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -28,6 +40,11 @@ import { cn } from '@/lib/utils';
 import { useProfileStore } from '@/stores/profile-store';
 
 import { AnnotatableContent } from './AnnotatableContent';
+import {
+  formatPlanAcceptedResponse,
+  formatPlanCommentsFeedback,
+  PLAN_REJECTED_RESPONSE,
+} from './plan-responses';
 
 const LazyMarkdown = lazy(() =>
   import('react-markdown').then(({ default: ReactMarkdown }) => ({
@@ -40,6 +57,266 @@ import { PlanReviewDialog, type PlanComment } from './PlanReviewDialog';
 import { useCurrentProjectId, useCurrentProjectPath, useCurrentThreadProviderModel } from './utils';
 
 const cardLog = createClientLogger('ExitPlanMode');
+
+type PlanResponseLabels = {
+  approve: string;
+  reject: string;
+  customPlaceholder: string;
+  startDictation: string;
+  stopDictation: string;
+  transcribing: string;
+  send: string;
+  sendComments: string;
+};
+
+type PlanDictationControls = {
+  enabled: boolean;
+  isRecording: boolean;
+  isTranscribing: boolean;
+  onToggle: () => void;
+};
+
+function createPlanResponseLabels(
+  t: ReturnType<typeof useTranslation>['t'],
+  commentCount: number,
+): PlanResponseLabels {
+  return {
+    approve: t('plan.approveAndStart', 'Approve plan and start coding'),
+    reject: t('thread.rejectPlan', 'Reject plan'),
+    customPlaceholder: t('plan.tellClaude', 'Tell the agent what to do instead'),
+    startDictation: t('prompt.startDictation', 'Start dictation'),
+    stopDictation: t('prompt.stopDictation', 'Stop dictation'),
+    transcribing: t('prompt.transcribing', 'Transcribing...'),
+    send: t('prompt.send', 'Send'),
+    sendComments: t('plan.sendComments', 'Send {{count}} comments', { count: commentCount }),
+  };
+}
+
+function PlanDecisionButton({
+  icon,
+  label,
+  testId,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  testId: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className="border-border/40 text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-3 border-b px-4 py-2.5 text-left text-sm transition-colors"
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function DictationButton({
+  labels,
+  isRecording,
+  isTranscribing,
+  onToggle,
+}: {
+  labels: PlanResponseLabels;
+  isRecording: boolean;
+  isTranscribing: boolean;
+  onToggle: () => void;
+}) {
+  const label = isRecording ? labels.stopDictation : labels.startDictation;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          data-testid="plan-dictate"
+          onClick={onToggle}
+          variant="ghost"
+          size="icon-sm"
+          tabIndex={-1}
+          aria-label={label}
+          disabled={isTranscribing}
+          className={cn(
+            'text-muted-foreground hover:text-foreground',
+            isRecording && 'text-destructive hover:text-destructive',
+          )}
+        >
+          {isTranscribing ? (
+            <Loader2 className="icon-xs animate-spin" />
+          ) : isRecording ? (
+            <MicOff className="icon-xs" />
+          ) : (
+            <Mic className="icon-xs" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {isTranscribing
+          ? labels.transcribing
+          : isRecording
+            ? labels.stopDictation
+            : labels.startDictation}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function PlanCustomResponseEditor({
+  labels,
+  editorRef,
+  editorContainerRef,
+  cwd,
+  slashSkills,
+  slashSkillsLoading,
+  ensureSlashSkills,
+  dictation,
+  hasContent,
+  onSubmitInput,
+  onEditorChange,
+}: {
+  labels: PlanResponseLabels;
+  editorRef: RefObject<PromptEditorHandle | null>;
+  editorContainerRef: RefObject<HTMLDivElement | null>;
+  cwd?: string;
+  slashSkills: PromptSlashResource[];
+  slashSkillsLoading: boolean;
+  ensureSlashSkills: () => Promise<PromptSlashResource[]>;
+  dictation: PlanDictationControls;
+  hasContent: boolean;
+  onSubmitInput: () => void;
+  onEditorChange: () => void;
+}) {
+  return (
+    <div
+      ref={editorContainerRef}
+      className="border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-ring/50 min-w-0 flex-1 rounded-md border focus-within:ring-1"
+    >
+      <div className="px-2.5 py-1.5">
+        <PromptEditor
+          ref={editorRef}
+          placeholder={labels.customPlaceholder}
+          onSubmit={onSubmitInput}
+          onChange={onEditorChange}
+          cwd={cwd}
+          slashSkills={slashSkills}
+          slashSkillsLoading={slashSkillsLoading}
+          onSlashOpen={ensureSlashSkills}
+          className="max-h-[120px] min-h-[20px] overflow-y-auto text-sm"
+        />
+      </div>
+      <div className="border-border/20 flex items-center justify-end gap-1 border-t px-1.5 py-0.5">
+        {dictation.enabled && (
+          <DictationButton
+            labels={labels}
+            isRecording={dictation.isRecording}
+            isTranscribing={dictation.isTranscribing}
+            onToggle={dictation.onToggle}
+          />
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              data-testid="plan-send-feedback"
+              onClick={onSubmitInput}
+              variant="ghost"
+              size="icon-sm"
+              tabIndex={-1}
+              disabled={!hasContent}
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                hasContent && 'text-primary hover:text-primary',
+              )}
+            >
+              <Send className="icon-xs" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{labels.send}</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+function PlanResponseControls({
+  labels,
+  editorRef,
+  editorContainerRef,
+  cwd,
+  slashSkills,
+  slashSkillsLoading,
+  ensureSlashSkills,
+  dictation,
+  hasContent,
+  planComments,
+  onAccept,
+  onReject,
+  onSubmitInput,
+  onEditorChange,
+  onSendComments,
+}: {
+  labels: PlanResponseLabels;
+  editorRef: RefObject<PromptEditorHandle | null>;
+  editorContainerRef: RefObject<HTMLDivElement | null>;
+  cwd?: string;
+  slashSkills: PromptSlashResource[];
+  slashSkillsLoading: boolean;
+  ensureSlashSkills: () => Promise<PromptSlashResource[]>;
+  dictation: PlanDictationControls;
+  hasContent: boolean;
+  planComments: PlanComment[];
+  onAccept: () => void;
+  onReject: () => void;
+  onSubmitInput: () => void;
+  onEditorChange: () => void;
+  onSendComments: () => void;
+}) {
+  return (
+    <div className="border-border/40 border-t">
+      <PlanDecisionButton
+        icon={<CheckCircle2 className="text-muted-foreground/60 size-4 shrink-0" />}
+        label={labels.approve}
+        testId="plan-accept"
+        onClick={onAccept}
+      />
+      <PlanDecisionButton
+        icon={<XCircle className="text-muted-foreground/60 size-4 shrink-0" />}
+        label={labels.reject}
+        testId="plan-reject"
+        onClick={onReject}
+      />
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <Pencil className="text-muted-foreground/60 size-4 shrink-0" />
+        <PlanCustomResponseEditor
+          labels={labels}
+          editorRef={editorRef}
+          editorContainerRef={editorContainerRef}
+          cwd={cwd}
+          slashSkills={slashSkills}
+          slashSkillsLoading={slashSkillsLoading}
+          ensureSlashSkills={ensureSlashSkills}
+          dictation={dictation}
+          hasContent={hasContent}
+          onSubmitInput={onSubmitInput}
+          onEditorChange={onEditorChange}
+        />
+        {planComments.length > 0 && (
+          <Button
+            size="sm"
+            onClick={onSendComments}
+            data-testid="plan-send-comments"
+            className="bg-primary h-7 shrink-0 px-3 text-xs"
+          >
+            {labels.sendComments}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   plan,
@@ -151,14 +428,14 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   const handleAccept = () => {
     if (!onRespond || submitted) return;
     cardLog.info('plan accepted');
-    onRespond('Plan accepted');
+    onRespond(formatPlanAcceptedResponse(plan ?? ''));
     setSubmitted(true);
   };
 
   const handleReject = () => {
     if (!onRespond || submitted) return;
     cardLog.info('plan rejected');
-    onRespond('Plan rejected. Do not proceed with this plan.');
+    onRespond(PLAN_REJECTED_RESPONSE);
     setSubmitted(true);
   };
 
@@ -170,7 +447,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
     setSubmitted(true);
   };
 
-  const _handleDialogRespond = useCallback(
+  const handleDialogRespond = useCallback(
     (answer: string) => {
       if (!onRespond || submitted) return;
       cardLog.info('dialog response', { responsePreview: answer.slice(0, 200) });
@@ -180,6 +457,14 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
     },
     [onRespond, submitted],
   );
+
+  const handleSendComments = useCallback(() => {
+    if (!onRespond || submitted) return;
+    onRespond(formatPlanCommentsFeedback(planComments));
+    setSubmitted(true);
+  }, [onRespond, planComments, submitted]);
+
+  const responseLabels = createPlanResponseLabels(t, planComments.length);
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
@@ -261,131 +546,28 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
       )}
 
       {onRespond && !submitted && (
-        <div className="border-border/40 border-t">
-          {/* Row 1: Approve */}
-          <button
-            onClick={handleAccept}
-            data-testid="plan-accept"
-            className="border-border/40 text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-3 border-b px-4 py-2.5 text-left text-sm transition-colors"
-          >
-            <CheckCircle2 className="text-muted-foreground/60 size-4 shrink-0" />
-            <span>{t('plan.approveAndStart', 'Approve plan and start coding')}</span>
-          </button>
-
-          {/* Row 2: Reject */}
-          <button
-            onClick={handleReject}
-            data-testid="plan-reject"
-            className="border-border/40 text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-3 border-b px-4 py-2.5 text-left text-sm transition-colors"
-          >
-            <XCircle className="text-muted-foreground/60 size-4 shrink-0" />
-            <span>{t('thread.rejectPlan', 'Reject plan')}</span>
-          </button>
-
-          {/* Row 3: Custom response — single row with inline editor */}
-          <div className="flex items-center gap-3 px-4 py-2.5">
-            <Pencil className="text-muted-foreground/60 size-4 shrink-0" />
-            <div
-              ref={editorContainerRef}
-              className="border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-ring/50 min-w-0 flex-1 rounded-md border focus-within:ring-1"
-            >
-              <div className="px-2.5 py-1.5">
-                <PromptEditor
-                  ref={editorRef}
-                  placeholder={t('plan.tellClaude', 'Tell the agent what to do instead')}
-                  onSubmit={handleSubmitInput}
-                  onChange={handleEditorChange}
-                  cwd={cwd}
-                  slashSkills={slashSkills}
-                  slashSkillsLoading={slashSkillsLoading}
-                  onSlashOpen={ensureSlashSkills}
-                  className="max-h-[120px] min-h-[20px] overflow-y-auto text-sm"
-                />
-              </div>
-              <div className="border-border/20 flex items-center justify-end gap-1 border-t px-1.5 py-0.5">
-                {hasAssemblyaiKey && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-testid="plan-dictate"
-                        onClick={toggleRecording}
-                        variant="ghost"
-                        size="icon-sm"
-                        tabIndex={-1}
-                        aria-label={
-                          isRecording
-                            ? t('prompt.stopDictation', 'Stop dictation')
-                            : t('prompt.startDictation', 'Start dictation')
-                        }
-                        disabled={isTranscribing}
-                        className={cn(
-                          'text-muted-foreground hover:text-foreground',
-                          isRecording && 'text-destructive hover:text-destructive',
-                        )}
-                      >
-                        {isTranscribing ? (
-                          <Loader2 className="icon-xs animate-spin" />
-                        ) : isRecording ? (
-                          <MicOff className="icon-xs" />
-                        ) : (
-                          <Mic className="icon-xs" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isTranscribing
-                        ? t('prompt.transcribing', 'Transcribing...')
-                        : isRecording
-                          ? t('prompt.stopDictation', 'Stop dictation')
-                          : t('prompt.startDictation', 'Start dictation')}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      data-testid="plan-send-feedback"
-                      onClick={handleSubmitInput}
-                      variant="ghost"
-                      size="icon-sm"
-                      tabIndex={-1}
-                      disabled={!hasContent}
-                      className={cn(
-                        'text-muted-foreground hover:text-foreground',
-                        hasContent && 'text-primary hover:text-primary',
-                      )}
-                    >
-                      <Send className="icon-xs" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('prompt.send', 'Send')}</TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
-            {planComments.length > 0 && (
-              <Button
-                size="sm"
-                onClick={() => {
-                  const parts = planComments.map((c) => {
-                    const quote =
-                      c.selectedText.length > 100
-                        ? c.selectedText.slice(0, 100) + '...'
-                        : c.selectedText;
-                    if (c.emoji && c.comment) return `> ${quote}\n${c.emoji} ${c.comment}`;
-                    if (c.emoji) return `> ${quote}\n${c.emoji}`;
-                    return `> ${quote}\nComment: ${c.comment}`;
-                  });
-                  onRespond(`Feedback on plan:\n\n${parts.join('\n\n')}`);
-                  setSubmitted(true);
-                }}
-                data-testid="plan-send-comments"
-                className="bg-primary h-7 shrink-0 px-3 text-xs"
-              >
-                {t('plan.sendComments', 'Send {{count}} comments', { count: planComments.length })}
-              </Button>
-            )}
-          </div>
-        </div>
+        <PlanResponseControls
+          labels={responseLabels}
+          editorRef={editorRef}
+          editorContainerRef={editorContainerRef}
+          cwd={cwd}
+          slashSkills={slashSkills}
+          slashSkillsLoading={slashSkillsLoading}
+          ensureSlashSkills={ensureSlashSkills}
+          dictation={{
+            enabled: hasAssemblyaiKey,
+            isRecording,
+            isTranscribing,
+            onToggle: toggleRecording,
+          }}
+          hasContent={hasContent}
+          planComments={planComments}
+          onAccept={handleAccept}
+          onReject={handleReject}
+          onSubmitInput={handleSubmitInput}
+          onEditorChange={handleEditorChange}
+          onSendComments={handleSendComments}
+        />
       )}
 
       {/* Plan review dialog */}
@@ -398,6 +580,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
           onAddComment={handleAddComment}
           onAddEmoji={handleAddEmoji}
           onRemoveComment={handleRemoveComment}
+          onRespond={!submitted ? handleDialogRespond : undefined}
         />
       )}
     </div>

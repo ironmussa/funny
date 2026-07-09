@@ -757,16 +757,6 @@ export function PinnedPRCard({
               ) : null}
             </div>
           </div>
-          {isMerged && (
-            <Badge
-              variant="outline"
-              className="shrink-0 gap-1 border-purple-500/30 bg-purple-500/15 text-[10px] text-purple-400"
-              data-testid={`pinned-pr-merged-badge-${pr.number}`}
-            >
-              <GitMerge className="size-2.5" />
-              {t('review.pullRequests.merged', 'Merged')}
-            </Badge>
-          )}
           {canMerge && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

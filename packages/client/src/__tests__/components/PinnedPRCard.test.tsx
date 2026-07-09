@@ -113,4 +113,54 @@ describe('PinnedPRCard', () => {
       'https://github.com/acme/repo/pull/51/files',
     );
   });
+
+  test('renders sanitized GitHub-style raw HTML in PR conversation comments', async () => {
+    apiMock.githubPRConversation.mockReturnValue(
+      okAsync({
+        comments: [
+          {
+            id: 2461,
+            author: 'coderabbitai[bot]',
+            author_avatar_url: 'https://example.test/coderabbit.png',
+            author_association: 'NONE',
+            body: [
+              '<!-- This is an auto-generated comment: summarize by coderabbit.ai -->',
+              '<details><summary>Run configuration</summary>',
+              '',
+              '**Review profile:** CHILL<br>`app/Http/Controllers/Foo.php`',
+              '',
+              '</details>',
+              '<script>alert(1)</script>',
+              '<!-- end of auto-generated comment -->',
+            ].join('\n'),
+            created_at: '2026-01-01T00:01:00.000Z',
+            updated_at: '2026-01-01T00:01:00.000Z',
+            html_url: 'https://github.com/acme/repo/pull/51#issuecomment-2461',
+            reactions: {
+              total: 0,
+              plus1: 0,
+              minus1: 0,
+              laugh: 0,
+              hooray: 0,
+              confused: 0,
+              heart: 0,
+              rocket: 0,
+              eyes: 0,
+            },
+          },
+        ],
+        reviews: [],
+      }),
+    );
+
+    const { container } = renderWithProviders(<PinnedPRCard pr={makePR()} projectId="project-1" />);
+
+    expect(await screen.findByText('Run configuration')).toBeInTheDocument();
+    expect(screen.getByText('Review profile:')).toBeInTheDocument();
+    expect(container.querySelector('details')).toBeInTheDocument();
+    expect(container.querySelector('br')).toBeInTheDocument();
+    expect(container.querySelector('script')).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent('<details>');
+    expect(container).not.toHaveTextContent('<!-- This is an auto-generated comment');
+  });
 });

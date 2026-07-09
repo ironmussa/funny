@@ -269,6 +269,27 @@ export function buildSlashSuggestionItems({
   return matched;
 }
 
+function insertInlineNodeWithTrailingSpace(
+  editor: any,
+  range: { from: number; to: number },
+  typeName: string,
+  attrs: Record<string, unknown>,
+) {
+  const docSize = editor.state.doc.content.size;
+  const safeFrom = Math.min(range.from, docSize);
+  const safeTo = Math.min(range.to, docSize);
+  const nodeType = editor.state.schema.nodes[typeName];
+  if (!nodeType) return;
+
+  const node = nodeType.create(attrs);
+  const space = editor.state.schema.text(' ');
+  const tr = editor.state.tr.replaceWith(safeFrom, safeTo, [node, space]);
+  const after = Math.min(safeFrom + node.nodeSize + space.nodeSize, tr.doc.content.size);
+  tr.setSelection(TextSelection.create(tr.doc, after));
+  editor.view.dispatch(tr);
+  editor.view.focus();
+}
+
 interface SuggestionPopupProps {
   items: SuggestionItem[];
   selectedIndex: number;
@@ -648,27 +669,12 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         });
       },
       command: ({ editor, range, props }: any) => {
-        const docSize = editor.state.doc.content.size;
-        const safeRange = {
-          from: Math.min(range.from, docSize),
-          to: Math.min(range.to, docSize),
-        };
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(safeRange, [
-            {
-              type: 'fileMention',
-              attrs: {
-                id: props.path ?? props.id,
-                label: (props.label as string).split('/').pop() ?? props.label,
-                path: props.path ?? props.id,
-                fileType: props.fileType ?? 'file',
-              },
-            },
-            { type: 'text', text: ' ' },
-          ])
-          .run();
+        insertInlineNodeWithTrailingSpace(editor, range, 'fileMention', {
+          id: props.path ?? props.id,
+          label: (props.label as string).split('/').pop() ?? props.label,
+          path: props.path ?? props.id,
+          fileType: props.fileType ?? 'file',
+        });
       },
       render: () => ({
         onStart: (props: any) => {
@@ -806,25 +812,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         return matched;
       },
       command: ({ editor, range, props }: any) => {
-        const docSize = editor.state.doc.content.size;
-        const safeRange = {
-          from: Math.min(range.from, docSize),
-          to: Math.min(range.to, docSize),
-        };
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(safeRange, [
-            {
-              type: 'slashCommand',
-              attrs: {
-                id: props.id,
-                label: props.label,
-              },
-            },
-            { type: 'text', text: ' ' },
-          ])
-          .run();
+        insertInlineNodeWithTrailingSpace(editor, range, 'slashCommand', {
+          id: props.id,
+          label: props.label,
+        });
       },
       render: () => ({
         onStart: (props: any) => {
@@ -1087,29 +1078,14 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         });
       },
       command: ({ editor, range, props }: any) => {
-        const docSize = editor.state.doc.content.size;
-        const safeRange = {
-          from: Math.min(range.from, docSize),
-          to: Math.min(range.to, docSize),
-        };
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(safeRange, [
-            {
-              type: 'symbolMention',
-              attrs: {
-                id: props.id,
-                label: props.label,
-                path: props.path ?? '',
-                kind: props.symbolKind ?? 'function',
-                line: props.symbolLine ?? 0,
-                endLine: props.symbolEndLine,
-              },
-            },
-            { type: 'text', text: ' ' },
-          ])
-          .run();
+        insertInlineNodeWithTrailingSpace(editor, range, 'symbolMention', {
+          id: props.id,
+          label: props.label,
+          path: props.path ?? '',
+          kind: props.symbolKind ?? 'function',
+          line: props.symbolLine ?? 0,
+          endLine: props.symbolEndLine,
+        });
       },
       render: () => ({
         onStart: (props: any) => {
@@ -1421,17 +1397,12 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       insertFileMention: (path: string, fileType: 'file' | 'folder') => {
         if (!alive(editor)) return;
         const label = path.split('/').pop() ?? path;
-        editor
-          .chain()
-          .focus()
-          .insertContent([
-            {
-              type: 'fileMention',
-              attrs: { id: path, label, path, fileType },
-            },
-            { type: 'text', text: ' ' },
-          ])
-          .run();
+        insertInlineNodeWithTrailingSpace(
+          editor,
+          { from: editor.state.selection.from, to: editor.state.selection.to },
+          'fileMention',
+          { id: path, label, path, fileType },
+        );
       },
       insertText: (text: string) => {
         if (!alive(editor)) return;

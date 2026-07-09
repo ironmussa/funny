@@ -431,13 +431,17 @@ prRoutes.get('/pr-detail', async (c) => {
     // Re-fetch check runs for the actual head SHA
     const headSha = prData.head?.sha;
     let checksData: any = null;
+    let lastCommit: PRCommit | null = null;
     if (headSha) {
-      const realChecksRes = await githubApiFetch(
-        `/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`,
-        token,
-      );
+      const [realChecksRes, commitRes] = await Promise.all([
+        githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`, token),
+        githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}`, token),
+      ]);
       if (realChecksRes.ok) {
         checksData = await realChecksRes.json();
+      }
+      if (commitRes.ok) {
+        lastCommit = mapCommitToPRCommit(await commitRes.json());
       }
     }
     if (!checksData && checksRes.ok) {
@@ -496,6 +500,7 @@ prRoutes.get('/pr-detail', async (c) => {
       checks_pending: checksPending,
       created_at: prData.created_at ?? '',
       updated_at: prData.updated_at ?? '',
+      last_commit: lastCommit,
     };
 
     return c.json(detail);

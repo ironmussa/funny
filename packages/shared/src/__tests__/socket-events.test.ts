@@ -14,7 +14,7 @@ import {
   runnerAssignProjectSchema,
   runnerHeartbeatSchema,
   runnerAgentEventSchema,
-} from '../../src/socket-events.ts';
+} from '../socket-events';
 
 describe('socket-events', () => {
   test('parseObjectPayload accepts objects and nullish', () => {

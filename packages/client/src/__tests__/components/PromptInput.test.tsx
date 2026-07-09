@@ -30,6 +30,7 @@ vi.mock('@/lib/api', async () => {
       listWorktrees: vi.fn().mockReturnValue(okAsync([])),
       listSkills: vi.fn().mockReturnValue(okAsync({ skills: [] })),
       listAgentResources: vi.fn().mockReturnValue(okAsync({ resources: [] })),
+      listWorkflows: vi.fn().mockReturnValue(okAsync({ workflows: [], warnings: [] })),
       remoteUrl: vi.fn().mockReturnValue(okAsync({ url: '' })),
       browseFiles: vi.fn().mockReturnValue(okAsync({ entries: [] })),
       getProfile: vi.fn().mockReturnValue(okAsync({ hasAssemblyaiKey: false })),

@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
+import { api } from '@/lib/api';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
+import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -141,15 +143,10 @@ export function NewThreadInput({
   // still renders the compose form with `creating === false`, flashing the
   // empty new-thread screen between "Preparing…" and the thread view.
   const [submitted, setSubmitted] = useState(false);
+  const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
 
-  const { creating, createThread: createThreadFromHook } = useThreadCreation({
-    projectId: newThreadIsScratch ? null : (effectiveProjectId ?? null),
-    defaultThreadMode,
-    toolPermissions,
-    isScratch: newThreadIsScratch,
-    forceIdle: newThreadIdleOnly,
-    designId: activeDesignId ?? undefined,
-    onSuccess: async (threadId, kind, thread) => {
+  const handleThreadCreated = useCallback(
+    async (threadId: string, kind: 'scratch' | 'idle' | 'normal', thread: any) => {
       // justSubmittedRef tells the unsaved-prompt guard to let the navigate
       // through. Only scratch + normal navigate; idle stays in place.
       if (kind === 'scratch' || kind === 'normal') {
@@ -197,6 +194,27 @@ export function NewThreadInput({
         }
       }
     },
+    [
+      activeDesignId,
+      addScratchThread,
+      cancelNewThread,
+      effectiveProjectId,
+      loadThreadsForProject,
+      navigate,
+      onCreated,
+      setReviewPaneOpen,
+      t,
+    ],
+  );
+
+  const { creating, createThread: createThreadFromHook } = useThreadCreation({
+    projectId: newThreadIsScratch ? null : (effectiveProjectId ?? null),
+    defaultThreadMode,
+    toolPermissions,
+    isScratch: newThreadIsScratch,
+    forceIdle: newThreadIdleOnly,
+    designId: activeDesignId ?? undefined,
+    onSuccess: handleThreadCreated,
   });
 
   const handleCreate = useCallback(
@@ -205,6 +223,60 @@ export function NewThreadInput({
       opts: Parameters<typeof createThreadFromHook>[1],
       images?: any[],
     ): Promise<boolean> => {
+      const workflowParse = parseWorkflowInvocation(prompt);
+      if (!workflowParse.ok) {
+        toast.error(workflowParse.error);
+        return false;
+      }
+      if (workflowParse.invocation) {
+        if (newThreadIsScratch || !effectiveProjectId) {
+          toast.error('Workflows require a project thread.');
+          return false;
+        }
+
+        setRestoredPrompt(null);
+        lastPromptRef.current = prompt;
+        setWorkflowSubmitting(true);
+
+        const workflowPrompt =
+          workflowParse.invocation.prompt ??
+          `Run workflow ${workflowParse.invocation.workflowName}`;
+        const createResult = await api.createIdleThread({
+          projectId: effectiveProjectId,
+          title: workflowPrompt.slice(0, 200),
+          mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
+          baseBranch: opts.baseBranch,
+          prompt: workflowPrompt,
+          images,
+          ...(activeDesignId ? { designId: activeDesignId } : {}),
+        });
+
+        if (createResult.isErr()) {
+          toast.error(createResult.error.message);
+          setWorkflowSubmitting(false);
+          setRestoredPrompt(lastPromptRef.current);
+          return false;
+        }
+
+        const runResult = await api.runWorkflow(workflowParse.invocation.workflowName, {
+          threadId: createResult.value.id,
+          ...buildWorkflowRunBody(workflowParse.invocation, {
+            fileReferences: opts.fileReferences,
+            symbolReferences: opts.symbolReferences,
+          }),
+        });
+
+        if (runResult.isErr()) {
+          toast.error(runResult.error.message);
+        } else {
+          toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+        }
+
+        await handleThreadCreated(createResult.value.id, 'normal', createResult.value);
+        setWorkflowSubmitting(false);
+        return true;
+      }
+
       // Reset restored-prompt before the call so the field clears if it succeeds.
       setRestoredPrompt(null);
       lastPromptRef.current = prompt;
@@ -223,10 +295,20 @@ export function NewThreadInput({
       if (willNavigateAway) setSubmitted(true);
       return ok;
     },
-    [createThreadFromHook, onCreated, newThreadIdleOnly, newThreadIsScratch, activeDesignId],
+    [
+      activeDesignId,
+      createThreadFromHook,
+      defaultThreadMode,
+      effectiveProjectId,
+      handleThreadCreated,
+      newThreadIdleOnly,
+      newThreadIsScratch,
+      onCreated,
+      t,
+    ],
   );
 
-  if (creating || submitted) {
+  if (creating || submitted || workflowSubmitting) {
     return (
       <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
         <LoadingState testId="new-thread-creating" label={t('common.preparing', 'Preparing…')} />

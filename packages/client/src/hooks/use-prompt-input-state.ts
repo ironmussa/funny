@@ -7,6 +7,7 @@ import {
   type AgentModel,
   getModelContextWindow,
 } from '@funny/shared/models';
+import type { WorkflowSummary } from '@funny/shared/types/workflows';
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -38,6 +39,7 @@ const queueLog = createClientLogger('PromptInputQueue');
 // Stable empty default so threads without an init payload don't churn the editor.
 const EMPTY_SLASH_COMMANDS: string[] = [];
 const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = [];
+const EMPTY_WORKFLOW_SUGGESTIONS: WorkflowSummary[] = [];
 
 export type SubmitOpts = {
   provider?: string;
@@ -514,6 +516,34 @@ export function usePromptInputState({
     model: currentModel,
     mode: 'eager',
   });
+  const [workflowSuggestions, setWorkflowSuggestions] = useState<WorkflowSummary[]>(
+    EMPTY_WORKFLOW_SUGGESTIONS,
+  );
+  const [workflowSuggestionsLoading, setWorkflowSuggestionsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!resolvedProjectId) {
+      setWorkflowSuggestions(EMPTY_WORKFLOW_SUGGESTIONS);
+      setWorkflowSuggestionsLoading(false);
+      return;
+    }
+
+    setWorkflowSuggestionsLoading(true);
+    void api.listWorkflows(resolvedProjectId).then((result) => {
+      if (cancelled) return;
+      if (result.isOk()) {
+        setWorkflowSuggestions(result.value.workflows);
+      } else {
+        setWorkflowSuggestions(EMPTY_WORKFLOW_SUGGESTIONS);
+      }
+      setWorkflowSuggestionsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedProjectId]);
 
   // ── Queue fetching ──
   const lastQueueFetchRef = useRef<{
@@ -919,6 +949,8 @@ export function usePromptInputState({
     slashSkills,
     slashSkillsLoading,
     sdkSlashCommands,
+    workflowSuggestions,
+    workflowSuggestionsLoading,
     // Provider that owns the slash menu: the active thread's provider when
     // viewing one, else the composer's selected provider. Gates Claude-specific
     // built-in command labels so a Codex/GPT thread isn't shown Claude wording.

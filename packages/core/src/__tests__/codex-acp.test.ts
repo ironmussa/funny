@@ -9,8 +9,8 @@
  *     tool_result.
  *   - agent_thought_chunk buffers reasoning text and flushes as a Think
  *     tool_use+tool_result pair on the next non-thought event.
- *   - Plan updates close out any in-flight Task tool_calls with the rendered
- *     plan text before emitting the user-visible plan message.
+ *   - Plan updates close out any in-flight Task tool_calls and then emit a
+ *     user-visible TodoWrite card.
  *   - Unlike Cursor/Gemini, an orphan tool_call_update (no prior tool_call)
  *     only emits a tool_result — codex never synthesizes a tool_use.
  */
@@ -169,7 +169,7 @@ describe('CodexACPProcess.translateUpdate', () => {
     });
   });
 
-  test('plan completes in-flight Task tool calls with the plan text', () => {
+  test('plan completes in-flight Task tool calls and emits a TodoWrite card', () => {
     const { proc, messages } = makeProcess();
 
     // Task tool_call starts (mode=switch_mode → Task).
@@ -185,8 +185,8 @@ describe('CodexACPProcess.translateUpdate', () => {
     translate(proc, {
       sessionUpdate: 'plan',
       entries: [
-        { title: 'Investigate', status: 'completed' },
-        { title: 'Patch', status: 'pending' },
+        { content: 'Investigate', status: 'completed' },
+        { content: 'Patch', status: 'pending' },
       ],
     });
 
@@ -202,6 +202,22 @@ describe('CodexACPProcess.translateUpdate', () => {
     if (block.type !== 'tool_result') throw new Error('unreachable');
     expect(block.content).toContain('[x] 1. Investigate');
     expect(block.content).toContain('[ ] 2. Patch');
+
+    const todoUse = messages.find(
+      (m) =>
+        m.type === 'assistant' &&
+        m.message.content.some((c) => c.type === 'tool_use' && c.name === 'TodoWrite'),
+    );
+    expect(todoUse).toBeDefined();
+    if (!todoUse || todoUse.type !== 'assistant') throw new Error('unreachable');
+    const todoBlock = todoUse.message.content[0];
+    if (todoBlock.type !== 'tool_use') throw new Error('unreachable');
+    expect(todoBlock.input).toEqual({
+      todos: [
+        { content: 'Investigate', status: 'completed' },
+        { content: 'Patch', status: 'pending' },
+      ],
+    });
   });
 
   test('agent_message_chunk accumulates streaming text under one id', () => {

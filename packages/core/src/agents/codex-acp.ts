@@ -14,7 +14,7 @@
  *   - fork capability under `sessions.fork`.
  *   - quirks: bufferPreambleAsThink (route `[cwd …] (reason)` preamble
  *     tool_calls into a Think card; a plan closes any in-flight Task call),
- *     plan rendered as `**Plan:**` markdown text, gated permissions. codex
+ *     plan rendered as a TodoWrite card, gated permissions. codex
  *     never defers tool input nor synthesizes a tool_use for an orphan update.
  */
 

@@ -860,6 +860,13 @@ export class GenericACPProcess extends BaseAgentProcess {
     } as CLIMessage);
   }
 
+  private closeInFlightTaskToolCalls(content: string): void {
+    for (const [toolCallId, toolName] of this.toolCallsSeen) {
+      if (toolName !== 'Task') continue;
+      this.emitToolResult(toolCallId, content);
+    }
+  }
+
   /**
    * Emit any tool calls still waiting for a renderable field at turn end. Only
    * relevant for `deferUnrenderableToolInput` providers. A still-unrenderable
@@ -1075,6 +1082,19 @@ export class GenericACPProcess extends BaseAgentProcess {
         if (this.manifest.quirks.planRender === 'todoCard') {
           const input = buildTodoWriteInputFromPlanEntries(update.entries);
           if (input.todos.length > 0) {
+            const planText = input.todos
+              .map((todo, i) => {
+                const status =
+                  todo.status === 'completed'
+                    ? '[x]'
+                    : todo.status === 'in_progress'
+                      ? '[~]'
+                      : '[ ]';
+                return `${status} ${i + 1}. ${todo.content}`;
+              })
+              .join('\n');
+            this.closeInFlightTaskToolCalls(planText);
+
             // ACP replaces the whole plan on each update, so each emission is its
             // own card with a fresh id — matching how the Claude SDK surfaces
             // successive TodoWrite calls.
@@ -1107,24 +1127,14 @@ export class GenericACPProcess extends BaseAgentProcess {
               .map((e, i) => {
                 const status =
                   e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
-                return `${status} ${i + 1}. ${e.title ?? e.description ?? 'Task'}`;
+                return `${status} ${i + 1}. ${e.content ?? e.title ?? e.description ?? 'Task'}`;
               })
               .join('\n');
 
             // codex: a `plan` arrives while a Task (switch_mode) tool_call is
             // still in flight — close it out with the rendered plan as its
             // tool_result. Harmless for providers with no open Task call.
-            for (const [tcId, tcState] of this.toolCallsSeen) {
-              if (tcState === 'Task') {
-                this.toolCallsSeen.set(tcId, 'done');
-                this.emitMessage({
-                  type: 'user',
-                  message: {
-                    content: [{ type: 'tool_result', tool_use_id: tcId, content: planText }],
-                  },
-                } as CLIMessage);
-              }
-            }
+            this.closeInFlightTaskToolCalls(planText);
 
             this.emitMessage({
               type: 'assistant',

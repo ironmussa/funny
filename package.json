@@ -120,6 +120,7 @@
     "satteri": "^0.9.5",
     "secretlint": "^13.0.2",
     "tailwindcss-animate": "^1.0.7",
+    "typescript": "^7.0.2",
     "vitepress": "^2.0.0-alpha.17"
   },
   "optionalDependencies": {

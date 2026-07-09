@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { z } from 'zod';
 
-import { parseExternalPayload, parseStoredJson } from '../json-validation.ts';
+import { parseExternalPayload, parseStoredJson } from '../json-validation';
 
 const profileSchema = z.object({
   providerKeys: z.record(z.string(), z.string()),

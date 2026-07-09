@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { funnyProjectConfigSchema } from '../funny-config-schema.ts';
+import { funnyProjectConfigSchema } from '../funny-config-schema';
 
 describe('funnyProjectConfigSchema', () => {
   test('accepts known .funny.json fields and preserves unknown fields', () => {

@@ -19,6 +19,7 @@ import {
   List,
   Variable,
   Sparkles,
+  Workflow as WorkflowIcon,
 } from 'lucide-react';
 import {
   forwardRef,
@@ -40,6 +41,14 @@ import { middleTruncate } from '@/lib/text-truncate';
 import { cn } from '@/lib/utils';
 
 const SLASH_RESULTS_LIMIT = 50;
+const WORKFLOW_RESULTS_LIMIT = 50;
+export const WORKFLOW_SUGGESTION_MATCH_OPTIONS = {
+  char: '>',
+  allowSpaces: false,
+  allowToIncludeChar: true,
+  allowedPrefixes: [' ', '\n'],
+  startOfLine: false,
+};
 
 // Human-readable blurbs for the built-in SDK slash commands. The SDK reports
 // command names but no descriptions, so we annotate the well-known ones; any
@@ -98,6 +107,12 @@ export interface PromptSlashResource {
   threadMode?: 'local' | 'worktree';
 }
 
+export interface PromptWorkflowResource {
+  name: string;
+  description?: string;
+  source?: string;
+}
+
 interface PromptEditorProps {
   placeholder?: string;
   disabled?: boolean;
@@ -126,6 +141,10 @@ interface PromptEditorProps {
   /** SDK-reported slash commands for the active thread (names without leading
    *  slash), merged into the / autocomplete alongside skills. */
   sdkSlashCommands?: string[];
+  /** Workflows available in the active project, shown by the `>>` menu. */
+  workflows?: readonly PromptWorkflowResource[];
+  /** True while workflows are being loaded for the `>>` menu. */
+  workflowsLoading?: boolean;
   /** Effective provider for the slash menu. Claude-specific built-in command
    *  descriptions are only applied when this is `'claude'` — other providers
    *  (e.g. Codex, which has its own /init, /compact, /review) must not be
@@ -144,13 +163,46 @@ interface SuggestionItem {
   path?: string;
   fileType?: 'file' | 'folder';
   description?: string;
-  type: 'file' | 'slash' | 'skill' | 'symbol';
+  type: 'file' | 'slash' | 'skill' | 'symbol' | 'workflow';
   /** Symbol kind (function, class, etc.) — only for type='symbol' */
   symbolKind?: string;
   /** Line number in the file — only for type='symbol' */
   symbolLine?: number;
   /** End line number — only for type='symbol' */
   symbolEndLine?: number;
+}
+
+interface WorkflowSuggestionOptions {
+  workflows: readonly PromptWorkflowResource[];
+  query: string;
+  limit?: number;
+}
+
+function normalizeWorkflowQuery(query: string): string {
+  return query.startsWith('>') ? query.slice(1) : query;
+}
+
+export function buildWorkflowSuggestionItems({
+  workflows,
+  query,
+  limit = WORKFLOW_RESULTS_LIMIT,
+}: WorkflowSuggestionOptions): SuggestionItem[] {
+  const q = normalizeWorkflowQuery(query).trim().toLowerCase();
+  const matched: SuggestionItem[] = [];
+  for (const workflow of workflows) {
+    if (matched.length >= limit) break;
+    const haystack = `${workflow.name} ${workflow.description ?? ''}`.toLowerCase();
+    if (q && !haystack.includes(q)) continue;
+    matched.push({
+      id: workflow.name,
+      label: workflow.name,
+      description:
+        workflow.description ??
+        (workflow.source ? `${workflow.source} workflow` : 'Project workflow'),
+      type: 'workflow',
+    });
+  }
+  return matched;
 }
 
 interface SlashSuggestionOptions {
@@ -225,7 +277,7 @@ interface SuggestionPopupProps {
   onSelect: (item: SuggestionItem) => void;
   onHover: (index: number) => void;
   rect: (() => DOMRect | null) | null;
-  type: 'file' | 'slash' | 'symbol';
+  type: 'file' | 'slash' | 'symbol' | 'workflow';
   /** Current search query for highlighting matches */
   query?: string;
   /** Ref to a container element — the popup will match its width and left edge */
@@ -238,6 +290,9 @@ export function getSuggestionLoadingLabel(type: SuggestionPopupProps['type']) {
   }
   if (type === 'symbol') {
     return { key: 'prompt.loadingSymbols', fallback: 'Loading symbols...' };
+  }
+  if (type === 'workflow') {
+    return { key: 'prompt.loadingWorkflows', fallback: 'Loading workflows...' };
   }
   return { key: 'prompt.loadingCommands', fallback: 'Loading commands...' };
 }
@@ -345,7 +400,9 @@ function SuggestionPopup({
             ? t('prompt.noFilesMatch', 'No files match')
             : type === 'symbol'
               ? t('prompt.noSymbolsMatch', 'No symbols match')
-              : t('skills.noSkillsFound', 'No skills found')}
+              : type === 'workflow'
+                ? t('prompt.noWorkflowsMatch', 'No workflows match')
+                : t('skills.noSkillsFound', 'No skills found')}
         </div>
       </div>,
       document.body,
@@ -371,7 +428,9 @@ function SuggestionPopup({
               ? `symbol-item-${item.id}`
               : type === 'file'
                 ? `mention-item-${item.id}`
-                : `slash-item-${item.id}`
+                : type === 'workflow'
+                  ? `workflow-item-${item.id}`
+                  : `slash-item-${item.id}`
           }
           className={cn(
             'flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent',
@@ -394,6 +453,8 @@ function SuggestionPopup({
             ) : (
               <FileText className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
             )
+          ) : item.type === 'workflow' ? (
+            <WorkflowIcon className="icon-base text-muted-foreground mt-0.5 shrink-0" />
           ) : item.type === 'skill' ? (
             <Sparkles className="icon-base text-muted-foreground mt-0.5 shrink-0" />
           ) : (
@@ -404,9 +465,11 @@ function SuggestionPopup({
               text={
                 type === 'slash'
                   ? `/${item.label}`
-                  : type === 'symbol'
-                    ? item.label
-                    : middleTruncate(item.label)
+                  : type === 'workflow'
+                    ? `>> ${item.label}`
+                    : type === 'symbol'
+                      ? item.label
+                      : middleTruncate(item.label)
               }
               query={query}
               className="block truncate font-mono text-xs font-medium"
@@ -453,6 +516,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     slashSkillsLoading,
     onSlashOpen,
     sdkSlashCommands,
+    workflows,
+    workflowsLoading,
     commandProvider,
     className,
     containerRef,
@@ -460,7 +525,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   ref,
 ) {
   // ── Suggestion state (shared for both @ and /) ──
-  const [suggestionType, setSuggestionType] = useState<'file' | 'slash' | 'symbol' | null>(null);
+  const [suggestionType, setSuggestionType] = useState<
+    'file' | 'slash' | 'symbol' | 'workflow' | null
+  >(null);
   const [suggestionItems, setSuggestionItems] = useState<SuggestionItem[]>([]);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -487,6 +554,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   cwdRef.current = cwd;
   const sdkSlashCommandsRef = useRef(sdkSlashCommands);
   sdkSlashCommandsRef.current = sdkSlashCommands;
+  const workflowsRef = useRef<readonly PromptWorkflowResource[]>(workflows ?? []);
+  workflowsRef.current = workflows ?? [];
+  const workflowsLoadingRef = useRef(workflowsLoading);
+  workflowsLoadingRef.current = workflowsLoading;
   const commandProviderRef = useRef(commandProvider);
   commandProviderRef.current = commandProvider;
 
@@ -504,7 +575,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
 
   /**
-   * Read the full text after a trigger character (@ or /) up to the next
+   * Read the full text after a trigger character (@, /, #, or >) up to the next
    * whitespace or end of the text node, regardless of caret position.
    * Falls back to TipTap's query if the editor isn't available.
    */
@@ -623,6 +694,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onKeyDown: (props: any) => {
+          if (suggestionTypeRef.current !== 'workflow') return false;
           const { event } = props;
           const len = suggestionItemsRef.current.length;
           if (event.key === 'ArrowDown') {
@@ -774,6 +846,148 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
             return next;
           });
           setSuggestionQuery(getFullQuery(props.query ?? ''));
+          setSuggestionRect(() => props.clientRect);
+          suggestionCommandRef.current = props.command;
+        },
+        onKeyDown: (props: any) => {
+          const { event } = props;
+          const len = suggestionItemsRef.current.length;
+          if (event.key === 'ArrowDown') {
+            setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
+            return true;
+          }
+          if (event.key === 'ArrowUp') {
+            setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
+            return true;
+          }
+          if (event.key === 'Enter' || event.key === 'Tab') {
+            const items = suggestionItemsRef.current;
+            if (items.length > 0) {
+              setSuggestionIndex((currentIndex) => {
+                const item = items[currentIndex];
+                if (item) {
+                  suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+                }
+                return currentIndex;
+              });
+            }
+            return true;
+          }
+          if (event.key === 'Escape') {
+            setSuggestionType(null);
+            return true;
+          }
+          return false;
+        },
+        onExit: () => {
+          triggerPosRef.current = null;
+          setSuggestionType(null);
+          setSuggestionItems([]);
+          setSuggestionQuery('');
+          setSuggestionLoading(false);
+        },
+      }),
+    }),
+    [getFullQuery],
+  );
+
+  // ── Workflow suggestion config (>> trigger) ──
+  const applyWorkflowSuggestionItems = useCallback((items: SuggestionItem[]) => {
+    setSuggestionItems((prev) => {
+      const changed =
+        prev.length !== items.length || prev.some((item, i) => item.id !== items[i]?.id);
+      if (changed) setSuggestionIndex(0);
+      return items;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (suggestionType !== 'workflow') return;
+    setSuggestionLoading(Boolean(workflowsLoading) && (workflows?.length ?? 0) === 0);
+    applyWorkflowSuggestionItems(
+      buildWorkflowSuggestionItems({
+        workflows: workflows ?? [],
+        query: suggestionQueryRef.current,
+      }),
+    );
+  }, [suggestionType, workflows, workflowsLoading, applyWorkflowSuggestionItems]);
+
+  const workflowSuggestion = useCallback(
+    () => ({
+      ...WORKFLOW_SUGGESTION_MATCH_OPTIONS,
+      items: ({ query }: { query: string }) => {
+        const fullQuery = getFullQuery(query);
+        if (!fullQuery.startsWith('>')) return [];
+
+        const workflowQuery = normalizeWorkflowQuery(fullQuery);
+        queueMicrotask(() => {
+          setSuggestionQuery(workflowQuery);
+          setSuggestionLoading(
+            Boolean(workflowsLoadingRef.current) && workflowsRef.current.length === 0,
+          );
+        });
+
+        const t0 = performance.now();
+        const matched = buildWorkflowSuggestionItems({
+          workflows: workflowsRef.current,
+          query: workflowQuery,
+        });
+        metric('palette.workflow.filter_ms', performance.now() - t0, {
+          type: 'gauge',
+          attributes: {
+            query_len: String(workflowQuery.length),
+            total: String(workflowsRef.current.length),
+            matched: String(matched.length),
+          },
+        });
+        return matched;
+      },
+      command: ({ editor, range, props }: any) => {
+        const docSize = editor.state.doc.content.size;
+        const safeRange = {
+          from: Math.min(range.from, docSize),
+          to: Math.min(range.to, docSize),
+        };
+        editor
+          .chain()
+          .focus()
+          .insertContentAt(safeRange, { type: 'text', text: `>> ${props.label} ` })
+          .run();
+      },
+      render: () => ({
+        onStart: (props: any) => {
+          triggerPosRef.current = props.range?.from ?? null;
+          const fullQuery = getFullQuery(props.query ?? '');
+          if (!fullQuery.startsWith('>')) {
+            setSuggestionType(null);
+            setSuggestionItems([]);
+            setSuggestionQuery('');
+            return;
+          }
+          setSuggestionType('workflow');
+          setSuggestionItems(props.items);
+          setSuggestionIndex(0);
+          setSuggestionQuery(normalizeWorkflowQuery(fullQuery));
+          setSuggestionRect(() => props.clientRect);
+          suggestionCommandRef.current = props.command;
+        },
+        onUpdate: (props: any) => {
+          const fullQuery = getFullQuery(props.query ?? '');
+          if (!fullQuery.startsWith('>')) {
+            setSuggestionType(null);
+            setSuggestionItems([]);
+            setSuggestionQuery('');
+            return;
+          }
+          setSuggestionType('workflow');
+          setSuggestionItems((prev) => {
+            const next = props.items as SuggestionItem[];
+            const changed =
+              prev.length !== next.length || prev.some((item, i) => item.id !== next[i]?.id);
+            if (changed) setSuggestionIndex(0);
+            return next;
+          });
+          setSuggestionQuery(normalizeWorkflowQuery(fullQuery));
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
         },
@@ -1026,6 +1240,13 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       }).configure({
         HTMLAttributes: { class: 'slash-command' },
         suggestion: slashSuggestion(),
+        deleteTriggerWithBackspace: true,
+      }),
+      // Workflow invocations (>> trigger)
+      Mention.extend({
+        name: 'workflowInvocation',
+      }).configure({
+        suggestion: workflowSuggestion(),
         deleteTriggerWithBackspace: true,
       }),
       // Symbol mentions (# trigger)

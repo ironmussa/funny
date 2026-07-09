@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { VISUALIZER_IMPORT_MAP, VISUALIZER_IMPORT_MAP_JSON } from '../visualizer-importmap.mjs';
+import {
+  VISUALIZER_IMPORT_MAP,
+  VISUALIZER_IMPORT_MAP_JSON,
+} from '@funny/shared/visualizer-importmap';
 
 describe('VISUALIZER_IMPORT_MAP', () => {
   test('maps the plugin SDK specifier and keeps the legacy host alias', () => {

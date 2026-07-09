@@ -147,7 +147,7 @@ export const codexManifest: ProviderManifest = {
   auth: { mode: 'provider-key', providerKeyId: 'openai' },
   quirks: {
     bufferPreambleAsThink: true,
-    planRender: 'text',
+    planRender: 'todoCard',
     permissionModel: 'gated',
     splitGluedAgentMessages: true,
   },

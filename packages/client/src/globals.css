@@ -1024,6 +1024,18 @@ mark.md-search-match[data-active='true'] {
     @apply border-border;
   }
 
+  html.app-shell-scroll-lock,
+  html.app-shell-scroll-lock body,
+  html.app-shell-scroll-lock #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  html.app-shell-scroll-lock {
+    overscroll-behavior: none;
+  }
+
   body {
     font-family: var(--font-sans);
     @apply bg-background text-foreground;

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
 import { api } from '@/lib/api';
+import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
@@ -63,6 +64,29 @@ export function ThreadIdleStarter({ activeThread }: Props) {
       },
       images?: any[],
     ) => {
+      const workflowParse = parseWorkflowInvocation(prompt);
+      if (!workflowParse.ok) {
+        toast.error(workflowParse.error);
+        return false;
+      }
+      if (workflowParse.invocation) {
+        setSending(true);
+        const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
+          threadId: activeThread.id,
+          ...buildWorkflowRunBody(workflowParse.invocation, {
+            fileReferences: opts.fileReferences,
+            symbolReferences: opts.symbolReferences,
+          }),
+        });
+        setSending(false);
+        if (result.isErr()) {
+          toast.error(result.error.message);
+          return false;
+        }
+        toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+        return true;
+      }
+
       setSending(true);
       useThreadStore
         .getState()
@@ -105,6 +129,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
         useThreadStore.getState().rollbackOptimisticMessage(activeThread.id);
       }
       setSending(false);
+      return true;
     },
     [activeThread.id, t],
   );

@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { parseRoute } from '@/hooks/route-parser';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
+import { useAppScrollLock } from '@/hooks/use-app-scroll-lock';
 import { useDisplayThreadId } from '@/hooks/use-display-thread-id';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
@@ -27,6 +28,7 @@ import { useRouteSync } from '@/hooks/use-route-sync';
 import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
+import { resolveLeftPaneOpen } from '@/lib/app-layout';
 import { effectiveThreadId, isRightPaneVisible } from '@/lib/grid-right-pane';
 import { useThreadById } from '@/lib/thread-selectors';
 import { canDoGitOps } from '@/lib/thread-variant';
@@ -137,6 +139,8 @@ const BrowserPanel = lazy(() =>
 );
 
 export function App() {
+  useAppScrollLock();
+
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
@@ -391,7 +395,7 @@ export function App() {
   );
 
   return (
-    <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
+    <SidebarProvider defaultOpen={true} className="h-dvh min-h-0 overflow-hidden">
       <ThreadProvider threadId={effectiveId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
           <ReviewPaneStateProvider>
@@ -400,6 +404,7 @@ export function App() {
               centerPanel={centerPanel}
               terminalDockview={terminalDockview}
               isFullScreenView={isFullScreenView}
+              hideLeftPane={!!workflowsProjectId}
               liveColumnsOpen={liveColumnsOpen}
               browserPanelOpen={browserPanelOpen}
               togglebrowserPanel={togglebrowserPanel}
@@ -424,6 +429,7 @@ function SidebarAwareDockview({
   centerPanel,
   terminalDockview,
   isFullScreenView,
+  hideLeftPane,
   liveColumnsOpen,
   browserPanelOpen,
   togglebrowserPanel,
@@ -433,6 +439,7 @@ function SidebarAwareDockview({
   centerPanel: ReactNode;
   terminalDockview: ReturnType<typeof useTerminalDockview>;
   isFullScreenView: boolean;
+  hideLeftPane: boolean;
   liveColumnsOpen: boolean;
   browserPanelOpen: boolean;
   togglebrowserPanel: () => void;
@@ -452,7 +459,7 @@ function SidebarAwareDockview({
     <DockviewLayout
       left={leftPanel}
       center={centerPanel}
-      leftPaneOpen={sidebarOpen}
+      leftPaneOpen={resolveLeftPaneOpen(sidebarOpen, hideLeftPane)}
       bottomTabs={terminalDockview.bottomTabs}
       activeBottomTab={terminalDockview.activeBottomTab}
       onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}

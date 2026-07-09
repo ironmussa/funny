@@ -1,10 +1,14 @@
 import { render, screen } from '@testing-library/react';
+import { Schema } from '@tiptap/pm/model';
+import { findSuggestionMatch } from '@tiptap/suggestion';
 import { describe, expect, test } from 'vitest';
 
 import {
   buildSlashSuggestionItems,
+  buildWorkflowSuggestionItems,
   getSuggestionLoadingLabel,
   PromptEditor,
+  WORKFLOW_SUGGESTION_MATCH_OPTIONS,
 } from '@/components/prompt-editor/PromptEditor';
 
 describe('PromptEditor', () => {
@@ -92,6 +96,71 @@ describe('buildSlashSuggestionItems', () => {
     expect(getSuggestionLoadingLabel('slash')).toEqual({
       key: 'prompt.loadingCommands',
       fallback: 'Loading commands...',
+    });
+  });
+});
+
+describe('buildWorkflowSuggestionItems', () => {
+  const textSchema = new Schema({
+    nodes: { doc: { content: 'text*' }, text: {} },
+    marks: {},
+  });
+
+  function matchWorkflowTrigger(text: string) {
+    const doc = textSchema.node('doc', null, [textSchema.text(text)]);
+    return findSuggestionMatch({
+      ...WORKFLOW_SUGGESTION_MATCH_OPTIONS,
+      $position: doc.resolve(doc.content.size),
+    });
+  }
+
+  test('matches double-chevron workflow triggers', () => {
+    expect(matchWorkflowTrigger('>>fus')?.query).toBe('>fus');
+    expect(matchWorkflowTrigger('text >>fus')?.query).toBe('>fus');
+    expect(matchWorkflowTrigger('text>>fus')).toBeNull();
+  });
+
+  test('returns project workflows for the double-chevron menu', () => {
+    const items = buildWorkflowSuggestionItems({
+      workflows: [
+        { name: 'fusion', description: 'Review and merge', source: 'built-in' },
+        { name: 'release', source: 'user' },
+      ],
+      query: '',
+    });
+
+    expect(items).toEqual([
+      {
+        id: 'fusion',
+        label: 'fusion',
+        description: 'Review and merge',
+        type: 'workflow',
+      },
+      {
+        id: 'release',
+        label: 'release',
+        description: 'user workflow',
+        type: 'workflow',
+      },
+    ]);
+  });
+
+  test('filters workflow names after the second chevron', () => {
+    const items = buildWorkflowSuggestionItems({
+      workflows: [
+        { name: 'fusion', description: 'Review and merge' },
+        { name: 'release', description: 'Ship changes' },
+      ],
+      query: '>fus',
+    });
+
+    expect(items.map((item) => item.id)).toEqual(['fusion']);
+  });
+
+  test('uses a workflow loading label', () => {
+    expect(getSuggestionLoadingLabel('workflow')).toEqual({
+      key: 'prompt.loadingWorkflows',
+      fallback: 'Loading workflows...',
     });
   });
 });

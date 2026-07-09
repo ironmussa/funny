@@ -432,6 +432,10 @@ export interface PromptInputUIProps {
   slashSkillsLoading?: boolean;
   /** SDK-reported slash commands for the active thread (names without leading slash) */
   sdkSlashCommands?: string[];
+  /** Workflows available in the active project, shown by the `>>` menu. */
+  workflows?: readonly { name: string; description?: string; source?: string }[];
+  /** True while workflows are being loaded for the `>>` menu. */
+  workflowsLoading?: boolean;
   /** Effective provider for the slash menu (gates Claude-specific built-in labels) */
   commandProvider?: string;
   /** Imperative ref — writes setPrompt into it so the parent can restore text */
@@ -519,6 +523,8 @@ export const PromptInputUI = memo(function PromptInputUI({
   slashSkills,
   slashSkillsLoading,
   sdkSlashCommands,
+  workflows,
+  workflowsLoading,
   commandProvider,
   setPromptRef,
   editorRef: externalEditorRef,
@@ -1355,6 +1361,8 @@ export const PromptInputUI = memo(function PromptInputUI({
               slashSkills={slashSkills}
               slashSkillsLoading={slashSkillsLoading}
               sdkSlashCommands={sdkSlashCommands}
+              workflows={workflows}
+              workflowsLoading={workflowsLoading}
               commandProvider={commandProvider}
               containerRef={promptBoxRef}
             />

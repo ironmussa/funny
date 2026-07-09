@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 // Fitness function: typecheck baseline diff.
 //
-// Runs tsc --noEmit against each package and compares the error set against
-// a frozen baseline at .fitness/typecheck-baseline.txt. Fails when there
-// are NEW errors (i.e. errors present now that weren't in the baseline).
+// Runs the TypeScript 7 tsc --noEmit binary against each package and compares
+// the error set against a frozen baseline at .fitness/typecheck-baseline.txt.
+// Fails when there are NEW errors (i.e. errors present now that weren't in the
+// baseline).
 //
 // Pre-existing errors stay in the baseline so the build doesn't break
 // on day one — but every refactor must NOT add new errors.
@@ -22,9 +23,15 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(import.meta.dir, '..', '..');
 const BASELINE_PATH = join(ROOT, '.fitness', 'typecheck-baseline.txt');
+const TSC_BIN = join(
+  ROOT,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
+);
 
-// Each entry runs `bunx tsc --noEmit -p <project>`. Add new packages here
-// as their own tsconfig.json gains errors worth gating on.
+// Each entry runs the local TypeScript 7 `tsc --noEmit -p <project>`. Add new
+// packages here as their own tsconfig.json gains errors worth gating on.
 const PROJECTS = [
   'packages/client/tsconfig.json',
   'packages/runtime/tsconfig.json',
@@ -55,8 +62,8 @@ interface NormalizedError {
  */
 function runTsc(project: string): NormalizedError[] {
   const result = spawnSync(
-    'bunx',
-    ['tsc', '--noEmit', '-p', project, '--ignoreDeprecations', '6.0', '--pretty', 'false'],
+    TSC_BIN,
+    ['--noEmit', '-p', project, '--ignoreDeprecations', '6.0', '--pretty', 'false'],
     { cwd: ROOT, encoding: 'utf-8' },
   );
 

@@ -14,6 +14,8 @@ import { renderWithProviders } from '../helpers/render';
 const mockCreateThread = vi.fn().mockResolvedValue(true);
 const mockNavigate = vi.fn();
 const mockListMcpServers = vi.hoisted(() => vi.fn());
+const mockCreateIdleThread = vi.hoisted(() => vi.fn());
+const mockRunWorkflow = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -60,6 +62,9 @@ vi.mock('@/lib/api', async () => {
   return {
     api: {
       listMcpServers: mockListMcpServers,
+      createIdleThread: mockCreateIdleThread,
+      runWorkflow: mockRunWorkflow,
+      listThreads: vi.fn().mockReturnValue(okAsyncResult({ threads: [], total: 0 })),
       remoteUrl: vi.fn().mockReturnValue(okAsyncResult({ url: '' })),
     },
   };
@@ -67,7 +72,7 @@ vi.mock('@/lib/api', async () => {
 
 vi.mock('@/components/PromptInput', () => ({
   PromptInput: (props: {
-    onSubmit?: () => void;
+    onSubmit?: (prompt: string, opts: { model: string; mode: string; threadMode: string }) => void;
     onWorktreeModeChange?: (value: boolean) => void;
     onContentChange?: (hasContent: boolean, text: string) => void;
     onProviderChange?: (provider: string) => void;
@@ -79,8 +84,31 @@ vi.mock('@/components/PromptInput', () => ({
         <div data-testid="new-thread-context-bar">{props.newThreadContextBar}</div>
       ) : null}
       {props.initialPrompt ? <span data-testid="initial-prompt">{props.initialPrompt}</span> : null}
-      <button type="button" data-testid="mock-prompt-submit" onClick={() => props.onSubmit?.()}>
+      <button
+        type="button"
+        data-testid="mock-prompt-submit"
+        onClick={() =>
+          props.onSubmit?.('Build feature X', {
+            model: 'gpt-5',
+            mode: 'auto',
+            threadMode: 'local',
+          })
+        }
+      >
         Submit
+      </button>
+      <button
+        type="button"
+        data-testid="mock-workflow-submit"
+        onClick={() =>
+          props.onSubmit?.('>> fusion review this branch', {
+            model: 'gpt-5',
+            mode: 'auto',
+            threadMode: 'local',
+          })
+        }
+      >
+        Workflow
       </button>
       <button
         type="button"
@@ -118,6 +146,15 @@ describe('NewThreadInput', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
+    mockCreateIdleThread.mockReturnValue(
+      okAsync({
+        id: 'thread-workflow',
+        projectId: 'p1',
+        title: 'review this branch',
+        status: 'idle',
+      }),
+    );
+    mockRunWorkflow.mockReturnValue(okAsync({ runId: 'run-1', pipelineRunId: 'run-1' }));
     useUIStore.setState({
       newThreadIsScratch: false,
       newThreadProjectId: null,
@@ -235,6 +272,29 @@ describe('NewThreadInput', () => {
     await waitFor(() => expect(mockCreateThread).toHaveBeenCalled());
     expect(screen.queryByTestId('new-thread-creating')).not.toBeInTheDocument();
     expect(screen.getByTestId('mock-prompt-input')).toBeInTheDocument();
+  });
+
+  test('creates an idle thread and runs workflow for >> invocations', async () => {
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+
+    fireEvent.click(screen.getByTestId('mock-workflow-submit'));
+
+    await waitFor(() => {
+      expect(mockCreateIdleThread).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'p1',
+          title: 'review this branch',
+          mode: 'local',
+          prompt: 'review this branch',
+        }),
+      );
+    });
+    expect(mockRunWorkflow).toHaveBeenCalledWith('fusion', {
+      threadId: 'thread-workflow',
+      prompt: 'review this branch',
+      inputs: undefined,
+    });
+    expect(mockCreateThread).not.toHaveBeenCalled();
   });
 
   test('shows worktree branch preview when worktree mode is enabled', () => {

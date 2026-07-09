@@ -7,6 +7,7 @@ import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
+import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
@@ -47,6 +48,28 @@ export function useThreadHandlers(refs: Refs) {
       }
       const thread = refs.activeThreadRef.current;
       if (!thread) return;
+      const workflowParse = parseWorkflowInvocation(prompt);
+      if (!workflowParse.ok) {
+        toast.error(workflowParse.error);
+        return false;
+      }
+      if (workflowParse.invocation) {
+        setSending(true);
+        const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
+          threadId: thread.id,
+          ...buildWorkflowRunBody(workflowParse.invocation, {
+            fileReferences: opts.fileReferences,
+            symbolReferences: opts.symbolReferences,
+          }),
+        });
+        setSending(false);
+        if (result.isErr()) {
+          toast.error(result.error.message);
+          return false;
+        }
+        toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+        return true;
+      }
       const queuedCount = thread.queuedCount ?? 0;
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;
       const currentProject = useProjectStore

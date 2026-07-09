@@ -56,15 +56,21 @@ import { cn } from '@/lib/utils';
 const log = createClientLogger('pinned-pr-card');
 
 const LazyMarkdown = lazy(() =>
-  import('react-markdown').then(({ default: ReactMarkdown }) => ({
-    default: function Md({ content }: { content: string }) {
-      return (
-        <ReactMarkdown remarkPlugins={remarkPlugins} components={baseMarkdownComponents}>
-          {content}
-        </ReactMarkdown>
-      );
-    },
-  })),
+  Promise.all([import('react-markdown'), import('rehype-raw'), import('rehype-sanitize')]).then(
+    ([{ default: ReactMarkdown }, { default: rehypeRaw }, { default: rehypeSanitize }]) => ({
+      default: function Md({ content }: { content: string }) {
+        return (
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={[rehypeRaw, rehypeSanitize]}
+            components={baseMarkdownComponents}
+          >
+            {content}
+          </ReactMarkdown>
+        );
+      },
+    }),
+  ),
 );
 
 function timeAgo(dateStr: string): string {

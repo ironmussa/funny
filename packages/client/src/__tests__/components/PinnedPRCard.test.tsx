@@ -163,4 +163,17 @@ describe('PinnedPRCard', () => {
     expect(container).not.toHaveTextContent('<details>');
     expect(container).not.toHaveTextContent('<!-- This is an auto-generated comment');
   });
+
+  test('does not render a redundant merged status badge', () => {
+    renderWithProviders(
+      <PinnedPRCard
+        pr={makePR({ state: 'closed', merged_at: '2026-01-01T00:02:00.000Z' })}
+        projectId="project-1"
+      />,
+    );
+
+    expect(screen.queryByTestId('pinned-pr-merged-badge-51')).not.toBeInTheDocument();
+    expect(screen.queryByText('Merged')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pinned-pr-link-51')).toHaveTextContent('#51');
+  });
 });

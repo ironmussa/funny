@@ -79,6 +79,9 @@ const virtualizerMockState = vi.hoisted(() => ({
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
+  // Mirrors the real adapter: ONE stable instance per component whose
+  // scrollOffset reflects the live scroll position (getter into mock state)
+  // even between React renders.
   useVirtualizer: (opts: any) => {
     virtualizerMockState.lastOptions = opts;
     const count = opts.count ?? 0;
@@ -97,9 +100,7 @@ vi.mock('@tanstack/react-virtual', () => ({
       };
     });
 
-    const instance = {
-      getVirtualItems: () => virtualItems,
-      getTotalSize: () => count * 120,
+    const instance = (virtualizerMockState.instance ??= {
       measureElement: () => {},
       scrollToIndex: (index: number, opts?: { align?: string }) => {
         virtualizerMockState.scrollToIndexCalls.push({ index, opts });
@@ -111,12 +112,18 @@ vi.mock('@tanstack/react-virtual', () => ({
       measure: () => {
         virtualizerMockState.measureCalls += 1;
       },
-      scrollOffset: virtualizerMockState.scrollOffset,
+      get scrollOffset() {
+        return virtualizerMockState.scrollOffset;
+      },
+      set scrollOffset(offset: number) {
+        virtualizerMockState.scrollOffset = offset;
+      },
       isScrolling: false,
       itemSizeCache: new Map(),
       scrollState: null,
-    };
-    virtualizerMockState.instance = instance;
+    });
+    instance.getVirtualItems = () => virtualItems;
+    instance.getTotalSize = () => count * 120;
     return instance;
   },
 }));
@@ -356,6 +363,46 @@ describe('MemoizedMessageList virtualization', () => {
       await waitFor(() =>
         expect(getByTestId('sticky-section-content').style.transform).toBe('translateY(-40px)'),
       );
+    } finally {
+      rectSpy.mockRestore();
+    }
+  });
+
+  test('updates the sticky push per scroll event without waiting for a virtualizer re-render', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 4;
+    virtualizerMockState.scrollOffset = 180;
+
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    rectSpy.mockImplementation(function (this: Element) {
+      const height = this.closest('[data-testid="sticky-section-context"]') ? 100 : 0;
+      return {
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: height,
+        width: 0,
+        height,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+
+    try {
+      const { getByTestId } = render(<Harness messages={makeMessages(6)} />);
+
+      await waitFor(() =>
+        expect(getByTestId('sticky-section-content').style.transform).toBe('translateY(-40px)'),
+      );
+
+      // Simulate scroll frames between virtualizer notifications: the
+      // instance's scrollOffset advances but the virtualizer does not notify
+      // React (its range has not changed), so no new offset reaches a render.
+      virtualizerMockState.scrollOffset = 200;
+      fireEvent.scroll(getByTestId('viewport'));
+
+      expect(getByTestId('sticky-section-content').style.transform).toBe('translateY(-60px)');
     } finally {
       rectSpy.mockRestore();
     }

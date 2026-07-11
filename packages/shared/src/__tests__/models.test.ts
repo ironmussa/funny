@@ -5,6 +5,7 @@ import {
   getDefaultModel,
   getProviderModels,
   getProviderModelsWithLabels,
+  getModelContextWindow,
   resolvePermissionMode,
   resolveResumePermissionMode,
   getDefaultAllowedTools,
@@ -47,16 +48,18 @@ describe('resolveModelId', () => {
   });
 
   describe('codex provider', () => {
+    test('resolves gpt-5.6 variants', () => {
+      expect(resolveModelId('codex', 'gpt-5.6-sol')).toBe('gpt-5.6-sol');
+      expect(resolveModelId('codex', 'gpt-5.6-terra')).toBe('gpt-5.6-terra');
+      expect(resolveModelId('codex', 'gpt-5.6-luna')).toBe('gpt-5.6-luna');
+    });
+
     test('resolves gpt-5.4 to gpt-5.4', () => {
       expect(resolveModelId('codex', 'gpt-5.4')).toBe('gpt-5.4');
     });
 
     test('resolves gpt-5.4-mini to gpt-5.4-mini', () => {
       expect(resolveModelId('codex', 'gpt-5.4-mini')).toBe('gpt-5.4-mini');
-    });
-
-    test('resolves gpt-5.3-codex to gpt-5.3-codex', () => {
-      expect(resolveModelId('codex', 'gpt-5.3-codex')).toBe('gpt-5.3-codex');
     });
 
     test('resolves gpt-5.2 to gpt-5.2', () => {
@@ -178,8 +181,8 @@ describe('getDefaultModel', () => {
     expect(getDefaultModel('claude')).toBe('opus-4.8');
   });
 
-  test('returns gpt-5.5 for codex', () => {
-    expect(getDefaultModel('codex')).toBe('gpt-5.5');
+  test('returns gpt-5.6-sol for codex', () => {
+    expect(getDefaultModel('codex')).toBe('gpt-5.6-sol');
   });
 
   test('returns gemini-3.1-pro-preview for gemini', () => {
@@ -212,12 +215,20 @@ describe('getProviderModels', () => {
 
   test('returns all codex models', () => {
     const models = getProviderModels('codex');
+    expect(models).toContain('gpt-5.6-sol');
+    expect(models).toContain('gpt-5.6-terra');
+    expect(models).toContain('gpt-5.6-luna');
     expect(models).toContain('gpt-5.5');
     expect(models).toContain('gpt-5.4');
     expect(models).toContain('gpt-5.4-mini');
-    expect(models).toContain('gpt-5.3-codex');
     expect(models).toContain('gpt-5.2');
-    expect(models).toHaveLength(5);
+    expect(models).toHaveLength(7);
+  });
+
+  test('GPT-5.6 Codex variants use the local Codex metadata context window', () => {
+    for (const model of ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const) {
+      expect(getModelContextWindow('codex', model)).toBe(372_000);
+    }
   });
 
   test('returns all gemini models', () => {
@@ -366,21 +377,22 @@ describe('isModelForProvider', () => {
     test('returns false for codex models', () => {
       expect(isModelForProvider('claude', 'gpt-5.4')).toBe(false);
       expect(isModelForProvider('claude', 'gpt-5.2')).toBe(false);
-      expect(isModelForProvider('claude', 'gpt-5.3-codex')).toBe(false);
     });
   });
 
   describe('codex provider', () => {
+    test('returns true for gpt-5.6 variants', () => {
+      expect(isModelForProvider('codex', 'gpt-5.6-sol')).toBe(true);
+      expect(isModelForProvider('codex', 'gpt-5.6-terra')).toBe(true);
+      expect(isModelForProvider('codex', 'gpt-5.6-luna')).toBe(true);
+    });
+
     test('returns true for gpt-5.4', () => {
       expect(isModelForProvider('codex', 'gpt-5.4')).toBe(true);
     });
 
     test('returns true for gpt-5.4-mini', () => {
       expect(isModelForProvider('codex', 'gpt-5.4-mini')).toBe(true);
-    });
-
-    test('returns true for gpt-5.3-codex', () => {
-      expect(isModelForProvider('codex', 'gpt-5.3-codex')).toBe(true);
     });
 
     test('returns false for claude models', () => {
@@ -426,6 +438,7 @@ describe('getProviderModelsWithLabels', () => {
   test('returns labeled models for codex', () => {
     const models = getProviderModelsWithLabels('codex');
     expect(models.length).toBeGreaterThan(0);
+    expect(models.some((m) => m.value === 'gpt-5.6-sol' && m.label === 'GPT-5.6 Sol')).toBe(true);
     expect(models.some((m) => m.value === 'gpt-5.4')).toBe(true);
   });
 

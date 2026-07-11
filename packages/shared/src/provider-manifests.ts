@@ -21,21 +21,33 @@ const MB = 1024 * 1024;
 // ─── ACP model catalogs (owned here; re-exported by models.ts) ───────────────
 
 export const codexModels = {
-  'gpt-5.5': { id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 400_000, i18nKey: 'gpt55' },
-  'gpt-5.4': { id: 'gpt-5.4', label: 'GPT-5.4', contextWindow: 400_000, i18nKey: 'gpt54' },
+  'gpt-5.6-sol': {
+    id: 'gpt-5.6-sol',
+    label: 'GPT-5.6 Sol',
+    contextWindow: 372_000,
+    i18nKey: 'gpt56sol',
+  },
+  'gpt-5.6-terra': {
+    id: 'gpt-5.6-terra',
+    label: 'GPT-5.6 Terra',
+    contextWindow: 372_000,
+    i18nKey: 'gpt56terra',
+  },
+  'gpt-5.6-luna': {
+    id: 'gpt-5.6-luna',
+    label: 'GPT-5.6 Luna',
+    contextWindow: 372_000,
+    i18nKey: 'gpt56luna',
+  },
+  'gpt-5.5': { id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 272_000, i18nKey: 'gpt55' },
+  'gpt-5.4': { id: 'gpt-5.4', label: 'GPT-5.4', contextWindow: 272_000, i18nKey: 'gpt54' },
   'gpt-5.4-mini': {
     id: 'gpt-5.4-mini',
     label: 'GPT-5.4 Mini',
-    contextWindow: 400_000,
+    contextWindow: 272_000,
     i18nKey: 'gpt54mini',
   },
-  'gpt-5.3-codex': {
-    id: 'gpt-5.3-codex',
-    label: 'GPT-5.3 Codex',
-    contextWindow: 400_000,
-    i18nKey: 'gpt53codex',
-  },
-  'gpt-5.2': { id: 'gpt-5.2', label: 'GPT-5.2', contextWindow: 400_000, i18nKey: 'gpt52' },
+  'gpt-5.2': { id: 'gpt-5.2', label: 'GPT-5.2', contextWindow: 272_000, i18nKey: 'gpt52' },
 } as const satisfies Record<string, ModelDefinition>;
 
 export const geminiModels = {
@@ -120,7 +132,7 @@ export const codexManifest: ProviderManifest = {
     binEnvVars: ['CODEX_ACP_BINARY_PATH', 'ACP_CODEX_BIN', 'CODEX_BIN'],
     npxSpec: { useEnvVar: 'CODEX_ACP_USE_NPX', pkg: ['-y', '@zed-industries/codex-acp'] },
   },
-  models: { kind: 'static', entries: codexModels, defaultModel: 'gpt-5.5' },
+  models: { kind: 'static', entries: codexModels, defaultModel: 'gpt-5.6-sol' },
   setModel: { method: 'unstable_setSessionModel' },
   modelVia: 'acp-method',
   modeVia: 'acp-setSessionMode',
@@ -301,6 +313,12 @@ export type KnownAcpProvider = keyof typeof ACP_MANIFESTS;
 
 /** Runtime list of bundled ACP provider ids. */
 export const KNOWN_ACP_PROVIDER_IDS = Object.keys(ACP_MANIFESTS) as KnownAcpProvider[];
+
+/** Bundled ACP providers that still launch through an ACP CLI and can be toggled off. */
+export type GateableAcpProvider = Exclude<KnownAcpProvider, 'codex'>;
+export const GATEABLE_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(
+  (id): id is GateableAcpProvider => id !== 'codex',
+);
 
 /** ACP providers whose catalog is discovered at runtime (`models.kind: 'dynamic'`). */
 export const DYNAMIC_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(

@@ -11,6 +11,7 @@ vi.mock('../../utils/claude-binary.js', () => ({
 // Mock the SDK imports — return empty objects so dynamic import() succeeds
 // but the SDK check in provider-detection will still treat them as available
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({}));
+vi.mock('@openai/codex-sdk', () => ({}));
 
 import {
   getAvailableProviders,
@@ -62,47 +63,47 @@ describe('resolveProviderAvailability (model-picker-availability §1)', () => {
   const ref = (id: string, command: string, extra: Partial<ProviderSpawnRef['spawn']> = {}) =>
     ({ id, spawn: { command, args: [], binEnvVars: [], ...extra } }) satisfies ProviderSpawnRef;
 
-  // claude is available here (the SDK import is mocked to {} → sdkAvailable),
-  // alongside the always-on non-ACP backends.
-  const ALWAYS = ['claude', 'pi', 'deepagent', 'llm-api'];
+  // claude/codex are available here (their SDK imports are mocked to {}
+  // → sdkAvailable), alongside the always-on non-ACP backends.
+  const ALWAYS = ['claude', 'codex', 'pi', 'deepagent', 'llm-api'];
 
   test('only providers whose resolved command is on PATH are available', async () => {
-    const refs = [ref('codex', 'codex-acp'), ref('gemini', 'gemini')];
+    const refs = [ref('gemini', 'gemini')];
     const out = await resolveProviderAvailability(refs, {
-      commandExists: (c) => c === 'codex-acp',
+      commandExists: () => false,
       env: {},
     });
-    expect(out).toEqual(expect.arrayContaining([...ALWAYS, 'codex']));
+    expect(out).toEqual(expect.arrayContaining(ALWAYS));
     expect(out).not.toContain('gemini');
   });
 
   test('installing another binary makes that provider available too', async () => {
-    const refs = [ref('codex', 'codex-acp'), ref('gemini', 'gemini')];
+    const refs = [ref('gemini', 'gemini')];
     const out = await resolveProviderAvailability(refs, {
-      commandExists: (c) => c === 'codex-acp' || c === 'gemini',
+      commandExists: (c) => c === 'gemini',
       env: {},
     });
     expect(out).toEqual(expect.arrayContaining(['codex', 'gemini']));
   });
 
   test('an env-var binary override is honored (resolveSpawnCommand precedence)', async () => {
-    const refs = [ref('codex', 'codex-acp', { binEnvVars: ['CODEX_BIN'] })];
+    const refs = [ref('gemini', 'gemini', { binEnvVars: ['GEMINI_BIN'] })];
     const out = await resolveProviderAvailability(refs, {
-      commandExists: (c) => c === '/custom/codex',
-      env: { CODEX_BIN: '/custom/codex' },
+      commandExists: (c) => c === '/custom/gemini',
+      env: { GEMINI_BIN: '/custom/gemini' },
     });
-    expect(out).toContain('codex');
+    expect(out).toContain('gemini');
   });
 
   test('the npx fallback counts as available when opted in', async () => {
     const refs = [
-      ref('codex', 'codex-acp', { npxSpec: { useEnvVar: 'USE_NPX', pkg: ['-y', 'x'] } }),
+      ref('cursor', 'cursor-agent', { npxSpec: { useEnvVar: 'USE_NPX', pkg: ['-y', 'x'] } }),
     ];
     const out = await resolveProviderAvailability(refs, {
-      commandExists: (c) => c === 'npx', // codex-acp NOT installed, npx is
+      commandExists: (c) => c === 'npx', // cursor-agent NOT installed, npx is
       env: { USE_NPX: '1' },
     });
-    expect(out).toContain('codex');
+    expect(out).toContain('cursor');
   });
 
   test('an active provider whose command is missing is absent', async () => {

@@ -58,11 +58,11 @@ describe('applyRunnerProviderGroups (model-picker-availability §4)', () => {
   test('lean-core: inactive built-ins are hidden entirely (not greyed)', () => {
     const out = applyRunnerProviderGroups(
       BASE,
-      state({ activeBuiltins: ['codex'], availableProviders: ['codex'] }),
+      state({ activeBuiltins: [], availableProviders: ['claude', 'codex'] }),
     );
     const ids = out.map((g) => g.provider);
     expect(ids).toContain('claude'); // non-ACP built-in, always shown
-    expect(ids).toContain('codex');
+    expect(ids).toContain('codex'); // SDK-backed built-in, always shown
     expect(ids).not.toContain('gemini'); // gated off → hidden, not disabled
   });
 

@@ -110,14 +110,15 @@ export async function buildThreadContext(threadId: string): Promise<string | nul
  * Check if a thread needs context recovery.
  * Triggered by:
  * - Post-merge: worktree was merged+cleaned (mergedAt is set, sessionId exists)
- * - Model/provider change: sessionId was cleared, contextRecoveryReason was set
+ * - Model/provider change or DB-only fork: sessionId was cleared (or absent)
+ *   and contextRecoveryReason was set
  */
 export async function needsContextRecovery(threadId: string): Promise<boolean> {
   const thread = await tm.getThread(threadId);
   if (!thread) return false;
   // Post-merge: sessionId still exists + mergedAt flag
   if (thread.sessionId && thread.mergedAt) return true;
-  // Model/provider changed: sessionId was cleared, recovery flag was set
+  // Model/provider changed or DB-only fork: recovery flag was set
   if (thread.contextRecoveryReason) return true;
   return false;
 }

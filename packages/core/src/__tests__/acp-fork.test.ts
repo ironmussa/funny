@@ -6,7 +6,7 @@
  * 'spawn' / 'error' → initialize ACP connection → check `sessions.fork`
  * capability → call `unstable_forkSession`. We mock `child_process.spawn` and
  * `@agentclientprotocol/sdk` so the test exercises every branch without
- * shelling out to a real codex / gemini / cursor binary.
+ * shelling out to a real gemini / cursor / opencode binary.
  */
 
 import { EventEmitter } from 'events';
@@ -68,10 +68,6 @@ vi.mock('@agentclientprotocol/sdk', () => {
 });
 
 const PROVIDER_ENVS = [
-  'CODEX_ACP_BINARY_PATH',
-  'ACP_CODEX_BIN',
-  'CODEX_BIN',
-  'CODEX_ACP_USE_NPX',
   'GEMINI_BINARY_PATH',
   'ACP_GEMINI_BIN',
   'CURSOR_BINARY_PATH',
@@ -114,7 +110,7 @@ describe('forkAcpSession', () => {
 
   test('happy path: returns { ok: true, newSessionId } when fork capability is advertised', async () => {
     const res = await forkAcpSession({
-      provider: 'codex',
+      provider: 'gemini',
       sessionId: 'src-1',
       cwd: '/tmp/work',
     });
@@ -167,7 +163,7 @@ describe('forkAcpSession', () => {
       child.stderr = new Readable({ read() {} });
       child.killed = false;
       child.kill = vi.fn(() => true);
-      process.nextTick(() => child.emit('error', new Error('ENOENT: codex-acp')));
+      process.nextTick(() => child.emit('error', new Error('ENOENT: cursor-agent')));
       return child;
     });
 
@@ -179,13 +175,8 @@ describe('forkAcpSession', () => {
 
     expect(res).toMatchObject({ ok: false, reason: 'spawn_failed' });
     if (res.ok === false) {
-      expect(res.message).toBe('ENOENT: codex-acp');
+      expect(res.message).toBe('ENOENT: cursor-agent');
     }
-  });
-
-  test('default codex command is `codex-acp` with no args', async () => {
-    await forkAcpSession({ provider: 'codex', sessionId: 's', cwd: '/tmp' });
-    expect(spawnMock).toHaveBeenCalledWith('codex-acp', [], expect.any(Object));
   });
 
   test('default gemini command is `gemini` with `--acp`', async () => {
@@ -236,22 +227,6 @@ describe('forkAcpSession', () => {
     expect(spawnMock).toHaveBeenCalledWith('npx', ['-y', 'opencode-ai', 'acp'], expect.any(Object));
   });
 
-  test('CODEX_ACP_BINARY_PATH overrides the codex command', async () => {
-    process.env.CODEX_ACP_BINARY_PATH = '/opt/my-codex';
-    await forkAcpSession({ provider: 'codex', sessionId: 's', cwd: '/tmp' });
-    expect(spawnMock).toHaveBeenCalledWith('/opt/my-codex', [], expect.any(Object));
-  });
-
-  test('CODEX_ACP_USE_NPX=1 switches codex to npx invocation', async () => {
-    process.env.CODEX_ACP_USE_NPX = '1';
-    await forkAcpSession({ provider: 'codex', sessionId: 's', cwd: '/tmp' });
-    expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      ['-y', '@zed-industries/codex-acp'],
-      expect.any(Object),
-    );
-  });
-
   test('GEMINI_BINARY_PATH overrides the gemini binary (args stay `--acp`)', async () => {
     process.env.GEMINI_BINARY_PATH = '/opt/my-gemini';
     await forkAcpSession({ provider: 'gemini', sessionId: 's', cwd: '/tmp' });
@@ -270,7 +245,7 @@ describe('forkAcpSession', () => {
 
   test('cwd and env are forwarded to spawn options', async () => {
     await forkAcpSession({
-      provider: 'codex',
+      provider: 'gemini',
       sessionId: 's',
       cwd: '/somewhere/else',
       env: { FOO: 'bar' },
@@ -286,7 +261,7 @@ describe('forkAcpSession', () => {
     const child = makeFakeChild();
     spawnMock.mockImplementationOnce(() => child);
 
-    await forkAcpSession({ provider: 'codex', sessionId: 's', cwd: '/tmp' });
+    await forkAcpSession({ provider: 'gemini', sessionId: 's', cwd: '/tmp' });
 
     expect(child.kill).toHaveBeenCalled();
     expect(child.killed).toBe(true);
@@ -297,7 +272,7 @@ describe('forkAcpSession', () => {
     spawnMock.mockImplementationOnce(() => child);
     mockInitialize.mockResolvedValueOnce({ agentCapabilities: {} });
 
-    await forkAcpSession({ provider: 'codex', sessionId: 's', cwd: '/tmp' });
+    await forkAcpSession({ provider: 'gemini', sessionId: 's', cwd: '/tmp' });
 
     expect(child.kill).toHaveBeenCalled();
   });

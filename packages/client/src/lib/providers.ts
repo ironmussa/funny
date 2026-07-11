@@ -134,13 +134,18 @@ const PROVIDERS_WITH_EFFORT = new Set(['claude', 'codex', 'pi']);
 // Keys are the friendly model names from `@funny/shared` models registry.
 const CLAUDE_MODELS_WITH_XHIGH = new Set(['opus-4.7', 'opus-4.8']);
 const CLAUDE_MODELS_WITH_MAX = new Set(['opus-4.7', 'opus-4.8', 'opus', 'sonnet-4.6']);
+const CODEX_MODELS_WITH_MAX = new Set(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
 
 /** Get available effort levels for a given provider + model. Returns empty array if not supported. */
 export function getEffortLevels(model: string, provider?: string): EffortConfig[] {
   if (provider && !PROVIDERS_WITH_EFFORT.has(provider)) return [];
+  if (provider === 'codex') {
+    return EFFORT_LEVELS.filter((e) => {
+      if (e.value === 'max') return CODEX_MODELS_WITH_MAX.has(model);
+      return true;
+    });
+  }
   if (provider !== 'claude') {
-    // Codex exposes low/medium/high/xhigh. Keep max limited to Claude models
-    // that advertise it below.
     return EFFORT_LEVELS.filter(
       (e) => e.value === 'low' || e.value === 'medium' || e.value === 'high' || e.value === 'xhigh',
     );

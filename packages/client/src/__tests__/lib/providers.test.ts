@@ -181,7 +181,15 @@ describe('isPromptModelConfigurable', () => {
 // ── getEffortLevels ─────────────────────────────────────────────
 
 describe('getEffortLevels', () => {
-  test('exposes xhigh for codex models but keeps max hidden', () => {
+  test('exposes max for GPT-5.6 Codex models only', () => {
+    expect(getEffortLevels('gpt-5.6-sol', 'codex').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
+    expect(getEffortLevels('gpt-5.6-terra', 'codex').map((e) => e.value)).toContain('max');
     expect(getEffortLevels('gpt-5.5', 'codex').map((e) => e.value)).toEqual([
       'low',
       'medium',
@@ -228,6 +236,10 @@ describe('getContextWindow', () => {
 
   test('returns correct context window for gemini 2.5 flash', () => {
     expect(getContextWindow('gemini', 'gemini-2.5-flash')).toBe(1_048_576);
+  });
+
+  test('returns correct context window for GPT-5.6 Codex models', () => {
+    expect(getContextWindow('codex', 'gpt-5.6-luna')).toBe(372_000);
   });
 
   test('returns default 200k for unknown provider', () => {

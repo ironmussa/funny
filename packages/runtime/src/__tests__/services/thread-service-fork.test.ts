@@ -307,9 +307,8 @@ describe('forkThread', () => {
     expect(mocks.tm.updateToolCallOutput).toHaveBeenCalledTimes(2);
   });
 
-  test('uses ACP fork for codex provider when available', async () => {
+  test('marks a Codex SDK fork for context recovery instead of using ACP', async () => {
     mocks.tm.getThread.mockResolvedValue({ ...sourceThread, provider: 'codex' });
-    mocks.forkAcpSession.mockResolvedValue({ ok: true, newSessionId: 'acp-sess' });
 
     const result = await forkThread({
       sourceThreadId: 'src-1',
@@ -318,10 +317,14 @@ describe('forkThread', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    expect(mocks.forkAcpSession).toHaveBeenCalled();
+    expect(mocks.forkAcpSession).not.toHaveBeenCalled();
     expect(mocks.getSessionMessages).not.toHaveBeenCalled();
     expect(mocks.tm.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'acp-sess', fileCheckpointingEnabled: 0 }),
+      expect.objectContaining({
+        sessionId: null,
+        contextRecoveryReason: 'forked',
+        fileCheckpointingEnabled: 0,
+      }),
     );
   });
 
@@ -341,7 +344,11 @@ describe('forkThread', () => {
 
     expect(result.isOk()).toBe(true);
     expect(mocks.tm.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: null, fileCheckpointingEnabled: 0 }),
+      expect.objectContaining({
+        sessionId: null,
+        contextRecoveryReason: 'forked',
+        fileCheckpointingEnabled: 0,
+      }),
     );
   });
 
@@ -358,7 +365,11 @@ describe('forkThread', () => {
     expect(mocks.getSessionMessages).not.toHaveBeenCalled();
     expect(mocks.forkAcpSession).not.toHaveBeenCalled();
     expect(mocks.tm.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: null, title: 'Fork: Original' }),
+      expect.objectContaining({
+        sessionId: null,
+        contextRecoveryReason: 'forked',
+        title: 'Fork: Original',
+      }),
     );
   });
 });

@@ -9,7 +9,7 @@ import type { CLIMessage } from '../agents/types.js';
 const { availableModels } = vi.hoisted(() => ({
   availableModels: [
     { provider: 'anthropic', id: 'claude-opus-4-5', name: 'Claude Opus 4.5' },
-    { provider: 'openai', id: 'gpt-5.2', name: 'GPT-5.2' },
+    { provider: 'openai-codex', id: 'gpt-5.5', name: 'GPT-5.5' },
   ],
 }));
 
@@ -35,6 +35,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
 import {
   discoverPiModels,
   PiSDKProcess,
+  resolveRequestedModel,
   resolvePiExtensionPaths,
   resolvePiTools,
 } from '../agents/pi-sdk.js';
@@ -158,16 +159,44 @@ describe('PiSDKProcess event translation', () => {
 });
 
 describe('discoverPiModels', () => {
-  test('returns SDK registry models in the existing discovery shape', async () => {
+  test('returns SDK registry models and GPT-5.6 compatibility entries', async () => {
     const result = await discoverPiModels();
 
     expect(result).toEqual({
       ok: true,
       models: [
         { modelId: 'anthropic/claude-opus-4-5', name: 'Claude Opus 4.5' },
-        { modelId: 'openai/gpt-5.2', name: 'GPT-5.2' },
+        { modelId: 'openai-codex/gpt-5.5', name: 'GPT-5.5' },
+        { modelId: 'openai-codex/gpt-5.6-sol', name: 'GPT-5.6 Sol' },
+        { modelId: 'openai-codex/gpt-5.6-terra', name: 'GPT-5.6 Terra' },
+        { modelId: 'openai-codex/gpt-5.6-luna', name: 'GPT-5.6 Luna' },
       ],
       currentModelId: null,
+    });
+  });
+
+  test("resolves the GPT-5.6 alias and variants through Pi's OpenAI transport", async () => {
+    const { AuthStorage, ModelRegistry } = await import('@earendil-works/pi-coding-agent');
+    const registry = ModelRegistry.create(AuthStorage.create());
+
+    expect(resolveRequestedModel(registry, 'openai-codex/gpt-5.6')).toMatchObject({
+      provider: 'openai-codex',
+      id: 'gpt-5.6-sol',
+      contextWindow: 1_050_000,
+      maxTokens: 128_000,
+      thinkingLevelMap: {
+        off: 'none',
+        low: 'low',
+        medium: 'medium',
+        high: 'high',
+        xhigh: 'max',
+      },
+      cost: { input: 5, output: 30 },
+    });
+    expect(resolveRequestedModel(registry, 'openai-codex/gpt-5.6-terra')).toMatchObject({
+      provider: 'openai-codex',
+      id: 'gpt-5.6-terra',
+      cost: { input: 2.5, output: 15 },
     });
   });
 });

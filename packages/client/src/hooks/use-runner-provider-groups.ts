@@ -1,4 +1,4 @@
-import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { useEffect, useMemo } from 'react';
 
 import type { AdvertisedProvider } from '@/lib/api/system';
@@ -7,7 +7,7 @@ import { useRunnerProvidersStore } from '@/stores/runner-providers-store';
 import type { ModelGroup } from './use-acp-prompt-models';
 
 /** Built-in ACP providers that lean-core can gate off (claude/deepagent/llm-api stay). */
-const BUILTIN_ACP = new Set<string>(KNOWN_ACP_PROVIDER_IDS);
+const BUILTIN_ACP = new Set<string>(GATEABLE_ACP_PROVIDER_IDS);
 
 /** The runner-advertised provider state the picker reconciles against. */
 export interface RunnerProviderState {

@@ -8,17 +8,23 @@
  * Fork a thread at a specific user message. For Claude threads, uses the
  * Claude Agent SDK's native `forkSession()` to slice the SDK transcript at
  * the matching transcript message UUID. For Pi, uses the Pi SDK session
- * manager. For ACP-based providers (codex, gemini, cursor, opencode), spawns
- * the agent CLI briefly and calls ACP's `unstable_forkSession()` if the
- * capability is advertised. Otherwise the fork is a "branch the visible
- * conversation" with no native session continuity. In all cases the prefix of
- * DB messages and tool calls are mirrored into a new (idle) thread.
+ * manager. For ACP-based providers (gemini, cursor, opencode), spawns the
+ * agent CLI briefly and calls ACP's `unstable_forkSession()` if the capability
+ * is advertised. Codex SDK does not expose native session forking, so Codex
+ * falls back to a DB-backed conversation branch. Forks without a native
+ * session are marked for context recovery, so the first follow-up rebuilds
+ * the copied transcript instead of starting the agent with no history. In all
+ * cases the prefix of DB messages and tool calls are mirrored into a new
+ * (idle) thread.
  */
 
 import { forkSession, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk';
 import { forkAcpSession, forkPiSession } from '@funny/core/agents';
-import { KNOWN_ACP_PROVIDER_IDS, type KnownAcpProvider } from '@funny/shared/provider-manifests';
+import {
+  GATEABLE_ACP_PROVIDER_IDS,
+  type GateableAcpProvider,
+} from '@funny/shared/provider-manifests';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
 
@@ -31,7 +37,7 @@ import { ThreadServiceError } from './helpers.js';
 
 // Derived from the manifest registry — adding an ACP manifest makes its
 // threads forkable here automatically.
-const ACP_PROVIDERS = new Set<string>(KNOWN_ACP_PROVIDER_IDS);
+const ACP_PROVIDERS = new Set<string>(GATEABLE_ACP_PROVIDER_IDS);
 
 export interface ForkThreadParams {
   sourceThreadId: string;
@@ -108,7 +114,8 @@ async function forkThreadImpl(params: ForkThreadParams) {
   // Determine native session-fork strategy by provider.
   // - claude (or unset): use the Claude SDK's transcript-aware forkSession()
   // - pi: use Pi SDK session manager
-  // - codex / gemini / cursor / opencode: spawn the agent CLI briefly and call ACP unstable_forkSession()
+  // - gemini / cursor / opencode: spawn the agent CLI briefly and call ACP unstable_forkSession()
+  // - codex: no native fork in the SDK yet; copy DB messages with no sessionId
   // - other providers: no native fork — copy DB messages with no sessionId
   let newSessionId: string | null = null;
   let forkedAtSdkUuid: string | undefined;
@@ -189,7 +196,7 @@ async function forkThreadImpl(params: ForkThreadParams) {
     }
   } else if (ACP_PROVIDERS.has(provider)) {
     const acpResult = await forkAcpSession({
-      provider: provider as KnownAcpProvider,
+      provider: provider as GateableAcpProvider,
       sessionId: source.sessionId,
       cwd,
     });
@@ -235,6 +242,10 @@ async function forkThreadImpl(params: ForkThreadParams) {
     baseBranch: source.baseBranch,
     worktreePath: source.worktreePath,
     sessionId: newSessionId,
+    // A DB-only fork has no provider session to resume. Rebuild the copied
+    // transcript for its first follow-up so it remains a functional branch,
+    // rather than merely displaying the source conversation in the UI.
+    contextRecoveryReason: newSessionId ? null : 'forked',
     parentThreadId: source.id,
     // Forked SDK sessions start without undo history (per the Claude SDK
     // docs), so even if the source thread had checkpointing on, the fork's

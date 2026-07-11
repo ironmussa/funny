@@ -5,7 +5,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 
-import { KNOWN_ACP_PROVIDER_IDS, opencodeManifest } from '@funny/shared/provider-manifests';
+import { GATEABLE_ACP_PROVIDER_IDS, opencodeManifest } from '@funny/shared/provider-manifests';
 
 import { GenericACPProcess } from '../agents/generic-acp.js';
 import type { IAgentProcess, AgentProcessOptions } from '../agents/interfaces.js';
@@ -66,7 +66,7 @@ describe('process-factory', () => {
   test('creates a codex process when provider is "codex"', () => {
     try {
       const process = defaultProcessFactory.create({ ...baseOpts, provider: 'codex' });
-      expect(process.constructor.name).toBe('CodexACPProcess');
+      expect(process.constructor.name).toBe('CodexSDKProcess');
     } catch {
       // Optional dependency — test passes if constructor resolves correctly
     }
@@ -155,24 +155,25 @@ describe('process-factory', () => {
 });
 
 describe('resolveActiveAcpProviders (lean-core)', () => {
-  test('unset / empty → all bundled ACP providers (no regression)', () => {
-    expect(resolveActiveAcpProviders(undefined).sort()).toEqual([...KNOWN_ACP_PROVIDER_IDS].sort());
-    expect(resolveActiveAcpProviders('').sort()).toEqual([...KNOWN_ACP_PROVIDER_IDS].sort());
-    expect(resolveActiveAcpProviders('   ').sort()).toEqual([...KNOWN_ACP_PROVIDER_IDS].sort());
+  test('unset / empty → all gateable ACP providers (no regression)', () => {
+    expect(resolveActiveAcpProviders(undefined).sort()).toEqual(
+      [...GATEABLE_ACP_PROVIDER_IDS].sort(),
+    );
+    expect(resolveActiveAcpProviders('').sort()).toEqual([...GATEABLE_ACP_PROVIDER_IDS].sort());
+    expect(resolveActiveAcpProviders('   ').sort()).toEqual([...GATEABLE_ACP_PROVIDER_IDS].sort());
   });
 
-  test('a lean list limits to the named ACP providers', () => {
-    expect(resolveActiveAcpProviders('codex,gemini').sort()).toEqual(['codex', 'gemini']);
+  test('a lean list limits to the named gateable ACP providers', () => {
+    expect(resolveActiveAcpProviders('codex,gemini').sort()).toEqual(['gemini']);
   });
 
-  test('trims whitespace and ignores unknown / non-ACP entries (claude is always-on elsewhere)', () => {
-    expect(resolveActiveAcpProviders(' codex , bogus , claude ')).toEqual(['codex']);
+  test('trims whitespace and ignores unknown / non-gateable entries', () => {
+    expect(resolveActiveAcpProviders(' codex , bogus , claude , cursor ')).toEqual(['cursor']);
   });
 
-  test('preserves the registry order of KNOWN_ACP_PROVIDER_IDS', () => {
-    // filter keeps KNOWN order regardless of input order
-    const out = resolveActiveAcpProviders('opencode,codex');
-    expect(out).toEqual(KNOWN_ACP_PROVIDER_IDS.filter((id) => out.includes(id)));
+  test('preserves the registry order of GATEABLE_ACP_PROVIDER_IDS', () => {
+    const out = resolveActiveAcpProviders('opencode,gemini');
+    expect(out).toEqual(GATEABLE_ACP_PROVIDER_IDS.filter((id) => out.includes(id)));
   });
 });
 
@@ -192,7 +193,9 @@ describe('enable / disable built-in providers (lean-core live toggle)', () => {
 
   test('enable/disable ignore non-ACP-built-in ids', () => {
     expect(enableBuiltinProvider('claude')).toBe(false);
+    expect(enableBuiltinProvider('codex')).toBe(false);
     expect(enableBuiltinProvider('pi')).toBe(false);
+    expect(disableBuiltinProvider('codex')).toBe(false);
     expect(disableBuiltinProvider('not-a-provider')).toBe(false);
   });
 

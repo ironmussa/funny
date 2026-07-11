@@ -35,6 +35,12 @@ export interface CLICommandsChangedMessage {
 
 export interface CLIAssistantMessage {
   type: 'assistant';
+  /**
+   * The provider guarantees that `message.id` names one logical assistant
+   * item across incremental updates. Consumers must not merge an unseen ID
+   * into the previous assistant message.
+   */
+  hasStableMessageId?: boolean;
   message: {
     id: string;
     content: Array<

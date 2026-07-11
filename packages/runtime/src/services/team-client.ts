@@ -32,7 +32,7 @@ import {
   loadProviderExtensions,
 } from '@funny/core/agents';
 import type { Project, ResolvedAgentExecutionProfileResponse, WSEvent } from '@funny/shared';
-import { KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
   isTextualContentType,
@@ -1885,7 +1885,7 @@ async function applyPersistedBuiltinProviders(): Promise<void> {
     const active = await remoteGetActiveBuiltinProviders();
     if (!active) return; // no stored override — keep the FUNNY_PROVIDERS default
     const want = new Set(active);
-    for (const id of KNOWN_ACP_PROVIDER_IDS) {
+    for (const id of GATEABLE_ACP_PROVIDER_IDS) {
       if (want.has(id)) enableBuiltinProvider(id);
       else disableBuiltinProvider(id);
     }

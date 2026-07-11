@@ -9,9 +9,12 @@
  *   2. Call `registerProvider('name', MyProcess)` before creating agents
  */
 
-import { KNOWN_ACP_PROVIDER_IDS, type KnownAcpProvider } from '@funny/shared/provider-manifests';
+import {
+  GATEABLE_ACP_PROVIDER_IDS,
+  type GateableAcpProvider,
+} from '@funny/shared/provider-manifests';
 
-import { CodexACPProcess } from './codex-acp.js';
+import { CodexSDKProcess } from './codex-sdk.js';
 import { CursorACPProcess } from './cursor-acp.js';
 import { DeepAgentProcess } from './deepagent-process.js';
 import { GeminiACPProcess } from './gemini-acp.js';
@@ -22,41 +25,44 @@ import { PiSDKProcess } from './pi-sdk.js';
 import { SDKClaudeProcess } from './sdk-claude.js';
 
 export type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
+function isAcpCliProvider(id: string): id is GateableAcpProvider {
+  return id in ACP_BUILTIN_PROCESSES;
+}
 
-// Always-on providers: Claude (SDK) is the default and never gated; the non-ACP
-// bundled backends (DeepAgent, llm-api) aren't part of the lean-core ACP toggle.
+// Always-on providers: Claude and Codex use SDKs and are never gated; the
+// non-ACP bundled backends aren't part of the lean-core ACP toggle.
 const ALWAYS_ON_PROVIDERS: ReadonlyArray<readonly [string, ProcessConstructor]> = [
   ['claude', SDKClaudeProcess],
+  ['codex', CodexSDKProcess],
   ['deepagent', DeepAgentProcess],
   ['llm-api', LLMApiProcess],
   ['pi', PiSDKProcess],
 ];
 
 // The gateable ACP built-ins, keyed by id.
-const ACP_BUILTIN_PROCESSES: Record<KnownAcpProvider, ProcessConstructor> = {
-  codex: CodexACPProcess,
+const ACP_BUILTIN_PROCESSES: Record<GateableAcpProvider, ProcessConstructor> = {
   gemini: GeminiACPProcess,
   cursor: CursorACPProcess,
   opencode: OpenCodeACPProcess,
 };
 
 /**
- * Resolve which ACP built-in providers are active from `FUNNY_PROVIDERS`
- * (comma-separated ids). Unset/empty → all bundled (no regression). Unknown /
- * non-ACP entries are ignored (Claude is always on regardless). This is the
- * lean-core toggle: "don't register every provider by default."
+ * Resolve which ACP CLI built-in providers are active from `FUNNY_PROVIDERS`
+ * (comma-separated ids). Unset/empty → all gateable built-ins. Unknown /
+ * non-gateable entries are ignored (Claude/Codex are always on regardless).
+ * This is the lean-core toggle: "don't register every provider by default."
  */
 export function resolveActiveAcpProviders(
   raw: string | undefined = process.env.FUNNY_PROVIDERS,
-): KnownAcpProvider[] {
-  if (!raw || !raw.trim()) return [...KNOWN_ACP_PROVIDER_IDS];
+): GateableAcpProvider[] {
+  if (!raw || !raw.trim()) return [...GATEABLE_ACP_PROVIDER_IDS];
   const requested = new Set(
     raw
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  return KNOWN_ACP_PROVIDER_IDS.filter((id) => requested.has(id));
+  return GATEABLE_ACP_PROVIDER_IDS.filter((id) => requested.has(id));
 }
 
 /** Build the initial registry: always-on providers + the active ACP built-ins. */
@@ -82,15 +88,15 @@ export function unregisterProvider(name: string): boolean {
 
 /** The ACP built-in providers currently active (registered). Drives the
  *  advertisement so the client picker can hide gated-off built-ins (lean-core). */
-export function getActiveBuiltinProviders(): KnownAcpProvider[] {
-  return KNOWN_ACP_PROVIDER_IDS.filter((id) => providerRegistry.has(id));
+export function getActiveBuiltinProviders(): GateableAcpProvider[] {
+  return GATEABLE_ACP_PROVIDER_IDS.filter((id) => providerRegistry.has(id));
 }
 
 /** Enable a gated-off built-in ACP provider live (no restart). False if `id`
  *  is not a known ACP built-in. */
 export function enableBuiltinProvider(id: string): boolean {
-  if (!(id in ACP_BUILTIN_PROCESSES)) return false;
-  registerProvider(id, ACP_BUILTIN_PROCESSES[id as KnownAcpProvider]);
+  if (!isAcpCliProvider(id)) return false;
+  registerProvider(id, ACP_BUILTIN_PROCESSES[id]);
   return true;
 }
 
@@ -101,7 +107,7 @@ export function enableBuiltinProvider(id: string): boolean {
  *  a spurious 400 in the toggle route when the registry is already in the
  *  requested state (e.g. after a restart restored a lean set). */
 export function disableBuiltinProvider(id: string): boolean {
-  if (!(id in ACP_BUILTIN_PROCESSES)) return false;
+  if (!isAcpCliProvider(id)) return false;
   unregisterProvider(id);
   return true;
 }

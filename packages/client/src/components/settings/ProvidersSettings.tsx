@@ -5,7 +5,7 @@
  * de-registers it. The spawn command is disclosed on install. Per-user-runner —
  * each user manages their own runner's providers.
  */
-import { ACP_MANIFESTS, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
+import { ACP_MANIFESTS, GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { AlertTriangle, Cpu, Package, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -21,7 +21,7 @@ import { useRunnerProvidersStore } from '@/stores/runner-providers-store';
 const log = createClientLogger('providers-settings');
 
 /** The gateable built-in ACP providers, with their display labels. */
-const BUILTIN_ACP = KNOWN_ACP_PROVIDER_IDS.map((id) => ({ id, label: ACP_MANIFESTS[id].label }));
+const BUILTIN_ACP = GATEABLE_ACP_PROVIDER_IDS.map((id) => ({ id, label: ACP_MANIFESTS[id].label }));
 
 /** Heuristic: a git URL vs a local path on the runner. */
 function isGitSource(s: string): boolean {

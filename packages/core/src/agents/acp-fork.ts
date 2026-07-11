@@ -7,19 +7,20 @@
  * Out-of-process ACP session fork: spawns the agent CLI just long enough to
  * call `unstable_forkSession()` against the source session, returns the new
  * sessionId, and tears the process down. Used by the runtime fork service
- * so that codex / gemini / pi / cursor conversations can be branched the
- * same way Claude SDK conversations are.
+ * so that ACP CLI conversations can be branched the same way Claude SDK
+ * conversations are. Codex runs through the Codex SDK and does not use this
+ * helper.
  */
 
 import { spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
 
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
-import { getManifest, type KnownAcpProvider } from '@funny/shared/provider-manifests';
+import { getManifest, type GateableAcpProvider } from '@funny/shared/provider-manifests';
 
 import { killProcessTree } from './base-process.js';
 
-type AcpProvider = KnownAcpProvider;
+type AcpProvider = GateableAcpProvider;
 
 /** Resolve the CLI command + args for an ACP provider from its manifest. */
 function resolveAcpCommand(provider: AcpProvider): { command: string; args: string[] } {

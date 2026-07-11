@@ -64,33 +64,28 @@ async function checkClaudeAvailability(): Promise<ProviderAvailability> {
   };
 }
 
-/** Check if the codex-acp binary is available in PATH. */
-function checkCodexAcpBinary(): { available: boolean; path?: string } {
+/** Check if the Codex SDK can be loaded. */
+async function checkCodexSDK(): Promise<boolean> {
   try {
-    const { execSync } = require('child_process');
-    const cmd = process.platform === 'win32' ? 'where codex-acp' : 'which codex-acp';
-    const result = execSync(cmd, { timeout: 5000, encoding: 'utf-8' });
-    const path = result.trim().split('\n')[0]?.trim();
-    if (path) return { available: true, path };
-  } catch {}
-  return { available: false };
+    await import('@openai/codex-sdk');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Codex availability is provided by the Zed-maintained codex-acp adapter,
- * not an in-process SDK. We accept either an installed binary or fall back
- * to `npx @zed-industries/codex-acp` (always available when the runner has
- * network access). Mark Codex as available so the UI exposes the provider;
- * the spawn itself surfaces a clear error if npx can't fetch it.
+ * Codex runs through the official SDK. The SDK owns CLI resolution, including
+ * a CODEX_BINARY_PATH/CODEX_BIN override when provided to the process adapter.
  */
 async function checkCodexAvailability(): Promise<ProviderAvailability> {
-  const binary = checkCodexAcpBinary();
+  const sdkAvailable = await checkCodexSDK();
   return {
-    available: true,
-    sdkAvailable: binary.available,
-    cliAvailable: binary.available,
-    cliPath: binary.path,
-    error: undefined,
+    available: sdkAvailable,
+    sdkAvailable,
+    cliAvailable: sdkAvailable,
+    cliPath: process.env.CODEX_BINARY_PATH ?? process.env.CODEX_BIN,
+    error: !sdkAvailable ? 'Codex SDK not found. Run: bun add @openai/codex-sdk' : undefined,
   };
 }
 
@@ -186,6 +181,7 @@ export async function resolveProviderAvailability(
   // claude — always-on, special-cased
   const detected = await getAvailableProviders();
   if (detected.get('claude')?.available) available.push('claude');
+  if (detected.get('codex')?.available) available.push('codex');
 
   // non-ACP bundled backends — available in v1 (not gated by a CLI on PATH)
   available.push('pi', 'deepagent', 'llm-api');

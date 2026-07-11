@@ -43,6 +43,25 @@ const FUNNY_TOOL_TO_PI_TOOLS: Record<string, string[]> = {
   TodoWrite: ['update_plan'],
 };
 const THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+const PI_GPT_56_MODELS = [
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', inputCost: 5, outputCost: 30 },
+  { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', inputCost: 2.5, outputCost: 15 },
+  { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', inputCost: 1, outputCost: 6 },
+] as const;
+const PI_GPT_56_ALIAS = 'gpt-5.6';
+// Pi exposes direct API keys as `openai` and ChatGPT Plus/Pro credentials as
+// `openai-codex`. The latter is the provider behind Pi's built-in GPT-5.x
+// Codex catalog, so preserve whichever authenticated transport Pi advertises.
+const PI_OPENAI_PROVIDERS = new Set(['openai', 'openai-codex']);
+const PI_GPT_56_CONTEXT_WINDOW = 1_050_000;
+const PI_GPT_56_THINKING_LEVEL_MAP = {
+  off: 'none',
+  minimal: null,
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  xhigh: 'max',
+};
 const PI_EXTENSION_PACKAGE_SCHEMA = z
   .object({
     pi: z
@@ -458,12 +477,15 @@ export async function discoverPiModels(): Promise<
         message: 'Pi returned no available models. Configure API keys or OAuth in Pi.',
       };
     }
+    const models = available.map((m: any) => ({
+      modelId: `${m.provider}/${m.id}`,
+      name: m.name ?? `${m.provider}/${m.id}`,
+    }));
+    addPiGpt56Models(models, available);
+
     return {
       ok: true,
-      models: available.map((m: any) => ({
-        modelId: `${m.provider}/${m.id}`,
-        name: m.name ?? `${m.provider}/${m.id}`,
-      })),
+      models,
       currentModelId: null,
     };
   } catch (err) {
@@ -475,14 +497,74 @@ export async function discoverPiModels(): Promise<
   }
 }
 
-function resolveRequestedModel(modelRegistry: ModelRegistry, requested?: string): any | undefined {
+export function resolveRequestedModel(
+  modelRegistry: ModelRegistry,
+  requested?: string,
+): any | undefined {
   if (!requested || requested === 'default') return undefined;
   const [provider, ...rest] = requested.includes('/') ? requested.split('/') : [];
   if (provider && rest.length > 0) {
     const found = modelRegistry.find(provider, rest.join('/'));
     if (found) return found;
+
+    if (PI_OPENAI_PROVIDERS.has(provider)) {
+      const gpt56Id = resolvePiGpt56ModelId(rest.join('/'));
+      if (gpt56Id) return createPiGpt56Model(modelRegistry, provider, gpt56Id);
+    }
   }
   return modelRegistry.getAll().find((m: any) => m.id === requested);
+}
+
+function addPiGpt56Models(
+  models: { modelId: string; name: string }[],
+  available: Array<{ provider: string; id: string }>,
+): void {
+  // Use a single configured OpenAI transport so the picker does not show
+  // duplicate variants when both an API key and a Codex subscription exist.
+  const provider =
+    available.find((model) => model.provider === 'openai-codex')?.provider ??
+    available.find((model) => model.provider === 'openai')?.provider;
+  if (!provider) return;
+
+  for (const model of PI_GPT_56_MODELS) {
+    const modelId = `${provider}/${model.id}`;
+    if (!models.some((entry) => entry.modelId === modelId))
+      models.push({ modelId, name: model.name });
+  }
+}
+
+function resolvePiGpt56ModelId(requested: string): string | undefined {
+  if (requested === PI_GPT_56_ALIAS) return 'gpt-5.6-sol';
+  return PI_GPT_56_MODELS.some((model) => model.id === requested) ? requested : undefined;
+}
+
+function createPiGpt56Model(
+  modelRegistry: ModelRegistry,
+  provider: string,
+  id: string,
+): any | undefined {
+  // Pi 0.80.3 predates GPT-5.6. Its OpenAI Responses model is otherwise a
+  // compatible template: retain its provider/auth/transport configuration and
+  // only replace the documented GPT-5.6 model metadata.
+  const template =
+    modelRegistry.find(provider, 'gpt-5.5') ??
+    modelRegistry.getAll().find((model: any) => model.provider === provider);
+  if (!template) return undefined;
+
+  const definition = PI_GPT_56_MODELS.find((model) => model.id === id);
+  return {
+    ...template,
+    id,
+    name: definition?.name ?? id,
+    thinkingLevelMap: PI_GPT_56_THINKING_LEVEL_MAP,
+    cost: {
+      ...template.cost,
+      input: definition?.inputCost ?? template.cost.input,
+      output: definition?.outputCost ?? template.cost.output,
+    },
+    contextWindow: PI_GPT_56_CONTEXT_WINDOW,
+    maxTokens: 128_000,
+  };
 }
 
 function normalizeThinkingLevel(effort?: string): any | undefined {

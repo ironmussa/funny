@@ -280,8 +280,11 @@ export function usePromptInputState({
   // Hide the ring until the agent has actually reported usage. New and forked
   // threads start at 0 and the displayed % would be misleading (a fork inherits
   // real context but no usage event has fired yet for the new threadId).
+  // Codex SDK only reports aggregate usage for a whole turn (which can span
+  // many model requests), not a snapshot of the active context window. Do not
+  // render stale persisted aggregate values as a false context percentage.
   const contextPct =
-    activeThreadContextTokens > 0
+    activeThreadProvider !== 'codex' && activeThreadContextTokens > 0
       ? Math.min(100, (activeThreadContextTokens / contextMaxTokens) * 100)
       : undefined;
 

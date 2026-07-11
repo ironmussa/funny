@@ -353,7 +353,15 @@ export class AgentMessageHandler {
     }
 
     if (textContent) {
-      let msgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
+      // Some providers publish a stable item ID for every incremental update.
+      // An unseen stable ID starts a distinct message; otherwise it could be
+      // merged into the current card and later appear to jump around the
+      // thread. Keep the current-message fallback for legacy providers whose
+      // IDs change between chunks.
+      let msgId = cliMap.get(cliMsgId);
+      if (!msgId && !msg.hasStableMessageId) {
+        msgId = this.state.currentAssistantMsgId.get(threadId);
+      }
       if (msgId) {
         // Existing message: emit WS immediately, persist in background
         // This gives the user instant feedback while DB writes happen async

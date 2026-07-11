@@ -558,4 +558,39 @@ describe('PromptInput', () => {
     });
     expect(screen.queryByText('Beta')).toBeNull();
   });
+
+  test('does not render a context percentage from Codex turn-aggregate usage', () => {
+    // Codex reports all input tokens consumed by a turn, including several
+    // model requests made for tool calls. Old thread payloads can retain that
+    // aggregate, but it is not the active context-window size.
+    renderWithProviders(
+      <PromptInput
+        onSubmit={vi.fn()}
+        threadOverride={{
+          provider: 'codex',
+          model: 'gpt-5.5',
+          contextUsage: { cumulativeInputTokens: 1_360_000 },
+        }}
+      />,
+      { threadId: 'codex-thread' },
+    );
+
+    expect(screen.queryByTestId('prompt-context-pct')).toBeNull();
+  });
+
+  test('renders a context percentage for providers that report a window snapshot', () => {
+    renderWithProviders(
+      <PromptInput
+        onSubmit={vi.fn()}
+        threadOverride={{
+          provider: 'claude',
+          model: 'opus-4.8',
+          contextUsage: { cumulativeInputTokens: 100_000 },
+        }}
+      />,
+      { threadId: 'claude-thread' },
+    );
+
+    expect(screen.getByTestId('prompt-context-pct')).toHaveTextContent('10% de contexto');
+  });
 });

@@ -71,9 +71,8 @@ export interface Thread {
   /** Filled template variable values (key → value). */
   templateVariables?: Record<string, string>;
   /**
-   * Whether the underlying SDK session was started with file checkpointing
-   * enabled. When true, "Rewind code to here" / "Fork conversation and rewind
-   * code" are available; otherwise the UI grays them out.
+   * Whether the thread can restore file checkpoints. Claude uses its native
+   * SDK checkpoints; Codex uses local Git checkpoints captured before turns.
    */
   fileCheckpointingEnabled?: boolean;
   /**

@@ -232,6 +232,56 @@ describe('CodexSDKProcess', () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  test('captures a patch when Codex edits from a sibling worktree', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-agent-cwd-'));
+    const editedRepo = await mkdtemp(join(tmpdir(), 'funny-codex-edited-repo-'));
+    try {
+      git(editedRepo, ['init']);
+      git(editedRepo, ['config', 'user.name', 'Funny test']);
+      git(editedRepo, ['config', 'user.email', 'test@example.invalid']);
+      const filePath = join(editedRepo, 'config.ts');
+      await writeFile(filePath, 'export const port = 3000;\n');
+      git(editedRepo, ['add', '.']);
+      git(editedRepo, ['commit', '-m', 'initial']);
+      await writeFile(filePath, 'export const port = 5173;\n');
+
+      const process = new CodexSDKProcess({ ...options, cwd });
+      const messages: any[] = [];
+      process.on('message', (message) => messages.push(message));
+      const handleEvent = (process as any).handleEvent.bind(process);
+      await handleEvent({
+        type: 'item.completed',
+        item: {
+          id: 'file-change-sibling-worktree',
+          type: 'file_change',
+          status: 'completed',
+          changes: [{ path: filePath, kind: 'update' }],
+        },
+      });
+
+      const toolUseMessage = messages.find(
+        (message) =>
+          message.type === 'assistant' && message.message.content[0]?.type === 'tool_use',
+      );
+      if (toolUseMessage?.type !== 'assistant') throw new Error('Edit tool call was not emitted');
+      expect(toolUseMessage.message.content[0]).toMatchObject({
+        type: 'tool_use',
+        name: 'Edit',
+        input: {
+          changes: {
+            [filePath]: {
+              type: 'update',
+              unified_diff: expect.stringContaining('+export const port = 5173;'),
+            },
+          },
+        },
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(editedRepo, { recursive: true, force: true });
+    }
+  });
 });
 
 function git(cwd: string, args: string[]): void {

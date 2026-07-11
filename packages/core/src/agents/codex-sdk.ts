@@ -9,7 +9,7 @@ import { execFile } from 'child_process';
 import { randomUUID } from 'crypto';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { isAbsolute, join, relative } from 'path';
+import { basename, dirname, isAbsolute, join } from 'path';
 import { promisify } from 'util';
 
 import {
@@ -328,22 +328,19 @@ export class CodexSDKProcess extends BaseAgentProcess {
 
   /**
    * Enrich the SDK's lightweight file-change event with the working-tree patch
-   * while that patch still exists. Paths outside the agent worktree are left
-   * untouched so the client can use its existing best-effort fallback.
+   * while that patch still exists. Codex can change into a sibling worktree
+   * during a turn, so absolute paths are resolved from their own directory
+   * rather than the thread's original working directory.
    */
   private async captureFileChangeDiffs(
     changes: Array<{ path: string; kind: string }>,
   ): Promise<Record<string, { type: string; unified_diff?: string }>> {
     const captured = await Promise.all(
       changes.map(async (change) => {
-        const relativePath = isAbsolute(change.path)
-          ? relative(this.options.cwd, change.path)
-          : change.path;
-        const outsideWorktree =
-          relativePath === '..' || relativePath.startsWith('../') || isAbsolute(relativePath);
-        if (outsideWorktree) return [change.path, { type: change.kind }] as const;
-
-        const result = await getFullContextFileDiff(this.options.cwd, relativePath, false);
+        const absolutePath = isAbsolute(change.path);
+        const cwd = absolutePath ? dirname(change.path) : this.options.cwd;
+        const filePath = absolutePath ? basename(change.path) : change.path;
+        const result = await getFullContextFileDiff(cwd, filePath, false);
         const unifiedDiff = result.isOk() && result.value.trim() ? result.value : undefined;
         return [
           change.path,

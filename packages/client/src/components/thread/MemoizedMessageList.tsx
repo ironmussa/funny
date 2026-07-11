@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import { makeProseFont } from '@/hooks/use-pretext';
 import { buildGroupedRenderItems, findNearestPrecedingUserMessageItem } from '@/lib/render-items';
+import { cn } from '@/lib/utils';
 import {
   useSettingsStore,
   PROSE_FONT_SIZE_PX,
@@ -438,6 +439,21 @@ export const MemoizedMessageList = memo(
         ? candidateHiddenSectionUserItem
         : null;
 
+    // Dock/undock must animate instead of popping: the copy stays mounted
+    // (hidden) while its real card is on screen so the CSS transition can play
+    // in both directions. `stickyEnterReady` starts each candidate undocked
+    // for one frame so a copy that mounts directly in the docked state (e.g.
+    // section handoff) still slides in instead of appearing fully formed.
+    const candidateSectionUserId = candidateHiddenSectionUserItem?.msg.id ?? null;
+    const [stickyEnterReady, setStickyEnterReady] = useState(false);
+    useLayoutEffect(() => {
+      setStickyEnterReady(false);
+      if (!candidateSectionUserId) return;
+      const rafId = requestAnimationFrame(() => setStickyEnterReady(true));
+      return () => cancelAnimationFrame(rafId);
+    }, [candidateSectionUserId]);
+    const isStickyDocked = hiddenSectionUserItem !== null && stickyEnterReady;
+
     const [stickyContentHeight, setStickyContentHeight] = useState(0);
     useLayoutEffect(() => {
       const el = stickySectionContentRef.current;
@@ -454,7 +470,7 @@ export const MemoizedMessageList = memo(
       ro.observe(el);
       return () => ro.disconnect();
       // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
-    }, [hiddenSectionUserItem?.msg.id]);
+    }, [candidateSectionUserId]);
 
     // Smooth section handoff: as the next section's user card scrolls up to
     // meet the docked sticky copy, push the copy out of the viewport instead
@@ -511,14 +527,14 @@ export const MemoizedMessageList = memo(
       subscribedViewportRef.current?.removeEventListener('scroll', handleViewportScroll);
       subscribedViewportRef.current = viewport;
       viewport?.addEventListener('scroll', handleViewportScroll, { passive: true });
-    });
 
-    useLayoutEffect(() => {
       return () => {
-        subscribedViewportRef.current?.removeEventListener('scroll', handleViewportScroll);
-        subscribedViewportRef.current = null;
+        viewport?.removeEventListener('scroll', handleViewportScroll);
+        if (subscribedViewportRef.current === viewport) {
+          subscribedViewportRef.current = null;
+        }
       };
-    }, []);
+    });
 
     useLayoutEffect(() => {
       if (!shouldReserveLeadingStickySpaceValue) {
@@ -538,7 +554,7 @@ export const MemoizedMessageList = memo(
       const ro = new ResizeObserver(measure);
       ro.observe(el);
       return () => ro.disconnect();
-    }, [shouldReserveLeadingStickySpaceValue, hiddenSectionUserItem?.msg.id]);
+    }, [shouldReserveLeadingStickySpaceValue, candidateSectionUserId]);
 
     useImperativeHandle(
       ref,
@@ -624,30 +640,41 @@ export const MemoizedMessageList = memo(
           isolation: 'isolate',
         }}
       >
-        {hiddenSectionUserItem ? (
+        {candidateHiddenSectionUserItem ? (
           <div
-            key={hiddenSectionUserItem.msg.id}
+            key={candidateHiddenSectionUserItem.msg.id}
             data-testid="sticky-section-context"
             className="pointer-events-none sticky top-0 z-50 h-0"
           >
             <div
               ref={stickySectionContentRef}
               data-testid="sticky-section-content"
-              className="pointer-events-auto relative z-50 pt-3 pb-3 will-change-transform"
+              className="relative z-50 pt-3 pb-3 will-change-transform"
             >
-              <UserMessageRenderer
-                item={hiddenSectionUserItem}
-                includeItemKey={false}
-                includeUserObserver={false}
-                onOpenLightbox={onOpenLightbox}
-                onFork={onFork}
-                onRewind={onRewind}
-                onForkAndRewind={onForkAndRewind}
-                forkingMessageId={forkingMessageId}
-                rewindDisabled={rewindDisabled}
-                rewindDisabledReason={rewindDisabledReason}
-                scrollToUserMessagePosition={scrollToUserMessagePosition}
-              />
+              <div
+                data-testid="sticky-section-card"
+                data-docked={isStickyDocked ? 'true' : 'false'}
+                className={cn(
+                  'transition-[opacity,transform] duration-200 ease-out',
+                  isStickyDocked
+                    ? 'pointer-events-auto translate-y-0 opacity-100'
+                    : 'pointer-events-none -translate-y-2 opacity-0',
+                )}
+              >
+                <UserMessageRenderer
+                  item={candidateHiddenSectionUserItem}
+                  includeItemKey={false}
+                  includeUserObserver={false}
+                  onOpenLightbox={onOpenLightbox}
+                  onFork={onFork}
+                  onRewind={onRewind}
+                  onForkAndRewind={onForkAndRewind}
+                  forkingMessageId={forkingMessageId}
+                  rewindDisabled={rewindDisabled}
+                  rewindDisabledReason={rewindDisabledReason}
+                  scrollToUserMessagePosition={scrollToUserMessagePosition}
+                />
+              </div>
             </div>
           </div>
         ) : null}

@@ -20,6 +20,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { LinearIssueBadge } from '@/components/LinearIssueBadge';
+import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
 import { CommandLineChip, FileChip, SkillChip } from '@/components/ui/chip';
 import {
@@ -33,7 +34,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { EFFORT_LEVELS } from '@/lib/providers';
-import { parseLinearIssueReference } from '@/lib/thread-title';
+import { parseGitHubPullRequestReference, parseLinearIssueReference } from '@/lib/thread-title';
 import { resolveModelLabel, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -180,6 +181,7 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
         url = url.slice(0, -trailing.length);
       }
       const linearIssue = parseLinearIssueReference(url);
+      const githubPullRequest = parseGitHubPullRequestReference(url);
       if (linearIssue) {
         parts.push(
           <LinearIssueBadge
@@ -189,6 +191,17 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
             size="xs"
             variant="inverse"
             data-testid="user-message-linear-issue"
+          />,
+        );
+      } else if (githubPullRequest) {
+        parts.push(
+          <PRBadge
+            key={`github-pr-${match.index}`}
+            prNumber={githubPullRequest.prNumber}
+            prUrl={githubPullRequest.url}
+            size="xs"
+            variant="inverse"
+            data-testid="user-message-github-pr"
           />,
         );
       } else {

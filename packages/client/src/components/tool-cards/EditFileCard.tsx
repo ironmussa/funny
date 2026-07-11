@@ -84,8 +84,8 @@ function computeUnifiedDiff(
 
 interface EditChangeEntry {
   filePath: string;
-  oldValue: string;
-  newValue: string;
+  oldValue?: string;
+  newValue?: string;
   rawDiff?: string;
   status: FileStatus;
 }
@@ -97,6 +97,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeUnifiedDiff(filePath: string, diff: string): string {
   if (diff.startsWith('diff --git') || diff.startsWith('--- ')) return diff;
   return `--- a/${filePath}\n+++ b/${filePath}\n${diff}`;
+}
+
+/** A diff viewer needs at least one hunk to produce visible rows. */
+function hasUnifiedDiffHunk(diff: string | undefined): boolean {
+  return !!diff && diff.split('\n').some((line) => line.startsWith('@@'));
 }
 
 function statusForChangeType(type: unknown): FileStatus {
@@ -128,15 +133,30 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
       }
 
       const content = rawChange.content;
-      if (typeof content !== 'string') continue;
-      entries.push({
-        filePath,
-        oldValue: status === 'deleted' ? content : '',
-        newValue: status === 'deleted' ? '' : content,
-        status,
-      });
+      if (typeof content === 'string') {
+        entries.push({
+          filePath,
+          oldValue: status === 'deleted' ? content : '',
+          newValue: status === 'deleted' ? '' : content,
+          status,
+        });
+      } else {
+        // Keep entries without a captured patch so the client can still
+        // request the live diff for legacy SDK events.
+        entries.push({ filePath, status });
+      }
     }
     if (entries.length > 0) return entries;
+  }
+
+  // `@openai/codex-sdk` reports a completed file change as a lightweight
+  // array of `{ path, kind }` objects. It intentionally does not include the
+  // patch text, so retain the paths here and load the actual diff on demand.
+  if (Array.isArray(changes)) {
+    return changes.flatMap((change) => {
+      if (!isRecord(change) || typeof change.path !== 'string' || !change.path) return [];
+      return [{ filePath: change.path, status: statusForChangeType(change.kind) }];
+    });
   }
 
   const filePath = parsed.file_path;
@@ -190,12 +210,22 @@ export function EditFileCard({
   const projectPath = useCurrentProjectPath();
   const changeEntries = useMemo(() => getEditChangeEntries(parsed), [parsed]);
   const [requestedFilePath, setRequestedFilePath] = useState<string | null>(null);
+  const [loadedDiffs, setLoadedDiffs] = useState<
+    Map<string, Omit<EditChangeEntry, 'filePath' | 'status'>>
+  >(() => new Map());
+  const requestedDiffPathsRef = useRef(new Set<string>());
   const activeEntry =
     changeEntries.find((entry) => entry.filePath === requestedFilePath) ?? changeEntries[0];
+  const loadedDiff = activeEntry ? loadedDiffs.get(activeEntry.filePath) : undefined;
   const filePath = activeEntry?.filePath;
-  const oldString = activeEntry?.oldValue;
-  const newString = activeEntry?.newValue;
-  const rawDiff = activeEntry?.rawDiff;
+  // Codex reports absolute paths when its working directory is absolute, while
+  // the Git endpoint (and native Git implementation) expects a path relative
+  // to the thread worktree.
+  const diffFilePath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
+  const oldString = loadedDiff?.oldValue ?? activeEntry?.oldValue;
+  const newString = loadedDiff?.newValue ?? activeEntry?.newValue;
+  const rawDiff = loadedDiff?.rawDiff ?? activeEntry?.rawDiff;
+  const hasCapturedDiff = hasUnifiedDiffHunk(rawDiff);
   const displayPath = filePath
     ? `${makeRelativePath(filePath, projectPath)}${changeEntries.length > 1 ? ` +${changeEntries.length - 1}` : ''}`
     : undefined;
@@ -210,8 +240,67 @@ export function EditFileCard({
   const [expanded, setExpanded] = useState(!hideLabel);
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);
   const [diffMounted, setDiffMounted] = useState(false);
+  const [isDiffLoading, setIsDiffLoading] = useState(false);
+  const [isDiffUnavailable, setIsDiffUnavailable] = useState(false);
+  const [diffRequestVersion, setDiffRequestVersion] = useState(0);
   const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);
   const diffObserverRef = useRef<IntersectionObserver | null>(null);
+
+  // SDK file-change entries contain paths but no patch content. Resolve only
+  // expanded cards, so a long transcript does not issue a diff request for
+  // every historical edit.
+  useEffect(() => {
+    const needsLiveDiff = !hasCapturedDiff && (oldString == null || newString == null || !!rawDiff);
+    if (!expanded || !activeEntry || !filePath || !diffFilePath || !needsLiveDiff) return;
+    if (!threadId || requestedDiffPathsRef.current.has(filePath)) return;
+
+    requestedDiffPathsRef.current.add(filePath);
+    setIsDiffLoading(true);
+    setIsDiffUnavailable(false);
+    let cancelled = false;
+    api.getFileDiff(threadId, diffFilePath, false, undefined, 'full').then(
+      (result) => {
+        const rawDiff = result.isOk() ? result.value.diff : '';
+        const hasUsableDiff = hasUnifiedDiffHunk(rawDiff);
+        if (!cancelled && hasUsableDiff) {
+          setLoadedDiffs((current) => {
+            const next = new Map(current);
+            next.set(filePath, {
+              oldValue: parseDiffOld(rawDiff),
+              newValue: parseDiffNew(rawDiff),
+              rawDiff,
+            });
+            return next;
+          });
+        }
+        if (!cancelled) {
+          setIsDiffUnavailable(!hasUsableDiff);
+          setIsDiffLoading(false);
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setIsDiffUnavailable(true);
+          setIsDiffLoading(false);
+        }
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeEntry,
+    diffFilePath,
+    diffRequestVersion,
+    expanded,
+    filePath,
+    hasCapturedDiff,
+    newString,
+    oldString,
+    rawDiff,
+    threadId,
+  ]);
 
   // `snippetBaseLine` only feeds the rendered diff (computeUnifiedDiff /
   // baseLine prop), which itself is gated behind `diffMounted`. Reading the
@@ -270,7 +359,13 @@ export function EditFileCard({
       path: string,
     ): Promise<{ oldValue: string; newValue: string; rawDiff?: string } | null> => {
       if (!threadId) return null;
-      const result = await api.getFileDiff(threadId, path, false, undefined, 'full');
+      const result = await api.getFileDiff(
+        threadId,
+        makeRelativePath(path, projectPath),
+        false,
+        undefined,
+        'full',
+      );
       if (result.isOk()) {
         return {
           oldValue: parseDiffOld(result.value.diff),
@@ -280,12 +375,18 @@ export function EditFileCard({
       }
       return null;
     },
-    [threadId],
+    [projectPath, threadId],
   );
 
   const hasDiff = useMemo(() => {
-    return !!activeEntry && oldString != null && newString != null && oldString !== newString;
-  }, [activeEntry, oldString, newString]);
+    return (
+      !!activeEntry &&
+      oldString != null &&
+      newString != null &&
+      oldString !== newString &&
+      (!rawDiff || hasCapturedDiff)
+    );
+  }, [activeEntry, hasCapturedDiff, oldString, newString]);
 
   const unifiedDiff = useMemo(() => {
     if (!hasDiff) return '';
@@ -306,6 +407,7 @@ export function EditFileCard({
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
+            aria-label={t('tools.editFile')}
             className="hover:bg-accent/30 flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs"
           >
             <ChevronRight
@@ -414,6 +516,32 @@ export function EditFileCard({
           ) : (
             <div className="h-16" data-testid="edit-file-inline-diff-placeholder" />
           )}
+        </div>
+      )}
+      {expanded && !hasDiff && isDiffLoading && (
+        <div
+          className="border-border/40 bg-muted/20 h-16 animate-pulse border-t"
+          data-testid="edit-file-inline-diff-loading"
+        />
+      )}
+      {expanded && !hasDiff && !isDiffLoading && isDiffUnavailable && filePath && (
+        <div
+          className="border-border/40 flex min-h-16 items-center justify-between gap-3 border-t px-3 py-2 text-xs"
+          data-testid="edit-file-inline-diff-unavailable"
+        >
+          <span className="text-muted-foreground">
+            {t('tools.diffUnavailable', 'This change is no longer available in Git.')}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              requestedDiffPathsRef.current.delete(filePath);
+              setDiffRequestVersion((version) => version + 1);
+            }}
+          >
+            {t('common.retry', 'Retry')}
+          </Button>
         </div>
       )}
       <ExpandedDiffDialog

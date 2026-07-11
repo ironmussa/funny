@@ -1,5 +1,5 @@
 import type { PRDetail } from '@funny/shared';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PRSummaryCard } from '@/components/PRSummaryCard';
@@ -113,6 +113,48 @@ describe('PRSummaryCard', () => {
     expect(status).toHaveTextContent('-4');
     expect(status).toHaveTextContent('3');
     expect(status).toHaveTextContent('Approved');
+    expect(screen.getAllByText('Ready to merge')).toHaveLength(1);
+  });
+
+  test('links CI check titles without rendering a duplicate link icon action', () => {
+    usePRDetailStore.setState({
+      detailByKey: {
+        'project-1:51': makeDetail({
+          checks: [
+            {
+              id: 101,
+              name: 'jest core --coverage (gate)',
+              status: 'completed',
+              conclusion: 'failure',
+              html_url: 'https://github.com/acme/repo/actions/runs/101',
+              started_at: null,
+              completed_at: null,
+              app_name: 'GitHub Actions',
+            },
+          ],
+          checks_passed: 0,
+          checks_failed: 1,
+          checks_pending: 0,
+        }),
+      },
+    });
+
+    renderWithProviders(
+      <PRSummaryCard
+        projectId="project-1"
+        prNumber={51}
+        prUrl="https://github.com/acme/repo/pull/51"
+        prState="OPEN"
+        visible
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('pr-summary-checks-toggle'));
+
+    const checkLink = screen.getByTestId('pr-check-link-101');
+    expect(checkLink).toHaveTextContent('jest core --coverage (gate)');
+    expect(checkLink).toHaveAttribute('href', 'https://github.com/acme/repo/actions/runs/101');
+    expect(checkLink.querySelector('svg')).not.toBeInTheDocument();
   });
 
   test('does not render a redundant merged status badge', () => {

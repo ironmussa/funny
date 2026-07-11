@@ -2,9 +2,11 @@ import { describe, test, expect } from 'vitest';
 
 import {
   cleanThreadTitle,
+  parseGitHubPullRequestReference,
   parseLeadingPromptCommand,
   parseLeadingSlashCommand,
   parseLinearIssueReference,
+  parseThreadTitleParts,
   parseThreadTitleForDisplay,
 } from '@/lib/thread-title';
 
@@ -149,6 +151,78 @@ describe('parseLinearIssueReference', () => {
   });
 });
 
+describe('parseGitHubPullRequestReference', () => {
+  test('extracts a GitHub pull request URL and hides it from the display title', () => {
+    expect(
+      parseGitHubPullRequestReference(
+        'revisar https://github.com/goliiive/goliiive-v2/pull/84 contra develop',
+      ),
+    ).toEqual({
+      owner: 'goliiive',
+      repo: 'goliiive-v2',
+      prNumber: 84,
+      url: 'https://github.com/goliiive/goliiive-v2/pull/84',
+      displayTitle: 'revisar contra develop',
+    });
+  });
+
+  test('trims trailing punctuation from the URL', () => {
+    expect(parseGitHubPullRequestReference('https://github.com/o/r/pull/84/files.')).toEqual({
+      owner: 'o',
+      repo: 'r',
+      prNumber: 84,
+      url: 'https://github.com/o/r/pull/84/files',
+      displayTitle: '',
+    });
+  });
+
+  test('ignores non-PR GitHub URLs', () => {
+    expect(
+      parseGitHubPullRequestReference('https://github.com/goliiive/goliiive-v2/issues/84'),
+    ).toBe(null);
+  });
+});
+
+describe('parseThreadTitleParts', () => {
+  test('keeps GitHub PR references in their original title position', () => {
+    const parts = parseThreadTitleParts(
+      'Puedes revisar este PR https://github.com/goliiive/goliiive-v2/pull/84 pero eta contra QA',
+    );
+
+    expect(
+      parts.map((part) =>
+        part.kind === 'text'
+          ? { kind: part.kind, text: part.text }
+          : { kind: part.kind, reference: part.reference },
+      ),
+    ).toEqual([
+      { kind: 'text', text: 'Puedes revisar este PR' },
+      {
+        kind: 'githubPullRequest',
+        reference: {
+          owner: 'goliiive',
+          repo: 'goliiive-v2',
+          prNumber: 84,
+          url: 'https://github.com/goliiive/goliiive-v2/pull/84',
+          displayTitle: 'Puedes revisar este PR pero eta contra QA',
+        },
+      },
+      { kind: 'text', text: 'pero eta contra QA' },
+    ]);
+    expect(parts.map((part) => part.id)).toEqual([
+      'text:0:Puedes revisar este PR',
+      'githubPullRequest:23:https://github.com/goliiive/goliiive-v2/pull/84',
+      'text:70:pero eta contra QA',
+    ]);
+  });
+
+  test('returns a stable single text part for titles without references', () => {
+    expect(parseThreadTitleParts('fix a normal title')).toEqual([
+      { id: 'text:0:fix a normal title', kind: 'text', text: 'fix a normal title' },
+    ]);
+  });
+});
+
 describe('parseThreadTitleForDisplay', () => {
   test('normalizes attachments, leading commands, and Linear issue references in one pass', () => {
     const parsed = parseThreadTitleForDisplay(
@@ -163,5 +237,33 @@ describe('parseThreadTitleForDisplay', () => {
     });
     expect(parsed.linearIssue?.issueKey).toBe('GOL-733');
     expect(parsed.visibleText).toBe('revisar');
+  });
+
+  test('normalizes GitHub pull request references in one pass', () => {
+    const parsed = parseThreadTitleForDisplay(
+      '/review https://github.com/goliiive/goliiive-v2/pull/84 puedes revisar',
+    );
+
+    expect(parsed.leadingCommand).toEqual({
+      kind: 'slash',
+      command: 'review',
+      rest: 'https://github.com/goliiive/goliiive-v2/pull/84 puedes revisar',
+    });
+    expect(parsed.githubPullRequest?.prNumber).toBe(84);
+    expect(parsed.githubPullRequest?.url).toBe('https://github.com/goliiive/goliiive-v2/pull/84');
+    expect(parsed.visibleText).toBe('puedes revisar');
+  });
+
+  test('exposes inline title parts for PR links without depending on assigned PR state', () => {
+    const parsed = parseThreadTitleForDisplay(
+      'Puedes revisar este PR https://github.com/goliiive/goliiive-v2/pull/84 pero eta contra QA',
+    );
+
+    expect(parsed.titleParts.map((part) => part.kind)).toEqual([
+      'text',
+      'githubPullRequest',
+      'text',
+    ]);
+    expect(parsed.visibleText).toBe('Puedes revisar este PR pero eta contra QA');
   });
 });

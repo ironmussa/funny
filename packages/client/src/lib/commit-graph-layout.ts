@@ -4,7 +4,7 @@ const GRAPH_GUTTER_PANEL_RATIO = 0.42;
 
 export function graphGutterViewportWidth(gutterWidth: number, containerWidth: number): number {
   if (gutterWidth <= 0) return 0;
-  if (containerWidth <= 0) return gutterWidth;
+  if (containerWidth <= 0) return Math.min(gutterWidth, GRAPH_GUTTER_MAX_VIEWPORT_PX);
   const responsiveCap = Math.floor(containerWidth * GRAPH_GUTTER_PANEL_RATIO);
   const cappedWidth = Math.max(
     GRAPH_GUTTER_MIN_VIEWPORT_PX,

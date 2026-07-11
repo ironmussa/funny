@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { EditFileCard } from '@/components/tool-cards/EditFileCard';
@@ -8,6 +8,11 @@ const intersectionObserverState = vi.hoisted(() => ({
   callback: null as IntersectionObserverCallback | null,
   observe: vi.fn(),
   disconnect: vi.fn(),
+}));
+
+const apiMocks = vi.hoisted(() => ({
+  getFileDiff: vi.fn(),
+  readFile: vi.fn(() => Promise.resolve({ isErr: () => true })),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -30,7 +35,8 @@ vi.mock('@/components/VirtualDiff', () => ({
 
 vi.mock('@/lib/api', () => ({
   api: {
-    readFile: vi.fn(() => Promise.resolve({ isErr: () => true })),
+    getFileDiff: apiMocks.getFileDiff,
+    readFile: apiMocks.readFile,
   },
 }));
 
@@ -48,8 +54,12 @@ vi.mock('@/stores/project-store', () => ({
 
 vi.mock('@/stores/settings-store', () => ({
   DIFF_ROW_HEIGHT_PX: { small: 18, default: 20, large: 23 },
-  useSettingsStore: (selector: (state: { defaultEditor: string; fontSize: string }) => unknown) =>
-    selector({ defaultEditor: 'cursor', fontSize: 'default' }),
+  editorLabels: { cursor: 'Cursor' },
+  useSettingsStore: Object.assign(
+    (selector: (state: { defaultEditor: string; fontSize: string }) => unknown) =>
+      selector({ defaultEditor: 'cursor', fontSize: 'default' }),
+    { getState: () => ({ defaultEditor: 'cursor', useInternalEditor: false }) },
+  ),
 }));
 
 describe('EditFileCard', () => {
@@ -57,6 +67,7 @@ describe('EditFileCard', () => {
     intersectionObserverState.callback = null;
     intersectionObserverState.observe.mockClear();
     intersectionObserverState.disconnect.mockClear();
+    apiMocks.getFileDiff.mockReset();
 
     class MockIntersectionObserver implements IntersectionObserver {
       readonly root = null;
@@ -146,5 +157,94 @@ describe('EditFileCard', () => {
     const diff = await screen.findByTestId('edit-file-inline-diff');
     expect(diff.parentElement).toBe(slot);
     expect(diff.getAttribute('data-unified-diff')).toContain('+export const value = 1;');
+  });
+
+  test('loads the diff for the SDK path-and-kind change format', async () => {
+    apiMocks.getFileDiff.mockResolvedValue({
+      isErr: () => false,
+      isOk: () => true,
+      value: {
+        diff: '@@ -1,1 +1,1 @@\n-export const port = 3000;\n+export const port = 5173;',
+      },
+    });
+
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          hideLabel
+          parsed={{
+            changes: [{ path: '/repo/src/config.ts', kind: 'update' }],
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('/repo/src/config.ts')).toBeInTheDocument();
+    expect(apiMocks.getFileDiff).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByTestId('edit-file-inline-diff-loading')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.getFileDiff).toHaveBeenCalledWith(
+        'thread-1',
+        '/repo/src/config.ts',
+        false,
+        undefined,
+        'full',
+      ),
+    );
+
+    await act(async () => {
+      intersectionObserverState.callback?.(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+    });
+
+    const diff = await screen.findByTestId('edit-file-inline-diff');
+    expect(diff.getAttribute('data-unified-diff')).toContain('+export const port = 5173;');
+  });
+
+  test('explains when a historical SDK change no longer has a Git diff', async () => {
+    apiMocks.getFileDiff.mockResolvedValue({
+      isErr: () => false,
+      isOk: () => true,
+      value: { diff: '' },
+    });
+
+    render(
+      <TooltipProvider>
+        <EditFileCard parsed={{ changes: [{ path: '/repo/src/config.ts', kind: 'update' }] }} />
+      </TooltipProvider>,
+    );
+
+    expect(await screen.findByTestId('edit-file-inline-diff-unavailable')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'common.retry' }));
+    await waitFor(() => expect(apiMocks.getFileDiff).toHaveBeenCalledTimes(2));
+  });
+
+  test('does not leave a blank panel when a captured change has no diff hunk', async () => {
+    apiMocks.getFileDiff.mockResolvedValue({
+      isErr: () => false,
+      isOk: () => true,
+      value: { diff: 'diff --git a/src/config.ts b/src/config.ts\nBinary files differ' },
+    });
+
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          parsed={{
+            changes: {
+              '/repo/src/config.ts': {
+                type: 'update',
+                unified_diff: 'diff --git a/src/config.ts b/src/config.ts\nBinary files differ',
+              },
+            },
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(await screen.findByTestId('edit-file-inline-diff-unavailable')).toBeInTheDocument();
+    expect(apiMocks.getFileDiff).toHaveBeenCalledTimes(1);
   });
 });

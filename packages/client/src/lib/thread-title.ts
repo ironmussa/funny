@@ -2,6 +2,8 @@ import { parseReferencedFiles, type ReferencedItem } from './parse-referenced-fi
 
 const LINEAR_ISSUE_URL_RE =
   /https?:\/\/linear\.app\/[^\s)]+\/issue\/([a-z][a-z0-9]+-\d+)(?:\/[^\s)]*)?/i;
+const GITHUB_PULL_REQUEST_URL_RE =
+  /https?:\/\/github\.com\/([^/\s)]+)\/([^/\s)]+)\/pull\/(\d+)(?:\/[^\s)]*)?/i;
 const TRAILING_URL_PUNCTUATION_RE = /[.,;:!?)\]]+$/;
 
 export interface LinearIssueReference {
@@ -9,6 +11,33 @@ export interface LinearIssueReference {
   url: string;
   displayTitle: string;
 }
+
+export interface GitHubPullRequestReference {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  url: string;
+  displayTitle: string;
+}
+
+export type ThreadTitlePart =
+  | { id: string; kind: 'text'; text: string }
+  | { id: string; kind: 'linearIssue'; reference: LinearIssueReference }
+  | { id: string; kind: 'githubPullRequest'; reference: GitHubPullRequestReference };
+
+type TitleReferenceMatch =
+  | {
+      kind: 'linearIssue';
+      index: number;
+      matchedUrl: string;
+      reference: LinearIssueReference;
+    }
+  | {
+      kind: 'githubPullRequest';
+      index: number;
+      matchedUrl: string;
+      reference: GitHubPullRequestReference;
+    };
 
 /**
  * Strip the leading `<referenced-files>` XML block (added when files are
@@ -76,6 +105,114 @@ export function parseLinearIssueReference(title: string): LinearIssueReference |
   };
 }
 
+export function parseGitHubPullRequestReference(title: string): GitHubPullRequestReference | null {
+  const match = GITHUB_PULL_REQUEST_URL_RE.exec(title);
+  if (!match) return null;
+
+  const matchedUrl = match[0];
+  const url = matchedUrl.replace(TRAILING_URL_PUNCTUATION_RE, '');
+  const displayTitle =
+    `${title.slice(0, match.index)} ${title.slice(match.index + matchedUrl.length)}`
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  return {
+    owner: match[1],
+    repo: match[2],
+    prNumber: Number(match[3]),
+    url,
+    displayTitle,
+  };
+}
+
+function normalizeTextPart(text: string) {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function findNextTitleReference(title: string): TitleReferenceMatch | null {
+  const linearMatch = LINEAR_ISSUE_URL_RE.exec(title);
+  const githubPrMatch = GITHUB_PULL_REQUEST_URL_RE.exec(title);
+  const matches: TitleReferenceMatch[] = [];
+
+  if (linearMatch) {
+    const matchedUrl = linearMatch[0];
+    matches.push({
+      kind: 'linearIssue',
+      index: linearMatch.index,
+      matchedUrl,
+      reference: {
+        issueKey: linearMatch[1].toUpperCase(),
+        url: matchedUrl.replace(TRAILING_URL_PUNCTUATION_RE, ''),
+        displayTitle: `${title.slice(0, linearMatch.index)} ${title.slice(
+          linearMatch.index + matchedUrl.length,
+        )}`
+          .replace(/\s+/g, ' ')
+          .trim(),
+      },
+    });
+  }
+
+  if (githubPrMatch) {
+    const matchedUrl = githubPrMatch[0];
+    matches.push({
+      kind: 'githubPullRequest',
+      index: githubPrMatch.index,
+      matchedUrl,
+      reference: {
+        owner: githubPrMatch[1],
+        repo: githubPrMatch[2],
+        prNumber: Number(githubPrMatch[3]),
+        url: matchedUrl.replace(TRAILING_URL_PUNCTUATION_RE, ''),
+        displayTitle: `${title.slice(0, githubPrMatch.index)} ${title.slice(
+          githubPrMatch.index + matchedUrl.length,
+        )}`
+          .replace(/\s+/g, ' ')
+          .trim(),
+      },
+    });
+  }
+
+  if (matches.length === 0) return null;
+  return matches.sort((a, b) => a.index - b.index)[0];
+}
+
+export function parseThreadTitleParts(title: string): ThreadTitlePart[] {
+  const parts: ThreadTitlePart[] = [];
+  let remaining = title;
+  let consumed = 0;
+
+  while (remaining) {
+    const match = findNextTitleReference(remaining);
+    if (!match) break;
+
+    const referenceOffset = consumed + match.index;
+    const before = normalizeTextPart(remaining.slice(0, match.index));
+    if (before) parts.push({ id: `text:${consumed}:${before}`, kind: 'text', text: before });
+
+    parts.push(
+      match.kind === 'linearIssue'
+        ? {
+            id: `linearIssue:${referenceOffset}:${match.reference.url}`,
+            kind: 'linearIssue',
+            reference: match.reference,
+          }
+        : {
+            id: `githubPullRequest:${referenceOffset}:${match.reference.url}`,
+            kind: 'githubPullRequest',
+            reference: match.reference,
+          },
+    );
+
+    consumed = referenceOffset + match.matchedUrl.length;
+    remaining = remaining.slice(match.index + match.matchedUrl.length);
+  }
+
+  const trailing = parts.length > 0 ? normalizeTextPart(remaining) : remaining;
+  if (trailing) parts.push({ id: `text:${consumed}:${trailing}`, kind: 'text', text: trailing });
+
+  return parts;
+}
+
 export interface ParsedThreadTitle {
   displayTitle: string;
   attachedFiles: ReferencedItem[];
@@ -85,6 +222,8 @@ export interface ParsedThreadTitle {
     rest: string;
   };
   linearIssue: LinearIssueReference | null;
+  githubPullRequest: GitHubPullRequestReference | null;
+  titleParts: ThreadTitlePart[];
   visibleText: string;
 }
 
@@ -92,14 +231,24 @@ export function parseThreadTitleForDisplay(title: string): ParsedThreadTitle {
   const { displayTitle, attachedFiles } = cleanThreadTitle(title);
   const leadingCommand = parseLeadingPromptCommand(displayTitle);
   const commandRest = leadingCommand.kind === 'slash' ? leadingCommand.rest : displayTitle;
-  const linearIssue = parseLinearIssueReference(commandRest);
+  const titleParts = parseThreadTitleParts(commandRest);
+  const linearIssue = titleParts.find((part) => part.kind === 'linearIssue')?.reference ?? null;
+  const githubPullRequest =
+    titleParts.find((part) => part.kind === 'githubPullRequest')?.reference ?? null;
+  const visibleText = titleParts
+    .filter((part) => part.kind === 'text')
+    .map((part) => part.text)
+    .join(' ')
+    .trim();
 
   return {
     displayTitle,
     attachedFiles,
     leadingCommand,
     linearIssue,
-    visibleText: linearIssue?.displayTitle ?? commandRest,
+    githubPullRequest,
+    titleParts,
+    visibleText,
   };
 }
 

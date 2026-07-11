@@ -14,6 +14,7 @@ import type { Thread } from '@funny/shared';
 
 type ThreadLike = Pick<Thread, 'isScratch'> | null | undefined;
 type ThreadGitContextLike = Pick<Thread, 'isScratch' | 'projectId'> | null | undefined;
+type ThreadRewindLike = Pick<Thread, 'provider' | 'fileCheckpointingEnabled'> | null | undefined;
 
 // ── Identity ─────────────────────────────────────────────────────
 
@@ -72,6 +73,21 @@ export function canFetchGitStatus(thread: ThreadLike): boolean {
 export function canLoadGitHistory(thread: ThreadGitContextLike): boolean {
   if (!thread?.projectId) return false;
   return canDoGitOps(thread);
+}
+
+/** Whether this provider can restore a checkpoint for an existing thread. */
+export function supportsCodeRewind(thread: ThreadRewindLike): boolean {
+  return thread?.provider === 'claude' || thread?.provider === 'codex';
+}
+
+/** Whether the thread has both a supported provider and a captured checkpoint. */
+export function canRewindCode(thread: ThreadRewindLike): boolean {
+  return supportsCodeRewind(thread) && !!thread?.fileCheckpointingEnabled;
+}
+
+/** Claude can fork its session before rewinding; Codex currently cannot. */
+export function canForkAndRewindCode(thread: ThreadRewindLike): boolean {
+  return thread?.provider === 'claude';
 }
 
 // ── External Claude Code sessions ────────────────────────────────

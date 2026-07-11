@@ -33,6 +33,19 @@ interface ToolCallCardProps {
   timestamp?: string;
 }
 
+function normalizeProviderErrorText(text: string): string {
+  return stripAnsi(text).replace(/\r\n/g, '\n').trim();
+}
+
+function shouldSuppressDuplicateProviderErrorOutput(
+  name: string,
+  parsed: Record<string, unknown>,
+  output: string | undefined,
+): boolean {
+  if (name !== 'ProviderError' || !output || typeof parsed.error !== 'string') return false;
+  return normalizeProviderErrorText(parsed.error) === normalizeProviderErrorText(output);
+}
+
 export const ToolCallCard = memo(
   function ToolCallCard({
     name,
@@ -65,11 +78,15 @@ export const ToolCallCard = memo(
     const projectPath = useCurrentProjectPath();
     const displayPath = filePath ? makeRelativePath(filePath, projectPath) : null;
     const displayTime = useMemo(() => (timestamp ? timeAgo(timestamp, t) : null), [timestamp, t]);
+    const displayOutput = useMemo(
+      () => (shouldSuppressDuplicateProviderErrorOutput(name, parsed, output) ? undefined : output),
+      [name, parsed, output],
+    );
 
     const specialized = dispatchToolCard({
       name,
       parsed,
-      output,
+      output: displayOutput,
       author,
       onRespond,
       hideLabel,
@@ -92,7 +109,7 @@ export const ToolCallCard = memo(
       <GenericToolCard
         name={name}
         parsed={parsed}
-        output={output}
+        output={displayOutput}
         onRespond={onRespond}
         hideLabel={hideLabel}
         displayTime={displayTime}

@@ -41,6 +41,29 @@ describe('ThreadTitle', () => {
     expect(screen.getByTestId('thread-title-linear-issue')).toHaveTextContent('GOL-728');
   });
 
+  test('replaces a GitHub PR URL with a compact PR badge', () => {
+    renderWithProviders(
+      <ThreadTitle title="Puedes revisar este PR https://github.com/goliiive/goliiive-v2/pull/84 pero eta contra QA" />,
+    );
+
+    expect(screen.queryByText(/https:\/\/github\.com/)).not.toBeInTheDocument();
+    const beforePr = screen.getByText('Puedes revisar este PR');
+    const prBadge = screen.getByTestId('thread-title-github-pr');
+    const afterPr = screen.getByText('pero eta contra QA');
+
+    expect(screen.getByTestId('thread-title-github-pr')).toHaveTextContent('#84');
+    expect(screen.getByTestId('thread-title-github-pr')).toHaveAttribute(
+      'href',
+      'https://github.com/goliiive/goliiive-v2/pull/84',
+    );
+    expect(beforePr.compareDocumentPosition(prBadge) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(prBadge.compareDocumentPosition(afterPr) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   test('uses compact token sizing when requested for sidebar rows', () => {
     renderWithProviders(
       <ThreadTitle

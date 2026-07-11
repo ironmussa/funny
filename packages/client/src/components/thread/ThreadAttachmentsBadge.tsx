@@ -3,22 +3,25 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LinearIssueBadge } from '@/components/LinearIssueBadge';
+import { PRBadge } from '@/components/PRBadge';
 import { CommandLineChip, SkillChip, type ChipSize } from '@/components/ui/chip';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
-import { parseThreadTitleForDisplay } from '@/lib/thread-title';
+import { parseThreadTitleForDisplay, type ThreadTitlePart } from '@/lib/thread-title';
 import { cn } from '@/lib/utils';
 
 const URL_LIKE_RE = /^[a-z][a-z0-9+.-]*:\/\/\S+/i;
 type ThreadTitleDensity = 'default' | 'compact' | 'title';
 
-const TOKEN_DENSITY: Record<ThreadTitleDensity, { chipSize: ChipSize; linearSize: 'xs' | 'xxs' }> =
-  {
-    default: { chipSize: 'xs', linearSize: 'xxs' },
-    compact: { chipSize: 'xxs', linearSize: 'xxs' },
-    title: { chipSize: 'sm', linearSize: 'xs' },
-  };
+const TOKEN_DENSITY: Record<
+  ThreadTitleDensity,
+  { chipSize: ChipSize; referenceSize: 'xs' | 'xxs' }
+> = {
+  default: { chipSize: 'xs', referenceSize: 'xxs' },
+  compact: { chipSize: 'xxs', referenceSize: 'xxs' },
+  title: { chipSize: 'sm', referenceSize: 'xs' },
+};
 
 interface ThreadAttachmentsBadgeProps {
   files: ReferencedItem[];
@@ -97,6 +100,60 @@ interface ThreadTitleProps {
   stopBadgePropagation?: boolean;
 }
 
+function ThreadTitlePartRenderer({
+  part,
+  partIndex,
+  search,
+  titleClass,
+  capitalizeFirstLetter,
+  tokenSize,
+}: {
+  part: ThreadTitlePart;
+  partIndex: number;
+  search?: string;
+  titleClass: string;
+  capitalizeFirstLetter: boolean;
+  tokenSize: (typeof TOKEN_DENSITY)[ThreadTitleDensity];
+}) {
+  if (part.kind === 'linearIssue') {
+    return (
+      <LinearIssueBadge
+        issueKey={part.reference.issueKey}
+        issueUrl={part.reference.url}
+        size={tokenSize.referenceSize}
+        data-testid="thread-title-linear-issue"
+      />
+    );
+  }
+
+  if (part.kind === 'githubPullRequest') {
+    return (
+      <PRBadge
+        prNumber={part.reference.prNumber}
+        prUrl={part.reference.url}
+        size={tokenSize.referenceSize}
+        data-testid="thread-title-github-pr"
+      />
+    );
+  }
+
+  return search !== undefined ? (
+    <HighlightText
+      key={`text-${partIndex}`}
+      text={part.text}
+      query={search}
+      className={cn(titleClass, capitalizeFirstLetter && 'first-letter:uppercase')}
+    />
+  ) : (
+    <span
+      key={`text-${partIndex}`}
+      className={cn(titleClass, capitalizeFirstLetter && 'first-letter:uppercase')}
+    >
+      {part.text}
+    </span>
+  );
+}
+
 /**
  * Renders a thread title with the `<referenced-files>` XML stripped out and a
  * compact 📎 badge listing the attached files. Centralizes the pattern that
@@ -113,16 +170,15 @@ export function ThreadTitle({
   badgeTestId,
   stopBadgePropagation,
 }: ThreadTitleProps) {
-  const { attachedFiles, leadingCommand, linearIssue, visibleText } = useMemo(
+  const { attachedFiles, leadingCommand, titleParts, visibleText } = useMemo(
     () => parseThreadTitleForDisplay(title),
     [title],
   );
   const tokenSize = TOKEN_DENSITY[density];
-  const titleClass = cn(
-    !URL_LIKE_RE.test(visibleText.trimStart()) && 'first-letter:uppercase',
-    multiline ? 'flex-1' : 'min-w-0 flex-1 truncate',
-    className,
-  );
+  const shouldCapitalizeTitle = !URL_LIKE_RE.test(visibleText.trimStart());
+  const titleClass = cn('min-w-0 truncate', className);
+  const hasReferenceParts = titleParts.some((part) => part.kind !== 'text');
+  const firstTextPartIndex = titleParts.findIndex((part) => part.kind === 'text');
   // Render leading `/slash-command` and `!command` titles as chips matching the
   // main thread message, then treat any remainder as plain title text.
 
@@ -151,20 +207,44 @@ export function ThreadTitle({
         />
       )}
       {leadingCommand.kind !== 'shell' &&
-        visibleText &&
-        (search !== undefined ? (
-          <HighlightText text={visibleText} query={search} className={titleClass} />
+        (hasReferenceParts ? (
+          <span
+            className={cn(
+              'flex min-w-0 flex-1 gap-1.5',
+              multiline ? 'flex-wrap items-start' : 'items-center overflow-hidden',
+            )}
+          >
+            {titleParts.map((part, index) => (
+              <ThreadTitlePartRenderer
+                key={part.id}
+                part={part}
+                partIndex={index}
+                search={search}
+                titleClass={titleClass}
+                capitalizeFirstLetter={shouldCapitalizeTitle && index === firstTextPartIndex}
+                tokenSize={tokenSize}
+              />
+            ))}
+          </span>
+        ) : visibleText && search !== undefined ? (
+          <HighlightText
+            text={visibleText}
+            query={search}
+            className={cn(titleClass, shouldCapitalizeTitle && 'first-letter:uppercase', 'flex-1')}
+          />
         ) : (
-          <span className={titleClass}>{visibleText}</span>
+          visibleText && (
+            <span
+              className={cn(
+                titleClass,
+                shouldCapitalizeTitle && 'first-letter:uppercase',
+                'flex-1',
+              )}
+            >
+              {visibleText}
+            </span>
+          )
         ))}
-      {leadingCommand.kind !== 'shell' && linearIssue && (
-        <LinearIssueBadge
-          issueKey={linearIssue.issueKey}
-          issueUrl={linearIssue.url}
-          size={tokenSize.linearSize}
-          data-testid="thread-title-linear-issue"
-        />
-      )}
       <ThreadAttachmentsBadge
         files={attachedFiles}
         className={multiline ? 'mt-0.5' : undefined}

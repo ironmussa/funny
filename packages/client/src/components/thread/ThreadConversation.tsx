@@ -11,7 +11,14 @@ import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
-import { canDoGitOps, canSteerShare, isReadOnlyShare } from '@/lib/thread-variant';
+import {
+  canDoGitOps,
+  canForkAndRewindCode,
+  canRewindCode,
+  canSteerShare,
+  isReadOnlyShare,
+  supportsCodeRewind,
+} from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -170,14 +177,17 @@ export function ThreadConversation({
         onToolRespond={handleToolRespond}
         onFork={gitOps ? handleFork : undefined}
         onRewind={gitOps ? handleRewind : undefined}
-        onForkAndRewind={gitOps ? handleForkAndRewind : undefined}
-        forkingMessageId={forkingMessageId}
-        rewindDisabled={
-          activeThread.provider !== 'claude' || !(activeThread as any).fileCheckpointingEnabled
+        onForkAndRewind={
+          gitOps && canForkAndRewindCode(activeThread) ? handleForkAndRewind : undefined
         }
+        forkingMessageId={forkingMessageId}
+        rewindDisabled={!canRewindCode(activeThread)}
         rewindDisabledReason={
-          activeThread.provider !== 'claude'
-            ? t('thread.rewindNotSupportedProvider', 'Rewind is only available for Claude threads')
+          !supportsCodeRewind(activeThread)
+            ? t(
+                'thread.rewindNotSupportedProvider',
+                'Rewind is only available for Claude and Codex threads',
+              )
             : t('thread.rewindNoCheckpoints', 'This thread was started without file checkpointing')
         }
         pagination={

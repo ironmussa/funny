@@ -5,14 +5,12 @@ import {
   ChevronRight,
   Circle,
   Clock,
-  ExternalLink,
   Loader2,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
-import { MergeStatus } from '@/components/pull-requests/PRStatusBadges';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
@@ -113,11 +111,6 @@ export function PRSummaryCard({
   const hasMoreChecks = sortedChecks.length > MAX_VISIBLE_CHECKS;
   const totalChecks = sortedChecks.length;
 
-  // Whether <MergeStatus> renders anything (only for open, mergeable/conflicting PRs)
-  const mergeStatusVisible =
-    !!detail &&
-    !detail.merged &&
-    (detail.mergeable_state === 'mergeable' || detail.mergeable_state === 'conflicting');
   const detailPrState = detail?.merged ? 'MERGED' : detail?.state === 'closed' ? 'CLOSED' : prState;
   const compactPr = detail ?? {
     number: prNumber,
@@ -162,68 +155,64 @@ export function PRSummaryCard({
         }
       />
 
-      {/* Line 3: CI checks → ready to merge */}
-      {detail && (totalChecks > 0 || mergeStatusVisible) && (
+      {/* Line 3: CI checks */}
+      {detail && totalChecks > 0 && (
         <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
           <div className="flex items-center gap-3">
-            {totalChecks > 0 && (
-              <CollapsibleTrigger
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
-                data-testid="pr-summary-checks-toggle"
-              >
-                {checksOpen ? (
-                  <ChevronDown className="size-3.5" />
-                ) : (
-                  <ChevronRight className="size-3.5" />
+            <CollapsibleTrigger
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
+              data-testid="pr-summary-checks-toggle"
+            >
+              {checksOpen ? (
+                <ChevronDown className="size-3.5" />
+              ) : (
+                <ChevronRight className="size-3.5" />
+              )}
+              <span>
+                CI Checks ({detail.checks_passed}/{totalChecks} passed)
+                {detail.checks_failed > 0 && (
+                  <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
                 )}
-                <span>
-                  CI Checks ({detail.checks_passed}/{totalChecks} passed)
-                  {detail.checks_failed > 0 && (
-                    <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
-                  )}
-                  {detail.checks_pending > 0 && (
-                    <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
-                  )}
-                </span>
-              </CollapsibleTrigger>
-            )}
-            <MergeStatus mergeable={detail.mergeable_state} merged={detail.merged} />
+                {detail.checks_pending > 0 && (
+                  <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
+                )}
+              </span>
+            </CollapsibleTrigger>
           </div>
-          {totalChecks > 0 && (
-            <CollapsibleContent>
-              <div className="mt-1 space-y-0.5 pl-4" data-testid="pr-summary-checks-list">
-                {visibleChecks.map((check) => (
-                  <div key={check.id} className="flex items-center gap-1.5 text-[11px]">
-                    <CheckIcon check={check} />
+          <CollapsibleContent>
+            <div className="mt-1 space-y-0.5 pl-4" data-testid="pr-summary-checks-list">
+              {visibleChecks.map((check) => (
+                <div key={check.id} className="flex items-center gap-1.5 text-[11px]">
+                  <CheckIcon check={check} />
+                  {check.html_url ? (
+                    <a
+                      href={check.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-foreground min-w-0 truncate hover:underline"
+                      data-testid={`pr-check-link-${check.id}`}
+                    >
+                      {check.name}
+                    </a>
+                  ) : (
                     <span className="truncate">{check.name}</span>
-                    {check.app_name && (
-                      <span className="text-muted-foreground shrink-0">({check.app_name})</span>
-                    )}
-                    {check.html_url && (
-                      <a
-                        href={check.html_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
-                        data-testid={`pr-check-link-${check.id}`}
-                      >
-                        <ExternalLink className="size-3.5" />
-                      </a>
-                    )}
-                  </div>
-                ))}
-                {hasMoreChecks && !checksOpen && (
-                  <button
-                    className="text-primary text-[11px] hover:underline"
-                    onClick={() => setChecksOpen(true)}
-                    data-testid="pr-summary-show-more-checks"
-                  >
-                    +{sortedChecks.length - MAX_VISIBLE_CHECKS} more
-                  </button>
-                )}
-              </div>
-            </CollapsibleContent>
-          )}
+                  )}
+                  {check.app_name && (
+                    <span className="text-muted-foreground shrink-0">({check.app_name})</span>
+                  )}
+                </div>
+              ))}
+              {hasMoreChecks && !checksOpen && (
+                <button
+                  className="text-primary text-[11px] hover:underline"
+                  onClick={() => setChecksOpen(true)}
+                  data-testid="pr-summary-show-more-checks"
+                >
+                  +{sortedChecks.length - MAX_VISIBLE_CHECKS} more
+                </button>
+              )}
+            </div>
+          </CollapsibleContent>
         </Collapsible>
       )}
 

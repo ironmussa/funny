@@ -120,6 +120,41 @@ describe('EditFileCard', () => {
     expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
   });
 
+  test('mounts a visible diff when IntersectionObserver does not notify', async () => {
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 24,
+      width: 480,
+      height: 64,
+      top: 24,
+      right: 480,
+      bottom: 88,
+      left: 0,
+      toJSON: () => ({}),
+    });
+
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          parsed={{
+            file_path: '/repo/src/app.ts',
+            old_string: 'const value = 1;',
+            new_string: 'const value = 2;',
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(await screen.findByTestId('edit-file-inline-diff')).toBeInTheDocument();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   test('renders Codex changes-map edit calls as diffs', async () => {
     render(
       <TooltipProvider>

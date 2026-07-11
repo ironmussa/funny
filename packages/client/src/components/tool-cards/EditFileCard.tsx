@@ -1,5 +1,5 @@
 import type { FileDiffSummary, FileStatus } from '@funny/shared';
-import { ChevronRight, FilePen, Maximize2 } from 'lucide-react';
+import { ChevronRight, FilePen, Loader2, Maximize2 } from 'lucide-react';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -245,6 +245,7 @@ export function EditFileCard({
   const [diffRequestVersion, setDiffRequestVersion] = useState(0);
   const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);
   const diffObserverRef = useRef<IntersectionObserver | null>(null);
+  const diffMountFrameRef = useRef<number | null>(null);
 
   // SDK file-change entries contain paths but no patch content. Resolve only
   // expanded cards, so a long transcript does not issue a diff request for
@@ -330,12 +331,30 @@ export function EditFileCard({
     (el: HTMLDivElement | null) => {
       diffObserverRef.current?.disconnect();
       diffObserverRef.current = null;
+      if (diffMountFrameRef.current != null) {
+        window.cancelAnimationFrame(diffMountFrameRef.current);
+        diffMountFrameRef.current = null;
+      }
 
       if (!el || !expanded || diffMounted) return;
       if (typeof IntersectionObserver === 'undefined') {
         setDiffMounted(true);
         return;
       }
+
+      // IntersectionObserver can miss a newly expanded element inside the
+      // transcript's nested scroller. Check its viewport position on the next
+      // frame as a fallback so the card cannot remain a blank placeholder.
+      diffMountFrameRef.current = window.requestAnimationFrame(() => {
+        diffMountFrameRef.current = null;
+        const rect = el.getBoundingClientRect();
+        const withinViewportMargin =
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom >= -600 &&
+          rect.top <= window.innerHeight + 600;
+        if (withinViewportMargin) setDiffMounted(true);
+      });
 
       const io = new IntersectionObserver(
         (entries) => {
@@ -352,7 +371,15 @@ export function EditFileCard({
     [diffMounted, expanded],
   );
 
-  useEffect(() => () => diffObserverRef.current?.disconnect(), []);
+  useEffect(
+    () => () => {
+      diffObserverRef.current?.disconnect();
+      if (diffMountFrameRef.current != null) {
+        window.cancelAnimationFrame(diffMountFrameRef.current);
+      }
+    },
+    [],
+  );
 
   const requestFullDiff = useCallback(
     async (
@@ -514,7 +541,13 @@ export function EditFileCard({
               data-testid="edit-file-inline-diff"
             />
           ) : (
-            <div className="h-16" data-testid="edit-file-inline-diff-placeholder" />
+            <div
+              className="text-muted-foreground flex h-16 items-center gap-2 px-3 text-xs"
+              data-testid="edit-file-inline-diff-placeholder"
+            >
+              <Loader2 className="icon-xs animate-spin" />
+              <span>{t('tools.loadingDiff', 'Loading diff…')}</span>
+            </div>
           )}
         </div>
       )}

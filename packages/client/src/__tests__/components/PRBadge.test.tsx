@@ -24,4 +24,11 @@ describe('PRBadge', () => {
 
     expect(screen.getByTestId('pr-badge-compact')).toHaveClass('h-[15px]');
   });
+
+  test('supports inverse styling for dark surfaces', () => {
+    renderWithProviders(<PRBadge prNumber={86} variant="inverse" data-testid="pr-badge-inverse" />);
+
+    expect(screen.getByTestId('pr-badge-inverse')).toHaveClass('bg-background/20');
+    expect(screen.getByTestId('pr-badge-inverse')).toHaveClass('text-background/70');
+  });
 });

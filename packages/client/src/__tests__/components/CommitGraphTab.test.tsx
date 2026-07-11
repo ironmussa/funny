@@ -93,7 +93,10 @@ describe('graphGutterViewportWidth', () => {
     expect(graphGutterViewportWidth(544, 780)).toBe(320);
     expect(graphGutterViewportWidth(160, 780)).toBe(160);
     expect(graphGutterViewportWidth(544, 220)).toBe(92);
-    expect(graphGutterViewportWidth(544, 0)).toBe(544);
+  });
+
+  test('keeps a capped viewport before the hidden review tab has a measured width', () => {
+    expect(graphGutterViewportWidth(544, 0)).toBe(320);
   });
 });
 

@@ -10,6 +10,7 @@ export interface PRBadgeProps {
   prUrl?: string;
   /** "sm" for large displays, "xs" for lists, "compact" for powerline rows, "xxs" for compact headers */
   size?: 'sm' | 'xs' | 'compact' | 'xxs';
+  variant?: 'default' | 'inverse';
   showExternalIcon?: boolean;
   className?: string;
   'data-testid'?: string;
@@ -52,6 +53,7 @@ export function PRBadge({
   prState = 'OPEN',
   prUrl,
   size = 'xs',
+  variant = 'default',
   showExternalIcon = !!prUrl,
   className,
   ...props
@@ -74,7 +76,9 @@ export function PRBadge({
   const badgeClassName = cn(
     'inline-flex shrink-0 items-center gap-0.5 rounded-[3px] border leading-none font-semibold focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none',
     config.badge,
-    STATE_CLASS[prState],
+    variant === 'inverse'
+      ? 'border-background/20 bg-background/20 text-background/70 hover:text-background'
+      : STATE_CLASS[prState],
     !prUrl && 'cursor-default',
     className,
   );

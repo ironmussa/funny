@@ -127,6 +127,25 @@ describe('UserMessageCard', () => {
     expect(screen.queryByRole('link', { name: url })).not.toBeInTheDocument();
   });
 
+  test('renders GitHub pull request URLs as parsed PR badges inline', () => {
+    const url = 'https://github.com/goliiive/goliiive-v2/pull/86';
+    renderWithProviders(
+      <UserMessageCard
+        content={`puedes revisar este PR ${url} pero eta contra QA`}
+        data-testid="msg-github-pr-url"
+      />,
+    );
+
+    const prBadge = screen.getByTestId('user-message-github-pr');
+    expect(prBadge).toHaveTextContent('#86');
+    expect(prBadge).toHaveAttribute('href', url);
+    expect(prBadge).toHaveClass('h-5');
+    expect(prBadge).toHaveClass('text-background/70');
+    expect(screen.queryByRole('link', { name: url })).not.toBeInTheDocument();
+    expect(screen.getByText(/puedes revisar este PR/)).toBeInTheDocument();
+    expect(screen.getByText(/pero eta contra QA/)).toBeInTheDocument();
+  });
+
   test('renders model and permission badges', () => {
     const timestampIso = new Date().toISOString();
 

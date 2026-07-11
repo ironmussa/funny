@@ -129,8 +129,11 @@ export function NonUserItemRenderer({
     // the small rendered size, then the WS event updates the message
     // content (same msgId, content='...') and Chrome can skip repainting.
     return (
-      <div data-item-key={key} className="group/msg text-foreground relative w-full text-sm">
-        <div className="text-sm leading-relaxed wrap-break-word">
+      <div data-item-key={key} className="group/msg relative w-full text-sm">
+        <div
+          data-testid={`assistant-message-${msg.id}`}
+          className="border-border/70 bg-card text-card-foreground rounded-lg border px-3 py-2 text-sm leading-relaxed wrap-break-word shadow-sm"
+        >
           <div className="flex items-start gap-2">
             {msg.author && <AuthorAvatar author={msg.author} />}
             <div className="min-w-0 flex-1">

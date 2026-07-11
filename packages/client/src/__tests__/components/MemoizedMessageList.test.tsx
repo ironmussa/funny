@@ -232,6 +232,16 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelectorAll('[data-item-key]').length).toBeLessThan(120);
   });
 
+  test('renders assistant text inside a message container', async () => {
+    const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
+
+    const assistantMessage = await waitFor(() => getByTestId('assistant-message-m1'));
+
+    expect(assistantMessage.textContent).toContain('message 1');
+    expect(assistantMessage.className).toContain('rounded-lg');
+    expect(assistantMessage.className).toContain('border');
+  });
+
   test('does not count the sticky section context as a measured item row', async () => {
     const { getByTestId } = render(<Harness messages={makeMessages(121)} />);
     const viewport = getByTestId('viewport');
@@ -303,19 +313,35 @@ describe('MemoizedMessageList virtualization', () => {
     });
 
     try {
-      const { getByTestId, queryByTestId } = render(
-        <Harness messages={makeMessages(4)} viewportHeight={300} />,
-      );
+      const { getByTestId } = render(<Harness messages={makeMessages(4)} viewportHeight={300} />);
       const viewport = getByTestId('viewport');
 
       await waitFor(() => expect(viewport.querySelector('[data-item-key="m0"]')).toBeTruthy());
       await act(async () => {});
 
-      await waitFor(() => expect(queryByTestId('sticky-section-context')).toBeNull());
-      expect(viewport.querySelectorAll('[data-testid="user-message-m0"]')).toHaveLength(1);
+      // The copy stays mounted (so dock/undock can animate) but must not be
+      // docked while the real card is visible in the viewport.
+      await waitFor(() => expect(getByTestId('sticky-section-card').dataset.docked).toBe('false'));
+      expect(getByTestId('sticky-section-card').className).toContain('opacity-0');
     } finally {
       rectSpy.mockRestore();
     }
+  });
+
+  test('docks the sticky copy through an animated transition instead of popping in', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 12;
+    virtualizerMockState.scrollOffset = 180;
+
+    const { getByTestId } = render(<Harness messages={makeMessages(20)} />);
+
+    await waitFor(() => expect(getByTestId('sticky-section-card')).toBeTruthy());
+    const card = getByTestId('sticky-section-card');
+    // The dock state is class-driven with a CSS transition so both docking
+    // and undocking animate; a keyed remount would pop in fully formed.
+    expect(card.className).toContain('transition-[opacity,transform]');
+    await waitFor(() => expect(getByTestId('sticky-section-card').dataset.docked).toBe('true'));
+    expect(getByTestId('sticky-section-card').className).toContain('opacity-100');
   });
 
   test('shows sticky context for the first visible section when a later user row is visible', async () => {

@@ -35,7 +35,7 @@ vi.mock('@/components/tool-cards/dispatch', () => ({
 }));
 
 describe('ToolCallCard', () => {
-  test('renders ProviderError ANSI sequences as formatting instead of visible text', () => {
+  test('suppresses ProviderError output when it duplicates the input error', () => {
     const providerError =
       '**Provider stderr:** \u001b[2m2026-07-09T02:17:01.652760Z\u001b[0m \u001b[31mERROR\u001b[0m invalid_token';
 
@@ -50,8 +50,27 @@ describe('ToolCallCard', () => {
 
     expect(screen.getByText('error')).toBeInTheDocument();
     expect(container.textContent).toContain('Provider stderr:');
+    expect(screen.queryByText('tools.output')).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('\u001b[');
     expect(container.innerHTML).toContain('color');
+  });
+
+  test('keeps ProviderError output when it adds distinct details', () => {
+    const providerError =
+      '**Provider stderr:** \u001b[2m2026-07-09T02:17:01.652760Z\u001b[0m \u001b[31mERROR\u001b[0m invalid_token';
+
+    render(
+      <ToolCallCard
+        name="ProviderError"
+        input={{ error: providerError }}
+        output={`${providerError}\nRetry failed after refresh.`}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /tools\.providerError/i }));
+
+    expect(screen.getByText('tools.output')).toBeInTheDocument();
+    expect(screen.getByText(/Retry failed after refresh/)).toBeInTheDocument();
   });
 
   test('does not crash when the summary resolves to a non-string value', () => {

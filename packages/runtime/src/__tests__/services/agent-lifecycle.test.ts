@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   },
   threadManager: {
     getThread: vi.fn(),
+    getThreadWithMessages: vi.fn(),
     updateThread: vi.fn(async () => undefined),
     insertMessage: vi.fn(async () => 'msg-1'),
   },
@@ -48,7 +49,9 @@ const mocks = vi.hoisted(() => ({
       needsRecovery: false,
     }),
   ),
-  loadProjectMcpServers: vi.fn(async () => ({ 'test-server': { name: 'test-server' } })),
+  loadProjectMcpServers: vi.fn(async (..._args: unknown[]) => ({
+    'test-server': { name: 'test-server' },
+  })),
   resolveThreadCwd: vi.fn(),
   mkdirSync: vi.fn(),
   spanEnd: vi.fn(),
@@ -73,6 +76,7 @@ const mocks = vi.hoisted(() => ({
   findPermissionRule: vi.fn(),
   runSensitivePathBypass: vi.fn(),
   syncClaudeProjectAssets: vi.fn(),
+  captureCodexCheckpoint: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -140,6 +144,10 @@ vi.mock('../../services/permission-rules-client.js', () => ({
 
 vi.mock('../../services/sensitive-path-bypass.js', () => ({
   runSensitivePathBypass: (...args: unknown[]) => mocks.runSensitivePathBypass(...args),
+}));
+
+vi.mock('../../services/codex-git-checkpoints.js', () => ({
+  captureCodexCheckpoint: (...args: unknown[]) => mocks.captureCodexCheckpoint(...args),
 }));
 
 import { log } from '../../lib/logger.js';
@@ -394,6 +402,69 @@ describe('AgentLifecycleManager', () => {
       expect(mocks.loadProjectMcpServers).toHaveBeenCalledWith('thread-1', '/tmp/repo', 'claude', {
         claudeConfigDir: '/tmp/claude-work',
       });
+    });
+  });
+
+  describe('startAgent — Codex checkpoints', () => {
+    test('captures a Git checkpoint for the newest user message before Codex starts', async () => {
+      const thread = seedProjectThread();
+      mocks.threadManager.getThreadWithMessages.mockResolvedValue({
+        ...thread,
+        messages: [
+          { id: 'user-1', role: 'user' },
+          { id: 'assistant-1', role: 'assistant' },
+          { id: 'user-2', role: 'user' },
+        ],
+      });
+
+      const manager = createManager();
+      await manager.startAgent(
+        'thread-1',
+        'follow up',
+        '/tmp/repo',
+        'gpt-5.6-sol',
+        'autoEdit',
+        undefined,
+        undefined,
+        undefined,
+        'codex',
+      );
+
+      expect(mocks.captureCodexCheckpoint).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        messageId: 'user-2',
+        cwd: '/tmp/repo',
+      });
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith('thread-1', {
+        fileCheckpointingEnabled: 1,
+      });
+    });
+
+    test('keeps Codex rewind disabled when checkpoint capture fails', async () => {
+      const thread = seedProjectThread();
+      mocks.threadManager.getThreadWithMessages.mockResolvedValue({
+        ...thread,
+        messages: [{ id: 'user-1', role: 'user' }],
+      });
+      mocks.captureCodexCheckpoint.mockRejectedValueOnce(new Error('not a Git worktree'));
+
+      const manager = createManager();
+      await manager.startAgent(
+        'thread-1',
+        'hello',
+        '/tmp/repo',
+        'gpt-5.6-sol',
+        'autoEdit',
+        undefined,
+        undefined,
+        undefined,
+        'codex',
+      );
+
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith('thread-1', {
+        fileCheckpointingEnabled: 0,
+      });
+      expect(mocks.orchestrator.startAgent).toHaveBeenCalled();
     });
   });
 

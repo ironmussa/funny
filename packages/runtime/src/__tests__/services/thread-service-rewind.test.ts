@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   forkThread: vi.fn(),
   rewindFiles: vi.fn(),
+  restoreCodexCheckpoint: vi.fn(),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -34,6 +35,10 @@ vi.mock('../../services/service-registry.js', () => ({
 
 vi.mock('../../services/thread-service/fork.js', () => ({
   forkThread: mocks.forkThread,
+}));
+
+vi.mock('../../services/codex-git-checkpoints.js', () => ({
+  restoreCodexCheckpoint: mocks.restoreCodexCheckpoint,
 }));
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -111,8 +116,8 @@ describe('rewindCode — validation', () => {
     if (result.isErr()) expect(result.error.statusCode).toBe(404);
   });
 
-  test('returns 400 for non-Claude provider', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, provider: 'codex' });
+  test('returns 400 for a provider without rewind support', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, provider: 'gemini' });
 
     const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-1', userId: 'u-1' });
 
@@ -222,6 +227,54 @@ describe('rewindCode — success and failures', () => {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.statusCode).toBe(500);
   });
+
+  test('restores a Codex Git checkpoint then starts the next turn with rebuilt context', async () => {
+    const codexThread = { ...claudeThread, provider: 'codex', sessionId: 'codex-session' };
+    mocks.tm.getThread.mockResolvedValue(codexThread);
+    mocks.tm.getThreadWithMessages.mockResolvedValue({ ...codexThread, messages: dbMessages });
+    mocks.restoreCodexCheckpoint.mockResolvedValue({
+      canRewind: true,
+      filesChanged: ['src/before.ts'],
+    });
+
+    const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-2', userId: 'u-1' });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) expect(result.value.newSessionId).toBeNull();
+    expect(mocks.restoreCodexCheckpoint).toHaveBeenCalledWith({
+      threadId: 't-1',
+      messageId: 'm-user-2',
+      cwd: '/repo',
+    });
+    expect(mocks.rewindFiles).not.toHaveBeenCalled();
+    expect(mocks.forkSession).not.toHaveBeenCalled();
+    expect(mocks.tm.deleteMessagesAfter).toHaveBeenCalledWith('t-1', 'm-user-2');
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+      't-1',
+      expect.objectContaining({
+        sessionId: null,
+        contextRecoveryReason: 'rewound',
+        fileCheckpointingEnabled: 1,
+      }),
+    );
+  });
+
+  test('does not truncate a Codex thread when its checkpoint is unavailable', async () => {
+    const codexThread = { ...claudeThread, provider: 'codex', sessionId: 'codex-session' };
+    mocks.tm.getThread.mockResolvedValue(codexThread);
+    mocks.tm.getThreadWithMessages.mockResolvedValue({ ...codexThread, messages: dbMessages });
+    mocks.restoreCodexCheckpoint.mockResolvedValue({
+      canRewind: false,
+      filesChanged: [],
+      error: 'No Git checkpoint exists for this message',
+    });
+
+    const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-2', userId: 'u-1' });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(mocks.tm.deleteMessagesAfter).not.toHaveBeenCalled();
+  });
 });
 
 describe('forkAndRewind', () => {
@@ -259,6 +312,20 @@ describe('forkAndRewind', () => {
         options: expect.objectContaining({ resume: 'sess-fork', cwd: '/repo/.worktrees/t-fork' }),
       }),
     );
+  });
+
+  test('returns 400 for Codex before attempting to fork', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, provider: 'codex' });
+
+    const result = await forkAndRewind({
+      sourceThreadId: 't-1',
+      messageId: 'm-user-1',
+      userId: 'u-1',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(mocks.forkThread).not.toHaveBeenCalled();
   });
 
   test('propagates forkThread errors', async () => {

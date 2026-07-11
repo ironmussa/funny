@@ -30,6 +30,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
+import { restoreCodexCheckpoint } from '../codex-git-checkpoints.js';
 import { getServices } from '../service-registry.js';
 import * as tm from '../thread-manager.js';
 import { forkThread } from './fork.js';
@@ -44,7 +45,7 @@ export interface RewindCodeParams {
 
 export interface RewindCodeResult {
   threadId: string;
-  newSessionId: string;
+  newSessionId: string | null;
   rewind: RewindFilesResult;
   deletedMessageCount: number;
 }
@@ -109,8 +110,9 @@ async function withResumedQueryForRewind<T>(
 
 interface ResolvedAnchor {
   sourceThread: Record<string, any>;
+  provider: string;
   cwd: string;
-  uuid: string;
+  uuid?: string;
   anchorIdx: number;
   anchorTimestamp: string;
 }
@@ -125,8 +127,8 @@ async function resolveAnchor(params: {
     throw new ThreadServiceError('Thread not found', 404);
   }
   const provider = (source as any).provider ?? 'claude';
-  if (provider !== 'claude') {
-    throw new ThreadServiceError('Rewind is only available for Claude threads', 400);
+  if (provider !== 'claude' && provider !== 'codex') {
+    throw new ThreadServiceError('Rewind is only available for Claude and Codex threads', 400);
   }
   if (!(source as any).fileCheckpointingEnabled) {
     throw new ThreadServiceError(
@@ -134,7 +136,7 @@ async function resolveAnchor(params: {
       400,
     );
   }
-  if (!(source as any).sessionId) {
+  if (provider === 'claude' && !(source as any).sessionId) {
     throw new ThreadServiceError('Thread has no session to rewind', 400);
   }
   if ((source as any).status === 'running') {
@@ -157,30 +159,35 @@ async function resolveAnchor(params: {
   if (anchor.role !== 'user') {
     throw new ThreadServiceError('Can only rewind to a user message', 400);
   }
-  const userMsgIndex =
-    dbMessages.slice(0, anchorIdx + 1).filter((m) => m.role === 'user').length - 1;
-
-  const { uuid } = await resolveSdkUserMessageUuid(
-    { sessionId: (source as any).sessionId, cwd, userMsgIndex },
-    (code, detail) => {
-      log.error('rewind: failed to resolve SDK uuid', {
-        namespace: 'thread-rewind',
-        threadId: source.id,
-        sessionId: (source as any).sessionId,
-        code,
-        detail,
-      });
-      throw new ThreadServiceError(
-        code === 'transcript_read_failed'
-          ? 'Failed to read agent session transcript'
-          : 'Could not locate matching message in agent session transcript',
-        500,
-      );
-    },
-  );
+  let uuid: string | undefined;
+  if (provider === 'claude') {
+    const userMsgIndex =
+      dbMessages.slice(0, anchorIdx + 1).filter((m) => m.role === 'user').length - 1;
+    uuid = (
+      await resolveSdkUserMessageUuid(
+        { sessionId: (source as any).sessionId, cwd, userMsgIndex },
+        (code, detail) => {
+          log.error('rewind: failed to resolve SDK uuid', {
+            namespace: 'thread-rewind',
+            threadId: source.id,
+            sessionId: (source as any).sessionId,
+            code,
+            detail,
+          });
+          throw new ThreadServiceError(
+            code === 'transcript_read_failed'
+              ? 'Failed to read agent session transcript'
+              : 'Could not locate matching message in agent session transcript',
+            500,
+          );
+        },
+      )
+    ).uuid;
+  }
 
   return {
     sourceThread: source as any,
+    provider,
     cwd,
     uuid,
     anchorIdx,
@@ -204,13 +211,49 @@ async function rewindCodeImpl(params: RewindCodeParams): Promise<RewindCodeResul
   });
   try {
     const anchor = await resolveAnchor(params);
+    if (anchor.provider === 'codex') {
+      const rewindResult = await restoreCodexCheckpoint({
+        threadId: params.threadId,
+        messageId: params.messageId,
+        cwd: anchor.cwd,
+      });
+      if (!rewindResult.canRewind) {
+        span.end('error', rewindResult.error ?? 'cannot_rewind');
+        throw new ThreadServiceError(rewindResult.error ?? 'No Git checkpoint available', 400);
+      }
+
+      const deletedMessageCount = await tm.deleteMessagesAfter(params.threadId, params.messageId);
+      // Codex cannot fork/resume a session at an earlier turn. The next
+      // follow-up starts a fresh session with the truncated DB transcript.
+      await tm.updateThread(params.threadId, {
+        sessionId: null,
+        contextRecoveryReason: 'rewound',
+        fileCheckpointingEnabled: 1,
+        status: 'idle',
+      });
+
+      log.info('Codex thread rewound from Git checkpoint', {
+        namespace: 'thread-rewind',
+        threadId: params.threadId,
+        filesChanged: rewindResult.filesChanged.length,
+        deletedMessageCount,
+      });
+      metric('threads.rewound', 1, { type: 'sum' });
+      span.end('ok');
+      return {
+        threadId: params.threadId,
+        newSessionId: null,
+        rewind: rewindResult,
+        deletedMessageCount,
+      };
+    }
     const sourceSessionId = (anchor.sourceThread as any).sessionId as string;
 
     // 1. Restore files via a temp query.
     const rewindResult = await withResumedQueryForRewind<RewindFilesResult>(
       sourceSessionId,
       anchor.cwd,
-      (q) => (q as any).rewindFiles(anchor.uuid) as Promise<RewindFilesResult>,
+      (q) => (q as any).rewindFiles(anchor.uuid!) as Promise<RewindFilesResult>,
     );
     if (!rewindResult.canRewind) {
       span.end('error', rewindResult.error ?? 'cannot_rewind');
@@ -281,6 +324,12 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
       messageId: params.messageId,
       userId: params.userId,
     });
+    if (anchor.provider !== 'claude') {
+      throw new ThreadServiceError(
+        'Fork and rewind is not available for Codex because a fork shares the current worktree.',
+        400,
+      );
+    }
 
     const forkResult = await forkThread({
       sourceThreadId: params.sourceThreadId,
@@ -299,7 +348,7 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
     const rewindResult = await withResumedQueryForRewind<RewindFilesResult>(
       newSessionId,
       newCwd,
-      (q) => (q as any).rewindFiles(anchor.uuid) as Promise<RewindFilesResult>,
+      (q) => (q as any).rewindFiles(anchor.uuid!) as Promise<RewindFilesResult>,
     );
     if (!rewindResult.canRewind) {
       log.warn('fork_and_rewind: rewindFiles returned canRewind=false', {

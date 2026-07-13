@@ -108,6 +108,32 @@ describe('FrozenMessageList', () => {
     });
   });
 
+  test('expandToItem scrolls to a loaded row (§6.6)', () => {
+    const handleRef = createRef<MemoizedMessageListHandle>();
+    const { container } = render(<Harness handleRef={handleRef} />);
+
+    // Any loaded row is mounted in the frozen list, so its data-item-key is
+    // queryable and expandToItem can scroll straight to it (window loading for
+    // unloaded targets is handled caller-side by store.loadMessagesUntil).
+    const row = container.querySelector<HTMLElement>('[data-item-key]');
+    expect(row).toBeTruthy();
+    const key = row!.getAttribute('data-item-key')!;
+
+    const spy = vi.spyOn(row!, 'scrollIntoView');
+    handleRef.current!.expandToItem(key);
+    expect(spy).toHaveBeenCalled();
+  });
+
+  test('keeps every loaded row text in the DOM for find-in-page (§6.8)', () => {
+    const handleRef = createRef<MemoizedMessageListHandle>();
+    const { container } = render(<Harness handleRef={handleRef} />);
+
+    // The very first message (far from the bottom) must still be present in the
+    // DOM — unlike the virtual viewer, which unmounts offscreen rows and hides
+    // them from Ctrl+F. `(turn 0)` is the deterministic first user message.
+    expect(container.textContent).toContain('(turn 0)');
+  });
+
   test('stamps user rows with a section id and pins them sticky (§6.7)', () => {
     const handleRef = createRef<MemoizedMessageListHandle>();
     const { container } = render(<Harness handleRef={handleRef} />);

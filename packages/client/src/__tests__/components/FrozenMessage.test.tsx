@@ -76,8 +76,10 @@ describe('FrozenMessage', () => {
 
     const el = getByTestId('frozen-message');
     expect(el.dataset.frozen).toBe('true');
-    // HTML stays in the DOM (find-in-page), but the live subtree unmounted.
+    // Text stays in the DOM (find-in-page reaches it), but the live subtree
+    // unmounted — the memory win without losing Ctrl+F (§6.8).
     expect(el.innerHTML).toContain('freeze me');
+    expect(el.textContent).toContain('freeze me');
     expect(live.mounts).toBe(0);
   });
 

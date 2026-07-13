@@ -189,7 +189,16 @@ export const FrozenMessageList = memo(function FrozenMessageList({
           // content-visibility is dropped on sticky rows (small cards, and it
           // interferes with sticky painting).
           const rowStyle: CSSProperties = isUserRow
-            ? { position: 'sticky', top: 0, zIndex: 20, overflowAnchor: 'auto' }
+            ? {
+                position: 'sticky',
+                top: 0,
+                zIndex: 20,
+                overflowAnchor: 'auto',
+                // Own paint layer: prevents a trailing ghost of the stuck header
+                // when neighboring content-visibility rows repaint during scroll.
+                // (transform on the sticky element itself does not break sticky.)
+                transform: 'translateZ(0)',
+              }
             : {
                 contentVisibility: 'auto',
                 containIntrinsicSize: `auto ${estimate}px`,
@@ -200,6 +209,10 @@ export const FrozenMessageList = memo(function FrozenMessageList({
               key={row.key}
               data-virtual-row-key={row.key}
               {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
+              // Sticky user rows need an opaque background so scrolling content
+              // cannot bleed through the transparent padding around the card —
+              // otherwise the outgoing header ghosts behind the incoming one.
+              className={isUserRow ? 'bg-background' : undefined}
               style={rowStyle}
             >
               <VirtualRowContent

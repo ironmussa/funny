@@ -144,6 +144,10 @@ describe('FrozenMessageList', () => {
       expect(row.style.position).toBe('sticky');
       expect(row.style.top).toBe('0px');
       expect(row.style.contentVisibility).toBe('');
+      // Opaque bg + own paint layer so the stuck header does not ghost/bleed
+      // as content scrolls under it.
+      expect(row.className).toContain('bg-background');
+      expect(row.style.transform).toBe('translateZ(0)');
     });
   });
 

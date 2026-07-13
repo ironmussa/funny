@@ -29,6 +29,9 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
     const e = raw as Record<string, unknown>;
     const content =
       (typeof e.content === 'string' && e.content) ||
+      // Codex SDK todo_list items use `{ text, completed }`, unlike the
+      // `{ content, status }` shape used by Claude and ACP providers.
+      (typeof e.text === 'string' && e.text) ||
       (typeof e.title === 'string' && e.title) ||
       (typeof e.description === 'string' && e.description) ||
       '';
@@ -36,9 +39,11 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
     const status =
       e.status === 'completed' || e.status === 'in_progress'
         ? e.status
-        : e.status === 'cancelled'
+        : e.completed === true
           ? 'completed'
-          : 'pending';
+          : e.status === 'cancelled'
+            ? 'completed'
+            : 'pending';
     todos.push({
       content,
       status,

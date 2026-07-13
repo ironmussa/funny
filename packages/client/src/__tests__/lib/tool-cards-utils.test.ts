@@ -66,6 +66,20 @@ describe('getTodos', () => {
     });
     expect(todos).toEqual([{ content: 'Fix CI', status: 'in_progress' }]);
   });
+
+  test('normalizes Codex todo_list items into checklist entries', () => {
+    const todos = getTodos({
+      todos: [
+        { text: 'Inspect the thread card', completed: true },
+        { text: 'Render the checklist', completed: false },
+      ],
+    });
+
+    expect(todos).toEqual([
+      { content: 'Inspect the thread card', status: 'completed' },
+      { content: 'Render the checklist', status: 'pending' },
+    ]);
+  });
 });
 
 describe('getFilePath', () => {

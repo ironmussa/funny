@@ -311,12 +311,14 @@ export class CodexSDKProcess extends BaseAgentProcess {
 
       case 'todo_list':
         if (!completed) return null;
-        this.emitToolPair(
-          'TodoWrite',
-          { todos: item.items },
-          stringifyToolOutput(item.items),
-          item.id,
-        );
+        // Keep the provider-facing contract consistent with every other
+        // checklist source. The SDK uses `{ text, completed }`, while the UI
+        // and persisted TodoWrite cards use `{ content, status }`.
+        const todos = item.items.map((todo) => ({
+          content: todo.text,
+          status: todo.completed ? 'completed' : 'pending',
+        }));
+        this.emitToolPair('TodoWrite', { todos }, stringifyToolOutput(todos), item.id);
         return null;
 
       case 'error':

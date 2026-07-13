@@ -151,6 +151,41 @@ describe('CodexSDKProcess', () => {
     expect(ids[1]).toMatch(/:item_0$/);
   });
 
+  test('normalizes Codex todo_list items to the TodoWrite checklist contract', async () => {
+    const process = new CodexSDKProcess(options);
+    const messages: any[] = [];
+    process.on('message', (message) => messages.push(message));
+
+    const handleEvent = (process as any).handleEvent.bind(process);
+    await handleEvent({
+      type: 'item.completed',
+      item: {
+        id: 'todos-1',
+        type: 'todo_list',
+        items: [
+          { text: 'Inspect the thread card', completed: true },
+          { text: 'Render the checklist', completed: false },
+        ],
+      },
+    });
+
+    const toolUseMessage = messages.find(
+      (message) => message.type === 'assistant' && message.message.content[0]?.type === 'tool_use',
+    );
+    if (toolUseMessage?.type !== 'assistant')
+      throw new Error('TodoWrite tool call was not emitted');
+    expect(toolUseMessage.message.content[0]).toMatchObject({
+      type: 'tool_use',
+      name: 'TodoWrite',
+      input: {
+        todos: [
+          { content: 'Inspect the thread card', status: 'completed' },
+          { content: 'Render the checklist', status: 'pending' },
+        ],
+      },
+    });
+  });
+
   test('normalizes Codex file changes to the ACP Edit tool card contract', async () => {
     const process = new CodexSDKProcess(options);
     const messages: any[] = [];

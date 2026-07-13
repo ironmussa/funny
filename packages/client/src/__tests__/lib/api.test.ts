@@ -97,6 +97,17 @@ describe('API Client', () => {
       expect(useCircuitBreakerStore.getState().state).toBe('open');
       expect(useCircuitBreakerStore.getState().failureCount).toBe(3);
     });
+
+    test('git diff read 500 responses stay scoped to the changes pane', async () => {
+      mockFetch.mockResolvedValue(mockJsonResponse({ error: 'Internal server error' }, 500));
+
+      await api.getDiffSummary('t1');
+      await api.getDiffSummary('t1');
+      await api.getDiffSummary('t1');
+
+      expect(useCircuitBreakerStore.getState().state).toBe('closed');
+      expect(useCircuitBreakerStore.getState().failureCount).toBe(0);
+    });
   });
 
   describe('Threads', () => {

@@ -49,6 +49,12 @@ export function getBaseUrlForThread(thread?: { runtime?: string; containerUrl?: 
   return BASE;
 }
 
+function isGitDiffReadRequest(method: string, path: string): boolean {
+  if (method !== 'GET') return false;
+  const pathname = path.split('?')[0];
+  return /^\/git\/(?:project\/[^/]+|[^/]+)\/diff(?:\/|$)/.test(pathname);
+}
+
 export function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -125,7 +131,15 @@ export function request<T>(path: string, init?: RequestInit): ResultAsync<T, Dom
         // unreachable or timed out, not that the central server is down.
         // Tripping the breaker here would block server-local requests
         // (profile, threads, etc.) that still work fine.
-        if (res.status >= 500 && res.status !== 502 && res.status !== 504) {
+        // A diff read can fail transiently while an agent updates its worktree.
+        // Keep that failure scoped to the Changes pane instead of presenting the
+        // global "server unavailable" overlay for an otherwise healthy server.
+        if (
+          res.status >= 500 &&
+          res.status !== 502 &&
+          res.status !== 504 &&
+          !isGitDiffReadRequest(method, path)
+        ) {
           useCircuitBreakerStore.getState().recordFailure();
         }
 

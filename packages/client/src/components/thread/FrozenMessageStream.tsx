@@ -1,26 +1,21 @@
 import { useCallback, useImperativeHandle } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSettingsStore } from '@/stores/settings-store';
-
-import { FrozenMessageStream } from './FrozenMessageStream';
-import { MemoizedMessageList } from './MemoizedMessageList';
+import { FrozenMessageList } from './FrozenMessageList';
 import { EMPTY_MESSAGES } from './MemoizedMessageList.constants';
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamShell } from './MessageStreamShell';
-import { useMessageStreamScroll } from './use-message-stream-scroll';
-
-export type { MessageStreamHandle, MessageStreamProps } from './message-stream-types';
+import { useFrozenScroll } from './use-frozen-scroll';
 
 const EMPTY_SNAPSHOT_MAP = new Map<string, number>();
 const EMPTY_KNOWN_IDS = new Set<string>();
 
 /**
- * Virtual viewer container: the TanStack Virtual `MemoizedMessageList` plus its
- * manual-anchoring scroll hook, rendered through the shared shell. This is the
- * default path and is behaviorally unchanged from before the shell extraction.
+ * Frozen viewer container: in-flow `FrozenMessageList` + native-scroll
+ * orchestration (`useFrozenScroll`) rendered through the shared
+ * `MessageStreamShell`. The virtual `MessageStream` path is untouched.
  */
-function VirtualMessageStream(props: MessageStreamProps) {
+export function FrozenMessageStream(props: MessageStreamProps) {
   const {
     ref,
     threadId,
@@ -52,7 +47,6 @@ function VirtualMessageStream(props: MessageStreamProps) {
     snapshotMap = EMPTY_SNAPSHOT_MAP,
     knownIds = EMPTY_KNOWN_IDS,
     onOpenLightbox,
-    onVisibleMessageChange,
     compact = false,
     footer,
     className,
@@ -68,16 +62,9 @@ function VirtualMessageStream(props: MessageStreamProps) {
     scrollDownRef,
     scrollToBottom,
     scrollViewportRef,
-  } = useMessageStreamScroll({
-    threadId,
-    status,
-    messages,
-    waitingReason,
-    pagination,
-    compact,
-    initInfo,
-    onVisibleMessageChange,
-  });
+    topSentinelRef,
+    bottomSentinelRef,
+  } = useFrozenScroll({ threadId, status, messages, waitingReason, pagination, compact, initInfo });
 
   const noopLightbox = useCallback(
     (_images: { src: string; alt: string }[], _index: number) => {},
@@ -117,7 +104,7 @@ function VirtualMessageStream(props: MessageStreamProps) {
   }, [pendingPermission, onPermissionApproval]);
 
   const list = (
-    <MemoizedMessageList
+    <FrozenMessageList
       key={threadId}
       ref={messageListRef}
       messages={messages ?? EMPTY_MESSAGES}
@@ -152,8 +139,18 @@ function VirtualMessageStream(props: MessageStreamProps) {
       scrollDownRef={scrollDownRef}
       scrollToBottom={scrollToBottom}
       promptPinSpacerHeight={promptPinSpacerHeight}
-      overflowAnchor="none"
+      overflowAnchor="auto"
       list={list}
+      topSentinel={
+        pagination ? (
+          <div ref={topSentinelRef} data-testid="frozen-top-sentinel" aria-hidden="true" />
+        ) : undefined
+      }
+      bottomSentinel={
+        pagination?.hasMoreAfter ? (
+          <div ref={bottomSentinelRef} data-testid="frozen-bottom-sentinel" aria-hidden="true" />
+        ) : undefined
+      }
       compact={compact}
       className={className}
       messages={messages}
@@ -174,15 +171,5 @@ function VirtualMessageStream(props: MessageStreamProps) {
       onPermissionDeny={handlePermissionDeny}
       footer={footer}
     />
-  );
-}
-
-/** Dispatches to the virtual (default) or frozen viewer based on the setting. */
-export function MessageStream(props: MessageStreamProps) {
-  const threadViewer = useSettingsStore((s) => s.threadViewer);
-  return threadViewer === 'frozen' ? (
-    <FrozenMessageStream {...props} />
-  ) : (
-    <VirtualMessageStream {...props} />
   );
 }

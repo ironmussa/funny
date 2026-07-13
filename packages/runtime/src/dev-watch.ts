@@ -29,13 +29,18 @@ let restarting = false;
 let exitRequested = false;
 
 function startServer() {
-  child = Bun.spawn(['bun', 'src/index.ts'], {
+  const server = Bun.spawn(['bun', 'src/index.ts'], {
     cwd: serverDir,
     stdio: ['inherit', 'inherit', 'inherit'],
     env: { ...process.env },
   });
+  child = server;
 
-  void child.exited.then((code) => {
+  void server.exited.then((code) => {
+    // A previous child can finish after its replacement has started. It must
+    // not clear or restart the replacement, or later reloads lose track of it
+    // and leave duplicate runtimes connected to the same runner.
+    if (child !== server) return;
     child = null;
     if (!exitRequested && !restarting) {
       // Server crashed — restart after a short delay
@@ -46,8 +51,9 @@ function startServer() {
 }
 
 async function killServer(): Promise<void> {
-  if (!child?.pid) return;
-  const pid = child.pid;
+  const server = child;
+  if (!server?.pid) return;
+  const pid = server.pid;
 
   if (process.platform === 'win32') {
     // Kill the entire process tree — prevents ghost sockets from
@@ -60,16 +66,12 @@ async function killServer(): Promise<void> {
       process.kill(-pid, 'SIGTERM');
     } catch {}
     try {
-      child.kill();
+      server.kill();
     } catch {}
   }
 
-  // Wait for exit
-  const deadline = Date.now() + 3000;
-  while (child && Date.now() < deadline) {
-    await Bun.sleep(100);
-  }
-  child = null;
+  await Promise.race([server.exited, Bun.sleep(3000)]);
+  if (child === server) child = null;
 }
 
 async function restart() {

@@ -43,6 +43,7 @@ import {
   type Editor,
   type FontSize,
   type TerminalShell,
+  type ThreadViewer,
   useSettingsStore,
 } from '@/stores/settings-store';
 
@@ -173,12 +174,14 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
     fontSize,
     notificationsEnabled,
     notificationSoundEnabled,
+    threadViewer,
     setDefaultEditor,
     setUseInternalEditor,
     setTerminalShell,
     setFontSize,
     setNotificationsEnabled,
     setNotificationSoundEnabled,
+    setThreadViewer,
     fetchAvailableShells,
   } = useSettingsStore(
     useShallow((s) => ({
@@ -189,12 +192,14 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
       fontSize: s.fontSize,
       notificationsEnabled: s.notificationsEnabled,
       notificationSoundEnabled: s.notificationSoundEnabled,
+      threadViewer: s.threadViewer,
       setDefaultEditor: s.setDefaultEditor,
       setUseInternalEditor: s.setUseInternalEditor,
       setTerminalShell: s.setTerminalShell,
       setFontSize: s.setFontSize,
       setNotificationsEnabled: s.setNotificationsEnabled,
       setNotificationSoundEnabled: s.setNotificationSoundEnabled,
+      setThreadViewer: s.setThreadViewer,
       fetchAvailableShells: s.fetchAvailableShells,
     })),
   );
@@ -575,6 +580,38 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
                     <SelectItem value="small">{t('settings.fontSizeSmall')}</SelectItem>
                     <SelectItem value="default">{t('settings.fontSizeDefault')}</SelectItem>
                     <SelectItem value="large">{t('settings.fontSizeLarge')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+            </div>
+            <h3 className="settings-section-header mt-6">
+              {t('settings.experimental', 'Experimental')}
+            </h3>
+            <div className="settings-card">
+              <SettingRow
+                title={t('settings.threadViewer', 'Thread viewer')}
+                description={t(
+                  'settings.threadViewerDesc',
+                  'Frozen renders messages in normal document flow (native scroll, find-in-page across the whole thread). Virtual is the current renderer.',
+                )}
+              >
+                <Select
+                  value={threadViewer}
+                  onValueChange={(v) => setThreadViewer(v as ThreadViewer)}
+                >
+                  <SelectTrigger
+                    className="w-[140px]"
+                    data-testid="preferences-thread-viewer-select"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="virtual">
+                      {t('settings.threadViewerVirtual', 'Virtual (default)')}
+                    </SelectItem>
+                    <SelectItem value="frozen">
+                      {t('settings.threadViewerFrozen', 'Frozen (experimental)')}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </SettingRow>

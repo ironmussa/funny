@@ -7,6 +7,7 @@ import {
   loadThreadScrollFetchOptions,
   saveThreadScrollPosition,
 } from '@/lib/thread-scroll-position';
+import { useSettingsStore } from '@/stores/settings-store';
 
 import { mockT } from '../helpers/mock-i18n';
 
@@ -79,6 +80,10 @@ vi.mock('@/components/thread/MemoizedMessageList', () => ({
       </div>
     );
   },
+}));
+
+vi.mock('@/components/thread/FrozenMessageList', () => ({
+  FrozenMessageList: () => <div data-testid="frozen-message-list-mock" />,
 }));
 
 vi.mock('@/components/thread/AgentStatusCards', () => ({
@@ -1222,5 +1227,41 @@ describe('MessageStream sticky bottom', () => {
     expect(loadThreadScrollFetchOptions('bottom-saved')).toEqual({
       messageProgress: 1,
     });
+  });
+});
+
+describe('MessageStream viewer selection', () => {
+  beforeEach(() => {
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useSettingsStore.getState().setThreadViewer('virtual');
+  });
+
+  test('renders the virtual list by default', () => {
+    const { queryByTestId } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        onSend={() => {}}
+      />,
+    );
+    expect(queryByTestId('frozen-message-list-mock')).toBeNull();
+  });
+
+  test('renders the frozen list when threadViewer=frozen', () => {
+    useSettingsStore.getState().setThreadViewer('frozen');
+    const { getByTestId } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        onSend={() => {}}
+      />,
+    );
+    expect(getByTestId('frozen-message-list-mock')).toBeTruthy();
   });
 });

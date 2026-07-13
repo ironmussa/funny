@@ -140,6 +140,27 @@ function getStoredFontSize(): FontSize {
   return 'default';
 }
 
+/**
+ * Thread viewer engine — experimental. `virtual` is the current TanStack
+ * Virtual renderer (`MemoizedMessageList`); `frozen` is the in-flow,
+ * native-scroll frozen-message viewer. Client-only, localStorage-backed (no
+ * server profile field): it's a rendering preference, not account state.
+ */
+export type ThreadViewer = 'virtual' | 'frozen';
+
+const THREAD_VIEWER_KEY = 'funny_thread_viewer';
+const THREAD_VIEWER_VALUES: readonly ThreadViewer[] = ['virtual', 'frozen'];
+
+function getStoredThreadViewer(): ThreadViewer {
+  try {
+    const stored = localStorage.getItem(THREAD_VIEWER_KEY);
+    if (stored && (THREAD_VIEWER_VALUES as readonly string[]).includes(stored)) {
+      return stored as ThreadViewer;
+    }
+  } catch {}
+  return 'virtual';
+}
+
 const NOTIFICATIONS_ENABLED_KEY = 'funny_notifications_enabled';
 const NOTIFICATIONS_SOUND_KEY = 'funny_notifications_sound';
 const HIDDEN_PROMPT_MODELS_KEY = 'funny_hidden_prompt_models';
@@ -244,6 +265,8 @@ interface SettingsState {
   notificationSoundEnabled: boolean;
   /** `provider:model` keys hidden from the prompt input model picker. */
   hiddenPromptModels: string[];
+  /** Experimental thread viewer engine (client-only, localStorage-backed). */
+  threadViewer: ThreadViewer;
   _initialized: boolean;
   initializeFromProfile: (profile: UserProfile) => void;
   setDefaultEditor: (editor: Editor) => void;
@@ -254,6 +277,7 @@ interface SettingsState {
   setNotificationSoundEnabled: (enabled: boolean) => void;
   setPromptModelVisible: (combinedKey: string, visible: boolean) => void;
   resetPromptModelVisibility: () => void;
+  setThreadViewer: (viewer: ThreadViewer) => void;
   fetchAvailableShells: () => Promise<void>;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
@@ -293,6 +317,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notificationsEnabled: getStoredNotificationsEnabled(),
   notificationSoundEnabled: getStoredNotificationSoundEnabled(),
   hiddenPromptModels: getStoredHiddenPromptModels(),
+  threadViewer: getStoredThreadViewer(),
   _initialized: false,
 
   initializeFromProfile: (profile) => {
@@ -325,6 +350,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       localStorage.setItem(FONT_SIZE_KEY, size);
     } catch {}
     applyFontSize(size);
+  },
+  setThreadViewer: (viewer) => {
+    set({ threadViewer: viewer });
+    try {
+      localStorage.setItem(THREAD_VIEWER_KEY, viewer);
+    } catch {}
   },
   setNotificationsEnabled: (enabled) => {
     set({ notificationsEnabled: enabled });

@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { LoadingState } from '@/components/ui/loading-state';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings-store';
 
+import { FrozenMessageList } from './FrozenMessageList';
 import { InitInfoCard } from './InitInfoCard';
 import { MemoizedMessageList } from './MemoizedMessageList';
 import { EMPTY_MESSAGES } from './MemoizedMessageList.constants';
@@ -56,6 +58,7 @@ export function MessageStream(props: MessageStreamProps) {
   } = props;
 
   const { t } = useTranslation();
+  const threadViewer = useSettingsStore((s) => s.threadViewer);
 
   const isRunning = status === 'running';
   const hasMore = pagination?.hasMore ?? false;
@@ -173,31 +176,36 @@ export function MessageStream(props: MessageStreamProps) {
 
         {/* Message list wrapper keeps the virtualizer scroll-margin observer stable. */}
         <div>
-          <MemoizedMessageList
-            key={threadId}
-            ref={messageListRef}
-            messages={messages ?? EMPTY_MESSAGES}
-            leadingUserMessage={leadingUserMessage}
-            threadEvents={threadEvents}
-            compactionEvents={compactionEvents}
-            threadId={threadId}
-            threadStatus={status}
-            knownIds={knownIds}
-            snapshotMap={snapshotMap}
-            onSend={onSend}
-            onOpenLightbox={effectiveOpenLightbox}
-            onToolRespond={onToolRespond}
-            onFork={onFork}
-            onRewind={onRewind}
-            onForkAndRewind={onForkAndRewind}
-            forkingMessageId={forkingMessageId}
-            rewindDisabled={rewindDisabled}
-            rewindDisabledReason={rewindDisabledReason}
-            scrollRef={scrollViewportRef}
-            sessionChanges={sessionChanges}
-            changeSummaryRunning={isRunning}
-            onSessionReverted={onSessionReverted}
-          />
+          {(() => {
+            const listProps = {
+              messages: messages ?? EMPTY_MESSAGES,
+              leadingUserMessage,
+              threadEvents,
+              compactionEvents,
+              threadId,
+              threadStatus: status,
+              knownIds,
+              snapshotMap,
+              onSend,
+              onOpenLightbox: effectiveOpenLightbox,
+              onToolRespond,
+              onFork,
+              onRewind,
+              onForkAndRewind,
+              forkingMessageId,
+              rewindDisabled,
+              rewindDisabledReason,
+              scrollRef: scrollViewportRef,
+              sessionChanges,
+              changeSummaryRunning: isRunning,
+              onSessionReverted,
+            };
+            return threadViewer === 'frozen' ? (
+              <FrozenMessageList key={threadId} ref={messageListRef} {...listProps} />
+            ) : (
+              <MemoizedMessageList key={threadId} ref={messageListRef} {...listProps} />
+            );
+          })()}
         </div>
 
         <MessageStreamStatusTail

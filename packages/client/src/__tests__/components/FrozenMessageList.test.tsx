@@ -99,18 +99,26 @@ describe('FrozenMessageList', () => {
     const rows = container.querySelectorAll('[data-virtual-row-key]');
     // 10 messages, each assistant with tool calls → at least one row per message.
     expect(rows.length).toBeGreaterThanOrEqual(10);
-    // Every row uses content-visibility to skip offscreen work.
+    // Non-user rows use content-visibility to skip offscreen work.
     rows.forEach((row) => {
-      expect((row as HTMLElement).style.contentVisibility).toBe('auto');
-      expect((row as HTMLElement).style.containIntrinsicSize).toContain('auto');
+      const el = row as HTMLElement;
+      if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows
+      expect(el.style.contentVisibility).toBe('auto');
+      expect(el.style.containIntrinsicSize).toContain('auto');
     });
   });
 
-  test('stamps user rows with a section id for scroll targeting', () => {
+  test('stamps user rows with a section id and pins them sticky (§6.7)', () => {
     const handleRef = createRef<MemoizedMessageListHandle>();
     const { container } = render(<Harness handleRef={handleRef} />);
-    const userRows = container.querySelectorAll('[data-section-msg-id]');
+    const userRows = container.querySelectorAll<HTMLElement>('[data-section-msg-id]');
     expect(userRows.length).toBeGreaterThan(0);
+    // Native sticky section headers: no per-frame JS, no content-visibility.
+    userRows.forEach((row) => {
+      expect(row.style.position).toBe('sticky');
+      expect(row.style.top).toBe('0px');
+      expect(row.style.contentVisibility).toBe('');
+    });
   });
 
   test('exposes the message-list handle contract without throwing', () => {

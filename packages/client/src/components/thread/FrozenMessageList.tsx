@@ -1,4 +1,4 @@
-import { useCallback, useImperativeHandle, useMemo, useRef, memo } from 'react';
+import { useCallback, useImperativeHandle, useMemo, useRef, memo, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { makeProseFont } from '@/hooks/use-pretext';
@@ -183,16 +183,24 @@ export const FrozenMessageList = memo(function FrozenMessageList({
           const isUserRow =
             row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
           const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
+          // Sticky section header (§6.7): each user message pins to the top of
+          // the scroller while its section is in view; the next user message
+          // shoves it out natively — no per-frame JS, unlike the virtual list.
+          // content-visibility is dropped on sticky rows (small cards, and it
+          // interferes with sticky painting).
+          const rowStyle: CSSProperties = isUserRow
+            ? { position: 'sticky', top: 0, zIndex: 20, overflowAnchor: 'auto' }
+            : {
+                contentVisibility: 'auto',
+                containIntrinsicSize: `auto ${estimate}px`,
+                overflowAnchor: 'auto',
+              };
           return (
             <div
               key={row.key}
               data-virtual-row-key={row.key}
               {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
-              style={{
-                contentVisibility: 'auto',
-                containIntrinsicSize: `auto ${estimate}px`,
-                overflowAnchor: 'auto',
-              }}
+              style={rowStyle}
             >
               <VirtualRowContent
                 row={row}

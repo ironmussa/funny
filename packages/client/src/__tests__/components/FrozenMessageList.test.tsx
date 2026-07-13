@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import { createRef, useRef, type RefObject } from 'react';
-import { beforeEach, describe, test, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, test, expect, vi } from 'vitest';
 
 import { FrozenMessageList } from '@/components/thread/FrozenMessageList';
 import type { MemoizedMessageListHandle } from '@/components/thread/MemoizedMessageList.types';
@@ -68,10 +68,23 @@ function Harness({ handleRef }: { handleRef: RefObject<MemoizedMessageListHandle
   );
 }
 
+class NoopIntersectionObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 describe('FrozenMessageList', () => {
   beforeEach(() => {
     // jsdom does not implement scrollIntoView.
     Element.prototype.scrollIntoView = vi.fn();
+    // FrozenMessage (assistant rows) observes intersection to freeze offscreen.
+    vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver);
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   test('mounts every row in normal flow (no absolute positioning)', () => {

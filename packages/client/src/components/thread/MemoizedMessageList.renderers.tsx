@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next';
+import { useContext } from 'react';
 
 import { getItemKey, type RenderItem, type ToolItem } from '@/lib/render-items';
 import { timeAgo } from '@/lib/thread-utils';
@@ -8,6 +9,8 @@ import { ToolCallGroup } from '../ToolCallGroup';
 import { AuthorAvatar } from './AuthorAvatar';
 import { ChangedFilesSummary } from './ChangedFilesSummary';
 import { CompactionEventCard } from './CompactionEventCard';
+import { FrozenViewerContext } from './frozen-message-context';
+import { FrozenMessage } from './FrozenMessage';
 import { GitEventCard } from './GitEventCard';
 import type { MessageItem, VirtualRow } from './MemoizedMessageList.virtualRows';
 import { MessageContent, CopyButton } from './MessageContent';
@@ -120,6 +123,8 @@ export function NonUserItemRenderer({
   onToolRespond,
 }: NonUserItemRendererProps) {
   const key = getItemKey(item);
+  // In the frozen viewer, assistant markdown freezes to static HTML offscreen.
+  const frozenViewer = useContext(FrozenViewerContext) !== null;
 
   if (item.type === 'message') {
     const msg = item.msg;
@@ -137,7 +142,11 @@ export function NonUserItemRenderer({
           <div className="flex items-start gap-2">
             {msg.author && <AuthorAvatar author={msg.author} />}
             <div className="min-w-0 flex-1">
-              <MessageContent content={msg.content.trim()} />
+              {frozenViewer ? (
+                <FrozenMessage content={msg.content.trim()} />
+              ) : (
+                <MessageContent content={msg.content.trim()} />
+              )}
             </div>
             <CopyButton content={msg.content} />
           </div>

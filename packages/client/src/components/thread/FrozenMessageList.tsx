@@ -10,6 +10,7 @@ import {
   CODE_LINE_HEIGHT_PX,
 } from '@/stores/settings-store';
 
+import { FrozenViewerContext } from './frozen-message-context';
 import { useContainerWidth, usePretextWarmup } from './MemoizedMessageList.hooks';
 import {
   estimateVirtualRowHeight,
@@ -36,11 +37,12 @@ import { buildVirtualRows } from './MemoizedMessageList.virtualRows';
  * find-in-page (Ctrl+F) can reach offscreen rows — the whole point of the
  * frozen viewer.
  *
- * This slice reuses the existing per-row renderer (`VirtualRowContent`) and the
- * same imperative handle contract as the virtual list, so it drops into
- * `MessageStream` behind the flag with the surrounding chrome untouched. Message
- * freezing (static HTML subtrees), sentinel-based bidirectional infinite
- * scroll, and the sticky section header land in later slices.
+ * This reuses the existing per-row renderer (`VirtualRowContent`) and the same
+ * imperative handle contract as the virtual list, so it drops into
+ * `MessageStream` behind the flag with the surrounding chrome untouched. It also
+ * provides `FrozenViewerContext`, which makes assistant markdown freeze to
+ * static HTML offscreen (`FrozenMessage`) so memory stays bounded by the visible
+ * rows. The sticky section header is still pending (§6.7).
  */
 export const FrozenMessageList = memo(function FrozenMessageList({
   ref,
@@ -168,49 +170,53 @@ export const FrozenMessageList = memo(function FrozenMessageList({
     [captureScrollAnchor, restoreScrollAnchor, captureVisibleAnchor, scrollToRowByAttr, scrollRef],
   );
 
+  const frozenCtxValue = useMemo(() => ({ scrollRootRef: scrollRef }), [scrollRef]);
+
   return (
-    <div
-      ref={containerRef}
-      data-testid="frozen-message-list"
-      style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
-    >
-      {virtualRows.map((row) => {
-        const isUserRow =
-          row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
-        const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
-        return (
-          <div
-            key={row.key}
-            data-virtual-row-key={row.key}
-            {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
-            style={{
-              contentVisibility: 'auto',
-              containIntrinsicSize: `auto ${estimate}px`,
-              overflowAnchor: 'auto',
-            }}
-          >
-            <VirtualRowContent
-              row={row}
-              t={t}
-              threadId={threadId}
-              changeSummaryRunning={changeSummaryRunning}
-              onSessionReverted={onSessionReverted}
-              snapshotMap={snapshotMap}
-              isWaiting={isWaiting}
-              onSend={onSend}
-              onToolRespond={onToolRespond}
-              onOpenLightbox={onOpenLightbox}
-              onFork={onFork}
-              onRewind={onRewind}
-              onForkAndRewind={onForkAndRewind}
-              forkingMessageId={forkingMessageId}
-              rewindDisabled={rewindDisabled}
-              rewindDisabledReason={rewindDisabledReason}
-              scrollToUserMessagePosition={scrollToUserMessagePosition}
-            />
-          </div>
-        );
-      })}
-    </div>
+    <FrozenViewerContext.Provider value={frozenCtxValue}>
+      <div
+        ref={containerRef}
+        data-testid="frozen-message-list"
+        style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
+      >
+        {virtualRows.map((row) => {
+          const isUserRow =
+            row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+          const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
+          return (
+            <div
+              key={row.key}
+              data-virtual-row-key={row.key}
+              {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: `auto ${estimate}px`,
+                overflowAnchor: 'auto',
+              }}
+            >
+              <VirtualRowContent
+                row={row}
+                t={t}
+                threadId={threadId}
+                changeSummaryRunning={changeSummaryRunning}
+                onSessionReverted={onSessionReverted}
+                snapshotMap={snapshotMap}
+                isWaiting={isWaiting}
+                onSend={onSend}
+                onToolRespond={onToolRespond}
+                onOpenLightbox={onOpenLightbox}
+                onFork={onFork}
+                onRewind={onRewind}
+                onForkAndRewind={onForkAndRewind}
+                forkingMessageId={forkingMessageId}
+                rewindDisabled={rewindDisabled}
+                rewindDisabledReason={rewindDisabledReason}
+                scrollToUserMessagePosition={scrollToUserMessagePosition}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </FrozenViewerContext.Provider>
   );
 });

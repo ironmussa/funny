@@ -333,7 +333,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
       <span className={cn('shrink-0 font-mono font-medium', config.color)}>{config.label}</span>
       {detail}
       {event.createdAt && (
-        <span className="text-muted-foreground ml-auto shrink-0">
+        <span className="thread-timestamp text-muted-foreground/50 ml-auto">
           {timeAgo(event.createdAt, t)}
         </span>
       )}
@@ -407,7 +407,7 @@ function PrecommitHooksCard({
           ({hooks.length} hook{hooks.length !== 1 ? 's' : ''})
         </span>
         {event.createdAt && (
-          <span className="text-muted-foreground ml-auto shrink-0">
+          <span className="thread-timestamp text-muted-foreground/50 ml-auto">
             {timeAgo(event.createdAt, t)}
           </span>
         )}
@@ -419,7 +419,7 @@ function PrecommitHooksCard({
           {hooks.map((hook, i) => {
             const errorHtml = hookErrorsHtml.get(i);
             return (
-              <div key={i}>
+              <div key={hook.label}>
                 <div
                   className={cn(
                     'flex items-center gap-1.5 text-[11px]',

@@ -96,7 +96,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
           </span>
         )}
         {event.createdAt && (
-          <span className="text-muted-foreground/50 ml-auto shrink-0 text-[10px] tabular-nums">
+          <span className="thread-timestamp text-muted-foreground/50 ml-auto">
             {timeAgo(event.createdAt, t)}
           </span>
         )}

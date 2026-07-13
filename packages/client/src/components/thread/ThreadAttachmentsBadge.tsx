@@ -176,7 +176,7 @@ export function ThreadTitle({
   );
   const tokenSize = TOKEN_DENSITY[density];
   const shouldCapitalizeTitle = !URL_LIKE_RE.test(visibleText.trimStart());
-  const titleClass = cn('min-w-0 truncate', className);
+  const titleClass = cn('min-w-0', !multiline && 'truncate', className);
   const hasReferenceParts = titleParts.some((part) => part.kind !== 'text');
   const firstTextPartIndex = titleParts.findIndex((part) => part.kind === 'text');
   // Render leading `/slash-command` and `!command` titles as chips matching the

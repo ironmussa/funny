@@ -30,6 +30,16 @@ describe('ThreadTitle', () => {
     expect(screen.getByText('fix the linear issue')).toHaveClass('first-letter:uppercase');
   });
 
+  test('allows multiline card titles to use their line clamp', () => {
+    renderWithProviders(
+      <ThreadTitle title="A title that can wrap" multiline className="line-clamp-3" />,
+    );
+
+    const title = screen.getByText('A title that can wrap');
+    expect(title).toHaveClass('line-clamp-3');
+    expect(title).not.toHaveClass('truncate');
+  });
+
   test('replaces a Linear issue URL with a compact issue badge', () => {
     renderWithProviders(
       <ThreadTitle title="/fix-linear https://linear.app/goliiive-v3/issue/GOL-728/core-catalogo-publico-con" />,

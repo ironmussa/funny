@@ -254,6 +254,10 @@ mark.md-search-match[data-active='true'] {
   @apply border-border/50 bg-card hover:bg-accent/30 rounded-lg border px-3 py-2.5 transition-colors;
 }
 
+@utility thread-timestamp {
+  @apply shrink-0 text-[10px] leading-4 whitespace-nowrap tabular-nums;
+}
+
 @utility icon-2xs {
   /* ── Icon size tokens ─────────────────────────────────────────
    * Named to mirror the Tailwind text-* scale so devs can pair

@@ -89,7 +89,9 @@ export const PipelineEventGroup = memo(function PipelineEventGroup({
           {events.length}
         </span>
         {timestamp && (
-          <span className="text-muted-foreground ml-auto shrink-0">{timeAgo(timestamp, t)}</span>
+          <span className="thread-timestamp text-muted-foreground/50 ml-auto">
+            {timeAgo(timestamp, t)}
+          </span>
         )}
       </button>
 

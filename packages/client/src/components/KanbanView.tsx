@@ -161,7 +161,7 @@ export const KanbanCard = memo(function KanbanCard({
             search={search || ''}
             multiline
             containerClassName="flex-1"
-            className="text-muted-foreground group-hover/card:text-foreground line-clamp-6 text-sm leading-relaxed font-medium transition-colors"
+            className="text-muted-foreground group-hover/card:text-foreground line-clamp-3 text-sm leading-relaxed font-medium transition-colors"
             stopBadgePropagation
             badgeTestId={`kanban-view-card-attachments-${thread.id}`}
           />

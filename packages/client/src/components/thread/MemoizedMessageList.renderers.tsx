@@ -141,8 +141,8 @@ export function NonUserItemRenderer({
             </div>
             <CopyButton content={msg.content} />
           </div>
-          <div className="mt-1">
-            <span className="text-muted-foreground/80 text-xs select-none">
+          <div className="mt-1 flex justify-end">
+            <span className="thread-timestamp text-muted-foreground/50 select-none">
               {timeAgo(msg.timestamp, t)}
             </span>
           </div>

@@ -99,12 +99,12 @@ const HooksEventCard = memo(function HooksEventCard({
 
   // Collect error output from failed hooks
   const errorOutput = useMemo(() => {
-    const errors = hooks
-      .filter((h) => h.status === 'failed' && h.error)
-      .map((h) => h.error!)
-      .join('\n');
-    if (!errors) return null;
-    return ansiConverter.toHtml(errors);
+    const errors: string[] = [];
+    for (const hook of hooks) {
+      if (hook.status === 'failed' && hook.error) errors.push(hook.error);
+    }
+    if (errors.length === 0) return null;
+    return ansiConverter.toHtml(errors.join('\n'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metadata.hooks]);
 
@@ -149,7 +149,7 @@ const HooksEventCard = memo(function HooksEventCard({
           />
         )}
         {!hasError && event.createdAt && (
-          <span className="text-muted-foreground ml-auto shrink-0">
+          <span className="thread-timestamp text-muted-foreground/50 ml-auto">
             {timeAgo(event.createdAt, t)}
           </span>
         )}
@@ -364,7 +364,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       <span className="text-muted-foreground shrink-0 font-mono font-medium">{config.label}</span>
       {detail}
       {event.createdAt && (
-        <span className="text-muted-foreground ml-auto shrink-0">
+        <span className="thread-timestamp text-muted-foreground/50 ml-auto">
           {timeAgo(event.createdAt, t)}
         </span>
       )}

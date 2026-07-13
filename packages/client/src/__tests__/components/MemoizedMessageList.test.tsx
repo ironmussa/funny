@@ -1,5 +1,5 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
-import { createRef, useRef, type RefObject } from 'react';
+import { createRef, useMemo, useRef, type RefObject } from 'react';
 import { beforeEach, describe, test, expect, vi } from 'vitest';
 
 import {
@@ -170,15 +170,17 @@ function Harness({
   viewportHeight?: number;
   listRef?: RefObject<MemoizedMessageListHandle | null>;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  if (!scrollRef.current && viewportHeight !== undefined) {
+  const initialScrollElement = useMemo(() => {
     const initialScrollElement = document.createElement('div');
-    Object.defineProperty(initialScrollElement, 'clientHeight', {
-      value: viewportHeight,
-      configurable: true,
-    });
-    scrollRef.current = initialScrollElement;
-  }
+    if (viewportHeight !== undefined) {
+      Object.defineProperty(initialScrollElement, 'clientHeight', {
+        value: viewportHeight,
+        configurable: true,
+      });
+    }
+    return initialScrollElement;
+  }, [viewportHeight]);
+  const scrollRef = useRef<HTMLDivElement>(initialScrollElement);
   return (
     <div
       ref={(node) => {
@@ -240,6 +242,18 @@ describe('MemoizedMessageList virtualization', () => {
     expect(assistantMessage.textContent).toContain('message 1');
     expect(assistantMessage.className).toContain('rounded-lg');
     expect(assistantMessage.className).toContain('border');
+  });
+
+  test('aligns an assistant message timestamp to the right', async () => {
+    const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
+
+    const assistantMessage = await waitFor(() => getByTestId('assistant-message-m1'));
+    const timestampFooter = assistantMessage.querySelector('div.mt-1');
+    const timestamp = timestampFooter?.querySelector('span');
+
+    expect(timestampFooter?.className).toContain('flex');
+    expect(timestampFooter?.className).toContain('justify-end');
+    expect(timestamp?.className).toContain('thread-timestamp');
   });
 
   test('does not count the sticky section context as a measured item row', async () => {

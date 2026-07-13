@@ -1,5 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { toast } from 'sonner';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { UserMessageCard } from '@/components/thread/UserMessageCard';
@@ -13,6 +14,10 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn() },
 }));
 
 vi.mock('@/components/ui/dropdown-menu', () => {
@@ -165,6 +170,7 @@ describe('UserMessageCard', () => {
     expect(screen.getByText(/High/)).toBeInTheDocument();
     const timestamp = screen.getByText('time.now');
     expect(timestamp).toBeInTheDocument();
+    expect(timestamp).toHaveClass('thread-timestamp');
     expect(screen.getByTestId('msg-4').className).toContain('grid grid-cols-[minmax(0,1fr)_auto]');
     expect(timestamp.parentElement).toHaveAttribute('data-testid', 'user-message-side-meta');
     expect(timestamp.parentElement?.className).toContain('justify-between');
@@ -242,7 +248,7 @@ describe('UserMessageCard', () => {
     expect(onFork).toHaveBeenCalledTimes(1);
   });
 
-  test('copies the visible message content from the actions menu', () => {
+  test('copies the visible message content from the external copy button', () => {
     const writeText = vi.fn();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -259,10 +265,15 @@ describe('UserMessageCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('user-message-actions-menu-msg-copy'));
-    fireEvent.click(screen.getByTestId('user-message-copy-content-msg-copy'));
+    const copyButton = screen.getByTestId('user-message-copy-content-msg-copy');
+
+    expect(copyButton).toHaveAttribute('aria-label', 'Copy content');
+    expect(copyButton).not.toHaveAttribute('role', 'menuitem');
+
+    fireEvent.click(copyButton);
 
     expect(writeText).toHaveBeenCalledWith('Copy this text');
+    expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Copied');
   });
 
   test('disables rewind actions when rewindDisabled is true', () => {

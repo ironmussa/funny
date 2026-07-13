@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { LinearIssueBadge } from '@/components/LinearIssueBadge';
 import { PRBadge } from '@/components/PRBadge';
@@ -356,12 +357,13 @@ export function UserMessageCard({
   // inline so the user can see what was sent.
   const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
   const hasCopyableContent = visibleContent.length > 0;
-  const hasThreadActions = Boolean(hasCopyableContent || onFork || onRewind || onForkAndRewind);
+  const hasThreadActions = Boolean(onFork || onRewind || onForkAndRewind);
+  const hasSideActions = Boolean(hasCopyableContent || hasThreadActions);
   const hasFooterBadges = Boolean(model || permissionMode);
-  const hasSideMeta = Boolean(hasThreadActions || timestamp);
+  const hasSideMeta = Boolean(hasSideActions || timestamp);
   let sideMetaJustify = 'justify-start';
   if (timestamp) sideMetaJustify = 'justify-end';
-  if (timestamp && hasThreadActions) sideMetaJustify = 'justify-between';
+  if (timestamp && hasSideActions) sideMetaJustify = 'justify-between';
   const handleCardKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (!onClick || event.defaultPrevented) return;
@@ -466,10 +468,25 @@ export function UserMessageCard({
           data-testid="user-message-side-meta"
           className={cn('flex min-w-6 flex-col items-end self-stretch', sideMetaJustify)}
         >
-          {hasThreadActions && (
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
+          {hasSideActions && (
+            <div className="flex items-center gap-1">
+              {hasCopyableContent && (
+                <button
+                  type="button"
+                  data-testid={`user-message-copy-content-${props['data-testid'] ?? ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copyToClipboard(visibleContent);
+                    toast.success(t('common.copied', 'Copied'));
+                  }}
+                  className="bg-background/10 text-background/70 hover:bg-background/20 hover:text-background flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label={t('thread.copyContent', 'Copy content')}
+                >
+                  <Copy className="icon-xs" />
+                </button>
+              )}
+              {hasThreadActions && (
+                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
@@ -487,74 +504,62 @@ export function UserMessageCard({
                       <MoreVertical className="icon-xs" />
                     </button>
                   </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  {t('thread.threadActions', 'Thread actions')}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent
-                align="end"
-                className="w-64"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {hasCopyableContent && (
-                  <DropdownMenuItem
-                    data-testid={`user-message-copy-content-${props['data-testid'] ?? ''}`}
-                    onSelect={() => copyToClipboard(visibleContent)}
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-64"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Copy className="icon-xs" />
-                    {t('thread.copyContent', 'Copy content')}
-                  </DropdownMenuItem>
-                )}
-                {onFork && (
-                  <DropdownMenuItem
-                    data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
-                    disabled={forkDisabled}
-                    onSelect={() => onFork()}
-                  >
-                    <GitBranch className="icon-xs" />
-                    {t('thread.forkConversationFromHere', 'Fork conversation from here')}
-                  </DropdownMenuItem>
-                )}
-                {onRewind && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+                    {onFork && (
                       <DropdownMenuItem
-                        data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
-                        disabled={forkDisabled || rewindDisabled}
-                        onSelect={() => onRewind()}
+                        data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
+                        disabled={forkDisabled}
+                        onSelect={() => onFork()}
                       >
-                        <Undo2 className="icon-xs" />
-                        {t('thread.rewindCodeToHere', 'Rewind code to here')}
+                        <GitBranch className="icon-xs" />
+                        {t('thread.forkConversationFromHere', 'Fork conversation from here')}
                       </DropdownMenuItem>
-                    </TooltipTrigger>
-                    {rewindDisabled && rewindDisabledReason ? (
-                      <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
-                    ) : null}
-                  </Tooltip>
-                )}
-                {onForkAndRewind && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuItem
-                        data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
-                        disabled={forkDisabled || rewindDisabled}
-                        onSelect={() => onForkAndRewind()}
-                      >
-                        <RotateCcw className="icon-xs" />
-                        {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
-                      </DropdownMenuItem>
-                    </TooltipTrigger>
-                    {rewindDisabled && rewindDisabledReason ? (
-                      <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
-                    ) : null}
-                  </Tooltip>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    )}
+                    {onRewind && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuItem
+                            data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
+                            disabled={forkDisabled || rewindDisabled}
+                            onSelect={() => onRewind()}
+                          >
+                            <Undo2 className="icon-xs" />
+                            {t('thread.rewindCodeToHere', 'Rewind code to here')}
+                          </DropdownMenuItem>
+                        </TooltipTrigger>
+                        {rewindDisabled && rewindDisabledReason ? (
+                          <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    )}
+                    {onForkAndRewind && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuItem
+                            data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
+                            disabled={forkDisabled || rewindDisabled}
+                            onSelect={() => onForkAndRewind()}
+                          >
+                            <RotateCcw className="icon-xs" />
+                            {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
+                          </DropdownMenuItem>
+                        </TooltipTrigger>
+                        {rewindDisabled && rewindDisabledReason ? (
+                          <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           )}
           {timestamp && (
-            <span className="text-background/50 text-right text-[10px] leading-4 whitespace-nowrap">
+            <span className="thread-timestamp text-background/50 text-right">
               {timeAgo(timestamp, t)}
             </span>
           )}

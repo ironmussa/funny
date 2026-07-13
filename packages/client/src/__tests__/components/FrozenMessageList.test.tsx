@@ -148,7 +148,23 @@ describe('FrozenMessageList', () => {
       // as content scrolls under it.
       expect(row.className).toContain('bg-background');
       expect(row.style.transform).toBe('translateZ(0)');
+      // Each header must live inside its OWN section container so it is bounded
+      // by that section and scrolls out with it — otherwise sibling stickies
+      // pile up at top:0. The header is the section's first element child.
+      const section = row.closest('[data-frozen-section]');
+      expect(section).toBeTruthy();
+      expect(section!.firstElementChild).toBe(row);
     });
+  });
+
+  test('groups rows into per-section containers headed by each user message (§6.7)', () => {
+    const handleRef = createRef<MemoizedMessageListHandle>();
+    const { container } = render(<Harness handleRef={handleRef} />);
+    const sections = container.querySelectorAll('[data-frozen-section]');
+    const userRows = container.querySelectorAll('[data-section-msg-id]');
+    // One section per user message (the fixture starts with a user message, so
+    // there is no headerless leading section).
+    expect(sections.length).toBe(userRows.length);
   });
 
   test('exposes the message-list handle contract without throwing', () => {

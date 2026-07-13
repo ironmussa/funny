@@ -172,6 +172,80 @@ export const FrozenMessageList = memo(function FrozenMessageList({
 
   const frozenCtxValue = useMemo(() => ({ scrollRootRef: scrollRef }), [scrollRef]);
 
+  // Group rows into sections, each starting at a user message. The sticky
+  // header (§6.7) lives INSIDE its section container, so it is bounded by that
+  // section: when the section scrolls out the header goes with it and the next
+  // section's header takes the top. A flat list of sibling stickies instead
+  // piles every header at top:0 (they share one containing block) — the stacking
+  // bug. Rows before the first user message form a headerless leading section.
+  const sections = useMemo(() => {
+    const out: { key: string; rows: typeof virtualRows }[] = [];
+    let current: { key: string; rows: typeof virtualRows } | null = null;
+    for (const row of virtualRows) {
+      const isUserRow =
+        row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+      if (isUserRow || current === null) {
+        current = { key: row.key, rows: [row] };
+        out.push(current);
+      } else {
+        current.rows.push(row);
+      }
+    }
+    return out;
+  }, [virtualRows]);
+
+  const renderRow = (row: (typeof virtualRows)[number]) => {
+    const isUserRow =
+      row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+    const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
+    const rowStyle: CSSProperties = isUserRow
+      ? {
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          overflowAnchor: 'auto',
+          // Own paint layer: avoids a trailing ghost of the stuck header when
+          // neighboring content-visibility rows repaint during scroll.
+          transform: 'translateZ(0)',
+        }
+      : {
+          contentVisibility: 'auto',
+          containIntrinsicSize: `auto ${estimate}px`,
+          overflowAnchor: 'auto',
+        };
+    return (
+      <div
+        key={row.key}
+        data-virtual-row-key={row.key}
+        {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
+        // Opaque bg so content scrolling under the stuck header cannot bleed
+        // through the transparent padding around the card.
+        className={isUserRow ? 'bg-background' : undefined}
+        style={rowStyle}
+      >
+        <VirtualRowContent
+          row={row}
+          t={t}
+          threadId={threadId}
+          changeSummaryRunning={changeSummaryRunning}
+          onSessionReverted={onSessionReverted}
+          snapshotMap={snapshotMap}
+          isWaiting={isWaiting}
+          onSend={onSend}
+          onToolRespond={onToolRespond}
+          onOpenLightbox={onOpenLightbox}
+          onFork={onFork}
+          onRewind={onRewind}
+          onForkAndRewind={onForkAndRewind}
+          forkingMessageId={forkingMessageId}
+          rewindDisabled={rewindDisabled}
+          rewindDisabledReason={rewindDisabledReason}
+          scrollToUserMessagePosition={scrollToUserMessagePosition}
+        />
+      </div>
+    );
+  };
+
   return (
     <FrozenViewerContext.Provider value={frozenCtxValue}>
       <div
@@ -179,64 +253,15 @@ export const FrozenMessageList = memo(function FrozenMessageList({
         data-testid="frozen-message-list"
         style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
       >
-        {virtualRows.map((row) => {
-          const isUserRow =
-            row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
-          const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
-          // Sticky section header (§6.7): each user message pins to the top of
-          // the scroller while its section is in view; the next user message
-          // shoves it out natively — no per-frame JS, unlike the virtual list.
-          // content-visibility is dropped on sticky rows (small cards, and it
-          // interferes with sticky painting).
-          const rowStyle: CSSProperties = isUserRow
-            ? {
-                position: 'sticky',
-                top: 0,
-                zIndex: 20,
-                overflowAnchor: 'auto',
-                // Own paint layer: prevents a trailing ghost of the stuck header
-                // when neighboring content-visibility rows repaint during scroll.
-                // (transform on the sticky element itself does not break sticky.)
-                transform: 'translateZ(0)',
-              }
-            : {
-                contentVisibility: 'auto',
-                containIntrinsicSize: `auto ${estimate}px`,
-                overflowAnchor: 'auto',
-              };
-          return (
-            <div
-              key={row.key}
-              data-virtual-row-key={row.key}
-              {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
-              // Sticky user rows need an opaque background so scrolling content
-              // cannot bleed through the transparent padding around the card —
-              // otherwise the outgoing header ghosts behind the incoming one.
-              className={isUserRow ? 'bg-background' : undefined}
-              style={rowStyle}
-            >
-              <VirtualRowContent
-                row={row}
-                t={t}
-                threadId={threadId}
-                changeSummaryRunning={changeSummaryRunning}
-                onSessionReverted={onSessionReverted}
-                snapshotMap={snapshotMap}
-                isWaiting={isWaiting}
-                onSend={onSend}
-                onToolRespond={onToolRespond}
-                onOpenLightbox={onOpenLightbox}
-                onFork={onFork}
-                onRewind={onRewind}
-                onForkAndRewind={onForkAndRewind}
-                forkingMessageId={forkingMessageId}
-                rewindDisabled={rewindDisabled}
-                rewindDisabledReason={rewindDisabledReason}
-                scrollToUserMessagePosition={scrollToUserMessagePosition}
-              />
-            </div>
-          );
-        })}
+        {sections.map((section) => (
+          <div
+            key={section.key}
+            data-frozen-section=""
+            style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
+          >
+            {section.rows.map(renderRow)}
+          </div>
+        ))}
       </div>
     </FrozenViewerContext.Provider>
   );

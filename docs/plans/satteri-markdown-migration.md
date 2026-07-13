@@ -98,6 +98,49 @@ output mounting.
   browser, keep the frozen-viewer phases (5–7, they work with any HTML source —
   the current pipeline can pre-render to HTML too) and drop the parser swap.
 
+#### Phase 0 — findings (2026-07-12)
+
+Measured headlessly so far; the in-browser ops/sec + CDP profiling still need a
+run on a dev machine with a real browser (see "still pending" below).
+
+- **Long-thread fixture — DONE.** `packages/client/src/test-fixtures/long-thread-fixture.ts`
+  (`makeLongThread({ messageCount, seed, toolCallRatio })`) — deterministic
+  (seeded mulberry32), mixed markdown (short / code+raw-HTML probe / table+task
+  list / long prose) with interleaved tool calls, variable heights to stress
+  measurement. Reusable by tests, the benchmark, and the profiler. Covered by
+  `src/__tests__/lib/long-thread-fixture.test.ts`.
+- **`.wasm` ship cost (`@bruits/satteri-wasm32-wasi@0.9.5`):** 2,397,591 B raw
+  (~2.29 MB) → **721,534 B gzip (~705 KB)**. For comparison the current markdown
+  stack (`react-markdown` + `remark-gfm` + `rehype-raw` + `rehype-sanitize`) is
+  ~100–150 KB gzip. The WASM engine adds roughly **5× the transfer size** of the
+  markdown stack it replaces — the gate must weigh this against the parse win.
+- **Install/build gate (affects §2.1).** The WASM binding lives in the
+  `optionalDependencies` entry `@bruits/satteri-wasm32-wasi` gated to
+  `cpu: wasm32`. On a normal (x64/arm64) host `bun install` records it in the
+  lockfile but **does not extract its files**, so `satteri`'s `browser` export
+  condition (`#binding` → `dist/binding.browser.js` → `@bruits/satteri-wasm32-wasi`)
+  resolves to missing files and a Vite client build cannot bundle it as-is.
+  §2.1 must force-install the wasm target (e.g. a `trustedDependencies` /
+  explicit non-optional dep or a postinstall that fetches the tarball) and prove
+  `bun run build` emits the `.wasm` before the engine can ship. This is the
+  concrete form of the "`.wasm` asset missing in packaged builds" risk.
+- **Parse-speed expectation (not yet an in-browser number).** The prior spike
+  measured Sätteri **native** ~34× faster than the `react-markdown` path, but
+  that path also included React static render — apples-to-oranges, since Sätteri
+  only emits an HTML string that still needs sanitize + DOM insertion. NAPI-RS
+  WASM bindings typically run ~1.5–3× slower than native for CPU-bound work, so
+  WASM likely still beats `react-markdown` on raw parse — but the gate decision
+  needs the **end-to-end in-browser** number (compile → sanitize → DOM), not a
+  parse microbenchmark.
+
+**Still pending (needs a browser on a dev machine):**
+
+1. In-browser ops/sec for `react-markdown` vs Sätteri-WASM on the fixture corpus
+   (Vite-built harness + Playwright), including sanitize + DOM insertion.
+2. `scripts/profile-client.ts` baseline via CDP: JS heap, DOM nodes,
+   thread-switch time, scroll frame times on the 500-message fixture.
+3. Gate decision (§1.4) once (1) and (2) exist.
+
 ### Phase 1 — Safe render layer
 
 - [ ] Move `satteri` from root devDependencies into `packages/client`

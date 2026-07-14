@@ -5,7 +5,7 @@
  * @domain layer: domain
  */
 
-import type { WaitingReason } from '@funny/shared';
+import type { PendingPermissionRequest, WaitingReason } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -56,6 +56,9 @@ export class AgentStateTracker {
     string,
     { toolName: string; toolUseId: string; toolInput?: string }
   >();
+
+  /** Durable metadata corresponding to a live ACP continuation. */
+  readonly structuredPermissionRequests = new Map<string, PendingPermissionRequest>();
 
   /**
    * Threads whose current run hit a provider error (rate limit / API error)
@@ -121,6 +124,7 @@ export class AgentStateTracker {
     this.completedEmitted.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
+    this.structuredPermissionRequests.delete(threadId);
     this.providerErrorPending.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
   }
@@ -135,6 +139,7 @@ export class AgentStateTracker {
     this.cliToDbMsgId.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
+    this.structuredPermissionRequests.delete(threadId);
     this.providerErrorPending.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
     this.supportedSlashCommands.delete(threadId);

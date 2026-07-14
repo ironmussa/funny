@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     updateMessage: vi.fn(async () => undefined),
     findLastUnansweredInteractiveToolCall: vi.fn(async (): Promise<any> => undefined),
     updateToolCallOutput: vi.fn(async () => undefined),
+    resolvePendingPermissionRequest: vi.fn(async () => true),
     deleteComment: vi.fn(async () => undefined),
   },
   projects: {
@@ -43,6 +44,8 @@ vi.mock('../../services/agent-runner-control.js', () => ({
   stopAgent: vi.fn(async () => undefined),
   isAgentRunning: vi.fn(() => false),
   getSupportedSlashCommands: vi.fn((): any => undefined),
+  getPendingPermission: vi.fn((): any => undefined),
+  respondToPermission: vi.fn(async () => false),
 }));
 
 vi.mock('../../services/ingest-mapper.js', () => ({
@@ -80,6 +83,8 @@ import {
   stopAgent,
   isAgentRunning,
   getSupportedSlashCommands,
+  getPendingPermission,
+  respondToPermission,
 } from '../../services/agent-runner-control.js';
 import { cleanupExternalThread } from '../../services/ingest-mapper.js';
 import {
@@ -90,11 +95,116 @@ import {
   sendMessage,
   stopThread,
   approveToolCall,
+  respondPermissionRequest,
   cancelQueuedMessage,
   updateQueuedMessage,
   deleteComment,
 } from '../../services/thread-service/messaging.js';
 import { wsBroker } from '../../services/ws-broker.js';
+
+describe('respondPermissionRequest', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projects.getProject.mockResolvedValue({ path: '/projects/test' });
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-permission',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'waiting',
+      provider: 'codex',
+      worktreePath: null,
+    });
+  });
+
+  test('resumes the exact live request once without starting another agent', async () => {
+    vi.mocked(getPendingPermission).mockReturnValue({
+      toolName: 'Bash',
+      toolInput: 'git status',
+    });
+    vi.mocked(respondToPermission).mockResolvedValue(true);
+
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_once',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(respondToPermission).toHaveBeenCalledWith('t-permission', 'request-1', 'allow_once');
+    expect(mocks.tm.resolvePendingPermissionRequest).toHaveBeenCalledWith(
+      'request-1',
+      'allow_once',
+    );
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith('t-permission', { status: 'running' });
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('rejects a stale request before it can reach the live process', async () => {
+    vi.mocked(getPendingPermission).mockReturnValue(undefined);
+
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'stale-request',
+      decision: 'deny',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(409);
+    expect(respondToPermission).not.toHaveBeenCalled();
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('keeps a request actionable when always-allow rule persistence fails', async () => {
+    vi.mocked(getPendingPermission).mockReturnValue({
+      toolName: 'Bash',
+      toolInput: 'git status',
+    });
+    vi.mocked(createPermissionRule).mockResolvedValue(null as any);
+
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_always',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(503);
+    expect(respondToPermission).not.toHaveBeenCalled();
+    expect(mocks.tm.resolvePendingPermissionRequest).not.toHaveBeenCalled();
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('persists an always-allow rule before resuming the live request', async () => {
+    vi.mocked(getPendingPermission).mockReturnValue({
+      toolName: 'Bash',
+      toolInput: 'git status',
+    });
+    vi.mocked(createPermissionRule).mockResolvedValue({ id: 'rule-1' } as any);
+    vi.mocked(respondToPermission).mockResolvedValue(true);
+
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_always',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(createPermissionRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u-1',
+        projectPath: '/projects/test',
+        toolName: 'Bash',
+        decision: 'allow',
+      }),
+    );
+    expect(respondToPermission).toHaveBeenCalledWith('t-permission', 'request-1', 'allow_always');
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+});
 
 describe('sendMessage — slash-command guardrail', () => {
   beforeEach(() => {

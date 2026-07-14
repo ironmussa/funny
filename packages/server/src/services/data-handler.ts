@@ -18,6 +18,7 @@ import {
   createStageHistoryRepository,
   createWatcherRepository,
   createJobRepository,
+  createPendingPermissionRepository,
 } from '@funny/shared/repositories';
 import { and, eq } from 'drizzle-orm';
 
@@ -36,6 +37,53 @@ let _toolCallRepo: ReturnType<typeof createToolCallRepository> | null = null;
 let _threadRepo: ReturnType<typeof createThreadRepository> | null = null;
 let _watcherRepo: ReturnType<typeof createWatcherRepository> | null = null;
 let _jobRepo: ReturnType<typeof createJobRepository> | null = null;
+let _pendingPermissionRepo: ReturnType<typeof createPendingPermissionRepository> | null = null;
+
+function getPendingPermissionRepo() {
+  if (!_pendingPermissionRepo) {
+    _pendingPermissionRepo = createPendingPermissionRepository({
+      db,
+      schema: schema as any,
+      dbAll,
+      dbGet,
+      dbRun,
+    });
+  }
+  return _pendingPermissionRepo;
+}
+
+/**
+ * A disconnected runner loses every in-memory ACP continuation. Expire those
+ * durable records before reporting the runner offline so an old card can
+ * never be submitted after reconnect.
+ */
+export async function expirePendingPermissionRequestsForRunner(
+  runnerId: string,
+): Promise<Array<{ requestId: string; threadId: string; userId: string }>> {
+  const expired = await getPendingPermissionRepo().expireForRunner(runnerId);
+  for (const request of expired) {
+    await getThreadRepo().updateThread(request.threadId, {
+      status: 'waiting',
+      contextRecoveryReason: 'permission-request-expired',
+    });
+    const event = {
+      type: 'agent:status',
+      threadId: request.threadId,
+      data: {
+        status: 'waiting',
+        waitingReason: 'provider_error',
+        permissionRecoveryReason: 'runner_lost',
+        permissionApprovalCapability: {
+          kind: 'unavailable',
+          reason: 'codex-sdk-no-interactive-approval',
+        },
+      },
+    };
+    relayToUser(request.userId, event);
+    relayToThreadStream(request.threadId, event);
+  }
+  return expired;
+}
 
 function getWatcherRepo() {
   if (!_watcherRepo) {
@@ -473,6 +521,21 @@ export async function handleDataMessageWithAck(
         await threadRepo.updateThread(data.payload.threadId, data.payload.updates);
         notifyTerminalStatusPersisted(runnerUserId, data.payload.threadId, data.payload.updates);
         return { type: 'data:update_thread_response', ok: true };
+      }
+      case 'data:create_pending_permission_request': {
+        await getPendingPermissionRepo().create(data.payload);
+        return { type: 'data:ack', success: true };
+      }
+      case 'data:resolve_pending_permission_request': {
+        const resolved = await getPendingPermissionRepo().resolve(
+          data.payload.requestId,
+          data.payload.decision,
+        );
+        return { type: 'data:ack', success: resolved };
+      }
+      case 'data:expire_pending_permission_request': {
+        await getPendingPermissionRepo().expire(data.payload.requestId);
+        return { type: 'data:ack', success: true };
       }
       case 'data:update_message': {
         const messageRepo = getMessageRepo();

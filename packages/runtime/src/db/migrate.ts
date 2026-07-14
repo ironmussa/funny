@@ -993,6 +993,44 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Provider-native permission continuations are live only in the runner,
+    // but this metadata lets reloads and stale clicks be handled safely.
+    name: '063_pending_permission_requests',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS pending_permission_requests (
+          request_id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          run_id TEXT NOT NULL,
+          transport TEXT NOT NULL,
+          tool_call_id TEXT NOT NULL,
+          tool_name TEXT NOT NULL,
+          tool_input TEXT,
+          can_always_allow INTEGER NOT NULL DEFAULT 0,
+          can_deny INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'active',
+          resolved_decision TEXT,
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          expired_at TEXT
+        )
+      `);
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_pending_permission_requests_active_thread
+        ON pending_permission_requests (thread_id, status)
+      `);
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_pending_permission_requests_run
+        ON pending_permission_requests (thread_id, run_id, status)
+      `);
+      await exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS pending_permission_requests_one_active_per_run
+        ON pending_permission_requests (thread_id, run_id)
+        WHERE status = 'active'
+      `);
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

@@ -111,6 +111,7 @@ export class AgentEventRouter {
     this.orchestrator.on('agent:stopped', (threadId: string) => {
       void (async () => {
         log.info('Agent stopped', { namespace: 'agent', threadId });
+        await this.expireStructuredPermission(threadId);
         // Drain debounced update_message buffers so a user-initiated stop
         // doesn't drop the last 100ms of streamed text from the DB.
         flushPendingMessageUpdates();
@@ -229,6 +230,7 @@ export class AgentEventRouter {
 
   private async handleAgentFailure(threadId: string, errorMessage: string): Promise<void> {
     log.error('Agent failure', { namespace: 'agent', threadId, error: errorMessage });
+    const lostPermissionContinuation = await this.expireStructuredPermission(threadId);
     // Flush debounced update_message buffers so partial assistant text
     // emitted before the failure still lands in the DB.
     flushPendingMessageUpdates();
@@ -236,20 +238,39 @@ export class AgentEventRouter {
     const thread = await this.threadManager.getThread(threadId);
     const userId = thread?.userId;
     const currentStatus = thread?.status ?? 'running';
-    const { status } = transitionStatus(
+    const { status: failedStatus } = transitionStatus(
       threadId,
       { type: 'FAIL', error: errorMessage },
       currentStatus as ThreadStatus,
     );
+    // A process that exits while waiting for an ACP response has lost its
+    // in-memory continuation. Keep that distinct from an ordinary failure so
+    // the client offers recovery, never the generic Continue affordance that
+    // could be mistaken for approving the expired action.
+    const status = lostPermissionContinuation ? 'waiting' : failedStatus;
     await this.threadManager.updateThread(threadId, {
       status,
       completedAt: new Date().toISOString(),
+      // This is durable so a reload tells the user why the former approval
+      // card disappeared rather than reconstructing it from historic tools.
+      contextRecoveryReason: lostPermissionContinuation ? 'permission-request-expired' : null,
     });
     this.emitWSToUser(threadId, userId, 'agent:error', { error: errorMessage });
-    this.emitWSToUser(threadId, userId, 'agent:status', { status });
+    this.emitWSToUser(threadId, userId, 'agent:status', {
+      status,
+      ...(lostPermissionContinuation ? { permissionRecoveryReason: 'runner_lost' as const } : {}),
+    });
     if (thread) {
       await this.emitAgentCompleted(threadId, thread, status as 'completed' | 'failed' | 'stopped');
     }
+  }
+
+  private async expireStructuredPermission(threadId: string): Promise<boolean> {
+    const pending = this.state.structuredPermissionRequests.get(threadId);
+    if (!pending) return false;
+    this.state.structuredPermissionRequests.delete(threadId);
+    await this.threadManager.expirePendingPermissionRequest?.(pending.requestId);
+    return true;
   }
 
   // ── Queue management ───────────────────────────────────────────

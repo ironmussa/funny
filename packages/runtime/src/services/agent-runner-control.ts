@@ -1,4 +1,5 @@
 import type { ActiveAgentSnapshot } from '@funny/core/agents';
+import type { PermissionDecision } from '@funny/core/agents';
 import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
 
 type StartAgent = (
@@ -26,6 +27,15 @@ export interface AgentRunnerControl {
   extractActiveAgentSnapshot: () => ActiveAgentSnapshot;
   extractActiveAgents: () => Map<string, unknown>;
   getSupportedSlashCommands: (threadId: string) => Set<string> | undefined;
+  respondToPermission: (
+    threadId: string,
+    requestId: string,
+    decision: PermissionDecision,
+  ) => Promise<boolean>;
+  getPendingPermission: (
+    threadId: string,
+    requestId: string,
+  ) => { toolName: string; toolInput?: string } | undefined;
 }
 
 let control: AgentRunnerControl | undefined;
@@ -69,4 +79,19 @@ export function extractActiveAgentSnapshot(): ActiveAgentSnapshot {
 
 export function getSupportedSlashCommands(threadId: string): Set<string> | undefined {
   return currentControl().getSupportedSlashCommands(threadId);
+}
+
+export function respondToPermission(
+  threadId: string,
+  requestId: string,
+  decision: PermissionDecision,
+): Promise<boolean> {
+  return currentControl().respondToPermission(threadId, requestId, decision);
+}
+
+export function getPendingPermission(
+  threadId: string,
+  requestId: string,
+): { toolName: string; toolInput?: string } | undefined {
+  return currentControl().getPendingPermission(threadId, requestId);
 }

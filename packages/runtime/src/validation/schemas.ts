@@ -590,6 +590,11 @@ export const approveToolSchema = z.object({
   toolInput: z.string().optional(),
 });
 
+export const respondPermissionRequestSchema = z.object({
+  requestId: z.string().uuid('requestId must be a UUID'),
+  decision: z.enum(['allow_once', 'allow_always', 'deny']),
+});
+
 // ── Helper ───────────────────────────────────────────────────────
 
 /** Validate request body; returns Result<T, DomainError> */

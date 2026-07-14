@@ -28,6 +28,21 @@ export function createRemoteThreadManager(): IThreadManager {
       return remoteUpdateThread(id, updates);
     },
 
+    async createPendingPermissionRequest(request) {
+      const { remoteCreatePendingPermissionRequest } = await import('./team-client.js');
+      return remoteCreatePendingPermissionRequest(request);
+    },
+
+    async resolvePendingPermissionRequest(requestId, decision) {
+      const { remoteResolvePendingPermissionRequest } = await import('./team-client.js');
+      return remoteResolvePendingPermissionRequest(requestId, decision);
+    },
+
+    async expirePendingPermissionRequest(requestId) {
+      const { remoteExpirePendingPermissionRequest } = await import('./team-client.js');
+      return remoteExpirePendingPermissionRequest(requestId);
+    },
+
     async getThreadWithMessages(
       id: string,
       messageLimit?: number,

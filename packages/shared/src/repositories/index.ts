@@ -6,6 +6,11 @@
  */
 
 export { createMessageRepository, type MessageRepositoryDeps } from './message-repository.js';
+export {
+  createPendingPermissionRepository,
+  type PendingPermissionRepositoryDeps,
+  type CreatePendingPermissionRequest,
+} from './pending-permission-repository.js';
 export { createToolCallRepository, type ToolCallRepositoryDeps } from './tool-call-repository.js';
 export { createThreadRepository, type ThreadRepositoryDeps } from './thread-repository.js';
 export { createCommentRepository, type CommentRepositoryDeps } from './comment-repository.js';

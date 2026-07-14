@@ -34,6 +34,8 @@ import {
   stopAgent,
   isAgentRunning,
   getSupportedSlashCommands,
+  getPendingPermission,
+  respondToPermission,
 } from '../agent-runner-control.js';
 import { cleanupExternalThread } from '../ingest-mapper.js';
 import { listPermissionRules } from '../permission-rules-client.js';
@@ -529,6 +531,13 @@ export interface ApproveToolParams {
   toolInput?: string;
 }
 
+export interface RespondPermissionRequestParams {
+  threadId: string;
+  userId: string;
+  requestId: string;
+  decision: import('@funny/shared').PermissionDecision;
+}
+
 /** Heuristic: derive a Bash command prefix to use as a permission pattern. */
 function deriveBashPrefix(toolInput: string | undefined): string | null {
   if (!toolInput) return null;
@@ -644,6 +653,85 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
       threadProvider,
     );
   }
+}
+
+/**
+ * Answer a provider-native request in the process that created it. This path
+ * intentionally never calls startAgent: doing so would turn a per-tool choice
+ * into a new natural-language prompt and could approve the wrong operation.
+ */
+export function respondPermissionRequest(
+  params: RespondPermissionRequestParams,
+): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(respondPermissionRequestImpl(params), toThreadServiceError);
+}
+
+async function respondPermissionRequestImpl(params: RespondPermissionRequestParams): Promise<void> {
+  const thread = await tm.getThread(params.threadId);
+  if (!thread) throw new ThreadServiceError('Thread not found', 404);
+  if (thread.userId !== params.userId) throw new ThreadServiceError('Access denied', 403);
+
+  // The process lookup binds this decision to the current live request id and
+  // supplies the only input that may be used to create an always-allow rule.
+  const pending = getPendingPermission(params.threadId, params.requestId);
+  if (!pending) throw new ThreadServiceError('This permission request is no longer active.', 409);
+
+  if (params.decision === 'allow_always') {
+    const project = thread.projectId
+      ? await getServices().projects.getProject(thread.projectId)
+      : null;
+    const cwdResult = resolveThreadCwd(
+      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
+      project ? { path: project.path } : null,
+    );
+    if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
+    const pattern = pending.toolName === 'Bash' ? deriveBashPrefix(pending.toolInput) : null;
+    const { createPermissionRule } = await import('../permission-rules-client.js');
+    const rule = await createPermissionRule({
+      userId: params.userId,
+      projectPath: thread.worktreePath ?? cwdResult.value,
+      toolName: pending.toolName,
+      pattern,
+      decision: 'allow',
+    });
+    // The continuation is deliberately left live when persistence fails so
+    // the card can offer a truthful one-time approval instead.
+    if (!rule) {
+      throw new ThreadServiceError(
+        'Permanent approval could not be saved. You can still allow this action once.',
+        503,
+      );
+    }
+  }
+
+  const accepted = await respondToPermission(params.threadId, params.requestId, params.decision);
+  if (!accepted) throw new ThreadServiceError('This permission request is no longer active.', 409);
+
+  const persisted = await tm.resolvePendingPermissionRequest?.(params.requestId, params.decision);
+  // The process accepts a request only once. Storage follows immediately so
+  // reloads cannot revive the just-resolved card. A failed durable transition
+  // is logged because the provider has already resumed and cannot be rolled
+  // back safely.
+  if (persisted === false) {
+    log.warn('Structured permission resolved live but was already stale in storage', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      requestId: params.requestId,
+    });
+  }
+
+  // The provider is resuming the same live turn. Clear the actionable card
+  // immediately instead of leaving the thread visibly waiting until its next
+  // tool/result event arrives.
+  await tm.updateThread(params.threadId, { status: 'running' });
+  wsBroker.emitToUser(params.userId, {
+    type: 'agent:status',
+    threadId: params.threadId,
+    data: {
+      status: 'running',
+      permissionApprovalCapability: { kind: 'structured', transport: 'codex-acp' },
+    },
+  });
 }
 
 // ── Queue Operations ────────────────────────────────────────────

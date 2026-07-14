@@ -418,3 +418,126 @@ describe('available_commands_update capture', () => {
     expect(changed.sessionId).toBe('sess-9');
   });
 });
+
+describe('CodexACPProcess structured permission continuation', () => {
+  type Internal = {
+    handleRequestPermission: (params: unknown) => Promise<unknown>;
+  };
+
+  const request = (toolCallId: string, options: Array<{ optionId: string; kind: string }>) => ({
+    options,
+    toolCall: {
+      toolCallId,
+      kind: 'execute',
+      title: 'git status',
+      rawInput: { command: 'git status' },
+    },
+  });
+
+  async function pendingRequest(proc: CodexACPProcess, messages: CLIMessage): Promise<string> {
+    await Promise.resolve();
+    const message = messages.find((m) => m.type === 'permission_request');
+    expect(message).toBeDefined();
+    if (!message || message.type !== 'permission_request') throw new Error('unreachable');
+    return message.requestId;
+  }
+
+  test('emits a structured request and selects allow once on the same live request', async () => {
+    const { proc, messages } = makeProcess();
+    const response = (proc as unknown as Internal).handleRequestPermission(
+      request('tool-1', [
+        { optionId: 'allow-once', kind: 'allow_once' },
+        { optionId: 'allow-always', kind: 'allow_always' },
+        { optionId: 'reject', kind: 'reject_once' },
+      ]),
+    );
+
+    const requestId = await pendingRequest(proc, messages);
+    const event = messages.find((m) => m.type === 'permission_request');
+    expect(event).toMatchObject({
+      toolCallId: 'tool-1',
+      toolName: 'Bash',
+      toolInput: 'git status',
+      canAlwaysAllow: true,
+      canDeny: true,
+      transport: 'codex-acp',
+    });
+    await expect(proc.respondToPermission(requestId, 'allow_once')).resolves.toBe(true);
+    await expect(response).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'allow-once' },
+    });
+  });
+
+  test('selects the exact always and deny options, while unsupported decisions remain pending', async () => {
+    const { proc, messages } = makeProcess();
+    const alwaysResponse = (proc as unknown as Internal).handleRequestPermission(
+      request('tool-always', [
+        { optionId: 'once', kind: 'allow_once' },
+        { optionId: 'always', kind: 'allow_always' },
+      ]),
+    );
+    const alwaysId = await pendingRequest(proc, messages);
+    await expect(proc.respondToPermission(alwaysId, 'deny')).resolves.toBe(false);
+    await expect(proc.respondToPermission(alwaysId, 'allow_always')).resolves.toBe(true);
+    await expect(alwaysResponse).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'always' },
+    });
+
+    const denyResponse = (proc as unknown as Internal).handleRequestPermission(
+      request('tool-deny', [
+        { optionId: 'once-2', kind: 'allow_once' },
+        { optionId: 'deny-2', kind: 'reject_always' },
+      ]),
+    );
+    const denyId = await pendingRequest(proc, messages.slice(2));
+    await expect(proc.respondToPermission(denyId, 'deny')).resolves.toBe(true);
+    await expect(denyResponse).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'deny-2' },
+    });
+  });
+
+  test('keeps sequential requests isolated and rejects stale request ids', async () => {
+    const { proc, messages } = makeProcess();
+    const first = (proc as unknown as Internal).handleRequestPermission(
+      request('first', [{ optionId: 'first-allow', kind: 'allow_once' }]),
+    );
+    const firstId = await pendingRequest(proc, messages);
+    await expect(proc.respondToPermission(firstId, 'allow_once')).resolves.toBe(true);
+    await expect(first).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'first-allow' },
+    });
+
+    const second = (proc as unknown as Internal).handleRequestPermission(
+      request('second', [{ optionId: 'second-allow', kind: 'allow_once' }]),
+    );
+    const secondId = await pendingRequest(proc, messages.slice(2));
+    expect(secondId).not.toBe(firstId);
+    await expect(proc.respondToPermission(firstId, 'allow_once')).resolves.toBe(false);
+    await expect(proc.respondToPermission(secondId, 'allow_once')).resolves.toBe(true);
+    await expect(second).resolves.toEqual({
+      outcome: { outcome: 'selected', optionId: 'second-allow' },
+    });
+  });
+
+  test('cancels every live request when the process exits', async () => {
+    const { proc, messages } = makeProcess();
+    const response = (proc as unknown as Internal).handleRequestPermission(
+      request('tool-exit', [{ optionId: 'once', kind: 'allow_once' }]),
+    );
+    await pendingRequest(proc, messages);
+    await proc.kill();
+    await expect(response).resolves.toEqual({ outcome: { outcome: 'cancelled' } });
+  });
+
+  test('cancels a live request when an unexpected child exit aborts the process', async () => {
+    const { proc, messages } = makeProcess();
+    const response = (proc as unknown as Internal).handleRequestPermission(
+      request('tool-child-exit', [{ optionId: 'once', kind: 'allow_once' }]),
+    );
+    await pendingRequest(proc, messages);
+
+    (proc as unknown as { abortController: AbortController }).abortController.abort();
+
+    await expect(response).resolves.toEqual({ outcome: { outcome: 'cancelled' } });
+  });
+});

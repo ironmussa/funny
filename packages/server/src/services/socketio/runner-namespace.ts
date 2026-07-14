@@ -137,6 +137,17 @@ export function setupRunnerNamespace(): void {
         const rm = await import('../runner-manager.js');
         rm.markRunnerOffline(runnerId).catch(() => {});
 
+        try {
+          const { expirePendingPermissionRequestsForRunner } = await import('../data-handler.js');
+          await expirePendingPermissionRequestsForRunner(runnerId);
+        } catch (error) {
+          log.error('Failed to expire pending permissions for offline runner', {
+            namespace: 'socketio',
+            runnerId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+
         const resolverInner = await import('../runner-resolver.js');
         resolverInner.evictRunnerFromCache(runnerId);
       }, OFFLINE_GRACE_MS);

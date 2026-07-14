@@ -254,6 +254,48 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
+  // ── PATCH /api/threads/:id/permission-mode ────────────
+
+  describe('PATCH /api/threads/:id/permission-mode', () => {
+    test('persists the mode and relays the update to the owner', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't1',
+        projectId: 'p1',
+        userId: 'user-1',
+        permissionMode: 'ask',
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/permission-mode', {
+        permissionMode: 'plan',
+      });
+
+      expect(res.status).toBe(200);
+      expect((await res.json()).permissionMode).toBe('plan');
+      const reloaded = await t.requestAs('user-1').get('/api/threads/t1');
+      expect((await reloaded.json()).permissionMode).toBe('plan');
+      expect(relayCalls).toContainEqual({
+        userId: 'user-1',
+        event: {
+          type: 'thread:updated',
+          threadId: 't1',
+          data: { permissionMode: 'plan' },
+        },
+      });
+    });
+
+    test('rejects an unknown permission mode', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/permission-mode', {
+        permissionMode: 'unsafe',
+      });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
   // ── PATCH /api/threads/:id/status ──────────────────────
 
   describe('PATCH /api/threads/:id/status', () => {

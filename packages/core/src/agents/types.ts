@@ -101,6 +101,25 @@ export interface CLIRateLimitMessage {
   sessionId: string;
 }
 
+/** Exact decision supported by a live, structured provider permission request. */
+export type PermissionDecision = 'allow_once' | 'allow_always' | 'deny';
+
+/**
+ * A provider emitted a live permission request that can be answered on the
+ * current process. Unlike inferred tool failures, this carries an opaque id
+ * that binds a decision to one specific provider request.
+ */
+export interface CLIPermissionRequestMessage {
+  type: 'permission_request';
+  requestId: string;
+  toolCallId: string;
+  toolName: string;
+  toolInput?: string;
+  canAlwaysAllow: boolean;
+  canDeny: boolean;
+  transport: 'codex-acp';
+}
+
 export type CLIMessage =
   | CLISystemMessage
   | CLICommandsChangedMessage
@@ -108,7 +127,8 @@ export type CLIMessage =
   | CLIUserMessage
   | CLIResultMessage
   | CLICompactBoundaryMessage
-  | CLIRateLimitMessage;
+  | CLIRateLimitMessage
+  | CLIPermissionRequestMessage;
 
 // ── Process Options ────────────────────────────────────────────────
 

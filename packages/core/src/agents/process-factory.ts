@@ -9,11 +9,13 @@
  *   2. Call `registerProvider('name', MyProcess)` before creating agents
  */
 
+import type { AgentProvider, PermissionApprovalCapability } from '@funny/shared';
 import {
   GATEABLE_ACP_PROVIDER_IDS,
   type GateableAcpProvider,
 } from '@funny/shared/provider-manifests';
 
+import { CodexACPProcess } from './codex-acp.js';
 import { CodexSDKProcess } from './codex-sdk.js';
 import { CursorACPProcess } from './cursor-acp.js';
 import { DeepAgentProcess } from './deepagent-process.js';
@@ -76,6 +78,33 @@ function buildProviderRegistry(): Map<string, ProcessConstructor> {
 
 const providerRegistry = buildProviderRegistry();
 
+export type CodexTransport = 'sdk' | 'acp';
+
+/**
+ * Codex ACP is deliberately opt-in while its live approval path rolls out.
+ * Fail fast on invalid configuration instead of silently changing transport
+ * semantics back to the SDK.
+ */
+export function resolveCodexTransport(raw = process.env.FUNNY_CODEX_TRANSPORT): CodexTransport {
+  if (raw === undefined || raw.trim() === '') return 'sdk';
+  if (raw === 'sdk' || raw === 'acp') return raw;
+  throw new Error(`Invalid FUNNY_CODEX_TRANSPORT=${JSON.stringify(raw)}. Expected "sdk" or "acp".`);
+}
+
+/**
+ * Capability advertised by the effective process factory. The runtime sends
+ * this with status data so the client never presents an approval control that
+ * the selected Codex transport cannot resume.
+ */
+export function resolvePermissionApprovalCapability(
+  provider: AgentProvider,
+): PermissionApprovalCapability | undefined {
+  if (provider !== 'codex') return undefined;
+  return resolveCodexTransport() === 'acp'
+    ? { kind: 'structured', transport: 'codex-acp' }
+    : { kind: 'unavailable', reason: 'codex-sdk-no-interactive-approval' };
+}
+
 /** Register a new provider process class at runtime. */
 export function registerProvider(name: string, ctor: ProcessConstructor): void {
   providerRegistry.set(name, ctor);
@@ -114,6 +143,9 @@ export function disableBuiltinProvider(id: string): boolean {
 
 export const defaultProcessFactory: IAgentProcessFactory = {
   create(opts: AgentProcessOptions): IAgentProcess {
+    if (opts.provider === 'codex' && resolveCodexTransport() === 'acp') {
+      return new CodexACPProcess(opts);
+    }
     const Ctor = providerRegistry.get(opts.provider ?? 'claude') ?? SDKClaudeProcess;
     return new Ctor(opts);
   },

@@ -11,7 +11,12 @@
  * to know about projects upfront.
  */
 
-import type { AgentModel, AgentProvider, PermissionMode } from './types.js';
+import type {
+  AgentModel,
+  AgentProvider,
+  PendingPermissionRequest,
+  PermissionMode,
+} from './types.js';
 
 // ─── Tunnel Limits ──────────────────────────────────────
 
@@ -398,6 +403,9 @@ export type RunnerDataMessage =
   | DataUpdateMessage
   | DataUpdateToolCallOutput
   | DataSaveThreadEvent
+  | DataCreatePendingPermissionRequest
+  | DataResolvePendingPermissionRequest
+  | DataExpirePendingPermissionRequest
   | DataInsertComment
   | DataDeleteMessagesAfter;
 
@@ -466,6 +474,25 @@ export interface DataSaveThreadEvent {
     eventType: string;
     data: Record<string, unknown>;
   };
+}
+
+/** Runner → Server: persist sanitized metadata for a live ACP permission request. */
+export interface DataCreatePendingPermissionRequest {
+  type: 'data:create_pending_permission_request';
+  requestId: string;
+  payload: PendingPermissionRequest;
+}
+
+export interface DataResolvePendingPermissionRequest {
+  type: 'data:resolve_pending_permission_request';
+  requestId: string;
+  payload: { requestId: string; decision: import('./types.js').PermissionDecision };
+}
+
+export interface DataExpirePendingPermissionRequest {
+  type: 'data:expire_pending_permission_request';
+  requestId: string;
+  payload: { requestId: string };
 }
 
 /** Runner → Server: delete every message after the anchor in a thread */

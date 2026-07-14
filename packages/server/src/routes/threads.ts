@@ -20,6 +20,7 @@ import {
   createStageHistoryRepository,
   createToolCallRepository,
   createThreadShareRepository,
+  createPendingPermissionRepository,
 } from '@funny/shared/repositories';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
@@ -69,6 +70,8 @@ const THREAD_STAGE_VALUES = [
   'archived',
 ] as const;
 
+const PERMISSION_MODE_VALUES = ['plan', 'auto', 'autoEdit', 'confirmEdit', 'ask'] as const;
+
 const contentBodySchema = z
   .object({
     content: z.unknown().optional(),
@@ -83,6 +86,10 @@ const threadValueBodySchema = z
     reason: z.unknown().optional(),
   })
   .passthrough();
+
+const threadPermissionModeBodySchema = z.object({
+  permissionMode: z.enum(PERMISSION_MODE_VALUES),
+});
 
 const threadWorkflowEventBodySchema = z
   .object({
@@ -132,6 +139,13 @@ const threadRepo = createThreadRepository({
 const messageRepo = createMessageRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
 const toolCallRepo = createToolCallRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
 const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
+const pendingPermissionRepo = createPendingPermissionRepository({
+  db,
+  schema: schema as any,
+  dbAll,
+  dbGet,
+  dbRun,
+});
 
 // Centralized per-thread authorization (see middleware/thread-access.ts).
 // `requireThreadView` guards read routes (owner OR active share grant);
@@ -372,12 +386,13 @@ threadRoutes.get('/:id', async (c) => {
       parentSpanId: span.spanId,
       attributes: { 'thread.id': id },
     });
-    const [result, queuedCount, queuedNext] = await Promise.all([
+    const [result, queuedCount, queuedNext, pendingPermissionRequest] = await Promise.all([
       messageRepo
         .getThreadWithMessages(id, messageLimit, { messageProgress, messageAnchorId })
         .finally(() => fetchSpan.end('ok')),
       messageQueueRepo.queueCount(id).finally(() => queueCountSpan.end('ok')),
       messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
+      pendingPermissionRepo.getActive(id),
     ]);
 
     if (!result || !(await authorizer.authorize(userId, 'thread', result.id, 'view'))) {
@@ -398,6 +413,21 @@ threadRoutes.get('/:id', async (c) => {
       ...result,
       queuedCount,
       queuedNextMessage: queuedNext?.content,
+      ...(pendingPermissionRequest ? { pendingPermissionRequest } : {}),
+      // Only an active durable request can prove an ACP continuation still
+      // exists after a reload. In every other Codex state we conservatively
+      // expose the SDK-style unavailable capability so the client never
+      // reconstructs a fake approval card from historic tool output.
+      ...(result.provider === 'codex'
+        ? {
+            permissionApprovalCapability: pendingPermissionRequest
+              ? { kind: 'structured' as const, transport: 'codex-acp' as const }
+              : {
+                  kind: 'unavailable' as const,
+                  reason: 'codex-sdk-no-interactive-approval' as const,
+                },
+          }
+        : {}),
       viewerShareLevel,
     });
   } catch (e) {
@@ -607,6 +637,26 @@ threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
       toStage: transitionTo,
     });
   }
+
+  const updated = await threadRepo.getThread(id);
+  return c.json(updated);
+});
+
+// Persist the composer selection independently of sending a prompt. A
+// currently-running agent keeps the policy with which it started; this value
+// applies when it next starts or resumes.
+threadRoutes.patch('/:id/permission-mode', requireThreadOwner, async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const parsed = await parseJsonBody(c, threadPermissionModeBodySchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+
+  await threadRepo.updateThread(id, { permissionMode: parsed.value.permissionMode });
+  relayToUser(userId, {
+    type: 'thread:updated',
+    threadId: id,
+    data: { permissionMode: parsed.value.permissionMode },
+  });
 
   const updated = await threadRepo.getThread(id);
   return c.json(updated);
@@ -917,6 +967,11 @@ threadRoutes.post('/:id/stop', requireThreadOwner, proxyToRunner);
 // POST /api/threads/:id/approve-tool — approve a tool call. Owner-only:
 // authorizes command execution on the owner's machine. Never steer.
 threadRoutes.post('/:id/approve-tool', requireThreadOwner, proxyToRunner);
+
+// POST /api/threads/:id/permission-requests/:requestId/respond — resolve one
+// live ACP continuation. Owner-only because it authorizes execution on the
+// runner and must never be available to a steering sharee.
+threadRoutes.post('/:id/permission-requests/:requestId/respond', requireThreadOwner, proxyToRunner);
 
 // POST /api/threads/:id/convert-to-worktree — convert local thread to worktree.
 // Owner-only git operation.

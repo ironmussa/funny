@@ -26,6 +26,21 @@ export const getThreadBySessionId = (sessionId: string) =>
 export const createThread = (data: Record<string, any>) => getServices().threads.createThread(data);
 export const updateThread = (id: string, updates: Record<string, any>) =>
   getServices().threads.updateThread(id, updates);
+export const createPendingPermissionRequest = (
+  ...args: Parameters<
+    NonNullable<ReturnType<typeof getServices>['threads']['createPendingPermissionRequest']>
+  >
+) => getServices().threads.createPendingPermissionRequest?.(...args);
+export const resolvePendingPermissionRequest = (
+  ...args: Parameters<
+    NonNullable<ReturnType<typeof getServices>['threads']['resolvePendingPermissionRequest']>
+  >
+) => getServices().threads.resolvePendingPermissionRequest?.(...args);
+export const expirePendingPermissionRequest = (
+  ...args: Parameters<
+    NonNullable<ReturnType<typeof getServices>['threads']['expirePendingPermissionRequest']>
+  >
+) => getServices().threads.expirePendingPermissionRequest?.(...args);
 export const deleteThread = (id: string) => getServices().threads.deleteThread(id);
 export const markStaleThreadsInterrupted = () =>
   getServices().threads.markStaleThreadsInterrupted();

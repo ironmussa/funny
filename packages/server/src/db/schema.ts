@@ -30,6 +30,7 @@ export {
   threadEvents,
   instanceSettings,
   permissionRules,
+  pendingPermissionRequests,
   agentExecutionProfiles,
   projectAgentProfileBindings,
   // Server-only tables

@@ -152,6 +152,23 @@ export class AgentRunner {
   getSupportedSlashCommands(threadId: string): Set<string> | undefined {
     return this.state.supportedSlashCommands.get(threadId);
   }
+
+  async respondToPermission(
+    threadId: string,
+    requestId: string,
+    decision: import('@funny/core/agents').PermissionDecision,
+  ): Promise<boolean> {
+    const accepted = await this.lifecycle.respondToPermission(threadId, requestId, decision);
+    if (accepted) this.state.structuredPermissionRequests.delete(threadId);
+    return accepted;
+  }
+
+  getPendingPermission(
+    threadId: string,
+    requestId: string,
+  ): { toolName: string; toolInput?: string } | undefined {
+    return this.lifecycle.getPendingPermission(threadId, requestId);
+  }
 }
 
 // ── Default singleton (backward-compatible exports) ─────────────
@@ -177,6 +194,8 @@ registerAgentRunnerControl({
   extractActiveAgentSnapshot: defaultRunner.extractActiveAgentSnapshot.bind(defaultRunner),
   extractActiveAgents: defaultRunner.extractActiveAgents.bind(defaultRunner),
   getSupportedSlashCommands: defaultRunner.getSupportedSlashCommands.bind(defaultRunner),
+  respondToPermission: defaultRunner.respondToPermission.bind(defaultRunner),
+  getPendingPermission: defaultRunner.getPendingPermission.bind(defaultRunner),
 });
 
 export {

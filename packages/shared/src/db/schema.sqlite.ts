@@ -5,7 +5,16 @@
  * Both packages/runtime and packages/server import from here.
  */
 
-import { sqliteTable, text, real, integer, primaryKey, customType } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import {
+  sqliteTable,
+  text,
+  real,
+  integer,
+  primaryKey,
+  customType,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 /**
  * Text column that also accepts Date objects (serializes them to ISO strings).
@@ -159,6 +168,34 @@ export const toolCalls = sqliteTable('tool_calls', {
   author: text('author'),
   parentToolCallId: text('parent_tool_call_id'),
 });
+
+/** Durable metadata for one provider-native permission continuation. */
+export const pendingPermissionRequests = sqliteTable(
+  'pending_permission_requests',
+  {
+    requestId: text('request_id').primaryKey(),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    runId: text('run_id').notNull(),
+    transport: text('transport').notNull(),
+    toolCallId: text('tool_call_id').notNull(),
+    toolName: text('tool_name').notNull(),
+    toolInput: text('tool_input'),
+    canAlwaysAllow: integer('can_always_allow').notNull().default(0),
+    canDeny: integer('can_deny').notNull().default(0),
+    status: text('status').notNull().default('active'),
+    resolvedDecision: text('resolved_decision'),
+    createdAt: text('created_at').notNull(),
+    resolvedAt: text('resolved_at'),
+    expiredAt: text('expired_at'),
+  },
+  (table) => [
+    uniqueIndex('pending_permission_requests_one_active_per_run')
+      .on(table.threadId, table.runId)
+      .where(sql`${table.status} = 'active'`),
+  ],
+);
 
 export const automations = sqliteTable('automations', {
   id: text('id').primaryKey(),

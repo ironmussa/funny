@@ -5,7 +5,7 @@
 
 import type { AgentProvider } from '@funny/shared';
 
-import type { CLIMessage, ClaudeProcessOptions } from './types.js';
+import type { CLIMessage, ClaudeProcessOptions, PermissionDecision } from './types.js';
 
 // ── Agent process (provider-agnostic) ───────────────────────────
 
@@ -49,6 +49,15 @@ export interface IAgentProcess {
    * runs to completion before the agent honors the cancel.
    */
   steerPrompt?(prompt: string, images?: unknown[]): Promise<void>;
+  /**
+   * Answer one active provider-native permission request without restarting
+   * the agent. Undefined means this transport has no interactive approval
+   * channel (for example Codex SDK's one-shot exec surface).
+   */
+  respondToPermission?(requestId: string, decision: PermissionDecision): Promise<boolean>;
+  /** Metadata needed to persist an "allow always" project rule before a live
+   * request is resumed. Only available while that request is still active. */
+  getPendingPermission?(requestId: string): { toolName: string; toolInput?: string } | undefined;
   readonly exited: boolean;
 }
 

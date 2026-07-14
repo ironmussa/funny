@@ -34,6 +34,18 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const { remoteUpdateThread } = await import('./team-client.js');
         return remoteUpdateThread(id, updates);
       },
+      async createPendingPermissionRequest(request) {
+        const { remoteCreatePendingPermissionRequest } = await import('./team-client.js');
+        return remoteCreatePendingPermissionRequest(request);
+      },
+      async resolvePendingPermissionRequest(requestId, decision) {
+        const { remoteResolvePendingPermissionRequest } = await import('./team-client.js');
+        return remoteResolvePendingPermissionRequest(requestId, decision);
+      },
+      async expirePendingPermissionRequest(requestId) {
+        const { remoteExpirePendingPermissionRequest } = await import('./team-client.js');
+        return remoteExpirePendingPermissionRequest(requestId);
+      },
       async getThreadWithMessages(id, messageLimit, opts) {
         const { remoteGetThreadWithMessages } = await import('./team-client.js');
         return remoteGetThreadWithMessages(id, messageLimit, opts);

@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   forkAndRewind: vi.fn(),
   convertToWorktree: vi.fn(),
   approveToolCall: vi.fn(),
+  respondPermissionRequest: vi.fn(),
   cancelQueuedMessage: vi.fn(),
   updateQueuedMessage: vi.fn(),
 }));
@@ -60,6 +61,7 @@ vi.mock('../../services/thread-service/messaging.js', () => ({
   sendMessage: mocks.sendMessage,
   stopThread: mocks.stopThread,
   approveToolCall: mocks.approveToolCall,
+  respondPermissionRequest: mocks.respondPermissionRequest,
   cancelQueuedMessage: mocks.cancelQueuedMessage,
   updateQueuedMessage: mocks.updateQueuedMessage,
 }));
@@ -124,6 +126,7 @@ describe('threadRoutes (mounted)', () => {
     mocks.forkAndRewind.mockResolvedValue(okAsync({ id: 'fork-rewind-1' }));
     mocks.convertToWorktree.mockResolvedValue(okAsync(undefined));
     mocks.approveToolCall.mockResolvedValue(undefined);
+    mocks.respondPermissionRequest.mockResolvedValue(okAsync(undefined));
     mocks.cancelQueuedMessage.mockResolvedValue(okAsync({ queuedCount: 0 }));
     mocks.updateQueuedMessage.mockResolvedValue(
       okAsync({ queuedCount: 1, queuedMessage: { id: 'q1', content: 'updated' } }),
@@ -252,6 +255,43 @@ describe('threadRoutes (mounted)', () => {
     expect(mocks.approveToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ threadId: 't1', toolName: 'Write', approved: true }),
     );
+  });
+
+  test('POST /:id/permission-requests/:requestId/respond forwards a structured decision', async () => {
+    const requestId = '3b9686df-0631-46d4-a769-8e0c81659890';
+    const res = await makeApp().request(
+      `/api/threads/t1/permission-requests/${requestId}/respond`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'allow_once' }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(mocks.respondPermissionRequest).toHaveBeenCalledWith({
+      threadId: 't1',
+      userId: 'user-1',
+      requestId,
+      decision: 'allow_once',
+    });
+  });
+
+  test('POST /:id/permission-requests/:requestId/respond returns the service stale conflict', async () => {
+    mocks.respondPermissionRequest.mockResolvedValue(
+      errAsync(new ThreadServiceError('This permission request is no longer active.', 409)),
+    );
+    const requestId = '3b9686df-0631-46d4-a769-8e0c81659890';
+    const res = await makeApp().request(
+      `/api/threads/t1/permission-requests/${requestId}/respond`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'deny' }),
+      },
+    );
+
+    expect(res.status).toBe(409);
   });
 
   test('PATCH /:id/tool-calls/:toolCallId persists tool output', async () => {

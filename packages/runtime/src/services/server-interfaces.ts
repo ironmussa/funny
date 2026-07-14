@@ -14,6 +14,7 @@
  */
 
 import type {
+  PendingPermissionRequest,
   WSEvent,
   Project,
   UserProfile,
@@ -49,6 +50,13 @@ export interface RuntimeThreadRecord {
 export interface IThreadQuery {
   getThread(id: string): RuntimeThreadRecord | undefined | Promise<RuntimeThreadRecord | undefined>;
   updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
+  createPendingPermissionRequest?(request: PendingPermissionRequest): void | Promise<void>;
+  /** Resolve only an active durable request. `false` means stale. */
+  resolvePendingPermissionRequest?(
+    requestId: string,
+    decision: import('@funny/shared').PermissionDecision,
+  ): boolean | void | Promise<boolean | void>;
+  expirePendingPermissionRequest?(requestId: string): void | Promise<void>;
   getThreadWithMessages(
     id: string,
     messageLimit?: number,

@@ -31,13 +31,19 @@ import {
   getAdvertisedProviders,
   loadProviderExtensions,
 } from '@funny/core/agents';
-import type { Project, ResolvedAgentExecutionProfileResponse, WSEvent } from '@funny/shared';
+import type {
+  PendingPermissionRequest,
+  Project,
+  ResolvedAgentExecutionProfileResponse,
+  WSEvent,
+} from '@funny/shared';
 import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import {
   TUNNEL_MAX_RESPONSE_BODY_BYTES,
   isTextualContentType,
   type DataInsertMessage,
   type DataInsertToolCall,
+  type DataCreatePendingPermissionRequest,
   type RunnerRegisterResponse,
   type RunnerTask,
   type TunnelHttpResponse,
@@ -1219,6 +1225,27 @@ export async function remoteUpdateThread(
   await sendDataMessage('data:update_thread', {
     payload: { threadId, updates },
   });
+}
+
+/** Persist the durable, display-safe half of a live ACP permission request. */
+export async function remoteCreatePendingPermissionRequest(
+  payload: DataCreatePendingPermissionRequest['payload'] | PendingPermissionRequest,
+): Promise<void> {
+  await sendDataMessage('data:create_pending_permission_request', { payload });
+}
+
+export async function remoteResolvePendingPermissionRequest(
+  requestId: string,
+  decision: import('@funny/shared').PermissionDecision,
+): Promise<boolean> {
+  const response = await sendDataMessage('data:resolve_pending_permission_request', {
+    payload: { requestId, decision },
+  });
+  return response?.success === true;
+}
+
+export async function remoteExpirePendingPermissionRequest(requestId: string): Promise<void> {
+  await sendDataMessage('data:expire_pending_permission_request', { payload: { requestId } });
 }
 
 /**

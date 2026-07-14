@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process';
-import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
+import { chmod, mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, relative } from 'path';
 
@@ -32,6 +32,80 @@ describe('CodexSDKProcess', () => {
       approvalPolicy: 'on-request',
       networkAccessEnabled: true,
     });
+  });
+
+  test('treats an SDK approval failure as recovery, never as a live permission request', async () => {
+    const fixtureDir = await mkdtemp(join(tmpdir(), 'funny-codex-sdk-permission-'));
+    const fixtureBinary = join(fixtureDir, 'codex-fixture.mjs');
+    const previousBinary = process.env.CODEX_BINARY_PATH;
+    const messages: any[] = [];
+
+    try {
+      // Exercise the installed @openai/codex-sdk's real exec/JSONL protocol
+      // without a network call or a user credential. Its public event union
+      // has no permission request/response operation, so a permission-like
+      // failure must remain an error the UI can recover from, not a fake
+      // actionable approval.
+      await writeFile(
+        fixtureBinary,
+        `#!/usr/bin/env node
+process.stdin.resume();
+process.stdin.on('end', () => {
+  console.log(JSON.stringify({ type: 'thread.started', thread_id: 'sdk-permission-thread' }));
+  console.log(JSON.stringify({ type: 'turn.started' }));
+  console.log(JSON.stringify({
+    type: 'turn.failed',
+    error: { message: 'Approval required before this command can run' },
+  }));
+});
+`,
+      );
+      await chmod(fixtureBinary, 0o755);
+      process.env.CODEX_BINARY_PATH = fixtureBinary;
+
+      const agent = new CodexSDKProcess({ ...options, permissionMode: 'ask' });
+      agent.on('message', (message) => messages.push(message));
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Codex SDK fixture timed out')), 5_000);
+        agent.on('message', (message) => {
+          if (message.type !== 'result') return;
+          clearTimeout(timeout);
+          resolve();
+        });
+        agent.start();
+      });
+
+      expect(agent.respondToPermission).toBeUndefined();
+      expect(messages.some((message) => message.type === 'permission_request')).toBe(false);
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: 'result',
+          subtype: 'error_during_execution',
+          errors: ['Approval required before this command can run'],
+        }),
+      );
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: 'assistant',
+          message: expect.objectContaining({
+            content: [
+              expect.objectContaining({
+                type: 'tool_use',
+                name: 'ProviderError',
+                input: { error: 'Approval required before this command can run' },
+              }),
+            ],
+          }),
+        }),
+      );
+
+      await agent.kill();
+    } finally {
+      if (previousBinary === undefined) delete process.env.CODEX_BINARY_PATH;
+      else process.env.CODEX_BINARY_PATH = previousBinary;
+      await rm(fixtureDir, { recursive: true, force: true });
+    }
   });
 
   test('allows linked-worktree Git metadata in workspace-write mode', async () => {

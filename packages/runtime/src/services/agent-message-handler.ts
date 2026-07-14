@@ -231,6 +231,11 @@ export class AgentMessageHandler {
       return;
     }
 
+    if (msg.type === 'permission_request') {
+      await this.handleStructuredPermissionRequest(threadId, msg);
+      return;
+    }
+
     // Assistant messages — text and tool calls
     if (msg.type === 'assistant') {
       await this.handleAssistantMessage(threadId, msg);
@@ -303,6 +308,40 @@ export class AgentMessageHandler {
   }
 
   // ── Assistant message handling ─────────────────────────────────
+
+  private async handleStructuredPermissionRequest(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'permission_request' }>,
+  ): Promise<void> {
+    const thread = await this.threadManager.getThread(threadId);
+    const requestedAt = new Date().toISOString();
+    const pendingPermissionRequest = {
+      requestId: msg.requestId,
+      threadId,
+      // ACP has initialized the session before it can request a tool. The
+      // request id remains a safe unique fallback for unusual init failures.
+      runId: thread?.sessionId ?? msg.requestId,
+      transport: msg.transport,
+      toolCallId: msg.toolCallId,
+      toolName: msg.toolName,
+      ...(msg.toolInput ? { toolInput: msg.toolInput } : {}),
+      canAlwaysAllow: msg.canAlwaysAllow,
+      canDeny: msg.canDeny,
+      requestedAt,
+    } as const;
+
+    await this.threadManager.createPendingPermissionRequest?.(pendingPermissionRequest);
+    this.state.structuredPermissionRequests.set(threadId, pendingPermissionRequest);
+    const currentStatus = (thread?.status ?? 'running') as ThreadStatus;
+    const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus);
+    await this.threadManager.updateThread(threadId, { status });
+    await this.emitWS(threadId, 'agent:status', {
+      status,
+      waitingReason: 'permission',
+      pendingPermissionRequest,
+      permissionApprovalCapability: { kind: 'structured', transport: msg.transport },
+    });
+  }
 
   private async handleAssistantMessage(
     threadId: string,

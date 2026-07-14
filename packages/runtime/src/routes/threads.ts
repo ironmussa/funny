@@ -27,6 +27,7 @@ import {
   sendMessage,
   stopThread,
   approveToolCall,
+  respondPermissionRequest,
   cancelQueuedMessage,
   updateQueuedMessage as updateQueuedMessageService,
 } from '../services/thread-service/messaging.js';
@@ -46,6 +47,7 @@ import {
   updateQueuedMessageSchema,
   updateToolCallOutputSchema,
   approveToolSchema,
+  respondPermissionRequestSchema,
   uploadFileSchema,
   convertToWorktreeSchema,
   validate,
@@ -326,6 +328,32 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
     return c.json({ ok: true });
   } catch (error) {
     log.error('Failed to approve tool', { namespace: 'agent', threadId: id, error });
+    return handleServiceError(c, error);
+  }
+});
+
+// POST /api/threads/:id/permission-requests/:requestId/respond
+// Structured ACP approval. This remains separate from the legacy heuristic
+// route above so non-ACP providers keep their current restart semantics.
+threadRoutes.post('/:id/permission-requests/:requestId/respond', async (c) => {
+  const id = c.req.param('id');
+  const requestId = c.req.param('requestId');
+  const userId = c.get('userId') as string;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(respondPermissionRequestSchema, { ...raw, requestId });
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  try {
+    const result = await respondPermissionRequest({ ...parsed.value, threadId: id, userId });
+    if (result.isErr()) return handleServiceError(c, result.error);
+    return c.json({ ok: true });
+  } catch (error) {
+    log.error('Failed to respond to structured permission request', {
+      namespace: 'agent',
+      threadId: id,
+      requestId,
+      error,
+    });
     return handleServiceError(c, error);
   }
 });

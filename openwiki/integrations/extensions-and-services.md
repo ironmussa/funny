@@ -12,6 +12,12 @@ Multi-provider support lives in `packages/core/src/agents/`, selected per thread
 
 **MCP (Model Context Protocol) support** for funny's own agents is implemented server-side: `packages/runtime/src/services/mcp-service.ts`, `mcp-oauth.ts`, `services/agent-startup/load-mcp-servers.ts`, exposed via `packages/runtime/src/routes/mcp.ts`, with client-side configuration UI at `packages/client/src/components/McpServerSettings.tsx`. This is unrelated to `packages/memory`'s own separate MCP server (see below) — same protocol, two independent implementations.
 
+### Codex transport and permission approvals
+
+Codex uses the SDK transport by default (`FUNNY_CODEX_TRANSPORT=sdk`). The SDK can report a blocked operation but cannot receive an interactive response, so Funny shows a recovery state rather than an actionable per-tool approval.
+
+Set `FUNNY_CODEX_TRANSPORT=acp` on the runner to opt into `codex-acp`. This requires the `codex-acp` binary to be installed and available on that runner's `PATH`; Funny fails the run with a provider setup error if it cannot start, and does not fall back to the SDK. ACP enables exact, live `allow once`, `allow always`, and `deny` responses for the current request. An `allow always` response is sent only after its Funny project rule has been persisted.
+
 > Note: `packages/api-acp` (`@funny/api-acp`) despite its name has **nothing to do with** this ACP provider layer — see §3.
 
 ## 2. Visualizer plugins and the browser annotator

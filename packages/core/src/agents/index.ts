@@ -31,6 +31,8 @@ export {
 } from './orchestrator.js';
 export {
   defaultProcessFactory,
+  resolveCodexTransport,
+  resolvePermissionApprovalCapability,
   registerProvider,
   unregisterProvider,
   resolveActiveAcpProviders,

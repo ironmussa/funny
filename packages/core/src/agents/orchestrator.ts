@@ -502,6 +502,32 @@ export class AgentOrchestrator extends EventEmitter {
   }
 
   /**
+   * Forward a decision to the exact live provider request for this thread.
+   * A false result deliberately covers both an absent/replaced process and a
+   * stale request id; callers must not restart a turn as a fallback.
+   */
+  async respondToPermission(
+    threadId: string,
+    requestId: string,
+    decision: import('./types.js').PermissionDecision,
+  ): Promise<boolean> {
+    const proc = this.activeAgents.get(threadId);
+    if (!proc || proc.exited || !proc.respondToPermission) return false;
+    return proc.respondToPermission(requestId, decision);
+  }
+
+  /** Read the display-safe metadata held by the same live process that owns
+   * a pending permission continuation. */
+  getPendingPermission(
+    threadId: string,
+    requestId: string,
+  ): { toolName: string; toolInput?: string } | undefined {
+    const proc = this.activeAgents.get(threadId);
+    if (!proc || proc.exited || !proc.getPendingPermission) return undefined;
+    return proc.getPendingPermission(requestId);
+  }
+
+  /**
    * Select threads whose live agent process is idle enough to reap.
    *
    * A candidate must be quiescent and turn-terminal: `resultReceived` is the

@@ -36,6 +36,28 @@ function makeRouter(state: AgentStateTracker): AgentEventRouter {
   return new AgentEventRouter(orchestrator, state, messageHandler, threadManager, wsBroker);
 }
 
+function makeRecoveryRouter(state: AgentStateTracker) {
+  const orchestrator = { on: vi.fn() } as any;
+  const messageHandler = {} as any;
+  const threadManager = {
+    getThread: vi.fn(async () => ({
+      id: 't-1',
+      projectId: 'p-1',
+      userId: 'u-1',
+      status: 'waiting',
+      cost: 0,
+    })),
+    updateThread: vi.fn(async () => undefined),
+    expirePendingPermissionRequest: vi.fn(async () => undefined),
+  } as any;
+  const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
+  return {
+    router: new AgentEventRouter(orchestrator, state, messageHandler, threadManager, wsBroker),
+    threadManager,
+    wsBroker,
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────────
 
 describe('AgentEventRouter.emitAgentCompleted — idempotency (bug 3b)', () => {
@@ -85,5 +107,48 @@ describe('AgentEventRouter.emitAgentCompleted — idempotency (bug 3b)', () => {
 
     await router.emitAgentCompleted('t-1', { projectId: 'p-1', userId: 'u-1' }, 'completed');
     expect(handler).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('AgentEventRouter — lost structured permission recovery', () => {
+  test('expires the request and leaves the thread in recovery waiting state when the process exits', async () => {
+    const state = new AgentStateTracker();
+    state.structuredPermissionRequests.set('t-1', {
+      requestId: 'request-1',
+      threadId: 't-1',
+      runId: 'run-1',
+      transport: 'codex-acp',
+      toolCallId: 'tool-1',
+      toolName: 'Bash',
+      canAlwaysAllow: true,
+      canDeny: true,
+      requestedAt: '2026-07-13T00:00:00.000Z',
+    });
+    const { router, threadManager, wsBroker } = makeRecoveryRouter(state);
+
+    try {
+      await (router as any).handleAgentFailure('t-1', 'ACP process exited');
+
+      expect(threadManager.expirePendingPermissionRequest).toHaveBeenCalledWith('request-1');
+      expect(threadManager.updateThread).toHaveBeenCalledWith(
+        't-1',
+        expect.objectContaining({
+          status: 'waiting',
+          contextRecoveryReason: 'permission-request-expired',
+        }),
+      );
+      expect(wsBroker.emitToUser).toHaveBeenCalledWith(
+        'u-1',
+        expect.objectContaining({
+          type: 'agent:status',
+          data: expect.objectContaining({
+            status: 'waiting',
+            permissionRecoveryReason: 'runner_lost',
+          }),
+        }),
+      );
+    } finally {
+      router.destroy();
+    }
   });
 });

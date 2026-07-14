@@ -27,9 +27,23 @@ import type {
   ThreadStatus,
   WaitingReason,
 } from './primitives.js';
+import type {
+  PendingPermissionRequest,
+  PermissionApprovalCapability,
+} from './types/permission-approvals.js';
 // ─── Thread (interface lives in ./types/thread.js to avoid cycles) ──
 import type { Thread, PaginatedThreadsResponse } from './types/thread.js';
 export type { Thread, PaginatedThreadsResponse };
+
+export type {
+  PermissionDecision,
+  PermissionApprovalCapability,
+  PermissionRecoveryReason,
+  PendingPermissionStatus,
+  PendingPermissionRequest,
+  PermissionRequestRecord,
+  StalePermissionRequestError,
+} from './types/permission-approvals.js';
 
 // ─── Domain re-exports (split modules) ───────────────────
 export type {
@@ -463,6 +477,10 @@ export interface ThreadWithMessages extends Thread {
   waitingReason?: WaitingReason;
   /** Pending tool approval reconstructed from persisted tool calls. */
   pendingPermission?: { toolName: string; toolInput?: string };
+  /** A live, structured approval request when the transport supports it. */
+  pendingPermissionRequest?: PendingPermissionRequest;
+  /** The effective permission interaction capability for this thread. */
+  permissionApprovalCapability?: PermissionApprovalCapability;
 }
 
 export interface PaginatedMessages {
@@ -532,6 +550,11 @@ export interface WSStatusData {
   status: ThreadStatus;
   waitingReason?: WaitingReason;
   permissionRequest?: { toolName: string; toolInput?: string };
+  /** Provider-native request; unlike permissionRequest this is directly actionable. */
+  pendingPermissionRequest?: PendingPermissionRequest;
+  permissionApprovalCapability?: PermissionApprovalCapability;
+  /** The live process disappeared while it owned a structured request. */
+  permissionRecoveryReason?: import('./types/permission-approvals.js').PermissionRecoveryReason;
   permissionMode?: PermissionMode;
 }
 
@@ -539,6 +562,8 @@ export interface WSResultData {
   status?: ThreadStatus;
   waitingReason?: WaitingReason;
   permissionRequest?: { toolName: string; toolInput?: string };
+  pendingPermissionRequest?: PendingPermissionRequest;
+  permissionApprovalCapability?: PermissionApprovalCapability;
   cost?: number;
   duration?: number;
   result?: string;

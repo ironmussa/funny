@@ -13,7 +13,7 @@
 import { mkdirSync } from 'node:fs';
 
 import type { AgentOrchestrator } from '@funny/core/agents';
-import { reapOrphanedAgents } from '@funny/core/agents';
+import { reapOrphanedAgents, resolvePermissionApprovalCapability } from '@funny/core/agents';
 import { syncClaudeProjectAssets } from '@funny/core/ports';
 import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
@@ -78,6 +78,23 @@ export class AgentLifecycleManager {
     }
     clearThreadTrace(threadId);
     metric('agents.running', this.runSpans.size, { type: 'gauge' });
+  }
+
+  /** Forward one structured provider permission decision to the current live
+   * process. A false response is intentionally a stale/mismatched request. */
+  async respondToPermission(
+    threadId: string,
+    requestId: string,
+    decision: import('@funny/core/agents').PermissionDecision,
+  ): Promise<boolean> {
+    return this.orchestrator.respondToPermission(threadId, requestId, decision);
+  }
+
+  getPendingPermission(
+    threadId: string,
+    requestId: string,
+  ): { toolName: string; toolInput?: string } | undefined {
+    return this.orchestrator.getPendingPermission(threadId, requestId);
   }
 
   // ── Start ──────────────────────────────────────────────────────
@@ -462,6 +479,9 @@ export class AgentLifecycleManager {
 
     this.eventRouter.emitWSToUser(threadId, currentThread?.userId, 'agent:status', {
       status: 'running',
+      ...(resolvePermissionApprovalCapability(provider)
+        ? { permissionApprovalCapability: resolvePermissionApprovalCapability(provider) }
+        : {}),
     });
 
     // Start a trace span for the entire agent run

@@ -103,6 +103,25 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS pending_permission_requests (
+      request_id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      run_id TEXT NOT NULL,
+      transport TEXT NOT NULL,
+      tool_call_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      tool_input TEXT,
+      can_always_allow INTEGER NOT NULL DEFAULT 0,
+      can_deny INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      resolved_decision TEXT,
+      created_at TEXT NOT NULL,
+      resolved_at TEXT,
+      expired_at TEXT
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS agent_execution_profiles (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

@@ -7,10 +7,7 @@ function Kbd({ className, ...props }: React.ComponentProps<'kbd'>) {
       className={cn(
         'bg-muted text-muted-foreground pointer-events-none inline-flex h-5 w-fit min-w-5 select-none items-center justify-center gap-1 rounded-sm px-1 font-sans text-xs font-medium',
         "[&_svg:not([class*='size-'])]:size-3",
-        // The tooltip surface is always white (see tooltip.tsx), regardless of
-        // app theme — so style these chips for a light surface with fixed
-        // colors, not theme-dependent --background / dark: variants.
-        'in-data-[slot=tooltip-content]:border in-data-[slot=tooltip-content]:border-gray-300 in-data-[slot=tooltip-content]:bg-gray-100 in-data-[slot=tooltip-content]:text-gray-600',
+        'in-data-[slot=tooltip-content]:border in-data-[slot=tooltip-content]:border-border in-data-[slot=tooltip-content]:bg-muted in-data-[slot=tooltip-content]:text-muted-foreground',
         className,
       )}
       {...props}

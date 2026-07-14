@@ -1,7 +1,9 @@
 import {
+  Check,
   CheckCircle2,
   Cloud,
   CloudCheck,
+  Copy,
   Download,
   Monitor,
   RefreshCw,
@@ -16,6 +18,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { contrastText } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import type { FoldedRef, GraphBranchSummary } from '@/lib/graph-refs';
 import { cn } from '@/lib/utils';
 
@@ -252,6 +255,58 @@ function BranchChipStatus({
   );
 }
 
+function CopyableRefValue({
+  kind,
+  value,
+}: {
+  kind: 'local' | 'remote';
+  value: string | undefined;
+}) {
+  const { t } = useTranslation();
+  const [copied, copy] = useCopyToClipboard();
+  const label = value ?? t('graph.notPresent', 'Not present');
+
+  return (
+    <dd className="group/ref-value flex min-w-0 items-center gap-1 font-mono">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+          {label}
+        </TooltipContent>
+      </Tooltip>
+      {value ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="focus-visible:ring-ring/70 inline-flex size-4 shrink-0 items-center justify-center rounded-sm opacity-0 outline-hidden transition-opacity group-hover/ref-value:opacity-100 focus-visible:opacity-100 focus-visible:ring-1"
+              aria-label={
+                copied
+                  ? t('graph.copiedRef', 'Copied {{ref}}', { ref: value })
+                  : t('graph.copyRef', 'Copy {{ref}}', { ref: value })
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                copy(value);
+              }}
+              data-testid={`graph-branch-copy-${kind}-${value}`}
+            >
+              {copied ? <Check className="icon-2xs" /> : <Copy className="icon-2xs" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {copied
+              ? t('graph.copiedRef', 'Copied {{ref}}', { ref: value })
+              : t('graph.copyRef', 'Copy {{ref}}', { ref: value })}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </dd>
+  );
+}
+
 function BranchRefDetail({
   ref,
   summary,
@@ -266,8 +321,6 @@ function BranchRefDetail({
   onPullCurrentBranch: (branch: string) => void;
 }) {
   const { t } = useTranslation();
-  const localLabel = summary?.localRef ?? t('graph.notPresent', 'Not present');
-  const remoteLabel = summary?.remoteRef ?? t('graph.notPresent', 'Not present');
   const action = branchActionForRef(ref, summary);
   const ActionIcon = action?.icon;
   const busy = !!action && actionInProgress === action.key;
@@ -283,23 +336,9 @@ function BranchRefDetail({
 
       <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         <dt className="text-muted-foreground">{t('graph.local', 'Local')}</dt>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <dd className="min-w-0 truncate font-mono">{localLabel}</dd>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-            {localLabel}
-          </TooltipContent>
-        </Tooltip>
+        <CopyableRefValue kind="local" value={summary?.localRef} />
         <dt className="text-muted-foreground">{t('graph.origin', 'Origin')}</dt>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <dd className="min-w-0 truncate font-mono">{remoteLabel}</dd>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-            {remoteLabel}
-          </TooltipContent>
-        </Tooltip>
+        <CopyableRefValue kind="remote" value={summary?.remoteRef} />
         {summary ? (
           <>
             <dt className="text-muted-foreground">{t('graph.state', 'State')}</dt>
@@ -343,6 +382,82 @@ function BranchRefDetail({
   );
 }
 
+function GraphRefChip({
+  ref,
+  summary,
+  actionInProgress,
+  color,
+  textColor,
+  hasSearchQuery,
+  searchQuery,
+  onPushBranch,
+  onPullCurrentBranch,
+}: {
+  ref: FoldedRef;
+  summary: GraphBranchSummary | undefined;
+  actionInProgress: string | null;
+  color: string;
+  textColor: string;
+  hasSearchQuery: boolean;
+  searchQuery: string;
+  onPushBranch: (branch: string) => void;
+  onPullCurrentBranch: (branch: string) => void;
+}) {
+  const { t } = useTranslation();
+  const Icon = iconForRef(ref);
+  const displayName = displayNameForRef(ref);
+
+  return (
+    <div
+      className="inline-flex min-w-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
+      style={{ backgroundColor: color, color: textColor }}
+      data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
+    >
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="focus-visible:ring-ring/70 inline-flex min-w-0 items-center gap-0.5 rounded-full px-0.5 text-left outline-hidden focus-visible:ring-1"
+            aria-label={tooltipForRef(t, ref, summary)}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            data-testid={`graph-branch-info-${ref.name}`}
+          >
+            <Icon className="icon-2xs shrink-0" aria-hidden="true" />
+            <span
+              className={cn(
+                'truncate text-[10px] leading-tight font-medium whitespace-nowrap',
+                ref.kind === 'local' && ref.isCurrent && 'font-bold',
+              )}
+            >
+              {hasSearchQuery ? (
+                <HighlightText text={displayName} query={searchQuery} />
+              ) : (
+                displayName
+              )}
+            </span>
+            <BranchChipStatus ref={ref} summary={summary} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="bottom"
+          align="start"
+          className="w-72 p-3"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <BranchRefDetail
+            ref={ref}
+            summary={summary}
+            actionInProgress={actionInProgress}
+            onPushBranch={onPushBranch}
+            onPullCurrentBranch={onPullCurrentBranch}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export function GraphRefChips({
   refs,
   branchSummaryByName,
@@ -360,7 +475,6 @@ export function GraphRefChips({
   onPushBranch: (branch: string) => void;
   onPullCurrentBranch: (branch: string) => void;
 }) {
-  const { t } = useTranslation();
   if (refs.length === 0) return null;
 
   const textColor = contrastText(color);
@@ -371,58 +485,20 @@ export function GraphRefChips({
       {refs.map((ref) => {
         const branchName = branchNameForRef(ref);
         const summary = branchName ? branchSummaryByName.get(branchName) : undefined;
-        const Icon = iconForRef(ref);
-        const displayName = displayNameForRef(ref);
 
         return (
-          <div
+          <GraphRefChip
             key={`${ref.kind}:${ref.name}`}
-            className="inline-flex min-w-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
-            style={{ backgroundColor: color, color: textColor }}
-            data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
-          >
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="focus-visible:ring-ring/70 inline-flex min-w-0 items-center gap-0.5 rounded-full px-0.5 text-left outline-hidden focus-visible:ring-1"
-                  aria-label={tooltipForRef(t, ref, summary)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                  data-testid={`graph-branch-info-${ref.name}`}
-                >
-                  <Icon className="icon-2xs shrink-0" aria-hidden="true" />
-                  <span
-                    className={cn(
-                      'truncate text-[10px] leading-tight font-medium whitespace-nowrap',
-                      ref.kind === 'local' && ref.isCurrent && 'font-bold',
-                    )}
-                  >
-                    {hasSearchQuery ? (
-                      <HighlightText text={displayName} query={searchQuery} />
-                    ) : (
-                      displayName
-                    )}
-                  </span>
-                  <BranchChipStatus ref={ref} summary={summary} />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                side="bottom"
-                align="start"
-                className="w-72 p-3"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <BranchRefDetail
-                  ref={ref}
-                  summary={summary}
-                  actionInProgress={actionInProgress}
-                  onPushBranch={onPushBranch}
-                  onPullCurrentBranch={onPullCurrentBranch}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+            ref={ref}
+            summary={summary}
+            actionInProgress={actionInProgress}
+            color={color}
+            textColor={textColor}
+            hasSearchQuery={hasSearchQuery}
+            searchQuery={searchQuery}
+            onPushBranch={onPushBranch}
+            onPullCurrentBranch={onPullCurrentBranch}
+          />
         );
       })}
     </div>

@@ -141,7 +141,7 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
   );
 
   return (
-    <Sidebar collapsible="none" className="h-full w-full select-none">
+    <Sidebar collapsible="none" className="sidebar-focus-scope h-full w-full select-none">
       {/* Project settings nav — rendered alongside the projects tree so the
           tree stays mounted (avoiding a costly remount when returning). */}
       {settingsOpen && <SettingsPanelBody />}

@@ -371,14 +371,25 @@ export function App() {
   );
 
   const centerPanel = (
-    <SidebarInset className="flex h-full flex-col overflow-hidden">
+    <SidebarInset className="relative flex h-full flex-col overflow-hidden">
       {!isFullScreenView && (
         <ErrorBoundary area="project-header">
           <ProjectHeader />
         </ErrorBoundary>
       )}
       <ErrorBoundary area="runner-onboarding">
-        <RunnerOnboardingBanner />
+        {/* The runner status arrives after the primary layout. Keep its banner
+        out of normal flow so it cannot resize the Dockview and cause CLS. */}
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-x-0 z-20',
+            isFullScreenView ? 'top-0' : 'top-12',
+          )}
+        >
+          <div className="pointer-events-auto">
+            <RunnerOnboardingBanner />
+          </div>
+        </div>
       </ErrorBoundary>
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <CenterDockview

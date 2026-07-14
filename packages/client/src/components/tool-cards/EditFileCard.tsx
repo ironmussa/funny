@@ -563,7 +563,10 @@ export function EditFileCard({
           data-testid="edit-file-inline-diff-unavailable"
         >
           <span className="text-muted-foreground">
-            {t('tools.diffUnavailable', 'This change is no longer available in Git.')}
+            {t(
+              'tools.diffUnavailableNoTracking',
+              'The diff cannot be shown because this file is not tracked by Git.',
+            )}
           </span>
           <Button
             variant="ghost"

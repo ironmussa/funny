@@ -175,6 +175,47 @@ describe('GraphWipRow', () => {
 });
 
 describe('GraphRefChips', () => {
+  test('copies each reference from its branch detail without widening the chip', async () => {
+    const writeText = vi.fn();
+    const branch: GraphBranchSummary = {
+      branch: 'feat/video',
+      localRef: 'feat/video',
+      remoteRef: 'origin/feat/video',
+      localHash: 'local-tip',
+      remoteHash: 'remote-tip',
+      isCurrent: false,
+      ahead: 0,
+      behind: 0,
+      state: 'synced',
+      primaryAction: 'none',
+    };
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    renderWithProviders(
+      <GraphRefChips
+        refs={[{ kind: 'remote', name: 'origin/feat/video', isCurrent: false }]}
+        branchSummaryByName={new Map([[branch.branch, branch]])}
+        actionInProgress={null}
+        color="#7cb9e8"
+        searchQuery=""
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('graph-ref-copy-remote:origin/feat/video')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('graph-branch-info-origin/feat/video'));
+    await screen.findByTestId('graph-branch-detail-origin/feat/video');
+    fireEvent.click(screen.getByTestId('graph-branch-copy-remote-origin/feat/video'));
+
+    expect(writeText).toHaveBeenCalledWith('origin/feat/video');
+    expect(screen.getByTestId('graph-branch-detail-origin/feat/video')).toBeInTheDocument();
+  });
+
   test('shows push status, action, and details on a local branch chip that is ahead', async () => {
     const onPushBranch = vi.fn();
     const onPullCurrentBranch = vi.fn();

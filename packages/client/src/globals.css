@@ -159,12 +159,9 @@
 }
 
 /*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
+  Tailwind CSS v4 defaults bare `border` utilities to the element's text
+  color. App surfaces must instead use the shared theme border token, so
+  every unspecified border stays the same gray in every theme.
 */
 @layer base {
   *,
@@ -172,8 +169,21 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: hsl(var(--border));
   }
+
+  /* Borders communicate structure, not state. Keep their tone consistent even
+     when a component uses a semantic utility for its background or text. */
+  :where([class*='border-']):not([class*='border-transparent']):not([class*='border-0']) {
+    border-color: hsl(var(--border)) !important;
+  }
+}
+
+/* Sidebar navigation controls share one focus treatment. Keeping the ring
+   inset prevents it from being clipped by scroll/containment boundaries. */
+.sidebar-focus-scope :is(button, [role='button'], a):focus-visible {
+  outline: none !important;
+  box-shadow: inset 0 0 0 1px hsl(var(--sidebar-ring)) !important;
 }
 
 /* Markdown preview search highlights (MonacoEditorDialog) */

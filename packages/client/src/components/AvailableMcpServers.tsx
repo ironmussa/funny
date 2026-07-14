@@ -151,33 +151,35 @@ export function AvailableMcpServers({
               </TooltipTrigger>
               <TooltipContent side="bottom" align="start" className="w-72 p-3 text-left">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 truncate font-medium text-gray-950">{server.name}</p>
-                  <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-[10px] leading-none text-gray-600 uppercase">
+                  <p className="text-foreground min-w-0 truncate font-medium">{server.name}</p>
+                  <span className="border-border bg-muted text-muted-foreground shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[10px] leading-none uppercase">
                     {server.type}
                   </span>
                 </div>
                 <dl className="mt-2 space-y-1.5">
                   <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
-                    <dt className="text-gray-500">{t('mcp.tooltip.transport', 'Transport')}</dt>
-                    <dd className="truncate text-gray-900">{transportLabel}</dd>
+                    <dt className="text-muted-foreground">
+                      {t('mcp.tooltip.transport', 'Transport')}
+                    </dt>
+                    <dd className="text-foreground truncate">{transportLabel}</dd>
                   </div>
                   <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
-                    <dt className="text-gray-500">{t('mcp.tooltip.scope', 'Scope')}</dt>
-                    <dd className="truncate text-gray-900">{sourceLabel}</dd>
+                    <dt className="text-muted-foreground">{t('mcp.tooltip.scope', 'Scope')}</dt>
+                    <dd className="text-foreground truncate">{sourceLabel}</dd>
                   </div>
                   {endpoint && (
                     <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
-                      <dt className="text-gray-500">
+                      <dt className="text-muted-foreground">
                         {server.url
                           ? t('mcp.tooltip.endpoint', 'Endpoint')
                           : t('mcp.tooltip.command', 'Command')}
                       </dt>
-                      <dd className="truncate font-mono text-[11px] text-gray-900">{endpoint}</dd>
+                      <dd className="text-foreground truncate font-mono text-[11px]">{endpoint}</dd>
                     </div>
                   )}
                   <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
-                    <dt className="text-gray-500">{t('mcp.tooltip.status', 'Status')}</dt>
-                    <dd className={cn('truncate text-gray-900', needsAuth && 'text-amber-700')}>
+                    <dt className="text-muted-foreground">{t('mcp.tooltip.status', 'Status')}</dt>
+                    <dd className={cn('text-foreground truncate', needsAuth && 'text-amber-700')}>
                       {statusLabel}
                     </dd>
                   </div>

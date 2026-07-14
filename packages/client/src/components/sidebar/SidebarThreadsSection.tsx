@@ -42,7 +42,7 @@ export function SidebarThreadsSection({
       <CollapsibleTrigger
         data-testid="sidebar-activity-toggle"
         className={cn(
-          'group/activity mx-2 flex items-center gap-1 rounded-md px-2 pb-2 pt-3 text-left cursor-pointer select-none',
+          'group/activity focus-visible:ring-sidebar-ring mx-2 flex items-center gap-1 rounded-md px-2 pb-2 pt-3 text-left cursor-pointer select-none focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset',
           'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
         )}
       >

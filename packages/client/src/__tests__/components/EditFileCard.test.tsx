@@ -252,7 +252,8 @@ describe('EditFileCard', () => {
       </TooltipProvider>,
     );
 
-    expect(await screen.findByTestId('edit-file-inline-diff-unavailable')).toBeInTheDocument();
+    const unavailable = await screen.findByTestId('edit-file-inline-diff-unavailable');
+    expect(unavailable).toHaveTextContent('tools.diffUnavailableNoTracking');
     fireEvent.click(screen.getByRole('button', { name: 'common.retry' }));
     await waitFor(() => expect(apiMocks.getFileDiff).toHaveBeenCalledTimes(2));
   });

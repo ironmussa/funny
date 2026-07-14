@@ -1,8 +1,6 @@
-import type { TFunction } from 'i18next';
 import { useContext } from 'react';
 
 import { getItemKey, type RenderItem, type ToolItem } from '@/lib/render-items';
-import { timeAgo } from '@/lib/thread-utils';
 
 import { ToolCallCard } from '../ToolCallCard';
 import { ToolCallGroup } from '../ToolCallGroup';
@@ -111,12 +109,10 @@ export function ToolItemRenderer({
 
 type NonUserItemRendererProps = ToolRendererCommonProps & {
   item: RenderItem;
-  t: TFunction;
 };
 
 export function NonUserItemRenderer({
   item,
-  t,
   snapshotMap,
   isWaiting,
   onSend,
@@ -137,7 +133,7 @@ export function NonUserItemRenderer({
       <div data-item-key={key} className="group/msg relative w-full text-sm">
         <div
           data-testid={`assistant-message-${msg.id}`}
-          className="border-border/70 bg-card text-card-foreground rounded-lg border px-3 py-2 text-sm leading-relaxed wrap-break-word shadow-sm"
+          className="px-3 py-1.5 text-sm leading-relaxed wrap-break-word"
         >
           <div className="flex items-start gap-2">
             {msg.author && <AuthorAvatar author={msg.author} />}
@@ -149,11 +145,6 @@ export function NonUserItemRenderer({
               )}
             </div>
             <CopyButton content={msg.content} />
-          </div>
-          <div className="mt-1 flex justify-end">
-            <span className="thread-timestamp text-muted-foreground/50 select-none">
-              {timeAgo(msg.timestamp, t)}
-            </span>
           </div>
         </div>
       </div>
@@ -278,7 +269,6 @@ export function UserMessageRenderer({
 type VirtualRowContentProps = ToolRendererCommonProps &
   Omit<UserMessageRendererProps, 'item' | 'includeItemKey' | 'includeUserObserver'> & {
     row: VirtualRow;
-    t: TFunction;
     threadId: string;
     changeSummaryRunning?: boolean;
     onSessionReverted?: () => void;
@@ -286,7 +276,6 @@ type VirtualRowContentProps = ToolRendererCommonProps &
 
 export function VirtualRowContent({
   row,
-  t,
   threadId,
   changeSummaryRunning,
   onSessionReverted,
@@ -337,7 +326,6 @@ export function VirtualRowContent({
   return (
     <NonUserItemRenderer
       item={item}
-      t={t}
       snapshotMap={snapshotMap}
       isWaiting={isWaiting}
       onSend={onSend}

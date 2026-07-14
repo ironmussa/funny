@@ -20,6 +20,9 @@ import type {
   ThreadStatus,
   ImageAttachment,
   ThreadStage,
+  PendingPermissionRequest,
+  PermissionApprovalCapability,
+  PermissionRecoveryReason,
 } from '@funny/shared';
 import { toast } from 'sonner';
 
@@ -84,7 +87,10 @@ function patchSidebarThread(
   if (!state.threadsById || !state.threadsById[threadId]) {
     return { found: false, patch: {} };
   }
-  return { found: true, patch: mutations.patchThread(state, threadId, updater) };
+  return {
+    found: true,
+    patch: mutations.patchThread(state, threadId, updater),
+  };
 }
 
 /**
@@ -98,7 +104,10 @@ function patchSidebarLastAssistant(
   content: string,
 ): Partial<ThreadState> {
   const snippet = content.slice(0, 120);
-  return patchSidebarThread(get, threadId, (t) => ({ ...t, lastAssistantMessage: snippet })).patch;
+  return patchSidebarThread(get, threadId, (t) => ({
+    ...t,
+    lastAssistantMessage: snippet,
+  })).patch;
 }
 
 /** True when the thread payload is loaded in the unified map. */
@@ -286,7 +295,10 @@ function takeDequeuedUserMessages(
 
 export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentInitInfo): void {
   set((state) =>
-    mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, initInfo: data })),
+    mutations.applyThreadDataPatch(state, threadId, (t) => ({
+      ...t,
+      initInfo: data,
+    })),
   );
 }
 
@@ -545,6 +557,9 @@ export function handleWSStatus(
     status: string;
     waitingReason?: string;
     permissionRequest?: { toolName: string; toolInput?: string };
+    pendingPermissionRequest?: PendingPermissionRequest;
+    permissionApprovalCapability?: PermissionApprovalCapability;
+    permissionRecoveryReason?: PermissionRecoveryReason;
     stage?: string;
     permissionMode?: string;
   },
@@ -603,8 +618,25 @@ export function handleWSStatus(
     const waitingReasonChanged =
       data.waitingReason !== undefined && data.waitingReason !== t.waitingReason;
     const permReqChanged = !!data.permissionRequest !== !!t.pendingPermission;
+    const structuredPermReqChanged =
+      data.pendingPermissionRequest !== undefined &&
+      data.pendingPermissionRequest.requestId !== t.pendingPermissionRequest?.requestId;
+    const permissionCapabilityChanged =
+      data.permissionApprovalCapability !== undefined &&
+      JSON.stringify(data.permissionApprovalCapability) !==
+        JSON.stringify(t.permissionApprovalCapability);
+    const permissionRecoveryChanged = data.permissionRecoveryReason !== t.permissionRecoveryReason;
     if (
-      !(statusChanged || stageChanged || permModeChanged || waitingReasonChanged || permReqChanged)
+      !(
+        statusChanged ||
+        stageChanged ||
+        permModeChanged ||
+        waitingReasonChanged ||
+        permReqChanged ||
+        structuredPermReqChanged ||
+        permissionCapabilityChanged ||
+        permissionRecoveryChanged
+      )
     ) {
       return t;
     }
@@ -620,6 +652,14 @@ export function handleWSStatus(
         status: newStatus,
         waitingReason: data.waitingReason as any,
         pendingPermission: data.permissionRequest,
+        // A permission wait is the only state that may retain a live ACP
+        // continuation. Clearing it for every other wait prevents a resolved
+        // request from resurfacing after a later question/provider pause.
+        pendingPermissionRequest: data.pendingPermissionRequest,
+        ...(data.permissionApprovalCapability
+          ? { permissionApprovalCapability: data.permissionApprovalCapability }
+          : {}),
+        permissionRecoveryReason: data.permissionRecoveryReason,
         ...(data.stage ? { stage: data.stage as any } : {}),
         ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
       };
@@ -630,6 +670,11 @@ export function handleWSStatus(
       ...terminalTimestamps(newStatus),
       waitingReason: undefined,
       pendingPermission: undefined,
+      pendingPermissionRequest: undefined,
+      permissionRecoveryReason: undefined,
+      ...(data.permissionApprovalCapability
+        ? { permissionApprovalCapability: data.permissionApprovalCapability }
+        : {}),
       ...(newStatus === 'stopped' || newStatus === 'interrupted' ? { resultInfo: undefined } : {}),
       ...(data.stage ? { stage: data.stage as any } : {}),
       ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
@@ -668,7 +713,11 @@ export function handleWSStageChanged(
   get: Get,
   set: Set,
   threadId: string,
-  data: { fromStage: ThreadStage | null; toStage: ThreadStage; projectId: string },
+  data: {
+    fromStage: ThreadStage | null;
+    toStage: ThreadStage;
+    projectId: string;
+  },
 ): void {
   const toStage = data.toStage;
   // The Kanban derives a card's column from `archived ? 'archived' : stage`.
@@ -713,7 +762,10 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);
   if (!machineEvent) {
-    wsLog.warn('Invalid result event', { threadId, data: JSON.stringify(data).slice(0, 200) });
+    wsLog.warn('Invalid result event', {
+      threadId,
+      data: JSON.stringify(data).slice(0, 200),
+    });
     return;
   }
 
@@ -977,7 +1029,12 @@ export function handleWSCompactBoundary(
   get: Get,
   set: Set,
   threadId: string,
-  data: { trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number; timestamp: string },
+  data: {
+    trigger: 'manual' | 'auto';
+    preTokens: number;
+    postTokens?: number;
+    timestamp: string;
+  },
 ): void {
   const state = get();
   if (!isHydrated(state, threadId)) {
@@ -1012,7 +1069,11 @@ export function handleWSContextUsage(
   get: Get,
   set: Set,
   threadId: string,
-  data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
+  data: {
+    inputTokens: number;
+    outputTokens: number;
+    cumulativeInputTokens: number;
+  },
 ): void {
   const usage = {
     cumulativeInputTokens: data.cumulativeInputTokens,
@@ -1026,7 +1087,10 @@ export function handleWSContextUsage(
 
   set((state) => {
     const updates: Partial<ThreadState> = {
-      contextUsageByThread: { ...state.contextUsageByThread, [threadId]: usage },
+      contextUsageByThread: {
+        ...state.contextUsageByThread,
+        [threadId]: usage,
+      },
     };
     if (!isHydrated(state, threadId)) {
       if ((getUrlThreadId() ?? state.selectedThreadId) === threadId)
@@ -1035,7 +1099,10 @@ export function handleWSContextUsage(
     }
     return {
       ...updates,
-      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, contextUsage: usage })),
+      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
+        ...t,
+        contextUsage: usage,
+      })),
     };
   });
 }
@@ -1166,6 +1233,9 @@ function notifyThreadResult(
     const reason = errorReason
       ? (ERROR_REASON_MESSAGES[errorReason] ?? errorReason)
       : 'Unknown error';
-    toast.error(`"${truncated}" failed: ${reason}`, { ...toastOpts, duration: 8000 });
+    toast.error(`"${truncated}" failed: ${reason}`, {
+      ...toastOpts,
+      duration: 8000,
+    });
   }
 }

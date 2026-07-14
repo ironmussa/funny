@@ -30,7 +30,14 @@
  *    handler always and a boolean `disabled` prop.
  */
 
-import type { Thread, MessageRole, WaitingReason } from '@funny/shared';
+import type {
+  Thread,
+  MessageRole,
+  WaitingReason,
+  PendingPermissionRequest,
+  PermissionApprovalCapability,
+  PermissionRecoveryReason,
+} from '@funny/shared';
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
@@ -125,6 +132,12 @@ export interface ThreadWithMessages extends Thread {
   resultInfo?: AgentResultInfo;
   waitingReason?: WaitingReason;
   pendingPermission?: { toolName: string; toolInput?: string };
+  /** A provider-native request that can be answered without restarting the run. */
+  pendingPermissionRequest?: PendingPermissionRequest;
+  /** The selected transport's ability to honor interactive approvals. */
+  permissionApprovalCapability?: PermissionApprovalCapability;
+  /** A formerly actionable request lost its runner-owned continuation. */
+  permissionRecoveryReason?: PermissionRecoveryReason;
   hasMore?: boolean;
   hasMoreAfter?: boolean;
   loadingMore?: boolean;
@@ -740,6 +753,35 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         })),
       );
     }
+  },
+
+  updateThreadPermissionMode: async (threadId, permissionMode) => {
+    const current = get();
+    const previousMode =
+      current.threadsById[threadId]?.permissionMode ??
+      current.threadDataById[threadId]?.permissionMode ??
+      (current.activeThread?.id === threadId ? current.activeThread.permissionMode : undefined);
+    if (!previousMode || previousMode === permissionMode) return true;
+
+    const patchMode = (mode: typeof permissionMode) =>
+      set((state) => ({
+        ...mutations.patchThread(state, threadId, (thread) => ({
+          ...thread,
+          permissionMode: mode,
+        })),
+        ...mutations.applyThreadDataPatch(state, threadId, (thread) => ({
+          ...thread,
+          permissionMode: mode,
+        })),
+      }));
+
+    patchMode(permissionMode);
+    const result = await api.updateThreadPermissionMode(threadId, permissionMode);
+    if (result.isErr()) {
+      patchMode(previousMode);
+      return false;
+    }
+    return true;
   },
 
   deleteThread: async (threadId) => {

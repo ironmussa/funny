@@ -1,4 +1,4 @@
-import type { AgentProvider, ImageAttachment, QueuedMessage } from '@funny/shared';
+import type { AgentProvider, ImageAttachment, PermissionMode, QueuedMessage } from '@funny/shared';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -175,6 +175,7 @@ export function usePromptInputState({
   // ── Model & mode state ──
   const [unifiedModel, setUnifiedModelRaw] = useState<string>(`${defaultProvider}:${defaultModel}`);
   const [mode, setMode] = useState<string>(defaultPermissionMode);
+  const modeMutationRef = useRef(0);
   const [createWorktree, setCreateWorktreeRaw] = useState(defaultThreadMode === 'worktree');
   const setCreateWorktree = useCallback(
     (v: boolean) => {
@@ -237,17 +238,11 @@ export function usePromptInputState({
     return baseModes;
   }, [t, currentProvider]);
 
-  // Auto mode is Claude-only — fall back to autoEdit when switching providers
-  useEffect(() => {
-    if (mode === 'auto' && currentProvider !== 'claude') {
-      setMode('autoEdit');
-    }
-  }, [currentProvider, mode]);
-
   // ── Active thread state (resolved via context) ──
   const storeActiveThreadPermissionMode = useThreadSelector((t) => t?.permissionMode);
   const activeThreadPermissionMode =
     threadOverride?.permissionMode ?? storeActiveThreadPermissionMode;
+  const updateThreadPermissionMode = useThreadStore((s) => s.updateThreadPermissionMode);
   const storeActiveThreadWorktreePath = useThreadSelector((t) => t?.worktreePath);
   const activeThreadWorktreePath = threadOverride?.worktreePath ?? storeActiveThreadWorktreePath;
   const storeActiveThreadProvider = useThreadSelector((t) => t?.provider);
@@ -287,6 +282,41 @@ export function usePromptInputState({
     activeThreadProvider !== 'codex' && activeThreadContextTokens > 0
       ? Math.min(100, (activeThreadContextTokens / contextMaxTokens) * 100)
       : undefined;
+
+  const applyPersistedMode = useCallback(
+    (nextMode: string) => {
+      setMode(() => nextMode);
+      if (isNewThread || !effectiveThreadId || nextMode === activeThreadPermissionMode) return;
+
+      const mutation = ++modeMutationRef.current;
+      void updateThreadPermissionMode(effectiveThreadId, nextMode as PermissionMode).then(
+        (saved) => {
+          // Preserve a newer picker action. The store rolled back the failed
+          // update already; this only repairs the hook-local selected value.
+          if (!saved && mutation === modeMutationRef.current) {
+            setMode(activeThreadPermissionMode ?? defaultPermissionMode);
+            toast.error(t('thread.permissionModeSaveFailed', 'Could not save permission mode'));
+          }
+        },
+      );
+    },
+    [
+      activeThreadPermissionMode,
+      defaultPermissionMode,
+      effectiveThreadId,
+      isNewThread,
+      t,
+      updateThreadPermissionMode,
+    ],
+  );
+
+  // Auto mode is Claude-only — fall back to autoEdit when switching providers.
+  // Existing threads persist that provider-imposed fallback as well.
+  useEffect(() => {
+    if (mode === 'auto' && currentProvider !== 'claude') {
+      applyPersistedMode('autoEdit');
+    }
+  }, [applyPersistedMode, currentProvider, mode]);
 
   // ── Branch state ──
   const selectedBranch = useBranchPickerStore((s) => s.selectedBranch);
@@ -910,7 +940,7 @@ export function usePromptInputState({
     setUnifiedModel,
     unifiedModelGroups,
     mode,
-    setMode,
+    setMode: applyPersistedMode,
     modes,
     createWorktree,
     setCreateWorktree,

@@ -33,9 +33,13 @@ function VirtualMessageStream(props: MessageStreamProps) {
     resultInfo,
     waitingReason,
     pendingPermission,
+    pendingPermissionRequest,
+    permissionApprovalCapability,
+    permissionRecoveryReason,
     isExternal = false,
     onSend,
     onPermissionApproval,
+    onPermissionDecision,
     onToolRespond,
     onFork,
     onRewind,
@@ -163,6 +167,9 @@ function VirtualMessageStream(props: MessageStreamProps) {
       status={status}
       waitingReason={waitingReason}
       pendingPermission={pendingPermission}
+      pendingPermissionRequest={pendingPermissionRequest}
+      permissionApprovalCapability={permissionApprovalCapability}
+      permissionRecoveryReason={permissionRecoveryReason}
       isRunning={isRunning}
       isExternal={isExternal}
       resultInfo={resultInfo}
@@ -172,6 +179,7 @@ function VirtualMessageStream(props: MessageStreamProps) {
       onPermissionApprove={handlePermissionApprove}
       onPermissionAlwaysAllow={handlePermissionAlwaysAllow}
       onPermissionDeny={handlePermissionDeny}
+      onPermissionDecision={onPermissionDecision}
       footer={footer}
     />
   );

@@ -21,6 +21,7 @@ export function FrozenMessageStream(props: MessageStreamProps) {
     threadId,
     status,
     messages,
+    lastUserMessage,
     leadingUserMessage,
     threadEvents,
     compactionEvents,
@@ -28,9 +29,13 @@ export function FrozenMessageStream(props: MessageStreamProps) {
     resultInfo,
     waitingReason,
     pendingPermission,
+    pendingPermissionRequest,
+    permissionApprovalCapability,
+    permissionRecoveryReason,
     isExternal = false,
     onSend,
     onPermissionApproval,
+    onPermissionDecision,
     onToolRespond,
     onFork,
     onRewind,
@@ -64,7 +69,15 @@ export function FrozenMessageStream(props: MessageStreamProps) {
     scrollViewportRef,
     topSentinelRef,
     bottomSentinelRef,
-  } = useFrozenScroll({ threadId, status, messages, waitingReason, pagination, compact, initInfo });
+  } = useFrozenScroll({
+    threadId,
+    status,
+    messages,
+    waitingReason,
+    pagination,
+    compact,
+    initInfo,
+  });
 
   const noopLightbox = useCallback(
     (_images: { src: string; alt: string }[], _index: number) => {},
@@ -108,6 +121,7 @@ export function FrozenMessageStream(props: MessageStreamProps) {
       key={threadId}
       ref={messageListRef}
       messages={messages ?? EMPTY_MESSAGES}
+      lastUserMessage={lastUserMessage}
       leadingUserMessage={leadingUserMessage}
       threadEvents={threadEvents}
       compactionEvents={compactionEvents}
@@ -160,6 +174,9 @@ export function FrozenMessageStream(props: MessageStreamProps) {
       status={status}
       waitingReason={waitingReason}
       pendingPermission={pendingPermission}
+      pendingPermissionRequest={pendingPermissionRequest}
+      permissionApprovalCapability={permissionApprovalCapability}
+      permissionRecoveryReason={permissionRecoveryReason}
       isRunning={isRunning}
       isExternal={isExternal}
       resultInfo={resultInfo}
@@ -169,6 +186,7 @@ export function FrozenMessageStream(props: MessageStreamProps) {
       onPermissionApprove={handlePermissionApprove}
       onPermissionAlwaysAllow={handlePermissionAlwaysAllow}
       onPermissionDeny={handlePermissionDeny}
+      onPermissionDecision={onPermissionDecision}
       footer={footer}
     />
   );

@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { createRef, useRef, type RefObject } from 'react';
 import { afterEach, beforeEach, describe, test, expect, vi } from 'vitest';
 
@@ -48,14 +48,26 @@ vi.mock('@/components/thread/UserMessageCard', () => ({
   UserMessageCard: ({ content, ...props }: any) => <div {...props}>{content}</div>,
 }));
 
-function Harness({ handleRef }: { handleRef: RefObject<MemoizedMessageListHandle | null> }) {
+function Harness({
+  handleRef,
+  messages,
+  lastUserMessage,
+  leadingUserMessage,
+}: {
+  handleRef: RefObject<MemoizedMessageListHandle | null>;
+  messages?: any[];
+  lastUserMessage?: any;
+  leadingUserMessage?: any;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fx = makeLongThread({ messageCount: 10, seed: 5, toolCallRatio: 1 });
   return (
     <div ref={scrollRef} style={{ overflow: 'auto' }}>
       <FrozenMessageList
         ref={handleRef}
-        messages={fx.messages}
+        messages={messages ?? fx.messages}
+        lastUserMessage={lastUserMessage}
+        leadingUserMessage={leadingUserMessage}
         threadId={fx.threadId}
         threadStatus="idle"
         knownIds={new Set()}
@@ -87,7 +99,7 @@ describe('FrozenMessageList', () => {
     vi.unstubAllGlobals();
   });
 
-  test('mounts every row in normal flow (no absolute positioning)', () => {
+  test('keeps the initial batch laid out, then enables offscreen skipping on scroll', () => {
     const handleRef = createRef<MemoizedMessageListHandle>();
     const { getByTestId, container } = render(<Harness handleRef={handleRef} />);
 
@@ -99,7 +111,18 @@ describe('FrozenMessageList', () => {
     const rows = container.querySelectorAll('[data-virtual-row-key]');
     // 10 messages, each assistant with tool calls → at least one row per message.
     expect(rows.length).toBeGreaterThanOrEqual(10);
-    // Non-user rows use content-visibility to skip offscreen work.
+    // The initial async batch uses real row heights, avoiding CLS when the
+    // viewport restores to the end of a long thread.
+    rows.forEach((row) => {
+      const el = row as HTMLElement;
+      if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows
+      expect(el.style.contentVisibility).toBe('visible');
+      expect(el.style.containIntrinsicSize).toBe('');
+    });
+
+    // Frozen mode retains its native offscreen optimization as soon as the
+    // user starts navigating history.
+    fireEvent.wheel(list.parentElement!);
     rows.forEach((row) => {
       const el = row as HTMLElement;
       if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows
@@ -165,6 +188,64 @@ describe('FrozenMessageList', () => {
     // One section per user message (the fixture starts with a user message, so
     // there is no headerless leading section).
     expect(sections.length).toBe(userRows.length);
+  });
+
+  test('keeps the latest user question visible when it is outside the loaded window', () => {
+    const handleRef = createRef<MemoizedMessageListHandle>();
+    const lastUserMessage = {
+      id: 'latest-user',
+      role: 'user',
+      content: 'latest question outside the loaded page',
+      timestamp: '2026-01-01T00:00:03.000Z',
+    };
+    const { getByTestId } = render(
+      <Harness
+        handleRef={handleRef}
+        messages={[
+          {
+            id: 'older-assistant',
+            role: 'assistant',
+            content: 'older loaded response',
+            timestamp: '2026-01-01T00:00:01.000Z',
+          },
+        ]}
+        lastUserMessage={lastUserMessage}
+      />,
+    );
+
+    const context = getByTestId('frozen-last-user-context');
+    expect(context).toHaveTextContent('latest question outside the loaded page');
+    expect(context.style.position).toBe('sticky');
+    expect(context.style.top).toBe('0px');
+  });
+
+  test('keeps the latest question when it is the leading context of a newer page', () => {
+    const handleRef = createRef<MemoizedMessageListHandle>();
+    const lastUserMessage = {
+      id: 'latest-user',
+      role: 'user',
+      content: 'latest question before the loaded page',
+      timestamp: '2026-01-01T00:00:03.000Z',
+    };
+    const { getByTestId } = render(
+      <Harness
+        handleRef={handleRef}
+        messages={[
+          {
+            id: 'newer-assistant',
+            role: 'assistant',
+            content: 'newer loaded response',
+            timestamp: '2026-01-01T00:00:04.000Z',
+          },
+        ]}
+        lastUserMessage={lastUserMessage}
+        leadingUserMessage={lastUserMessage}
+      />,
+    );
+
+    expect(getByTestId('frozen-last-user-context')).toHaveTextContent(
+      'latest question before the loaded page',
+    );
   });
 
   test('exposes the message-list handle contract without throwing', () => {

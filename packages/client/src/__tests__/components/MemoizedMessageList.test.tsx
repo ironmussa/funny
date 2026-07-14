@@ -234,26 +234,21 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelectorAll('[data-item-key]').length).toBeLessThan(120);
   });
 
-  test('renders assistant text inside a message container', async () => {
+  test('renders assistant text without a card surface', async () => {
     const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
 
     const assistantMessage = await waitFor(() => getByTestId('assistant-message-m1'));
 
     expect(assistantMessage.textContent).toContain('message 1');
-    expect(assistantMessage.className).toContain('rounded-lg');
-    expect(assistantMessage.className).toContain('border');
+    expect(assistantMessage).not.toHaveClass('rounded-lg', 'border', 'bg-card', 'shadow-sm');
   });
 
-  test('aligns an assistant message timestamp to the right', async () => {
+  test('does not render an assistant message timestamp', async () => {
     const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
 
     const assistantMessage = await waitFor(() => getByTestId('assistant-message-m1'));
-    const timestampFooter = assistantMessage.querySelector('div.mt-1');
-    const timestamp = timestampFooter?.querySelector('span');
 
-    expect(timestampFooter?.className).toContain('flex');
-    expect(timestampFooter?.className).toContain('justify-end');
-    expect(timestamp?.className).toContain('thread-timestamp');
+    expect(assistantMessage.querySelector('.thread-timestamp')).toBeNull();
   });
 
   test('does not count the sticky section context as a measured item row', async () => {

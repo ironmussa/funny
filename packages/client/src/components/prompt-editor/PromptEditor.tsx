@@ -594,6 +594,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   // regardless of caret position
   const triggerPosRef = useRef<number | null>(null);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  // A burst of input can produce many editor transactions in the same frame.
+  // Keep at most one geometry check pending so typing does not repeatedly force
+  // layout before the browser can paint the editor update.
+  const caretScrollFrameRef = useRef<number | null>(null);
 
   /**
    * Read the full text after a trigger character (@, /, #, or >) up to the next
@@ -1326,10 +1330,15 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     onUpdate: ({ editor: ed }) => {
       onChangeRef.current?.();
       // Keep the caret in view — PM's scrollIntoView can lag behind our height
-      // animation, so we re-assert it on the next frame.
-      requestAnimationFrame(() => {
+      // animation, so we re-assert it on the next frame. Coalesce bursts of
+      // keystrokes and skip the geometry reads entirely while the editor has
+      // no internal overflow; a one-line prompt cannot need scrolling.
+      if (caretScrollFrameRef.current !== null) return;
+      caretScrollFrameRef.current = requestAnimationFrame(() => {
+        caretScrollFrameRef.current = null;
         try {
           const dom = ed.view.dom as HTMLElement;
+          if (dom.scrollHeight <= dom.clientHeight) return;
           const coords = ed.view.coordsAtPos(ed.state.selection.from);
           const rect = dom.getBoundingClientRect();
           const offsetBottom = coords.bottom - rect.top;
@@ -1347,6 +1356,15 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     editable: !disabled,
   });
   editorRef.current = editor;
+
+  useEffect(
+    () => () => {
+      if (caretScrollFrameRef.current !== null) {
+        cancelAnimationFrame(caretScrollFrameRef.current);
+      }
+    },
+    [],
+  );
 
   // Update placeholder when it changes
   useEffect(() => {

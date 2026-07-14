@@ -167,7 +167,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       });
       break;
     case 'agent:status': {
-      const statusKey = `${data.status}|${data.waitingReason ?? ''}|${data.permissionRequest?.toolName ?? ''}|${data.stage ?? ''}|${data.permissionMode ?? ''}`;
+      const statusKey = `${data.status}|${data.waitingReason ?? ''}|${data.permissionRequest?.toolName ?? ''}|${data.pendingPermissionRequest?.requestId ?? ''}|${data.permissionApprovalCapability?.kind ?? ''}|${data.permissionApprovalCapability?.transport ?? data.permissionApprovalCapability?.reason ?? ''}|${data.stage ?? ''}|${data.permissionMode ?? ''}`;
       const prev = lastStatusByThread.get(threadId);
       if (prev === statusKey) break;
       lastStatusByThread.set(threadId, statusKey);
@@ -179,7 +179,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         permissionRequest: data.permissionRequest?.toolName ?? '',
       });
 
-      if (data.status === 'waiting' || data.permissionRequest) {
+      if (data.status === 'waiting' || data.permissionRequest || data.pendingPermissionRequest) {
         startTransition(() => {
           useThreadStore.getState().handleWSStatus(threadId, data);
         });
@@ -446,10 +446,24 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
           store2.refreshActiveThread();
         }
       }
-      if (data.permissionMode && store2.activeThread?.id === threadId) {
-        useThreadStore.setState({
-          activeThread: { ...store2.activeThread, permissionMode: data.permissionMode },
-        });
+      if (data.permissionMode) {
+        useThreadStore.setState((state) => ({
+          ...threadMutations.patchThread(state, threadId, (thread) => ({
+            ...thread,
+            permissionMode: data.permissionMode,
+          })),
+          ...threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
+            ...thread,
+            permissionMode: data.permissionMode,
+          })),
+          // A very early event can arrive before either cache is hydrated.
+          // Keep the active mirror coherent in that narrow window as well.
+          ...(state.activeThread?.id === threadId &&
+          !state.threadsById[threadId] &&
+          !state.threadDataById[threadId]
+            ? { activeThread: { ...state.activeThread, permissionMode: data.permissionMode } }
+            : {}),
+        }));
       }
       break;
     }

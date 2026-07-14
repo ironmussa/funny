@@ -12,7 +12,15 @@
  * back to `thread-store.ts`.
  */
 
-import type { Thread, Message, ThreadEvent, WaitingReason } from '@funny/shared';
+import type {
+  Thread,
+  Message,
+  ThreadEvent,
+  WaitingReason,
+  PendingPermissionRequest,
+  PermissionApprovalCapability,
+  PermissionRecoveryReason,
+} from '@funny/shared';
 
 import type { ContextUsage } from '@/lib/context-usage-types';
 import type { GitProgressStep } from '@/lib/git-progress-types';
@@ -49,6 +57,12 @@ export interface ThreadWithMessages extends Thread {
   resultInfo?: AgentResultInfo;
   waitingReason?: WaitingReason;
   pendingPermission?: { toolName: string; toolInput?: string };
+  /** A provider-native request that can be answered without restarting the run. */
+  pendingPermissionRequest?: PendingPermissionRequest;
+  /** The selected transport's ability to honor interactive approvals. */
+  permissionApprovalCapability?: PermissionApprovalCapability;
+  /** A formerly actionable request lost its runner-owned continuation. */
+  permissionRecoveryReason?: PermissionRecoveryReason;
   hasMore?: boolean;
   hasMoreAfter?: boolean;
   loadingMore?: boolean;

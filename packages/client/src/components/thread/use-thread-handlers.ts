@@ -1,3 +1,4 @@
+import type { PermissionDecision } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { useCallback, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -161,6 +162,31 @@ export function useThreadHandlers(refs: Refs) {
     [refs],
   );
 
+  const handlePermissionDecision = useCallback(
+    async (requestId: string, decision: PermissionDecision) => {
+      const thread = refs.activeThreadRef.current;
+      if (!thread) return;
+
+      const result = await api.respondPermissionRequest(thread.id, requestId, decision);
+      if (result.isErr()) {
+        log.error('respondPermissionRequest failed', {
+          threadId: thread.id,
+          requestId,
+          decision,
+          error: result.error.message,
+        });
+        toast.error(result.error.message);
+        // A 409 means the browser is looking at an old card. Reload the
+        // server snapshot instead of sending a replacement prompt.
+        if (result.error.type === 'CONFLICT') {
+          await useThreadStore.getState().refreshActiveThread();
+        }
+        throw new Error(result.error.message);
+      }
+    },
+    [refs],
+  );
+
   const handleToolRespond = useCallback(
     (toolCallId: string, answer: string) => {
       const thread = refs.activeThreadRef.current;
@@ -176,6 +202,7 @@ export function useThreadHandlers(refs: Refs) {
     handleSend,
     handleStop,
     handlePermissionApproval,
+    handlePermissionDecision,
     handleToolRespond,
   };
 }

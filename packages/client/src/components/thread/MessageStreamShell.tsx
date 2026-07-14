@@ -35,6 +35,9 @@ interface MessageStreamShellProps {
   status: string;
   waitingReason: MessageStreamProps['waitingReason'];
   pendingPermission: MessageStreamProps['pendingPermission'];
+  pendingPermissionRequest: MessageStreamProps['pendingPermissionRequest'];
+  permissionApprovalCapability: MessageStreamProps['permissionApprovalCapability'];
+  permissionRecoveryReason: MessageStreamProps['permissionRecoveryReason'];
   isRunning: boolean;
   isExternal: boolean;
   resultInfo: MessageStreamProps['resultInfo'];
@@ -44,6 +47,7 @@ interface MessageStreamShellProps {
   onPermissionApprove: () => void;
   onPermissionAlwaysAllow: () => void;
   onPermissionDeny: () => void;
+  onPermissionDecision: MessageStreamProps['onPermissionDecision'];
   footer?: ReactNode;
 }
 
@@ -75,6 +79,9 @@ export function MessageStreamShell({
   status,
   waitingReason,
   pendingPermission,
+  pendingPermissionRequest,
+  permissionApprovalCapability,
+  permissionRecoveryReason,
   isRunning,
   isExternal,
   resultInfo,
@@ -84,6 +91,7 @@ export function MessageStreamShell({
   onPermissionApprove,
   onPermissionAlwaysAllow,
   onPermissionDeny,
+  onPermissionDecision,
   footer,
 }: MessageStreamShellProps) {
   const hasMore = pagination?.hasMore ?? false;
@@ -154,6 +162,9 @@ export function MessageStreamShell({
           status={status}
           waitingReason={waitingReason}
           pendingPermission={pendingPermission}
+          pendingPermissionRequest={pendingPermissionRequest}
+          permissionApprovalCapability={permissionApprovalCapability}
+          permissionRecoveryReason={permissionRecoveryReason}
           isRunning={isRunning}
           isExternal={isExternal}
           compact={compact}
@@ -165,6 +176,7 @@ export function MessageStreamShell({
           onPermissionApprove={onPermissionApprove}
           onPermissionAlwaysAllow={onPermissionAlwaysAllow}
           onPermissionDeny={onPermissionDeny}
+          onPermissionDecision={onPermissionDecision}
         />
 
         {/* Prompt pin spacer (full mode only) */}

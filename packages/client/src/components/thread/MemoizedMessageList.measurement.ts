@@ -8,7 +8,14 @@ import type { RenderItem } from '@/lib/render-items';
 import type { MessageItem, VirtualRow } from './MemoizedMessageList.virtualRows';
 
 export const VIRTUAL_ROW_GAP_PX = 16;
-export const VIRTUAL_OVERSCAN = 8;
+// Four rows on either side keeps a scroll buffer while avoiding eager markdown
+// parsing for a full screen of messages that may never become visible.
+export const VIRTUAL_OVERSCAN = 4;
+// Before TanStack Virtual receives its first scroll measurement, render only
+// the active end of the thread. A direct thread load is restored to that end,
+// and rendering the complete history for this one-frame fallback can otherwise
+// synchronously parse hundreds of markdown messages before the LCP can paint.
+export const INITIAL_FALLBACK_RENDER_COUNT = VIRTUAL_OVERSCAN * 2 + 1;
 
 const USER_MESSAGE_ROW_PADDING_PX = 24;
 const USER_MESSAGE_CARD_VERTICAL_CHROME_PX = 38;
@@ -158,9 +165,14 @@ export function buildFallbackVirtualItems(
   heightCache: Map<string, number>,
   containerWidth: number,
   fonts: FontConfig,
+  maxRenderedItems = virtualRows.length,
 ) {
   let offset = 0;
-  return virtualRows.map((row, index) => {
+  const firstRenderedIndex = Math.max(0, virtualRows.length - maxRenderedItems);
+  const renderedItems: VirtualItem[] = [];
+
+  for (let index = 0; index < virtualRows.length; index++) {
+    const row = virtualRows[index];
     const size = heightCache.get(row.key) ?? estimateVirtualRowHeight(row, containerWidth, fonts);
     const item = {
       key: row.key,
@@ -171,8 +183,9 @@ export function buildFallbackVirtualItems(
       lane: 0,
     };
     offset = item.end + VIRTUAL_ROW_GAP_PX;
-    return item;
-  });
+    if (index >= firstRenderedIndex) renderedItems.push(item);
+  }
+  return renderedItems;
 }
 
 export function getMeasuredLastRowBottom({

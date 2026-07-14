@@ -9,7 +9,6 @@ import {
   memo,
   useImperativeHandle,
 } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { makeProseFont } from '@/hooks/use-pretext';
 import { buildGroupedRenderItems, findNearestPrecedingUserMessageItem } from '@/lib/render-items';
@@ -34,6 +33,7 @@ import {
   getMeasuredLastRowBottom,
   getObservedBlockSize,
   getVirtualContentHeight,
+  INITIAL_FALLBACK_RENDER_COUNT,
   shouldAdjustScrollPositionOnItemSizeChange,
   VIRTUAL_OVERSCAN,
   VIRTUAL_ROW_GAP_PX,
@@ -120,7 +120,6 @@ export const MemoizedMessageList = memo(
     changeSummaryRunning,
     onSessionReverted,
   }: MemoizedMessageListProps) {
-    const { t } = useTranslation();
     // ── Font config: dynamic based on global font size setting ──
     const globalFontSize = useSettingsStore((s) => s.fontSize);
     const fontConfig = useMemo<FontConfig>(
@@ -274,7 +273,13 @@ export const MemoizedMessageList = memo(
     const fallbackVirtualItems = useMemo(
       () =>
         shouldUseVirtualFallback
-          ? buildFallbackVirtualItems(virtualRows, heightCache, containerWidth, fontConfig)
+          ? buildFallbackVirtualItems(
+              virtualRows,
+              heightCache,
+              containerWidth,
+              fontConfig,
+              INITIAL_FALLBACK_RENDER_COUNT,
+            )
           : [],
       [containerWidth, fontConfig, heightCache, shouldUseVirtualFallback, virtualRows],
     );
@@ -703,7 +708,6 @@ export const MemoizedMessageList = memo(
             >
               <VirtualRowContent
                 row={row}
-                t={t}
                 threadId={threadId}
                 changeSummaryRunning={changeSummaryRunning}
                 onSessionReverted={onSessionReverted}

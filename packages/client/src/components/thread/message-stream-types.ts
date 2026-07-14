@@ -1,4 +1,11 @@
-import type { ThreadEvent, WaitingReason } from '@funny/shared';
+import type {
+  PermissionApprovalCapability,
+  PermissionDecision,
+  PermissionRecoveryReason,
+  PendingPermissionRequest,
+  ThreadEvent,
+  WaitingReason,
+} from '@funny/shared';
 import type { ReactNode, Ref } from 'react';
 
 import type { AgentInitInfo, CompactionEvent } from '@/stores/thread-store';
@@ -8,16 +15,27 @@ export interface MessageStreamProps {
   threadId: string;
   status: string;
   messages: any[];
+  /** Most-recent user message, returned even when it falls outside the loaded window. */
+  lastUserMessage?: any;
   leadingUserMessage?: any;
   threadEvents?: ThreadEvent[];
   compactionEvents?: CompactionEvent[];
   initInfo?: AgentInitInfo;
-  resultInfo?: { status: 'completed' | 'failed'; cost: number; duration: number; error?: string };
+  resultInfo?: {
+    status: 'completed' | 'failed';
+    cost: number;
+    duration: number;
+    error?: string;
+  };
   waitingReason?: WaitingReason;
   pendingPermission?: { toolName: string; toolInput?: string };
+  pendingPermissionRequest?: PendingPermissionRequest;
+  permissionApprovalCapability?: PermissionApprovalCapability;
+  permissionRecoveryReason?: PermissionRecoveryReason;
   isExternal?: boolean;
   onSend: (prompt: string, opts: { model: string; mode: string }) => void;
   onPermissionApproval?: (toolName: string, approved: boolean, alwaysAllow?: boolean) => void;
+  onPermissionDecision?: (requestId: string, decision: PermissionDecision) => Promise<void> | void;
   onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;
   onFork?: (messageId: string) => void;
   onRewind?: (messageId: string) => void;

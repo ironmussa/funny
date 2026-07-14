@@ -84,6 +84,11 @@ export interface ThreadState {
   renameThread: (threadId: string, projectId: string, title: string) => Promise<void>;
   pinThread: (threadId: string, projectId: string, pinned: boolean) => Promise<void>;
   updateThreadStage: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
+  /** Persist the mode to use for this thread's next agent execution. */
+  updateThreadPermissionMode: (
+    threadId: string,
+    permissionMode: PermissionMode,
+  ) => Promise<boolean>;
   deleteThread: (threadId: string, projectId: string) => Promise<void>;
   /** Delete a scratch thread (no project / no worktree). */
   deleteScratchThread: (threadId: string) => Promise<void>;

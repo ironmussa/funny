@@ -30,11 +30,13 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
   const capturedHtmlRef = useRef<string | null>(null);
   const nearRef = useRef(true);
   const [mode, setMode] = useState<'live' | 'frozen'>('live');
+  const [frozenHeight, setFrozenHeight] = useState<number | null>(null);
 
   // Reset when the message content changes (e.g. edit) — a stale capture would
   // otherwise freeze the previous text.
   useEffect(() => {
     capturedHtmlRef.current = null;
+    setFrozenHeight(null);
     setMode('live');
   }, [content]);
 
@@ -51,7 +53,14 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
       if (capturedHtmlRef.current === null) {
         const el2 = wrapperRef.current;
         const html = el2?.innerHTML ?? '';
-        if (html && el2?.firstElementChild) capturedHtmlRef.current = html;
+        if (html && el2?.firstElementChild) {
+          capturedHtmlRef.current = html;
+          // The static markup is semantically identical but can have a
+          // slightly different box tree. Retain the live height while this
+          // offscreen row is frozen so its replacement cannot move the rows
+          // that remain in the viewport.
+          setFrozenHeight(el2.getBoundingClientRect().height);
+        }
       }
       if (capturedHtmlRef.current !== null) setMode('frozen');
     };
@@ -84,6 +93,7 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
         ref={wrapperRef}
         data-testid="frozen-message"
         data-frozen="true"
+        style={frozenHeight !== null ? { height: frozenHeight } : undefined}
         // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- sanitized react-markdown output, re-inserted verbatim
         dangerouslySetInnerHTML={{ __html: capturedHtmlRef.current }}
       />

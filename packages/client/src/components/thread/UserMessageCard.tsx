@@ -274,15 +274,22 @@ function UserMessageContent({
         onScroll={expanded ? checkScrollEnd : undefined}
         className={cn(
           'whitespace-pre-wrap font-sans text-sm leading-relaxed wrap-break-word overflow-x-auto',
-          !expanded && isOverflowing && 'overflow-hidden',
+          // Apply the collapsed height before overflow measurement. Previously
+          // the full prompt could paint as the LCP, then shrink after the
+          // layout effect discovered it overflowed, shifting the whole thread.
+          !expanded && 'overflow-hidden',
           expanded && 'max-h-[40vh] overflow-y-auto',
         )}
         style={
-          !expanded && isOverflowing
+          !expanded
             ? {
                 maxHeight: COLLAPSED_MAX_H,
-                WebkitMaskImage: 'linear-gradient(to bottom, black 55%, transparent)',
-                maskImage: 'linear-gradient(to bottom, black 55%, transparent)',
+                ...(isOverflowing
+                  ? {
+                      WebkitMaskImage: 'linear-gradient(to bottom, black 55%, transparent)',
+                      maskImage: 'linear-gradient(to bottom, black 55%, transparent)',
+                    }
+                  : {}),
               }
             : undefined
         }
@@ -361,9 +368,6 @@ export function UserMessageCard({
   const hasSideActions = Boolean(hasCopyableContent || hasThreadActions);
   const hasFooterBadges = Boolean(model || permissionMode);
   const hasSideMeta = Boolean(hasSideActions || timestamp);
-  let sideMetaJustify = 'justify-start';
-  if (timestamp) sideMetaJustify = 'justify-end';
-  if (timestamp && hasSideActions) sideMetaJustify = 'justify-between';
   const handleCardKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (!onClick || event.defaultPrevented) return;
@@ -390,8 +394,8 @@ export function UserMessageCard({
         'relative group text-sm',
         'w-full rounded-lg py-2 bg-foreground text-background',
         'px-3',
-        hasSideMeta && 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-2',
-        onClick && 'cursor-pointer',
+        onClick &&
+          'cursor-pointer focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border',
         'shadow-md',
       )}
       {...interactiveCardProps}
@@ -466,7 +470,7 @@ export function UserMessageCard({
       {hasSideMeta && (
         <div
           data-testid="user-message-side-meta"
-          className={cn('flex min-w-6 flex-col items-end self-stretch', sideMetaJustify)}
+          className="absolute inset-y-2 right-2 z-10 flex min-w-6 flex-col items-end justify-between"
         >
           {hasSideActions && (
             <div className="flex items-center gap-1">

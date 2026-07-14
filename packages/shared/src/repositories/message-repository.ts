@@ -202,9 +202,11 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       }
     }
 
-    // Only fall back to a dedicated query when the window has no user message
-    // (e.g. agent produced > MAX_TOTAL messages since the last prompt).
-    if (!lastUserMessage) {
+    // A restored window can be in the middle of a long thread. In that case it
+    // may contain an older user message while the actual latest prompt lives in
+    // the unloaded newer history, so querying only when the window has no user
+    // message violates the `lastUserMessage` contract.
+    if (!lastUserMessage || hasMoreAfter) {
       const lastUserRow = await dbGet(
         db
           .select()
@@ -213,7 +215,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
           .orderBy(desc(schema.messages.timestamp))
           .limit(1),
       );
-      lastUserMessage = lastUserRow ?? undefined;
+      lastUserMessage = lastUserRow ?? lastUserMessage;
     }
 
     // Single batched tool-calls fetch covering messages + context-only user messages.

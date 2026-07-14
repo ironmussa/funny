@@ -151,7 +151,10 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const refreshActive = vi.fn();
 
     useThreadStore.setState({
-      activeThread: { id: 't1', permissionMode: 'default' } as any,
+      threadsById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+      threadDataById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+      selectedThreadId: 't1',
+      activeThread: { id: 't1', permissionMode: 'ask' } as any,
       handleWSStatus: ((tid: string, data: unknown) => {
         statusCalls.push({ tid, data });
       }) as any,
@@ -168,6 +171,8 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(statusCalls).toEqual([{ tid: 't1', data: { status: 'completed' } }]);
     expect(refreshAll).toHaveBeenCalled();
     expect(refreshActive).toHaveBeenCalled();
+    expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('plan');
+    expect(useThreadStore.getState().threadDataById.t1.permissionMode).toBe('plan');
     expect(useThreadStore.getState().activeThread?.permissionMode).toBe('plan');
   });
 

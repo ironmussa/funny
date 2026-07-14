@@ -476,6 +476,31 @@ describe('getThreadWithMessages', () => {
     expect(result!.lastUserMessage!.content).toBe('second');
   });
 
+  test('lastUserMessage stays latest when a restored window contains an older prompt', async () => {
+    seedMessage(deps.db, {
+      id: 'u1',
+      role: 'user',
+      content: 'older prompt in the restored window',
+      timestamp: ts(0),
+    });
+    seedMessage(deps.db, { id: 'a1', role: 'assistant', content: 'r1', timestamp: ts(1) });
+    seedMessage(deps.db, { id: 'a2', role: 'assistant', content: 'r2', timestamp: ts(2) });
+    seedMessage(deps.db, {
+      id: 'u2',
+      role: 'user',
+      content: 'latest prompt outside the restored window',
+      timestamp: ts(3),
+    });
+    seedMessage(deps.db, { id: 'a3', role: 'assistant', content: 'r3', timestamp: ts(4) });
+
+    const result = await repo.getThreadWithMessages('t1', 2, { messageProgress: 0 });
+
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['u1', 'a1']);
+    expect(result!.hasMoreAfter).toBe(true);
+    expect(result!.lastUserMessage!.id).toBe('u2');
+    expect(result!.lastUserMessage!.content).toBe('latest prompt outside the restored window');
+  });
+
   test('single tool-calls fetch covers messages and out-of-window lastUserMessage', async () => {
     // Tool calls on both an in-window assistant and the out-of-window user
     // must both be returned, even though they come from a single batched query.

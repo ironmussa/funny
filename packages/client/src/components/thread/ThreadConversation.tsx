@@ -92,8 +92,14 @@ export function ThreadConversation({
   activeThreadRef.current = activeThread;
   const sendingRef = useRef(false);
 
-  const { sending, handleSend, handleStop, handlePermissionApproval, handleToolRespond } =
-    useThreadHandlers({ activeThreadRef, sendingRef, streamRef });
+  const {
+    sending,
+    handleSend,
+    handleStop,
+    handlePermissionApproval,
+    handlePermissionDecision,
+    handleToolRespond,
+  } = useThreadHandlers({ activeThreadRef, sendingRef, streamRef });
   const { handleFork, handleRewind, handleForkAndRewind, forkingMessageId } = useThreadCheckpoints({
     activeThreadRef,
   });
@@ -160,6 +166,7 @@ export function ThreadConversation({
         threadId={activeThread.id}
         status={activeThread.status}
         messages={stableMessages ?? EMPTY_MESSAGES}
+        lastUserMessage={activeThread.lastUserMessage}
         leadingUserMessage={activeThread.leadingUserMessage}
         threadEvents={stableThreadEvents}
         compactionEvents={stableCompactionEvents}
@@ -167,6 +174,14 @@ export function ThreadConversation({
         resultInfo={activeThread.resultInfo}
         waitingReason={activeThread.waitingReason}
         pendingPermission={activeThread.pendingPermission}
+        pendingPermissionRequest={activeThread.pendingPermissionRequest}
+        permissionApprovalCapability={activeThread.permissionApprovalCapability}
+        permissionRecoveryReason={
+          activeThread.permissionRecoveryReason ??
+          (activeThread.contextRecoveryReason === 'permission-request-expired'
+            ? 'runner_lost'
+            : undefined)
+        }
         isExternal={isExternal}
         model={activeThread.model}
         permissionMode={activeThread.permissionMode}
@@ -174,6 +189,7 @@ export function ThreadConversation({
         onSessionReverted={() => refreshAfterRevert(activeThread.id)}
         onSend={handleSend}
         onPermissionApproval={handlePermissionApproval}
+        onPermissionDecision={handlePermissionDecision}
         onToolRespond={handleToolRespond}
         onFork={gitOps ? handleFork : undefined}
         onRewind={gitOps ? handleRewind : undefined}

@@ -1,5 +1,8 @@
 import { Check, Copy } from 'lucide-react';
-import { memo, lazy, Suspense } from 'react';
+import { memo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
@@ -65,47 +68,21 @@ const markdownComponents = {
   },
 };
 
-// Prefetch react-markdown immediately at module load time.
-// By the time ThreadView renders messages, the chunk is already downloaded.
-const markdownImportPromise = import('react-markdown');
-
-// Lazy-load rehype plugins alongside react-markdown. `rehype-raw` lets GitHub-
-// style tags emitted by bots (details/summary/br/etc.) render as HTML, and
-// `rehype-sanitize` must run after it so scripts, iframes, and event handlers
-// cannot reach the DOM.
-const rehypeRawImportPromise = import('rehype-raw');
-const rehypeSanitizeImportPromise = import('rehype-sanitize');
-
-const LazyMarkdownRenderer = lazy(() =>
-  Promise.all([markdownImportPromise, rehypeRawImportPromise, rehypeSanitizeImportPromise]).then(
-    ([{ default: ReactMarkdown }, { default: rehypeRaw }, { default: rehypeSanitize }]) => {
-      const rehypePlugins = [rehypeRaw, rehypeSanitize];
-      function MarkdownRenderer({ content }: { content: string }) {
-        return (
-          <ReactMarkdown
-            remarkPlugins={remarkPlugins}
-            rehypePlugins={rehypePlugins}
-            components={markdownComponents}
-          >
-            {content}
-          </ReactMarkdown>
-        );
-      }
-      return { default: MarkdownRenderer };
-    },
-  ),
-);
+// Parse markdown in the first render instead of swapping a raw-text Suspense
+// fallback for formatted HTML later. That swap changes headings, lists, and
+// blockquote heights after paint, producing a visible thread-wide CLS cluster.
+const rehypePlugins = [rehypeRaw, rehypeSanitize];
 
 export const MessageContent = memo(function MessageContent({ content }: { content: string }) {
   return (
     <div className={cn(markdownProseClassName, 'overflow-hidden')}>
-      <Suspense
-        fallback={
-          <div className={cn(markdownProseClassName, 'text-sm whitespace-pre-wrap')}>{content}</div>
-        }
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={markdownComponents}
       >
-        <LazyMarkdownRenderer content={content} />
-      </Suspense>
+        {content}
+      </ReactMarkdown>
     </div>
   );
 });
@@ -115,6 +92,7 @@ export function CopyButton({ content }: { content: string }) {
 
   return (
     <button
+      type="button"
       onClick={() => copy(content)}
       className="msg-copy-btn text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded p-1 opacity-0 transition-opacity group-hover/msg:opacity-100"
       aria-label="Copy message"

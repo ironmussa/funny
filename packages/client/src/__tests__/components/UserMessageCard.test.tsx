@@ -51,10 +51,12 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 });
 
 describe('UserMessageCard', () => {
-  test('renders plain message text', () => {
+  test('renders plain message text in a card surface', () => {
     renderWithProviders(<UserMessageCard content="Fix the login bug" data-testid="msg-1" />);
 
-    expect(screen.getByTestId('msg-1')).toBeInTheDocument();
+    const message = screen.getByTestId('msg-1');
+    expect(message).toBeInTheDocument();
+    expect(message).toHaveClass('bg-foreground', 'rounded-lg', 'shadow-md');
     expect(screen.getByText('Fix the login bug')).toBeInTheDocument();
   });
 
@@ -171,12 +173,13 @@ describe('UserMessageCard', () => {
     const timestamp = screen.getByText('time.now');
     expect(timestamp).toBeInTheDocument();
     expect(timestamp).toHaveClass('thread-timestamp');
-    expect(screen.getByTestId('msg-4').className).toContain('grid grid-cols-[minmax(0,1fr)_auto]');
+    expect(screen.getByTestId('msg-4').className).not.toContain('grid-cols-[minmax(0,1fr)_auto]');
     expect(timestamp.parentElement).toHaveAttribute('data-testid', 'user-message-side-meta');
-    expect(timestamp.parentElement?.className).toContain('justify-between');
+    expect(timestamp.parentElement?.className).toContain('absolute');
+    expect(timestamp.parentElement?.className).toContain('right-2');
   });
 
-  test('keeps actions and timestamp in the same right-side column', () => {
+  test('overlays actions and timestamp without reserving a message column', () => {
     const timestampIso = new Date().toISOString();
 
     renderWithProviders(
@@ -196,6 +199,11 @@ describe('UserMessageCard', () => {
     expect(sideMeta).toContainElement(timestamp);
     expect(sideMeta.className).toContain('items-end');
     expect(sideMeta.className).toContain('justify-between');
+    expect(sideMeta.className).toContain('absolute');
+    expect(sideMeta.className).toContain('inset-y-2');
+    expect(screen.getByTestId('msg-actions-layout').className).not.toContain(
+      'grid-cols-[minmax(0,1fr)_auto]',
+    );
   });
 
   test('supports keyboard activation when the card is clickable', () => {
@@ -208,6 +216,7 @@ describe('UserMessageCard', () => {
     const card = screen.getByTestId('msg-keyboard');
     expect(card).toHaveAttribute('role', 'button');
     expect(card).toHaveAttribute('tabindex', '0');
+    expect(card).toHaveClass('focus:outline-hidden', 'focus-visible:ring-border');
 
     fireEvent.keyDown(card, { key: 'Enter' });
     fireEvent.keyDown(card, { key: ' ' });
@@ -317,6 +326,14 @@ describe('UserMessageCard', () => {
       renderWithProviders(<UserMessageCard content={'line\n'.repeat(20)} data-testid="msg-7" />);
 
       expect(screen.getByText('Show more')).toBeInTheDocument();
+    });
+
+    test('uses the collapsed height before overflow measurement can repaint', () => {
+      renderWithProviders(<UserMessageCard content={'line\n'.repeat(20)} data-testid="msg-8" />);
+
+      const content = screen.getByTestId('msg-8').querySelector('pre');
+      expect(content).toHaveStyle({ maxHeight: '48px' });
+      expect(content).toHaveClass('overflow-hidden');
     });
   });
 });

@@ -19,6 +19,8 @@ export interface MessageListScrollAnchor {
 export interface MemoizedMessageListProps {
   ref?: Ref<MemoizedMessageListHandle>;
   messages: any[];
+  /** Most-recent user message, returned even when it falls outside the loaded window. */
+  lastUserMessage?: any;
   leadingUserMessage?: any;
   threadEvents?: ThreadEvent[];
   compactionEvents?: CompactionEvent[];

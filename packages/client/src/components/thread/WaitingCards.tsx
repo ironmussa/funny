@@ -163,6 +163,63 @@ export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }
   );
 }
 
+/**
+ * Codex SDK can report a permission-like failure but its one-shot transport
+ * has no live request to resume. Deliberately offer no approve/deny or generic
+ * Continue controls: those controls would make a promise this transport
+ * cannot honor.
+ */
+export function CodexSdkApprovalUnavailableCard() {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      data-testid="codex-sdk-approval-unavailable"
+      className="border-status-warning/20 bg-status-warning/5 space-y-2 rounded-lg border p-3"
+    >
+      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
+        <AlertTriangle className="icon-sm" />
+        {t(
+          'thread.codexSdkApprovalUnavailableTitle',
+          'Codex needs an approval that this runner cannot answer interactively.',
+        )}
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {t(
+          'thread.codexSdkApprovalUnavailableBody',
+          'Start a new run with a suitable permission mode, or use a runner configured with Codex ACP.',
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The server persisted the request, but the runner that owned its ACP
+ * continuation disconnected. Retrying an old decision cannot resume this run.
+ */
+export function PermissionContinuationLostCard() {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      data-testid="permission-continuation-lost"
+      className="border-status-warning/20 bg-status-warning/5 space-y-2 rounded-lg border p-3"
+    >
+      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
+        <AlertTriangle className="icon-sm" />
+        {t('thread.permissionContinuationLostTitle', 'The approval request could not be resumed.')}
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {t(
+          'thread.permissionContinuationLostBody',
+          'The runner disconnected while this approval was pending. Start a new run to continue.',
+        )}
+      </p>
+    </div>
+  );
+}
+
 export function PermissionApprovalCard({
   toolName,
   toolInput,
@@ -172,9 +229,9 @@ export function PermissionApprovalCard({
 }: {
   toolName: string;
   toolInput?: string;
-  onApprove: () => void;
-  onAlwaysAllow?: () => void;
-  onDeny: () => void;
+  onApprove: () => void | Promise<void>;
+  onAlwaysAllow?: () => void | Promise<void>;
+  onDeny?: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const fontSize = useSettingsStore((s) => s.fontSize);
@@ -215,19 +272,33 @@ export function PermissionApprovalCard({
     };
   }, [displayedInput, bashCommand]);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     setLoading('approve');
-    onApprove();
+    try {
+      await onApprove();
+    } catch {
+      // The request remains active after a failed submission (notably when a
+      // permanent rule could not be saved), so restore its controls.
+      setLoading(null);
+    }
   };
 
-  const handleAlwaysAllow = () => {
+  const handleAlwaysAllow = async () => {
     setLoading('always');
-    onAlwaysAllow?.();
+    try {
+      await onAlwaysAllow?.();
+    } catch {
+      setLoading(null);
+    }
   };
 
-  const handleDeny = () => {
+  const handleDeny = async () => {
     setLoading('deny');
-    onDeny();
+    try {
+      await onDeny?.();
+    } catch {
+      setLoading(null);
+    }
   };
 
   return (
@@ -311,22 +382,24 @@ export function PermissionApprovalCard({
             {t('thread.alwaysAllow')}
           </button>
         )}
-        <button
-          data-testid="permission-deny"
-          onClick={handleDeny}
-          disabled={!!loading}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors',
-            loading && 'opacity-50 pointer-events-none',
-          )}
-        >
-          {loading === 'deny' ? (
-            <Loader2 className="icon-sm animate-spin" />
-          ) : (
-            <XCircle className="icon-sm" />
-          )}
-          {t('thread.denyPermission')}
-        </button>
+        {onDeny && (
+          <button
+            data-testid="permission-deny"
+            onClick={handleDeny}
+            disabled={!!loading}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors',
+              loading && 'opacity-50 pointer-events-none',
+            )}
+          >
+            {loading === 'deny' ? (
+              <Loader2 className="icon-sm animate-spin" />
+            ) : (
+              <XCircle className="icon-sm" />
+            )}
+            {t('thread.denyPermission')}
+          </button>
+        )}
       </div>
     </div>
   );

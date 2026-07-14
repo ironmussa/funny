@@ -1,5 +1,13 @@
-import { useCallback, useImperativeHandle, useMemo, useRef, memo, type CSSProperties } from 'react';
-import { useTranslation } from 'react-i18next';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+  type CSSProperties,
+} from 'react';
 
 import { makeProseFont } from '@/hooks/use-pretext';
 import { buildGroupedRenderItems } from '@/lib/render-items';
@@ -17,7 +25,7 @@ import {
   VIRTUAL_ROW_GAP_PX,
   type FontConfig,
 } from './MemoizedMessageList.measurement';
-import { VirtualRowContent } from './MemoizedMessageList.renderers';
+import { UserMessageRenderer, VirtualRowContent } from './MemoizedMessageList.renderers';
 import type {
   MemoizedMessageListProps,
   MessageListScrollAnchor,
@@ -47,6 +55,7 @@ import { buildVirtualRows } from './MemoizedMessageList.virtualRows';
 export const FrozenMessageList = memo(function FrozenMessageList({
   ref,
   messages,
+  lastUserMessage,
   threadEvents,
   compactionEvents,
   threadId,
@@ -66,8 +75,6 @@ export const FrozenMessageList = memo(function FrozenMessageList({
   changeSummaryRunning,
   onSessionReverted,
 }: MemoizedMessageListProps) {
-  const { t } = useTranslation();
-
   const globalFontSize = useSettingsStore((s) => s.fontSize);
   const fontConfig = useMemo<FontConfig>(
     () => ({
@@ -92,6 +99,25 @@ export const FrozenMessageList = memo(function FrozenMessageList({
   const containerRef = useRef<HTMLDivElement>(null);
   const containerWidth = useContainerWidth(containerRef);
   usePretextWarmup(groupedItems, fontConfig);
+  const [contentVisibilityReady, setContentVisibilityReady] = useState(false);
+
+  useEffect(() => {
+    // A Frozen thread mounts empty and receives its first message batch
+    // asynchronously. Applying `content-visibility: auto` during that fill
+    // makes Chrome replace the offscreen height estimates while it restores the
+    // viewport to the bottom, creating a large CLS cluster. Keep the initial
+    // composition fully laid out; enable skipping only once the user starts
+    // navigating the history, when the browser has real row dimensions.
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    const enableContentVisibility = () => setContentVisibilityReady(true);
+    viewport.addEventListener('wheel', enableContentVisibility, { once: true, passive: true });
+    viewport.addEventListener('touchmove', enableContentVisibility, { once: true, passive: true });
+    return () => {
+      viewport.removeEventListener('wheel', enableContentVisibility);
+      viewport.removeEventListener('touchmove', enableContentVisibility);
+    };
+  }, [scrollRef, threadId]);
 
   // ── Scroll anchoring (native): capture the top-most visible row + its offset,
   // restore by nudging scrollTop so the same row lands at the same place. Shares
@@ -172,6 +198,21 @@ export const FrozenMessageList = memo(function FrozenMessageList({
 
   const frozenCtxValue = useMemo(() => ({ scrollRootRef: scrollRef }), [scrollRef]);
 
+  // A restored long-thread window can sit before the newest user prompt. Keep
+  // that prompt in a separate sticky card until its real row arrives through
+  // newer-message pagination; otherwise frozen mode loses the user's current
+  // question entirely.
+  const detachedLastUserItem = useMemo(() => {
+    if (
+      !lastUserMessage ||
+      lastUserMessage.role !== 'user' ||
+      messages.some((message) => message.id === lastUserMessage.id)
+    ) {
+      return null;
+    }
+    return { type: 'message' as const, msg: lastUserMessage };
+  }, [lastUserMessage, messages]);
+
   // Group rows into sections, each starting at a user message. The sticky
   // header (§6.7) lives INSIDE its section container, so it is bounded by that
   // section: when the section scrolls out the header goes with it and the next
@@ -209,8 +250,8 @@ export const FrozenMessageList = memo(function FrozenMessageList({
           transform: 'translateZ(0)',
         }
       : {
-          contentVisibility: 'auto',
-          containIntrinsicSize: `auto ${estimate}px`,
+          contentVisibility: contentVisibilityReady ? 'auto' : 'visible',
+          ...(contentVisibilityReady ? { containIntrinsicSize: `auto ${estimate}px` } : {}),
           overflowAnchor: 'auto',
         };
     return (
@@ -225,7 +266,6 @@ export const FrozenMessageList = memo(function FrozenMessageList({
       >
         <VirtualRowContent
           row={row}
-          t={t}
           threadId={threadId}
           changeSummaryRunning={changeSummaryRunning}
           onSessionReverted={onSessionReverted}
@@ -253,6 +293,32 @@ export const FrozenMessageList = memo(function FrozenMessageList({
         data-testid="frozen-message-list"
         style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
       >
+        {detachedLastUserItem ? (
+          <div
+            data-testid="frozen-last-user-context"
+            data-section-msg-id={detachedLastUserItem.msg.id}
+            className="bg-background"
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 30,
+              overflowAnchor: 'auto',
+              transform: 'translateZ(0)',
+            }}
+          >
+            <UserMessageRenderer
+              item={detachedLastUserItem}
+              onOpenLightbox={onOpenLightbox}
+              onFork={onFork}
+              onRewind={onRewind}
+              onForkAndRewind={onForkAndRewind}
+              forkingMessageId={forkingMessageId}
+              rewindDisabled={rewindDisabled}
+              rewindDisabledReason={rewindDisabledReason}
+              scrollToUserMessagePosition={scrollToUserMessagePosition}
+            />
+          </div>
+        ) : null}
         {sections.map((section) => (
           <div
             key={section.key}

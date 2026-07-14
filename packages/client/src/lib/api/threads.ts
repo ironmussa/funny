@@ -212,6 +212,11 @@ export const threadsApi = {
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
+  updateThreadPermissionMode: (threadId: string, permissionMode: string) =>
+    request<Thread>(`/threads/${threadId}/permission-mode`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissionMode }),
+    }),
   convertToWorktree: (threadId: string, baseBranch?: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/convert-to-worktree`, {
       method: 'POST',
@@ -271,6 +276,15 @@ export const threadsApi = {
         pattern: options?.pattern,
         toolInput: options?.toolInput,
       }),
+    }),
+  respondPermissionRequest: (
+    threadId: string,
+    requestId: string,
+    decision: import('@funny/shared').PermissionDecision,
+  ) =>
+    request<{ ok: boolean }>(`/threads/${threadId}/permission-requests/${requestId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ decision }),
     }),
   deleteThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),

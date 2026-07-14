@@ -18,6 +18,7 @@ const {
   mockRenameThread,
   mockPinThread,
   mockUpdateThreadStage,
+  mockUpdateThreadPermissionMode,
   mockGetThreadMessages,
   mockCleanupThreadActor,
 } = vi.hoisted(() => ({
@@ -37,6 +38,7 @@ const {
   mockRenameThread: vi.fn(),
   mockPinThread: vi.fn(),
   mockUpdateThreadStage: vi.fn(),
+  mockUpdateThreadPermissionMode: vi.fn(),
   mockGetThreadMessages: vi.fn(),
   mockCleanupThreadActor: vi.fn(),
 }));
@@ -59,6 +61,7 @@ vi.mock('@/lib/api/threads', () => ({
     renameThread: mockRenameThread,
     pinThread: mockPinThread,
     updateThreadStage: mockUpdateThreadStage,
+    updateThreadPermissionMode: mockUpdateThreadPermissionMode,
   },
 }));
 
@@ -935,6 +938,33 @@ describe('thread store actions', () => {
       await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
 
       expect(useThreadStore.getState().threadsById.t1.stage).toBe('backlog');
+    });
+  });
+
+  describe('updateThreadPermissionMode', () => {
+    test('updates the cached thread immediately and persists the selection', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, permissionMode: 'ask' } as any] }),
+      } as any);
+      mockUpdateThreadPermissionMode.mockReturnValue(okAsync({ ok: true }));
+
+      const result = await useThreadStore.getState().updateThreadPermissionMode('t1', 'plan');
+
+      expect(result).toBe(true);
+      expect(mockUpdateThreadPermissionMode).toHaveBeenCalledWith('t1', 'plan');
+      expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('plan');
+    });
+
+    test('restores the previous mode if the persistence request fails', async () => {
+      useThreadStore.setState({
+        ...seedThreads({ p1: [{ ...baseThread, permissionMode: 'ask' } as any] }),
+      } as any);
+      mockUpdateThreadPermissionMode.mockReturnValue(errAsync(new Error('network error')));
+
+      const result = await useThreadStore.getState().updateThreadPermissionMode('t1', 'plan');
+
+      expect(result).toBe(false);
+      expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('ask');
     });
   });
 

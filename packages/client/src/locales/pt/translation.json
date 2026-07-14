@@ -708,6 +708,7 @@
     "input": "Entrada",
     "output": "Saída",
     "waitingForOutput": "Aguardando saída...",
+    "diffUnavailableNoTracking": "A diferença não pode ser exibida porque este arquivo não é rastreado pelo Git.",
     "openInEditor": "Abrir no {{editor}}: {{path}}",
     "copy": "Copiar",
     "preview": "Visualizar",

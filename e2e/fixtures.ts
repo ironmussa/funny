@@ -145,8 +145,8 @@ export class ApiHelper {
 /*  Temp git repo helper                                               */
 /* ------------------------------------------------------------------ */
 
-export function createTempGitRepo(suffix = ''): string {
-  const tmpBase = process.env.TEMP || process.env.TMP || os.tmpdir();
+export function createTempGitRepo(suffix = '', parentDir?: string): string {
+  const tmpBase = parentDir ?? process.env.TEMP ?? process.env.TMP ?? os.tmpdir();
   const dir = path.join(tmpBase, `funny-e2e-${Date.now()}${suffix}`);
   fs.mkdirSync(dir, { recursive: true });
   execSync('git init', { cwd: dir, stdio: 'ignore' });

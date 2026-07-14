@@ -187,7 +187,7 @@ export function conversationWithMarkdown(threadId: string, projectId: string) {
           '  setTimeout(() => resolve("done"), 1000);',
           '});',
           '',
-          'promise.then(value => console.log(value));',
+          'promise.then(value => value);',
           '```',
           '',
           '> Promises are the foundation of modern async JavaScript.',
@@ -379,15 +379,31 @@ export async function mockThreadResponse(
   data: ReturnType<typeof mockThreadWithMessages>,
 ) {
   await page.route(`**/api/threads/${threadId}**`, async (route) => {
-    if (route.request().method() === 'GET') {
+    if (route.request().method() !== 'GET') return route.continue();
+
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === `/api/threads/${threadId}`) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(data),
       });
-    } else {
-      await route.continue();
+      return;
     }
+
+    // Thread loading fetches the message payload and the event timeline in
+    // parallel. Keep the route contracts distinct so mock-driven E2E tests
+    // exercise the same loading path as the real client.
+    if (pathname === `/api/threads/${threadId}/events`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ events: data.threadEvents }),
+      });
+      return;
+    }
+
+    await route.continue();
   });
 }
 

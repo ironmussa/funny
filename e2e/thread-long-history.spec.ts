@@ -281,7 +281,8 @@ test.describe('J.14 Long thread history (500 messages)', () => {
 
       const firstChunk = `${'stream-marker-pinned\n'.repeat(180)}final-pinned-marker`;
       await streamAssistantMessage(page, thread.id, streamingMessage.id, firstChunk);
-      await expect(page.getByTestId(`assistant-message-${streamingMessage.id}`)).toContainText(
+      await expect.poll(() => page.locator('[data-virtual-row-key]').count()).toBe(WINDOW_SIZE);
+      await expect(page.locator('[data-virtual-row-key="streaming-message"]')).toContainText(
         'final-pinned-marker',
       );
       await expect
@@ -295,7 +296,7 @@ test.describe('J.14 Long thread history (500 messages)', () => {
 
       const secondChunk = `${firstChunk}\n${'stream-marker-reading\n'.repeat(180)}final-reading-marker`;
       await streamAssistantMessage(page, thread.id, streamingMessage.id, secondChunk);
-      await expect(page.getByTestId(`assistant-message-${streamingMessage.id}`)).toContainText(
+      await expect(page.locator('[data-virtual-row-key="streaming-message"]')).toContainText(
         'final-reading-marker',
       );
 

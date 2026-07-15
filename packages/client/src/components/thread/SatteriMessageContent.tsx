@@ -3,6 +3,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -118,6 +119,17 @@ function enhanceStaticHtml(root: HTMLElement): void {
       'text-sm',
       'leading-relaxed',
     );
+    // Apply the highlighted block's box model before the first paint. Language
+    // loading only replaces this element's text with token spans, so it must
+    // not be allowed to alter the block height after it is visible.
+    code.classList.add(
+      'hljs',
+      'block',
+      'overflow-x-auto',
+      'font-mono',
+      'text-sm',
+      'leading-relaxed',
+    );
 
     const group = document.createElement('div');
     group.className = 'group/codeblock relative my-2';
@@ -147,14 +159,6 @@ function highlightCodeBlocks(root: HTMLElement): void {
     const source = code.textContent ?? '';
     void ensureLanguage(language.slice('language-'.length)).then((available) => {
       if (available && code.isConnected) {
-        code.classList.add(
-          'hljs',
-          'block',
-          'overflow-x-auto',
-          'font-mono',
-          'text-sm',
-          'leading-relaxed',
-        );
         // highlight.js returns escaped token markup for source read from textContent.
         code.innerHTML = highlightCode(source, language.slice('language-'.length));
       }
@@ -229,30 +233,27 @@ function SatteriMessageContentInner({ content }: { content: string }) {
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
-    const frame = requestAnimationFrame(() => {
-      void Promise.all(
-        segments.map(async (segment): Promise<RenderedSegment> => {
-          if (segment.type !== 'html') return segment;
-          return { type: 'html', html: await renderMarkdownToSafeHtml(segment.markdown) };
-        }),
-      )
-        .then((renderedSegments) => {
-          if (!cancelled) setState({ status: 'ready', segments: renderedSegments });
-        })
-        .catch(() => {
-          if (!cancelled) {
-            metric('markdown.satteri_error', 1, { attributes: { reason: 'compile' } });
-            setState({ status: 'failed' });
-          }
-        });
-    });
+    void Promise.all(
+      segments.map(async (segment): Promise<RenderedSegment> => {
+        if (segment.type !== 'html') return segment;
+        return { type: 'html', html: await renderMarkdownToSafeHtml(segment.markdown) };
+      }),
+    )
+      .then((renderedSegments) => {
+        if (!cancelled) setState({ status: 'ready', segments: renderedSegments });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          metric('markdown.satteri_error', 1, { attributes: { reason: 'compile' } });
+          setState({ status: 'failed' });
+        }
+      });
     return () => {
       cancelled = true;
-      cancelAnimationFrame(frame);
     };
   }, [content, segments]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root || state.status !== 'ready') return;
     enhanceStaticHtml(root);
@@ -278,7 +279,10 @@ function SatteriMessageContentInner({ content }: { content: string }) {
 
   if (state.status === 'loading') {
     return (
-      <div className="text-muted-foreground whitespace-pre-wrap" data-satteri-pending="true">
+      <div
+        className={cn(markdownProseClassName, 'text-foreground whitespace-pre-wrap')}
+        data-satteri-pending="true"
+      >
         {content}
       </div>
     );

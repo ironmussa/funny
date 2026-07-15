@@ -24,4 +24,29 @@ describe('SatteriMessageContent', () => {
     expect(error).toHaveTextContent('## Keep this message');
     expect(screen.queryByTestId('satteri-markdown')).not.toBeInTheDocument();
   });
+
+  test("sets a code block's layout classes before asynchronous syntax highlighting", async () => {
+    markdown.renderMarkdownToSafeHtml.mockResolvedValueOnce(
+      '<pre><code class="language-ts">const value = 1;</code></pre>',
+    );
+
+    render(<SatteriMessageContent content={'```ts\nconst value = 1;\n```'} />);
+
+    const root = await screen.findByTestId('satteri-markdown');
+    const code = root.querySelector('pre > code');
+    expect(code).toHaveClass('hljs', 'block', 'overflow-x-auto', 'font-mono', 'text-sm');
+  });
+
+  test('uses the final markdown text styling while the compiler is loading', () => {
+    markdown.renderMarkdownToSafeHtml.mockImplementationOnce(() => new Promise(() => {}));
+
+    const { container } = render(
+      <SatteriMessageContent content="A message that is still compiling" />,
+    );
+
+    const pending = container.querySelector('[data-satteri-pending]');
+    expect(pending).toBeInTheDocument();
+    expect(pending).toHaveClass('prose', 'max-w-none', 'text-foreground', 'whitespace-pre-wrap');
+    expect(pending).not.toHaveClass('text-muted-foreground');
+  });
 });

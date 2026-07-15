@@ -1,7 +1,13 @@
 import type { Page } from '@playwright/test';
 
 import { expect, seedProject, test } from './fixtures';
-import { mockMessage, mockPaginatedThreadResponse, mockThreadWithMessages } from './mock-helpers';
+import {
+  injectSocketIOEvent,
+  mockMessage,
+  mockPaginatedThreadResponse,
+  mockThreadWithMessages,
+  setupWSIntercept,
+} from './mock-helpers';
 
 const THREAD_VIEWER_STORAGE_KEY = 'funny_thread_viewer';
 const TOTAL_MESSAGES = 500;
@@ -97,31 +103,20 @@ async function scrollMetrics(page: Page) {
   });
 }
 
-/**
- * Drive the same thread-store mutation used after an `agent:message` socket
- * event has been batched. Dynamic import keeps the assertion in the browser
- * against the app's actual Zustand singleton without depending on a runner.
- */
 async function streamAssistantMessage(
   page: Page,
   threadId: string,
   messageId: string,
   content: string,
 ) {
+  await injectSocketIOEvent(page, {
+    type: 'agent:message',
+    threadId,
+    data: { messageId, role: 'assistant', content },
+  });
   await page.evaluate(
-    async ({ nextThreadId, nextMessageId, nextContent }) => {
-      const moduleUrl = '/src/stores/thread-store.ts';
-      const { useThreadStore } = await import(/* @vite-ignore */ moduleUrl);
-      useThreadStore.getState().handleWSMessage(nextThreadId, {
-        messageId: nextMessageId,
-        role: 'assistant',
-        content: nextContent,
-      });
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      );
-    },
-    { nextThreadId: threadId, nextMessageId: messageId, nextContent: content },
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
   );
 }
 
@@ -191,6 +186,10 @@ test.describe('J.14 Long thread history (500 messages)', () => {
       }
     });
 
+    // The socket event injector must wrap the client connection before the
+    // app creates it. Keep the authenticated context, then start a fresh page.
+    await setupWSIntercept(page);
+    await page.goto('about:blank');
     await setFrozenViewer(page);
     await mockPaginatedThreadResponse(page, historyThread.id, history, historyMessages, {
       initialWindowStart: 225,
@@ -203,6 +202,16 @@ test.describe('J.14 Long thread history (500 messages)', () => {
         waitUntil: 'domcontentloaded',
       });
       await expect(page.getByTestId('frozen-message-list')).toBeVisible();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              ((window as any).__playwright_ws_instances as WebSocket[] | undefined)?.some(
+                (ws) => ws.readyState === WebSocket.OPEN && ws.url.includes('/socket.io/'),
+              ) ?? false,
+          ),
+        )
+        .toBe(true);
 
       await loadHistoryFromBothEdges(page);
       await expect
@@ -217,7 +226,34 @@ test.describe('J.14 Long thread history (500 messages)', () => {
       await expect(page.getByTestId('assistant-message-history-message-499')).toBeVisible();
       await page.keyboard.press('Escape');
 
+      // Streaming follows the newest output while pinned at the bottom, but
+      // must leave a reader's current anchor untouched after they scroll up.
+      await scrollToEdge(page, 'bottom');
+      expect((await scrollMetrics(page)).distanceFromBottom).toBeLessThanOrEqual(2);
+      const firstChunk = `${'stream-marker-pinned\n'.repeat(180)}final-pinned-marker`;
+      await streamAssistantMessage(page, historyThread.id, 'history-message-499', firstChunk);
+      await expect.poll(() => page.locator('[data-virtual-row-key]').count()).toBe(TOTAL_MESSAGES);
+      await expect(page.getByTestId('assistant-message-history-message-499')).toContainText(
+        'final-pinned-marker',
+      );
+      await expect
+        .poll(() => scrollMetrics(page).then((metrics) => metrics.distanceFromBottom))
+        .toBeLessThanOrEqual(2);
+
       await scrollToProgress(page, 0.5);
+      const beforeStream = await visibleAnchor(page);
+      const beforeStreamMetrics = await scrollMetrics(page);
+      expect(beforeStreamMetrics.distanceFromBottom).toBeGreaterThan(50);
+      const secondChunk = `${firstChunk}\n${'stream-marker-reading\n'.repeat(180)}final-reading-marker`;
+      await streamAssistantMessage(page, historyThread.id, 'history-message-499', secondChunk);
+      await expect(page.getByTestId('assistant-message-history-message-499')).toContainText(
+        'final-reading-marker',
+      );
+      const afterStream = await visibleAnchor(page);
+      expect(afterStream.key).toBe(beforeStream.key);
+      expect(Math.abs(afterStream.offset - beforeStream.offset)).toBeLessThan(8);
+      expect((await scrollMetrics(page)).distanceFromBottom).toBeGreaterThan(50);
+
       const beforeSwitch = await visibleAnchor(page);
 
       await page.goto(`${baseURL}/projects/${project.id}/threads/${alternateThread.id}`, {
@@ -236,77 +272,6 @@ test.describe('J.14 Long thread history (500 messages)', () => {
     } finally {
       await api.deleteThread(historyThread.id).catch(() => {});
       await api.deleteThread(alternateThread.id).catch(() => {});
-      await api.deleteProject(project.id).catch(() => {});
-    }
-  });
-
-  test('keeps following a stream only while the reader is pinned to the bottom', async ({
-    api,
-    authedPage: page,
-    baseURL,
-    tempRepo,
-  }) => {
-    test.setTimeout(120_000);
-    const project = await seedProject(api, page, tempRepo, `StreamingPin-${Date.now()}`);
-    const thread = await api.createIdleThread(project.id, 'Streaming pin');
-    const streamingMessage = mockMessage({
-      id: 'streaming-message',
-      threadId: thread.id,
-      role: 'assistant',
-      content: 'stream-marker-initial',
-    });
-    const history = mockThreadWithMessages(thread.id, project.id, {
-      title: 'Streaming pin',
-      status: 'completed',
-      messages: [...longThreadMessages(thread.id).slice(0, 160), streamingMessage],
-    });
-
-    await setFrozenViewer(page);
-    await mockPaginatedThreadResponse(page, thread.id, history, history.messages, {
-      initialWindowStart: history.messages.length - WINDOW_SIZE,
-      initialWindowSize: WINDOW_SIZE,
-    });
-
-    try {
-      await page.goto(`${baseURL}/projects/${project.id}/threads/${thread.id}`, {
-        waitUntil: 'domcontentloaded',
-      });
-      await expect(page.getByTestId('frozen-message-list')).toBeVisible();
-      await expect.poll(() => page.locator('[data-virtual-row-key]').count()).toBe(WINDOW_SIZE);
-      await expect(page.locator('[data-virtual-row-key="streaming-message"]')).toContainText(
-        'stream-marker-initial',
-      );
-      await scrollToEdge(page, 'bottom');
-      expect((await scrollMetrics(page)).distanceFromBottom).toBeLessThanOrEqual(2);
-
-      const firstChunk = `${'stream-marker-pinned\n'.repeat(180)}final-pinned-marker`;
-      await streamAssistantMessage(page, thread.id, streamingMessage.id, firstChunk);
-      await expect.poll(() => page.locator('[data-virtual-row-key]').count()).toBe(WINDOW_SIZE);
-      await expect(page.locator('[data-virtual-row-key="streaming-message"]')).toContainText(
-        'final-pinned-marker',
-      );
-      await expect
-        .poll(() => scrollMetrics(page).then((metrics) => metrics.distanceFromBottom))
-        .toBeLessThanOrEqual(2);
-
-      await scrollToProgress(page, 0.35);
-      const beforeReading = await visibleAnchor(page);
-      const beforeReadingMetrics = await scrollMetrics(page);
-      expect(beforeReadingMetrics.distanceFromBottom).toBeGreaterThan(50);
-
-      const secondChunk = `${firstChunk}\n${'stream-marker-reading\n'.repeat(180)}final-reading-marker`;
-      await streamAssistantMessage(page, thread.id, streamingMessage.id, secondChunk);
-      await expect(page.locator('[data-virtual-row-key="streaming-message"]')).toContainText(
-        'final-reading-marker',
-      );
-
-      const afterReading = await visibleAnchor(page);
-      const afterReadingMetrics = await scrollMetrics(page);
-      expect(afterReading.key).toBe(beforeReading.key);
-      expect(Math.abs(afterReading.offset - beforeReading.offset)).toBeLessThan(8);
-      expect(afterReadingMetrics.distanceFromBottom).toBeGreaterThan(50);
-    } finally {
-      await api.deleteThread(thread.id).catch(() => {});
       await api.deleteProject(project.id).catch(() => {});
     }
   });

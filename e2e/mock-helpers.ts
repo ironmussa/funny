@@ -352,6 +352,35 @@ export async function injectWSEvent(
 }
 
 /**
+ * Inject a server-to-client Socket.IO event through Engine.IO's websocket
+ * transport. Unlike `injectWSEvent`, this uses Socket.IO's `42[...]` packet
+ * framing, so the normal client event dispatcher receives the update.
+ */
+export async function injectSocketIOEvent(
+  page: Page,
+  event: {
+    type: string;
+    threadId: string;
+    data: Record<string, unknown>;
+  },
+) {
+  await page.evaluate((evt) => {
+    const allWs = (window as any).__playwright_ws_instances as WebSocket[] | undefined;
+    const ws = allWs
+      ?.slice()
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.readyState === WebSocket.OPEN && candidate.url.includes('/socket.io/'),
+      );
+    if (!ws) throw new Error('Socket.IO WebSocket was not available for event injection');
+
+    const packet = `42${JSON.stringify([evt.type, { threadId: evt.threadId, data: evt.data }])}`;
+    ws.dispatchEvent(new MessageEvent('message', { data: packet }));
+  }, event);
+}
+
+/**
  * Hook into WebSocket creation to capture instances for later injection.
  * Call this BEFORE navigating to the page.
  */

@@ -338,6 +338,32 @@ describe('thread-mutations — patchThread', () => {
     expect(patch.threadsById!.t1.status).toBe('running');
     expect(patch.activeThread!.status).toBe('running');
   });
+
+  test('preserves loaded active-thread fields absent from an older sidebar row', () => {
+    const sidebar = makeThread('t1', { status: 'idle', lastAssistantMessage: 'old snippet' });
+    const active = makeThreadWithMessages('t1');
+    active.status = 'completed';
+    active.messages = [{ id: 'm1', threadId: 't1', role: 'user', content: 'kept' } as any];
+    active.hasMore = true;
+    const state = emptyState({
+      ...seedThreads({ p1: [sidebar] }),
+      selectedThreadId: 't1',
+      activeThread: active,
+    });
+
+    const patch = patchThread(state, 't1', (thread) => ({
+      ...thread,
+      lastAssistantMessage: 'new snippet',
+    }));
+
+    expect(patch.threadsById!.t1.status).toBe('idle');
+    expect(patch.activeThread).toMatchObject({
+      status: 'completed',
+      lastAssistantMessage: 'new snippet',
+      hasMore: true,
+    });
+    expect(patch.activeThread!.messages).toBe(active.messages);
+  });
 });
 
 describe('thread-mutations — threadDataById', () => {

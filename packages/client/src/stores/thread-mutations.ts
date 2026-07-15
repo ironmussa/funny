@@ -265,7 +265,8 @@ export function removeThread(state: ThreadState, threadId: string): Partial<Thre
  * When the patched thread is also the currently-active one (right pane),
  * the mirrored fields are propagated onto `activeThread` so the chat view
  * stays in sync without a separate write path. Fields the updater touches
- * are shallowly merged onto activeThread.
+ * are shallowly merged onto activeThread. The sidebar row can be older than
+ * the loaded payload, so only fields that actually changed are mirrored.
  *
  * Use this for status / title / pinned / stage / lastAssistantMessage —
  * any field that mutates without changing which bucket the thread lives in.
@@ -283,7 +284,12 @@ export function patchThread(
     threadsById: { ...state.threadsById, [threadId]: next },
   };
   if (state.activeThread?.id === threadId) {
-    patch.activeThread = { ...state.activeThread, ...next };
+    const changedFields = Object.fromEntries(
+      Object.entries(next).filter(
+        ([key, value]) => !Object.is(existing[key as keyof Thread], value),
+      ),
+    ) as Partial<Thread>;
+    patch.activeThread = { ...state.activeThread, ...changedFields };
   }
   return patch;
 }

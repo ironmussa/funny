@@ -194,6 +194,38 @@ describe('EditFileCard', () => {
     expect(diff.getAttribute('data-unified-diff')).toContain('+export const value = 1;');
   });
 
+  test('renders combined merge diffs from Codex changes maps', async () => {
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          parsed={{
+            changes: {
+              '/repo/src/AssemblyManager.tsx': {
+                type: 'update',
+                unified_diff: [
+                  'diff --cc src/AssemblyManager.tsx',
+                  '@@@ -10,1 -10,1 +10,1 @@@',
+                  ' -const before = true;',
+                  ' +const after = true;',
+                ].join('\n'),
+              },
+            },
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    await act(async () => {
+      intersectionObserverState.callback?.(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+    });
+
+    const diff = await screen.findByTestId('edit-file-inline-diff');
+    expect(diff.getAttribute('data-unified-diff')).toContain('@@@ -10,1 -10,1 +10,1 @@@');
+  });
+
   test('loads the diff for the SDK path-and-kind change format', async () => {
     apiMocks.getFileDiff.mockResolvedValue({
       isErr: () => false,

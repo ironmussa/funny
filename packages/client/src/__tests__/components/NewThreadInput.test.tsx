@@ -182,6 +182,7 @@ describe('NewThreadInput', () => {
 
     expect(screen.getByTestId('new-thread-scratch')).toBeInTheDocument();
     expect(screen.getByTestId('new-thread-scratch-label')).toHaveTextContent('New scratch thread');
+    expect(screen.getByTestId('new-thread-scratch-icon')).toHaveClass('lucide-notebook-pen');
     expect(screen.getByTestId('new-thread-scratch-prompt')).toBeInTheDocument();
   });
 

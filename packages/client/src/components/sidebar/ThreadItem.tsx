@@ -352,7 +352,10 @@ export const ThreadItem = memo(function ThreadItem({
   const hasPR = !!effectiveGitStatus?.prNumber;
   const snippetText = contentSnippet ?? thread.lastAssistantMessage;
   const hasSnippet = !!snippetText;
-  const showLaunching = isBusy && !hasSnippet;
+  // A newly-created thread is returned as `pending` before the runner emits
+  // its first `running` status. Treat it as launching so it does not briefly
+  // look like an idle backlog item ("Ready to Launch").
+  const showLaunching = (isBusy || thread.status === 'pending') && !hasSnippet;
   const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
   // Scratch threads have no project / branch / worktree — never show the
   // powerline even if older DB rows still carry a stale `branch` value.

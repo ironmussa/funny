@@ -1,5 +1,5 @@
 import { DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { CircleDot, FolderOpen, GitFork } from 'lucide-react';
+import { CircleDot, GitFork, NotebookPen } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -331,7 +331,7 @@ export function NewThreadInput({
             data-testid="new-thread-context-bar"
           >
             <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
-              <FolderOpen className="size-5 shrink-0" />
+              <NotebookPen className="size-5 shrink-0" data-testid="new-thread-scratch-icon" />
               <span className="truncate font-medium" data-testid="new-thread-scratch-label">
                 {t('scratch.composeTitle', { defaultValue: 'New scratch thread' })}
               </span>

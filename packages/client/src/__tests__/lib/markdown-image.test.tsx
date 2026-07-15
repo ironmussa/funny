@@ -1,10 +1,9 @@
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import ReactMarkdown from 'react-markdown';
-import rehypeSanitize from 'rehype-sanitize';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { baseMarkdownComponents, remarkPlugins } from '@/lib/markdown-components';
+import { baseMarkdownComponents } from '@/lib/markdown-components';
+import { renderMarkdownToSafeHtml } from '@/lib/satteri-markdown';
 import { __resetVisualizerRegistry } from '@/lib/visualizer-registry';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
@@ -109,20 +108,13 @@ describe('markdown img', () => {
     expect(screen.getByTestId('markdown-image')).toBeTruthy();
   });
 
-  // Guards the real risk: rehypeSanitize must KEEP a protocol-less absolute
-  // path so our img override can rewrite it. (data:/javascript: stay stripped.)
-  test('survives the rehypeSanitize markdown pipeline for a local path', () => {
-    render(
-      createElement(
-        ReactMarkdown,
-        {
-          remarkPlugins,
-          rehypePlugins: [rehypeSanitize],
-          components: baseMarkdownComponents,
-        },
-        '![shot](/home/u/out.png)',
-      ),
+  test('survives the Sätteri sanitizer for a local path', async () => {
+    const document = new DOMParser().parseFromString(
+      await renderMarkdownToSafeHtml('![shot](/home/u/out.png)'),
+      'text/html',
     );
+    const source = document.querySelector('img')?.getAttribute('src');
+    render(createElement(Img, { src: source ?? undefined, alt: 'shot' }));
     const img = screen.getByTestId('markdown-image') as HTMLImageElement;
     expect(new URL(img.src).searchParams.get('path')).toBe('/home/u/out.png');
   });

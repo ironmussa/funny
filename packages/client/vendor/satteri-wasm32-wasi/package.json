@@ -1,0 +1,28 @@
+{
+  "name": "@bruits/satteri-wasm32-wasi",
+  "version": "0.9.5",
+  "private": true,
+  "description": "High-performance Markdown and MDX processing",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bruits/satteri.git"
+  },
+  "files": [
+    "satteri_napi.wasm32-wasi.wasm",
+    "satteri_napi.wasi.cjs",
+    "satteri_napi.wasi-browser.js",
+    "wasi-worker.mjs",
+    "wasi-worker-browser.mjs"
+  ],
+  "main": "satteri_napi.wasi.cjs",
+  "browser": "satteri_napi.wasi-browser.js",
+  "dependencies": {
+    "@emnapi/core": "1.11.1",
+    "@emnapi/runtime": "1.11.1",
+    "@napi-rs/wasm-runtime": "^1.1.6"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

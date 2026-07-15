@@ -29,6 +29,18 @@ export default defineConfig(({ mode }) => {
   const clientPort = Number(env.VITE_PORT) || 5173;
   const serverPort = Number(env.VITE_SERVER_PORT) || 3001;
   const serverTarget = `http://127.0.0.1:${serverPort}`;
+  const benchmarkTarget = process.env.VITE_BENCHMARK_TARGET;
+  const benchmarkInput =
+    benchmarkTarget === 'markdown'
+      ? { 'markdown-wasm': resolve(__dirname, 'benchmark/markdown-wasm.html') }
+      : benchmarkTarget === 'thread'
+        ? { 'thread-viewer': resolve(__dirname, 'benchmark/thread-viewer.html') }
+        : process.env.VITE_BENCHMARK === '1'
+          ? {
+              'markdown-wasm': resolve(__dirname, 'benchmark/markdown-wasm.html'),
+              'thread-viewer': resolve(__dirname, 'benchmark/thread-viewer.html'),
+            }
+          : undefined;
 
   // Default: listen on all interfaces (0.0.0.0) so http://<LAN-IP>:5173 works, matching a typical
   // API on HOST=0.0.0.0. If Vite only bound 127.0.0.1, the UI was unreachable except via localhost.
@@ -54,10 +66,19 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
+        // Sätteri's browser entry lives at the workspace root but its WASI
+        // binding is deliberately installed in this browser-only workspace.
+        // Explicitly anchor the bare binding import here; otherwise Vite starts
+        // resolution from Sätteri's root-level package directory and misses it.
+        '@bruits/satteri-wasm32-wasi': resolve(
+          __dirname,
+          './node_modules/@bruits/satteri-wasm32-wasi',
+        ),
       },
     },
     build: {
       rollupOptions: {
+        ...(benchmarkInput ? { input: benchmarkInput } : {}),
         output: {
           manualChunks(id: string) {
             if (id.includes('react-markdown') || id.includes('remark-gfm')) return 'markdown';

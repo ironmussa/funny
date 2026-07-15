@@ -1,4 +1,4 @@
-import { screen, cleanup } from '@testing-library/react';
+import { screen, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { MessageContent } from '@/components/thread/MessageContent';
@@ -9,7 +9,10 @@ import { renderWithProviders } from '../helpers/render';
 
 describe('MessageContent', () => {
   beforeEach(() => {
-    useSettingsStore.setState({ defaultEditor: 'cursor', useInternalEditor: false });
+    useSettingsStore.setState({
+      defaultEditor: 'cursor',
+      useInternalEditor: false,
+    });
     useAppStore.setState({
       projects: [{ id: 'p1', name: 'funny', path: '/home/u/projects/funny' } as any],
       selectedProjectId: 'p1',
@@ -92,5 +95,27 @@ describe('MessageContent', () => {
     expect(link).not.toHaveAttribute('href');
     expect(link).not.toHaveAttribute('onclick');
     expect(container.querySelector('script')).not.toBeInTheDocument();
+  });
+
+  test('renders Sätteri HTML with safe local-file links', async () => {
+    renderWithProviders(
+      <MessageContent
+        content={
+          '[MessageContent.tsx](/home/u/projects/funny/packages/client/src/components/thread/MessageContent.tsx:42)\n\n```ts\nconst value = 1;\n```'
+        }
+      />,
+    );
+
+    const root = await screen.findByTestId('satteri-markdown');
+    const link = await screen.findByRole('link', { name: 'MessageContent.tsx' });
+    expect(link).toHaveAttribute(
+      'href',
+      'cursor://file/home/u/projects/funny/packages/client/src/components/thread/MessageContent.tsx:42',
+    );
+
+    await waitFor(() => {
+      expect(root.querySelector('[data-satteri-copy]')).toBeInTheDocument();
+      expect(root.querySelector('code.language-ts')).toHaveTextContent('const value = 1;');
+    });
   });
 });

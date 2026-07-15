@@ -77,6 +77,7 @@ function CopyButton({ text }: { text: string }) {
 
   return (
     <button
+      type="button"
       data-testid="code-block-copy"
       onClick={() => copy(text)}
       className="text-muted-foreground hover:bg-background/50 hover:text-foreground absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity group-hover/codeblock:opacity-100"
@@ -140,7 +141,7 @@ function HighlightedCode({ code, language }: { code: string; language: string })
  * `MarkdownImageCard`, which adds the Mermaid-style chrome — a bordered card
  * with a filename header and a hover toolbar (zoom %, in/out, 1:1, expand).
  */
-function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
+export function MarkdownImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   // Proxied `/api/files/raw` URL immediately, upgraded to a signed direct-runner
   // URL (transport C) when the runner supports it. Falls back silently otherwise.
   const { src: resolved, onError: onMediaError } = useResolvedMediaSrc(src);

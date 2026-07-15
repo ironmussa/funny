@@ -146,7 +146,11 @@ export class ApiHelper {
 /* ------------------------------------------------------------------ */
 
 export function createTempGitRepo(suffix = '', parentDir?: string): string {
-  const tmpBase = parentDir ?? process.env.TEMP ?? process.env.TMP ?? os.tmpdir();
+  // Project creation intentionally rejects paths outside $HOME (unless an
+  // operator configures FUNNY_PROJECT_ROOT). Keep E2E repos in a disposable
+  // directory below $HOME so the fixture exercises the authenticated API
+  // instead of failing its path-policy guard before a test can begin.
+  const tmpBase = parentDir ?? path.join(os.homedir(), '.funny', 'e2e');
   const dir = path.join(tmpBase, `funny-e2e-${Date.now()}${suffix}`);
   fs.mkdirSync(dir, { recursive: true });
   execSync('git init', { cwd: dir, stdio: 'ignore' });

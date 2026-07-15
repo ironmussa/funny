@@ -4,13 +4,13 @@ import { FrozenViewerContext } from './frozen-message-context';
 import { MessageContent } from './MessageContent';
 
 /**
- * Assistant-message content for the frozen viewer. Renders live `MessageContent`
- * (react-markdown) while near the viewport, and once scrolled far away freezes
- * to the HTML the browser already rendered — dropping the react-markdown fiber
- * tree so memory stays bounded by what is visible, not by thread length.
+ * Assistant-message content for the frozen viewer. Renders live Sätteri HTML
+ * while near the viewport, and once scrolled far away freezes the browser's
+ * sanitized markup — dropping the markdown component tree so memory stays
+ * bounded by what is visible, not by thread length.
  *
- * The captured HTML is react-markdown's own output, which already passed through
- * `rehype-sanitize`, so re-inserting it via `dangerouslySetInnerHTML` adds no
+ * The captured HTML is Sätteri output that already passed through DOMPurify, so
+ * re-inserting it via `dangerouslySetInnerHTML` adds no
  * XSS surface. Interactivity (copy button, file links) lives on the row chrome
  * and on live rows; a frozen row is offscreen by definition and rehydrates to
  * live React before it can be interacted with. Frozen HTML stays in the DOM, so
@@ -25,6 +25,13 @@ import { MessageContent } from './MessageContent';
 const FREEZE_MARGIN_PX = 1500;
 
 export const FrozenMessage = memo(function FrozenMessage({ content }: { content: string }) {
+  // A content change must discard any previously captured markup. Using a key
+  // gives React that reset at the component boundary rather than resetting
+  // several pieces of state from an effect after an outdated frame has painted.
+  return <FrozenMessageInstance key={content} content={content} />;
+});
+
+function FrozenMessageInstance({ content }: { content: string }) {
   const ctx = useContext(FrozenViewerContext);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const capturedHtmlRef = useRef<string | null>(null);
@@ -32,17 +39,18 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
   const [mode, setMode] = useState<'live' | 'frozen'>('live');
   const [frozenHeight, setFrozenHeight] = useState<number | null>(null);
 
-  // Reset when the message content changes (e.g. edit) — a stale capture would
-  // otherwise freeze the previous text.
-  useEffect(() => {
-    capturedHtmlRef.current = null;
-    setFrozenHeight(null);
-    setMode('live');
-  }, [content]);
-
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
+    let retryTimer: number | undefined;
+
+    const scheduleRetry = () => {
+      if (retryTimer !== undefined) return;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = undefined;
+        settle();
+      }, 16);
+    };
 
     const settle = () => {
       if (nearRef.current) {
@@ -52,6 +60,12 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
       // Far offscreen: capture the live HTML (if it has rendered) and freeze.
       if (capturedHtmlRef.current === null) {
         const el2 = wrapperRef.current;
+        // Do not freeze the temporary plain-text loading state. Wait for
+        // compiler HTML or the explicit safe error state instead.
+        if (!el2?.querySelector('[data-testid="satteri-markdown"], [data-satteri-error]')) {
+          scheduleRetry();
+          return;
+        }
         const html = el2?.innerHTML ?? '';
         if (html && el2?.firstElementChild) {
           capturedHtmlRef.current = html;
@@ -84,6 +98,7 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
     return () => {
       observer.disconnect();
       cancelAnimationFrame(raf);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
   }, [content, ctx]);
 
@@ -94,7 +109,7 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
         data-testid="frozen-message"
         data-frozen="true"
         style={frozenHeight !== null ? { height: frozenHeight } : undefined}
-        // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- sanitized react-markdown output, re-inserted verbatim
+        // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- sanitized Sätteri output, re-inserted verbatim
         dangerouslySetInnerHTML={{ __html: capturedHtmlRef.current }}
       />
     );
@@ -105,4 +120,4 @@ export const FrozenMessage = memo(function FrozenMessage({ content }: { content:
       <MessageContent content={content} />
     </div>
   );
-});
+}

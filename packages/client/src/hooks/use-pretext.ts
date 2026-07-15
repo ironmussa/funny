@@ -63,6 +63,15 @@ export async function ensurePretextLoaded(): Promise<PretextModule> {
   return pretextLoadPromise;
 }
 
+/**
+ * Preload the message-layout dependency and its primary font without preparing
+ * any message content. Call this after the app has painted so opening the
+ * first thread can use cached layout preparation immediately.
+ */
+export async function preloadPretext(): Promise<void> {
+  await Promise.all([ensurePretextLoaded(), ensureFontReady(PROSE_FONT)]);
+}
+
 /* ── Font readiness ── */
 
 export async function ensureFontReady(font: string): Promise<boolean> {

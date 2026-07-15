@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { createRef, useRef, type RefObject } from 'react';
 import { afterEach, beforeEach, describe, test, expect, vi } from 'vitest';
 
@@ -99,7 +99,7 @@ describe('FrozenMessageList', () => {
     vi.unstubAllGlobals();
   });
 
-  test('keeps the initial batch laid out, then enables offscreen skipping on scroll', () => {
+  test('enables browser offscreen skipping from the initial in-flow render', () => {
     const handleRef = createRef<MemoizedMessageListHandle>();
     const { getByTestId, container } = render(<Harness handleRef={handleRef} />);
 
@@ -111,18 +111,9 @@ describe('FrozenMessageList', () => {
     const rows = container.querySelectorAll('[data-virtual-row-key]');
     // 10 messages, each assistant with tool calls → at least one row per message.
     expect(rows.length).toBeGreaterThanOrEqual(10);
-    // The initial async batch uses real row heights, avoiding CLS when the
-    // viewport restores to the end of a long thread.
-    rows.forEach((row) => {
-      const el = row as HTMLElement;
-      if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows
-      expect(el.style.contentVisibility).toBe('visible');
-      expect(el.style.containIntrinsicSize).toBe('');
-    });
-
-    // Frozen mode retains its native offscreen optimization as soon as the
-    // user starts navigating history.
-    fireEvent.wheel(list.parentElement!);
+    // Every non-sticky row participates in the browser's native display
+    // locking from first paint; the `auto` intrinsic size retains measured
+    // heights after a row has rendered.
     rows.forEach((row) => {
       const el = row as HTMLElement;
       if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows

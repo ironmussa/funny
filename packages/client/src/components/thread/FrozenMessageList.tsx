@@ -1,13 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-  memo,
-  type CSSProperties,
-} from 'react';
+import { useCallback, useImperativeHandle, useMemo, useRef, memo, type CSSProperties } from 'react';
 
 import { makeProseFont } from '@/hooks/use-pretext';
 import { buildGroupedRenderItems } from '@/lib/render-items';
@@ -99,25 +90,6 @@ export const FrozenMessageList = memo(function FrozenMessageList({
   const containerRef = useRef<HTMLDivElement>(null);
   const containerWidth = useContainerWidth(containerRef);
   usePretextWarmup(groupedItems, fontConfig);
-  const [contentVisibilityReady, setContentVisibilityReady] = useState(false);
-
-  useEffect(() => {
-    // A Frozen thread mounts empty and receives its first message batch
-    // asynchronously. Applying `content-visibility: auto` during that fill
-    // makes Chrome replace the offscreen height estimates while it restores the
-    // viewport to the bottom, creating a large CLS cluster. Keep the initial
-    // composition fully laid out; enable skipping only once the user starts
-    // navigating the history, when the browser has real row dimensions.
-    const viewport = scrollRef.current;
-    if (!viewport) return;
-    const enableContentVisibility = () => setContentVisibilityReady(true);
-    viewport.addEventListener('wheel', enableContentVisibility, { once: true, passive: true });
-    viewport.addEventListener('touchmove', enableContentVisibility, { once: true, passive: true });
-    return () => {
-      viewport.removeEventListener('wheel', enableContentVisibility);
-      viewport.removeEventListener('touchmove', enableContentVisibility);
-    };
-  }, [scrollRef, threadId]);
 
   // ── Scroll anchoring (native): capture the top-most visible row + its offset,
   // restore by nudging scrollTop so the same row lands at the same place. Shares
@@ -250,8 +222,8 @@ export const FrozenMessageList = memo(function FrozenMessageList({
           transform: 'translateZ(0)',
         }
       : {
-          contentVisibility: contentVisibilityReady ? 'auto' : 'visible',
-          ...(contentVisibilityReady ? { containIntrinsicSize: `auto ${estimate}px` } : {}),
+          contentVisibility: 'auto',
+          containIntrinsicSize: `auto ${estimate}px`,
           overflowAnchor: 'auto',
         };
     return (

@@ -25,6 +25,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
+import { preloadPretext } from './hooks/use-pretext';
 import { profileApi } from './lib/api/profile';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
@@ -38,6 +39,22 @@ import '@fontsource/jetbrains-mono/latin.css';
 
 import './globals.css';
 import './i18n/config';
+
+// Load the thread text-layout engine after first paint. The import remains
+// lazy, so it does not delay startup, but is normally ready before a user
+// opens their first thread.
+const preloadThreadLayout = () => {
+  void preloadPretext().catch(() => {
+    // Pretext is an estimation enhancement; ResizeObserver still measures the
+    // real row height if the preload cannot complete.
+  });
+};
+
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(preloadThreadLayout, { timeout: 1_500 });
+} else {
+  setTimeout(preloadThreadLayout, 0);
+}
 
 // Lazy-load conditional views to reduce initial bundle (~175KB savings)
 const App = lazy(() => import('./App').then((m) => ({ default: m.App })));

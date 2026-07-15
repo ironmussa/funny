@@ -407,6 +407,103 @@ export async function mockThreadResponse(
   });
 }
 
+/**
+ * Mock a thread detail response plus its cursor-based history API. This keeps
+ * long-history Playwright coverage on the same windowed pagination contract as
+ * the real client instead of loading the full fixture in one response.
+ */
+export async function mockPaginatedThreadResponse(
+  page: Page,
+  threadId: string,
+  data: ReturnType<typeof mockThreadWithMessages>,
+  allMessages: ReturnType<typeof mockMessage>[],
+  options: { initialWindowStart?: number; initialWindowSize?: number } = {},
+) {
+  const initialWindowStart = options.initialWindowStart ?? 0;
+  const initialWindowSize = options.initialWindowSize ?? 50;
+
+  const windowAt = (start: number, size: number) => {
+    const windowStart = Math.max(0, Math.min(start, Math.max(0, allMessages.length - 1)));
+    const messages = allMessages.slice(windowStart, windowStart + size);
+    const windowEnd = windowStart + messages.length;
+    return {
+      ...data,
+      messages,
+      hasMore: windowStart > 0,
+      hasMoreAfter: windowEnd < allMessages.length,
+      total: allMessages.length,
+      windowStart,
+      lastUserMessage: [...allMessages].reverse().find((message) => message.role === 'user'),
+    };
+  };
+
+  await page.route(`**/api/threads/${threadId}**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+
+    const url = new URL(route.request().url());
+    const { pathname, searchParams } = url;
+    if (pathname === `/api/threads/${threadId}`) {
+      const anchorId = searchParams.get('messageAnchorId');
+      const anchorIndex = anchorId
+        ? allMessages.findIndex((message) => message.id === anchorId)
+        : -1;
+      const start =
+        anchorIndex >= 0
+          ? Math.max(0, anchorIndex - Math.floor(initialWindowSize / 2))
+          : initialWindowStart;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(windowAt(start, initialWindowSize)),
+      });
+      return;
+    }
+
+    if (pathname === `/api/threads/${threadId}/events`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ events: data.threadEvents }),
+      });
+      return;
+    }
+
+    if (pathname === `/api/threads/${threadId}/messages`) {
+      const cursor = searchParams.get('cursor');
+      const cursorIndex = cursor
+        ? allMessages.findIndex((message) => message.timestamp === cursor)
+        : -1;
+      const limit = Math.max(1, Number.parseInt(searchParams.get('limit') ?? '50', 10) || 50);
+      const direction = searchParams.get('direction') === 'after' ? 'after' : 'before';
+      const start =
+        direction === 'after'
+          ? Math.min(allMessages.length, cursorIndex + 1)
+          : Math.max(0, cursorIndex - limit);
+      const end =
+        direction === 'after'
+          ? Math.min(allMessages.length, start + limit)
+          : Math.max(start, cursorIndex);
+      const messages = cursorIndex < 0 ? [] : allMessages.slice(start, end);
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages,
+          hasMore: start > 0,
+          hasMoreAfter: end < allMessages.length,
+          total: allMessages.length,
+          windowStart: start,
+          leadingUserMessage: undefined,
+        }),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+}
+
 /** Mock the analytics overview response */
 export function mockAnalyticsOverview(
   overrides: Partial<{

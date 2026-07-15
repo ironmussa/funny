@@ -58,6 +58,12 @@ export interface ThreePaneTriple {
 /* ── Parser ── */
 
 export const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+/**
+ * Git's combined diff format for merge commits. It contains one old range per
+ * parent and one new range for the merge result, e.g.
+ * `@@@ -10,2 -12,2 +10,3 @@@`.
+ */
+export const COMBINED_HUNK_RE = /^@@@ ((?:-\d+(?:,\d+)? )+)\+(\d+)(?:,\d+)? @@@/;
 
 /** Conflict marker patterns (match the text content after the diff prefix is stripped) */
 export const CONFLICT_START_RE = /^<{7}\s?(.*)/;
@@ -157,6 +163,7 @@ export function parseUnifiedDiff(diff: string): ParsedDiff {
   let oldNo = 0;
   let newNo = 0;
   let inHunk = false;
+  let combinedPrefixWidth = 0;
 
   for (const line of raw) {
     const hunkMatch = HUNK_RE.exec(line);
@@ -164,18 +171,51 @@ export function parseUnifiedDiff(diff: string): ParsedDiff {
       oldNo = parseInt(hunkMatch[1], 10);
       newNo = parseInt(hunkMatch[2], 10);
       inHunk = true;
+      combinedPrefixWidth = 0;
+      hunkHeaders.set(lines.length, line);
+      continue;
+    }
+
+    const combinedHunkMatch = COMBINED_HUNK_RE.exec(line);
+    if (combinedHunkMatch) {
+      // A combined diff has one prefix column per merge parent. The visualizer
+      // has one "before" pane, so we render a result-oriented two-way view:
+      // a line absent from the result is deleted; one present only in the
+      // result is added; and a line present everywhere is context.
+      const oldStart = /-(\d+)/.exec(combinedHunkMatch[1]);
+      oldNo = oldStart ? parseInt(oldStart[1], 10) : 0;
+      newNo = parseInt(combinedHunkMatch[2], 10);
+      inHunk = true;
+      combinedPrefixWidth = (combinedHunkMatch[1].match(/-\d+(?:,\d+)?/g) ?? []).length;
       hunkHeaders.set(lines.length, line);
       continue;
     }
 
     if (!inHunk) continue;
 
+    if (line.startsWith('\\')) continue;
+
+    if (combinedPrefixWidth > 0) {
+      const prefix = line.slice(0, combinedPrefixWidth);
+      const text = line.slice(combinedPrefixWidth);
+
+      // `+` means the line is present in the merge result but absent from at
+      // least one parent. Prefer it when both signs occur so the result pane
+      // remains faithful to the merged file.
+      if (prefix.includes('+')) {
+        lines.push({ type: 'add', text, newNo: newNo++ });
+      } else if (prefix.includes('-')) {
+        lines.push({ type: 'del', text, oldNo: oldNo++ });
+      } else {
+        lines.push({ type: 'ctx', text, oldNo: oldNo++, newNo: newNo++ });
+      }
+      continue;
+    }
+
     if (line.startsWith('+')) {
       lines.push({ type: 'add', text: line.substring(1), newNo: newNo++ });
     } else if (line.startsWith('-')) {
       lines.push({ type: 'del', text: line.substring(1), oldNo: oldNo++ });
-    } else if (line.startsWith('\\')) {
-      continue;
     } else {
       const text = line.length > 0 && line[0] === ' ' ? line.substring(1) : line;
       lines.push({ type: 'ctx', text, oldNo: oldNo++, newNo: newNo++ });

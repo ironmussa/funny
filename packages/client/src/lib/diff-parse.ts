@@ -10,14 +10,31 @@ export function parseDiffOld(unifiedDiff: string): string {
   const lines = unifiedDiff.split('\n');
   const oldLines: string[] = [];
   let inHunk = false;
+  let combinedPrefixWidth = 0;
 
   for (const line of lines) {
+    const combinedHunkMatch = /^@@@ ((?:-\d+(?:,\d+)? )+)\+\d+(?:,\d+)? @@@/.exec(line);
+    if (combinedHunkMatch) {
+      inHunk = true;
+      combinedPrefixWidth = (combinedHunkMatch[1].match(/-\d+(?:,\d+)?/g) ?? []).length;
+      continue;
+    }
     if (line.startsWith('@@')) {
       inHunk = true;
+      combinedPrefixWidth = 0;
       continue;
     }
     if (!inHunk) continue;
     if (line.startsWith('---') || line.startsWith('+++')) continue;
+    if (line.startsWith('\\')) continue;
+
+    if (combinedPrefixWidth > 0) {
+      const prefix = line.slice(0, combinedPrefixWidth);
+      // Lines marked with `+` are new in the merge result and therefore do
+      // not belong to the synthetic before side of the inline card.
+      if (!prefix.includes('+')) oldLines.push(line.slice(combinedPrefixWidth));
+      continue;
+    }
 
     if (line.startsWith('-')) {
       oldLines.push(line.substring(1));
@@ -67,14 +84,31 @@ export function parseDiffNew(unifiedDiff: string): string {
   const lines = unifiedDiff.split('\n');
   const newLines: string[] = [];
   let inHunk = false;
+  let combinedPrefixWidth = 0;
 
   for (const line of lines) {
+    const combinedHunkMatch = /^@@@ ((?:-\d+(?:,\d+)? )+)\+\d+(?:,\d+)? @@@/.exec(line);
+    if (combinedHunkMatch) {
+      inHunk = true;
+      combinedPrefixWidth = (combinedHunkMatch[1].match(/-\d+(?:,\d+)?/g) ?? []).length;
+      continue;
+    }
     if (line.startsWith('@@')) {
       inHunk = true;
+      combinedPrefixWidth = 0;
       continue;
     }
     if (!inHunk) continue;
     if (line.startsWith('---') || line.startsWith('+++')) continue;
+    if (line.startsWith('\\')) continue;
+
+    if (combinedPrefixWidth > 0) {
+      const prefix = line.slice(0, combinedPrefixWidth);
+      // Lines marked with `-` are absent from the merge result and therefore
+      // do not belong to the synthetic after side of the inline card.
+      if (!prefix.includes('-')) newLines.push(line.slice(combinedPrefixWidth));
+      continue;
+    }
 
     if (line.startsWith('+')) {
       newLines.push(line.substring(1));

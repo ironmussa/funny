@@ -41,6 +41,27 @@ describe('parseUnifiedDiff', () => {
     expect(lines[3]).toMatchObject({ type: 'ctx', text: 'tail', oldNo: 3, newNo: 3 });
   });
 
+  test('parses combined merge diffs into a result-oriented two-way view', () => {
+    const combinedDiff = [
+      'diff --cc src/AssemblyManager.tsx',
+      '@@@ -10,2 -12,2 +10,3 @@@',
+      ' -removed from the merge result',
+      ' +added by the merge result',
+      '  shared context',
+      '-+replaced across merge parents',
+    ].join('\n');
+
+    const { lines, hunkHeaders } = parseUnifiedDiff(combinedDiff);
+
+    expect(hunkHeaders.size).toBe(1);
+    expect(lines).toMatchObject([
+      { type: 'del', text: 'removed from the merge result', oldNo: 10 },
+      { type: 'add', text: 'added by the merge result', newNo: 10 },
+      { type: 'ctx', text: 'shared context', oldNo: 11, newNo: 11 },
+      { type: 'add', text: 'replaced across merge parents', newNo: 12 },
+    ]);
+  });
+
   test('detects merge conflict markers', () => {
     const conflictDiff = [
       '@@ -1,6 +1,6 @@',

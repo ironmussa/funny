@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const markdown = vi.hoisted(() => ({
@@ -35,6 +35,23 @@ describe('SatteriMessageContent', () => {
     const root = await screen.findByTestId('satteri-markdown');
     const code = root.querySelector('pre > code');
     expect(code).toHaveClass('hljs', 'block', 'overflow-x-auto', 'font-mono', 'text-sm');
+  });
+
+  test('uses icons for code-block copy feedback', async () => {
+    markdown.renderMarkdownToSafeHtml.mockResolvedValueOnce(
+      '<pre><code class="language-ts">const value = 1;</code></pre>',
+    );
+
+    render(<SatteriMessageContent content={'```ts\nconst value = 1;\n```'} />);
+
+    const copyButton = await screen.findByRole('button', { name: 'Copy code' });
+    expect(copyButton.querySelector('[data-satteri-copy-icon="copy"]')).toBeInTheDocument();
+    expect(copyButton).not.toHaveTextContent('Copy');
+
+    fireEvent.click(copyButton);
+
+    expect(copyButton).toHaveAccessibleName('Copied');
+    expect(copyButton.querySelector('[data-satteri-copy-icon="check"]')).toBeInTheDocument();
   });
 
   test('uses the final markdown text styling while the compiler is loading', () => {

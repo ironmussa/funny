@@ -76,6 +76,37 @@ function SatteriRenderError({
   );
 }
 
+function setCopyButtonIcon(button: HTMLButtonElement, icon: 'copy' | 'check'): void {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('data-satteri-copy-icon', icon);
+  svg.classList.add('icon-base');
+
+  const paths: Array<[tag: string, attributes: string[]]> =
+    icon === 'copy'
+      ? [
+          ['rect', ['width', '14', 'height', '14', 'x', '8', 'y', '8', 'rx', '2', 'ry', '2']],
+          ['path', ['d', 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2']],
+        ]
+      : [['path', ['d', 'M20 6 9 17l-5-5']]];
+
+  for (const [tag, attributes] of paths) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (let index = 0; index < attributes.length; index += 2) {
+      path.setAttribute(attributes[index], attributes[index + 1]);
+    }
+    svg.append(path);
+  }
+
+  button.replaceChildren(svg);
+}
+
 function enhanceStaticHtml(root: HTMLElement): void {
   for (const link of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
     const href = link.getAttribute('href');
@@ -143,7 +174,7 @@ function enhanceStaticHtml(root: HTMLElement): void {
     copy.setAttribute('aria-label', 'Copy code');
     copy.className =
       'text-muted-foreground hover:bg-background/50 hover:text-foreground absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity group-hover/codeblock:opacity-100';
-    copy.textContent = 'Copy';
+    setCopyButtonIcon(copy, 'copy');
     group.append(copy);
   }
 }
@@ -266,7 +297,8 @@ function SatteriMessageContentInner({ content }: { content: string }) {
     if (copy) {
       const code = copy.parentElement?.querySelector('pre > code')?.textContent ?? '';
       void navigator.clipboard?.writeText(code);
-      copy.textContent = 'Copied';
+      copy.setAttribute('aria-label', 'Copied');
+      setCopyButtonIcon(copy, 'check');
       return;
     }
 

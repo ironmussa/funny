@@ -483,7 +483,7 @@ export function UserMessageCard({
                     copyToClipboard(visibleContent);
                     toast.success(t('common.copied', 'Copied'));
                   }}
-                  className="bg-background/10 text-background/70 hover:bg-background/20 hover:text-background flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  className="flex h-6 w-6 items-center justify-center rounded bg-white text-black opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/90 focus-visible:opacity-100"
                   aria-label={t('thread.copyContent', 'Copy content')}
                 >
                   <Copy className="icon-xs" />
@@ -499,7 +499,7 @@ export function UserMessageCard({
                       onClick={(e) => e.stopPropagation()}
                       className={cn(
                         'flex h-6 w-6 items-center justify-center rounded',
-                        'bg-background/10 text-background/70 transition-opacity hover:bg-background/20 hover:text-background',
+                        'bg-white text-black transition-opacity hover:bg-white/90',
                         'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
                         forkDisabled && !hasCopyableContent && 'cursor-not-allowed opacity-50',
                       )}

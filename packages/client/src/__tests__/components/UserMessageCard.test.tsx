@@ -201,6 +201,7 @@ describe('UserMessageCard', () => {
     expect(sideMeta.className).toContain('justify-between');
     expect(sideMeta.className).toContain('absolute');
     expect(sideMeta.className).toContain('inset-y-2');
+    expect(actionsButton).toHaveClass('bg-white', 'text-black');
     expect(screen.getByTestId('msg-actions-layout').className).not.toContain(
       'grid-cols-[minmax(0,1fr)_auto]',
     );
@@ -278,6 +279,7 @@ describe('UserMessageCard', () => {
 
     expect(copyButton).toHaveAttribute('aria-label', 'Copy content');
     expect(copyButton).not.toHaveAttribute('role', 'menuitem');
+    expect(copyButton).toHaveClass('bg-white', 'text-black');
 
     fireEvent.click(copyButton);
 

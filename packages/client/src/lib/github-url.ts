@@ -12,6 +12,12 @@ export function githubCommitUrl(browseBaseUrl: string, hash: string): string {
   return `${browseBaseUrl.replace(/\/$/, '')}/commit/${hash}`;
 }
 
+/** GitHub branch page URL. Each path segment is encoded while preserving branch slashes. */
+export function githubBranchUrl(browseBaseUrl: string, branch: string): string {
+  const encodedBranch = branch.split('/').map(encodeURIComponent).join('/');
+  return `${browseBaseUrl.replace(/\/$/, '')}/tree/${encodedBranch}`;
+}
+
 export function githubCommitUrlForRemoteCommit(
   browseBaseUrl: string | null,
   hash: string,

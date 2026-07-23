@@ -5,6 +5,7 @@ import {
   CloudCheck,
   Copy,
   Download,
+  ExternalLink,
   Monitor,
   RefreshCw,
   Tag,
@@ -19,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { contrastText } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { githubBranchUrl } from '@/lib/github-url';
 import type { FoldedRef, GraphBranchSummary } from '@/lib/graph-refs';
 import { cn } from '@/lib/utils';
 
@@ -310,12 +312,14 @@ function CopyableRefValue({
 function BranchRefDetail({
   ref,
   summary,
+  githubBrowseBaseUrl,
   actionInProgress,
   onPushBranch,
   onPullCurrentBranch,
 }: {
   ref: FoldedRef;
   summary: GraphBranchSummary | undefined;
+  githubBrowseBaseUrl: string | null;
   actionInProgress: string | null;
   onPushBranch: (branch: string) => void;
   onPullCurrentBranch: (branch: string) => void;
@@ -324,6 +328,10 @@ function BranchRefDetail({
   const action = branchActionForRef(ref, summary);
   const ActionIcon = action?.icon;
   const busy = !!action && actionInProgress === action.key;
+  const githubUrl =
+    githubBrowseBaseUrl && summary?.remoteRef
+      ? githubBranchUrl(githubBrowseBaseUrl, summary.branch)
+      : null;
 
   return (
     <div className="flex flex-col gap-3 text-xs" data-testid={`graph-branch-detail-${ref.name}`}>
@@ -353,31 +361,54 @@ function BranchRefDetail({
         ) : null}
       </dl>
 
-      {summary && action && ActionIcon ? (
+      {(githubUrl || (summary && action && ActionIcon)) && (
         <div className="border-border/70 flex border-t pt-3">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            aria-label={branchActionTooltip(t, summary)}
-            className="h-7 gap-1.5 px-2 text-xs"
-            disabled={!!actionInProgress}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (action.type === 'push') onPushBranch(summary.branch);
-              else onPullCurrentBranch(summary.branch);
-            }}
-            data-testid={`graph-branch-action-${summary.branch}`}
-          >
-            <ActionIcon
-              className={cn('icon-sm', busy && 'animate-pulse')}
-              data-testid={`graph-branch-action-icon-${summary.branch}`}
-            />
-            {branchActionLabel(t, summary)}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {githubUrl ? (
+              <Button
+                asChild
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs"
+              >
+                <a
+                  href={githubUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid={`graph-branch-github-${summary?.branch}`}
+                >
+                  <ExternalLink className="icon-sm" aria-hidden="true" />
+                  {t('graph.viewBranchOnGithub', 'View branch on GitHub')}
+                </a>
+              </Button>
+            ) : null}
+            {summary && action && ActionIcon ? (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                aria-label={branchActionTooltip(t, summary)}
+                className="h-7 gap-1.5 px-2 text-xs"
+                disabled={!!actionInProgress}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (action.type === 'push') onPushBranch(summary.branch);
+                  else onPullCurrentBranch(summary.branch);
+                }}
+                data-testid={`graph-branch-action-${summary.branch}`}
+              >
+                <ActionIcon
+                  className={cn('icon-sm', busy && 'animate-pulse')}
+                  data-testid={`graph-branch-action-icon-${summary.branch}`}
+                />
+                {branchActionLabel(t, summary)}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -385,6 +416,7 @@ function BranchRefDetail({
 function GraphRefChip({
   ref,
   summary,
+  githubBrowseBaseUrl,
   actionInProgress,
   color,
   textColor,
@@ -395,6 +427,7 @@ function GraphRefChip({
 }: {
   ref: FoldedRef;
   summary: GraphBranchSummary | undefined;
+  githubBrowseBaseUrl: string | null;
   actionInProgress: string | null;
   color: string;
   textColor: string;
@@ -448,6 +481,7 @@ function GraphRefChip({
           <BranchRefDetail
             ref={ref}
             summary={summary}
+            githubBrowseBaseUrl={githubBrowseBaseUrl}
             actionInProgress={actionInProgress}
             onPushBranch={onPushBranch}
             onPullCurrentBranch={onPullCurrentBranch}
@@ -461,6 +495,7 @@ function GraphRefChip({
 export function GraphRefChips({
   refs,
   branchSummaryByName,
+  githubBrowseBaseUrl = null,
   actionInProgress,
   color,
   searchQuery,
@@ -469,6 +504,7 @@ export function GraphRefChips({
 }: {
   refs: FoldedRef[];
   branchSummaryByName: ReadonlyMap<string, GraphBranchSummary>;
+  githubBrowseBaseUrl?: string | null;
   actionInProgress: string | null;
   color: string;
   searchQuery: string;
@@ -491,6 +527,7 @@ export function GraphRefChips({
             key={`${ref.kind}:${ref.name}`}
             ref={ref}
             summary={summary}
+            githubBrowseBaseUrl={githubBrowseBaseUrl}
             actionInProgress={actionInProgress}
             color={color}
             textColor={textColor}

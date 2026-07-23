@@ -501,6 +501,7 @@
     "copyShortSha": "Copiar SHA corto",
     "copyRef": "Copiar {{ref}}",
     "copiedRef": "Copiado {{ref}}",
+    "viewBranchOnGithub": "Ver rama en GitHub",
     "resetToHere": "Resetear rama a aquí",
     "uncommittedChanges": "Cambios sin commitear",
     "searchPlaceholder": "Buscar ramas y commits",

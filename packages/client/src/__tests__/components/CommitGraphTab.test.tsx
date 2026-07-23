@@ -279,6 +279,46 @@ describe('GraphRefChips', () => {
     expect(onPullCurrentBranch).not.toHaveBeenCalled();
   });
 
+  test('links a remote branch detail to its GitHub page', async () => {
+    const branch: GraphBranchSummary = {
+      branch: 'feat/video',
+      localRef: 'feat/video',
+      remoteRef: 'origin/feat/video',
+      localHash: 'local-tip',
+      remoteHash: 'remote-tip',
+      isCurrent: true,
+      ahead: 0,
+      behind: 0,
+      state: 'synced',
+      primaryAction: 'none',
+    };
+
+    renderWithProviders(
+      <GraphRefChips
+        refs={[{ kind: 'local', name: 'feat/video', isCurrent: true }]}
+        branchSummaryByName={new Map([[branch.branch, branch]])}
+        githubBrowseBaseUrl="https://github.com/acme/funny"
+        actionInProgress={null}
+        color="#7cb9e8"
+        searchQuery=""
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('graph-branch-info-feat/video'));
+
+    expect(await screen.findByTestId('graph-branch-detail-feat/video')).toBeInTheDocument();
+    expect(screen.getByTestId('graph-branch-github-feat/video')).toHaveAttribute(
+      'href',
+      'https://github.com/acme/funny/tree/feat/video',
+    );
+    expect(screen.getByTestId('graph-branch-github-feat/video')).toHaveAttribute(
+      'target',
+      '_blank',
+    );
+  });
+
   test('shows pull status, action, and details on the remote chip for the current behind branch', async () => {
     const onPushBranch = vi.fn();
     const onPullCurrentBranch = vi.fn();

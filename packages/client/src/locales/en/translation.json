@@ -503,6 +503,7 @@
     "copyShortSha": "Copy short SHA",
     "copyRef": "Copy {{ref}}",
     "copiedRef": "Copied {{ref}}",
+    "viewBranchOnGithub": "View branch on GitHub",
     "resetToHere": "Reset branch to here",
     "uncommittedChanges": "Uncommitted changes",
     "searchPlaceholder": "Search branches & commits",

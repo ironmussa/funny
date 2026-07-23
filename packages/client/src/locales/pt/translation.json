@@ -493,6 +493,7 @@
     "nodeCommitter": "Committer: {{committer}}",
     "copySha": "Copiar SHA do commit",
     "copyShortSha": "Copiar SHA curto",
+    "viewBranchOnGithub": "Ver ramificação no GitHub",
     "resetToHere": "Resetar ramificação para aqui",
     "uncommittedChanges": "Alterações não commitadas",
     "searchPlaceholder": "Buscar ramificações e commits",

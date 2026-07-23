@@ -1542,6 +1542,7 @@ function GraphCommitRow({
               <GraphRefChips
                 refs={foldedRefs}
                 branchSummaryByName={branchSummaryByName}
+                githubBrowseBaseUrl={githubBrowseBaseUrl}
                 actionInProgress={branchActionInProgress}
                 color={lanePastel}
                 searchQuery={searchQuery}

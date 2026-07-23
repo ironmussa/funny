@@ -110,6 +110,14 @@ vi.mock('@/components/prompt-editor/PromptEditor', () => {
             props.onChange?.();
           }}
           onKeyDown={(e: any) => {
+            if (e.key === 'ArrowUp' && props.onHistoryNavigate?.('previous')) {
+              e.preventDefault();
+              return;
+            }
+            if (e.key === 'ArrowDown' && props.onHistoryNavigate?.('next')) {
+              e.preventDefault();
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               props.onSubmit?.();
@@ -176,6 +184,91 @@ describe('PromptInput', () => {
       expect.objectContaining({ model: 'opus-4.8', mode: 'autoEdit' }),
       undefined,
     );
+  });
+
+  test('navigates this thread’s sent-message history with the arrow keys', () => {
+    useThreadStore.setState({
+      threadDataById: {
+        'thread-history': {
+          id: 'thread-history',
+          projectId: 'p1',
+          mode: 'local',
+          branch: 'main',
+          status: 'idle',
+          messages: [
+            {
+              id: 'user-1',
+              threadId: 'thread-history',
+              role: 'user',
+              content: 'first prompt',
+              timestamp: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              id: 'assistant-1',
+              threadId: 'thread-history',
+              role: 'assistant',
+              content: 'response',
+              timestamp: '2026-01-01T00:00:01.000Z',
+            },
+            {
+              id: 'user-2',
+              threadId: 'thread-history',
+              role: 'user',
+              content: 'latest prompt',
+              timestamp: '2026-01-01T00:00:02.000Z',
+            },
+          ],
+        },
+      },
+    } as any);
+
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('latest prompt');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('first prompt');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('latest prompt');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('');
+  });
+
+  test('restores the draft after navigating back to the end of message history', () => {
+    useThreadStore.setState({
+      threadDataById: {
+        'thread-history': {
+          id: 'thread-history',
+          projectId: 'p1',
+          mode: 'local',
+          branch: 'main',
+          status: 'idle',
+          messages: [
+            {
+              id: 'user-1',
+              threadId: 'thread-history',
+              role: 'user',
+              content: 'previous prompt',
+              timestamp: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      },
+    } as any);
+
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'unfinished draft' } });
+
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' });
+    expect(textarea.value).toBe('previous prompt');
+
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    expect(textarea.value).toBe('unfinished draft');
   });
 
   test('notifies the selected default provider on mount for new threads', async () => {

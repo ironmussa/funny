@@ -443,6 +443,8 @@ export interface PromptInputUIProps {
   editorRef?: React.RefObject<PromptEditorHandle | null>;
   /** Ref to the editor container div — used by the parent for PTT focus detection */
   editorContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** User messages available for ↑/↓ navigation in this thread. */
+  messageHistory?: readonly string[];
   initialPrompt?: string;
   initialImages?: ImageAttachment[];
 
@@ -474,6 +476,7 @@ const RUNTIME_MODES = [
   { value: 'remote', label: 'Remote' },
 ];
 const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = [];
+const EMPTY_MESSAGE_HISTORY: string[] = [];
 
 export const PromptInputUI = memo(function PromptInputUI({
   onSubmit,
@@ -529,6 +532,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   setPromptRef,
   editorRef: externalEditorRef,
   editorContainerRef: externalEditorContainerRef,
+  messageHistory = EMPTY_MESSAGE_HISTORY,
   initialPrompt: _initialPrompt,
   initialImages,
   onEditorChange,
@@ -573,6 +577,8 @@ export const PromptInputUI = memo(function PromptInputUI({
   const [isDragging, setIsDragging] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  const historyDraftRef = useRef<ReturnType<PromptEditorHandle['getJSON']>>(undefined);
 
   // ── Queue editing state ──
   const [editingQueuedMessageId, setEditingQueuedMessageId] = useState<string | null>(null);
@@ -747,6 +753,47 @@ export const PromptInputUI = memo(function PromptInputUI({
     setEditorEmpty(editorRef.current?.isEmpty() ?? true);
     onEditorChange?.();
   }, [onEditorChange, editorRef]);
+
+  // Only the current thread's messages belong in its history. Keep a draft
+  // snapshot so ↓ after the newest historical message returns the composer to
+  // exactly what the user was writing before pressing ↑.
+  useEffect(() => {
+    setHistoryIndex(null);
+    historyDraftRef.current = undefined;
+  }, [threadId]);
+
+  const handleHistoryNavigate = useCallback(
+    (direction: 'previous' | 'next') => {
+      if (messageHistory.length === 0) return false;
+
+      if (direction === 'previous') {
+        const nextIndex = historyIndex === null ? messageHistory.length - 1 : historyIndex - 1;
+        if (nextIndex < 0) return true;
+        if (historyIndex === null) historyDraftRef.current = editorRef.current?.getJSON();
+        editorRef.current?.setContent(messageHistory[nextIndex]);
+        setHistoryIndex(nextIndex);
+        handleEditorChange();
+        return true;
+      }
+
+      if (historyIndex === null) return false;
+      if (historyIndex < messageHistory.length - 1) {
+        const nextIndex = historyIndex + 1;
+        editorRef.current?.setContent(messageHistory[nextIndex]);
+        setHistoryIndex(nextIndex);
+      } else if (historyDraftRef.current) {
+        editorRef.current?.setContent(historyDraftRef.current);
+        historyDraftRef.current = undefined;
+        setHistoryIndex(null);
+      } else {
+        editorRef.current?.clear();
+        setHistoryIndex(null);
+      }
+      handleEditorChange();
+      return true;
+    },
+    [editorRef, handleEditorChange, historyIndex, messageHistory],
+  );
 
   const handleTemplateChange = useCallback((v: string | undefined) => {
     setSelectedTemplateId(v);
@@ -1354,6 +1401,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               disabled={loading}
               onSubmit={handleSubmit}
               onCycleMode={handleCycleMode}
+              onHistoryNavigate={handleHistoryNavigate}
               onChange={handleEditorChange}
               onPaste={handleEditorPaste}
               onFileMentionDrop={() => setIsDragging(false)}

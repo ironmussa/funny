@@ -142,6 +142,7 @@ export const PromptInput = memo(function PromptInput({
         setPromptRef={setPromptRef}
         editorRef={state.editorRef}
         editorContainerRef={state.editorContainerRef}
+        messageHistory={state.messageHistory}
         initialPrompt={initialPromptProp}
         initialImages={initialImagesProp}
         onEditorChange={state.handleEditorChange}

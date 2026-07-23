@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Schema } from '@tiptap/pm/model';
 import { findSuggestionMatch } from '@tiptap/suggestion';
 import { createRef } from 'react';
-import { describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import {
   buildSlashSuggestionItems,
@@ -12,6 +12,47 @@ import {
   type PromptEditorHandle,
   WORKFLOW_SUGGESTION_MATCH_OPTIONS,
 } from '@/components/prompt-editor/PromptEditor';
+
+const rangeGetClientRectsDescriptor = Object.getOwnPropertyDescriptor(
+  Range.prototype,
+  'getClientRects',
+);
+const rangeGetBoundingClientRectDescriptor = Object.getOwnPropertyDescriptor(
+  Range.prototype,
+  'getBoundingClientRect',
+);
+
+beforeAll(() => {
+  // ProseMirror reads the active text range's geometry while focusing. JSDOM
+  // does not implement these Range methods, unlike browsers.
+  Object.defineProperties(Range.prototype, {
+    getClientRects: {
+      configurable: true,
+      value: () => [] as unknown as DOMRectList,
+    },
+    getBoundingClientRect: {
+      configurable: true,
+      value: () => ({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 }) as DOMRect,
+    },
+  });
+});
+
+afterAll(() => {
+  if (rangeGetClientRectsDescriptor) {
+    Object.defineProperty(Range.prototype, 'getClientRects', rangeGetClientRectsDescriptor);
+  } else {
+    delete (Range.prototype as Partial<Range>).getClientRects;
+  }
+  if (rangeGetBoundingClientRectDescriptor) {
+    Object.defineProperty(
+      Range.prototype,
+      'getBoundingClientRect',
+      rangeGetBoundingClientRectDescriptor,
+    );
+  } else {
+    delete (Range.prototype as Partial<Range>).getBoundingClientRect;
+  }
+});
 
 describe('PromptEditor', () => {
   test('opts the prompt editor out of the global scroll fade mask', () => {
@@ -59,6 +100,22 @@ describe('PromptEditor', () => {
         ]),
       );
     });
+  });
+
+  test('navigates forward through message history when the caret is at the end', async () => {
+    const ref = createRef<PromptEditorHandle>();
+    const onHistoryNavigate = vi.fn(() => true);
+
+    render(<PromptEditor ref={ref} onHistoryNavigate={onHistoryNavigate} />);
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    act(() => {
+      ref.current?.insertText('latest prompt');
+    });
+
+    fireEvent.keyDown(screen.getByTestId('prompt-editor'), { key: 'ArrowDown' });
+
+    expect(onHistoryNavigate).toHaveBeenCalledWith('next');
   });
 });
 

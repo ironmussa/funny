@@ -120,6 +120,8 @@ interface PromptEditorProps {
   onSubmit?: () => void;
   /** Called on Shift+Tab to cycle permission mode */
   onCycleMode?: () => void;
+  /** Navigate submitted user messages when the caret reaches the editor boundary. */
+  onHistoryNavigate?: (direction: 'previous' | 'next') => boolean;
   /** Called when content changes */
   onChange?: () => void;
   /** Called when image is pasted */
@@ -529,6 +531,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     disabled,
     onSubmit,
     onCycleMode,
+    onHistoryNavigate,
     onChange,
     onPaste,
     onFileMentionDrop,
@@ -1162,6 +1165,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   onSubmitRef.current = onSubmit;
   const onCycleModeRef = useRef(onCycleMode);
   onCycleModeRef.current = onCycleMode;
+  const onHistoryNavigateRef = useRef(onHistoryNavigate);
+  onHistoryNavigateRef.current = onHistoryNavigate;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onFileMentionDropRef = useRef(onFileMentionDrop);
@@ -1271,6 +1276,19 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           event.preventDefault();
           onCycleModeRef.current?.();
           return true;
+        }
+        // Preserve normal multiline cursor movement. History navigation is
+        // only active when the caret is at the start/end of the document.
+        if (!suggestionTypeRef.current && _view.state.selection.empty) {
+          const { from } = _view.state.selection;
+          if (event.key === 'ArrowUp' && from <= 1) {
+            return onHistoryNavigateRef.current?.('previous') ?? false;
+          }
+          // A text selection at the end of a paragraph is one position before
+          // the document content boundary (the paragraph's closing token).
+          if (event.key === 'ArrowDown' && from >= _view.state.doc.content.size - 1) {
+            return onHistoryNavigateRef.current?.('next') ?? false;
+          }
         }
         // Enter without shift → submit
         if (event.key === 'Enter' && !event.shiftKey) {

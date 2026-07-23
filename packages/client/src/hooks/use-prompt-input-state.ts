@@ -126,6 +126,22 @@ export function usePromptInputState({
   // the latest server state.
   const contextThreadId = useThreadId();
   const effectiveThreadId = contextThreadId;
+  const threadMessages = useThreadStore((s) =>
+    effectiveThreadId ? s.threadDataById[effectiveThreadId]?.messages : undefined,
+  );
+  const lastUserMessage = useThreadStore((s) =>
+    effectiveThreadId ? s.threadDataById[effectiveThreadId]?.lastUserMessage : undefined,
+  );
+  // The loaded conversation window is normally enough here. `lastUserMessage`
+  // is included separately for paginated threads, so add it when it falls
+  // outside that window and keep history navigation useful for long threads.
+  const messageHistory = useMemo(() => {
+    const messages = threadMessages?.filter((message) => message.role === 'user') ?? [];
+    if (lastUserMessage && !messages.some((message) => message.id === lastUserMessage.id)) {
+      messages.push(lastUserMessage);
+    }
+    return messages.map((message) => message.content);
+  }, [threadMessages, lastUserMessage]);
   const storeQueuedCount = useThreadStore((s) =>
     effectiveThreadId
       ? (s.queuedCountByThread[effectiveThreadId] ??
@@ -975,6 +991,7 @@ export function usePromptInputState({
     // Editor handlers
     handleEditorChange,
     handleEditorPaste,
+    messageHistory,
     handleCheckoutPreflight,
     // `ensureSlashSkills` resolves the (eagerly-loaded) list for the submit
     // path; `slashSkills`/`slashSkillsLoading` feed the editor's `/` menu.

@@ -759,8 +759,10 @@ export function getFullContextFileDiff(
         ['ls-files', '--others', '--exclude-standard', '--', filePath],
         { cwd, reject: false },
       );
-      if (lsResult.exitCode === 0 && lsResult.stdout.trim()) {
-        // Untracked file — use diff --no-index. Same large/binary guard as
+      if ((lsResult.exitCode === 0 && lsResult.stdout.trim()) || lsResult.exitCode !== 0) {
+        // Untracked files, and files outside a Git worktree, need a no-index
+        // diff. The latter is used by agents for temporary scripts such as
+        // SSH askpass helpers. Keep the same large/binary guard as
         // getSingleFileDiff to prevent multi-GB binaries from hanging the call.
         if (shouldSkipUntrackedDiff(cwd, filePath)) return '';
         const result = await gitRead(['diff', '--no-index', '-U99999', '/dev/null', filePath], {

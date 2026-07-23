@@ -293,6 +293,101 @@ process.stdin.on('end', () => {
     });
   });
 
+  test('captures a patch for a created file outside a Git worktree', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-external-file-'));
+    try {
+      const filePath = join(cwd, 'askpass');
+      await writeFile(filePath, '#!/bin/sh\nprintf \'%s\\n\' "example credential"\n');
+
+      const process = new CodexSDKProcess({ ...options, cwd });
+      const messages: any[] = [];
+      process.on('message', (message) => messages.push(message));
+      const handleEvent = (process as any).handleEvent.bind(process);
+      await handleEvent({
+        type: 'item.completed',
+        item: {
+          id: 'external-file-change',
+          type: 'file_change',
+          status: 'completed',
+          changes: [{ path: filePath, kind: 'create' }],
+        },
+      });
+
+      const toolUseMessage = messages.find(
+        (message) =>
+          message.type === 'assistant' && message.message.content[0]?.type === 'tool_use',
+      );
+      if (toolUseMessage?.type !== 'assistant') throw new Error('Edit tool call was not emitted');
+      expect(toolUseMessage.message.content[0]).toMatchObject({
+        type: 'tool_use',
+        name: 'Edit',
+        input: {
+          changes: {
+            [filePath]: {
+              type: 'create',
+              unified_diff: expect.stringContaining('+printf'),
+            },
+          },
+        },
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('preserves the content of a deleted temporary file after its creation event', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-temporary-file-'));
+    try {
+      const filePath = join(cwd, 'askpass');
+      await writeFile(filePath, '#!/bin/sh\nprintf \'%s\\n\' "example credential"\n');
+
+      const process = new CodexSDKProcess({ ...options, cwd });
+      const messages: any[] = [];
+      process.on('message', (message) => messages.push(message));
+      const handleEvent = (process as any).handleEvent.bind(process);
+      await handleEvent({
+        type: 'item.completed',
+        item: {
+          id: 'temporary-file-create',
+          type: 'file_change',
+          status: 'completed',
+          changes: [{ path: filePath, kind: 'create' }],
+        },
+      });
+
+      await rm(filePath);
+      await handleEvent({
+        type: 'item.completed',
+        item: {
+          id: 'temporary-file-delete',
+          type: 'file_change',
+          status: 'completed',
+          changes: [{ path: filePath, kind: 'delete' }],
+        },
+      });
+
+      const editToolUses = messages.filter(
+        (message) =>
+          message.type === 'assistant' && message.message.content[0]?.type === 'tool_use',
+      );
+      expect(editToolUses).toHaveLength(2);
+      expect(editToolUses[1].message.content[0]).toMatchObject({
+        type: 'tool_use',
+        name: 'Edit',
+        input: {
+          changes: {
+            [filePath]: {
+              type: 'delete',
+              unified_diff: expect.stringContaining(`-printf '%s\\n' "example credential"`),
+            },
+          },
+        },
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   test('captures a file-change patch before emitting the Edit card', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-file-change-'));
     try {

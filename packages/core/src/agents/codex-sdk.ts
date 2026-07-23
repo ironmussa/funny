@@ -29,6 +29,8 @@ import type { CLIMessage } from './types.js';
 
 const dlog = createDebugLogger('codex-sdk');
 const execFileAsync = promisify(execFile);
+const MAX_CACHED_CREATED_FILE_DIFFS = 64;
+const MAX_CACHED_CREATED_FILE_DIFF_BYTES = 512 * 1024;
 
 const CODEX_TOOLS = [
   'read_file',
@@ -51,6 +53,12 @@ export class CodexSDKProcess extends BaseAgentProcess {
   private initEmitted = false;
   /** Last text published for each in-flight SDK item. */
   private agentMessageTextByItemId = new Map<string, string>();
+  /**
+   * The SDK reports deletions after the file has already disappeared. Retain
+   * small creation patches so a later delete can still render its removed
+   * content instead of an empty Edit card.
+   */
+  private createdFileDiffsByPath = new Map<string, string>();
   /**
    * Per-turn token that namespaces SDK item IDs. Codex numbers items
    * ordinally within a turn (`item_0`, `item_1`, …) and reuses those IDs on
@@ -343,7 +351,15 @@ export class CodexSDKProcess extends BaseAgentProcess {
         const cwd = absolutePath ? dirname(change.path) : this.options.cwd;
         const filePath = absolutePath ? basename(change.path) : change.path;
         const result = await getFullContextFileDiff(cwd, filePath, false);
-        const unifiedDiff = result.isOk() && result.value.trim() ? result.value : undefined;
+        let unifiedDiff = result.isOk() && result.value.trim() ? result.value : undefined;
+        if (!unifiedDiff && isFileDeletion(change.kind)) {
+          const createdDiff = this.createdFileDiffsByPath.get(change.path);
+          if (createdDiff) unifiedDiff = makeDeletionDiff(change.path, createdDiff);
+          this.createdFileDiffsByPath.delete(change.path);
+        }
+        if (unifiedDiff && isFileCreation(change.kind)) {
+          this.rememberCreatedFileDiff(change.path, unifiedDiff);
+        }
         return [
           change.path,
           { type: change.kind, ...(unifiedDiff ? { unified_diff: unifiedDiff } : {}) },
@@ -351,6 +367,16 @@ export class CodexSDKProcess extends BaseAgentProcess {
       }),
     );
     return Object.fromEntries(captured);
+  }
+
+  private rememberCreatedFileDiff(filePath: string, unifiedDiff: string): void {
+    if (Buffer.byteLength(unifiedDiff, 'utf8') > MAX_CACHED_CREATED_FILE_DIFF_BYTES) return;
+    this.createdFileDiffsByPath.delete(filePath);
+    this.createdFileDiffsByPath.set(filePath, unifiedDiff);
+    if (this.createdFileDiffsByPath.size > MAX_CACHED_CREATED_FILE_DIFFS) {
+      const oldestPath = this.createdFileDiffsByPath.keys().next().value;
+      if (oldestPath) this.createdFileDiffsByPath.delete(oldestPath);
+    }
   }
 
   /** Start a fresh turn: rotate the ID namespace and drop per-item text state. */
@@ -425,6 +451,48 @@ function normalizeEffort(effort: string | undefined): ModelReasoningEffort | und
     return effort;
   }
   return 'high' as const;
+}
+
+function isFileCreation(kind: string): boolean {
+  return kind === 'add' || kind === 'create';
+}
+
+function isFileDeletion(kind: string): boolean {
+  return kind === 'delete' || kind === 'remove';
+}
+
+/**
+ * Reverse a creation patch into a deletion patch. This is used only when the
+ * SDK announces that a temporary file was deleted after it has disappeared
+ * from disk, so Git cannot produce the historical patch anymore.
+ */
+function makeDeletionDiff(filePath: string, creationDiff: string): string {
+  let inHunk = false;
+
+  return creationDiff
+    .split('\n')
+    .map((line) => {
+      if (line.startsWith('diff --git ')) return `diff --git a/${filePath} b/${filePath}`;
+      if (line.startsWith('new file mode '))
+        return line.replace('new file mode ', 'deleted file mode ');
+      if (line.startsWith('--- ')) return `--- a/${filePath}`;
+      if (line.startsWith('+++ ')) return '+++ /dev/null';
+
+      const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/.exec(line);
+      if (hunk) {
+        inHunk = true;
+        const [, oldStart, oldCount, newStart, newCount, suffix] = hunk;
+        const oldRange = newCount ? `${newStart},${newCount}` : newStart;
+        const newRange = oldCount ? `${oldStart},${oldCount}` : oldStart;
+        return `@@ -${oldRange} +${newRange} @@${suffix}`;
+      }
+
+      if (!inHunk) return line;
+      if (line.startsWith('+')) return `-${line.slice(1)}`;
+      if (line.startsWith('-')) return `+${line.slice(1)}`;
+      return line;
+    })
+    .join('\n');
 }
 
 /**

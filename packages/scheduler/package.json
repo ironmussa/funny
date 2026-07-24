@@ -23,7 +23,7 @@
     "@funny/pipelines": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/workflows": "workspace:*",
-    "nanoid": "^5.1.6",
+    "nanoid": "^6.0.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

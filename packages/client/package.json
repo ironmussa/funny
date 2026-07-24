@@ -120,7 +120,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "@welldone-software/why-did-you-render": "^10.0.1",
     "jsdom": "^29.1.1",
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.56.0",
     "playwright": "^1.58.2",
     "postcss": "^8.5.16",
     "storybook": "^10.4.6",

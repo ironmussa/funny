@@ -292,6 +292,9 @@ function insertInlineNodeWithTrailingSpace(
   editor.view.focus();
 }
 
+/** Which trigger opened the (single, shared) suggestion menu. */
+type SuggestionMenuType = 'file' | 'slash' | 'symbol' | 'workflow';
+
 interface SuggestionPopupProps {
   items: SuggestionItem[];
   selectedIndex: number;
@@ -300,7 +303,7 @@ interface SuggestionPopupProps {
   onSelect: (item: SuggestionItem) => void;
   onHover: (index: number) => void;
   rect: (() => DOMRect | null) | null;
-  type: 'file' | 'slash' | 'symbol' | 'workflow';
+  type: SuggestionMenuType;
   /** Current search query for highlighting matches */
   query?: string;
   /** Ref to a container element — the popup will match its width and left edge */
@@ -549,9 +552,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   ref,
 ) {
   // ── Suggestion state (shared for both @ and /) ──
-  const [suggestionType, setSuggestionType] = useState<
-    'file' | 'slash' | 'symbol' | 'workflow' | null
-  >(null);
+  const [suggestionType, setSuggestionType] = useState<SuggestionMenuType | null>(null);
   const [suggestionItems, setSuggestionItems] = useState<SuggestionItem[]>([]);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -628,6 +629,47 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       return tiptapQuery;
     }
   }, []);
+
+  // Every trigger (@, /, #, >>) renders the same popup off one shared
+  // `suggestionType`/`suggestionIndex` pair, and more than one TipTap suggestion
+  // plugin can be active at the same time. So a plugin claims keys only while
+  // its own menu is the one on screen — otherwise two plugins would move the
+  // shared selected index for a single keypress.
+  const makeSuggestionKeyDown = useCallback(
+    (menuType: SuggestionMenuType) =>
+      ({ event }: { event: KeyboardEvent }) => {
+        if (suggestionTypeRef.current !== menuType) return false;
+        const len = suggestionItemsRef.current.length;
+        if (event.key === 'ArrowDown') {
+          setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
+          return true;
+        }
+        if (event.key === 'ArrowUp') {
+          setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
+          return true;
+        }
+        if (event.key === 'Enter' || event.key === 'Tab') {
+          const items = suggestionItemsRef.current;
+          if (items.length > 0) {
+            // Use setSuggestionIndex to read the latest index, then select
+            setSuggestionIndex((currentIndex) => {
+              const item = items[currentIndex];
+              if (item) {
+                suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+              }
+              return currentIndex;
+            });
+          }
+          return true;
+        }
+        if (event.key === 'Escape') {
+          setSuggestionType(null);
+          return true;
+        }
+        return false;
+      },
+    [],
+  );
 
   // ── File suggestion config ──
   const fileSuggestion = useCallback(
@@ -706,38 +748,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
         },
-        onKeyDown: (props: any) => {
-          if (suggestionTypeRef.current !== 'workflow') return false;
-          const { event } = props;
-          const len = suggestionItemsRef.current.length;
-          if (event.key === 'ArrowDown') {
-            setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'ArrowUp') {
-            setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'Enter' || event.key === 'Tab') {
-            const items = suggestionItemsRef.current;
-            if (items.length > 0) {
-              // Use setSuggestionIndex to read the latest index, then select
-              setSuggestionIndex((currentIndex) => {
-                const item = items[currentIndex];
-                if (item) {
-                  suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-                }
-                return currentIndex;
-              });
-            }
-            return true;
-          }
-          if (event.key === 'Escape') {
-            setSuggestionType(null);
-            return true;
-          }
-          return false;
-        },
+        onKeyDown: makeSuggestionKeyDown('file'),
         onExit: () => {
           triggerPosRef.current = null;
           setSuggestionType(null);
@@ -748,9 +759,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    // Intentionally empty: cwd/loadSkills accessed via refs
+    // Intentionally minimal: cwd/loadSkills accessed via refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [makeSuggestionKeyDown],
   );
 
   // ── Slash command suggestion config ──
@@ -847,36 +858,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
         },
-        onKeyDown: (props: any) => {
-          const { event } = props;
-          const len = suggestionItemsRef.current.length;
-          if (event.key === 'ArrowDown') {
-            setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'ArrowUp') {
-            setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'Enter' || event.key === 'Tab') {
-            const items = suggestionItemsRef.current;
-            if (items.length > 0) {
-              setSuggestionIndex((currentIndex) => {
-                const item = items[currentIndex];
-                if (item) {
-                  suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-                }
-                return currentIndex;
-              });
-            }
-            return true;
-          }
-          if (event.key === 'Escape') {
-            setSuggestionType(null);
-            return true;
-          }
-          return false;
-        },
+        onKeyDown: makeSuggestionKeyDown('slash'),
         onExit: () => {
           triggerPosRef.current = null;
           setSuggestionType(null);
@@ -886,7 +868,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    [getFullQuery],
+    [getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Workflow suggestion config (>> trigger) ──
@@ -989,36 +971,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
         },
-        onKeyDown: (props: any) => {
-          const { event } = props;
-          const len = suggestionItemsRef.current.length;
-          if (event.key === 'ArrowDown') {
-            setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'ArrowUp') {
-            setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'Enter' || event.key === 'Tab') {
-            const items = suggestionItemsRef.current;
-            if (items.length > 0) {
-              setSuggestionIndex((currentIndex) => {
-                const item = items[currentIndex];
-                if (item) {
-                  suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-                }
-                return currentIndex;
-              });
-            }
-            return true;
-          }
-          if (event.key === 'Escape') {
-            setSuggestionType(null);
-            return true;
-          }
-          return false;
-        },
+        onKeyDown: makeSuggestionKeyDown('workflow'),
         onExit: () => {
           triggerPosRef.current = null;
           setSuggestionType(null);
@@ -1028,7 +981,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    [getFullQuery],
+    [getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Symbol suggestion config (# trigger) ──
@@ -1116,36 +1069,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
         },
-        onKeyDown: (props: any) => {
-          const { event } = props;
-          const len = suggestionItemsRef.current.length;
-          if (event.key === 'ArrowDown') {
-            setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'ArrowUp') {
-            setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
-            return true;
-          }
-          if (event.key === 'Enter' || event.key === 'Tab') {
-            const items = suggestionItemsRef.current;
-            if (items.length > 0) {
-              setSuggestionIndex((currentIndex) => {
-                const item = items[currentIndex];
-                if (item) {
-                  suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-                }
-                return currentIndex;
-              });
-            }
-            return true;
-          }
-          if (event.key === 'Escape') {
-            setSuggestionType(null);
-            return true;
-          }
-          return false;
-        },
+        onKeyDown: makeSuggestionKeyDown('symbol'),
         onExit: () => {
           triggerPosRef.current = null;
           setSuggestionType(null);
@@ -1157,7 +1081,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       }),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [makeSuggestionKeyDown],
   );
 
   // ── TipTap editor ──

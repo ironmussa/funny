@@ -13,6 +13,20 @@ import {
   WORKFLOW_SUGGESTION_MATCH_OPTIONS,
 } from '@/components/prompt-editor/PromptEditor';
 
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<{ api: Record<string, unknown> }>('@/lib/api');
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      browseFiles: vi.fn(async () => ({
+        isOk: () => true,
+        value: { files: ['src/a.ts', 'src/b.ts', 'src/c.ts'], truncated: false },
+      })),
+    },
+  };
+});
+
 const rangeGetClientRectsDescriptor = Object.getOwnPropertyDescriptor(
   Range.prototype,
   'getClientRects',
@@ -116,6 +130,68 @@ describe('PromptEditor', () => {
     fireEvent.keyDown(screen.getByTestId('prompt-editor'), { key: 'ArrowDown' });
 
     expect(onHistoryNavigate).toHaveBeenCalledWith('next');
+  });
+
+  test('moves the @ menu selection with the arrow keys instead of stalling', async () => {
+    const ref = createRef<PromptEditorHandle>();
+    const onHistoryNavigate = vi.fn(() => true);
+
+    render(<PromptEditor ref={ref} cwd="/repo" onHistoryNavigate={onHistoryNavigate} />);
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    act(() => {
+      ref.current?.insertText('@');
+    });
+
+    const editor = screen.getByTestId('prompt-editor');
+    await screen.findByTestId('mention-item-src/a.ts');
+    expect(screen.getByTestId('mention-item-src/a.ts')).toHaveClass('bg-accent');
+
+    fireEvent.keyDown(editor, { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(screen.getByTestId('mention-item-src/b.ts')).toHaveClass('bg-accent'),
+    );
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    await waitFor(() =>
+      expect(screen.getByTestId('mention-item-src/a.ts')).toHaveClass('bg-accent'),
+    );
+
+    // An open menu owns the arrow keys — history navigation must stay out of it.
+    expect(onHistoryNavigate).not.toHaveBeenCalled();
+  });
+
+  test('selects the highlighted @ menu item with Enter', async () => {
+    const ref = createRef<PromptEditorHandle>();
+    const onSubmit = vi.fn();
+
+    render(<PromptEditor ref={ref} cwd="/repo" onSubmit={onSubmit} />);
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    act(() => {
+      ref.current?.insertText('@');
+    });
+
+    const editor = screen.getByTestId('prompt-editor');
+    await screen.findByTestId('mention-item-src/a.ts');
+    fireEvent.keyDown(editor, { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(screen.getByTestId('mention-item-src/b.ts')).toHaveClass('bg-accent'),
+    );
+    fireEvent.keyDown(editor, { key: 'Enter' });
+
+    await waitFor(() => {
+      const paragraph = ref.current?.getJSON()?.content?.[0];
+      expect(paragraph?.content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'fileMention',
+            attrs: expect.objectContaining({ path: 'src/b.ts' }),
+          }),
+        ]),
+      );
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
 

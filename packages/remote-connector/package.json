@@ -1,0 +1,14 @@
+{
+  "name": "@funny/remote-connector",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "cargo build --release",
+    "build:debug": "cargo build",
+    "start": "cargo run --",
+    "test": "cargo test --all-targets",
+    "typecheck": "cargo check --all-targets",
+    "lint": "cargo clippy --all-targets -- -D warnings",
+    "format:check": "cargo fmt --all -- --check"
+  }
+}

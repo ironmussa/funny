@@ -42,3 +42,8 @@ openspec/
 # VitePress
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+.pi-subagents/artifacts/e95ee245_scout_1_output.md
+/.pi-subagents
+
+# Rust connector build output
+packages/remote-connector/target/

@@ -1,0 +1,74 @@
+{
+  "negotiationRequests": [
+    {
+      "kind": "negotiate",
+      "protocolVersions": [1],
+      "requiredCapabilities": ["ssh-exec-v1", "output-redaction-v1"],
+      "runtimeVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiate",
+      "protocolVersions": [2],
+      "requiredCapabilities": ["ssh-exec-v1"],
+      "runtimeVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiate",
+      "protocolVersions": [1],
+      "requiredCapabilities": ["future-transport-v1"],
+      "runtimeVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiate",
+      "protocolVersions": [1],
+      "requiredCapabilities": ["ssh-exec-v1"],
+      "runtimeVersion": "0.0.9"
+    },
+    {
+      "kind": "negotiate",
+      "protocolVersions": [1],
+      "requiredCapabilities": ["ssh-exec-v1"],
+      "runtimeVersion": "0.1.1"
+    }
+  ],
+  "negotiationResults": [
+    {
+      "kind": "negotiated",
+      "compatible": true,
+      "protocolVersion": 1,
+      "capabilities": [
+        "credential-enrolment-v1",
+        "password-auth-v1",
+        "ssh-exec-v1",
+        "output-redaction-v1",
+        "production-approval-v1",
+        "target-config-v1"
+      ],
+      "connectorVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiated",
+      "compatible": false,
+      "reason": "no-common-protocol",
+      "connectorVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiated",
+      "compatible": false,
+      "reason": "missing-capability",
+      "connectorVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiated",
+      "compatible": false,
+      "reason": "peer-version-too-old",
+      "connectorVersion": "0.1.0"
+    },
+    {
+      "kind": "negotiated",
+      "compatible": false,
+      "reason": "revoked-peer",
+      "connectorVersion": "0.1.0"
+    }
+  ]
+}

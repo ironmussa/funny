@@ -21,6 +21,7 @@
     "./thread-machine": "./src/thread-machine.ts",
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
+    "./remote-connector-protocol": "./src/remote-connector-protocol.ts",
     "./socket-events": "./src/socket-events.ts",
     "./types/workflows": "./src/types/workflows.ts",
     "./auth/roles": "./src/auth/roles.ts",
@@ -40,7 +41,8 @@
     "./db/migrate": "./src/db/migrate.ts",
     "./repositories": "./src/repositories/index.ts",
     "./evflow-model": "./src/evflow.model.ts",
-    "./lib/crypto": "./src/lib/crypto.ts"
+    "./lib/crypto": "./src/lib/crypto.ts",
+    "./lib/text-search": "./src/lib/text-search.ts"
   },
   "scripts": {
     "test": "bun test"
@@ -50,11 +52,13 @@
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.5",
     "pg": "^8.20.0",
+    "semver": "^7.7.3",
     "xstate": "^5.32.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bun": "^1.3.8",
-    "@types/pg": "^8.18.0"
+    "@types/pg": "^8.18.0",
+    "@types/semver": "^7.7.1"
   }
 }

@@ -1,4 +1,5 @@
 import type { RunTriageStatus } from '@funny/shared';
+import { includesSearchText } from '@funny/shared/lib/text-search';
 import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -69,22 +70,13 @@ export function AutomationInboxView() {
 
     // Filter by search query
     if (searchQuery.trim()) {
-      if (searchCaseSensitive) {
-        items = items.filter(
-          (item) =>
-            item.automation.name.includes(searchQuery) ||
-            item.thread.title.includes(searchQuery) ||
-            !!item.run.summary?.includes(searchQuery),
-        );
-      } else {
-        const query = searchQuery.toLowerCase();
-        items = items.filter(
-          (item) =>
-            item.automation.name.toLowerCase().includes(query) ||
-            item.thread.title.toLowerCase().includes(query) ||
-            item.run.summary?.toLowerCase().includes(query),
-        );
-      }
+      items = items.filter(
+        (item) =>
+          includesSearchText(item.automation.name, searchQuery, searchCaseSensitive) ||
+          includesSearchText(item.thread.title, searchQuery, searchCaseSensitive) ||
+          (!!item.run.summary &&
+            includesSearchText(item.run.summary, searchQuery, searchCaseSensitive)),
+      );
     }
 
     return items;

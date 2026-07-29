@@ -645,6 +645,26 @@ describe('Thread Routes (Integration)', () => {
       expect(body.snippets['t1']).toBeTruthy();
     });
 
+    test('matches accented message content when the query omits accents', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db as any, {
+        id: 'msg1',
+        threadId: 't1',
+        role: 'assistant',
+        content: 'La niña tomó café después del almuerzo',
+      });
+
+      const res = await t
+        .requestAs('user-1')
+        .get('/api/threads/search/content?q=nina&projectId=p1');
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.threadIds).toContain('t1');
+      expect(body.snippets['t1']).toContain('niña tomó café');
+    });
+
     test('does not return other users threads', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });

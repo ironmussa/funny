@@ -96,7 +96,7 @@ export const ThreadColumn = memo(function ThreadColumn({
   // pointer hover. Mirrors ThreadChatView but scoped so only one column
   // claims the shortcut. stopImmediatePropagation prevents siblings from
   // also opening, and the browser's default find is preempted.
-  const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose } =
+  const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose, handleSearchClear } =
     useThreadSearchState(streamRef, threadId);
   const isHoveredRef = useRef(false);
 
@@ -197,6 +197,7 @@ export const ThreadColumn = memo(function ThreadColumn({
           open={searchOpen}
           onClose={handleSearchClose}
           onNavigateToMessage={handleSearchNavigate}
+          onClearHighlights={handleSearchClear}
           testIdPrefix={`grid-search-${threadId}`}
           className="border-border bg-popover absolute top-9 right-2 z-30 gap-1.5 rounded-md border px-2 py-1.5 shadow-md"
         />

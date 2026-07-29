@@ -3,6 +3,7 @@
  * Supports FTS5 (SQLite), tsvector (PostgreSQL), and LIKE fallback.
  */
 
+import { findTextSearchMatches, includesSearchText } from '@funny/shared/lib/text-search';
 import { eq, and, desc } from 'drizzle-orm';
 import { sql, type SQL } from 'drizzle-orm';
 
@@ -50,12 +51,16 @@ export async function searchThreadIdsByContent(opts: {
     return await searchViaLike(query, projectId, userId, caseSensitive);
   }
 
-  // Dialect-specific full-text search with LIKE fallback on error
+  // Use the index for a fast first pass, then merge a normalized substring
+  // search. FTS tokenizers do not fold all diacritics consistently, so the
+  // normalized pass is needed for results such as `nina` → `niña`.
   try {
-    if (dbDialect === 'pg') {
-      return await searchViaTsvector(query, projectId, userId);
-    }
-    return await searchViaFts5(query, projectId, userId);
+    const indexedResults =
+      dbDialect === 'pg'
+        ? await searchViaTsvector(query, projectId, userId)
+        : await searchViaFts5(query, projectId, userId);
+    const normalizedResults = await searchViaLike(query, projectId, userId, false);
+    return new Map([...indexedResults, ...normalizedResults]);
   } catch {
     return await searchViaLike(query, projectId, userId, false);
   }
@@ -109,7 +114,7 @@ export async function searchThreadMessages(opts: {
 
   const filters: SQL[] = [eq(schema.threads.userId, userId)];
   if (projectId) filters.push(eq(schema.threads.projectId, projectId));
-  if (query) {
+  if (query && caseSensitive) {
     filters.push(sql`${schema.messages.content} like ${`%${escapeLike(query)}%`} escape '\\'`);
   }
   if (author) {
@@ -119,10 +124,6 @@ export async function searchThreadMessages(opts: {
   if (until) filters.push(sql`${schema.messages.timestamp} <= ${until}`);
 
   const cap = Math.max(1, Math.min(500, Math.trunc(limit) || 50));
-
-  // Over-fetch when we'll re-filter for case-sensitivity in JS (SQLite LIKE is
-  // ASCII case-insensitive, so the SQL pass is only a coarse pre-filter there).
-  const fetchLimit = query && caseSensitive ? cap * 4 : cap;
 
   const rows = await dbAll(
     db
@@ -138,23 +139,18 @@ export async function searchThreadMessages(opts: {
       .from(schema.messages)
       .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
       .where(and(...filters))
-      .orderBy(desc(schema.messages.timestamp))
-      .limit(fetchLimit),
+      .orderBy(desc(schema.messages.timestamp)),
+    // Accent-insensitive comparison happens below, before the final cap.
   );
 
-  const needle = caseSensitive ? query : query.toLowerCase();
   const results: ThreadMessageMatch[] = [];
   for (const row of rows) {
     let snippet: string;
     if (query) {
-      const haystack = caseSensitive ? row.content : row.content.toLowerCase();
-      const idx = haystack.indexOf(needle);
-      // caseSensitive: the coarse SQL LIKE may have matched a different case;
-      // drop rows that don't contain the exact-case needle.
-      if (caseSensitive && idx === -1) continue;
-      const at = idx === -1 ? 0 : idx;
-      const start = Math.max(0, at - 30);
-      const end = Math.min(row.content.length, at + needle.length + 50);
+      if (!includesSearchText(row.content, query, caseSensitive)) continue;
+      const match = findTextSearchMatches(row.content, query, caseSensitive)[0]!;
+      const start = Math.max(0, match.start - 30);
+      const end = Math.min(row.content.length, match.end + 50);
       snippet = row.content.slice(start, end).replace(/\n/g, ' ');
       if (start > 0) snippet = '…' + snippet;
       if (end < row.content.length) snippet = snippet + '…';
@@ -265,9 +261,13 @@ async function searchViaLike(
   const trimmed = query.trim();
   const safeQuery = escapeLike(trimmed);
 
-  // SQL `LIKE` semantics differ across drivers (SQLite ASCII-insensitive, PG case-sensitive).
-  // We use it as a coarse filter and apply the exact case-sensitivity rule in JS below.
-  const filters: SQL[] = [sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`];
+  // SQL has no portable Unicode-diacritic-insensitive collation. For
+  // case-insensitive search, scope by user/project in SQL and apply the
+  // normalized comparison below. Case-sensitive search retains the narrower
+  // literal LIKE pre-filter.
+  const filters: SQL[] = caseSensitive
+    ? [sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`]
+    : [];
 
   filters.push(eq(schema.threads.userId, userId));
   if (projectId) {
@@ -283,14 +283,12 @@ async function searchViaLike(
   );
 
   const result = new Map<string, string>();
-  const needle = caseSensitive ? trimmed : trimmed.toLowerCase();
   for (const row of rows) {
     if (result.has(row.threadId)) continue;
-    const haystack = caseSensitive ? row.content : row.content.toLowerCase();
-    const idx = haystack.indexOf(needle);
-    if (idx === -1) continue;
-    const start = Math.max(0, idx - 30);
-    const end = Math.min(row.content.length, idx + needle.length + 50);
+    if (!includesSearchText(row.content, trimmed, caseSensitive)) continue;
+    const match = findTextSearchMatches(row.content, trimmed, caseSensitive)[0]!;
+    const start = Math.max(0, match.start - 30);
+    const end = Math.min(row.content.length, match.end + 50);
     let snippet = row.content.slice(start, end).replace(/\n/g, ' ');
     if (start > 0) snippet = '…' + snippet;
     if (end < row.content.length) snippet = snippet + '…';

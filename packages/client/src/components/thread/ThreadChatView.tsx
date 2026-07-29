@@ -21,7 +21,7 @@ export function ThreadChatView({ activeThread }: Props) {
   const streamRef = useRef<MessageStreamHandle>(null);
   const [visibleMessageId, setVisibleMessageId] = useState<string | null>(null);
 
-  const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose } =
+  const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose, handleSearchClear } =
     useThreadSearchState(streamRef, activeThread.id);
 
   // Search handoff from the list/board views: arriving at a thread via a
@@ -43,8 +43,8 @@ export function ThreadChatView({ activeThread }: Props) {
       if (e.key !== 'f' && e.key !== 'F') return;
       // Don't hijack Ctrl+F when focus is inside a terminal — the
       // terminal owns this shortcut and shows its own search overlay.
-      const target = e.target as Element | null;
-      if (target && target.closest('.xterm')) return;
+      const target = e.target;
+      if (target instanceof Element && target.closest('.xterm')) return;
       e.preventDefault();
       e.stopPropagation();
       setSearchOpen(true);
@@ -54,6 +54,27 @@ export function ThreadChatView({ activeThread }: Props) {
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   }, [activeThread.id, setSearchOpen]);
+
+  // Escape closes an open in-thread search even after focus has moved away
+  // from its input (for example, into the conversation or prompt editor).
+  // Dialogs and terminals own Escape while they have focus.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target;
+      if (
+        target instanceof Element &&
+        target.closest('.xterm, [role="dialog"][data-state="open"]')
+      ) {
+        return;
+      }
+      e.preventDefault();
+      handleSearchClose();
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [searchOpen, handleSearchClose]);
 
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
@@ -69,6 +90,7 @@ export function ThreadChatView({ activeThread }: Props) {
               open={searchOpen}
               onClose={handleSearchClose}
               onNavigateToMessage={handleSearchNavigate}
+              onClearHighlights={handleSearchClear}
             />
           }
         />

@@ -19,6 +19,7 @@ import type {
   dbRun as dbRunFn,
 } from '../db/connection.js';
 import type * as sqliteSchema from '../db/schema.sqlite.js';
+import { findTextSearchMatches, includesSearchText } from '../lib/text-search.js';
 
 export interface MessageRepositoryDeps {
   db: AppDatabase;
@@ -463,8 +464,9 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     // treated as a literal, so `apply\_patch` would never match `apply_patch`.
     const safeQuery = query.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
-    // SQL `LIKE` semantics differ across drivers (SQLite ASCII-insensitive, PG case-sensitive).
-    // We use it as a coarse filter and apply the exact case-sensitivity rule in JS below.
+    // SQL has no portable Unicode-diacritic-insensitive collation. Use the
+    // literal pre-filter only for a case-sensitive search; the default search
+    // must inspect all messages in the thread before applying shared folding.
     const rows = await dbAll(
       db
         .select({
@@ -477,14 +479,14 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         .where(
           and(
             eq(schema.messages.threadId, threadId),
-            sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`,
+            ...(caseSensitive
+              ? [sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`]
+              : []),
           ),
         )
-        .orderBy(asc(schema.messages.timestamp))
-        .limit(limit),
+        .orderBy(asc(schema.messages.timestamp)),
     );
 
-    const needle = caseSensitive ? query : query.toLowerCase();
     const results: {
       messageId: string;
       role: string;
@@ -493,11 +495,10 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       snippet: string;
     }[] = [];
     for (const row of rows) {
-      const haystack = caseSensitive ? row.content : row.content.toLowerCase();
-      const idx = haystack.indexOf(needle);
-      if (idx === -1) continue;
-      const start = Math.max(0, idx - 40);
-      const end = Math.min(row.content.length, idx + needle.length + 60);
+      if (!includesSearchText(row.content, query, caseSensitive)) continue;
+      const match = findTextSearchMatches(row.content, query, caseSensitive)[0]!;
+      const start = Math.max(0, match.start - 40);
+      const end = Math.min(row.content.length, match.end + 60);
       let snippet = row.content.slice(start, end).replace(/\n/g, ' ');
       if (start > 0) snippet = '…' + snippet;
       if (end < row.content.length) snippet = snippet + '…';
@@ -508,6 +509,7 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         timestamp: row.timestamp,
         snippet,
       });
+      if (results.length >= limit) break;
     }
     return results;
   }

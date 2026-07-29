@@ -1,3 +1,4 @@
+import { findTextSearchMatches } from '@funny/shared/lib/text-search';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,6 +29,8 @@ interface ThreadSearchBarProps {
     withinIdx: number,
     reportMarkCount?: (messageId: string, count: number) => void,
   ) => void | Promise<void>;
+  /** Removes DOM marks from the previous query before a new search runs. */
+  onClearHighlights: () => void;
   /** data-testid prefix for the underlying SearchBar. Default: "thread-search". */
   testIdPrefix?: string;
   /** Override container className (positioning). Default: chat-view absolute style. */
@@ -35,18 +38,7 @@ interface ThreadSearchBarProps {
 }
 
 function countOccurrences(haystack: string, needle: string, caseSensitive: boolean): number {
-  if (!needle) return 0;
-  const h = caseSensitive ? haystack : haystack.toLowerCase();
-  const n = caseSensitive ? needle : needle.toLowerCase();
-  let count = 0;
-  let from = 0;
-  while (true) {
-    const idx = h.indexOf(n, from);
-    if (idx === -1) break;
-    count++;
-    from = idx + n.length;
-  }
-  return count;
+  return findTextSearchMatches(haystack, needle, caseSensitive).length;
 }
 
 export function ThreadSearchBar({
@@ -54,6 +46,7 @@ export function ThreadSearchBar({
   open,
   onClose,
   onNavigateToMessage,
+  onClearHighlights,
   testIdPrefix = 'thread-search',
   className = 'absolute right-4 top-0 z-30 gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md',
 }: ThreadSearchBarProps) {
@@ -155,6 +148,7 @@ export function ThreadSearchBar({
         setCurrent(null);
         setMarkCounts(new Map());
         setLoading(false);
+        onClearHighlights();
         return;
       }
 
@@ -174,21 +168,24 @@ export function ThreadSearchBar({
             runNavigate(items[0].messageId, q.trim(), 0);
           } else {
             setCurrent(null);
+            onClearHighlights();
           }
         } else {
           setResults([]);
           setCurrent(null);
+          onClearHighlights();
         }
       } catch {
         if (!controller.signal.aborted) {
           setResults([]);
           setCurrent(null);
+          onClearHighlights();
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     },
-    [threadId, runNavigate],
+    [threadId, runNavigate, onClearHighlights],
   );
 
   // Consume a search handoff from the list/board views: when the bar opens
@@ -208,12 +205,14 @@ export function ThreadSearchBar({
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
+    onClearHighlights();
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => doSearch(value, caseSensitive), 300);
   };
 
   const handleCaseSensitiveChange = (value: boolean) => {
     setCaseSensitive(value);
+    onClearHighlights();
     if (debounceRef.current) clearTimeout(debounceRef.current);
     doSearch(query, value);
   };

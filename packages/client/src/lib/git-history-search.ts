@@ -15,6 +15,8 @@
  * Kept free of React/DOM so it can be unit-tested directly.
  */
 
+import { includesSearchText } from '@funny/shared/lib/text-search';
+
 /** The minimal commit shape the filter needs. */
 export interface SearchableCommit {
   /** Full commit SHA. */
@@ -31,12 +33,12 @@ export interface SearchableCommit {
 
 /** True when `commit` should be shown for `query` (blank query → always true). */
 export function commitMatchesQuery(commit: SearchableCommit, query: string): boolean {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (!q) return true;
-  if (commit.hash?.toLowerCase().includes(q)) return true;
-  if (commit.shortHash?.toLowerCase().includes(q)) return true;
-  if (commit.message.toLowerCase().includes(q)) return true;
-  if (commit.body && commit.body.toLowerCase().includes(q)) return true;
-  if (commit.refs?.some((r) => r.name.toLowerCase().includes(q))) return true;
+  if (commit.hash && includesSearchText(commit.hash, q)) return true;
+  if (commit.shortHash && includesSearchText(commit.shortHash, q)) return true;
+  if (includesSearchText(commit.message, q)) return true;
+  if (commit.body && includesSearchText(commit.body, q)) return true;
+  if (commit.refs?.some((r) => includesSearchText(r.name, q))) return true;
   return false;
 }

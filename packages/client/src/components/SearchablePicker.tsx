@@ -1,3 +1,4 @@
+import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GitBranch, Check, Copy, Plus, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
@@ -66,12 +67,12 @@ export function SearchablePicker({
 
   const filtered = useMemo(() => {
     if (!search) return items;
-    const q = search.toLowerCase();
+    const q = normalizeSearchText(search);
     return items
-      .filter((item) => item.label.toLowerCase().includes(q))
+      .filter((item) => findTextSearchMatches(item.label, q).length > 0)
       .sort((a, b) => {
-        const aLower = a.label.toLowerCase();
-        const bLower = b.label.toLowerCase();
+        const aLower = normalizeSearchText(a.label);
+        const bLower = normalizeSearchText(b.label);
         const aStartsWith = aLower.startsWith(q) ? 0 : 1;
         const bStartsWith = bLower.startsWith(q) ? 0 : 1;
         if (aStartsWith !== bStartsWith) return aStartsWith - bStartsWith;

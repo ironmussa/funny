@@ -1,3 +1,4 @@
+import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import { FolderOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,13 +47,13 @@ function useFilteredCommandItems(
   t: (key: string) => string,
   hasActiveProject: boolean,
 ) {
-  const searchLower = search.toLowerCase();
+  const searchLower = normalizeSearchText(search);
   const displayProjects = useMemo(() => {
     if (!searchLower) return projects.slice(0, 50);
     const scored: Array<{ p: ProjectEntry; rank: number; pos: number }> = [];
     for (const p of projects) {
-      const nameIdx = p.name.toLowerCase().indexOf(searchLower);
-      const pathIdx = p.path.toLowerCase().indexOf(searchLower);
+      const nameIdx = findTextSearchMatches(p.name, searchLower)[0]?.start ?? -1;
+      const pathIdx = findTextSearchMatches(p.path, searchLower)[0]?.start ?? -1;
       if (nameIdx === -1 && pathIdx === -1) continue;
       const rank = nameIdx !== -1 ? 0 : 1;
       const pos = nameIdx !== -1 ? nameIdx : pathIdx;
@@ -69,8 +70,8 @@ function useFilteredCommandItems(
     if (!hasActiveProject) return [];
     if (!searchLower) return settingsItems;
     return settingsItems.filter((item) => {
-      const label = item.label.toLowerCase();
-      const translated = t(settingsLabelKeys[item.id] ?? item.label).toLowerCase();
+      const label = normalizeSearchText(item.label);
+      const translated = normalizeSearchText(t(settingsLabelKeys[item.id] ?? item.label));
       return label.includes(searchLower) || translated.includes(searchLower);
     });
   }, [searchLower, t, hasActiveProject]);

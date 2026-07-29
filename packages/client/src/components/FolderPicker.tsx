@@ -1,3 +1,4 @@
+import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import {
   Folder,
   ChevronRight,
@@ -128,12 +129,12 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
   const filteredDirs = useMemo(() => {
     if (!search.trim()) return dirs;
-    const q = search.toLowerCase();
+    const q = normalizeSearchText(search);
     return dirs
-      .filter((d) => d.name.toLowerCase().includes(q))
+      .filter((d) => findTextSearchMatches(d.name, q).length > 0)
       .sort((a, b) => {
-        const aLower = a.name.toLowerCase();
-        const bLower = b.name.toLowerCase();
+        const aLower = normalizeSearchText(a.name);
+        const bLower = normalizeSearchText(b.name);
         const aStartsWith = aLower.startsWith(q) ? 0 : 1;
         const bStartsWith = bLower.startsWith(q) ? 0 : 1;
         if (aStartsWith !== bStartsWith) return aStartsWith - bStartsWith;

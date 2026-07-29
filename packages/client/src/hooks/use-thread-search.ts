@@ -1,3 +1,4 @@
+import { findTextSearchMatches } from '@funny/shared/lib/text-search';
 import { useCallback, useRef, useState, type RefObject } from 'react';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
@@ -38,7 +39,6 @@ export function useThreadSearchState(
 
   const highlightTextInElement = useCallback((root: Element, query: string) => {
     if (!query) return;
-    const queryLower = query.toLowerCase();
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         let p: Node | null = node.parentNode;
@@ -51,22 +51,20 @@ export function useThreadSearchState(
         return NodeFilter.FILTER_ACCEPT;
       },
     });
-    const matches: { node: Text; index: number }[] = [];
+    const matches: { node: Text; start: number; end: number }[] = [];
 
     let node: Text | null;
     while ((node = walker.nextNode() as Text | null)) {
       const text = node.textContent || '';
-      let idx = text.toLowerCase().indexOf(queryLower);
-      while (idx !== -1) {
-        matches.push({ node, index: idx });
-        idx = text.toLowerCase().indexOf(queryLower, idx + queryLower.length);
+      for (const match of findTextSearchMatches(text, query)) {
+        matches.push({ node, start: match.start, end: match.end });
       }
     }
 
     for (let i = matches.length - 1; i >= 0; i--) {
-      const { node: textNode, index } = matches[i];
-      const after = textNode.splitText(index + queryLower.length);
-      const matchNode = textNode.splitText(index);
+      const { node: textNode, start, end } = matches[i];
+      const after = textNode.splitText(end);
+      const matchNode = textNode.splitText(start);
       const mark = document.createElement('mark');
       mark.setAttribute('data-search-hl', '');
       mark.style.cssText = 'background-color:#FFE500;color:black';
@@ -220,5 +218,11 @@ export function useThreadSearchState(
     highlightedQueryRef.current = '';
   }, [clearSearchHighlights]);
 
-  return { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose };
+  const handleSearchClear = useCallback(() => {
+    clearSearchHighlights();
+    highlightedMsgRef.current = null;
+    highlightedQueryRef.current = '';
+  }, [clearSearchHighlights]);
+
+  return { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose, handleSearchClear };
 }

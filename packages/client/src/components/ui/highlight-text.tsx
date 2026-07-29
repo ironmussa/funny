@@ -1,11 +1,8 @@
+import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import { useMemo } from 'react';
 
-function normalize(str: string) {
-  return str
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
+// Kept as a compatibility export while consumers move to the shared matcher.
+export const normalize = normalizeSearchText;
 
 interface HighlightTextProps {
   text: string;
@@ -32,13 +29,6 @@ export function HighlightText({
   ranges,
   className,
 }: HighlightTextProps) {
-  // Normalize text only when text changes — the expensive NFKC/NFKD passes
-  // shouldn't re-run on every keystroke as the query changes.
-  const normalizedText = useMemo(() => {
-    const displayText = text.normalize('NFKC');
-    return { displayText, lower: normalize(displayText) };
-  }, [text]);
-
   const parts = useMemo(() => {
     // Range-based highlighting (from ripgrep / explicit offsets)
     if (ranges && ranges.length > 0) {
@@ -73,28 +63,25 @@ export function HighlightText({
       return out;
     }
 
-    const q = normalize(query);
-    const { displayText, lower } = normalizedText;
-    let idx = lower.indexOf(q);
-    if (idx === -1) return [{ text: displayText, highlight: false }];
+    const matches = findTextSearchMatches(text, query);
+    if (matches.length === 0) return [{ text, highlight: false }];
 
     const result: { text: string; highlight: boolean }[] = [];
     let pos = 0;
-    while (idx !== -1) {
-      if (idx > pos) {
-        result.push({ text: displayText.slice(pos, idx), highlight: false });
+    for (const match of matches) {
+      if (match.start > pos) {
+        result.push({ text: text.slice(pos, match.start), highlight: false });
       }
-      result.push({ text: displayText.slice(idx, idx + q.length), highlight: true });
-      pos = idx + q.length;
-      idx = lower.indexOf(q, pos);
+      result.push({ text: text.slice(match.start, match.end), highlight: true });
+      pos = match.end;
     }
 
-    if (pos < displayText.length) {
-      result.push({ text: displayText.slice(pos), highlight: false });
+    if (pos < text.length) {
+      result.push({ text: text.slice(pos), highlight: false });
     }
 
     return result;
-  }, [text, query, indices, ranges, normalizedText]);
+  }, [text, query, indices, ranges]);
 
   if (!query.trim() && !(ranges && ranges.length > 0) && !(indices && indices.length > 0)) {
     return <span className={className}>{text}</span>;
@@ -118,5 +105,3 @@ export function HighlightText({
     </span>
   );
 }
-
-export { normalize };

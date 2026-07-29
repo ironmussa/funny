@@ -219,6 +219,23 @@ function truncateDiff(diff: string): string {
   );
 }
 
+/**
+ * Whether a working-tree file has no tracked baseline and therefore needs a
+ * no-index diff against `/dev/null`.
+ *
+ * Deliberately omit `--exclude-standard`: ignored files are still untracked
+ * from Git's perspective and need the same treatment as ordinary untracked
+ * files when an agent explicitly reports editing them.
+ */
+async function shouldUseNoIndexDiff(cwd: string, filePath: string): Promise<boolean> {
+  const result = await gitRead(['ls-files', '--others', '--', filePath], {
+    cwd,
+    reject: false,
+  });
+  // Outside a Git worktree there is no tracked baseline either.
+  return result.exitCode !== 0 || Boolean(result.stdout.trim());
+}
+
 // ─── Public API ─────────────────────────────────────────
 
 /**
@@ -702,13 +719,8 @@ export function getSingleFileDiff(
         });
         return result.exitCode === 0 ? result.stdout : '';
       }
-      // Check if file is untracked
-      const lsResult = await gitRead(
-        ['ls-files', '--others', '--exclude-standard', '--', filePath],
-        { cwd, reject: false },
-      );
-      if (lsResult.exitCode === 0 && lsResult.stdout.trim()) {
-        // Untracked file — use diff --no-index. Guard against large/binary files
+      if (await shouldUseNoIndexDiff(cwd, filePath)) {
+        // Untracked or ignored file — use diff --no-index. Guard against large/binary files
         // because `git diff --no-index` on a multi-GB binary can hang for tens
         // of seconds, blocking the request.
         if (shouldSkipUntrackedDiff(cwd, filePath)) return '';
@@ -754,13 +766,8 @@ export function getFullContextFileDiff(
         });
         return result.exitCode === 0 ? result.stdout : '';
       }
-      // Check if file is untracked
-      const lsResult = await gitRead(
-        ['ls-files', '--others', '--exclude-standard', '--', filePath],
-        { cwd, reject: false },
-      );
-      if ((lsResult.exitCode === 0 && lsResult.stdout.trim()) || lsResult.exitCode !== 0) {
-        // Untracked files, and files outside a Git worktree, need a no-index
+      if (await shouldUseNoIndexDiff(cwd, filePath)) {
+        // Untracked and ignored files, and files outside a Git worktree, need a no-index
         // diff. The latter is used by agents for temporary scripts such as
         // SSH askpass helpers. Keep the same large/binary guard as
         // getSingleFileDiff to prevent multi-GB binaries from hanging the call.

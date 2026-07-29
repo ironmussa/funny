@@ -15,6 +15,7 @@ import {
   getDiff,
   getDiffSummary,
   getExternalRepoFileStats,
+  getFullContextFileDiff,
   getIgnoredFileStats,
   getLog,
   getSingleFileDiff,
@@ -983,6 +984,29 @@ describe('integration: getIgnoredFileStats', () => {
     expect(stats.isOk()).toBe(true);
     if (stats.isOk()) {
       expect(stats.value.get(rel)).toEqual({ additions: 4, deletions: 0 });
+    }
+  });
+
+  test('returns displayable diffs for ignored files', async () => {
+    mkdirSync(resolve(repoPath, 'openspec/changes/x'), { recursive: true });
+    const rel = 'openspec/changes/x/tasks.md';
+    writeFileSync(resolve(repoPath, rel), 'first task\nsecond task\n');
+
+    const single = await getSingleFileDiff(repoPath, rel, false);
+    expect(single.isOk()).toBe(true);
+    if (single.isOk()) {
+      expect(single.value).toContain('diff --git');
+      expect(single.value).toContain('+first task');
+      expect(single.value).toContain('+second task');
+    }
+
+    const full = await getFullContextFileDiff(repoPath, rel, false);
+    expect(full.isOk()).toBe(true);
+    if (full.isOk()) {
+      expect(full.value).toContain('diff --git');
+      expect(full.value).toContain('@@ -0,0 +1,2 @@');
+      expect(full.value).toContain('+first task');
+      expect(full.value).toContain('+second task');
     }
   });
 

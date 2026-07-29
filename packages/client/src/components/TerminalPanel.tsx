@@ -55,6 +55,7 @@ import { getActiveWS } from '@/hooks/use-ws';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
 import { jobsApi } from '@/lib/api/jobs';
+import { markMemoryPhase } from '@/lib/memory-phase';
 import { cn } from '@/lib/utils';
 import {
   renderPhaseFromState,
@@ -136,6 +137,7 @@ export function TauriTerminalTabContent({
         return true;
       });
       termRef.current = { terminal, fitAddon };
+      markMemoryPhase('terminal-open');
       // Re-apply theme after terminal is attached to DOM
       terminal.options.theme = getTerminalTheme();
       requestAnimationFrame(() => fitAddon.fit());
@@ -178,6 +180,8 @@ export function TauriTerminalTabContent({
         searchAddonRegistry.delete(id);
         terminalRegistry.delete(id);
         termRef.current = null;
+        // Marked before dispose so the sample still reflects the terminal's cost.
+        markMemoryPhase('terminal-close');
         terminal.dispose();
         invoke('pty_kill', { id }).catch(console.error);
       };
@@ -426,6 +430,10 @@ export function WebTerminalTabContent({
       });
       termRef.current = { terminal, fitAddon };
 
+      // Phase boundary for a memory profiling run: xterm buffers and the WebGL
+      // renderer are now live. No-op unless a run is active.
+      markMemoryPhase('terminal-open');
+
       // Re-apply theme after terminal is attached to DOM, in case CSS vars
       // weren't computed yet when the Terminal was constructed.
       terminal.options.theme = getTerminalTheme();
@@ -542,6 +550,8 @@ export function WebTerminalTabContent({
         searchAddonRegistry.delete(id);
         terminalRegistry.delete(id);
         termRef.current = null;
+        // Marked before dispose so the sample still reflects the terminal's cost.
+        markMemoryPhase('terminal-close');
         terminal.dispose();
         // NOTE: Do NOT send pty:kill here. Component unmount happens on page
         // reload too, which would destroy persistent (tmux) sessions. The kill

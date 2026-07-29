@@ -224,6 +224,13 @@ describe('getEffortLevels', () => {
       'xhigh',
       'max',
     ]);
+    expect(getEffortLevels('opus-5', 'claude').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
   });
 });
 

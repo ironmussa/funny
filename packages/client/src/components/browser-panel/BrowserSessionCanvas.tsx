@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 import {
+  recordBrowserSessionDecodeCompleted,
+  recordBrowserSessionDecodeFailed,
+  recordBrowserSessionDecodeStarted,
+} from '@/lib/browser-session-diagnostics';
+import {
   BROWSER_SESSION_VIEWPORT_HEIGHT,
   BROWSER_SESSION_VIEWPORT_WIDTH,
   subscribeToFrames,
@@ -44,11 +49,20 @@ export function BrowserSessionCanvas({ canvasRef }: BrowserSessionCanvasProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    let decodePending = false;
     const unsub = subscribeToFrames(sessionId, (base64) => {
       const img = imgRef.current;
       if (!img) return;
+      recordBrowserSessionDecodeStarted(sessionId, decodePending);
+      decodePending = true;
       img.onload = () => {
+        decodePending = false;
+        recordBrowserSessionDecodeCompleted(sessionId);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.onerror = () => {
+        decodePending = false;
+        recordBrowserSessionDecodeFailed(sessionId);
       };
       img.src = `data:image/jpeg;base64,${base64}`;
     });

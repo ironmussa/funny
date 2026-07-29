@@ -8,15 +8,16 @@ It ships as a Bun workspaces monorepo with **19 packages** under `packages/*`, a
 
 ## Where to go next
 
-| Page | What it covers |
-| --- | --- |
-| [architecture/overview.md](./architecture/overview.md) | Full package map (all 19 packages), what's live app vs. standalone service vs. experimental, deployment topology |
-| [architecture/agent-execution.md](./architecture/agent-execution.md) | End-to-end trace of a live chat thread: client → server → runner → agent process → WebSocket back |
-| [architecture/pipelines-and-automation.md](./architecture/pipelines-and-automation.md) | Post-commit review/fix pipeline, the `@funny/pipelines` engine, scheduler, and automations |
-| [domain/threads-and-worktrees.md](./domain/threads-and-worktrees.md) | Thread modes (local/worktree), scratch threads, team sharing levels and the steer-delegation exception |
-| [integrations/extensions-and-services.md](./integrations/extensions-and-services.md) | Multi-provider agents, visualizer plugins, MCP, native-git, and the standalone services (`agent`, `api-acp`, `reviewbot`, `memory`, `design-client`) |
-| [operations/deployment-and-auth.md](./operations/deployment-and-auth.md) | Local vs. team deployment, auth/admin bootstrap (and a stale-doc fix), per-user git identity, trust boundaries, desktop packaging |
-| [workflows/development.md](./workflows/development.md) | Dev commands, TypeScript/lint/format tooling, fitness/architecture guardrails, testing, CI |
+| Page                                                                                   | What it covers                                                                                                                                       |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [architecture/overview.md](./architecture/overview.md)                                 | Full package map (all 19 packages), what's live app vs. standalone service vs. experimental, deployment topology                                     |
+| [architecture/agent-execution.md](./architecture/agent-execution.md)                   | End-to-end trace of a live chat thread: client → server → runner → agent process → WebSocket back                                                    |
+| [architecture/pipelines-and-automation.md](./architecture/pipelines-and-automation.md) | Post-commit review/fix pipeline, the `@funny/pipelines` engine, scheduler, and automations                                                           |
+| [domain/threads-and-worktrees.md](./domain/threads-and-worktrees.md)                   | Thread modes (local/worktree), scratch threads, team sharing levels and the steer-delegation exception                                               |
+| [integrations/extensions-and-services.md](./integrations/extensions-and-services.md)   | Multi-provider agents, visualizer plugins, MCP, native-git, and the standalone services (`agent`, `api-acp`, `reviewbot`, `memory`, `design-client`) |
+| [operations/deployment-and-auth.md](./operations/deployment-and-auth.md)               | Local vs. team deployment, auth/admin bootstrap (and a stale-doc fix), per-user git identity, trust boundaries, desktop packaging                    |
+| [operations/client-memory-diagnostics.md](./operations/client-memory-diagnostics.md)   | Development-only browser memory profiler, controlled experiments, JSONL export, and heap-vs-native-memory interpretation                             |
+| [workflows/development.md](./workflows/development.md)                                 | Dev commands, TypeScript/lint/format tooling, fitness/architecture guardrails, testing, CI                                                           |
 
 ## Fastest path to running it
 

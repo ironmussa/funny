@@ -27,6 +27,7 @@ import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
 import { preloadPretext } from './hooks/use-pretext';
 import { profileApi } from './lib/api/profile';
+import { resolveClientLogLevel } from './lib/client-logger';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
 import { useProfileStore } from './stores/profile-store';
@@ -263,7 +264,7 @@ root.render(
         endpoint={otlpEndpoint ?? ''}
         serviceName="funny-client"
         captureConsole
-        level="debug"
+        level={resolveClientLogLevel()}
         enabled={otlpEnabled}
         includeUrl={true}
         consoleOptions={{
@@ -287,3 +288,46 @@ root.render(
     </ThemeProvider>
   </React.StrictMode>,
 );
+
+// Keep the profiler off the initial bundle. Abbacchio owns the bounded sampler;
+// Funny contributes only application-specific values. It ships in development
+// and wherever OTLP is configured — a run is only useful if there is a sink to
+// persist it into — and never starts sampling on its own.
+//
+// The condition reads `import.meta.env` directly instead of `otlpEnabled` so
+// Vite folds it at build time: a production build without an OTLP endpoint drops
+// the profiler entirely rather than shipping an unreachable chunk.
+if (import.meta.env.DEV || import.meta.env.VITE_OTLP_ENDPOINT) {
+  void Promise.all([
+    import('@abbacchio/browser-transport'),
+    import('./lib/browser-session-diagnostics'),
+    import('./lib/memory-telemetry'),
+    import('./lib/worker-diagnostics'),
+  ]).then(
+    ([
+      { installMemoryProfiler },
+      { getBrowserSessionDiagnostics },
+      { publishMemorySample },
+      { getWorkerDiagnostics },
+    ]) => {
+      installMemoryProfiler({
+        globalName: '__funnyMemory',
+        filenamePrefix: 'funny-memory',
+        domSelectors: {
+          xterms: '.xterm',
+          monacoEditors: '.monaco-editor',
+          virtualRows: '[data-virtual-row-key]',
+          messageItems: '[data-item-key]',
+        },
+        collectValues: () => ({
+          browserPanel: getBrowserSessionDiagnostics(),
+          workers: getWorkerDiagnostics(),
+        }),
+        onSample: publishMemorySample,
+        readyMessage:
+          '[funny:memory] Profiler ready. Start with __funnyMemory.start(); see openwiki/operations/client-memory-diagnostics.md',
+        hot: import.meta.hot,
+      });
+    },
+  );
+}

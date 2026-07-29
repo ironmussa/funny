@@ -94,6 +94,17 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       include: ['decimal.js-light', 'socket.io-client', 'lucide-react'],
+      // `@abbacchio/browser-transport` is currently a symlink to the sibling
+      // abbacchio repo. Vite pre-bundles it and does not notice when that repo's
+      // `dist/` is rebuilt, so the browser keeps loading a stale copy and fails
+      // with "does not provide an export named X" — while lint/typecheck/tests
+      // stay green, because vitest resolves the dist directly. Serving its ESM
+      // unbundled keeps dev in step with the linked build.
+      //
+      // Safe to drop once the package is consumed as a published dependency: a
+      // version change invalidates the cache on its own. Dev-server only — the
+      // production build does not use optimizeDeps.
+      exclude: ['@abbacchio/browser-transport', '@abbacchio/browser-transport/react'],
     },
     server: {
       host: viteHost,

@@ -16,30 +16,35 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 /* eslint-enable import/default */
 
+import { trackWorker } from './worker-diagnostics';
+
 declare global {
   interface Window {
     MonacoEnvironment?: monaco.Environment;
   }
 }
 
+// Every Monaco worker is created here, which makes this the one place that can
+// account for them. Their heaps are invisible to `performance.memory`, so the
+// memory profiler relies on these counts — see lib/worker-diagnostics.ts.
 self.MonacoEnvironment = {
   getWorker(_workerId, label) {
     switch (label) {
       case 'json':
-        return new jsonWorker();
+        return trackWorker('monaco:json', new jsonWorker());
       case 'css':
       case 'scss':
       case 'less':
-        return new cssWorker();
+        return trackWorker('monaco:css', new cssWorker());
       case 'html':
       case 'handlebars':
       case 'razor':
-        return new htmlWorker();
+        return trackWorker('monaco:html', new htmlWorker());
       case 'typescript':
       case 'javascript':
-        return new tsWorker();
+        return trackWorker('monaco:typescript', new tsWorker());
       default:
-        return new editorWorker();
+        return trackWorker('monaco:editor', new editorWorker());
     }
   },
 };

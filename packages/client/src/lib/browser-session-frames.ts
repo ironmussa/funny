@@ -18,10 +18,21 @@ export {
   BROWSER_SESSION_ASPECT_RATIO,
 } from './browser-session-viewport';
 
+import {
+  clearBrowserSessionDiagnostics,
+  recordBrowserSessionFrame,
+} from './browser-session-diagnostics';
+import { markMemoryPhase } from './memory-phase';
+
 const latestFrameBySession = new Map<string, string>();
 
 /** Called by the WS event dispatcher when a `browser-session:frame` arrives. */
 export function ingestBrowserSessionFrame(sessionId: string, base64Jpeg: string): void {
+  // The first frame is when the session starts costing memory. Marking here
+  // rather than per frame keeps this a phase boundary, not a 30 fps event.
+  if (!latestFrameBySession.has(sessionId)) markMemoryPhase('browser-session-open');
+
+  recordBrowserSessionFrame(sessionId, base64Jpeg.length);
   latestFrameBySession.set(sessionId, base64Jpeg);
   window.dispatchEvent(new CustomEvent('browser-session:frame', { detail: { sessionId } }));
 }
@@ -31,7 +42,11 @@ export function getLatestFrame(sessionId: string): string | null {
 }
 
 export function clearLatestFrame(sessionId: string): void {
+  // Marked before the cleanup so the sample still reflects the session's cost.
+  if (latestFrameBySession.has(sessionId)) markMemoryPhase('browser-session-close');
+
   latestFrameBySession.delete(sessionId);
+  clearBrowserSessionDiagnostics(sessionId);
 }
 
 /**

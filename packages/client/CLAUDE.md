@@ -7,6 +7,7 @@
 - **Logs:** Use `createClientLogger(namespace)` from `@/lib/client-logger.ts` (`@abbacchio/browser-transport`). Create a namespaced logger per module/store.
 - **Metrics/Traces:** Use `metric()` and `startSpan()` from `@/lib/telemetry.ts` for recording metrics and traces with W3C Trace Context propagation.
 - Do NOT use bare `console.log` / `console.error` — always prefer the structured logger so output reaches Abbacchio.
+- **Export is enabled by the endpoint, not by the environment.** `VITE_OTLP_ENDPOINT` turns client telemetry on in development too (same rule as the runtime), so the instrumentation below is observable while you build it — not only in prod. Set `VITE_OTLP_ENABLED=false` to silence a tab.
 - When creating new stores, hooks, or significant UI interactions, add relevant log calls and spans (e.g., API call duration, user action traces).
 
 ### Log levels are PERMANENT — do not add/remove logs per investigation
@@ -20,7 +21,7 @@ Instrumentation is supposed to be a fixed fixture of the code, not something you
 - `debug` — high-frequency / noisy traces: every WS chunk, every RAF flush, every status transition, queue dedups, render cycles. **Off in prod by default**, toggled at runtime via localStorage (see below).
 - `trace` — extreme detail (per-keystroke, per-frame). Reserved; use sparingly.
 
-**Default level**: `info` in prod (`import.meta.env.PROD === true`), `debug` in dev. This is set inside `client-logger.ts` — do NOT change it. If you find yourself wanting to "promote" a debug log to info so it shows up in prod, that's a sign it's a milestone — pick the right level once and leave it.
+**Default level**: `info` in prod (`import.meta.env.PROD === true`), `debug` in dev. This is set inside `client-logger.ts` (`resolveClientLogLevel()`) — do NOT change it. The `AbbacchioProvider` console capture in `main.tsx` reads the same resolver, so there is one level for the whole client; never hardcode a `level` prop there. If you find yourself wanting to "promote" a debug log to info so it shows up in prod, that's a sign it's a milestone — pick the right level once and leave it.
 
 **Runtime toggles (work in prod, no redeploy):**
 
@@ -28,8 +29,15 @@ Instrumentation is supposed to be a fixed fixture of the code, not something you
 // In DevTools console:
 __funnyLog.setLevel('debug'); // raise global floor
 __funnyLog.setNamespaceLevel('ws', 'debug'); // raise just one namespace
+__funnyLog.clearNamespaceLevel('ws'); // that namespace follows the floor again
 __funnyLog.clear(); // reset to defaults
 ```
+
+All four apply **immediately**, with no reload: they re-resolve the floor plus every namespace override, push it onto the loggers that already exist, and retune the console capture via `interceptConsole({ level })`. A namespace override always wins over the global floor until it is cleared.
+
+`client-logger.ts` owns that resolution on purpose — do NOT set a level directly on a logger returned by `createClientLogger`. `Logger.child()` delegates through the prototype, so a child that sets its own level shadows the parent permanently and would stop following the toggles. Note also that `createClientLogger` returns one shared instance per namespace.
+
+Writing the localStorage keys by hand still works, but only takes effect on the next page load.
 
 Or via localStorage directly:
 

@@ -44,6 +44,7 @@ import { create } from 'zustand';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
+import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 
@@ -461,6 +462,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // instant. It's cheap (one string), so keep it synchronous/urgent.
       set({ selectedThreadId: threadId });
       notifyThreadSelected();
+
+      // Phase boundary for a memory profiling run: the heavy MessageStream
+      // subtree mounts just below. No-op unless a run is active.
+      if (threadId) markMemoryPhase('thread-open');
 
       // `activeThread` mounts the heavy ThreadChatView → MessageStream →
       // MemoizedMessageList subtree. On a cache hit (instant swap) this is

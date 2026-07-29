@@ -1,5 +1,7 @@
 import FileSearchWorker from '@/workers/file-search.worker.ts?worker';
 
+import { trackWorker } from './worker-diagnostics';
+
 export interface FileSearchMatch {
   path: string;
   score: number;
@@ -34,7 +36,8 @@ export class FileSearchWorkerClient {
   private indexedKey: string | null = null;
 
   constructor() {
-    this.worker = new FileSearchWorker();
+    // Tracked because this isolate's heap is invisible to `performance.memory`.
+    this.worker = trackWorker('file-search', new FileSearchWorker());
     this.worker.addEventListener('message', this.onMessage);
   }
 

@@ -276,6 +276,20 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelector('[data-virtual-row-key="m1"]')?.className).toContain('z-0');
   });
 
+  test('shows sticky section context when a long response outgrows its virtual estimate', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 2;
+    // The two mocked rows end at 240px, but a response can grow after its
+    // initial estimate while the measured container already allows scrolling.
+    virtualizerMockState.scrollOffset = 1_000;
+
+    const { getByTestId } = render(<Harness messages={makeMessages(2)} />);
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() => expect(getByTestId('sticky-section-context')).toBeTruthy());
+    expect(viewport.querySelectorAll('[data-testid="user-message-m0"]')).toHaveLength(2);
+  });
+
   test('does not show sticky section context while the user row is already visible at the top', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 1;

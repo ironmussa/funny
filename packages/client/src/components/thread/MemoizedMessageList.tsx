@@ -380,9 +380,14 @@ export const MemoizedMessageList = memo(
 
     const stickyScrollOffset =
       rowVirtualizer.scrollOffset ?? scrollRef.current?.scrollTop ?? listScrollMargin;
+    // A response can grow beyond its cached virtual size before the
+    // virtualizer catches up. If the real scroll offset is already past every
+    // estimated end, the furthest mounted row is the best available owner;
+    // falling back to the first row incorrectly treats the old user card as
+    // visible and suppresses its sticky copy.
     const firstVisibleVirtualItem =
       visibleVirtualItems.find((virtualItem) => virtualItem.end > stickyScrollOffset) ??
-      visibleVirtualItems[0];
+      visibleVirtualItems.at(-1);
     const firstVisibleRow = firstVisibleVirtualItem
       ? virtualRows[firstVisibleVirtualItem.index]
       : undefined;

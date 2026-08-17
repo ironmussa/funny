@@ -1,7 +1,10 @@
 import type { FileDiffSummary, PRReviewThread } from '@funny/shared';
 import {
+  BookOpen,
+  Check,
   Columns3,
   Columns2,
+  Copy,
   FileCode,
   FileText,
   Loader2,
@@ -23,6 +26,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -35,6 +39,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { isOneSidedDiff } from '@/lib/diff-math';
 import { parseRawDiff, getChangeableIndices } from '@/lib/patch-builder';
 import { cn } from '@/lib/utils';
@@ -42,7 +47,9 @@ import { cn } from '@/lib/utils';
 import { DiffCommentThread } from '../DiffCommentThread';
 import { FileTree } from '../FileTree';
 import { type DiffViewMode, type ConflictResolution, VirtualDiff } from '../VirtualDiff';
-import { getFileName } from './format-utils';
+import { getFileExtension, getFileName } from './format-utils';
+
+const MARKDOWN_EXTENSIONS = new Set(['md', 'mdx', 'markdown']);
 
 /* ── Helpers ── */
 
@@ -302,14 +309,17 @@ export function ExpandedDiffDialog({
   prReviewThreads,
   onRequestFullDiff,
 }: ExpandedDiffDialogProps) {
+  const { t } = useTranslation();
   const [userViewMode, setUserViewMode] = useState<DiffViewMode>('three-pane');
   const [wordWrap, setWordWrap] = useState(false);
   const [showFullFile, setShowFullFile] = useState(false);
+  const [markdownPreviewPath, setMarkdownPreviewPath] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [fullDiffCache, setFullDiffCache] = useState<
     Map<string, { oldValue: string; newValue: string; rawDiff?: string }>
   >(new Map());
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
+  const [copied, copy] = useCopyToClipboard();
 
   const currentFileStatus = files?.find((f) => f.path === filePath)?.status;
 
@@ -325,27 +335,31 @@ export function ExpandedDiffDialog({
     startTransition(() => setUserViewMode(value as DiffViewMode));
   }, []);
 
+  const requestFullFile = useCallback(async () => {
+    const cached = fullDiffCache.get(filePath);
+    if (cached) return cached;
+    if (!onRequestFullDiff) return null;
+
+    setLoadingFullDiff(true);
+    try {
+      const result = await onRequestFullDiff(filePath);
+      if (!result) return null;
+      setFullDiffCache((prev) => new Map(prev).set(filePath, result));
+      return result;
+    } finally {
+      setLoadingFullDiff(false);
+    }
+  }, [filePath, fullDiffCache, onRequestFullDiff]);
+
   const toggleFullFile = useCallback(async () => {
     if (showFullFile) {
       startTransition(() => setShowFullFile(false));
       return;
     }
-    if (fullDiffCache.has(filePath)) {
-      startTransition(() => setShowFullFile(true));
-      return;
-    }
-    if (!onRequestFullDiff) {
-      startTransition(() => setShowFullFile(true));
-      return;
-    }
-    setLoadingFullDiff(true);
-    const result = await onRequestFullDiff(filePath);
-    setLoadingFullDiff(false);
-    if (result) {
-      setFullDiffCache((prev) => new Map(prev).set(filePath, result));
+    if (!onRequestFullDiff || (await requestFullFile())) {
       startTransition(() => setShowFullFile(true));
     }
-  }, [showFullFile, filePath, fullDiffCache, onRequestFullDiff]);
+  }, [showFullFile, onRequestFullDiff, requestFullFile]);
 
   // ── Search handlers ──
   const openSearch = useCallback(() => setShowSearch(true), []);
@@ -367,6 +381,24 @@ export function ExpandedDiffDialog({
     setTotalMatches(0);
   }, []);
 
+  const toggleMarkdownPreview = useCallback(async () => {
+    if (markdownPreviewPath === filePath) {
+      setMarkdownPreviewPath(null);
+      return;
+    }
+
+    if (onRequestFullDiff && !(await requestFullFile())) return;
+
+    closeSearch();
+    setMarkdownPreviewPath(filePath);
+  }, [markdownPreviewPath, filePath, onRequestFullDiff, requestFullFile, closeSearch]);
+
+  const copyFullFileText = useCallback(async () => {
+    const fullFile = onRequestFullDiff ? await requestFullFile() : fullDiffCache.get(filePath);
+    const currentText = fullFile?.newValue || fullFile?.oldValue || newValue || oldValue;
+    if (currentText) copy(currentText);
+  }, [onRequestFullDiff, requestFullFile, fullDiffCache, filePath, newValue, oldValue, copy]);
+
   const goToNextMatch = useCallback(() => {
     if (totalMatches === 0) return;
     setCurrentMatchIndex((prev) => (prev + 1) % totalMatches);
@@ -387,7 +419,7 @@ export function ExpandedDiffDialog({
   // stopImmediatePropagation prevents other capture-phase listeners
   // (e.g. ThreadView search) from also firing.
   const onDialogKey = useEffectEvent((e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f' && markdownPreviewPath !== filePath) {
       e.preventDefault();
       e.stopImmediatePropagation();
       openSearch();
@@ -434,6 +466,7 @@ export function ExpandedDiffDialog({
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.oldValue : oldValue;
   const effectiveNewValue =
     showFullFile && fullDiffCache.has(filePath) ? fullDiffCache.get(filePath)!.newValue : newValue;
+  const fullFileNewValue = fullDiffCache.get(filePath)?.newValue ?? newValue;
 
   // Force unified ('1 column') for one-sided diffs — a freshly created or fully
   // deleted file — since split/three-pane would render an empty column. Derived
@@ -446,9 +479,19 @@ export function ExpandedDiffDialog({
     newValue: effectiveNewValue,
   });
   const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
+  const isMarkdown = MARKDOWN_EXTENSIONS.has(getFileExtension(filePath).toLowerCase());
+  const isDeletedFile = effectiveNewValue === '' && effectiveOldValue !== '';
+  const canPreviewMarkdown = isMarkdown && !isDeletedFile;
+  const showMarkdownPreview = canPreviewMarkdown && markdownPreviewPath === filePath;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setMarkdownPreviewPath(null);
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent
         className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col gap-0 p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -466,7 +509,7 @@ export function ExpandedDiffDialog({
               {filePath}
             </span>
           </DialogTitle>
-          {!isOneSided && (
+          {!showMarkdownPreview && !isOneSided && (
             <ToggleGroup
               type="single"
               size="sm"
@@ -519,61 +562,118 @@ export function ExpandedDiffDialog({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => setWordWrap((w) => !w)}
-                className={cn(
-                  'shrink-0 text-muted-foreground',
-                  wordWrap && 'bg-accent text-accent-foreground',
-                )}
-                data-testid="diff-toggle-word-wrap"
+                onClick={() => void copyFullFileText()}
+                disabled={loadingFullDiff || (!onRequestFullDiff && !newValue && !oldValue)}
+                className="text-muted-foreground shrink-0"
+                data-testid="diff-copy-full-file"
+                aria-label={t('tools.copy', 'Copy file contents')}
               >
-                <WrapText className="icon-base" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {wordWrap ? 'Word wrap on' : 'Word wrap off'}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={toggleFullFile}
-                disabled={isPending || loadingFullDiff}
-                className={cn(
-                  'shrink-0 text-muted-foreground',
-                  showFullFile && 'bg-accent text-accent-foreground',
-                )}
-                data-testid="diff-toggle-full-file"
-              >
-                {isPending || loadingFullDiff ? (
+                {loadingFullDiff ? (
                   <Loader2 className="icon-base animate-spin" />
+                ) : copied ? (
+                  <Check className="icon-base" />
                 ) : (
-                  <FileText className="icon-base" />
+                  <Copy className="icon-base" />
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {showFullFile ? 'Show changes only' : 'Show full file'}
-            </TooltipContent>
+            <TooltipContent side="bottom">{t('tools.copy', 'Copy file contents')}</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={toggleSearch}
-                className={cn(
-                  'shrink-0 text-muted-foreground',
-                  showSearch && 'bg-accent text-accent-foreground',
-                )}
-                data-testid="diff-toggle-search"
-              >
-                <Search className="icon-base" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Search (Ctrl+F)</TooltipContent>
-          </Tooltip>
+          {canPreviewMarkdown && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={toggleMarkdownPreview}
+                  disabled={loadingFullDiff}
+                  className={cn(
+                    'shrink-0 text-muted-foreground',
+                    showMarkdownPreview && 'bg-accent text-accent-foreground',
+                  )}
+                  data-testid="diff-toggle-markdown-preview"
+                  aria-pressed={showMarkdownPreview}
+                >
+                  {loadingFullDiff ? (
+                    <Loader2 className="icon-base animate-spin" />
+                  ) : showMarkdownPreview ? (
+                    <FileCode className="icon-base" />
+                  ) : (
+                    <BookOpen className="icon-base" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {showMarkdownPreview
+                  ? t('tools.viewSource', 'View changes')
+                  : t('tools.preview', 'Preview')}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {!showMarkdownPreview && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setWordWrap((w) => !w)}
+                    className={cn(
+                      'shrink-0 text-muted-foreground',
+                      wordWrap && 'bg-accent text-accent-foreground',
+                    )}
+                    data-testid="diff-toggle-word-wrap"
+                  >
+                    <WrapText className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {wordWrap ? 'Word wrap on' : 'Word wrap off'}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={toggleFullFile}
+                    disabled={isPending || loadingFullDiff}
+                    className={cn(
+                      'shrink-0 text-muted-foreground',
+                      showFullFile && 'bg-accent text-accent-foreground',
+                    )}
+                    data-testid="diff-toggle-full-file"
+                  >
+                    {isPending || loadingFullDiff ? (
+                      <Loader2 className="icon-base animate-spin" />
+                    ) : (
+                      <FileText className="icon-base" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {showFullFile ? 'Show changes only' : 'Show full file'}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={toggleSearch}
+                    className={cn(
+                      'shrink-0 text-muted-foreground',
+                      showSearch && 'bg-accent text-accent-foreground',
+                    )}
+                    data-testid="diff-toggle-search"
+                  >
+                    <Search className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Search (Ctrl+F)</TooltipContent>
+              </Tooltip>
+            </>
+          )}
           <DialogDescription className="sr-only">
             {description || `Diff for ${getFileName(filePath)}`}
           </DialogDescription>
@@ -581,7 +681,7 @@ export function ExpandedDiffDialog({
 
         <div className="relative flex min-h-0 flex-1">
           {/* Search bar — positioned below header, above diff content */}
-          {showSearch && (
+          {showSearch && !showMarkdownPreview && (
             <SearchBar
               query={searchQuery}
               onQueryChange={(v) => {
@@ -633,22 +733,28 @@ export function ExpandedDiffDialog({
           {/* Diff content + review threads */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto">
-              <DiffContent
-                filePath={filePath}
-                splitView={viewMode === 'split'}
-                viewMode={viewMode}
-                loading={loading || loadingFullDiff}
-                rawDiff={effectiveRawDiff}
-                oldValue={effectiveOldValue}
-                newValue={effectiveNewValue}
-                baseLine={showFullFile ? 1 : baseLine}
-                showFullFile={showFullFile}
-                wordWrap={wordWrap}
-                searchQuery={showSearch ? searchQuery : undefined}
-                searchCaseSensitive={searchCaseSensitive}
-                currentMatchIndex={currentMatchIndex}
-                onMatchCount={handleMatchCount}
-              />
+              {showMarkdownPreview ? (
+                <div className="px-8 py-6" data-testid="diff-markdown-preview">
+                  <MessageContent content={fullFileNewValue} />
+                </div>
+              ) : (
+                <DiffContent
+                  filePath={filePath}
+                  splitView={viewMode === 'split'}
+                  viewMode={viewMode}
+                  loading={loading}
+                  rawDiff={effectiveRawDiff}
+                  oldValue={effectiveOldValue}
+                  newValue={effectiveNewValue}
+                  baseLine={showFullFile ? 1 : baseLine}
+                  showFullFile={showFullFile}
+                  wordWrap={wordWrap}
+                  searchQuery={showSearch ? searchQuery : undefined}
+                  searchCaseSensitive={searchCaseSensitive}
+                  currentMatchIndex={currentMatchIndex}
+                  onMatchCount={handleMatchCount}
+                />
+              )}
             </div>
             {/* Inline PR review threads */}
             {fileThreads.length > 0 && (

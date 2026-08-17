@@ -7,9 +7,9 @@
 
 import { execFile } from 'child_process';
 import { randomUUID } from 'crypto';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { basename, dirname, isAbsolute, join } from 'path';
+import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { promisify } from 'util';
 
 import {
@@ -23,7 +23,7 @@ import {
 } from '@openai/codex-sdk';
 
 import { createDebugLogger } from '../debug.js';
-import { getFullContextFileDiff } from '../git/index.js';
+import { getFullContextFileDiff, gitRead } from '../git/index.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 import type { CLIMessage } from './types.js';
 
@@ -31,6 +31,9 @@ const dlog = createDebugLogger('codex-sdk');
 const execFileAsync = promisify(execFile);
 const MAX_CACHED_CREATED_FILE_DIFFS = 64;
 const MAX_CACHED_CREATED_FILE_DIFF_BYTES = 512 * 1024;
+const MAX_TRACKED_FILE_SNAPSHOTS = 64;
+const MAX_TRACKED_FILE_SNAPSHOT_BYTES = 512 * 1024;
+const MAX_TOTAL_FILE_SNAPSHOT_BYTES = 4 * 1024 * 1024;
 
 const CODEX_TOOLS = [
   'read_file',
@@ -59,6 +62,8 @@ export class CodexSDKProcess extends BaseAgentProcess {
    * content instead of an empty Edit card.
    */
   private createdFileDiffsByPath = new Map<string, string>();
+  /** Content immediately before the next SDK file-change event for a path. */
+  private fileSnapshotsByPath = new Map<string, Buffer>();
   /**
    * Per-turn token that namespaces SDK item IDs. Codex numbers items
    * ordinally within a turn (`item_0`, `item_1`, …) and reuses those IDs on
@@ -146,7 +151,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
 
     // Fresh token per turn so this turn's item IDs never collide with a
     // previous turn's (Codex reuses ordinal item IDs across turns).
-    this.beginTurn();
+    await this.beginTurn();
 
     let resultText = '';
     let subtype: ResultSubtype = 'success';
@@ -347,11 +352,25 @@ export class CodexSDKProcess extends BaseAgentProcess {
   ): Promise<Record<string, { type: string; unified_diff?: string }>> {
     const captured = await Promise.all(
       changes.map(async (change) => {
+        const snapshotPath = this.snapshotPath(change.path);
+        const previousContent = this.fileSnapshotsByPath.get(snapshotPath);
+        const currentContent = await readSmallFile(snapshotPath);
         const absolutePath = isAbsolute(change.path);
         const cwd = absolutePath ? dirname(change.path) : this.options.cwd;
         const filePath = absolutePath ? basename(change.path) : change.path;
-        const result = await getFullContextFileDiff(cwd, filePath, false);
-        let unifiedDiff = result.isOk() && result.value.trim() ? result.value : undefined;
+        let unifiedDiff =
+          previousContent && !buffersEqual(previousContent, currentContent)
+            ? await createHistoricalFileDiff(
+                change.path,
+                previousContent,
+                currentContent,
+                change.kind,
+              )
+            : undefined;
+        if (!unifiedDiff) {
+          const result = await getFullContextFileDiff(cwd, filePath, false);
+          unifiedDiff = result.isOk() && result.value.trim() ? result.value : undefined;
+        }
         if (!unifiedDiff && isFileDeletion(change.kind)) {
           const createdDiff = this.createdFileDiffsByPath.get(change.path);
           if (createdDiff) unifiedDiff = makeDeletionDiff(change.path, createdDiff);
@@ -360,6 +379,8 @@ export class CodexSDKProcess extends BaseAgentProcess {
         if (unifiedDiff && isFileCreation(change.kind)) {
           this.rememberCreatedFileDiff(change.path, unifiedDiff);
         }
+        if (currentContent) this.fileSnapshotsByPath.set(snapshotPath, currentContent);
+        else this.fileSnapshotsByPath.delete(snapshotPath);
         return [
           change.path,
           { type: change.kind, ...(unifiedDiff ? { unified_diff: unifiedDiff } : {}) },
@@ -367,6 +388,32 @@ export class CodexSDKProcess extends BaseAgentProcess {
       }),
     );
     return Object.fromEntries(captured);
+  }
+
+  private snapshotPath(filePath: string): string {
+    return isAbsolute(filePath) ? filePath : resolve(this.options.cwd, filePath);
+  }
+
+  /**
+   * Snapshot files that are already dirty before Codex starts the turn. The
+   * SDK reports file changes only after applying them, so this is the only
+   * reliable way to preserve a later edit that restores a file to HEAD.
+   */
+  private async snapshotChangedFiles(): Promise<void> {
+    this.fileSnapshotsByPath.clear();
+    const [tracked, untracked] = await Promise.all([
+      listGitPaths(this.options.cwd, ['diff', '--name-only', '-z', 'HEAD', '--']),
+      listGitPaths(this.options.cwd, ['ls-files', '--others', '--exclude-standard', '-z', '--']),
+    ]);
+    const paths = [...new Set([...tracked, ...untracked])].slice(0, MAX_TRACKED_FILE_SNAPSHOTS);
+    let totalBytes = 0;
+    for (const filePath of paths) {
+      const absolutePath = resolve(this.options.cwd, filePath);
+      const content = await readSmallFile(absolutePath);
+      if (!content || totalBytes + content.byteLength > MAX_TOTAL_FILE_SNAPSHOT_BYTES) continue;
+      this.fileSnapshotsByPath.set(absolutePath, content);
+      totalBytes += content.byteLength;
+    }
   }
 
   private rememberCreatedFileDiff(filePath: string, unifiedDiff: string): void {
@@ -380,9 +427,10 @@ export class CodexSDKProcess extends BaseAgentProcess {
   }
 
   /** Start a fresh turn: rotate the ID namespace and drop per-item text state. */
-  private beginTurn(): void {
+  private async beginTurn(): Promise<void> {
     this.turnToken = randomUUID();
     this.agentMessageTextByItemId.clear();
+    await this.snapshotChangedFiles();
   }
 
   /**
@@ -490,6 +538,91 @@ function makeDeletionDiff(filePath: string, creationDiff: string): string {
       if (!inHunk) return line;
       if (line.startsWith('+')) return `-${line.slice(1)}`;
       if (line.startsWith('-')) return `+${line.slice(1)}`;
+      return line;
+    })
+    .join('\n');
+}
+
+/** Read a file for snapshotting, skipping anything too large to diff cheaply. */
+async function readSmallFile(absolutePath: string): Promise<Buffer | null> {
+  try {
+    const content = await readFile(absolutePath);
+    return content.byteLength > MAX_TRACKED_FILE_SNAPSHOT_BYTES ? null : content;
+  } catch {
+    return null;
+  }
+}
+
+function buffersEqual(a: Buffer | null, b: Buffer | null): boolean {
+  if (!a || !b) return a === b;
+  return a.equals(b);
+}
+
+/** Git produces no useful text patch for binary payloads. */
+function isBinaryContent(content: Buffer | null): boolean {
+  return content ? content.includes(0) : false;
+}
+
+/**
+ * Run a `-z` git command and return the paths it reports. Failures (not a
+ * repository, no HEAD yet) degrade to an empty list — snapshotting is a
+ * best-effort optimization, never a hard requirement for the turn.
+ */
+async function listGitPaths(cwd: string, args: string[]): Promise<string[]> {
+  const result = await gitRead(args, { cwd, reject: false });
+  if (result.exitCode !== 0) return [];
+  return result.stdout.split('\0').filter(Boolean);
+}
+
+/**
+ * Diff the pre-turn snapshot of a file against its current content. Git can
+ * only diff what is on disk, so both sides are materialized into a temporary
+ * directory and the resulting patch is re-headed with the real path.
+ */
+async function createHistoricalFileDiff(
+  filePath: string,
+  previousContent: Buffer,
+  currentContent: Buffer | null,
+  kind: string,
+): Promise<string | undefined> {
+  if (isBinaryContent(previousContent) || isBinaryContent(currentContent)) return undefined;
+
+  let dir: string | undefined;
+  try {
+    dir = await mkdtemp(join(tmpdir(), 'funny-codex-diff-'));
+    const oldPath = join(dir, 'before');
+    const newPath = join(dir, 'after');
+    await writeFile(oldPath, previousContent);
+    await writeFile(newPath, currentContent ?? Buffer.alloc(0));
+    // --no-index exits with 1 when the files differ, which is the expected case.
+    const result = await gitRead(['diff', '--no-index', '-U99999', '--', oldPath, newPath], {
+      cwd: dir,
+      reject: false,
+    });
+    if (!result.stdout.trim()) return undefined;
+    return rewriteDiffPaths(result.stdout, filePath, !currentContent || isFileDeletion(kind));
+  } catch {
+    return undefined;
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Replace the temp-file paths in a `--no-index` patch with the real path. */
+function rewriteDiffPaths(diff: string, filePath: string, deleted: boolean): string {
+  let inHunk = false;
+
+  return diff
+    .split('\n')
+    .map((line) => {
+      if (inHunk) return line;
+      if (line.startsWith('@@ ')) {
+        inHunk = true;
+        return line;
+      }
+      if (line.startsWith('diff --git ')) return `diff --git a/${filePath} b/${filePath}`;
+      if (line.startsWith('--- ')) return `--- a/${filePath}`;
+      if (line.startsWith('+++ ')) return deleted ? '+++ /dev/null' : `+++ b/${filePath}`;
       return line;
     })
     .join('\n');

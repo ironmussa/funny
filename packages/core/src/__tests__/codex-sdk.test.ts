@@ -486,6 +486,73 @@ process.stdin.on('end', () => {
       await rm(editedRepo, { recursive: true, force: true });
     }
   });
+
+  test('starts a turn without throwing when the working tree is dirty', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-begin-turn-'));
+    try {
+      git(cwd, ['init']);
+      git(cwd, ['config', 'user.name', 'Funny test']);
+      git(cwd, ['config', 'user.email', 'test@example.invalid']);
+      await writeFile(join(cwd, 'config.ts'), 'export const port = 3000;\n');
+      git(cwd, ['add', '.']);
+      git(cwd, ['commit', '-m', 'initial']);
+      await writeFile(join(cwd, 'config.ts'), 'export const port = 5173;\n');
+      await writeFile(join(cwd, 'untracked.ts'), 'export const extra = true;\n');
+
+      const process = new CodexSDKProcess({ ...options, cwd });
+      await expect((process as any).beginTurn()).resolves.toBeUndefined();
+      const snapshots: Map<string, Buffer> = (process as any).fileSnapshotsByPath;
+      expect([...snapshots.keys()].sort()).toEqual(
+        [join(cwd, 'config.ts'), join(cwd, 'untracked.ts')].sort(),
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('captures a patch when an edit restores a dirty file back to HEAD', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-restore-head-'));
+    try {
+      git(cwd, ['init']);
+      git(cwd, ['config', 'user.name', 'Funny test']);
+      git(cwd, ['config', 'user.email', 'test@example.invalid']);
+      const filePath = join(cwd, 'config.ts');
+      await writeFile(filePath, 'export const port = 3000;\n');
+      git(cwd, ['add', '.']);
+      git(cwd, ['commit', '-m', 'initial']);
+      // The file is already dirty when the turn starts…
+      await writeFile(filePath, 'export const port = 5173;\n');
+
+      const process = new CodexSDKProcess({ ...options, cwd });
+      const messages: any[] = [];
+      process.on('message', (message) => messages.push(message));
+      await (process as any).beginTurn();
+
+      // …and Codex edits it back to HEAD, so `git diff` alone reports nothing.
+      await writeFile(filePath, 'export const port = 3000;\n');
+      await (process as any).handleEvent({
+        type: 'item.completed',
+        item: {
+          id: 'restore-to-head',
+          type: 'file_change',
+          status: 'completed',
+          changes: [{ path: filePath, kind: 'update' }],
+        },
+      });
+
+      const toolUseMessage = messages.find(
+        (message) =>
+          message.type === 'assistant' && message.message.content[0]?.type === 'tool_use',
+      );
+      if (toolUseMessage?.type !== 'assistant') throw new Error('Edit tool call was not emitted');
+      const unifiedDiff = toolUseMessage.message.content[0].input.changes[filePath].unified_diff;
+      expect(unifiedDiff).toContain(`diff --git a/${filePath} b/${filePath}`);
+      expect(unifiedDiff).toContain('-export const port = 5173;');
+      expect(unifiedDiff).toContain('+export const port = 3000;');
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
 
 function git(cwd: string, args: string[]): void {

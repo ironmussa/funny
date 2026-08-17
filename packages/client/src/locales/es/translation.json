@@ -573,6 +573,15 @@
     "searchProvider": "Buscar proveedor...",
     "selectModel": "Modelo",
     "searchModel": "Buscar modelo...",
+    "projectDefaultEffort": "Nivel de razonamiento predeterminado",
+    "projectDefaultEffortDesc": "Nivel de razonamiento seleccionado por defecto para nuevos hilos que usen este modelo",
+    "effort": {
+      "low": "Bajo",
+      "medium": "Medio",
+      "high": "Alto",
+      "xhigh": "Extra alto",
+      "max": "Máximo"
+    },
     "defaultPermissionMode": "Modo de permisos predeterminado",
     "defaultPermissionModeDesc": "El modo de permisos seleccionado por defecto para nuevos hilos y seguimientos",
     "permissions": "Permisos",

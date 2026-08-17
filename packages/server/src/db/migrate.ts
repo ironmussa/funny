@@ -1583,6 +1583,12 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '074_projects_default_effort',
+    async up() {
+      await ctx().addColumn('projects', 'default_effort', 'TEXT');
+    },
+  },
 ];
 
 /**

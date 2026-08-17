@@ -1031,6 +1031,12 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '064_projects_default_effort',
+    async up() {
+      await addColumn('projects', 'default_effort', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

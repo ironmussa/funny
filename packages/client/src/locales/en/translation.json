@@ -575,6 +575,15 @@
     "searchProvider": "Search provider...",
     "selectModel": "Model",
     "searchModel": "Search model...",
+    "projectDefaultEffort": "Default thinking level",
+    "projectDefaultEffortDesc": "Thinking level selected by default for new threads using this model",
+    "effort": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra High",
+      "max": "Max"
+    },
     "defaultPermissionMode": "Default permission mode",
     "defaultPermissionModeDesc": "The permission mode selected by default for new threads and follow-ups",
     "permissions": "Permissions",

@@ -26,6 +26,7 @@ export function createTestDb() {
       fast_mode INTEGER NOT NULL DEFAULT 0,
       default_provider TEXT,
       default_model TEXT,
+      default_effort TEXT,
       default_mode TEXT,
       default_permission_mode TEXT,
       default_branch TEXT,

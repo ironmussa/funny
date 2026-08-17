@@ -157,6 +157,22 @@ export function getEffortLevels(model: string, provider?: string): EffortConfig[
   });
 }
 
+/**
+ * Keep a preferred effort valid for the selected provider/model.
+ * Unsupported models intentionally resolve to an empty value so request
+ * builders omit the effort field.
+ */
+export function normalizeEffort(
+  model: string,
+  provider: string | undefined,
+  preferred?: string | null,
+): string {
+  const levels = getEffortLevels(model, provider);
+  if (levels.length === 0) return '';
+  if (preferred && levels.some((level) => level.value === preferred)) return preferred;
+  return levels.find((level) => level.value === 'high')?.value ?? levels[0]?.value ?? '';
+}
+
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 /** Get the context window size (in tokens) for a given provider + model. */

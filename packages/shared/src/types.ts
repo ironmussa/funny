@@ -412,6 +412,8 @@ export interface Project {
   fastMode?: boolean;
   defaultProvider?: AgentProvider;
   defaultModel?: AgentModel;
+  /** Per-project reasoning level used for new threads when the selected model supports it. */
+  defaultEffort?: EffortLevel;
   defaultMode?: ThreadMode;
   defaultPermissionMode?: PermissionMode;
   defaultBranch?: string;

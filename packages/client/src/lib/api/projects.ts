@@ -35,6 +35,7 @@ export const projectsApi = {
       fastMode?: boolean;
       defaultProvider?: string | null;
       defaultModel?: string | null;
+      defaultEffort?: string | null;
       defaultMode?: string | null;
       defaultPermissionMode?: string | null;
       defaultBranch?: string | null;

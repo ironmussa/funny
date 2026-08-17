@@ -186,6 +186,41 @@ describe('PromptInput', () => {
     );
   });
 
+  test('uses the project default thinking level for a new thread', async () => {
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Test',
+          path: '/tmp/test',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 0,
+          defaultProvider: 'codex',
+          defaultModel: 'gpt-5.4',
+          defaultEffort: 'medium',
+        },
+      ],
+    });
+    const onSubmit = vi.fn();
+    renderWithProviders(<PromptInput onSubmit={onSubmit} isNewThread projectId="p1" />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'Use the project defaults' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      'Use the project defaults',
+      expect.objectContaining({
+        provider: 'codex',
+        model: 'gpt-5.4',
+        effort: 'medium',
+      }),
+      undefined,
+    );
+  });
+
   test('navigates this thread’s sent-message history with the arrow keys', () => {
     useThreadStore.setState({
       threadDataById: {

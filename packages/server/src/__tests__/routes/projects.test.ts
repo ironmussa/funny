@@ -427,12 +427,13 @@ describe.serial('Project Routes (Integration)', () => {
       expect(project.followUpMode).toBe('interrupt');
     });
 
-    test('defaultProvider and defaultModel are persisted', async () => {
+    test('defaultProvider, defaultModel, and defaultEffort are persisted', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
 
       await t.requestAs('user-1').patch('/api/projects/p1', {
         defaultProvider: 'claude',
         defaultModel: 'opus',
+        defaultEffort: 'medium',
       });
 
       const listRes = await t.requestAs('user-1').get('/api/projects');
@@ -440,6 +441,7 @@ describe.serial('Project Routes (Integration)', () => {
       const project = projects.find((p: any) => p.id === 'p1');
       expect(project.defaultProvider).toBe('claude');
       expect(project.defaultModel).toBe('opus');
+      expect(project.defaultEffort).toBe('medium');
     });
 
     test('systemPrompt is persisted', async () => {

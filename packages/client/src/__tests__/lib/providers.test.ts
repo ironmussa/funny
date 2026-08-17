@@ -12,6 +12,7 @@ import {
   getContextWindow,
   parseUnifiedModel,
   getEffortLevels,
+  normalizeEffort,
 } from '@/lib/providers';
 
 /** Mock translation function — returns the key itself (simulating missing i18n). */
@@ -231,6 +232,17 @@ describe('getEffortLevels', () => {
       'xhigh',
       'max',
     ]);
+  });
+});
+
+describe('normalizeEffort', () => {
+  test('preserves supported values and falls back to high', () => {
+    expect(normalizeEffort('opus-4.8', 'claude', 'xhigh')).toBe('xhigh');
+    expect(normalizeEffort('sonnet', 'claude', 'xhigh')).toBe('high');
+  });
+
+  test('returns an empty value when the model does not support thinking levels', () => {
+    expect(normalizeEffort('gemini-2.5-pro', 'gemini', 'high')).toBe('');
   });
 });
 

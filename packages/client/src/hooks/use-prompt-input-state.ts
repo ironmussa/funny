@@ -20,7 +20,12 @@ import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { getEffortLevels, filterVisibleModelGroups, parseUnifiedModel } from '@/lib/providers';
+import {
+  filterVisibleModelGroups,
+  getEffortLevels,
+  normalizeEffort,
+  parseUnifiedModel,
+} from '@/lib/providers';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
@@ -183,6 +188,11 @@ export function usePromptInputState({
     : undefined;
   const defaultProvider = effectiveProject?.defaultProvider ?? DEFAULT_PROVIDER;
   const defaultModel = effectiveProject?.defaultModel ?? DEFAULT_MODEL;
+  const defaultEffort = normalizeEffort(
+    defaultModel,
+    defaultProvider,
+    effectiveProject?.defaultEffort,
+  );
   const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? DEFAULT_PERMISSION_MODE;
   const defaultThreadMode = effectiveProject?.defaultMode ?? DEFAULT_THREAD_MODE;
 
@@ -202,7 +212,7 @@ export function usePromptInputState({
   );
   const [runtime, setRuntime] = useState<'local' | 'remote'>('local');
   const hasLauncher = !!effectiveProject?.launcherUrl;
-  const [effort, setEffort] = useState<string>('high');
+  const [effort, setEffort] = useState<string>(defaultEffort);
 
   const baseUnifiedModelGroups = useUnifiedPromptModelGroups();
   const hiddenPromptModels = useSettingsStore((s) => s.hiddenPromptModels);
@@ -229,10 +239,11 @@ export function usePromptInputState({
   }, [currentProvider, notifyProviderChange]);
   const setUnifiedModel = useCallback(
     (nextUnifiedModel: string) => {
-      const nextProvider = parseUnifiedModel(nextUnifiedModel).provider;
+      const { provider: nextProvider, model: nextModel } = parseUnifiedModel(nextUnifiedModel);
       if (nextProvider !== currentProvider) {
         notifyProviderChange(nextProvider);
       }
+      setEffort((currentEffort) => normalizeEffort(nextModel, nextProvider, currentEffort));
       setUnifiedModelRaw(nextUnifiedModel);
     },
     [currentProvider, notifyProviderChange],
@@ -447,10 +458,26 @@ export function usePromptInputState({
   }, [isNewThread, activeThreadProvider, activeThreadModel, defaultProvider, defaultModel]);
 
   useEffect(() => {
-    if (!isNewThread && activeThreadLastEffort) {
-      setEffort(activeThreadLastEffort);
+    if (isNewThread) {
+      setEffort(defaultEffort);
+      return;
     }
-  }, [isNewThread, activeThreadLastEffort]);
+    setEffort((currentEffort) =>
+      normalizeEffort(
+        activeThreadModel ?? currentModel,
+        activeThreadProvider ?? currentProvider,
+        activeThreadLastEffort ?? currentEffort,
+      ),
+    );
+  }, [
+    isNewThread,
+    defaultEffort,
+    activeThreadLastEffort,
+    activeThreadModel,
+    activeThreadProvider,
+    currentModel,
+    currentProvider,
+  ]);
 
   // ── Fetch branches ──
   // Mirror effectiveProject's resolution: an existing thread uses its own

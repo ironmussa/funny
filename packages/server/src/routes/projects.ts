@@ -40,6 +40,7 @@ const updateProjectBodySchema = z.object({
   followUpMode: z.string().optional(),
   defaultProvider: z.string().nullable().optional(),
   defaultModel: z.string().nullable().optional(),
+  defaultEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).nullable().optional(),
   defaultMode: z.string().nullable().optional(),
   defaultPermissionMode: z.string().nullable().optional(),
   defaultBranch: z.string().nullable().optional(),

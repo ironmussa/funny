@@ -51,6 +51,7 @@ export const projects = sqliteTable('projects', {
   fastMode: integer('fast_mode').notNull().default(0),
   defaultProvider: text('default_provider'),
   defaultModel: text('default_model'),
+  defaultEffort: text('default_effort'),
   defaultMode: text('default_mode'),
   defaultPermissionMode: text('default_permission_mode'),
   defaultBranch: text('default_branch'),

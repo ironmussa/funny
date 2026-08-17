@@ -64,6 +64,7 @@ function toProject(row: ProjectRow): Project {
     fastMode,
     defaultProvider,
     defaultModel,
+    defaultEffort,
     defaultMode,
     defaultPermissionMode,
     defaultBranch,
@@ -89,6 +90,7 @@ function toProject(row: ProjectRow): Project {
       ? { defaultProvider: defaultProvider as Project['defaultProvider'] }
       : {}),
     ...(defaultModel != null ? { defaultModel: defaultModel as Project['defaultModel'] } : {}),
+    ...(defaultEffort != null ? { defaultEffort: defaultEffort as Project['defaultEffort'] } : {}),
     ...(defaultMode != null ? { defaultMode: defaultMode as Project['defaultMode'] } : {}),
     ...(defaultPermissionMode != null
       ? { defaultPermissionMode: defaultPermissionMode as Project['defaultPermissionMode'] }
@@ -360,6 +362,7 @@ export async function updateProject(
     followUpMode?: string;
     defaultProvider?: string | null;
     defaultModel?: string | null;
+    defaultEffort?: string | null;
     defaultMode?: string | null;
     defaultPermissionMode?: string | null;
     defaultBranch?: string | null;
@@ -423,6 +426,7 @@ export async function updateProject(
   if (fields.followUpMode !== undefined) updateData.followUpMode = fields.followUpMode;
   if (fields.defaultProvider !== undefined) updateData.defaultProvider = fields.defaultProvider;
   if (fields.defaultModel !== undefined) updateData.defaultModel = fields.defaultModel;
+  if (fields.defaultEffort !== undefined) updateData.defaultEffort = fields.defaultEffort;
   if (fields.defaultMode !== undefined) updateData.defaultMode = fields.defaultMode;
   if (fields.defaultPermissionMode !== undefined)
     updateData.defaultPermissionMode = fields.defaultPermissionMode;

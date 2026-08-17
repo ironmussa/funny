@@ -22,7 +22,7 @@ import {
   SettingRow,
 } from '@/components/general-settings-project/setting-primitives';
 import { projectsApi } from '@/lib/api/projects';
-import { getModelOptions, PROVIDERS } from '@/lib/providers';
+import { getEffortLevels, getModelOptions, normalizeEffort, PROVIDERS } from '@/lib/providers';
 import { useAcpModelsStore } from '@/stores/acp-models-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
@@ -96,6 +96,14 @@ export function GeneralSettings() {
 
   const projectDefaultProvider = (selectedProject?.defaultProvider ||
     DEFAULT_PROVIDER) as AgentProvider;
+  const projectDefaultModel =
+    selectedProject?.defaultModel || getDefaultModel(projectDefaultProvider);
+  const projectEffortOptions = getEffortLevels(projectDefaultModel, projectDefaultProvider);
+  const projectDefaultEffort = normalizeEffort(
+    projectDefaultModel,
+    projectDefaultProvider,
+    selectedProject?.defaultEffort,
+  );
   const projectModelOptions = (() => {
     const base = getModelOptions(projectDefaultProvider, t);
     const dynamic = acpByProvider[projectDefaultProvider];
@@ -181,9 +189,12 @@ export function GeneralSettings() {
                   value={selectedProject.defaultProvider || DEFAULT_PROVIDER}
                   onChange={(v) => {
                     const p = v as AgentProvider;
+                    const model = getDefaultModel(p);
                     saveProject(selectedProject.id, {
                       defaultProvider: p,
-                      defaultModel: getDefaultModel(p),
+                      defaultModel: model,
+                      defaultEffort:
+                        normalizeEffort(model, p, selectedProject.defaultEffort) || null,
                     });
                   }}
                   options={PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
@@ -191,19 +202,37 @@ export function GeneralSettings() {
                   searchPlaceholder={t('settings.searchProvider')}
                 />
                 <ModelCombobox
-                  value={
-                    selectedProject.defaultModel ||
-                    getDefaultModel(
-                      (selectedProject.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
-                    )
+                  value={projectDefaultModel}
+                  onChange={(v) =>
+                    saveProject(selectedProject.id, {
+                      defaultModel: v,
+                      defaultEffort:
+                        normalizeEffort(v, projectDefaultProvider, selectedProject.defaultEffort) ||
+                        null,
+                    })
                   }
-                  onChange={(v) => saveProject(selectedProject.id, { defaultModel: v })}
                   options={projectModelOptions}
                   placeholder={t('settings.selectModel')}
                   searchPlaceholder={t('settings.searchModel')}
                 />
               </div>
             </SettingRow>
+            {projectEffortOptions.length > 0 && (
+              <SettingRow
+                title={t('settings.projectDefaultEffort')}
+                description={t('settings.projectDefaultEffortDesc')}
+              >
+                <SegmentedControl<string>
+                  value={projectDefaultEffort}
+                  onChange={(v) => saveProject(selectedProject.id, { defaultEffort: v })}
+                  options={projectEffortOptions.map((level) => ({
+                    value: level.value,
+                    label: t(`settings.effort.${level.value}`, level.label),
+                    testId: `settings-default-effort-${level.value}`,
+                  }))}
+                />
+              </SettingRow>
+            )}
             <SettingRow
               title={t('settings.projectDefaultMode', 'Default Thread Mode')}
               description={t(

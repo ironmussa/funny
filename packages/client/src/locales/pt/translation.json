@@ -565,6 +565,15 @@
     "searchProvider": "Buscar provedor...",
     "selectModel": "Modelo",
     "searchModel": "Buscar modelo...",
+    "projectDefaultEffort": "Nível de raciocínio padrão",
+    "projectDefaultEffortDesc": "Nível de raciocínio selecionado por padrão para novas threads que usam este modelo",
+    "effort": {
+      "low": "Baixo",
+      "medium": "Médio",
+      "high": "Alto",
+      "xhigh": "Extra alto",
+      "max": "Máximo"
+    },
     "defaultPermissionMode": "Modo de permissão padrão",
     "defaultPermissionModeDesc": "O modo de permissão selecionado por padrão para novas threads e acompanhamentos",
     "permissions": "Permissões",

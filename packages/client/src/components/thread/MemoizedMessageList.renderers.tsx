@@ -18,7 +18,7 @@ import { WorkflowEventGroup } from './WorkflowEventGroup';
 type ToolRendererCommonProps = {
   snapshotMap: Map<string, number>;
   isWaiting: boolean;
-  onSend: (prompt: string, opts: { model: string; mode: string }) => void;
+  onSend: (prompt: string, opts: { model: string; mode: string; effort?: string }) => void;
   onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;
 };
 

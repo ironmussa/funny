@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef, useEffect, useImperativeHandle, type Ref } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -88,7 +88,11 @@ vi.mock('@/components/thread/FrozenMessageList', () => ({
 
 vi.mock('@/components/thread/AgentStatusCards', () => ({
   AgentResultCard: () => null,
-  AgentInterruptedCard: () => null,
+  AgentInterruptedCard: ({ onContinue }: { onContinue: () => void }) => (
+    <button type="button" onClick={onContinue}>
+      Continue
+    </button>
+  ),
   AgentStoppedCard: () => null,
 }));
 
@@ -202,6 +206,38 @@ describe('MessageStream sticky bottom', () => {
 
     expect(viewport.style.overflowAnchor).toBe('none');
     expect(viewport.style.overscrollBehaviorY).toBe('contain');
+  });
+
+  test('continues with the canonical lastUserMessage effort', () => {
+    const onSend = vi.fn();
+    const messages = [
+      { ...makeMessages('interrupted response')[0], effort: 'low' },
+      makeMessages('interrupted response')[1],
+    ];
+    const lastUserMessage = { ...messages[0], effort: 'medium' };
+
+    render(
+      <MessageStream
+        threadId="t1"
+        status="interrupted"
+        messages={messages}
+        lastUserMessage={lastUserMessage}
+        model="test-model"
+        permissionMode="autoEdit"
+        onSend={onSend}
+      />,
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(onSend).toHaveBeenCalledWith('Continue', {
+      model: 'test-model',
+      mode: 'autoEdit',
+      effort: 'medium',
+    });
   });
 
   test('keeps the viewport pinned when streamed message content grows', () => {

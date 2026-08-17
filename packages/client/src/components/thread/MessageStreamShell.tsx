@@ -29,6 +29,7 @@ interface MessageStreamShellProps {
   className?: string;
   // Chrome data
   messages: any[];
+  lastUserMessage?: MessageStreamProps['lastUserMessage'];
   pagination: MessageStreamProps['pagination'];
   createdAt?: string;
   initInfo: MessageStreamProps['initInfo'];
@@ -73,6 +74,7 @@ export function MessageStreamShell({
   compact,
   className,
   messages,
+  lastUserMessage,
   pagination,
   createdAt,
   initInfo,
@@ -171,6 +173,7 @@ export function MessageStreamShell({
           resultInfo={resultInfo}
           model={model}
           permissionMode={permissionMode}
+          effort={lastUserMessage?.effort}
           t={t}
           onSend={onSend}
           onPermissionApprove={onPermissionApprove}

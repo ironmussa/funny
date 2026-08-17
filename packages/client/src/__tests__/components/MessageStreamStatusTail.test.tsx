@@ -36,6 +36,26 @@ describe('MessageStreamStatusTail', () => {
     expect(container.querySelector('.animate-pulse')).toBeNull();
   });
 
+  test('preserves the previous thinking effort when continuing an interrupted run', () => {
+    const onSend = vi.fn();
+    render(
+      <MessageStreamStatusTail
+        {...baseProps}
+        status="interrupted"
+        effort="medium"
+        onSend={onSend}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(onSend).toHaveBeenCalledWith('Continue', {
+      model: 'test-model',
+      mode: 'default',
+      effort: 'medium',
+    });
+  });
+
   test('keeps a structured request actionable after its always decision fails', async () => {
     const onPermissionDecision = vi.fn().mockRejectedValue(new Error('rule persistence failed'));
     render(

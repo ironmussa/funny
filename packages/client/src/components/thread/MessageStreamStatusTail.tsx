@@ -37,8 +37,9 @@ interface MessageStreamStatusTailProps {
   };
   model: string;
   permissionMode: string;
+  effort?: string;
   t: TFunction;
-  onSend: (prompt: string, opts: { model: string; mode: string }) => void;
+  onSend: (prompt: string, opts: { model: string; mode: string; effort?: string }) => void;
   onPermissionApprove: () => void;
   onPermissionAlwaysAllow: () => void;
   onPermissionDeny: () => void;
@@ -58,6 +59,7 @@ export function MessageStreamStatusTail({
   resultInfo,
   model,
   permissionMode,
+  effort,
   t,
   onSend,
   onPermissionApprove,
@@ -65,7 +67,7 @@ export function MessageStreamStatusTail({
   onPermissionDeny,
   onPermissionDecision,
 }: MessageStreamStatusTailProps) {
-  const sendContinue = () => onSend('Continue', { model, mode: permissionMode });
+  const sendContinue = () => onSend('Continue', { model, mode: permissionMode, effort });
   const sendWithMode = (text: string) => onSend(text, { model, mode: permissionMode });
 
   return (

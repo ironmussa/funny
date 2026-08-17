@@ -33,7 +33,7 @@ export interface MessageStreamProps {
   permissionApprovalCapability?: PermissionApprovalCapability;
   permissionRecoveryReason?: PermissionRecoveryReason;
   isExternal?: boolean;
-  onSend: (prompt: string, opts: { model: string; mode: string }) => void;
+  onSend: (prompt: string, opts: { model: string; mode: string; effort?: string }) => void;
   onPermissionApproval?: (toolName: string, approved: boolean, alwaysAllow?: boolean) => void;
   onPermissionDecision?: (requestId: string, decision: PermissionDecision) => Promise<void> | void;
   onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;

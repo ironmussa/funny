@@ -26,6 +26,7 @@ function VirtualMessageStream(props: MessageStreamProps) {
     threadId,
     status,
     messages,
+    lastUserMessage,
     leadingUserMessage,
     threadEvents,
     compactionEvents,
@@ -161,6 +162,7 @@ function VirtualMessageStream(props: MessageStreamProps) {
       compact={compact}
       className={className}
       messages={messages}
+      lastUserMessage={lastUserMessage}
       pagination={pagination}
       createdAt={createdAt}
       initInfo={initInfo}

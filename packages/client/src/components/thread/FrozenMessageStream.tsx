@@ -168,6 +168,7 @@ export function FrozenMessageStream(props: MessageStreamProps) {
       compact={compact}
       className={className}
       messages={messages}
+      lastUserMessage={lastUserMessage}
       pagination={pagination}
       createdAt={createdAt}
       initInfo={initInfo}

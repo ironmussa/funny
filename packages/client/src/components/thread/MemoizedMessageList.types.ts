@@ -28,7 +28,7 @@ export interface MemoizedMessageListProps {
   threadStatus?: string;
   knownIds: Set<string>;
   snapshotMap: Map<string, number>;
-  onSend: (prompt: string, opts: { model: string; mode: string }) => void;
+  onSend: (prompt: string, opts: { model: string; mode: string; effort?: string }) => void;
   onOpenLightbox: (images: { src: string; alt: string }[], index: number) => void;
   onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;
   onFork?: (messageId: string) => void;

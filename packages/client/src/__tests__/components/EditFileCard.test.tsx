@@ -48,8 +48,13 @@ vi.mock('@/stores/thread-context', () => ({
 }));
 
 vi.mock('@/stores/project-store', () => ({
-  useProjectStore: (selector: (state: { projects: never[] }) => unknown) =>
-    selector({ projects: [] }),
+  useProjectStore: Object.assign(
+    (selector: (state: { projects: never[] }) => unknown) => selector({ projects: [] }),
+    {
+      getState: () => ({ projects: [] }),
+      subscribe: () => () => {},
+    },
+  ),
 }));
 
 vi.mock('@/stores/settings-store', () => ({

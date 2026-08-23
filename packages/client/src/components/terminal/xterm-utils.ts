@@ -131,6 +131,23 @@ export function repaintVisibleTerminal(
   terminal.refresh(0, terminal.rows - 1);
 }
 
+/**
+ * Refit and repaint an xterm after its container becomes visible or changes
+ * size. `FitAddon.fit()` is intentionally paired with an explicit repaint:
+ * when reopening a collapsed dockview panel, the proposed rows/columns can be
+ * unchanged, so fit is a no-op and xterm's paused WebGL canvas otherwise stays
+ * stale until keyboard input triggers another render.
+ */
+export function refitAndRepaintVisibleTerminal(
+  terminal: import('@xterm/xterm').Terminal,
+  fitAddon: Pick<import('@xterm/addon-fit').FitAddon, 'fit'>,
+  container: HTMLElement | null,
+): void {
+  if (!container || container.offsetParent === null || container.clientHeight <= 0) return;
+  fitAddon.fit();
+  repaintVisibleTerminal(terminal, container);
+}
+
 export function writeAndRepaintTerminal(
   terminal: import('@xterm/xterm').Terminal,
   data: string | Uint8Array,

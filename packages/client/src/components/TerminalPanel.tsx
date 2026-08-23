@@ -23,6 +23,7 @@ import {
   getTerminalTheme,
   getXtermModules,
   isTauri,
+  refitAndRepaintVisibleTerminal,
   repaintVisibleTerminal,
   searchAddonRegistry,
   terminalRegistry,
@@ -531,9 +532,7 @@ export function WebTerminalTabContent({
       // and SIGWINCH spam that show up as a strobe during a drag.
       const resizeScheduler = createResizeScheduler(() => {
         const el = containerRef.current;
-        if (el && el.offsetParent !== null && el.clientHeight > 0) {
-          fitAddon.fit();
-        }
+        refitAndRepaintVisibleTerminal(terminal, fitAddon, el);
       });
       const resizeObserver = new ResizeObserver(() => resizeScheduler.schedule());
       resizeObserver.observe(containerRef.current!);
@@ -595,7 +594,7 @@ export function WebTerminalTabContent({
 
         // Re-sync xterm theme with current CSS variables
         terminal.options.theme = getTerminalTheme();
-        fitAddon.fit();
+        refitAndRepaintVisibleTerminal(terminal, fitAddon, el);
         // Force-send a resize in case fit() didn't trigger onResize
         // (e.g. when dimensions match the stale cached value in xterm).
         const dims = fitAddon.proposeDimensions();
@@ -605,7 +604,6 @@ export function WebTerminalTabContent({
             ws.emit('pty:resize', { id, cols: dims.cols, rows: dims.rows });
           }
         }
-        repaintVisibleTerminal(terminal, el);
         // Only focus if no modal dialog is open (see aria-hidden note above)
         if (shouldFocus && !document.querySelector('[role="dialog"][data-state="open"]')) {
           terminal.focus();

@@ -5,8 +5,12 @@ import { describe, test, expect, vi } from 'vitest';
 // (`if (!isTauri) getXtermModules()`). Flag Tauri before importing so the unit
 // under test loads without pulling in the WebGL/canvas bundle under jsdom.
 (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
-const { flushPausedRender, repaintVisibleTerminal, writeAndRepaintTerminal } =
-  await import('@/components/terminal/xterm-utils');
+const {
+  flushPausedRender,
+  refitAndRepaintVisibleTerminal,
+  repaintVisibleTerminal,
+  writeAndRepaintTerminal,
+} = await import('@/components/terminal/xterm-utils');
 
 /**
  * Minimal stand-in for an xterm Terminal that exposes just the private render
@@ -105,5 +109,35 @@ describe('writeAndRepaintTerminal', () => {
 
     expect(calls).toEqual([{ isIntersecting: true, intersectionRatio: 1 }]);
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
+  });
+});
+
+describe('refitAndRepaintVisibleTerminal', () => {
+  test('refits and repaints after a collapsed terminal becomes visible', () => {
+    const { terminal, calls } = makeFakeTerminal({ paused: true });
+    const fitAddon = { fit: vi.fn() };
+    const container = document.createElement('div');
+    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(document.body);
+    vi.spyOn(container, 'clientHeight', 'get').mockReturnValue(240);
+
+    refitAndRepaintVisibleTerminal(terminal, fitAddon, container);
+
+    expect(fitAddon.fit).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([{ isIntersecting: true, intersectionRatio: 1 }]);
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
+  });
+
+  test('does nothing while the terminal is still collapsed', () => {
+    const { terminal, calls } = makeFakeTerminal({ paused: true });
+    const fitAddon = { fit: vi.fn() };
+    const container = document.createElement('div');
+    vi.spyOn(container, 'offsetParent', 'get').mockReturnValue(null);
+    vi.spyOn(container, 'clientHeight', 'get').mockReturnValue(0);
+
+    refitAndRepaintVisibleTerminal(terminal, fitAddon, container);
+
+    expect(fitAddon.fit).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+    expect(terminal.refresh).not.toHaveBeenCalled();
   });
 });

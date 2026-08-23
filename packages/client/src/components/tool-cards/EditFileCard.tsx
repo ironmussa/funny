@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { VirtualDiff } from '@/components/VirtualDiff';
 import { api } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
+import { buildSections, buildVirtualRows } from '@/lib/diff/layout';
+import { parseUnifiedDiff } from '@/lib/diff/parse';
 import { cn } from '@/lib/utils';
 import { DIFF_ROW_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
 import { useThreadId } from '@/stores/thread-context';
@@ -20,6 +22,8 @@ import {
   useCurrentProjectPath,
   makeRelativePath,
 } from './utils';
+
+const INLINE_DIFF_CONTEXT_LINES = 3;
 
 /**
  * Compute a minimal unified diff from old/new strings for inline display.
@@ -423,8 +427,25 @@ export function EditFileCard({
   const inlineDiffSlotHeight = useMemo(() => {
     if (!hasDiff) return undefined;
     const rowHeight = DIFF_ROW_HEIGHT_PX[fontSize];
-    const lineCount = Math.max(1, unifiedDiff.split('\n').length);
-    return Math.max(64, lineCount * rowHeight);
+    const parsedDiff = parseUnifiedDiff(unifiedDiff);
+    const sections = buildSections(parsedDiff.lines, INLINE_DIFF_CONTEXT_LINES);
+    const visibleRows = buildVirtualRows(
+      sections,
+      parsedDiff.lines,
+      parsedDiff.hunkHeaders,
+      INLINE_DIFF_CONTEXT_LINES,
+    );
+    // VirtualDiff folds long unchanged sections by default. Reserve space for
+    // the rows it actually renders, not every line in the raw patch; otherwise
+    // a small edit in a large hunk leaves a tall empty panel below the diff.
+    const conflictStartLines = new Set(
+      parsedDiff.conflictBlocks.map((block) => block.startLineIdx),
+    );
+    const visibleConflictActions = visibleRows.filter(
+      (row) => row.type === 'line' && conflictStartLines.has(row.lineIdx),
+    ).length;
+    const visibleRowCount = visibleRows.length + visibleConflictActions;
+    return Math.max(64, visibleRowCount * rowHeight);
   }, [fontSize, hasDiff, unifiedDiff]);
 
   return (
@@ -537,6 +558,7 @@ export function EditFileCard({
               splitView={false}
               filePath={filePath}
               codeFolding={true}
+              contextLines={INLINE_DIFF_CONTEXT_LINES}
               className="h-full max-h-[50vh]"
               data-testid="edit-file-inline-diff"
             />

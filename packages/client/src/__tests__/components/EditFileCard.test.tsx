@@ -125,6 +125,39 @@ describe('EditFileCard', () => {
     expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
   });
 
+  test('sizes the inline diff from visible folded rows instead of raw patch lines', () => {
+    const contextBefore = Array.from({ length: 30 }, (_, index) => ` before ${index}`);
+    const contextAfter = Array.from({ length: 30 }, (_, index) => ` after ${index}`);
+    const rawDiff = [
+      '--- a/src/app.ts',
+      '+++ b/src/app.ts',
+      '@@ -1,61 +1,60 @@',
+      ...contextBefore,
+      '-const removed = true;',
+      ...contextAfter,
+    ].join('\n');
+
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          parsed={{
+            changes: {
+              '/repo/src/app.ts': {
+                type: 'update',
+                unified_diff: rawDiff,
+              },
+            },
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    const slot = screen.getByTestId('edit-file-inline-diff-placeholder').parentElement;
+
+    // 1 hunk + (3 context + 1 fold + 3 context) on each side + 1 changed row.
+    expect(slot).toHaveStyle({ height: '320px' });
+  });
+
   test('mounts a visible diff when IntersectionObserver does not notify', async () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);

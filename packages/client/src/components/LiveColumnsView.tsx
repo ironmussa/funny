@@ -429,7 +429,8 @@ export function LiveColumnsView() {
                     {threadId ? (
                       <ThreadColumn
                         threadId={threadId}
-                        onRemove={() => handleRemoveFromGrid(cellIndex)}
+                        cellIndex={cellIndex}
+                        onRemove={handleRemoveFromGrid}
                         onOpenLightbox={openLightbox}
                       />
                     ) : (

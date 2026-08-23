@@ -25,7 +25,8 @@ type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) =>
 
 interface Props {
   threadId: string;
-  onRemove?: () => void;
+  cellIndex: number;
+  onRemove?: (cellIndex: number) => void;
   onOpenLightbox?: OpenLightboxFn;
 }
 
@@ -37,6 +38,7 @@ interface Props {
  */
 export const ThreadColumn = memo(function ThreadColumn({
   threadId,
+  cellIndex,
   onRemove,
   onOpenLightbox,
 }: Props) {
@@ -55,6 +57,9 @@ export const ThreadColumn = memo(function ThreadColumn({
   const selectThisColumn = useCallback(() => {
     setGridSelectedThreadId(threadId);
   }, [setGridSelectedThreadId, threadId]);
+  const removeThisColumn = useCallback(() => {
+    onRemove?.(cellIndex);
+  }, [cellIndex, onRemove]);
 
   // Register for WS updates; fetch + unregister on unmount. The register
   // call anchors `threadDataById[threadId]` so the same map that backs the
@@ -181,7 +186,7 @@ export const ThreadColumn = memo(function ThreadColumn({
               onRemove ? (
                 <TooltipIconButton
                   tooltip={t('live.removeFromGrid', 'Remove from grid')}
-                  onClick={onRemove}
+                  onClick={removeThisColumn}
                   className="size-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
                   data-testid={`grid-remove-${threadId}`}
                 >

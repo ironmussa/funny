@@ -91,6 +91,8 @@ export function ThreadConversation({
   const activeThreadRef = useRef(activeThread);
   activeThreadRef.current = activeThread;
   const sendingRef = useRef(false);
+  const handlerRefs = useMemo(() => ({ activeThreadRef, sendingRef, streamRef }), [streamRef]);
+  const checkpointRefs = useMemo(() => ({ activeThreadRef }), []);
 
   const {
     sending,
@@ -99,10 +101,9 @@ export function ThreadConversation({
     handlePermissionApproval,
     handlePermissionDecision,
     handleToolRespond,
-  } = useThreadHandlers({ activeThreadRef, sendingRef, streamRef });
-  const { handleFork, handleRewind, handleForkAndRewind, forkingMessageId } = useThreadCheckpoints({
-    activeThreadRef,
-  });
+  } = useThreadHandlers(handlerRefs);
+  const { handleFork, handleRewind, handleForkAndRewind, forkingMessageId } =
+    useThreadCheckpoints(checkpointRefs);
 
   // Track which message/tool-call IDs existed when the thread was loaded.
   const knownIdsRef = useRef<Set<string> | null>(null);

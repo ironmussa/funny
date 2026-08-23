@@ -1345,7 +1345,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                   <img
                     src={`data:${img.source.media_type};base64,${img.source.data}`}
                     alt={`Attachment ${idx + 1}`}
-                    className="border-input max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border object-cover transition-opacity hover:opacity-80"
+                    className="border-foreground max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border-2 object-cover transition-opacity hover:opacity-80"
                     onClick={() => {
                       setLightboxIndex(idx);
                       setLightboxOpen(true);

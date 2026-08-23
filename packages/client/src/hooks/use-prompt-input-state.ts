@@ -504,7 +504,12 @@ export function usePromptInputState({
   // Fetch follow-up branches — only refetch when the project changes.
   // Branch selection is updated separately when activeThreadBaseBranch changes.
   const storeSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProjectId = threadProjectId ?? storeSelectedProjectId;
+  // A new-thread composer can still be rendered beneath the previously active
+  // thread's context. Never let that stale thread override the project chosen
+  // for the new thread; existing-thread composers still follow their owner.
+  const selectedProjectId = isNewThread
+    ? resolvedProjectId
+    : (threadProjectId ?? storeSelectedProjectId);
   const followUpBranchCacheRef = useRef<{
     projectId: string;
     branches: string[];
@@ -581,9 +586,9 @@ export function usePromptInputState({
   // (which resolves a leading slash command's thread mode).
   const composerProjectPath = useMemo(
     () =>
-      activeThreadWorktreePath ??
+      (!isNewThread ? activeThreadWorktreePath : undefined) ??
       (selectedProjectId ? projects.find((p) => p.id === selectedProjectId)?.path : undefined),
-    [activeThreadWorktreePath, selectedProjectId, projects],
+    [activeThreadWorktreePath, isNewThread, selectedProjectId, projects],
   );
   const { slashSkills, slashSkillsLoading, ensureSlashSkills } = useSlashSkills({
     projectPath: composerProjectPath,

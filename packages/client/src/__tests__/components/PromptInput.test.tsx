@@ -339,6 +339,66 @@ describe('PromptInput', () => {
     expect(onProviderChange).toHaveBeenCalledTimes(1);
   });
 
+  test('loads new-thread skills from the chosen project instead of the previous thread', async () => {
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'p-old',
+          name: 'Previous project',
+          path: '/tmp/previous-project',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 0,
+        },
+        {
+          id: 'p-new',
+          name: 'Google Live B2',
+          path: '/tmp/google-live-b2',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 1,
+          defaultProvider: 'codex',
+          defaultModel: 'gpt-5.5',
+        },
+      ],
+      selectedProjectId: 'p-new',
+    });
+    useThreadStore.setState({
+      threadDataById: {
+        'old-thread': {
+          id: 'old-thread',
+          projectId: 'p-old',
+          worktreePath: '/tmp/previous-project-worktree',
+          provider: 'claude',
+          model: 'opus-4.8',
+          mode: 'worktree',
+          branch: 'old-branch',
+          status: 'idle',
+          messages: [],
+        },
+      },
+    } as any);
+
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} isNewThread projectId="p-new" />, {
+      threadId: 'old-thread',
+    });
+
+    await waitFor(() =>
+      expect(api.listAgentResources).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'p-new',
+          projectPath: '/tmp/google-live-b2',
+          provider: 'codex',
+          model: 'gpt-5.5',
+          phase: 'composer',
+        }),
+      ),
+    );
+    expect(api.listAgentResources).not.toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p-old' }),
+    );
+  });
+
   test('Shift+Enter does not trigger submit', () => {
     const onSubmit = vi.fn();
     renderWithProviders(<PromptInput onSubmit={onSubmit} />);
@@ -407,6 +467,29 @@ describe('PromptInput', () => {
   test('textarea is disabled when loading=true', () => {
     renderWithProviders(<PromptInput onSubmit={vi.fn()} loading={true} />);
     expect(screen.getByRole('textbox')).toBeDisabled();
+  });
+
+  test('uses a theme-aware contrasting border for attached image previews', () => {
+    renderWithProviders(
+      <PromptInput
+        onSubmit={vi.fn()}
+        initialImages={[
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: 'ZmFrZQ==',
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Attachment 1' })).toHaveClass(
+      'border-2',
+      'border-foreground',
+    );
   });
 
   test('shows all queued messages above the prompt', async () => {

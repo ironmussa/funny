@@ -30,7 +30,7 @@ Do **not** run `bun run dev` (or any `--watch`/`vite` process) from an automated
 
 ## Quick facts
 
-- **Runtime:** Bun (`>=1.4.0-0` per `package.json` `packageManager`/`engines`), Node `>=22.19.0 <23` as a fallback target.
+- **Runtime:** Bun (`>=1.4.0` per `package.json` `packageManager`/`engines`), Node `>=22.19.0 <23` as a fallback target.
 - **Workspaces:** `packages/*` (root `package.json:17-19`).
 - **Persistence:** SQLite (`bun:sqlite` + Drizzle) by default at `~/.funny/data.db`, PostgreSQL optional via `DATABASE_URL`.
 - **License:** MIT.

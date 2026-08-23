@@ -74,6 +74,7 @@ const virtualizerMockState = vi.hoisted(() => ({
   instance: null as any,
   lastOptions: undefined as any,
   measureCalls: 0,
+  resizeItemCalls: [] as { index: number; size: number }[],
   scrollToIndexCalls: [] as { index: number; opts?: { align?: string } }[],
   scrollToOffsetCalls: [] as { offset: number; opts?: { align?: string } }[],
 }));
@@ -111,6 +112,9 @@ vi.mock('@tanstack/react-virtual', () => ({
       },
       measure: () => {
         virtualizerMockState.measureCalls += 1;
+      },
+      resizeItem: (index: number, size: number) => {
+        virtualizerMockState.resizeItemCalls.push({ index, size });
       },
       get scrollOffset() {
         return virtualizerMockState.scrollOffset;
@@ -220,6 +224,7 @@ describe('MemoizedMessageList virtualization', () => {
     virtualizerMockState.instance = null;
     virtualizerMockState.lastOptions = undefined;
     virtualizerMockState.measureCalls = 0;
+    virtualizerMockState.resizeItemCalls = [];
     virtualizerMockState.scrollToIndexCalls = [];
     virtualizerMockState.scrollToOffsetCalls = [];
   });
@@ -744,6 +749,33 @@ describe('MemoizedMessageList virtualization', () => {
     expect(height).toBe(88);
     expect(row.getBoundingClientRect).not.toHaveBeenCalled();
     expect(virtualizerMockState.lastOptions.estimateSize(0)).toBe(88);
+  });
+
+  test('reapplies mounted row heights after resetting virtual measurements', async () => {
+    virtualizerMockState.start = 0;
+    virtualizerMockState.visibleCount = 2;
+    const listRef = createRef<MemoizedMessageListHandle>();
+    const { getByTestId } = render(<Harness messages={makeMessages(2)} listRef={listRef} />);
+    const viewport = getByTestId('viewport');
+
+    await waitFor(() =>
+      expect(viewport.querySelectorAll('[data-virtual-row-key]')).toHaveLength(2),
+    );
+
+    const rows = Array.from(viewport.querySelectorAll<HTMLElement>('[data-virtual-row-key]'));
+    rows[0]!.getBoundingClientRect = vi.fn(() => ({ height: 480 }) as DOMRect);
+    rows[1]!.getBoundingClientRect = vi.fn(() => ({ height: 96 }) as DOMRect);
+    virtualizerMockState.measureCalls = 0;
+    virtualizerMockState.resizeItemCalls = [];
+
+    act(() => listRef.current?.remeasure?.());
+
+    expect(virtualizerMockState.measureCalls).toBe(1);
+    expect(virtualizerMockState.resizeItemCalls).toEqual([
+      { index: 0, size: 480 },
+      { index: 1, size: 96 },
+    ]);
+    expect(virtualizerMockState.lastOptions.estimateSize(0)).toBe(480);
   });
 
   test('reserves observed row overflow beyond the virtualizer total estimate', async () => {

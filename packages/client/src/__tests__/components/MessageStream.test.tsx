@@ -31,6 +31,7 @@ const memoizedMessageListLifecycle = vi.hoisted(() => ({
   captureScrollAnchorCalls: 0,
   restoreScrollAnchorCalls: 0,
   captureVisibleAnchorCalls: 0,
+  remeasureCalls: 0,
   restoredAnchors: [] as any[],
   visibleAnchor: null as { key: string; offsetFromViewportTop: number } | null,
   restoreScrollAnchorResult: true,
@@ -67,6 +68,9 @@ vi.mock('@/components/thread/MemoizedMessageList', () => ({
       captureVisibleAnchor: () => {
         memoizedMessageListLifecycle.captureVisibleAnchorCalls += 1;
         return memoizedMessageListLifecycle.visibleAnchor;
+      },
+      remeasure: () => {
+        memoizedMessageListLifecycle.remeasureCalls += 1;
       },
     }));
 
@@ -178,6 +182,7 @@ describe('MessageStream sticky bottom', () => {
     memoizedMessageListLifecycle.captureScrollAnchorCalls = 0;
     memoizedMessageListLifecycle.restoreScrollAnchorCalls = 0;
     memoizedMessageListLifecycle.captureVisibleAnchorCalls = 0;
+    memoizedMessageListLifecycle.remeasureCalls = 0;
     memoizedMessageListLifecycle.restoredAnchors = [];
     memoizedMessageListLifecycle.visibleAnchor = null;
     memoizedMessageListLifecycle.restoreScrollAnchorResult = true;
@@ -206,6 +211,67 @@ describe('MessageStream sticky bottom', () => {
 
     expect(viewport.style.overflowAnchor).toBe('none');
     expect(viewport.style.overscrollBehaviorY).toBe('contain');
+  });
+
+  test('remeasures and restores a bottom-pinned virtual stream after its viewport resizes', () => {
+    const observers: Array<{
+      targets: Set<Element>;
+      trigger: () => void;
+    }> = [];
+
+    vi.stubGlobal(
+      'ResizeObserver',
+      class TestResizeObserver {
+        private readonly callback: ResizeObserverCallback;
+        readonly targets = new Set<Element>();
+
+        constructor(callback: ResizeObserverCallback) {
+          this.callback = callback;
+          observers.push({ targets: this.targets, trigger: () => this.callback([], this) });
+        }
+
+        observe(target: Element) {
+          this.targets.add(target);
+        }
+        unobserve(target: Element) {
+          this.targets.delete(target);
+        }
+        disconnect() {
+          this.targets.clear();
+        }
+      },
+    );
+
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => 1000,
+      clientHeight: () => 300,
+    });
+    viewport.scrollTop = 700;
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    memoizedMessageListLifecycle.remeasureCalls = 0;
+
+    const viewportObserver = observers.find((observer) => observer.targets.has(viewport));
+    expect(viewportObserver).toBeDefined();
+
+    act(() => {
+      viewportObserver?.trigger();
+      vi.runAllTimers();
+    });
+
+    expect(memoizedMessageListLifecycle.remeasureCalls).toBe(1);
+    expect(viewport.scrollTop).toBe(1000);
   });
 
   test('continues with the canonical lastUserMessage effort', () => {

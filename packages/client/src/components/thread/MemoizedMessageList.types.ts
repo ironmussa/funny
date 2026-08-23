@@ -6,6 +6,8 @@ import type { CompactionEvent } from '@/stores/thread-store';
 export interface MemoizedMessageListHandle {
   expandToItem: (id: string) => void;
   hasHiddenItems: () => boolean;
+  /** Recompute the visible range after an external host-layout resize. */
+  remeasure?: () => void;
   captureScrollAnchor: () => void;
   restoreScrollAnchor: (anchor?: MessageListScrollAnchor) => boolean;
   captureVisibleAnchor: () => MessageListScrollAnchor | null;

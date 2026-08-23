@@ -165,20 +165,9 @@ export const MemoizedMessageList = memo(
 
     const layoutKey = `${threadId}:${globalFontSize}:${Math.round(containerWidth)}`;
     const prevLayoutKeyRef = useRef(layoutKey);
-    if (prevLayoutKeyRef.current !== layoutKey) {
-      prevLayoutKeyRef.current = layoutKey;
-      heightCache.clear();
-      measuredRowBottomCache.clear();
-      if (measuredContentBottom !== 0) setMeasuredContentBottom(0);
-    }
 
     const rowBottomKey = `${threadId}:${Math.round(listScrollMargin)}`;
     const prevRowBottomKeyRef = useRef(rowBottomKey);
-    if (prevRowBottomKeyRef.current !== rowBottomKey) {
-      prevRowBottomKeyRef.current = rowBottomKey;
-      measuredRowBottomCache.clear();
-      if (measuredContentBottom !== 0) setMeasuredContentBottom(0);
-    }
 
     usePretextWarmup(groupedItems, fontConfig);
 
@@ -251,11 +240,48 @@ export const MemoizedMessageList = memo(
     rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange =
       shouldAdjustScrollPositionOnItemSizeChange;
 
-    const measureRowsEvent = useEffectEvent(() => {
+    const resetAndMeasureMountedRows = useCallback(() => {
+      const mountedRows = itemContainerRef.current?.querySelectorAll<HTMLElement>(
+        '[data-virtual-row-key][data-index]',
+      );
+
+      // `measure()` invalidates every cached size, including mounted rows whose
+      // DOM height did not change. ResizeObserver will not report those rows
+      // again, so immediately seed the virtualizer with their real heights to
+      // prevent following rows from being positioned using small estimates.
       rowVirtualizer.measure();
-    });
+      rowVirtualizer.getVirtualItems();
+
+      mountedRows?.forEach((element) => {
+        const index = Number(element.dataset.index);
+        const key = element.dataset.virtualRowKey;
+        const height = element.getBoundingClientRect().height;
+        if (!Number.isInteger(index) || !key || height <= 0) return;
+        heightCache.set(key, height);
+        rowVirtualizer.resizeItem(index, height);
+      });
+    }, [heightCache, rowVirtualizer]);
+
+    const measureRowsEvent = useEffectEvent(resetAndMeasureMountedRows);
 
     useLayoutEffect(() => {
+      const layoutChanged = prevLayoutKeyRef.current !== layoutKey;
+      const rowBottomChanged = prevRowBottomKeyRef.current !== rowBottomKey;
+
+      // Never mutate measurement caches or schedule React state while rendering.
+      // Grid columns can all resize in the same commit; doing this in render left
+      // TanStack with an empty/stale visible range until the next scroll event.
+      if (layoutChanged) {
+        prevLayoutKeyRef.current = layoutKey;
+        heightCache.clear();
+      }
+      if (layoutChanged || rowBottomChanged) {
+        prevRowBottomKeyRef.current = rowBottomKey;
+        measuredRowBottomCache.clear();
+        setMeasuredContentBottom((prev) => (prev === 0 ? prev : 0));
+        measureRowsEvent();
+      }
+
       let secondRafId: number | null = null;
       const firstRafId = requestAnimationFrame(() => {
         measureRowsEvent();
@@ -266,7 +292,17 @@ export const MemoizedMessageList = memo(
         cancelAnimationFrame(firstRafId);
         if (secondRafId !== null) cancelAnimationFrame(secondRafId);
       };
-    }, [containerWidth, globalFontSize, listScrollMargin, threadId, virtualRowsSignature]);
+    }, [
+      containerWidth,
+      globalFontSize,
+      heightCache,
+      layoutKey,
+      listScrollMargin,
+      measuredRowBottomCache,
+      rowBottomKey,
+      threadId,
+      virtualRowsSignature,
+    ]);
 
     const virtualItems = rowVirtualizer.getVirtualItems();
     const shouldUseVirtualFallback = virtualItems.length === 0 && virtualRows.length > 0;
@@ -576,6 +612,7 @@ export const MemoizedMessageList = memo(
           }
         },
         hasHiddenItems: () => (rowVirtualizer.getVirtualItems()[0]?.index ?? 0) > 0,
+        remeasure: resetAndMeasureMountedRows,
         captureScrollAnchor,
         restoreScrollAnchor,
         captureVisibleAnchor,
@@ -586,6 +623,7 @@ export const MemoizedMessageList = memo(
         captureScrollAnchor,
         restoreScrollAnchor,
         captureVisibleAnchor,
+        resetAndMeasureMountedRows,
       ],
     );
 

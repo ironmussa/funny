@@ -124,6 +124,70 @@ export function useViewportScrollListeners({
   }, [onScrollRef, onUserInput, scrollViewportRef]);
 }
 
+/**
+ * A grid/sidebar/pane resize changes every live-column viewport at once. TanStack
+ * observes the new rect, but variable-height rows may still be using the range
+ * calculated from the previous width. Re-measure after resize settles and then
+ * restore the visible anchor (or the bottom pin) without waiting for user scroll.
+ */
+export function useViewportResizeRecovery({
+  messageListRef,
+  pinViewportToBottom,
+  scrollViewportRef,
+  updateStickyMetrics,
+  userHasScrolledUpRef,
+}: {
+  messageListRef: RefObject<MemoizedMessageListHandle | null>;
+  pinViewportToBottom: ViewportCallback;
+  scrollViewportRef: RefObject<HTMLDivElement | null>;
+  updateStickyMetrics: ViewportCallback;
+  userHasScrolledUpRef: RefObject<boolean>;
+}) {
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    let measureRafId: number | null = null;
+    let restoreRafId: number | null = null;
+    const observer = new ResizeObserver(() => {
+      const wasBottomPinned = !userHasScrolledUpRef.current;
+      const anchor = wasBottomPinned
+        ? null
+        : (messageListRef.current?.captureVisibleAnchor() ?? null);
+
+      if (measureRafId !== null) cancelAnimationFrame(measureRafId);
+      if (restoreRafId !== null) cancelAnimationFrame(restoreRafId);
+      measureRafId = requestAnimationFrame(() => {
+        measureRafId = null;
+        messageListRef.current?.remeasure?.();
+        restoreRafId = requestAnimationFrame(() => {
+          restoreRafId = null;
+          if (wasBottomPinned && !userHasScrolledUpRef.current) {
+            pinViewportToBottom(viewport);
+          } else if (anchor) {
+            messageListRef.current?.restoreScrollAnchor(anchor);
+          }
+          updateStickyMetrics(viewport);
+        });
+      });
+    });
+    observer.observe(viewport);
+
+    return () => {
+      if (measureRafId !== null) cancelAnimationFrame(measureRafId);
+      if (restoreRafId !== null) cancelAnimationFrame(restoreRafId);
+      observer.disconnect();
+    };
+  }, [
+    messageListRef,
+    pinViewportToBottom,
+    scrollViewportRef,
+    updateStickyMetrics,
+    userHasScrolledUpRef,
+  ]);
+}
+
 export function useVisibleMessageObserver({
   compact,
   onVisibleMessageChange,

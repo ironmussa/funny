@@ -26,6 +26,7 @@ import {
   useThreadLayoutScrollEffect,
   useThreadSwitchResizeRestore,
   useThreadSwitchSettle,
+  useViewportResizeRecovery,
   useViewportScrollListeners,
   useVisibleMessageObserver,
 } from './use-message-stream-scroll-effects';
@@ -427,6 +428,14 @@ export function useMessageStreamScroll({
     onScrollRef: handleViewportScrollRef,
     onUserInput: clearSettle,
     scrollViewportRef,
+  });
+
+  useViewportResizeRecovery({
+    messageListRef,
+    pinViewportToBottom,
+    scrollViewportRef,
+    updateStickyMetrics,
+    userHasScrolledUpRef: userHasScrolledUp,
   });
 
   useVisibleMessageObserver({

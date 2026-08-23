@@ -234,7 +234,7 @@ export function useGlobalShortcuts(
         log.info('shortcut.terminal_toggle');
         const store = useTerminalStore.getState();
         const { projects } = useProjectStore.getState();
-        const { scopeId, scratchThreadId } = getTerminalScope();
+        const { scopeId, scratchThreadId, worktreePath } = getTerminalScope();
         if (!scopeId) return;
         const scopeTabs = store.tabs.filter((t) => t.projectId === scopeId);
         const isVisible = store.panelVisibleByProject[scopeId] ?? false;
@@ -246,7 +246,7 @@ export function useGlobalShortcuts(
             cwd = '~';
           } else {
             const project = projects.find((p: any) => p.id === scopeId);
-            cwd = project?.path ?? 'C:\\';
+            cwd = worktreePath ?? project?.path ?? 'C:\\';
           }
           store.addTab({
             id: crypto.randomUUID(),

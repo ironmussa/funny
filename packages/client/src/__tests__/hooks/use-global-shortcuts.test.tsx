@@ -5,12 +5,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // getTerminalScope drives which project's terminal the Ctrl+` shortcut targets.
 vi.mock('@/hooks/use-terminal-scope', () => ({
-  getTerminalScope: vi.fn(() => ({ scopeId: 'p1', scratchThreadId: null })),
-  useTerminalScope: vi.fn(() => ({ scopeId: 'p1', scratchThreadId: null })),
+  getTerminalScope: vi.fn(() => ({
+    scopeId: 'p1',
+    scratchThreadId: null,
+    worktreePath: null,
+  })),
+  useTerminalScope: vi.fn(() => ({
+    scopeId: 'p1',
+    scratchThreadId: null,
+    worktreePath: null,
+  })),
 }));
 
 import { terminalRegistry } from '@/components/terminal/xterm-utils';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
+import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -32,6 +41,11 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     terminalRegistry.clear();
+    vi.mocked(getTerminalScope).mockReturnValue({
+      scopeId: 'p1',
+      scratchThreadId: null,
+      worktreePath: null,
+    });
   });
 
   afterEach(() => {
@@ -57,6 +71,24 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     expect(focus).not.toHaveBeenCalled();
     vi.advanceTimersByTime(250);
     expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  test('creates the first terminal in the selected thread worktree', () => {
+    vi.mocked(getTerminalScope).mockReturnValue({
+      scopeId: 'p1',
+      scratchThreadId: null,
+      worktreePath: '/worktrees/selected-split',
+    });
+
+    renderShortcuts();
+    pressCtrlBacktick();
+
+    expect(useTerminalStore.getState().tabs).toEqual([
+      expect.objectContaining({
+        projectId: 'p1',
+        cwd: '/worktrees/selected-split',
+      }),
+    ]);
   });
 
   test('retries focus until the xterm finishes its async (re)creation', () => {

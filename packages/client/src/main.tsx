@@ -1,6 +1,9 @@
 import './wdyr'; // must be first — tracks unnecessary re-renders in dev
 import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
 
+import { clientComposition } from './platform/client-composition';
+import { prefetchInitialThread } from './platform/prefetch-initial-thread';
+
 // Swallow benign "ResizeObserver loop completed with undelivered notifications"
 // errors before any other listener (Abbacchio, React) sees them. They surface
 // during Radix Collapsible/Sidebar layout transitions and have no user impact.
@@ -40,6 +43,11 @@ import '@fontsource/jetbrains-mono/latin.css';
 
 import './globals.css';
 import './i18n/config';
+
+// The platform is constructed and validated before React starts rendering.
+// Factories migrated into client-core receive capabilities from this value.
+void clientComposition;
+prefetchInitialThread(clientComposition.platform.navigation.current().pathname);
 
 // Load the thread text-layout engine after first paint. The import remains
 // lazy, so it does not delay startup, but is normally ready before a user

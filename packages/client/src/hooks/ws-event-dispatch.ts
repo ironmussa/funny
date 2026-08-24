@@ -1,6 +1,11 @@
+import {
+  createRealtimeDispatcher,
+  type RealtimeActionPorts,
+  type RealtimeEffect,
+  type RealtimeEvent,
+} from '@funny/client-core';
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
-import { toast } from 'sonner';
 
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
@@ -9,6 +14,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
+import { clientComposition } from '@/platform/client-composition';
 import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import * as threadMutations from '@/stores/thread-mutations';
@@ -140,7 +146,81 @@ function scheduleFlush() {
  * Dispatch a received event (from Socket.IO or raw WS) to the appropriate
  * store. The event object has { type, threadId, data } shape.
  */
+const applyThroughWebStore = (event: RealtimeEvent): void => {
+  applyWebEvent(event.type, event.threadId, event.data);
+};
+
+const actionPorts: RealtimeActionPorts = {
+  agent: applyThroughWebStore,
+  terminal: applyThroughWebStore,
+  thread: applyThroughWebStore,
+  git: applyThroughWebStore,
+  automation: applyThroughWebStore,
+  pipeline: applyThroughWebStore,
+  workflow: applyThroughWebStore,
+  presence: applyThroughWebStore,
+  testing: applyThroughWebStore,
+  browserSession: applyThroughWebStore,
+  infrastructure: applyThroughWebStore,
+};
+
+function applyRealtimeEffect(effect: RealtimeEffect): void {
+  switch (effect.type) {
+    case 'agent-result':
+      maybeNotifyAgentResult(effect.threadId, effect);
+      break;
+    case 'terminal-error':
+      clientComposition.platform.effects.emit({
+        type: 'toast',
+        level: 'error',
+        message: effect.message,
+      });
+      break;
+    case 'environment-activated':
+      clientComposition.platform.effects.emit({
+        type: 'toast',
+        level: 'success',
+        message: 'Activated environment',
+        description: effect.activations
+          .map((activation) => `${activation.kind}: ${activation.detail}`)
+          .join('\n'),
+      });
+      break;
+    case 'application-event':
+      clientComposition.platform.effects.emit({
+        type: 'application-event',
+        name: effect.name,
+        detail: effect.detail,
+      });
+      break;
+    case 'hook-failed':
+      clientComposition.platform.effects.emit({
+        type: 'toast',
+        level: 'error',
+        message: 'Pre-commit hook failed',
+        description: effect.message,
+      });
+      break;
+    case 'push-completed':
+      clientComposition.platform.effects.emit({
+        type: 'toast',
+        level: 'success',
+        message: 'Pushed successfully',
+      });
+      break;
+  }
+}
+
+const realtimeDispatcher = createRealtimeDispatcher({
+  actions: actionPorts,
+  effects: { emit: applyRealtimeEffect },
+});
+
 function dispatchEvent(type: string, threadId: string, data: any): void {
+  realtimeDispatcher.dispatch({ type, threadId, data });
+}
+
+function applyWebEvent(type: string, threadId: string, data: any): void {
   switch (type) {
     case 'agent:message': {
       const key = pendingMessageKey(threadId, data);
@@ -234,7 +314,6 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         useReviewPaneStore.getState().notifyDirty(threadId);
       });
 
-      maybeNotifyAgentResult(threadId, data);
       break;
     }
     case 'agent:tool_call': {
@@ -550,19 +629,12 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       useTerminalStore
         .getState()
         .setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
-      toast.error(data.error ?? 'Failed to create terminal');
       break;
     }
     case 'runner:status':
       handleRunnerStatus(data);
       break;
     case 'pty:env_activated': {
-      const lines = (data.activations as Array<{ kind: string; detail: string }>).map(
-        (a) => `${a.kind}: ${a.detail}`,
-      );
-      toast.success('Activated environment', {
-        description: lines.join('\n'),
-      });
       break;
     }
     case 'thread:queue_update':
@@ -586,10 +658,8 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       dispatchBrowserSessionEvent(type, data);
       break;
     case 'clone:progress':
-      window.dispatchEvent(new CustomEvent('clone:progress', { detail: data }));
       break;
     case 'worktree:setup':
-      window.dispatchEvent(new CustomEvent('worktree:setup', { detail: { threadId, ...data } }));
       useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
       break;
     case 'worktree:setup_complete':
@@ -670,19 +740,8 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       store.startCommit(threadId, title, steps, action, workflowId);
     } else if (wfStatus === 'step_update') {
       store.replaceSteps(threadId, steps);
-      const failedHook = steps?.find((s: any) => s.id === 'hooks' && s.status === 'failed');
-      if (failedHook) {
-        toast.error('Pre-commit hook failed', {
-          description: failedHook.error
-            ? failedHook.error.slice(0, 120)
-            : 'A pre-commit hook did not pass',
-        });
-      }
     } else if (wfStatus === 'completed') {
       store.replaceSteps(threadId, steps);
-      if (action === 'push') {
-        toast.success('Pushed successfully');
-      }
       setTimeout(() => store.finishCommit(threadId), 1500);
     } else if (wfStatus === 'failed') {
       store.replaceSteps(threadId, steps);

@@ -1,9 +1,15 @@
+import {
+  createEndpointPolicy,
+  createRealtimeController,
+  getSidebarResyncTargets,
+} from '@funny/client-core';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
+import { clientComposition } from '@/platform/client-composition';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
@@ -34,7 +40,6 @@ let refCount = 0;
 // resync is pure redundant work. For a heavy thread (megabytes of inline
 // images) that duplicate full-payload refetch + merge forces the whole message
 // list to repaint, which the user sees as a second load ("double refresh").
-let hasConnectedBefore = false;
 // The thread the user is currently viewing, mirrored to the server for
 // thread-sharing presence. Module-level so the on-connect handler can re-join
 // the room after a reconnect (Socket.IO room membership is lost on disconnect).
@@ -51,9 +56,7 @@ export { connectRemoteWS, disconnectRemoteWS };
 function connect() {
   setWSStopped(false);
 
-  const isTauri = !!(window as any).__TAURI_INTERNALS__;
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-  const url = isTauri ? `http://localhost:${serverPort}` : window.location.origin;
+  const url = createEndpointPolicy(clientComposition.platform.transport.environment).realtimeOrigin;
 
   const socket = io(url, {
     withCredentials: true,
@@ -87,11 +90,7 @@ function connect() {
     // path already fetched everything fresh; resyncing here would refetch the
     // active thread's full payload a second time and repaint the message list
     // — visible as a "double refresh" on heavy threads (large inline images).
-    const isReconnect = hasConnectedBefore;
-    hasConnectedBefore = true;
-    if (shouldResyncThreadsOnConnect(isReconnect, window.location.pathname)) {
-      useThreadStore.getState().refreshAllLoadedThreads();
-    }
+    realtimeController.handleConnected();
     // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
     // naturally throttles the thundering herd. WS git:status events will
     // invalidate specific keys when the server pushes fresh data.
@@ -186,9 +185,6 @@ function teardown() {
 
 // Throttle resyncs triggered by visibility/focus events so rapid tab swaps
 // don't fan out into multiple simultaneous refresh storms.
-const VISIBILITY_RESYNC_MIN_INTERVAL_MS = 2_000;
-let lastVisibilityResyncAt = 0;
-
 // Routes that don't read thread data — skipping resync on these saves the
 // N+1 listThreads requests fired by refreshAllLoadedThreads. When the user
 // navigates back to a thread-bearing route, that route's own load path
@@ -217,8 +213,6 @@ export function shouldResyncThreadsOnConnect(isReconnect: boolean, pathname: str
   return isReconnect && routeNeedsThreadResync(pathname);
 }
 
-const ACTIVE_SIDEBAR_STATUSES = new Set(['setting_up', 'pending', 'running', 'waiting']);
-
 type SidebarResyncTargets = {
   projectIds: string[];
   scratch: boolean;
@@ -231,24 +225,7 @@ export function getLoadedSidebarResyncTargets(
     'threadIdsByProject' | 'threadsById' | 'scratchThreadIds' | 'sharedThreadIds'
   >,
 ): SidebarResyncTargets {
-  const projectIds: string[] = [];
-
-  for (const [projectId, threadIds] of Object.entries(state.threadIdsByProject)) {
-    const hasActiveThread = threadIds.some((id) =>
-      ACTIVE_SIDEBAR_STATUSES.has(state.threadsById[id]?.status),
-    );
-    if (hasActiveThread) projectIds.push(projectId);
-  }
-
-  return {
-    projectIds,
-    scratch: state.scratchThreadIds.some((id) =>
-      ACTIVE_SIDEBAR_STATUSES.has(state.threadsById[id]?.status),
-    ),
-    shared: state.sharedThreadIds.some((id) =>
-      ACTIVE_SIDEBAR_STATUSES.has(state.threadsById[id]?.status),
-    ),
-  };
+  return getSidebarResyncTargets(state);
 }
 
 function refreshLoadedSidebarRowsForActiveThreads(store: ThreadState) {
@@ -260,16 +237,7 @@ function refreshLoadedSidebarRowsForActiveThreads(store: ThreadState) {
   if (targets.shared) void store.loadSharedThreads();
 }
 
-function resyncOnFocus(reason: 'visibility' | 'focus') {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-  if (!activeSocket?.connected) return;
-  const now = Date.now();
-  if (now - lastVisibilityResyncAt < VISIBILITY_RESYNC_MIN_INTERVAL_MS) return;
-  if (!routeNeedsThreadResync(window.location.pathname)) {
-    wsLog.debug('Skipping focus resync — route does not display thread data', { reason });
-    return;
-  }
-  lastVisibilityResyncAt = now;
+function refreshThreadsOnFocus(reason: 'visibility' | 'focus') {
   wsLog.info('Tab regained focus — resyncing threads', { reason });
   // Prefer narrow refresh: when one thread is active (project or scratch
   // detail view), refreshing only that thread avoids the N+1 listThreads
@@ -283,6 +251,23 @@ function resyncOnFocus(reason: 'visibility' | 'focus') {
     void store.refreshAllLoadedThreads();
   }
 }
+
+const realtimeController = createRealtimeController({
+  lifecycle: clientComposition.platform.lifecycle,
+  navigation: clientComposition.platform.navigation,
+  connected: () => activeSocket?.connected === true,
+  routeEligible: routeNeedsThreadResync,
+  clock: Date.now,
+  actions: {
+    refreshForFocus: refreshThreadsOnFocus,
+    refreshForReconnect: () => useThreadStore.getState().refreshAllLoadedThreads(),
+    skipped(reason, cause) {
+      if (cause === 'route') {
+        wsLog.debug('Skipping focus resync — route does not display thread data', { reason });
+      }
+    },
+  },
+});
 
 export function useWS() {
   useEffect(() => {
@@ -318,19 +303,11 @@ export function useWS() {
 
       lastContainerUrl = containerUrl;
     });
-
-    // Resync on tab visibility/focus — covers the case where Chrome throttles
-    // background tabs or the WS dropped a terminal `agent:result` while the
-    // tab was inactive. `refreshAllLoadedThreads` rehydrates status from DB.
-    const onVisibility = () => resyncOnFocus('visibility');
-    const onFocus = () => resyncOnFocus('focus');
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('focus', onFocus);
+    const stopRealtimeController = realtimeController.start();
 
     return () => {
       unsub();
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('focus', onFocus);
+      stopRealtimeController();
       refCount--;
       if (refCount === 0) {
         // Defer teardown so StrictMode/HMR remounts (which fire cleanup then

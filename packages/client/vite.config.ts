@@ -66,6 +66,19 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
+        '@funny/client-core/stores/circuit-breaker': resolve(
+          __dirname,
+          '../client-core/src/stores/circuit-breaker.ts',
+        ),
+        '@funny/client-core/stores/preferences': resolve(
+          __dirname,
+          '../client-core/src/stores/preferences.ts',
+        ),
+        '@funny/client-core/stores/thread-read': resolve(
+          __dirname,
+          '../client-core/src/stores/thread-read.ts',
+        ),
+        '@funny/client-core': resolve(__dirname, '../client-core/src/index.ts'),
         // Sätteri's browser entry lives at the workspace root but its WASI
         // binding is deliberately installed in this browser-only workspace.
         // Explicitly anchor the bare binding import here; otherwise Vite starts

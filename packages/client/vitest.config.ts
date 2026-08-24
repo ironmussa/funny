@@ -13,6 +13,19 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(dirname, './src'),
+      '@funny/client-core/stores/circuit-breaker': path.resolve(
+        dirname,
+        '../client-core/src/stores/circuit-breaker.ts',
+      ),
+      '@funny/client-core/stores/preferences': path.resolve(
+        dirname,
+        '../client-core/src/stores/preferences.ts',
+      ),
+      '@funny/client-core/stores/thread-read': path.resolve(
+        dirname,
+        '../client-core/src/stores/thread-read.ts',
+      ),
+      '@funny/client-core': path.resolve(dirname, '../client-core/src/index.ts'),
     },
   },
   test: {

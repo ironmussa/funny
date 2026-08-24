@@ -1,81 +1,34 @@
-import { create } from 'zustand';
+import {
+  createEndpointPolicy,
+  createCircuitBreakerStore,
+  type CircuitBreakerState,
+} from '@funny/client-core';
 
-const FAILURE_THRESHOLD = 3;
-const COOLDOWN_MS = 15_000;
+import { bindVanillaStore } from '@/platform/bind-vanilla-store';
+import { clientComposition } from '@/platform/client-composition';
+import { installBrowserCircuitConnectivity } from '@/platform/web/circuit-connectivity';
+
 const PROBE_TIMEOUT_MS = 5_000;
+const healthUrl = `${createEndpointPolicy(clientComposition.platform.transport.environment).apiBase}/health`;
 
-const isTauri = !!(window as any).__TAURI_INTERNALS__;
-const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-const HEALTH_URL = isTauri ? `http://localhost:${serverPort}/api/health` : '/api/health';
-
-type CircuitState = 'closed' | 'open' | 'half-open';
-
-interface CircuitBreakerStore {
-  state: CircuitState;
-  failureCount: number;
-  _cooldownTimer: ReturnType<typeof setTimeout> | null;
-
-  recordFailure: () => void;
-  recordSuccess: () => void;
-  retryNow: () => Promise<void>;
-}
-
-export const useCircuitBreakerStore = create<CircuitBreakerStore>((set, get) => ({
-  state: 'closed',
-  failureCount: 0,
-  _cooldownTimer: null,
-
-  recordFailure: () => {
-    const { state, failureCount, _cooldownTimer } = get();
-    if (state === 'half-open') {
-      // Probe failed — go back to open
-      set({ state: 'open' });
-      startCooldown(get, set);
-      return;
-    }
-    const next = failureCount + 1;
-    if (next >= FAILURE_THRESHOLD && state === 'closed') {
-      if (_cooldownTimer) clearTimeout(_cooldownTimer);
-      set({ state: 'open', failureCount: next, _cooldownTimer: null });
-      startCooldown(get, set);
-    } else {
-      set({ failureCount: next });
-    }
-  },
-
-  recordSuccess: () => {
-    const { _cooldownTimer } = get();
-    if (_cooldownTimer) clearTimeout(_cooldownTimer);
-    set({ state: 'closed', failureCount: 0, _cooldownTimer: null });
-  },
-
-  retryNow: async () => {
-    const { _cooldownTimer } = get();
-    if (_cooldownTimer) clearTimeout(_cooldownTimer);
-    set({ state: 'half-open', _cooldownTimer: null });
+const circuitBreakerStore = createCircuitBreakerStore<ReturnType<typeof setTimeout>>({
+  async probe() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-      const res = await fetch(HEALTH_URL, { signal: controller.signal });
-      clearTimeout(timeout);
-      if (res.ok) {
-        get().recordSuccess();
-      } else {
-        get().recordFailure();
-      }
+      return (await fetch(healthUrl, { signal: controller.signal })).ok;
     } catch {
-      get().recordFailure();
+      return false;
+    } finally {
+      clearTimeout(timeout);
     }
   },
-}));
+  setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimer: (timer) => clearTimeout(timer),
+});
 
-function startCooldown(
-  get: () => CircuitBreakerStore,
-  set: (partial: Partial<CircuitBreakerStore>) => void,
-) {
-  const timer = setTimeout(() => {
-    // Auto-probe after cooldown
-    get().retryNow();
-  }, COOLDOWN_MS);
-  set({ _cooldownTimer: timer });
-}
+export const useCircuitBreakerStore =
+  bindVanillaStore<CircuitBreakerState<ReturnType<typeof setTimeout>>>(circuitBreakerStore);
+
+const disposeConnectivity = installBrowserCircuitConnectivity(window, circuitBreakerStore);
+if (import.meta.hot) import.meta.hot.dispose(disposeConnectivity);

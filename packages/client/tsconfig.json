@@ -9,11 +9,16 @@
     "declaration": false,
     "declarationMap": false,
     "outDir": "./dist",
-    "rootDir": "./src",
+    // Includes source-linked workspace packages when Bun's workspace symlink is
+    // unavailable (for example, an offline checkout using the explicit paths below).
+    // Vite owns the final dist output and clears TypeScript's transient emit.
+    "rootDir": "..",
     // No baseUrl — deprecated in TS6 / removed in TS7. `paths` resolve
     // relative to this tsconfig's directory, so "@/*" still maps to ./src/*.
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@funny/client-core": ["../client-core/src/index.ts"],
+      "@funny/client-core/*": ["../client-core/src/*"]
     }
   },
   "include": ["src"]

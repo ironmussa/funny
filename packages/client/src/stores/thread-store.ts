@@ -201,18 +201,6 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
   }
 }
 
-// ── Eager thread prefetch ─────────────────────────────────────────
-// Parse the URL at module-load time. If we're on a thread route, start
-// fetching thread data immediately via the thread-data-machine actor —
-// in parallel with auth bootstrap and project loading — instead of waiting
-// for useRouteSync.
-{
-  const m = window.location.pathname.match(/\/projects\/[^/]+\/threads\/([^/]+)/);
-  if (m) {
-    prefetchThreadData(m[1]);
-  }
-}
-
 // ── Store ────────────────────────────────────────────────────────
 
 // Ref-count for explicit registrations from live columns. A thread is

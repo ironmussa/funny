@@ -7,6 +7,7 @@ import { parseRoute } from '@/hooks/route-parser';
 import { projectsApi } from '@/lib/api/projects';
 import { threadsApi } from '@/lib/api/threads';
 import { metric, startSpan } from '@/lib/telemetry';
+import { clientComposition } from '@/platform/client-composition';
 
 import { useAuthStore } from './auth-store';
 import {
@@ -32,7 +33,7 @@ const _branchGen = new Map<string, number>();
 
 function loadExpandedProjects(): Set<string> {
   try {
-    const stored = localStorage.getItem(EXPANDED_PROJECTS_KEY);
+    const stored = clientComposition.platform.storage.read(EXPANDED_PROJECTS_KEY);
     if (stored) return new Set(JSON.parse(stored));
   } catch {}
   return new Set();
@@ -40,7 +41,7 @@ function loadExpandedProjects(): Set<string> {
 
 function persistExpandedProjects(ids: Set<string>) {
   try {
-    localStorage.setItem(EXPANDED_PROJECTS_KEY, JSON.stringify([...ids]));
+    clientComposition.platform.storage.write(EXPANDED_PROJECTS_KEY, JSON.stringify([...ids]));
   } catch {}
 }
 
@@ -159,7 +160,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // they don't starve the lists — Abbacchio showed the eager git loop
         // kicking off ~28 background git.fetch_remote (2s each) that saturated
         // the runner's git pool and stalled the sidebar lists ~1.5s.
-        const activeProjectId = parseRoute(window.location.pathname).projectId;
+        const activeProjectId = parseRoute(
+          clientComposition.platform.navigation.current().pathname,
+        ).projectId;
         const ordered =
           activeProjectId && projects.some((p) => p.id === activeProjectId)
             ? [

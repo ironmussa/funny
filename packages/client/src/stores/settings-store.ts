@@ -1,9 +1,16 @@
+import {
+  createClientPreferencesStore,
+  type FontSizePreference,
+  type ThreadViewerPreference,
+} from '@funny/client-core/stores/preferences';
 import type { ToolPermission, UserProfile } from '@funny/shared';
 import { MODEL_REGISTRY } from '@funny/shared/models';
 import { create } from 'zustand';
 
 import { profileApi } from '@/lib/api/profile';
 import { systemApi } from '@/lib/api/system';
+import { clientComposition } from '@/platform/client-composition';
+import { applyWebFontSize } from '@/platform/web/font-size-effects';
 
 export type { ToolPermission };
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
@@ -65,9 +72,8 @@ const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntr
   ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
 );
 
-export type FontSize = 'small' | 'default' | 'large';
+export type FontSize = FontSizePreference;
 
-const FONT_SIZE_KEY = 'funny_font_size';
 const FONT_SIZE_VALUES: Record<FontSize, string> = {
   small: '13px',
   default: '14px',
@@ -132,56 +138,13 @@ export const DIFF_ROW_HEIGHT_PX: Record<FontSize, number> = {
   large: 23,
 };
 
-function getStoredFontSize(): FontSize {
-  try {
-    const stored = localStorage.getItem(FONT_SIZE_KEY);
-    if (stored && stored in FONT_SIZE_VALUES) return stored as FontSize;
-  } catch {}
-  return 'default';
-}
-
 /**
  * Thread viewer engine — experimental. `virtual` is the current TanStack
  * Virtual renderer (`MemoizedMessageList`); `frozen` is the in-flow,
  * native-scroll frozen-message viewer. Client-only, localStorage-backed (no
  * server profile field): it's a rendering preference, not account state.
  */
-export type ThreadViewer = 'virtual' | 'frozen';
-
-const THREAD_VIEWER_KEY = 'funny_thread_viewer';
-const THREAD_VIEWER_VALUES: readonly ThreadViewer[] = ['virtual', 'frozen'];
-
-function getStoredThreadViewer(): ThreadViewer {
-  try {
-    const stored = localStorage.getItem(THREAD_VIEWER_KEY);
-    if (stored && (THREAD_VIEWER_VALUES as readonly string[]).includes(stored)) {
-      return stored as ThreadViewer;
-    }
-  } catch {}
-  return 'virtual';
-}
-
-const NOTIFICATIONS_ENABLED_KEY = 'funny_notifications_enabled';
-const NOTIFICATIONS_SOUND_KEY = 'funny_notifications_sound';
-const HIDDEN_PROMPT_MODELS_KEY = 'funny_hidden_prompt_models';
-const HIDDEN_PROMPT_MODELS_VERSION_KEY = 'funny_hidden_prompt_models_version';
-const CURRENT_HIDDEN_MODELS_VERSION = '1';
-
-function getStoredNotificationsEnabled(): boolean {
-  try {
-    return localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function getStoredNotificationSoundEnabled(): boolean {
-  try {
-    return localStorage.getItem(NOTIFICATIONS_SOUND_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
+export type ThreadViewer = ThreadViewerPreference;
 
 /**
  * Default models shown in the dropdown on first run. Only essential models
@@ -210,47 +173,29 @@ function getAllModelKeys(): string[] {
   return keys;
 }
 
-function getStoredHiddenPromptModels(): string[] {
-  try {
-    const raw = localStorage.getItem(HIDDEN_PROMPT_MODELS_KEY);
-    const version = localStorage.getItem(HIDDEN_PROMPT_MODELS_VERSION_KEY);
-
-    // If user has saved preferences AND they're on the current version, use those
-    if (raw && version === CURRENT_HIDDEN_MODELS_VERSION) {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'string') : [];
-    }
-
-    // First run OR migration needed: hide all models except the default visible set
-    const allModels = getAllModelKeys();
-    const hiddenModels = allModels.filter((key) => !DEFAULT_VISIBLE_MODELS.has(key));
-    // Persist the default so subsequent loads use it
-    persistHiddenPromptModels(hiddenModels);
-    try {
-      localStorage.setItem(HIDDEN_PROMPT_MODELS_VERSION_KEY, CURRENT_HIDDEN_MODELS_VERSION);
-    } catch {}
-    return hiddenModels;
-  } catch {
-    return [];
-  }
-}
-
-function persistHiddenPromptModels(hiddenPromptModels: string[]) {
-  try {
-    localStorage.setItem(HIDDEN_PROMPT_MODELS_KEY, JSON.stringify(hiddenPromptModels));
-  } catch {}
-}
+const portablePreferences = createClientPreferencesStore({
+  storage: clientComposition.platform.storage,
+  diagnostics: clientComposition.platform.diagnostics,
+  defaultHiddenPromptModels: () =>
+    getAllModelKeys().filter((key) => !DEFAULT_VISIBLE_MODELS.has(key)),
+});
+const initialPreferences = portablePreferences.getState();
 
 function applyFontSize(size: FontSize) {
-  document.documentElement.style.fontSize = FONT_SIZE_VALUES[size];
-  // Diff vars track the editor-aligned scale; --code-font-size stays on the
-  // denser CODE scale used by inline code blocks in chat (WaitingCards, prose).
-  const diffPx = DIFF_FONT_SIZE_PX[size];
-  const diffRowPx = DIFF_ROW_HEIGHT_PX[size];
-  const codePx = CODE_FONT_SIZE_PX[size];
-  document.documentElement.style.setProperty('--diff-font-size', `${diffPx}px`);
-  document.documentElement.style.setProperty('--diff-row-height', `${diffRowPx}px`);
-  document.documentElement.style.setProperty('--code-font-size', `${codePx}px`);
+  applyWebFontSize(
+    size,
+    Object.fromEntries(
+      (Object.keys(FONT_SIZE_VALUES) as FontSize[]).map((value) => [
+        value,
+        {
+          root: FONT_SIZE_VALUES[value],
+          diff: DIFF_FONT_SIZE_PX[value],
+          diffRow: DIFF_ROW_HEIGHT_PX[value],
+          code: CODE_FONT_SIZE_PX[value],
+        },
+      ]),
+    ) as Record<FontSize, import('@/platform/web/font-size-effects').FontSizeCssValues>,
+  );
 }
 
 interface SettingsState {
@@ -313,11 +258,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   availableShells: [],
   _shellsLoaded: false,
   toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
-  fontSize: getStoredFontSize(),
-  notificationsEnabled: getStoredNotificationsEnabled(),
-  notificationSoundEnabled: getStoredNotificationSoundEnabled(),
-  hiddenPromptModels: getStoredHiddenPromptModels(),
-  threadViewer: getStoredThreadViewer(),
+  fontSize: initialPreferences.fontSize,
+  notificationsEnabled: initialPreferences.notificationsEnabled,
+  notificationSoundEnabled: initialPreferences.notificationSoundEnabled,
+  hiddenPromptModels: initialPreferences.hiddenPromptModels,
+  threadViewer: initialPreferences.threadViewer,
   _initialized: false,
 
   initializeFromProfile: (profile) => {
@@ -345,45 +290,28 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     syncToServer({ terminalShell: shell });
   },
   setFontSize: (size) => {
-    set({ fontSize: size });
-    try {
-      localStorage.setItem(FONT_SIZE_KEY, size);
-    } catch {}
-    applyFontSize(size);
+    portablePreferences.getState().setFontSize(size);
   },
   setThreadViewer: (viewer) => {
-    set({ threadViewer: viewer });
-    try {
-      localStorage.setItem(THREAD_VIEWER_KEY, viewer);
-    } catch {}
+    portablePreferences.getState().setThreadViewer(viewer);
   },
   setNotificationsEnabled: (enabled) => {
-    set({ notificationsEnabled: enabled });
-    try {
-      localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, enabled ? '1' : '0');
-    } catch {}
+    portablePreferences.getState().setNotificationsEnabled(enabled);
   },
   setNotificationSoundEnabled: (enabled) => {
-    set({ notificationSoundEnabled: enabled });
-    try {
-      localStorage.setItem(NOTIFICATIONS_SOUND_KEY, enabled ? '1' : '0');
-    } catch {}
+    portablePreferences.getState().setNotificationSoundEnabled(enabled);
   },
-  setPromptModelVisible: (combinedKey, visible) =>
-    set((state) => {
-      const hidden = new Set(state.hiddenPromptModels);
-      if (visible) hidden.delete(combinedKey);
-      else hidden.add(combinedKey);
-      const hiddenPromptModels = [...hidden];
-      persistHiddenPromptModels(hiddenPromptModels);
-      return { hiddenPromptModels };
-    }),
+  setPromptModelVisible: (combinedKey, visible) => {
+    const hidden = new Set(get().hiddenPromptModels);
+    if (visible) hidden.delete(combinedKey);
+    else hidden.add(combinedKey);
+    portablePreferences.getState().setHiddenPromptModels([...hidden]);
+  },
   resetPromptModelVisibility: () => {
     // Reset to the default visible set (not all visible)
     const allModels = getAllModelKeys();
     const hiddenModels = allModels.filter((key) => !DEFAULT_VISIBLE_MODELS.has(key));
-    persistHiddenPromptModels(hiddenModels);
-    set({ hiddenPromptModels: hiddenModels });
+    portablePreferences.getState().setHiddenPromptModels(hiddenModels);
   },
   fetchAvailableShells: async () => {
     if (get()._shellsLoaded) return;
@@ -405,7 +333,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 }));
 
-// Apply stored font size on load
-applyFontSize(useSettingsStore.getState().fontSize);
+portablePreferences.subscribe((preferences, previous) => {
+  useSettingsStore.setState({
+    fontSize: preferences.fontSize,
+    threadViewer: preferences.threadViewer,
+    notificationsEnabled: preferences.notificationsEnabled,
+    notificationSoundEnabled: preferences.notificationSoundEnabled,
+    hiddenPromptModels: preferences.hiddenPromptModels,
+  });
+  if (preferences.fontSize !== previous.fontSize) applyFontSize(preferences.fontSize);
+});
+
+// CSS mutation remains an intentionally renderer-specific effect.
+applyFontSize(initialPreferences.fontSize);
 
 export { editorLabels, shellLabels };

@@ -93,6 +93,7 @@
       "name": "@funny/client",
       "version": "0.1.0",
       "dependencies": {
+        "@funny/client-core": "workspace:*",
         "@abbacchio/browser-transport": "^0.2.0",
         "@atlaskit/pragmatic-drag-and-drop": "^2.0.0",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
@@ -208,6 +209,14 @@
         "typescript": "^7.0.2",
         "vite": "^8.1.3",
         "vitest": "^4.1.9",
+      },
+    },
+    "packages/client-core": {
+      "name": "@funny/client-core",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "typescript": "^7.0.2",
       },
     },
     "packages/core": {
@@ -846,6 +855,8 @@
     "@funny/chrome-extension": ["@funny/chrome-extension@workspace:packages/chrome-extension"],
 
     "@funny/client": ["@funny/client@workspace:packages/client"],
+
+    "@funny/client-core": ["@funny/client-core@workspace:packages/client-core"],
 
     "@funny/core": ["@funny/core@workspace:packages/core"],
 

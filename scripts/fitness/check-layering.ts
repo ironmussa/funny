@@ -6,6 +6,7 @@
  *  - packages/server/** must not import from @funny/runtime
  *  - packages/core/**   must not import hono or drizzle-orm
  *  - packages/shared/** must not import from @funny/core or @funny/runtime
+ *  - packages/client-core/** must not depend on browser, DOM, Tauri, Vite, or web renderers
  *
  * Exits non-zero on violation.
  */
@@ -47,7 +48,58 @@ const RULES: Rule[] = [
     pkgDir: 'packages/shared/src',
     forbidden: /from\s+['"]@funny\/runtime(\/|['"])/,
   },
+  {
+    name: 'client-core must not import renderer packages',
+    pkgDir: 'packages/client-core/src',
+    forbidden:
+      /(?:from\s+|import\s*\()['"](?:@funny\/client(?:\/|['"])|react(?:-dom)?(?:\/|['"])|@tauri-apps\/|@vitejs\/|vite(?:\/|['"])|sonner(?:\/|['"])|socket\.io-client(?:\/|['"]))/,
+  },
+  {
+    name: 'client-core must not use browser or DOM globals/types',
+    pkgDir: 'packages/client-core/src',
+    forbidden:
+      /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|Element|Node|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
+  },
 ];
+
+function findViolations(source: string, rule: Rule, file = 'fixture.ts'): string[] {
+  const found: string[] = [];
+  source.split('\n').forEach((line, index) => {
+    if (rule.forbidden.test(line)) {
+      found.push(`[${rule.name}] ${file}:${index + 1}  ${line.trim()}`);
+    }
+  });
+  return found;
+}
+
+function runSelfTest(): void {
+  const coreRules = RULES.filter((rule) => rule.pkgDir === 'packages/client-core/src');
+  const allowed = [
+    "import type { Thread } from '@funny/shared';",
+    'const location = { pathname: "/" };',
+    'export interface StorageService { read(key: string): string | null }',
+  ];
+  const forbidden = [
+    "import { toast } from 'sonner';",
+    "import React from 'react';",
+    "import { invoke } from '@tauri-apps/api/core';",
+    'const path = window.location.pathname;',
+    'const root: HTMLElement | null = null;',
+    'new ResizeObserver(() => undefined);',
+  ];
+
+  for (const source of allowed) {
+    if (coreRules.some((rule) => findViolations(source, rule).length > 0)) {
+      throw new Error(`layering self-test rejected allowed source: ${source}`);
+    }
+  }
+  for (const source of forbidden) {
+    if (!coreRules.some((rule) => findViolations(source, rule).length > 0)) {
+      throw new Error(`layering self-test accepted forbidden source: ${source}`);
+    }
+  }
+  console.log('layering self-test ok — allowed and forbidden fixtures classified correctly');
+}
 
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir)) {
@@ -66,17 +118,14 @@ for (const rule of RULES) {
   try {
     for (const file of walk(abs)) {
       const text = readFileSync(file, 'utf8');
-      const lines = text.split('\n');
-      lines.forEach((line, i) => {
-        if (rule.forbidden.test(line)) {
-          violations.push(`[${rule.name}] ${relative(ROOT, file)}:${i + 1}  ${line.trim()}`);
-        }
-      });
+      violations.push(...findViolations(text, rule, relative(ROOT, file)));
     }
   } catch {
     // dir missing — skip
   }
 }
+
+if (process.argv.includes('--self-test')) runSelfTest();
 
 if (violations.length > 0) {
   console.error('Layering violations:\n');

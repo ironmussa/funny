@@ -1,0 +1,25 @@
+{
+  "name": "@funny/client-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./platform": "./src/platform.ts",
+    "./api-client": "./src/api-client.ts",
+    "./endpoint-policy": "./src/endpoint-policy.ts",
+    "./realtime": "./src/realtime.ts",
+    "./stores/circuit-breaker": "./src/stores/circuit-breaker.ts",
+    "./stores/preferences": "./src/stores/preferences.ts",
+    "./stores/thread-read": "./src/stores/thread-read.ts",
+    "./testing": "./src/testing/in-memory-platform.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "typescript": "^7.0.2"
+  }
+}

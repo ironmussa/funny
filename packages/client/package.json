@@ -25,6 +25,7 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/noto-sans": "^5.2.10",
     "@fontsource/noto-sans-mono": "^5.2.10",
+    "@funny/client-core": "workspace:*",
     "@funny/plugin-sdk": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/workflows": "workspace:*",

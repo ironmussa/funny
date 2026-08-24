@@ -33,6 +33,7 @@ const TSC_BIN = join(
 // Each entry runs the local TypeScript 7 `tsc --noEmit -p <project>`. Add new
 // packages here as their own tsconfig.json gains errors worth gating on.
 const PROJECTS = [
+  'packages/client-core/tsconfig.json',
   'packages/client/tsconfig.json',
   'packages/runtime/tsconfig.json',
   'packages/server/tsconfig.json',

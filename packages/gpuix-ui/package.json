@@ -1,0 +1,50 @@
+{
+  "name": "@funny/gpuix-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Composable native UI components for React applications rendered with GPUIX.",
+  "type": "module",
+  "exports": {
+    "./badge": "./src/badge.tsx",
+    "./button": "./src/button.tsx",
+    "./card": "./src/card.tsx",
+    "./input": "./src/input.tsx",
+    "./composer": "./src/composer.tsx",
+    "./conversation": "./src/conversation.tsx",
+    "./dock-layout": "./src/dock-layout.tsx",
+    "./dock-layout-model": "./src/dock-layout-model.ts",
+    "./file-tree": "./src/file-tree.tsx",
+    "./file-tree-model": "./src/file-tree-model.ts",
+    "./icon": "./src/icon.tsx",
+    "./layout": "./src/layout.tsx",
+    "./nav-item": "./src/nav-item.tsx",
+    "./powerline": "./src/powerline.tsx",
+    "./select": "./src/select.tsx",
+    "./separator": "./src/separator.tsx",
+    "./sidebar": "./src/sidebar.tsx",
+    "./status-card": "./src/status-card.tsx",
+    "./thread-header": "./src/thread-header.tsx",
+    "./theme": "./src/theme.tsx",
+    "./tooltip": "./src/tooltip.tsx",
+    "./virtual-range": "./src/virtual-range.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0",
+    "verify:native-test-renderer": "bun scripts/verify-native-test-renderer.ts"
+  },
+  "dependencies": {
+    "@funny/ui-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@gpuix/react": "0.5.1",
+    "@types/bun": "^1.4.0",
+    "@types/react": "^19.2.14",
+    "react": "^19.2.4",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "@gpuix/react": "^0.5.1",
+    "react": ">=19"
+  }
+}

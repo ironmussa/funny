@@ -50,8 +50,18 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const { remoteGetThreadWithMessages } = await import('./team-client.js');
         return remoteGetThreadWithMessages(id, messageLimit, opts);
       },
-      async listThreads() {
-        return { threads: [], total: 0 };
+      async listThreads(opts) {
+        if (!opts.projectId || opts.includeArchived || opts.isScratch === true) {
+          return { threads: [], total: 0 };
+        }
+        const { remoteListProjectThreads } = await import('./team-client.js');
+        const allThreads = await remoteListProjectThreads(opts.projectId);
+        const offset = opts.offset ?? 0;
+        const threads =
+          opts.limit === undefined
+            ? allThreads.slice(offset)
+            : allThreads.slice(offset, offset + opts.limit);
+        return { threads, total: allThreads.length };
       },
       async listArchivedThreads() {
         return [];

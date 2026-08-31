@@ -705,17 +705,32 @@ export async function handleDataMessageWithAck(
         };
       }
       case 'data:list_project_threads': {
+        // Ownership validation above rejects this request when the runner has
+        // no user, but keep the narrowing local to this data-plane query.
+        if (!runnerUserId) {
+          return { type: 'data:ack', success: false, error: 'Forbidden' };
+        }
         const threads = await dbAll(
           db
             .select({
               id: schema.threads.id,
               userId: schema.threads.userId,
+              projectId: schema.threads.projectId,
+              mode: schema.threads.mode,
               worktreePath: schema.threads.worktreePath,
+              branch: schema.threads.branch,
+              baseBranch: schema.threads.baseBranch,
+              mergedAt: schema.threads.mergedAt,
               status: schema.threads.status,
             })
             .from(schema.threads)
             .where(
-              and(eq(schema.threads.projectId, data.projectId), eq(schema.threads.archived, 0)),
+              and(
+                eq(schema.threads.projectId, data.projectId),
+                eq(schema.threads.userId, runnerUserId),
+                eq(schema.threads.archived, 0),
+                eq(schema.threads.isScratch, 0),
+              ),
             ),
         );
         return { type: 'data:list_project_threads_response', threads };

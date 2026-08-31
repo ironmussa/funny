@@ -1077,6 +1077,10 @@ describe('data-handler handleDataMessageWithAck', () => {
       projectId: 'p1',
       userId: 'user-1',
       archived: 0,
+      mode: 'worktree',
+      worktreePath: '/tmp/worktree',
+      branch: 'feature/sidebar-diffs',
+      baseBranch: 'main',
     });
     seedThread(db as any, {
       id: 't-archived',
@@ -1084,6 +1088,19 @@ describe('data-handler handleDataMessageWithAck', () => {
       userId: 'user-1',
       archived: 1,
       title: 'Old',
+    });
+    seedThread(db as any, {
+      id: 't-foreign',
+      projectId: 'p1',
+      userId: 'user-2',
+      archived: 0,
+    });
+    seedThread(db as any, {
+      id: 't-scratch',
+      projectId: 'p1',
+      userId: 'user-1',
+      archived: 0,
+      isScratch: 1,
     });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
@@ -1096,6 +1113,15 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(ids).toContain('t-active');
     expect(ids).toContain('t1');
     expect(ids).not.toContain('t-archived');
+    expect(ids).not.toContain('t-foreign');
+    expect(ids).not.toContain('t-scratch');
+    expect(res.threads.find((thread: { id: string }) => thread.id === 't-active')).toMatchObject({
+      projectId: 'p1',
+      mode: 'worktree',
+      worktreePath: '/tmp/worktree',
+      branch: 'feature/sidebar-diffs',
+      baseBranch: 'main',
+    });
   });
 
   test('get_thread_messages returns paginated messages for owner', async () => {

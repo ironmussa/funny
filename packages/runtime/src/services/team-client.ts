@@ -1580,7 +1580,7 @@ export async function remoteListProjects(userId: string): Promise<any[]> {
   return result?.projects ?? result ?? [];
 }
 
-/** List all non-archived threads for a project (system call, no userId filter) */
+/** List the runner owner's non-archived, non-scratch threads for a project. */
 export async function remoteListProjectThreads(projectId: string): Promise<any[]> {
   const result = await sendDataMessage('data:list_project_threads', {
     projectId,

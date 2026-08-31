@@ -1,0 +1,43 @@
+{
+  "name": "@funny/client-gpuix",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "dist",
+    "NATIVE_READINESS.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./host-support": "./src/host-support.ts",
+    "./platform": "./src/platform/index.ts",
+    "./services": "./src/services/index.ts"
+  },
+  "scripts": {
+    "build": "bun build src/main.ts --target=bun --outdir=dist --external react --external react/jsx-runtime --external @gpuix/native --external @gpuix/react --external '@gpuix/react/*'",
+    "build:profile": "bun build src/benchmark/product-cli.tsx --target=bun --outfile=dist/profile-cli.js --external react --external react/jsx-runtime --external @gpuix/native --external @gpuix/react --external '@gpuix/react/*'",
+    "capture:parity": "bun scripts/capture-visual-parity.tsx",
+    "package:release": "bun run build && bun scripts/package-release.ts",
+    "smoke:release": "bun scripts/smoke-release.ts",
+    "start": "bun src/main.ts",
+    "start:release": "bun dist/main.js",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+  },
+  "dependencies": {
+    "@funny/client-core": "workspace:*",
+    "@funny/gpuix-ui": "workspace:*",
+    "@funny/shared": "workspace:*",
+    "@funny/ui-contracts": "workspace:*",
+    "@gpuix/native": "0.5.1",
+    "@gpuix/react": "0.5.1",
+    "react": "^19.2.4",
+    "socket.io-client": "4"
+  },
+  "devDependencies": {
+    "@funny/client-benchmark": "workspace:*",
+    "@types/bun": "^1.4.0",
+    "@types/react": "^19.2.14",
+    "typescript": "^7.0.2"
+  }
+}

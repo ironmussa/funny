@@ -102,6 +102,9 @@ jobs:
       - name: Run tests (client)
         run: bun run --cwd packages/client test
 
+      - name: Run renderer benchmark contract smoke
+        run: bun run test:renderer-benchmark
+
       - name: Run client coverage (scoped logic layers)
         run: bun run --cwd packages/client test:coverage
 
@@ -131,6 +134,66 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  gpuix-contract:
+    name: GPUIX contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run client-core contracts
+        run: bun run --cwd packages/client-core test
+
+      - name: Typecheck GPUIX UI primitives
+        run: bun run --cwd packages/gpuix-ui typecheck
+
+      - name: Require native GPUIX test renderer (macOS and Windows)
+        if: runner.os != 'Linux'
+        run: bun run --cwd packages/gpuix-ui verify:native-test-renderer
+
+      - name: Run GPUIX UI contracts and compatible native tests
+        run: bun run --cwd packages/gpuix-ui test
+
+      - name: Run GPUIX product contracts and compatible native smoke
+        run: bun run --cwd packages/client-gpuix test
+
+      - name: Typecheck GPUIX product
+        run: bun run --cwd packages/client-gpuix typecheck
+
+      - name: Build GPUIX product
+        run: bun run --cwd packages/client-gpuix build
+
+      - name: Package GPUIX product
+        run: bun run --cwd packages/client-gpuix package:release
+
+      - name: Smoke GPUIX release (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a bun run --cwd packages/client-gpuix smoke:release
+
+      - name: Smoke GPUIX release (macOS and Windows)
+        if: runner.os != 'Linux'
+        run: bun run --cwd packages/client-gpuix smoke:release
+
+      - name: Upload GPUIX release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-gpuix-${{ matrix.os }}-${{ runner.arch }}
+          path: artifacts/*.tgz
 
   chrome-extension:
     runs-on: ubuntu-latest

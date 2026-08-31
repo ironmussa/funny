@@ -34,6 +34,12 @@ const TSC_BIN = join(
 // packages here as their own tsconfig.json gains errors worth gating on.
 const PROJECTS = [
   'packages/client-core/tsconfig.json',
+  'packages/client-benchmark/tsconfig.json',
+  'packages/client-gpuix-benchmark/tsconfig.json',
+  'packages/client-gpuix/tsconfig.json',
+  'packages/gpuix-ui/tsconfig.json',
+  'packages/ui-contracts/tsconfig.json',
+  'scripts/renderer-benchmark/tsconfig.json',
   'packages/client/tsconfig.json',
   'packages/runtime/tsconfig.json',
   'packages/server/tsconfig.json',

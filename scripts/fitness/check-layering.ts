@@ -7,6 +7,8 @@
  *  - packages/core/**   must not import hono or drizzle-orm
  *  - packages/shared/** must not import from @funny/core or @funny/runtime
  *  - packages/client-core/** must not depend on browser, DOM, Tauri, Vite, or web renderers
+ *  - packages/client-benchmark/** must remain renderer-neutral and DOM-free
+ *  - packages/client-gpuix/** must not depend on web renderer APIs
  *
  * Exits non-zero on violation.
  */
@@ -60,6 +62,42 @@ const RULES: Rule[] = [
     forbidden:
       /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|Element|Node|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
   },
+  {
+    name: 'ui-contracts must not import renderer packages',
+    pkgDir: 'packages/ui-contracts/src',
+    forbidden:
+      /(?:from\s+|import\s*\()['"](?:@funny\/(?:client|gpuix-ui)(?:\/|['"])|@gpuix\/|react(?:-dom)?(?:\/|['"])|@radix-ui\/|vite(?:\/|['"]))/,
+  },
+  {
+    name: 'ui-contracts must not use browser or DOM globals/types',
+    pkgDir: 'packages/ui-contracts/src',
+    forbidden:
+      /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|Element|Node|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
+  },
+  {
+    name: 'client-gpuix must not import web renderer packages',
+    pkgDir: 'packages/client-gpuix/src',
+    forbidden:
+      /(?:from\s+|import\s*\()['"](?:@funny\/client(?:\/|['"])|react-dom(?:\/|['"])|react-router-dom(?:\/|['"])|@tauri-apps\/|@radix-ui\/|dockview(?:\/|['"])|monaco-editor(?:\/|['"])|@xterm\/|sonner(?:\/|['"]))/,
+  },
+  {
+    name: 'client-gpuix must not use browser or DOM globals/types',
+    pkgDir: 'packages/client-gpuix/src',
+    forbidden:
+      /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
+  },
+  {
+    name: 'client-benchmark must not import renderer packages',
+    pkgDir: 'packages/client-benchmark/src',
+    forbidden:
+      /(?:from\s+|import\s*\()['"](?:@funny\/client(?:\/|['"])|@gpuix\/|react(?:-dom)?(?:\/|['"])|@tauri-apps\/|@vitejs\/|vite(?:\/|['"])|playwright(?:\/|['"]))/,
+  },
+  {
+    name: 'client-benchmark must not use browser or DOM globals/types',
+    pkgDir: 'packages/client-benchmark/src',
+    forbidden:
+      /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|Element|Node|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
+  },
 ];
 
 function findViolations(source: string, rule: Rule, file = 'fixture.ts'): string[] {
@@ -73,7 +111,10 @@ function findViolations(source: string, rule: Rule, file = 'fixture.ts'): string
 }
 
 function runSelfTest(): void {
-  const coreRules = RULES.filter((rule) => rule.pkgDir === 'packages/client-core/src');
+  const portableRules = RULES.filter(
+    (rule) =>
+      rule.pkgDir === 'packages/client-core/src' || rule.pkgDir === 'packages/client-benchmark/src',
+  );
   const allowed = [
     "import type { Thread } from '@funny/shared';",
     'const location = { pathname: "/" };',
@@ -89,12 +130,12 @@ function runSelfTest(): void {
   ];
 
   for (const source of allowed) {
-    if (coreRules.some((rule) => findViolations(source, rule).length > 0)) {
+    if (portableRules.some((rule) => findViolations(source, rule).length > 0)) {
       throw new Error(`layering self-test rejected allowed source: ${source}`);
     }
   }
   for (const source of forbidden) {
-    if (!coreRules.some((rule) => findViolations(source, rule).length > 0)) {
+    if (!portableRules.some((rule) => findViolations(source, rule).length > 0)) {
       throw new Error(`layering self-test accepted forbidden source: ${source}`);
     }
   }

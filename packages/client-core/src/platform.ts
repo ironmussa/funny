@@ -39,12 +39,13 @@ export interface NavigationService {
   subscribe(listener: (location: ClientLocation) => void): Unsubscribe;
 }
 
-export type HostMode = 'browser' | 'tauri';
+export type HostMode = 'browser' | 'tauri' | 'native';
 
 export interface TransportEnvironment {
   hostMode: HostMode;
   pageOrigin: string;
   localServerPort: number;
+  nativeServerOrigin?: string;
   remoteOriginAllowlist: readonly string[];
 }
 

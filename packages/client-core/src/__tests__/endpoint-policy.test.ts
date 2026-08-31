@@ -29,6 +29,30 @@ describe('endpoint policy', () => {
     });
   });
 
+  test('resolves explicit and local native server origins without changing web modes', () => {
+    expect(
+      createEndpointPolicy({
+        hostMode: 'native',
+        pageOrigin: '',
+        localServerPort: 5002,
+        nativeServerOrigin: 'https://funny.example',
+        remoteOriginAllowlist: [],
+      }),
+    ).toEqual({
+      apiBase: 'https://funny.example/api',
+      realtimeOrigin: 'https://funny.example',
+      remoteOriginAllowlist: [],
+    });
+    expect(
+      createEndpointPolicy({
+        hostMode: 'native',
+        pageOrigin: '',
+        localServerPort: 5002,
+        remoteOriginAllowlist: [],
+      }).apiBase,
+    ).toBe('http://localhost:5002/api');
+  });
+
   test('rejects malformed, credentialed, unsupported, and non-allowlisted origins', () => {
     expect(validateRemoteOrigin('not a url', [])).toBeNull();
     expect(validateRemoteOrigin('ftp://container.test', [])).toBeNull();

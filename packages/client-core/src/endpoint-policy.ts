@@ -19,9 +19,15 @@ export interface EndpointPolicy {
 
 export function createEndpointPolicy(environment: TransportEnvironment): EndpointPolicy {
   const localOrigin = `http://localhost:${environment.localServerPort}`;
+  const primaryOrigin =
+    environment.hostMode === 'native'
+      ? (environment.nativeServerOrigin ?? localOrigin)
+      : environment.hostMode === 'tauri'
+        ? localOrigin
+        : environment.pageOrigin;
   return {
-    apiBase: environment.hostMode === 'tauri' ? `${localOrigin}/api` : '/api',
-    realtimeOrigin: environment.hostMode === 'tauri' ? localOrigin : environment.pageOrigin,
+    apiBase: environment.hostMode === 'browser' ? '/api' : `${primaryOrigin}/api`,
+    realtimeOrigin: primaryOrigin,
     remoteOriginAllowlist: environment.remoteOriginAllowlist,
   };
 }

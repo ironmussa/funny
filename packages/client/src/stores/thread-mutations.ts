@@ -1,3 +1,4 @@
+import { uniqueEntityIds } from '@funny/client-core';
 import type { Thread } from '@funny/shared';
 
 import { reconcileBoardWrite } from './thread-optimistic-guard';
@@ -27,17 +28,6 @@ function timeValue(value: string | undefined): number {
   if (!value) return 0;
   const ms = new Date(value).getTime();
   return Number.isFinite(ms) ? ms : 0;
-}
-
-function uniqueThreadIds(threads: Thread[]): string[] {
-  const seen = new Set<string>();
-  const ids: string[] = [];
-  for (const thread of threads) {
-    if (seen.has(thread.id)) continue;
-    seen.add(thread.id);
-    ids.push(thread.id);
-  }
-  return ids;
 }
 
 function reconcileIncomingThread(existing: Thread | undefined, incoming: Thread): Thread {
@@ -112,7 +102,7 @@ export function replaceProjectThreads(
   threads: Thread[],
   total: number,
 ): Partial<ThreadState> {
-  const newIds = uniqueThreadIds(threads);
+  const newIds = uniqueEntityIds(threads);
   const incoming = new Set(newIds);
   // Preserve archived threads already resident in this bucket that the
   // incoming page omits (a non-archived reload, or a refresh right after a
@@ -190,7 +180,7 @@ export function replaceScratchThreads(
 ): Partial<ThreadState> {
   return {
     threadsById: withThreadsUpserted(state.threadsById, threads),
-    scratchThreadIds: uniqueThreadIds(threads),
+    scratchThreadIds: uniqueEntityIds(threads),
     scratchThreadTotal: total ?? threads.length,
   };
 }
@@ -205,7 +195,7 @@ export function replaceSharedThreads(
 ): Partial<ThreadState> {
   return {
     threadsById: withThreadsUpserted(state.threadsById, threads),
-    sharedThreadIds: uniqueThreadIds(threads),
+    sharedThreadIds: uniqueEntityIds(threads),
     sharedThreadTotal: total ?? threads.length,
   };
 }

@@ -9,14 +9,25 @@
     "./api-client": "./src/api-client.ts",
     "./endpoint-policy": "./src/endpoint-policy.ts",
     "./realtime": "./src/realtime.ts",
+    "./renderer-selection": "./src/renderer-selection.ts",
+    "./route-parser": "./src/route-parser.ts",
     "./stores/circuit-breaker": "./src/stores/circuit-breaker.ts",
+    "./stores/auth-session": "./src/stores/auth-session.ts",
+    "./stores/selectors": "./src/stores/selectors.ts",
     "./stores/preferences": "./src/stores/preferences.ts",
+    "./stores/thread-commands": "./src/stores/thread-commands.ts",
+    "./stores/thread-navigation": "./src/stores/thread-navigation.ts",
     "./stores/thread-read": "./src/stores/thread-read.ts",
+    "./stores/thread-workspace": "./src/stores/thread-workspace.ts",
+    "./stores/vanilla-store": "./src/stores/vanilla-store.ts",
     "./testing": "./src/testing/in-memory-platform.ts"
   },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+  },
+  "dependencies": {
+    "@funny/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

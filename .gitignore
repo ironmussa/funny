@@ -31,6 +31,8 @@ packages/server/.env.test
 .funny-test
 /test-results
 e2e-report.json
+/benchmark-results/
+/artifacts/
 
 *storybook.log
 storybook-static

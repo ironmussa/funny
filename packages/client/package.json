@@ -28,6 +28,7 @@
     "@funny/client-core": "workspace:*",
     "@funny/plugin-sdk": "workspace:*",
     "@funny/shared": "workspace:*",
+    "@funny/ui-contracts": "workspace:*",
     "@funny/workflows": "workspace:*",
     "@iconify-json/vscode-icons": "^1.2.58",
     "@iconify/react": "^6.0.2",
@@ -94,6 +95,7 @@
   },
   "devDependencies": {
     "@chromatic-com/storybook": "^5.0.1",
+    "@funny/client-benchmark": "workspace:*",
     "@storybook/addon-a11y": "^10.4.6",
     "@storybook/addon-docs": "^10.4.6",
     "@storybook/addon-onboarding": "^10.4.6",

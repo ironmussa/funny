@@ -1,0 +1,182 @@
+{
+  "generatedAt": "2026-08-31T01:08:28.876Z",
+  "platform": "linux-x64",
+  "bun": "1.4.0",
+  "configuration": {
+    "largeFileCount": 10000,
+    "fileIterations": 50,
+    "contentIterations": 20
+  },
+  "correctness": "Run bun --bun vitest run src/__tests__/services/search-benchmark.test.ts",
+  "comparisons": [
+    {
+      "scenario": "current-repository",
+      "current": {
+        "backend": "current",
+        "roots": 1,
+        "indexedFiles": 3790,
+        "coldReadyMs": 90.92499799999999,
+        "file": {
+          "p50Ms": 0.9957039999999893,
+          "p95Ms": 1.5791360000000054
+        },
+        "content": {
+          "p50Ms": 10.845724999999959,
+          "p95Ms": 13.027198999999996
+        },
+        "rssDeltaBytes": 35524608,
+        "watcherDelta": 0,
+        "eventLoopDelayP95Ms": 0.585727
+      },
+      "fff": {
+        "backend": "fff",
+        "roots": 1,
+        "indexedFiles": 2539,
+        "coldReadyMs": 106.582071,
+        "file": {
+          "p50Ms": 2.6235619999999926,
+          "p95Ms": 4.4007489999999905
+        },
+        "content": {
+          "p50Ms": 2.3032419999999547,
+          "p95Ms": 6.289616000000024
+        },
+        "rssDeltaBytes": 47747072,
+        "watcherDelta": 341,
+        "eventLoopDelayP95Ms": 0.061055
+      },
+      "gate": {
+        "coldReadiness": true,
+        "fileLatency": false,
+        "contentLatency": true
+      }
+    },
+    {
+      "scenario": "small",
+      "current": {
+        "backend": "current",
+        "roots": 1,
+        "indexedFiles": 6,
+        "coldReadyMs": 9.710218999999995,
+        "file": {
+          "p50Ms": 0.007844000000005735,
+          "p95Ms": 0.01948600000000056
+        },
+        "content": {
+          "p50Ms": 5.267481000000004,
+          "p95Ms": 7.1594340000000045
+        },
+        "rssDeltaBytes": 17534976,
+        "watcherDelta": 0,
+        "eventLoopDelayP95Ms": 1.132543
+      },
+      "fff": {
+        "backend": "fff",
+        "roots": 1,
+        "indexedFiles": 5,
+        "coldReadyMs": 55.90898200000001,
+        "file": {
+          "p50Ms": 0.7102299999999957,
+          "p95Ms": 1.0220329999999933
+        },
+        "content": {
+          "p50Ms": 0.21432199999998147,
+          "p95Ms": 0.5428970000000106
+        },
+        "rssDeltaBytes": 17739776,
+        "watcherDelta": 4,
+        "eventLoopDelayP95Ms": 0.061631
+      },
+      "gate": {
+        "coldReadiness": false,
+        "fileLatency": false,
+        "contentLatency": true
+      }
+    },
+    {
+      "scenario": "large-10000",
+      "current": {
+        "backend": "current",
+        "roots": 1,
+        "indexedFiles": 10001,
+        "coldReadyMs": 21.25886,
+        "file": {
+          "p50Ms": 3.5912340000000427,
+          "p95Ms": 5.256330000000048
+        },
+        "content": {
+          "p50Ms": 14.032110999999986,
+          "p95Ms": 18.02701000000002
+        },
+        "rssDeltaBytes": 37163008,
+        "watcherDelta": 0,
+        "eventLoopDelayP95Ms": 1.679359
+      },
+      "fff": {
+        "backend": "fff",
+        "roots": 1,
+        "indexedFiles": 10001,
+        "coldReadyMs": 55.78539000000001,
+        "file": {
+          "p50Ms": 4.558895000000007,
+          "p95Ms": 7.5786280000000374
+        },
+        "content": {
+          "p50Ms": 9.566168999999945,
+          "p95Ms": 13.487631000000079
+        },
+        "rssDeltaBytes": 51847168,
+        "watcherDelta": 203,
+        "eventLoopDelayP95Ms": 0.059871
+      },
+      "gate": {
+        "coldReadiness": false,
+        "fileLatency": false,
+        "contentLatency": true
+      }
+    },
+    {
+      "scenario": "multi-worktree-3",
+      "current": {
+        "backend": "current",
+        "roots": 3,
+        "indexedFiles": 18,
+        "coldReadyMs": 14.879846999999998,
+        "file": {
+          "p50Ms": 0.005269999999995889,
+          "p95Ms": 0.016151000000007798
+        },
+        "content": {
+          "p50Ms": 4.952571999999975,
+          "p95Ms": 6.081524999999999
+        },
+        "rssDeltaBytes": 33603584,
+        "watcherDelta": 0,
+        "eventLoopDelayP95Ms": 0.798719
+      },
+      "fff": {
+        "backend": "fff",
+        "roots": 3,
+        "indexedFiles": 15,
+        "coldReadyMs": 156.99504199999998,
+        "file": {
+          "p50Ms": 0.6776990000000183,
+          "p95Ms": 1.0763450000000034
+        },
+        "content": {
+          "p50Ms": 0.22434000000004062,
+          "p95Ms": 0.452637999999979
+        },
+        "rssDeltaBytes": 32239616,
+        "watcherDelta": 12,
+        "eventLoopDelayP95Ms": 0.063167
+      },
+      "gate": {
+        "coldReadiness": false,
+        "fileLatency": false,
+        "contentLatency": true
+      }
+    }
+  ],
+  "passed": false
+}

@@ -12,6 +12,7 @@ import { join, parse as parsePath, resolve, normalize } from 'path';
 import { getRemoteUrl, extractRepoName, initRepo } from '@funny/core/git';
 import { Hono } from 'hono';
 
+import { openDirectoryOnHost } from '../services/directory-opener.js';
 import { getFileIndex, getFileIndexDelta } from '../services/file-index-service.js';
 import { getServices } from '../services/service-registry.js';
 import { resolveThreadCwd } from '../services/thread-context.js';
@@ -275,26 +276,13 @@ app.post('/open-directory', async (c) => {
     return c.json({ error: 'Cannot access directory' }, 500);
   }
 
-  const os = platform();
-  let cmd: string;
-  let args: string[];
-
-  if (os === 'win32') {
-    cmd = 'explorer';
-    args = [normalizedPath.replace(/\//g, '\\')];
-  } else if (os === 'darwin') {
-    cmd = 'open';
-    args = [normalizedPath];
-  } else {
-    cmd = 'xdg-open';
-    args = [normalizedPath];
+  try {
+    await openDirectoryOnHost(normalizedPath, platform());
+    return c.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: `Failed to open directory: ${message}` }, 500);
   }
-
-  Bun.spawn([cmd, ...args], {
-    stdio: ['ignore', 'ignore', 'ignore'],
-  });
-
-  return c.json({ ok: true });
 });
 
 // Open project in editor

@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["bun"],
+    "typeRoots": [
+      "../../packages/client-benchmark/node_modules/@types",
+      "../../node_modules/@types"
+    ],
+    "outDir": "./dist",
+    "rootDir": "../.."
+  },
+  "include": [
+    "./**/*.ts",
+    "../profile-renderers.ts",
+    "../compare-renderers.ts",
+    "../../packages/client-benchmark/src"
+  ],
+  "exclude": ["./**/__tests__/**", "../../packages/client-benchmark/src/**/__tests__/**"]
+}

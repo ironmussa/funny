@@ -1,0 +1,27 @@
+{
+  "name": "@funny/client-gpuix-benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build src/cli.tsx --target=bun --outdir=dist --external react --external react/jsx-runtime --external @gpuix/native --external @gpuix/react --external '@gpuix/react/*'",
+    "start": "bun src/cli.tsx",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+  },
+  "dependencies": {
+    "@funny/client-benchmark": "workspace:*",
+    "@funny/gpuix-ui": "workspace:*",
+    "@gpuix/native": "0.5.1",
+    "@gpuix/react": "0.5.1",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/react": "^19.2.14",
+    "typescript": "^7.0.2"
+  }
+}

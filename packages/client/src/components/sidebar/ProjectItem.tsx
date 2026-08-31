@@ -3,47 +3,20 @@ import {
   dropTargetForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Project, Thread } from '@funny/shared';
-import {
-  AlertTriangle,
-  ChevronRight,
-  Folder,
-  FolderOpenDot,
-  Trash2,
-  MoreVertical,
-  Terminal,
-  Settings,
-  Pencil,
-  BarChart3,
-  Sparkles,
-  EyeOff,
-  RotateCcw,
-  Zap,
-  Waypoints,
-} from 'lucide-react';
+import { AlertTriangle, ChevronRight, Folder } from 'lucide-react';
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { OpenInEditorSubmenu } from '@/components/OpenInEditorSubmenu';
+import { ProjectActionsMenu } from '@/components/sidebar/ProjectActionsMenu';
 import { ProjectSetupHost } from '@/components/sidebar/ProjectSetupHost';
-import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useExternalClaudeSessionsLoaded } from '@/hooks/use-external-claude-sessions';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
-import { openDirectoryInEditor } from '@/lib/editor-utils';
-import { openProjectTerminal } from '@/lib/open-terminal-tab';
 import { isExternalClaudeShell } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -238,10 +211,8 @@ export const ProjectItem = memo(function ProjectItem({
   onShowAllThreads,
   onShowIssues: _onShowIssues,
 }: ProjectItemProps) {
-  const navigate = useStableNavigate();
   const { t } = useTranslation();
   useMinuteTick();
-  const [openDropdown, setOpenDropdown] = useState(false);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   // Read the shared global sync flag — the polling itself happens once at the
   // sidebar root (useExternalClaudeSessionsSync), not per project.
@@ -398,6 +369,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <button
                   type="button"
                   data-testid={`project-needs-setup-${project.id}`}
+                  aria-label="Local directory not configured"
                   className="shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -411,173 +383,13 @@ export const ProjectItem = memo(function ProjectItem({
             </Tooltip>
           )}
         </div>
-        <div className="mr-2 flex items-center gap-0.5">
-          <div
-            className={cn(
-              'flex items-center gap-0.5',
-              openDropdown
-                ? 'opacity-100'
-                : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto',
-            )}
-          >
-            <DropdownMenu open={openDropdown} onOpenChange={setOpenDropdown}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  tabIndex={-1}
-                  data-testid={`project-more-actions-${project.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <MoreVertical className="icon-sm" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="bottom">
-                <DropdownMenuItem
-                  data-testid="project-menu-open-directory"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const result = await api.openDirectory({
-                      path: project.path,
-                    });
-                    if (result.isErr()) {
-                      console.error('Failed to open directory:', result.error);
-                    }
-                  }}
-                >
-                  <FolderOpenDot className="icon-sm" />
-                  {t('sidebar.openDirectory')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-open-terminal"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openProjectTerminal({
-                      projectId: project.id,
-                      cwd: project.path,
-                    });
-                  }}
-                >
-                  <Terminal className="icon-sm" />
-                  {t('sidebar.openTerminal')}
-                </DropdownMenuItem>
-                <OpenInEditorSubmenu
-                  testId="project-menu-open-editor"
-                  onPick={(editor) => openDirectoryInEditor(project.path, editor)}
-                />
-                <DropdownMenuItem
-                  data-testid="project-menu-settings"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    navigate(buildPath(`/projects/${project.id}/settings/general`));
-                  }}
-                >
-                  <Settings className="icon-sm" />
-                  {t('sidebar.settings')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-analytics"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    navigate(buildPath(`/projects/${project.id}/analytics`));
-                  }}
-                >
-                  <BarChart3 className="icon-sm" />
-                  {t('sidebar.analytics')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-workflows"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    navigate(buildPath(`/projects/${project.id}/workflows`));
-                  }}
-                >
-                  <Waypoints className="icon-sm" />
-                  {t('sidebar.workflows')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-view-designs"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    navigate(buildPath(`/projects/${project.id}/designs`));
-                  }}
-                >
-                  <Sparkles className="icon-sm" />
-                  {t('sidebar.viewDesigns')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  data-testid="project-menu-create-automation"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    navigate(buildPath(`/projects/${project.id}/settings/automations`), {
-                      state: { openCreateAutomation: true },
-                    });
-                  }}
-                >
-                  <Zap className="icon-sm" />
-                  {t('sidebar.createAutomation')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  data-testid="project-menu-rename"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    onRenameProject(project.id, project.name);
-                  }}
-                >
-                  <Pencil className="icon-sm" />
-                  {t('sidebar.renameProject')}
-                </DropdownMenuItem>
-                {onReopenProject ? (
-                  <DropdownMenuItem
-                    data-testid="project-menu-reopen"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenDropdown(false);
-                      onReopenProject(project.id, project.name);
-                    }}
-                  >
-                    <RotateCcw className="icon-sm" />
-                    {t('sidebar.reopenProject')}
-                  </DropdownMenuItem>
-                ) : (
-                  onCloseProject && (
-                    <DropdownMenuItem
-                      data-testid="project-menu-close"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenDropdown(false);
-                        onCloseProject(project.id, project.name);
-                      }}
-                    >
-                      <EyeOff className="icon-sm" />
-                      {t('sidebar.closeProject')}
-                    </DropdownMenuItem>
-                  )
-                )}
-                <DropdownMenuItem
-                  data-testid="project-menu-delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenDropdown(false);
-                    onDeleteProject(project.id, project.name);
-                  }}
-                  className="text-status-error focus:text-status-error"
-                >
-                  <Trash2 className="icon-sm" />
-                  {t('sidebar.deleteProject')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+        <ProjectActionsMenu
+          project={project}
+          onRenameProject={onRenameProject}
+          onDeleteProject={onDeleteProject}
+          onCloseProject={onCloseProject}
+          onReopenProject={onReopenProject}
+        />
       </div>
 
       <CollapsibleContent>

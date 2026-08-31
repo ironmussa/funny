@@ -670,7 +670,9 @@ export function useReviewActions({
           path: absoluteDir,
           error: String(result.error),
         });
-        toast.error(t('review.openDirectoryError', 'Failed to open directory'));
+        toast.error(t('review.openDirectoryError', 'Failed to open directory'), {
+          description: result.error.message,
+        });
       }
     },
     [basePath, t],

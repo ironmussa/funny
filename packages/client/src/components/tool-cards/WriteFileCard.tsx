@@ -1,13 +1,15 @@
-import { Check, ChevronRight, Copy, Eye, FileText, FileCode2 } from 'lucide-react';
+import { Check, ChevronRight, Copy, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureLanguage, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
+import { isMarkdownFile } from '@/lib/markdown-file';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -20,8 +22,6 @@ import {
   useCurrentProjectPath,
   makeRelativePath,
 } from './utils';
-
-const MARKDOWN_EXTS = new Set(['md', 'mdx', 'markdown']);
 
 export function WriteFileCard({
   parsed,
@@ -41,9 +41,11 @@ export function WriteFileCard({
   const content = parsed.content as string | undefined;
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
-  const isMarkdown = MARKDOWN_EXTS.has(ext);
+  const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
   const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
   const [copied, copy] = useCopyToClipboard();
+
+  useEffect(() => setRenderMarkdown(isMarkdown), [filePath, isMarkdown]);
 
   const hljsLang = ext ? extToHljsLang(ext) : 'plaintext';
   const [highlighted, setHighlighted] = useState<string | null>(null);
@@ -63,20 +65,23 @@ export function WriteFileCard({
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
-      >
-        <ChevronRight
-          className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
-        />
-        {!hideLabel && <FileText className="icon-xs text-muted-foreground shrink-0" />}
-        {!hideLabel && (
-          <span className="text-foreground shrink-0 font-mono font-medium">
-            {t('tools.writeFile')}
-          </span>
-        )}
+      <div className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <ChevronRight
+            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
+          />
+          {!hideLabel && <FileText className="icon-xs text-muted-foreground shrink-0" />}
+          {!hideLabel && (
+            <span className="text-foreground shrink-0 font-mono font-medium">
+              {t('tools.writeFile')}
+            </span>
+          )}
+        </button>
         {filePath &&
           (() => {
             const editorUri = toEditorUri(filePath, defaultEditor);
@@ -96,23 +101,13 @@ export function WriteFileCard({
                       {displayPath}
                     </a>
                   ) : (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openFileInEditor(filePath, defaultEditor);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.stopPropagation();
-                          openFileInEditor(filePath, defaultEditor);
-                        }
-                      }}
+                    <button
+                      type="button"
+                      onClick={() => openFileInEditor(filePath, defaultEditor)}
                       className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                     >
                       {displayPath}
-                    </span>
+                    </button>
                   )}
                 </TooltipTrigger>
                 <TooltipContent>{editorTitle}</TooltipContent>
@@ -124,7 +119,7 @@ export function WriteFileCard({
             {displayTime}
           </span>
         )}
-      </button>
+      </div>
       {expanded && content != null && (
         <ScrollArea
           className="border-border/40 border-t"
@@ -139,29 +134,13 @@ export function WriteFileCard({
                 </span>
               )}
               {isMarkdown && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => setRenderMarkdown((v) => !v)}
-                      data-testid="write-file-toggle-markdown"
-                      aria-pressed={renderMarkdown}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      {renderMarkdown ? (
-                        <FileCode2 className="icon-sm" />
-                      ) : (
-                        <Eye className="icon-sm" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    {renderMarkdown
-                      ? t('tools.viewSource', 'View source')
-                      : t('tools.preview', 'Preview')}
-                  </TooltipContent>
-                </Tooltip>
+                <PreviewModeToggle
+                  previewing={renderMarkdown}
+                  onToggle={() => setRenderMarkdown((value) => !value)}
+                  size="icon-xs"
+                  tooltipSide="left"
+                  testId="write-file-toggle-markdown"
+                />
               )}
               <Tooltip>
                 <TooltipTrigger asChild>

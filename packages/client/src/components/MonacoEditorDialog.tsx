@@ -4,9 +4,7 @@ import {
   Minimize2,
   Eye,
   EyeOff,
-  BookOpen,
   Check,
-  Code,
   Copy,
   FileCode,
   GitBranch,
@@ -21,6 +19,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
+import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -42,6 +41,7 @@ import {
   type BlameHistoryEntry,
 } from '@/lib/editor-blame-history';
 import { markdownProseClassName } from '@/lib/markdown-components';
+import { isMarkdownFile } from '@/lib/markdown-file';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
@@ -78,7 +78,7 @@ export function MonacoEditorDialog({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const ext = getFileExtension(filePath);
   const language = getMonacoLanguage(ext, filePath);
-  const isMarkdown = language === 'markdown';
+  const isMarkdown = isMarkdownFile(filePath);
   // A visualizer registered for this file's extension (e.g. an installed CSV
   // plugin) also enables preview. Built-ins claim no file extensions, so for
   // them `canPreview` reduces to `isMarkdown` (no behavior change).
@@ -199,6 +199,8 @@ export function MonacoEditorDialog({
 
   const handleClose = () => {
     setHiddenHistoryFile(null);
+    setSearchOpen(false);
+    setSearchQuery('');
     onOpenChange(false);
   };
 
@@ -345,14 +347,6 @@ export function MonacoEditorDialog({
     return () => window.removeEventListener('keydown', handler, true);
   }, [open]);
 
-  // Reset search when the dialog closes or the file changes.
-  useEffect(() => {
-    if (!open) {
-      setSearchOpen(false);
-      setSearchQuery('');
-    }
-  }, [open, filePath]);
-
   // ── Markdown preview search ─────────────────────────────────────────────────
   // Collect <mark> elements produced by the rehype plugin so we can navigate.
   useEffect(() => {
@@ -460,11 +454,6 @@ export function MonacoEditorDialog({
       monacoDecorationsRef.current?.clear();
       monacoMatchesRef.current = [];
     }
-    // Re-trigger the appropriate effect by nudging state.
-    if (searchOpen && debouncedQuery) {
-      setMatchCount(0);
-      setCurrentMatch(-1);
-    }
     // Intentionally only react to view changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
   }, [inCodeView]);
@@ -539,28 +528,11 @@ export function MonacoEditorDialog({
             <TooltipContent side="bottom">{t('editor.copy', 'Copy')}</TooltipContent>
           </Tooltip>
           {canPreview && !lockPreview && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setShowPreview((prev) => !prev)}
-                  className="text-muted-foreground shrink-0"
-                  data-testid="editor-toggle-preview"
-                >
-                  {showPreview ? (
-                    <Code className="icon-base" />
-                  ) : (
-                    <BookOpen className="icon-base" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {showPreview
-                  ? t('editor.showCode', 'Show code')
-                  : t('editor.showPreview', 'Show preview')}
-              </TooltipContent>
-            </Tooltip>
+            <PreviewModeToggle
+              previewing={showPreview}
+              onToggle={() => setShowPreview((value) => !value)}
+              testId="editor-toggle-preview"
+            />
           )}
           {inCodeView && blame && blame.hunks.length > 0 && (
             <Tooltip>
@@ -913,6 +885,7 @@ function getMonacoLanguage(ext: string, filePath?: string): string {
     cs: 'csharp',
     md: 'markdown',
     mdx: 'markdown',
+    markdown: 'markdown',
     json: 'json',
     yaml: 'yaml',
     yml: 'yaml',

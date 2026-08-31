@@ -1,8 +1,8 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useMemo, useState } from 'react';
 
-import { buildTreeRows, collectAllFolderPaths, type TreeRow } from '@/components/FileTree';
 import { gitApi } from '@/lib/api/git';
+import { buildTreeRows, collectAllFolderPaths, type TreeRow } from '@/lib/file-tree';
 
 export interface UseFileTreeStateResult {
   // Filtered list (search-aware)

@@ -1,6 +1,15 @@
 import { describe, test, expect } from 'vitest';
 
-import { detectLanguageFromContent, ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import {
+  detectLanguageFromContent,
+  ensureLanguage,
+  filePathToHljsLang,
+  highlightCode,
+} from '@/hooks/use-highlight';
+
+test('maps the long Markdown extension to Markdown highlighting', () => {
+  expect(filePathToHljsLang('docs/guide.markdown')).toBe('markdown');
+});
 
 /**
  * Regression: Cursor's ACP `read` tool calls omit the file path, so the Read

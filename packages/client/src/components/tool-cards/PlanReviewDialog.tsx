@@ -1,8 +1,9 @@
-import { BookOpen, CheckCircle2, Code, MessageSquare, Pencil, XCircle } from 'lucide-react';
+import { CheckCircle2, MessageSquare, Pencil, XCircle } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,7 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
 import { cn } from '@/lib/utils';
@@ -285,22 +285,12 @@ export function PlanReviewDialog({
             <Pencil className="icon-base shrink-0" />
             {t('plan.reviewTitle', 'Review plan')}
           </DialogTitle>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setIsEditing((prev) => !prev)}
-                data-testid="plan-review-toggle-edit"
-                className="text-muted-foreground shrink-0"
-              >
-                {isEditing ? <BookOpen className="icon-base" /> : <Code className="icon-base" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {isEditing ? t('plan.showPreview', 'Preview') : t('plan.editPlan', 'Edit')}
-            </TooltipContent>
-          </Tooltip>
+          <PreviewModeToggle
+            previewing={!isEditing}
+            onToggle={() => setIsEditing((value) => !value)}
+            testId="plan-review-toggle-edit"
+            sourceLabel={t('plan.editPlan', 'Edit')}
+          />
           <DialogDescription className="sr-only">
             {isEditing
               ? t('plan.editDescription', 'Edit the plan markdown directly')

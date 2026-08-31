@@ -1,7 +1,7 @@
 import type { Project, Thread } from '@funny/shared';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 import { useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -11,6 +11,8 @@ import { api } from '@/lib/api';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
+
+const toastErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
   draggable: vi.fn(() => () => {}),
@@ -36,6 +38,10 @@ vi.mock('@/lib/api', () => ({
     dismissExternalClaudeSession: vi.fn(),
     openDirectory: vi.fn(),
   },
+}));
+
+vi.mock('@/lib/toast-error', () => ({
+  toastError: toastErrorMock,
 }));
 
 const project: Project = {
@@ -235,6 +241,44 @@ describe('ProjectItem external Claude sessions', () => {
       expect(screen.getByTestId('location-pathname')).toHaveTextContent(
         '/projects/project-1/workflows',
       );
+    });
+  });
+
+  test('shows an error when opening the project directory fails', async () => {
+    const error = {
+      type: 'PROCESS_ERROR' as const,
+      message: 'xdg-open exited with code 3',
+    };
+    vi.mocked(api.openDirectory).mockReturnValue(errAsync(error));
+
+    renderWithProviders(
+      <ProjectItem
+        project={project}
+        threads={[]}
+        threadsLoaded
+        isExpanded={false}
+        isSelected={false}
+        onToggle={vi.fn()}
+        onSelectProject={vi.fn()}
+        onNewThread={vi.fn()}
+        onRenameProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onSelectThread={vi.fn()}
+        onRenameThread={vi.fn()}
+        onArchiveThread={vi.fn()}
+        onPinThread={vi.fn()}
+        onDeleteThread={vi.fn()}
+        onShowAllThreads={vi.fn()}
+        onShowIssues={vi.fn()}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('project-more-actions-project-1'));
+    fireEvent.click(await screen.findByTestId('project-menu-open-directory'));
+
+    await waitFor(() => {
+      expect(api.openDirectory).toHaveBeenCalledWith({ path: '/work/funny' });
+      expect(toastErrorMock).toHaveBeenCalledWith(error);
     });
   });
 });

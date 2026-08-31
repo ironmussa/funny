@@ -1,7 +1,7 @@
 import { Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 
-import { detectMediaKind, MediaPreview } from '@/components/MediaPreview';
+import { MediaPreview } from '@/components/MediaPreview';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBoxZoomPan } from '@/hooks/use-box-zoom-pan';
+import { detectMediaKind } from '@/lib/media-preview';
 import { isExternalUrl } from '@/lib/raw-file-src';
 import { cn } from '@/lib/utils';
 

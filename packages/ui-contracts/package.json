@@ -1,0 +1,22 @@
+{
+  "name": "@funny/ui-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Renderer-neutral visual contracts and parity fixtures for Funny clients.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures": "./src/fixtures.ts",
+    "./inventory": "./src/inventory.ts",
+    "./structure": "./src/structure.ts",
+    "./tokens": "./src/tokens.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -33,6 +33,7 @@ const EXT_TO_HLJS_LANG: Record<string, string> = {
   cs: 'csharp',
   md: 'markdown',
   mdx: 'markdown',
+  markdown: 'markdown',
   json: 'json',
   yaml: 'yaml',
   yml: 'yaml',

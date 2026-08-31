@@ -3,8 +3,7 @@ import { FolderMinus, FolderOpen, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { collectAllFolderPaths, FileTree } from '@/components/FileTree';
-import { isMediaFile } from '@/components/MediaPreview';
+import { FileTree } from '@/components/FileTree';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -13,6 +12,8 @@ import { getFileExtension } from '@/hooks/use-highlight';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { collectAllFolderPaths } from '@/lib/file-tree';
+import { isMediaFile } from '@/lib/media-preview';
 import { useThreadById } from '@/lib/thread-selectors';
 import { getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';

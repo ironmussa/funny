@@ -1,7 +1,8 @@
-import { Check, ChevronRight, Copy, Eye, FileCode2, FileSearch } from 'lucide-react';
+import { Check, ChevronRight, Copy, FileSearch } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -13,6 +14,7 @@ import {
   filePathToHljsLang,
   highlightLine,
 } from '@/hooks/use-highlight';
+import { isMarkdownFile } from '@/lib/markdown-file';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -26,20 +28,24 @@ import {
   makeRelativePath,
 } from './utils';
 
-const MARKDOWN_EXTS = new Set(['md', 'mdx', 'markdown']);
-
 const LINE_PREFIX_RE = /^(\s*)(\d+)([→\t])(.*)$/;
 
 interface ParsedLine {
+  key: string;
   num: string;
   content: string;
 }
 
 function parseLines(raw: string): ParsedLine[] {
+  const occurrences = new Map<string, number>();
   return raw.split('\n').map((line) => {
     const m = line.match(LINE_PREFIX_RE);
-    if (m) return { num: m[2], content: m[4] };
-    return { num: '', content: line };
+    const num = m?.[2] ?? '';
+    const content = m?.[4] ?? line;
+    const identity = `${num}\u0000${content}`;
+    const occurrence = occurrences.get(identity) ?? 0;
+    occurrences.set(identity, occurrence + 1);
+    return { key: `${identity}\u0000${occurrence}`, num, content };
   });
 }
 
@@ -83,8 +89,8 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
 
   return (
     <pre className="hljs code-viewer m-0 px-3 py-2 font-mono text-sm leading-relaxed whitespace-pre">
-      {lines.map((line, i) => (
-        <div key={i} className="flex">
+      {lines.map((line) => (
+        <div key={line.key} className="flex">
           {line.num ? (
             <span
               className="text-muted-foreground/60 mr-3 shrink-0 text-right select-none"
@@ -130,12 +136,14 @@ export function ReadFileCard({
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
-  const isMarkdown = MARKDOWN_EXTS.has(ext);
+  const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
   const hasOutput = typeof output === 'string' && output.length > 0;
 
   const [expanded, setExpanded] = useState(false);
   const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
   const [copied, copy] = useCopyToClipboard();
+
+  useEffect(() => setRenderMarkdown(isMarkdown), [filePath, isMarkdown]);
 
   const cleanContent = useMemo(
     () => (hasOutput ? stripLinePrefix(output!) : ''),
@@ -157,36 +165,32 @@ export function ReadFileCard({
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <div
-        role={hasOutput ? 'button' : undefined}
-        tabIndex={hasOutput ? 0 : undefined}
-        aria-expanded={hasOutput ? expanded : undefined}
-        onClick={toggle}
-        onKeyDown={(e) => {
-          if (!hasOutput) return;
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            toggle();
-          }
-        }}
         className={cn(
           'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs',
-          hasOutput && 'cursor-pointer transition-colors hover:bg-accent/30',
-          !hasOutput && 'cursor-default',
+          hasOutput && 'transition-colors hover:bg-accent/30',
         )}
       >
-        {hasOutput ? (
-          <ChevronRight
-            className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
-          />
-        ) : (
-          <span className="icon-xs shrink-0" />
-        )}
-        {!hideLabel && <FileSearch className="icon-xs text-muted-foreground shrink-0" />}
-        {!hideLabel && (
-          <span className="text-foreground shrink-0 font-mono font-medium">
-            {t('tools.readFile')}
-          </span>
-        )}
+        <button
+          type="button"
+          disabled={!hasOutput}
+          aria-expanded={hasOutput ? expanded : undefined}
+          onClick={toggle}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+        >
+          {hasOutput ? (
+            <ChevronRight
+              className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
+            />
+          ) : (
+            <span className="icon-xs shrink-0" />
+          )}
+          {!hideLabel && <FileSearch className="icon-xs text-muted-foreground shrink-0" />}
+          {!hideLabel && (
+            <span className="text-foreground shrink-0 font-mono font-medium">
+              {t('tools.readFile')}
+            </span>
+          )}
+        </button>
         {filePath && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -200,25 +204,14 @@ export function ReadFileCard({
                   {displayPath}
                 </a>
               ) : (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openFileInEditor(filePath, defaultEditor);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      openFileInEditor(filePath, defaultEditor);
-                    }
-                  }}
+                <button
+                  type="button"
+                  onClick={() => openFileInEditor(filePath, defaultEditor)}
                   className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                   data-testid="read-file-open-link"
                 >
                   {displayPath}
-                </span>
+                </button>
               )}
             </TooltipTrigger>
             <TooltipContent>{editorTitle}</TooltipContent>
@@ -244,32 +237,13 @@ export function ReadFileCard({
                 </span>
               )}
               {isMarkdown && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenderMarkdown((v) => !v);
-                      }}
-                      data-testid="read-file-toggle-markdown"
-                      aria-pressed={renderMarkdown}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      {renderMarkdown ? (
-                        <FileCode2 className="icon-sm" />
-                      ) : (
-                        <Eye className="icon-sm" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    {renderMarkdown
-                      ? t('tools.viewSource', 'View source')
-                      : t('tools.preview', 'Preview')}
-                  </TooltipContent>
-                </Tooltip>
+                <PreviewModeToggle
+                  previewing={renderMarkdown}
+                  onToggle={() => setRenderMarkdown((value) => !value)}
+                  size="icon-xs"
+                  tooltipSide="left"
+                  testId="read-file-toggle-markdown"
+                />
               )}
               <Tooltip>
                 <TooltipTrigger asChild>

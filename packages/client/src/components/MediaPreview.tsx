@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { useImageZoomPan } from '@/hooks/use-image-zoom-pan';
 import { createClientLogger } from '@/lib/client-logger';
 import { markdownProseClassName } from '@/lib/markdown-components';
+import { detectMediaKind, type MediaKind } from '@/lib/media-preview';
 import { cn } from '@/lib/utils';
 import {
   EDITOR_FONT_SIZE_PX,
@@ -20,76 +21,6 @@ import {
 } from '@/stores/settings-store';
 
 const log = createClientLogger('media-preview');
-
-export type MediaKind = 'image' | 'audio' | 'video' | 'pdf' | 'markdown' | 'text' | 'unknown';
-
-const EXT_TO_KIND: Record<string, MediaKind> = {
-  png: 'image',
-  jpg: 'image',
-  jpeg: 'image',
-  gif: 'image',
-  webp: 'image',
-  svg: 'image',
-  bmp: 'image',
-  avif: 'image',
-  ico: 'image',
-  mp3: 'audio',
-  wav: 'audio',
-  ogg: 'audio',
-  flac: 'audio',
-  m4a: 'audio',
-  aac: 'audio',
-  mp4: 'video',
-  webm: 'video',
-  mov: 'video',
-  mkv: 'video',
-  pdf: 'pdf',
-  md: 'markdown',
-  markdown: 'markdown',
-  mdx: 'markdown',
-  txt: 'text',
-  log: 'text',
-  json: 'text',
-  yaml: 'text',
-  yml: 'text',
-  csv: 'text',
-  tsv: 'text',
-  xml: 'text',
-  ini: 'text',
-  toml: 'text',
-};
-
-/**
- * True if the given file name has an extension we want to render in
- * `MediaPreview` instead of a code editor (image, audio, video, PDF).
- * Markdown and plain text are intentionally excluded — those open in Monaco.
- */
-export function isMediaFile(name: string): boolean {
-  const ext = name.split('.').pop()?.toLowerCase();
-  if (!ext) return false;
-  const kind = EXT_TO_KIND[ext];
-  return kind === 'image' || kind === 'audio' || kind === 'video' || kind === 'pdf';
-}
-
-export function detectMediaKind(name?: string, mime?: string): MediaKind {
-  return detectKind(name, mime);
-}
-
-function detectKind(name?: string, mime?: string): MediaKind {
-  if (mime) {
-    if (mime.startsWith('image/')) return 'image';
-    if (mime.startsWith('audio/')) return 'audio';
-    if (mime.startsWith('video/')) return 'video';
-    if (mime === 'application/pdf') return 'pdf';
-    if (mime === 'text/markdown') return 'markdown';
-    if (mime.startsWith('text/') || mime === 'application/json') return 'text';
-  }
-  if (name) {
-    const ext = name.split('.').pop()?.toLowerCase();
-    if (ext && EXT_TO_KIND[ext]) return EXT_TO_KIND[ext];
-  }
-  return 'unknown';
-}
 
 export interface MediaPreviewProps {
   /** URL to the media resource. */
@@ -116,7 +47,10 @@ export function MediaPreview({
   className,
   onError,
 }: MediaPreviewProps) {
-  const kind = useMemo(() => kindOverride ?? detectKind(name, mime), [kindOverride, name, mime]);
+  const kind = useMemo(
+    () => kindOverride ?? detectMediaKind(name, mime),
+    [kindOverride, name, mime],
+  );
 
   return (
     <div
@@ -257,6 +191,7 @@ function PdfPreview({ src, name }: { src: string; name?: string }) {
     <iframe
       src={src}
       title={name ?? 'PDF preview'}
+      sandbox="allow-same-origin"
       data-testid="media-preview-pdf"
       className="h-[70vh] w-full"
     />

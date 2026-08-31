@@ -7,6 +7,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   CodexSDKProcess,
+  normalizeEffort,
   resolveCodexSandboxOptions,
   resolveCodexSandboxWritableDirectories,
 } from '../agents/codex-sdk.js';
@@ -18,6 +19,18 @@ const options = {
 };
 
 describe('CodexSDKProcess', () => {
+  test.each(['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const)(
+    'forwards supported reasoning effort %s without downgrading it',
+    (effort) => {
+      expect(normalizeEffort(effort)).toBe(effort);
+    },
+  );
+
+  test('preserves the existing fallback for unknown reasoning efforts', () => {
+    expect(normalizeEffort(undefined)).toBeUndefined();
+    expect(normalizeEffort('unsupported')).toBe('high');
+  });
+
   test('maps Funny permission modes to the intended Codex sandbox', () => {
     expect(resolveCodexSandboxOptions('plan')).toEqual({
       sandboxMode: 'read-only',

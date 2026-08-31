@@ -114,7 +114,9 @@ describe('BaseAgentProcess', () => {
 
     test('start() emits error if runProcess throws', async () => {
       const errors: Error[] = [];
+      const exits: (number | null)[] = [];
       proc.on('error', (err) => errors.push(err));
+      proc.on('exit', (code) => exits.push(code));
 
       proc.runProcessFn = async () => {
         throw new Error('SDK crash');
@@ -126,6 +128,8 @@ describe('BaseAgentProcess', () => {
 
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toBe('SDK crash');
+      expect(proc.exited).toBe(true);
+      expect(exits).toEqual([1]);
     });
 
     test('start() does not emit error if already exited', async () => {

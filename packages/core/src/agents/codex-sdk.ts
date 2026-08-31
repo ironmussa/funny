@@ -486,15 +486,15 @@ export class CodexSDKProcess extends BaseAgentProcess {
   }
 }
 
-function normalizeEffort(effort: string | undefined): ModelReasoningEffort | undefined {
+export function normalizeEffort(effort: string | undefined): ModelReasoningEffort | undefined {
   if (!effort) return undefined;
-  if (effort === 'max') return 'xhigh' as const;
   if (
     effort === 'minimal' ||
     effort === 'low' ||
     effort === 'medium' ||
     effort === 'high' ||
-    effort === 'xhigh'
+    effort === 'xhigh' ||
+    effort === 'max'
   ) {
     return effort;
   }

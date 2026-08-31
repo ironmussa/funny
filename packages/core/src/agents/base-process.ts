@@ -114,7 +114,14 @@ export abstract class BaseAgentProcess extends EventEmitter {
   start(): void {
     this.runProcess().catch((err) => {
       if (!this._exited) {
-        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+        try {
+          this.emit('error', err instanceof Error ? err : new Error(String(err)));
+        } finally {
+          // A provider can fail before it creates its underlying session/thread.
+          // Mark it exited so the orchestrator cannot reuse a half-initialized
+          // process for a follow-up prompt.
+          if (!this._exited) this.finalize(1);
+        }
       }
     });
   }
@@ -484,8 +491,8 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * Mark the process as exited and emit the 'exit' event.
    * Call this in the `finally` block of `runProcess()`.
    */
-  protected finalize(): void {
+  protected finalize(exitCode: number | null = this.isAborted ? null : 0): void {
     this._exited = true;
-    this.emit('exit', this.isAborted ? null : 0);
+    this.emit('exit', exitCode);
   }
 }

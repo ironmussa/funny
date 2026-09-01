@@ -111,6 +111,7 @@ export function SelectionPopover({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   handleSubmitComment();

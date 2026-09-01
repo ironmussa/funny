@@ -80,7 +80,7 @@ const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HT
         {children}
         <DialogPrimitive.Close
           tabIndex={-1}
-          className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-0 right-0 shrink-0 rounded-md p-1.5 opacity-70 transition-all hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
+          className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-0 right-0 shrink-0 rounded-md p-1.5 opacity-70 transition-[color,background-color,opacity,box-shadow] hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
         >
           <X className="icon-base" />
           <span className="sr-only">Close</span>
@@ -98,7 +98,7 @@ const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HT
           {actions.length > 0 && actions}
           <DialogPrimitive.Close
             tabIndex={-1}
-            className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground shrink-0 rounded-md p-1.5 opacity-70 transition-all hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
+            className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground shrink-0 rounded-md p-1.5 opacity-70 transition-[color,background-color,opacity,box-shadow] hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
           >
             <X className="icon-base" />
             <span className="sr-only">Close</span>

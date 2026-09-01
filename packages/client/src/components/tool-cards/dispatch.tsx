@@ -102,9 +102,13 @@ export function dispatchToolCard({
         hideLabel={hideLabel}
         childToolCalls={childToolCalls}
         displayTime={displayTime}
-        renderChild={(item, idx) =>
+        renderChild={(item) =>
           item.type === 'toolcall-group' ? (
-            <ToolCallGroup key={`group-${item.name}-${idx}`} name={item.name} calls={item.calls} />
+            <ToolCallGroup
+              key={`group-${item.name}-${item.calls.map((call) => call.id).join('-')}`}
+              name={item.name}
+              calls={item.calls}
+            />
           ) : (
             renderToolCall(item.tc)
           )

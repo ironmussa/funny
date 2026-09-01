@@ -34,8 +34,7 @@ function normalizeTaskOutput(output: string): string {
     const parsed = JSON.parse(output);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.type === 'text') {
       return parsed
-        .filter((b: any) => b.type === 'text' && b.text)
-        .map((b: any) => b.text)
+        .flatMap((block: any) => (block.type === 'text' && block.text ? [block.text] : []))
         .join('\n\n');
     }
   } catch {

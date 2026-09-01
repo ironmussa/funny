@@ -7,8 +7,8 @@ import type { TodoItem } from './utils';
 export function TodoList({ todos }: { todos: TodoItem[] }) {
   return (
     <div className="space-y-1 py-1">
-      {todos.map((todo, i) => (
-        <div key={`todo-${i}`} className="flex items-start gap-2">
+      {todos.map((todo) => (
+        <div key={`${todo.content}-${todo.activeForm ?? ''}`} className="flex items-start gap-2">
           {todo.status === 'completed' ? (
             <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
           ) : todo.status === 'in_progress' ? (

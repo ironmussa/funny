@@ -417,7 +417,7 @@ export function EditFileCard({
       oldString !== newString &&
       (!rawDiff || hasCapturedDiff)
     );
-  }, [activeEntry, hasCapturedDiff, oldString, newString]);
+  }, [activeEntry, hasCapturedDiff, oldString, newString, rawDiff]);
 
   const unifiedDiff = useMemo(() => {
     if (!hasDiff) return '';

@@ -59,6 +59,7 @@
     "bench:markdown": "bun packages/client/scripts/benchmark-markdown-renderers.ts",
     "bench:markdown:browser": "bun packages/client/scripts/benchmark-markdown-wasm-browser.ts",
     "profile:client": "bun scripts/profile-client.ts",
+    "profile:client:soak": "bun scripts/soak-client-memory.ts",
     "profile:renderers": "bun scripts/profile-renderers.ts",
     "profile:renderers:smoke": "bun scripts/profile-renderers.ts --smoke",
     "compare:renderers": "bun scripts/compare-renderers.ts",

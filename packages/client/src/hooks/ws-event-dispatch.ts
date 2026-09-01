@@ -513,6 +513,9 @@ function applyWebEvent(type: string, threadId: string, data: any): void {
     }
     case 'thread:updated': {
       const store2 = useThreadStore.getState();
+      if (data.resync && (getUrlThreadId() ?? store2.selectedThreadId) === threadId) {
+        store2.refreshActiveThread();
+      }
       if (data.status) {
         store2.handleWSStatus(threadId, { status: data.status });
       }

@@ -190,6 +190,21 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(refreshAll).toHaveBeenCalled();
   });
 
+  test('thread:updated resync reloads durable state for the active thread only', () => {
+    const refreshActive = vi.fn();
+    useThreadStore.setState({
+      selectedThreadId: 't1',
+      refreshActiveThread: refreshActive as any,
+    });
+    const handler = captureHandlers()['thread:updated'];
+
+    handler({ threadId: 't2', data: { resync: true } });
+    expect(refreshActive).not.toHaveBeenCalled();
+
+    handler({ threadId: 't1', data: { resync: true } });
+    expect(refreshActive).toHaveBeenCalledTimes(1);
+  });
+
   test('thread:stage-changed routes to handleWSStageChanged with mapped data', async () => {
     const stageCalls: Array<{ tid: string; data: unknown }> = [];
     useThreadStore.setState({

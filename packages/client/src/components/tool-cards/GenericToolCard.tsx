@@ -74,13 +74,15 @@ export function GenericToolCard({
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
-      <button
-        type="button"
-        aria-expanded={expanded}
-        className="hover:bg-accent/30 w-full cursor-pointer rounded-md text-left"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
+      <div className="hover:bg-accent/30 relative w-full rounded-md text-left">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${label}`}
+          className="absolute inset-0 z-0 w-full cursor-pointer rounded-md"
+          onClick={() => setExpanded(!expanded)}
+        />
+        <div className="pointer-events-none relative z-10 flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
           <ChevronRight
             className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
@@ -94,7 +96,13 @@ export function GenericToolCard({
             <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>
           )}
           {summary && filePath && (
-            <FileLink filePath={filePath} displayPath={displayPath} defaultEditor={defaultEditor} />
+            <span className="pointer-events-auto min-w-0">
+              <FileLink
+                filePath={filePath}
+                displayPath={displayPath}
+                defaultEditor={defaultEditor}
+              />
+            </span>
           )}
           {summary && !filePath && name === 'WebFetch' && (
             <Tooltip>
@@ -104,7 +112,7 @@ export function GenericToolCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
+                  className="text-muted-foreground hover:text-primary pointer-events-auto min-w-0 truncate font-mono text-xs hover:underline"
                   data-testid="tool-webfetch-url"
                 >
                   {summary}
@@ -125,13 +133,13 @@ export function GenericToolCard({
           )}
         </div>
         {!expanded && outputPreview && (
-          <div className="-mt-0.5 px-3 pb-1.5">
+          <div className="pointer-events-none relative z-10 -mt-0.5 px-3 pb-1.5">
             <p className="text-muted-foreground/70 truncate font-mono text-xs leading-tight">
               → {outputPreview}
             </p>
           </div>
         )}
-      </button>
+      </div>
       {expanded && (
         <ScrollArea
           className="border-border/40 border-t"

@@ -13,7 +13,7 @@ import {
   Loader2,
   NotebookPen,
 } from 'lucide-react';
-import { useState, memo, useCallback, useRef, type ReactNode } from 'react';
+import { useState, memo, useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
@@ -317,13 +317,16 @@ export const ThreadItem = memo(function ThreadItem({
       .replace(/[^a-zA-Z0-9\-_/.]/g, '');
     if (!name || !thread.projectId) return;
     setCreateBranchLoading(true);
-    const result = await api.checkout(thread.projectId, name, 'carry', true, thread.id);
-    setCreateBranchLoading(false);
-    if (result.isErr()) {
-      toastError(result.error);
-    } else {
-      setIsCreateBranchOpen(false);
-      setBranchName('');
+    try {
+      const result = await api.checkout(thread.projectId, name, 'carry', true, thread.id);
+      if (result.isErr()) {
+        toastError(result.error);
+      } else {
+        setIsCreateBranchOpen(false);
+        setBranchName('');
+      }
+    } finally {
+      setCreateBranchLoading(false);
     }
   }, [branchName, thread.projectId, thread.id]);
 
@@ -339,8 +342,10 @@ export const ThreadItem = memo(function ThreadItem({
   // Keep the last known git status so the widget doesn't flicker away
   // during transient undefined gaps (e.g. thread selection race conditions).
   const lastGitStatusRef = useRef(gitStatus);
-  if (gitStatus) lastGitStatusRef.current = gitStatus;
   const effectiveGitStatus = gitStatus ?? lastGitStatusRef.current;
+  useLayoutEffect(() => {
+    if (gitStatus) lastGitStatusRef.current = gitStatus;
+  }, [gitStatus]);
 
   // Whether to show the second row (has project subtitle or git diff stats)
   const hasDiffStats =
@@ -375,6 +380,16 @@ export const ThreadItem = memo(function ThreadItem({
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
+      {/* Keep the pin beside the selection button so interactive elements are never nested. */}
+      <div className="shrink-0 py-2 pl-2">
+        <ThreadStatusPin
+          thread={thread}
+          onPin={onPin ? () => onPin() : undefined}
+          hoverGroup="thread"
+          showStatusTooltip
+        />
+      </div>
+
       <button
         type="button"
         data-testid={`thread-item-${thread.id}`}
@@ -415,18 +430,10 @@ export const ThreadItem = memo(function ThreadItem({
             );
           }
         }}
-        className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden bg-transparent py-1.5 pl-2 text-left focus:outline-hidden focus-visible:ring-1"
+        className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden bg-transparent py-1.5 pl-1.5 text-left focus:outline-hidden focus-visible:ring-1"
       >
-        {/* Row 1: Status icon + Title */}
+        {/* Row 1: Title */}
         <div className="flex min-w-0 items-center gap-1.5">
-          {/* Thread status / pin icon — pin only shown when onPin is provided */}
-          <ThreadStatusPin
-            thread={thread}
-            onPin={onPin ? () => onPin() : undefined}
-            hoverGroup="thread"
-            showStatusTooltip
-          />
-
           <ThreadTitle
             title={thread.title}
             search={search}
@@ -484,7 +491,7 @@ export const ThreadItem = memo(function ThreadItem({
 
         {/* Row 2: Powerline (project → branch) + Git status + Snippet + Time */}
         {(hasMetadataRow || hasSnippetRow) && (
-          <div className="flex min-h-[22px] min-w-0 items-center gap-1.5 pl-5">
+          <div className="flex min-h-[22px] min-w-0 items-center gap-1.5">
             {(hasPowerline || hasPR) && (
               <ThreadPowerline
                 thread={thread}
@@ -568,7 +575,7 @@ export const ThreadItem = memo(function ThreadItem({
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitRename();
             }}
             autoFocus
           />
@@ -606,7 +613,9 @@ export const ThreadItem = memo(function ThreadItem({
             value={branchName}
             onChange={(e) => setBranchName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && branchName.trim()) commitCreateBranch();
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && branchName.trim()) {
+                commitCreateBranch();
+              }
             }}
             autoFocus
           />

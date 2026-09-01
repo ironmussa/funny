@@ -1,5 +1,5 @@
 import type { Thread } from '@funny/shared';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
@@ -41,5 +41,48 @@ describe('ThreadItem', () => {
 
     expect(screen.getByTestId('thread-item-scratch-1')).toHaveTextContent('Launching...');
     expect(screen.queryByText('Ready to Launch')).not.toBeInTheDocument();
+  });
+
+  test('renders the pin control beside the thread selection button', () => {
+    const { container } = renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ pinned: true, status: 'idle' })}
+        projectPath=""
+        isSelected={false}
+        onSelect={vi.fn()}
+        onPin={vi.fn()}
+      />,
+    );
+
+    const threadButton = screen.getByTestId('thread-item-scratch-1');
+    const pinButton = screen.getByTestId('thread-pin-toggle-scratch-1');
+
+    expect(threadButton).not.toContainElement(pinButton);
+    expect(container.querySelector('button button')).not.toBeInTheDocument();
+  });
+
+  test('does not commit a rename while Enter confirms an IME composition', async () => {
+    const onRename = vi.fn();
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ status: 'idle' })}
+        projectPath=""
+        isSelected={false}
+        onSelect={vi.fn()}
+        onRename={onRename}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId('thread-item-more-scratch-1'), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByTestId('thread-rename-scratch-1'));
+    const input = screen.getByTestId('thread-rename-input-scratch-1');
+    fireEvent.change(input, { target: { value: 'Renamed thread' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(input).toBeInTheDocument();
   });
 });

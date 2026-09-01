@@ -18,4 +18,18 @@ describe('ColorPicker', () => {
 
     expect(onChange).toHaveBeenLastCalledWith([255, 255, 255, 1]);
   });
+
+  test('does not blur an editable field when Enter confirms an IME composition', () => {
+    render(
+      <ColorPicker defaultValue="#000000" onChange={vi.fn()}>
+        <ColorPickerFormat />
+      </ColorPicker>,
+    );
+
+    const [hexInput] = screen.getAllByRole('textbox');
+    hexInput.focus();
+    fireEvent.keyDown(hexInput, { key: 'Enter', isComposing: true });
+
+    expect(hexInput).toHaveFocus();
+  });
 });

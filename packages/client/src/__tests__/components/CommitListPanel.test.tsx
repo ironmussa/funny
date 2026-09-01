@@ -71,6 +71,7 @@ describe('CommitListPanel', () => {
   });
 
   test('shows GitHub link for pushed commits', () => {
+    const onSelectHash = vi.fn();
     virtualizerState.rows = [{ index: 0, start: 0 }];
 
     renderWithProviders(
@@ -82,15 +83,25 @@ describe('CommitListPanel', () => {
         githubAvatarBySha={new Map()}
         githubBrowseBaseUrl="https://github.com/acme/funny"
         selectedHash={null}
-        onSelectHash={vi.fn()}
+        onSelectHash={onSelectHash}
         onLoadMore={vi.fn()}
       />,
     );
 
-    expect(screen.getByTestId('history-commit-github-1111111')).toHaveAttribute(
+    const row = screen.getByTestId('history-commit-1111111');
+    const selectButton = screen.getByRole('button', { name: 'Select commit: feat: current page' });
+    const copyButton = screen.getByRole('button', { name: 'Copy commit hash 1111111' });
+    const githubLink = screen.getByTestId('history-commit-github-1111111');
+
+    expect(selectButton).not.toContainElement(copyButton);
+    expect(selectButton).not.toContainElement(githubLink);
+    expect(githubLink).toHaveAttribute(
       'href',
       'https://github.com/acme/funny/commit/1111111111111111111111111111111111111111',
     );
+    fireEvent.click(selectButton);
+    expect(onSelectHash).toHaveBeenCalledWith(entries[0].hash);
+    expect(row).toContainElement(selectButton);
   });
 
   test('hides GitHub link for local-only commits', () => {

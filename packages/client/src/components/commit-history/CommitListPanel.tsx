@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUpCircle, ExternalLink, GitCommit, Search } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -266,6 +266,20 @@ function CommitRow({
 }) {
   const { t } = useTranslation();
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
+  const copyCommitHash = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(entry.hash);
+      toast.success(
+        t('history.hashCopied', {
+          hash: entry.shortHash,
+          defaultValue: `Copied ${entry.shortHash}`,
+        }),
+      );
+    } catch {
+      toast.error(t('history.hashCopyFailed', 'Failed to copy hash'));
+    }
+  };
 
   return (
     <div
@@ -279,21 +293,30 @@ function CommitRow({
         transform: `translateY(${transform}px)`,
       }}
     >
-      <button
-        type="button"
-        onClick={onClick}
+      <div
         className={cn(
-          'w-full overflow-hidden border-b border-border px-3 py-2 text-left text-xs transition-colors',
+          'relative w-full overflow-hidden border-b border-border px-3 py-2 text-left text-xs transition-colors',
           selected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-accent/50',
         )}
         data-testid={`history-commit-${entry.shortHash}`}
       >
-        <HighlightText
-          text={entry.message}
-          query={commitSearch}
-          className="text-foreground block truncate font-medium"
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={t('history.selectCommit', {
+            message: entry.message,
+            defaultValue: `Select commit: ${entry.message}`,
+          })}
+          className="absolute inset-0 z-0 w-full text-left"
         />
-        <div className="text-muted-foreground mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px]">
+        <div className="pointer-events-none relative z-10">
+          <HighlightText
+            text={entry.message}
+            query={commitSearch}
+            className="text-foreground block truncate font-medium"
+          />
+        </div>
+        <div className="text-muted-foreground pointer-events-none relative z-10 mt-0.5 flex w-full min-w-0 items-center gap-1.5 text-[10px]">
           <AuthorBadge
             name={entry.author}
             email={entry.authorEmail}
@@ -320,34 +343,18 @@ function CommitRow({
             <GitCommit className="icon-xs shrink-0" />
             <Tooltip>
               <TooltipTrigger asChild>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void navigator.clipboard.writeText(entry.hash).then(
-                      () =>
-                        toast.success(
-                          t('history.hashCopied', {
-                            hash: entry.shortHash,
-                            defaultValue: `Copied ${entry.shortHash}`,
-                          }),
-                        ),
-                      () => toast.error(t('history.hashCopyFailed', 'Failed to copy hash')),
-                    );
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      (e.currentTarget as HTMLSpanElement).click();
-                    }
-                  }}
-                  className="text-primary shrink-0 cursor-pointer font-mono hover:underline"
+                <button
+                  type="button"
+                  aria-label={t('history.copyCommitHash', {
+                    hash: entry.shortHash,
+                    defaultValue: `Copy commit hash ${entry.shortHash}`,
+                  })}
+                  onClick={copyCommitHash}
+                  className="text-primary pointer-events-auto shrink-0 cursor-pointer font-mono hover:underline"
                   data-testid={`history-commit-hash-${entry.shortHash}`}
                 >
                   <HighlightText text={entry.shortHash} query={commitSearch} />
-                </span>
+                </button>
               </TooltipTrigger>
               <TooltipContent side="top">
                 {t('history.copyHash', 'Click to copy hash')}
@@ -361,8 +368,9 @@ function CommitRow({
                   href={githubUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={t('history.openCommitOnGithub', 'Open commit on GitHub')}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground ml-auto shrink-0 transition-colors"
+                  className="text-muted-foreground hover:text-foreground pointer-events-auto ml-auto shrink-0 transition-colors"
                   data-testid={`history-commit-github-${entry.shortHash}`}
                 >
                   <ExternalLink className="icon-xs" />
@@ -374,7 +382,7 @@ function CommitRow({
             </Tooltip>
           ) : null}
         </div>
-      </button>
+      </div>
     </div>
   );
 }

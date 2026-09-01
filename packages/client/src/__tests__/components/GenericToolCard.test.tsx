@@ -3,6 +3,8 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { GenericToolCard } from '@/components/tool-cards/GenericToolCard';
 
+import { renderWithProviders } from '../helpers/render';
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -12,6 +14,29 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('GenericToolCard', () => {
+  test('keeps the WebFetch link separate from the expand button', () => {
+    renderWithProviders(
+      <GenericToolCard
+        name="WebFetch"
+        parsed={{ url: 'https://example.com' }}
+        label="Fetch URL"
+        displayTime={null}
+        summary="https://example.com"
+        filePath={null}
+        displayPath={null}
+        isTodo={false}
+        todos={null}
+      />,
+    );
+
+    const expandButton = screen.getByRole('button', { name: 'Expand Fetch URL' });
+    const link = screen.getByTestId('tool-webfetch-url');
+
+    expect(expandButton).not.toContainElement(link);
+    fireEvent.click(link);
+    expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
   test('syntax highlights JSON-valued tool parameters', async () => {
     const { container } = render(
       <GenericToolCard
@@ -35,7 +60,7 @@ describe('GenericToolCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /search code/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Search Code' }));
 
     expect(screen.getByText('parsed_cmd')).toBeInTheDocument();
     expect(screen.getByText(/"type": "search"/)).toBeInTheDocument();

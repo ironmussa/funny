@@ -10,6 +10,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -109,7 +110,9 @@ export const ColorPicker = ({
   );
   const colorState = controlledColor ?? draftColor;
   const colorStateRef = useRef(colorState);
-  colorStateRef.current = colorState;
+  useLayoutEffect(() => {
+    colorStateRef.current = colorState;
+  }, [colorState]);
   const [mode, setMode] = useState('hex');
 
   const commitColorState = useCallback(
@@ -391,7 +394,7 @@ const EditableInput = ({ value, onCommit, className, ...props }: EditableInputPr
         }
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur();
       }}
     />
   );

@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { delimiter } from 'node:path';
 
 import { processError, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
@@ -7,6 +8,37 @@ import pLimit from 'p-limit';
 
 /** Whether we're running under Bun (vs Node/vitest) */
 const hasBun = typeof globalThis.Bun !== 'undefined';
+
+const POSIX_SYSTEM_PATHS = ['/usr/local/bin', '/usr/bin', '/bin'];
+
+/**
+ * Service managers and desktop launchers can provide a reduced PATH that omits
+ * the system Git installation. Keep the inherited environment, but make the
+ * standard POSIX command locations available to every Git subprocess.
+ */
+export function buildProcessEnv(
+  overrides?: Record<string, string>,
+  inherited: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string | undefined> {
+  const env = { ...inherited, ...overrides };
+  if (platform !== 'win32') {
+    const paths = (env.PATH ?? '').split(delimiter).filter(Boolean);
+    for (const systemPath of POSIX_SYSTEM_PATHS) {
+      if (!paths.includes(systemPath)) paths.push(systemPath);
+    }
+    env.PATH = paths.join(delimiter);
+  }
+  return env;
+}
+
+function processEnvFor(
+  command: string,
+  overrides?: Record<string, string>,
+): Record<string, string | undefined> | undefined {
+  if (command === 'git') return buildProcessEnv(overrides);
+  return overrides ? { ...process.env, ...overrides } : undefined;
+}
 
 export interface ProcessResult {
   stdout: string;
@@ -191,7 +223,7 @@ async function _executeRawBun(
 ): Promise<ProcessResult> {
   const proc = Bun.spawn([command, ...args], {
     cwd: options.cwd,
-    env: options.env ? { ...process.env, ...options.env } : undefined,
+    env: processEnvFor(command, options.env),
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: options.stdin != null ? new Blob([options.stdin]) : undefined,
@@ -260,7 +292,7 @@ async function _executeRawNode(
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd: options.cwd,
-      env: options.env ? { ...process.env, ...options.env } : undefined,
+      env: processEnvFor(command, options.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -341,7 +373,7 @@ export function executeSync(
   if (hasBun) {
     const result = Bun.spawnSync([command, ...args], {
       cwd: options.cwd,
-      env: options.env ? { ...process.env, ...options.env } : undefined,
+      env: processEnvFor(command, options.env),
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -351,7 +383,7 @@ export function executeSync(
   } else {
     const result = spawnSync(command, args, {
       cwd: options.cwd,
-      env: options.env ? { ...process.env, ...options.env } : undefined,
+      env: processEnvFor(command, options.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     stdout = result.stdout?.toString() ?? '';

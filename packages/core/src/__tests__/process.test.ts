@@ -1,4 +1,29 @@
-import { execute, executeSync, executeResult, ProcessExecutionError } from '../git/process.js';
+import {
+  buildProcessEnv,
+  execute,
+  executeSync,
+  executeResult,
+  ProcessExecutionError,
+} from '../git/process.js';
+
+describe('buildProcessEnv', () => {
+  test('adds standard POSIX command locations to a service-style PATH', () => {
+    const env = buildProcessEnv(
+      { CUSTOM_VALUE: 'present' },
+      { PATH: '/opt/funny/bin', HOME: '/home/runner' },
+      'linux',
+    );
+
+    expect(env.PATH?.split(':')).toEqual(['/opt/funny/bin', '/usr/local/bin', '/usr/bin', '/bin']);
+    expect(env.HOME).toBe('/home/runner');
+    expect(env.CUSTOM_VALUE).toBe('present');
+  });
+
+  test('does not duplicate standard POSIX command locations', () => {
+    const env = buildProcessEnv(undefined, { PATH: '/usr/bin:/custom:/bin' }, 'linux');
+    expect(env.PATH?.split(':')).toEqual(['/usr/bin', '/custom', '/bin', '/usr/local/bin']);
+  });
+});
 
 describe('ProcessExecutionError', () => {
   test('has correct name and properties', () => {
@@ -23,6 +48,13 @@ describe('execute', () => {
   test('captures stderr', async () => {
     // git with no args writes to stderr
     const result = await execute('git', ['--version']);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('git version');
+  });
+
+  test('finds system Git with a reduced PATH on POSIX', async () => {
+    if (process.platform === 'win32') return;
+    const result = await execute('git', ['--version'], { env: { PATH: '/opt/funny/bin' } });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('git version');
   });

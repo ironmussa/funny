@@ -414,14 +414,30 @@ describe('git operations', () => {
 
     test('counts untracked file lines as linesAdded', async () => {
       writeFileSync(resolve(repoPath, 'new-file.txt'), 'line1\nline2\nline3\n');
-      writeFileSync(resolve(repoPath, 'another.txt'), 'single line\n');
+      writeFileSync(resolve(repoPath, 'another.txt'), 'single line');
+      writeFileSync(resolve(repoPath, 'empty.txt'), '');
       const result = await getStatusSummary(repoPath);
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        // Untracked content is added via `git diff --no-index` so the totals
-        // match the per-file numstat shown in ReviewPane.
+        // Direct line counting matches Git numstat for terminated,
+        // unterminated, and empty text files.
         expect(result.value.linesAdded).toBe(4);
         expect(result.value.linesDeleted).toBe(0);
+      }
+    });
+
+    test('shares concurrent status calculations for the same worktree', async () => {
+      writeFileSync(resolve(repoPath, 'concurrent.txt'), 'one\ntwo\n');
+      const [first, second] = await Promise.all([
+        getStatusSummary(repoPath),
+        getStatusSummary(repoPath),
+      ]);
+
+      expect(first.isOk()).toBe(true);
+      expect(second.isOk()).toBe(true);
+      if (first.isOk() && second.isOk()) {
+        expect(second.value).toEqual(first.value);
+        expect(first.value.linesAdded).toBe(2);
       }
     });
 

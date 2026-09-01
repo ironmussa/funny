@@ -6,7 +6,7 @@ import type { GitSyncState } from '@funny/shared';
 import { processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
-import { shouldSkipUntrackedDiff } from './diff.js';
+import { countUntrackedTextFileLines } from './diff.js';
 import { getNativeGit } from './native.js';
 import { gitRead } from './process.js';
 
@@ -26,8 +26,10 @@ export interface GitStatusSummary {
 
 const STATUS_CACHE_TTL = 1_000; // 1 second
 const STATUS_CACHE_MAX_ENTRIES = 1_000;
+const UNTRACKED_LINE_COUNT_CONCURRENCY = 4;
 
 const statusCache = new Map<string, { data: GitStatusSummary; ts: number }>();
+const statusInFlight = new Map<string, Promise<GitStatusSummary>>();
 
 function statusCacheKey(cwd: string, baseBranch?: string, projectCwd?: string): string {
   return `${cwd}|${baseBranch ?? ''}|${projectCwd ?? ''}`;
@@ -79,6 +81,22 @@ function unquoteGitPath(raw: string): string {
   });
 }
 
+async function countUntrackedLines(cwd: string, paths: string[]): Promise<number> {
+  let cursor = 0;
+  let total = 0;
+  const worker = async () => {
+    while (cursor < paths.length) {
+      const path = paths[cursor++];
+      if (!path || path.endsWith('/')) continue;
+      const lines = await countUntrackedTextFileLines(cwd, path);
+      if (lines !== null) total += lines;
+    }
+  };
+  const workerCount = Math.min(UNTRACKED_LINE_COUNT_CONCURRENCY, paths.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return total;
+}
+
 // ─── Public API ─────────────────────────────────────────
 
 /**
@@ -96,268 +114,257 @@ export function getStatusSummary(
     return ResultAsync.fromSafePromise(Promise.resolve(cached.data));
   }
 
+  const existing = statusInFlight.get(cacheKey);
+  if (existing) {
+    return ResultAsync.fromPromise(existing, (error) => processError(String(error), 1, ''));
+  }
+
   // Try native module first, fall back to CLI
   const native = getNativeGit();
 
-  return ResultAsync.fromPromise(
-    (async () => {
-      if (native) {
-        try {
-          const result = await native.getStatusSummary(
-            worktreeCwd,
-            baseBranch ?? null,
-            projectCwd ?? null,
-          );
-          statusCache.set(cacheKey, { data: result, ts: Date.now() });
-          evictStatusCacheIfNeeded();
-          return result;
-        } catch {
-          // Native module failed (e.g., empty repo with no HEAD) — fall through to CLI
-        }
-      }
-
-      // Phase 1: three git commands
-      //   - `status --porcelain -b`              → branch name + tracked dirty files
-      //   - `diff HEAD --numstat`                 → staged + unstaged line stats combined
-      //   - `ls-files --others --exclude-standard` → accurate untracked file count
-      //     (porcelain collapses untracked dirs into one entry; ls-files expands them)
-      const [statusResult, diffResult, untrackedResult] = await Promise.all([
-        gitRead(['status', '--porcelain', '-b'], { cwd: worktreeCwd, reject: false }),
-        gitRead(['diff', 'HEAD', '--numstat'], { cwd: worktreeCwd, reject: false }),
-        gitRead(['ls-files', '--others', '--exclude-standard'], {
-          cwd: worktreeCwd,
-          reject: false,
-        }),
-      ]);
-
-      // Parse branch from the first line: "## branch" or "## branch...upstream [ahead N]"
-      let branch: string | null = null;
-      let dirtyFileCount = 0;
-      const untrackedPaths: string[] = [];
-      if (statusResult.exitCode === 0 && statusResult.stdout.trim()) {
-        const lines = statusResult.stdout.trim().split('\n');
-        const headerLine = lines[0]; // e.g. "## main...origin/main [ahead 2]"
-        if (headerLine.startsWith('## ')) {
-          const ref = headerLine.slice(3).split('...')[0].trim();
-          // Handle empty repo headers like "## No commits yet on master"
-          const noCommitsMatch = ref.match(/^No commits yet on (.+)$/);
-          if (noCommitsMatch) {
-            branch = noCommitsMatch[1];
-          } else if (ref && ref !== 'HEAD (no branch)') {
-            branch = ref;
-          }
-        }
-        // Count tracked dirty files (exclude untracked '??' entries — counted separately)
-        const fileLines = lines.slice(1).filter(Boolean);
-        let trackedDirtyCount = 0;
-        for (const line of fileLines) {
-          if (line.startsWith('?? ')) {
-            untrackedPaths.push(unquoteGitPath(line.slice(3)));
-          } else {
-            trackedDirtyCount++;
-          }
-        }
-
-        // Untracked count: prefer ls-files (expands directories) over porcelain (collapses them)
-        const untrackedFileCount =
-          untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
-            ? untrackedResult.stdout.trim().split('\n').length
-            : untrackedPaths.length;
-
-        dirtyFileCount = trackedDirtyCount + untrackedFileCount;
-      }
-
-      // Parse combined line stats (working tree)
-      let linesAdded = 0;
-      let linesDeleted = 0;
-      if (diffResult.exitCode === 0 && diffResult.stdout.trim()) {
-        for (const line of diffResult.stdout.trim().split('\n')) {
-          const parts = line.split('\t');
-          if (parts.length >= 2) {
-            const added = parseInt(parts[0], 10);
-            const deleted = parseInt(parts[1], 10);
-            if (!isNaN(added)) linesAdded += added;
-            if (!isNaN(deleted)) linesDeleted += deleted;
-          }
-        }
-      }
-
-      // Untracked files don't appear in `git diff --numstat`, so add their line counts
-      // separately via `git diff --no-index` to match the per-file stats shown in
-      // ReviewPane. Skip oversized files and binaries.
-      const untrackedFiles =
-        untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
-          ? untrackedResult.stdout.trim().split('\n')
-          : [];
-      const untrackedToStat = untrackedFiles.filter(
-        (p) => !p.endsWith('/') && !shouldSkipUntrackedDiff(worktreeCwd, p),
-      );
-      if (untrackedToStat.length > 0) {
-        const numstats = await Promise.all(
-          untrackedToStat.map((p) =>
-            gitRead(['diff', '--no-index', '--numstat', '--', '/dev/null', p], {
-              cwd: worktreeCwd,
-              reject: false,
-            }),
-          ),
+  const operation = (async () => {
+    if (native) {
+      try {
+        const result = await native.getStatusSummary(
+          worktreeCwd,
+          baseBranch ?? null,
+          projectCwd ?? null,
         );
-        for (const r of numstats) {
-          // Exit code 1 is expected (differences found); only bail on 2+ (error).
-          if (r.exitCode !== 0 && r.exitCode !== 1) continue;
-          const line = r.stdout.trim().split('\n')[0];
-          if (!line) continue;
-          const parts = line.split('\t');
-          if (parts.length < 3) continue;
-          const a = parseInt(parts[0], 10);
-          const d = parseInt(parts[1], 10);
-          if (!isNaN(a)) linesAdded += a;
-          if (!isNaN(d)) linesDeleted += d;
-        }
-      }
-
-      if (!branch) {
-        const result: GitStatusSummary = {
-          dirtyFileCount,
-          unpushedCommitCount: 0,
-          unpulledCommitCount: 0,
-          hasRemoteBranch: false,
-          isMergedIntoBase: false,
-          linesAdded,
-          linesDeleted,
-        };
         statusCache.set(cacheKey, { data: result, ts: Date.now() });
         evictStatusCacheIfNeeded();
         return result;
+      } catch {
+        // Native module failed (e.g., empty repo with no HEAD) — fall through to CLI
       }
+    }
 
-      // Phase 2: launch ALL conditional commands in parallel (consolidated from 2 phases)
-      const [
-        remoteResult,
-        mergedResult,
-        baseCountResult,
-        mergeBaseResult,
-        branchTipResult,
-        baseDiffResult,
-      ] = await Promise.all([
-        gitRead(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
-          cwd: worktreeCwd,
-          reject: false,
-        }),
-        baseBranch && projectCwd
-          ? gitRead(['branch', '--merged', baseBranch, '--format=%(refname:short)'], {
-              cwd: projectCwd,
-              reject: false,
-            })
-          : Promise.resolve(null),
-        // Speculatively count against baseBranch — used when no remote exists
-        baseBranch
-          ? gitRead(['rev-list', '--count', `${baseBranch}..HEAD`], {
-              cwd: worktreeCwd,
-              reject: false,
-            })
-          : Promise.resolve(null),
-        baseBranch && projectCwd
-          ? gitRead(['merge-base', baseBranch, branch], { cwd: projectCwd, reject: false })
-          : Promise.resolve(null),
-        projectCwd
-          ? gitRead(['rev-parse', branch], { cwd: projectCwd, reject: false })
-          : Promise.resolve(null),
-        // Line diff against baseBranch — includes committed changes so diff stats
-        // persist after the agent commits (git diff HEAD only shows uncommitted).
-        baseBranch
-          ? gitRead(['diff', `${baseBranch}...HEAD`, '--numstat'], {
-              cwd: worktreeCwd,
-              reject: false,
-            })
-          : Promise.resolve(null),
-      ]);
+    // Phase 1: three git commands
+    //   - `status --porcelain -b`              → branch name + tracked dirty files
+    //   - `diff HEAD --numstat`                 → staged + unstaged line stats combined
+    //   - `ls-files --others --exclude-standard` → accurate untracked file count
+    //     (porcelain collapses untracked dirs into one entry; ls-files expands them)
+    const [statusResult, diffResult, untrackedResult] = await Promise.all([
+      gitRead(['status', '--porcelain', '-b'], { cwd: worktreeCwd, reject: false }),
+      gitRead(['diff', 'HEAD', '--numstat'], { cwd: worktreeCwd, reject: false }),
+      gitRead(['ls-files', '--others', '--exclude-standard'], {
+        cwd: worktreeCwd,
+        reject: false,
+      }),
+    ]);
 
-      const remoteBranch = remoteResult.exitCode === 0 ? remoteResult.stdout.trim() : null;
-      const hasRemoteBranch = remoteBranch !== null;
-
-      // Unpushed count uses `HEAD --not --remotes` so the Changes badge matches the
-      // History tab's `getUnpushedHashes` (commits not present on any remote ref).
-      // The legacy `<upstream>..HEAD` form disagreed when the upstream pointer was
-      // stale or pointed at a different branch.
-      // When no remote branch exists, fall back to the speculative baseBranch count.
-      let unpushedCommitCount = 0;
-      let unpulledCommitCount = 0;
-      if (hasRemoteBranch) {
-        const [unpushedResult, behindCount] = await Promise.all([
-          gitRead(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
-            cwd: worktreeCwd,
-            reject: false,
-          }),
-          gitRead(['rev-list', '--count', `HEAD..${remoteBranch}`], {
-            cwd: worktreeCwd,
-            reject: false,
-          }),
-        ]);
-        unpushedCommitCount =
-          unpushedResult.exitCode === 0 ? parseInt(unpushedResult.stdout.trim(), 10) || 0 : 0;
-        unpulledCommitCount =
-          behindCount.exitCode === 0 ? parseInt(behindCount.stdout.trim(), 10) || 0 : 0;
-      } else if (baseCountResult && baseCountResult.exitCode === 0) {
-        unpushedCommitCount = parseInt(baseCountResult.stdout.trim(), 10) || 0;
+    // Parse branch from the first line: "## branch" or "## branch...upstream [ahead N]"
+    let branch: string | null = null;
+    let dirtyFileCount = 0;
+    const untrackedPaths: string[] = [];
+    if (statusResult.exitCode === 0 && statusResult.stdout.trim()) {
+      const lines = statusResult.stdout.trim().split('\n');
+      const headerLine = lines[0]; // e.g. "## main...origin/main [ahead 2]"
+      if (headerLine.startsWith('## ')) {
+        const ref = headerLine.slice(3).split('...')[0].trim();
+        // Handle empty repo headers like "## No commits yet on master"
+        const noCommitsMatch = ref.match(/^No commits yet on (.+)$/);
+        if (noCommitsMatch) {
+          branch = noCommitsMatch[1];
+        } else if (ref && ref !== 'HEAD (no branch)') {
+          branch = ref;
+        }
       }
-
-      const needsMergeCheck =
-        mergedResult &&
-        mergedResult.exitCode === 0 &&
-        mergedResult.stdout.trim() &&
-        mergedResult.stdout
-          .trim()
-          .split('\n')
-          .map((b) => b.trim())
-          .includes(branch);
-
-      let isMergedIntoBase = false;
-      if (needsMergeCheck && mergeBaseResult && branchTipResult) {
-        if (mergeBaseResult.exitCode === 0 && branchTipResult.exitCode === 0) {
-          isMergedIntoBase = mergeBaseResult.stdout.trim() !== branchTipResult.stdout.trim();
+      // Count tracked dirty files (exclude untracked '??' entries — counted separately)
+      const fileLines = lines.slice(1).filter(Boolean);
+      let trackedDirtyCount = 0;
+      for (const line of fileLines) {
+        if (line.startsWith('?? ')) {
+          untrackedPaths.push(unquoteGitPath(line.slice(3)));
         } else {
-          isMergedIntoBase = true;
+          trackedDirtyCount++;
         }
       }
 
-      // Include committed line changes against baseBranch as a FALLBACK so diff
-      // stats don't drop to zero when the agent commits its changes.
-      // Only use branch-level stats when the working tree has no uncommitted changes;
-      // otherwise the working-tree stats are authoritative (they match the per-file
-      // diff stats shown in the ReviewPane).
-      if (
-        linesAdded === 0 &&
-        linesDeleted === 0 &&
-        baseDiffResult &&
-        baseDiffResult.exitCode === 0 &&
-        baseDiffResult.stdout.trim()
-      ) {
-        for (const line of baseDiffResult.stdout.trim().split('\n')) {
-          const parts = line.split('\t');
-          if (parts.length >= 2) {
-            const a = parseInt(parts[0], 10);
-            const d = parseInt(parts[1], 10);
-            if (!isNaN(a)) linesAdded += a;
-            if (!isNaN(d)) linesDeleted += d;
-          }
+      // Untracked count: prefer ls-files (expands directories) over porcelain (collapses them)
+      const untrackedFileCount =
+        untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
+          ? untrackedResult.stdout.trim().split('\n').length
+          : untrackedPaths.length;
+
+      dirtyFileCount = trackedDirtyCount + untrackedFileCount;
+    }
+
+    // Parse combined line stats (working tree)
+    let linesAdded = 0;
+    let linesDeleted = 0;
+    if (diffResult.exitCode === 0 && diffResult.stdout.trim()) {
+      for (const line of diffResult.stdout.trim().split('\n')) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const added = parseInt(parts[0], 10);
+          const deleted = parseInt(parts[1], 10);
+          if (!isNaN(added)) linesAdded += added;
+          if (!isNaN(deleted)) linesDeleted += deleted;
         }
       }
+    }
 
+    // Untracked files don't appear in `git diff --numstat`. Count their lines
+    // directly with bounded file-read concurrency: spawning one
+    // `git diff --no-index` per file can saturate a machine when a generated directory
+    // (vendor, node_modules, dist, etc.) is accidentally left unignored.
+    const untrackedFiles =
+      untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
+        ? untrackedResult.stdout.trim().split('\n')
+        : [];
+    linesAdded += await countUntrackedLines(worktreeCwd, untrackedFiles);
+
+    if (!branch) {
       const result: GitStatusSummary = {
         dirtyFileCount,
-        unpushedCommitCount,
-        unpulledCommitCount,
-        hasRemoteBranch,
-        isMergedIntoBase,
+        unpushedCommitCount: 0,
+        unpulledCommitCount: 0,
+        hasRemoteBranch: false,
+        isMergedIntoBase: false,
         linesAdded,
         linesDeleted,
       };
       statusCache.set(cacheKey, { data: result, ts: Date.now() });
       evictStatusCacheIfNeeded();
       return result;
-    })(),
-    (error) => processError(String(error), 1, ''),
+    }
+
+    // Phase 2: launch ALL conditional commands in parallel (consolidated from 2 phases)
+    const [
+      remoteResult,
+      mergedResult,
+      baseCountResult,
+      mergeBaseResult,
+      branchTipResult,
+      baseDiffResult,
+    ] = await Promise.all([
+      gitRead(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
+        cwd: worktreeCwd,
+        reject: false,
+      }),
+      baseBranch && projectCwd
+        ? gitRead(['branch', '--merged', baseBranch, '--format=%(refname:short)'], {
+            cwd: projectCwd,
+            reject: false,
+          })
+        : Promise.resolve(null),
+      // Speculatively count against baseBranch — used when no remote exists
+      baseBranch
+        ? gitRead(['rev-list', '--count', `${baseBranch}..HEAD`], {
+            cwd: worktreeCwd,
+            reject: false,
+          })
+        : Promise.resolve(null),
+      baseBranch && projectCwd
+        ? gitRead(['merge-base', baseBranch, branch], { cwd: projectCwd, reject: false })
+        : Promise.resolve(null),
+      projectCwd
+        ? gitRead(['rev-parse', branch], { cwd: projectCwd, reject: false })
+        : Promise.resolve(null),
+      // Line diff against baseBranch — includes committed changes so diff stats
+      // persist after the agent commits (git diff HEAD only shows uncommitted).
+      baseBranch
+        ? gitRead(['diff', `${baseBranch}...HEAD`, '--numstat'], {
+            cwd: worktreeCwd,
+            reject: false,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const remoteBranch = remoteResult.exitCode === 0 ? remoteResult.stdout.trim() : null;
+    const hasRemoteBranch = remoteBranch !== null;
+
+    // Unpushed count uses `HEAD --not --remotes` so the Changes badge matches the
+    // History tab's `getUnpushedHashes` (commits not present on any remote ref).
+    // The legacy `<upstream>..HEAD` form disagreed when the upstream pointer was
+    // stale or pointed at a different branch.
+    // When no remote branch exists, fall back to the speculative baseBranch count.
+    let unpushedCommitCount = 0;
+    let unpulledCommitCount = 0;
+    if (hasRemoteBranch) {
+      const [unpushedResult, behindCount] = await Promise.all([
+        gitRead(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
+          cwd: worktreeCwd,
+          reject: false,
+        }),
+        gitRead(['rev-list', '--count', `HEAD..${remoteBranch}`], {
+          cwd: worktreeCwd,
+          reject: false,
+        }),
+      ]);
+      unpushedCommitCount =
+        unpushedResult.exitCode === 0 ? parseInt(unpushedResult.stdout.trim(), 10) || 0 : 0;
+      unpulledCommitCount =
+        behindCount.exitCode === 0 ? parseInt(behindCount.stdout.trim(), 10) || 0 : 0;
+    } else if (baseCountResult && baseCountResult.exitCode === 0) {
+      unpushedCommitCount = parseInt(baseCountResult.stdout.trim(), 10) || 0;
+    }
+
+    const needsMergeCheck =
+      mergedResult &&
+      mergedResult.exitCode === 0 &&
+      mergedResult.stdout.trim() &&
+      mergedResult.stdout
+        .trim()
+        .split('\n')
+        .map((b) => b.trim())
+        .includes(branch);
+
+    let isMergedIntoBase = false;
+    if (needsMergeCheck && mergeBaseResult && branchTipResult) {
+      if (mergeBaseResult.exitCode === 0 && branchTipResult.exitCode === 0) {
+        isMergedIntoBase = mergeBaseResult.stdout.trim() !== branchTipResult.stdout.trim();
+      } else {
+        isMergedIntoBase = true;
+      }
+    }
+
+    // Include committed line changes against baseBranch as a FALLBACK so diff
+    // stats don't drop to zero when the agent commits its changes.
+    // Only use branch-level stats when the working tree has no uncommitted changes;
+    // otherwise the working-tree stats are authoritative (they match the per-file
+    // diff stats shown in the ReviewPane).
+    if (
+      linesAdded === 0 &&
+      linesDeleted === 0 &&
+      baseDiffResult &&
+      baseDiffResult.exitCode === 0 &&
+      baseDiffResult.stdout.trim()
+    ) {
+      for (const line of baseDiffResult.stdout.trim().split('\n')) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const a = parseInt(parts[0], 10);
+          const d = parseInt(parts[1], 10);
+          if (!isNaN(a)) linesAdded += a;
+          if (!isNaN(d)) linesDeleted += d;
+        }
+      }
+    }
+
+    const result: GitStatusSummary = {
+      dirtyFileCount,
+      unpushedCommitCount,
+      unpulledCommitCount,
+      hasRemoteBranch,
+      isMergedIntoBase,
+      linesAdded,
+      linesDeleted,
+    };
+    statusCache.set(cacheKey, { data: result, ts: Date.now() });
+    evictStatusCacheIfNeeded();
+    return result;
+  })();
+  statusInFlight.set(cacheKey, operation);
+  void operation.then(
+    () => {
+      if (statusInFlight.get(cacheKey) === operation) statusInFlight.delete(cacheKey);
+    },
+    () => {
+      if (statusInFlight.get(cacheKey) === operation) statusInFlight.delete(cacheKey);
+    },
   );
+  return ResultAsync.fromPromise(operation, (error) => processError(String(error), 1, ''));
 }
 
 /**

@@ -3,6 +3,7 @@
  */
 
 import { existsSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import { join, dirname, isAbsolute } from 'node:path';
 
 import type {
@@ -182,6 +183,35 @@ export function shouldSkipUntrackedDiff(cwd: string, relPath: string): boolean {
     return true;
   }
   return isBinaryFile(abs);
+}
+
+/**
+ * Count additions for a new text file without spawning `git diff --no-index`.
+ * Git represents every line in an untracked file as an addition, so reading the
+ * bounded file directly produces the same numstat value at a fraction of the
+ * cost. Null means the file is missing, oversized, non-regular, or binary.
+ */
+export async function countUntrackedTextFileLines(
+  cwd: string,
+  relPath: string,
+): Promise<number | null> {
+  const abs = join(cwd, relPath);
+  try {
+    const fileStat = await stat(abs);
+    if (!fileStat.isFile() || fileStat.size > MAX_UNTRACKED_NUMSTAT_BYTES) return null;
+
+    const content = await readFile(abs);
+    if (content.includes(0)) return null;
+    if (content.length === 0) return 0;
+
+    let lines = content[content.length - 1] === 0x0a ? 0 : 1;
+    for (const byte of content) {
+      if (byte === 0x0a) lines++;
+    }
+    return lines;
+  } catch {
+    return null;
+  }
 }
 
 /** Detect binary files by scanning for a null byte in the first 8 KB. */

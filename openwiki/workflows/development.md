@@ -47,6 +47,8 @@ bun run format:check     # oxfmt --check .
 
 `bun run lint` also runs four baseline-diff "boundary validation" fitness checks (unvalidated HTTP/JSON/query/socket boundaries), each with matching `:refresh` and `:self-test` variants: `fitness:boundary-validation`, `fitness:query-validation`, `fitness:socket-validation`, `fitness:json-validation` (`scripts/fitness/check-*-boundary-validation.ts`).
 
+It also runs `fitness:runner-transport`, which prevents presentation handlers from importing concrete gRPC code, prevents a global transport locator or a second presence registry, and blocks new runtime consumers of the old monolithic `team-client` facade. The permitted direction is presentation → runner ports → gRPC adapters.
+
 Separately, `bun run fitness` runs the architecture-shape guardrails described in `scripts/fitness/README.md` and enforced against `ARCHITECTURE_EVAL.md`-style rules:
 
 - `fitness:layering` — package dependency direction (e.g. `server` cannot import `runtime`; `core` cannot import `hono`/`drizzle-orm`; `shared` cannot import `core`/`runtime`).
@@ -66,6 +68,8 @@ All of these are baseline-diff style (compare against `.fitness/*-baseline.txt`)
 ## CI
 
 `.github/workflows/`: `ci.yml` (lint + format-check + test, on push/PR to `master`, Bun **canary** channel is intentional while validating Bun 1.4/Rust builds), plus `e2e.yml`, `security.yml`, `build.yml`, `docs.yml` (VitePress docs at `docs/`, via `bun run docs:dev`/`docs:build`), `link-check.yml`, and `native-git.yml` (builds/tests the Rust `packages/native-git` addon across platforms).
+
+`runner-grpc.yml` adds transport-specific assurance. Relevant pull requests run architecture fitness, runtime adapter contracts, the production vertical/failure matrix, and the Rust Tonic compatibility harness. A scheduled and manually dispatchable 15–30 minute chaos soak exercises reconnects, stalled streams, slow consumers, backlog cleanup, and RSS bounds. See the [runner gRPC runbook](../operations/runner-grpc-runbook.md).
 
 ## Error handling convention (`neverthrow`)
 

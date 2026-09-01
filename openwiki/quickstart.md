@@ -17,6 +17,7 @@ It ships as a Bun workspaces monorepo with **20 packages** under `packages/*`, a
 | [domain/threads-and-worktrees.md](./domain/threads-and-worktrees.md)                   | Thread modes (local/worktree), scratch threads, team sharing levels and the steer-delegation exception                                               |
 | [integrations/extensions-and-services.md](./integrations/extensions-and-services.md)   | Multi-provider agents, visualizer plugins, MCP, native-git, and the standalone services (`agent`, `api-acp`, `reviewbot`, `memory`, `design-client`) |
 | [operations/deployment-and-auth.md](./operations/deployment-and-auth.md)               | Local vs. team deployment, auth/admin bootstrap (and a stale-doc fix), per-user git identity, trust boundaries, desktop packaging                    |
+| [operations/runner-grpc-runbook.md](./operations/runner-grpc-runbook.md)               | Runner gRPC ownership boundaries, configuration, test layers, rollout checks, and incident diagnosis                                                 |
 | [operations/client-memory-diagnostics.md](./operations/client-memory-diagnostics.md)   | Development-only browser memory profiler, controlled experiments, JSONL export, and heap-vs-native-memory interpretation                             |
 | [workflows/development.md](./workflows/development.md)                                 | Dev commands, TypeScript/lint/format tooling, fitness/architecture guardrails, testing, CI                                                           |
 

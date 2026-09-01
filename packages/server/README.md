@@ -1,6 +1,6 @@
 # @funny/server
 
-Central coordination server for Funny. Manages users, projects, runner dispatch, and WebSocket relay. It does **not** execute agents or git operations — those run on [runner instances](../runtime/).
+Central coordination server for Funny. Manages users, projects, runner dispatch, browser Socket.IO, and the native gRPC runner data plane. It does **not** execute agents or git operations — those run on [runner instances](../runtime/).
 
 ## Architecture
 
@@ -9,7 +9,8 @@ Browser  ←→  Central Server (this package)  ←→  Runner (packages/runtime
                ├─ Auth (Better Auth)              ├─ Claude agents
                ├─ Project membership              ├─ Git operations
                ├─ Runner routing                  └─ Local filesystem
-               └─ WebSocket relay
+               ├─ Browser Socket.IO
+               └─ Runner gRPC endpoint
 ```
 
 ## Deploy to Railway
@@ -47,7 +48,6 @@ In the Railway service settings, add these variables:
 | `PORT`               | No       | Railway injects this automatically. Default: `3002`.                                                        |
 | `HOST`               | No       | Default: `0.0.0.0` (correct for Railway).                                                                   |
 | `CORS_ORIGIN`        | Yes      | Comma-separated origins allowed to connect. Set to your frontend URL (e.g. `https://your-app.railway.app`). |
-| `DEFAULT_RUNNER_URL` | No       | Fallback runner URL when no runner is assigned to a project.                                                |
 
 Example:
 
@@ -94,7 +94,8 @@ Change this immediately after your first login.
 Each runner (machine running `packages/runtime`) needs to connect to the central server. On the runner machine, set:
 
 ```env
-CENTRAL_SERVER_URL=https://your-app.railway.app
+TEAM_SERVER_URL=https://your-app.railway.app
+RUNNER_GRPC_ENDPOINT=grpc.your-app.example:443
 RUNNER_AUTH_SECRET=same-secret-as-server
 ```
 
@@ -118,15 +119,35 @@ cd packages/server && bun run dev
 
 ## Environment variables reference
 
-| Variable                 | Default                 | Description                                        |
-| ------------------------ | ----------------------- | -------------------------------------------------- |
-| `DATABASE_URL`           | —                       | PostgreSQL connection string (required)            |
-| `RUNNER_AUTH_SECRET`     | —                       | Shared secret for runner authentication (required) |
-| `PORT`                   | `3002`                  | HTTP server port                                   |
-| `HOST`                   | `0.0.0.0`               | Bind address                                       |
-| `CORS_ORIGIN`            | `http://localhost:5173` | Comma-separated allowed origins                    |
-| `DEFAULT_RUNNER_URL`     | —                       | Fallback runner URL                                |
-| `FUNNY_CENTRAL_DATA_DIR` | `~/.funny-central`      | Directory for auth secrets and encryption keys     |
+| Variable                                   | Default                 | Description                                        |
+| ------------------------------------------ | ----------------------- | -------------------------------------------------- |
+| `DATABASE_URL`                             | —                       | PostgreSQL connection string (required)            |
+| `RUNNER_AUTH_SECRET`                       | —                       | Shared secret for runner authentication (required) |
+| `PORT`                                     | `3002`                  | HTTP server port                                   |
+| `HOST`                                     | `0.0.0.0`               | Bind address                                       |
+| `CORS_ORIGIN`                              | `http://localhost:5173` | Comma-separated allowed origins                    |
+| `FUNNY_CENTRAL_DATA_DIR`                   | `~/.funny-central`      | Directory for auth secrets and encryption keys     |
+| `RUNNER_GRPC_ENABLED`                      | `true`                  | Set `false` only when this server offers no runners |
+| `RUNNER_GRPC_HOST`                         | `127.0.0.1`             | Private gRPC HTTP/2 bind address                   |
+| `RUNNER_GRPC_PORT`                         | `50051`                 | Dedicated gRPC listener port                       |
+| `RUNNER_GRPC_MAX_MESSAGE_BYTES`            | `33554432`              | Maximum inbound and outbound gRPC message size     |
+| `RUNNER_GRPC_MAX_STREAMS_PER_RUNNER`       | `10`                    | Concurrent stream quota per authenticated runner   |
+| `RUNNER_GRPC_AUTH_TIMEOUT_MS`              | `10000`                 | Runner credential lookup timeout                   |
+| `RUNNER_GRPC_MAX_FRAME_BYTES`              | `65536`                 | Negotiated frame-size ceiling                      |
+| `RUNNER_GRPC_MAX_PENDING_OPERATIONS`       | `32`                    | Negotiated pending-operation ceiling               |
+| `RUNNER_GRPC_IDEMPOTENCY_RETENTION_MS`     | `604800000`             | Completed mutation outcome retention (7 days)      |
+| `RUNNER_GRPC_MAX_ACTIVE_TUNNELS`           | `4`                     | Negotiated active-tunnel ceiling                   |
+| `RUNNER_GRPC_MAX_ACTIVE_TERMINALS`         | `8`                     | Negotiated active-terminal ceiling                 |
+| `RUNNER_GRPC_MAX_BUFFERED_BYTES_PER_CLASS` | `1048576`               | Negotiated buffer ceiling per traffic class        |
+| `RUNNER_GRPC_HEARTBEAT_INTERVAL_MS`        | `15000`                 | Negotiated runner heartbeat interval               |
+| `RUNNER_GRPC_HEARTBEAT_TIMEOUT_MS`         | `45000`                 | Negotiated runner heartbeat expiry                 |
+The gRPC listener is the only runner data plane. Its public route must terminate
+TLS and preserve HTTP/2 at the deployment
+ingress; the dedicated Bun listener accepts only the private ingress hop and
+authenticates runner bearer credentials from gRPC metadata.
+
+See [RUNNER_GRPC_RUNBOOK.md](RUNNER_GRPC_RUNBOOK.md) for deployment order,
+monitoring, retention, cleanup, and binary rollback procedures.
 
 ## API endpoints
 
@@ -141,4 +162,4 @@ cd packages/server && bun run dev
 | `*`    | `/api/threads/*`  | Thread routing + status                        |
 | `*`    | `/api/*`          | Catch-all proxy to assigned runner             |
 | `WS`   | `/ws`             | Browser WebSocket                              |
-| `WS`   | `/ws/runner`      | Runner WebSocket                               |
+| `gRPC` | dedicated listener | Authenticated native runner transport          |

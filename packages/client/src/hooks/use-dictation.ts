@@ -8,7 +8,7 @@
  */
 
 import { Result } from 'neverthrow';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
@@ -75,8 +75,13 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<AudioWorkletNode | null>(null);
+  const sessionRef = useRef(0);
 
-  const cleanup = useCallback(() => {
+  const cleanupResources = useCallback(() => {
+    // Invalidate async work before releasing the resources it may be using.
+    // A late getUserMedia/token/worklet result must not resurrect this session.
+    sessionRef.current += 1;
+
     // Stop mic stream
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -101,15 +106,22 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
       wsRef.current.close();
     }
     wsRef.current = null;
+  }, []);
 
+  const cleanup = useCallback(() => {
+    cleanupResources();
     isRecordingRef.current = false;
     isConnectingRef.current = false;
     setIsRecording(false);
     setIsConnecting(false);
-  }, []);
+  }, [cleanupResources]);
+
+  useEffect(() => cleanupResources, [cleanupResources]);
 
   const start = useCallback(async () => {
     if (isRecordingRef.current || isConnectingRef.current) return;
+    const session = ++sessionRef.current;
+    const isCurrentSession = () => sessionRef.current === session;
     isConnectingRef.current = true;
     setIsConnecting(true);
 
@@ -123,10 +135,15 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
           noiseSuppression: true,
         },
       });
+      if (!isCurrentSession()) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
 
       // 2. Get temporary token from our server (API key stays server-side)
       const tokenResult = await api.getTranscribeToken();
+      if (!isCurrentSession()) return;
       if (tokenResult.isErr()) {
         toastError(tokenResult.error, 'transcribeToken');
         cleanup();
@@ -177,9 +194,11 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
           reject(new Error('WebSocket closed before ready'));
         };
       });
+      if (!isCurrentSession()) return;
 
       // 4. Set up message handler for transcripts
       ws.onmessage = (event) => {
+        if (!isCurrentSession()) return;
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'Turn') {
@@ -196,8 +215,11 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
         } catch {}
       };
 
-      ws.onclose = () => cleanup();
+      ws.onclose = () => {
+        if (isCurrentSession()) cleanup();
+      };
       ws.onerror = () => {
+        if (!isCurrentSession()) return;
         onError?.('Connection lost');
         cleanup();
       };
@@ -213,6 +235,7 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
       // converts float32 → PCM16 off the main thread and posts ready-to-send
       // chunks back to us.
       await audioContext.audioWorklet.addModule(pcmWorkletUrl);
+      if (!isCurrentSession()) return;
       const processor = new AudioWorkletNode(audioContext, 'pcm-processor', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
@@ -228,12 +251,14 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
       source.connect(processor);
       processor.connect(audioContext.destination);
 
+      if (!isCurrentSession()) return;
       isConnectingRef.current = false;
       isRecordingRef.current = true;
       setIsConnecting(false);
       setIsRecording(true);
       playBeep('on');
     } catch (err: any) {
+      if (!isCurrentSession()) return;
       onError?.(err?.message || 'Failed to start dictation');
       cleanup();
     }

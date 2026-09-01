@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 
@@ -22,7 +22,9 @@ export function useAutoRefreshDiff(
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onRefreshRef = useRef(onRefresh);
-  onRefreshRef.current = onRefresh;
+  useLayoutEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
   const pendingWhileHiddenRef = useRef(false);
 
   const dirtySignal = useReviewPaneStore((s) => s.dirtySignal);

@@ -27,19 +27,6 @@ function ScrollArea({
     onScroll: onViewportScroll,
     ...restViewportProps
   } = viewportProps ?? {};
-  const viewportNodeRef = React.useRef<HTMLDivElement | null>(null);
-
-  const setViewportRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      viewportNodeRef.current = node;
-      if (typeof viewportRef === 'function') {
-        viewportRef(node);
-      } else if (viewportRef) {
-        (viewportRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      }
-    },
-    [viewportRef],
-  );
 
   const handleViewportScroll: React.UIEventHandler<HTMLDivElement> = (event) => {
     onViewportScroll?.(event);
@@ -52,7 +39,7 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
-        ref={setViewportRef}
+        ref={viewportRef}
         className={cn(
           'h-full w-full rounded-[inherit] [&>div]:block! [&>div]:min-w-0!',
           viewportClassName,

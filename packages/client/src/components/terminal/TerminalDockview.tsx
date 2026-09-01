@@ -1,5 +1,5 @@
 import { PanelBottomClose, PictureInPicture2, Plus } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -63,7 +63,7 @@ function TerminalTabBody({
 
   // The xterm tab forwards Ctrl+F via a window event. We scope it to the
   // currently-active tab so multiple panels mounted at once don't all open.
-  useMemo(() => {
+  useEffect(() => {
     if (!active) return;
     const handler = () => setSearchVisible(true);
     window.addEventListener('terminal:search-open', handler);

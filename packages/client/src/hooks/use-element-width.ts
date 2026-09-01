@@ -6,7 +6,7 @@ import { useLayoutEffect, useState, type RefObject } from 'react';
  * preventing a flash of incorrect overlay positioning.
  */
 export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
-  const [width, setWidth] = useState(() => ref.current?.clientWidth ?? 0);
+  const [width, setWidth] = useState(0);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -31,7 +31,7 @@ export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
  * Also listens for window resize to catch viewport changes.
  */
 export function useElementLeft(ref: RefObject<HTMLElement | null>): number {
-  const [left, setLeft] = useState(() => ref.current?.getBoundingClientRect().left ?? 0);
+  const [left, setLeft] = useState(0);
 
   useLayoutEffect(() => {
     const el = ref.current;

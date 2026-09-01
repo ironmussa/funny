@@ -336,7 +336,7 @@ export function ChangesFilesPanel({
                   return (
                     <div
                       key={`folder-${row.path}`}
-                      className="group text-muted-foreground hover:bg-sidebar-accent/50 flex cursor-pointer items-center gap-1.5 text-xs select-none"
+                      className="group text-muted-foreground hover:bg-sidebar-accent/50 flex items-center gap-1.5 text-xs select-none"
                       style={{
                         position: 'absolute',
                         top: 0,
@@ -346,7 +346,6 @@ export function ChangesFilesPanel({
                         transform: `translateY(${virtualRow.start}px)`,
                         paddingLeft,
                       }}
-                      onClick={() => toggleFolder(row.path)}
                       draggable
                       onDragStart={(e) => {
                         setFileMentionDragData(e.dataTransfer, {
@@ -354,31 +353,45 @@ export function ChangesFilesPanel({
                           fileType: 'folder',
                         });
                       }}
-                      data-testid={`review-folder-${row.path}`}
                     >
-                      <ChevronRight
-                        className={cn(
-                          'icon-sm shrink-0 transition-transform',
-                          !isCollapsed && 'rotate-90',
+                      <button
+                        type="button"
+                        onClick={() => toggleFolder(row.path)}
+                        aria-expanded={!isCollapsed}
+                        aria-label={t(
+                          isCollapsed ? 'review.expandFolder' : 'review.collapseFolder',
+                          {
+                            folder: row.path,
+                            defaultValue: `${isCollapsed ? 'Expand' : 'Collapse'} ${row.path}`,
+                          },
                         )}
-                      />
-                      {isCollapsed ? (
-                        <Folder className="icon-base text-muted-foreground/70 shrink-0" />
-                      ) : (
-                        <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
-                      )}
-                      <HighlightText
-                        text={row.label}
-                        query={fileSearch}
-                        className="font-mono-explorer flex-1 truncate text-xs"
-                      />
-                      <DiffStats
-                        linesAdded={row.additions}
-                        linesDeleted={row.deletions}
-                        size="xs"
-                      />
-                      {/* Spacer to align with file rows' status letter */}
-                      <span className="invisible shrink-0 text-xs font-medium">M</span>
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+                        data-testid={`review-folder-${row.path}`}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'icon-sm shrink-0 transition-transform',
+                            !isCollapsed && 'rotate-90',
+                          )}
+                        />
+                        {isCollapsed ? (
+                          <Folder className="icon-base text-muted-foreground/70 shrink-0" />
+                        ) : (
+                          <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
+                        )}
+                        <HighlightText
+                          text={row.label}
+                          query={fileSearch}
+                          className="font-mono-explorer flex-1 truncate text-xs"
+                        />
+                        <DiffStats
+                          linesAdded={row.additions}
+                          linesDeleted={row.deletions}
+                          size="xs"
+                        />
+                        {/* Spacer to align with file rows' status letter */}
+                        <span className="invisible shrink-0 text-xs font-medium">M</span>
+                      </button>
                       <DropdownMenu
                         onOpenChange={(open) => {
                           if (!open) dropdownCloseRef.current = Date.now();
@@ -484,6 +497,16 @@ export function ChangesFilesPanel({
                 const isChecked = checkedFiles.has(f.path);
                 const lineSelState = fileSelectionState.get(f.path);
                 const isPartial = isChecked && lineSelState === 'partial';
+                const openFileDiff = () => {
+                  if (Date.now() - dropdownCloseRef.current < 400) return;
+                  setSelectedFile(f.path);
+                  setExpandedFile(f.path);
+                  // Kick off the diff fetch synchronously so loadingDiff is
+                  // set in the same render batch — avoids a flash of
+                  // "No diff available" before the useEffect-on-expandedFile
+                  // fires the request.
+                  loadDiffForFile(f.path);
+                };
                 return (
                   <div
                     key={f.path}
@@ -497,21 +520,11 @@ export function ChangesFilesPanel({
                       paddingLeft,
                     }}
                     className={cn(
-                      'group flex items-center gap-1.5 text-xs cursor-pointer',
+                      'group flex items-center gap-1.5 text-xs',
                       selectedFile === f.path
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                         : 'hover:bg-sidebar-accent/50 text-muted-foreground',
                     )}
-                    onClick={() => {
-                      if (Date.now() - dropdownCloseRef.current < 400) return;
-                      setSelectedFile(f.path);
-                      setExpandedFile(f.path);
-                      // Kick off the diff fetch synchronously so loadingDiff is
-                      // set in the same render batch — avoids a flash of
-                      // "No diff available" before the useEffect-on-expandedFile
-                      // fires the request.
-                      loadDiffForFile(f.path);
-                    }}
                     draggable
                     onDragStart={(e) => {
                       setFileMentionDragData(e.dataTransfer, {
@@ -578,119 +591,132 @@ export function ChangesFilesPanel({
                         />
                       </button>
                     )}
-                    {f.kind === 'submodule' ? (
-                      <GitBranch
-                        className="icon-base shrink-0 text-purple-500 dark:text-purple-400"
-                        data-testid={`review-submodule-icon-${f.path}`}
+                    <button
+                      type="button"
+                      onClick={openFileDiff}
+                      aria-label={t('review.openFileDiff', {
+                        file: f.path,
+                        defaultValue: `Open diff for ${f.path}`,
+                      })}
+                      aria-current={selectedFile === f.path ? 'true' : undefined}
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+                    >
+                      {f.kind === 'submodule' ? (
+                        <GitBranch
+                          className="icon-base shrink-0 text-purple-500 dark:text-purple-400"
+                          data-testid={`review-submodule-icon-${f.path}`}
+                        />
+                      ) : (
+                        <FileExtensionIcon
+                          filePath={f.path}
+                          className="icon-base text-muted-foreground/80 shrink-0"
+                        />
+                      )}
+                      <HighlightText
+                        text={f.path.split('/').pop() || f.path}
+                        query={fileSearch}
+                        className="font-mono-explorer flex-1 truncate text-xs"
                       />
-                    ) : (
-                      <FileExtensionIcon
-                        filePath={f.path}
-                        className="icon-base text-muted-foreground/80 shrink-0"
-                      />
-                    )}
-                    <HighlightText
-                      text={f.path.split('/').pop() || f.path}
-                      query={fileSearch}
-                      className="font-mono-explorer flex-1 truncate text-xs"
-                    />
-                    {f.kind === 'submodule' && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className="shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] tracking-wide text-purple-600 uppercase dark:text-purple-300"
-                            data-testid={`review-submodule-badge-${f.path}`}
-                          >
-                            {f.nestedDirty && f.nestedDirty.dirtyFileCount > 0
-                              ? t('review.submoduleDirtyCount', {
-                                  count: f.nestedDirty.dirtyFileCount,
-                                  defaultValue: 'submodule · {{count}}',
-                                })
-                              : t('review.submodule', { defaultValue: 'submodule' })}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs text-xs">
-                          <div className="font-medium">
-                            {t('review.submoduleTooltip', {
-                              defaultValue: 'Nested git repository (gitlink)',
-                            })}
-                          </div>
-                          {f.nestedDirty && (
-                            <div className="mt-1 space-y-0.5 font-mono">
-                              {f.nestedDirty.pointerMoved && (
+                      {f.kind === 'submodule' && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] tracking-wide text-purple-600 uppercase dark:text-purple-300"
+                              data-testid={`review-submodule-badge-${f.path}`}
+                            >
+                              {f.nestedDirty && f.nestedDirty.dirtyFileCount > 0
+                                ? t('review.submoduleDirtyCount', {
+                                    count: f.nestedDirty.dirtyFileCount,
+                                    defaultValue: 'submodule · {{count}}',
+                                  })
+                                : t('review.submodule', { defaultValue: 'submodule' })}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            <div className="font-medium">
+                              {t('review.submoduleTooltip', {
+                                defaultValue: 'Nested git repository (gitlink)',
+                              })}
+                            </div>
+                            {f.nestedDirty && (
+                              <div className="mt-1 space-y-0.5 font-mono">
+                                {f.nestedDirty.pointerMoved && (
+                                  <div>
+                                    {t('review.submodulePointerMoved', {
+                                      defaultValue:
+                                        'Gitlink pointer moved (parent-visible change).',
+                                    })}
+                                  </div>
+                                )}
                                 <div>
-                                  {t('review.submodulePointerMoved', {
-                                    defaultValue: 'Gitlink pointer moved (parent-visible change).',
+                                  {t('review.submoduleDirtyLine', {
+                                    count: f.nestedDirty.dirtyFileCount,
+                                    defaultValue: '{{count}} file(s) dirty inside',
                                   })}
                                 </div>
-                              )}
-                              <div>
-                                {t('review.submoduleDirtyLine', {
-                                  count: f.nestedDirty.dirtyFileCount,
-                                  defaultValue: '{{count}} file(s) dirty inside',
-                                })}
+                                {(f.nestedDirty.linesAdded > 0 ||
+                                  f.nestedDirty.linesDeleted > 0) && (
+                                  <div>
+                                    <span className="text-diff-added">
+                                      +{f.nestedDirty.linesAdded}
+                                    </span>{' '}
+                                    <span className="text-diff-removed">
+                                      -{f.nestedDirty.linesDeleted}
+                                    </span>{' '}
+                                    <span className="text-muted-foreground">
+                                      {t('review.submoduleLines', { defaultValue: 'lines' })}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                              {(f.nestedDirty.linesAdded > 0 || f.nestedDirty.linesDeleted > 0) && (
-                                <div>
-                                  <span className="text-diff-added">
-                                    +{f.nestedDirty.linesAdded}
-                                  </span>{' '}
-                                  <span className="text-diff-removed">
-                                    -{f.nestedDirty.linesDeleted}
-                                  </span>{' '}
-                                  <span className="text-muted-foreground">
-                                    {t('review.submoduleLines', { defaultValue: 'lines' })}
-                                  </span>
-                                </div>
-                              )}
+                            )}
+                            <div className="text-muted-foreground mt-1">
+                              {t('review.submoduleExpandHint', {
+                                defaultValue: 'Click the arrow to expand inner files.',
+                              })}
                             </div>
-                          )}
-                          <div className="text-muted-foreground mt-1">
-                            {t('review.submoduleExpandHint', {
-                              defaultValue: 'Click the arrow to expand inner files.',
-                            })}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    <DiffStats
-                      linesAdded={
-                        f.kind === 'submodule' && f.nestedDirty
-                          ? f.nestedDirty.linesAdded
-                          : (f.additions ?? 0)
-                      }
-                      linesDeleted={
-                        f.kind === 'submodule' && f.nestedDirty
-                          ? f.nestedDirty.linesDeleted
-                          : (f.deletions ?? 0)
-                      }
-                      size="xs"
-                    />
-                    <span
-                      className="shrink-0 text-xs font-medium"
-                      style={{
-                        color:
-                          f.status === 'conflicted'
-                            ? 'hsl(0 72% 51%)'
-                            : f.status === 'added'
-                              ? 'hsl(142 40% 45%)'
-                              : f.status === 'modified'
-                                ? 'hsl(30 90% 55%)'
-                                : f.status === 'deleted'
-                                  ? 'hsl(0 45% 55%)'
-                                  : 'hsl(200 80% 60%)',
-                      }}
-                    >
-                      {f.status === 'conflicted'
-                        ? 'C'
-                        : f.status === 'added'
-                          ? 'A'
-                          : f.status === 'modified'
-                            ? 'M'
-                            : f.status === 'deleted'
-                              ? 'D'
-                              : 'R'}
-                    </span>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      <DiffStats
+                        linesAdded={
+                          f.kind === 'submodule' && f.nestedDirty
+                            ? f.nestedDirty.linesAdded
+                            : (f.additions ?? 0)
+                        }
+                        linesDeleted={
+                          f.kind === 'submodule' && f.nestedDirty
+                            ? f.nestedDirty.linesDeleted
+                            : (f.deletions ?? 0)
+                        }
+                        size="xs"
+                      />
+                      <span
+                        className="shrink-0 text-xs font-medium"
+                        style={{
+                          color:
+                            f.status === 'conflicted'
+                              ? 'hsl(0 72% 51%)'
+                              : f.status === 'added'
+                                ? 'hsl(142 40% 45%)'
+                                : f.status === 'modified'
+                                  ? 'hsl(30 90% 55%)'
+                                  : f.status === 'deleted'
+                                    ? 'hsl(0 45% 55%)'
+                                    : 'hsl(200 80% 60%)',
+                        }}
+                      >
+                        {f.status === 'conflicted'
+                          ? 'C'
+                          : f.status === 'added'
+                            ? 'A'
+                            : f.status === 'modified'
+                              ? 'M'
+                              : f.status === 'deleted'
+                                ? 'D'
+                                : 'R'}
+                      </span>
+                    </button>
                     <DropdownMenu
                       onOpenChange={(open) => {
                         if (!open) dropdownCloseRef.current = Date.now();

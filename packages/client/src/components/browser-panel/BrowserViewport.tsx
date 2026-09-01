@@ -29,6 +29,8 @@ export function BrowserViewport() {
   const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
+  const sessionError = useBrowserPanelStore((s) => s.sessionError);
+  const openBrowserSession = useBrowserPanelStore((s) => s.openBrowserSession);
   const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -236,19 +238,19 @@ export function BrowserViewport() {
           className="bg-background/90 text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-sm"
         >
           <div>Browser session disconnected.</div>
-          {useBrowserPanelStore.getState().sessionError && (
+          {sessionError && (
             <pre
               data-testid="browser-panel-session-error"
               className="border-destructive/30 bg-destructive/5 text-destructive max-h-40 max-w-full overflow-auto rounded-md border p-2 text-left text-xs whitespace-pre-wrap"
             >
-              {useBrowserPanelStore.getState().sessionError}
+              {sessionError}
             </pre>
           )}
           <button
             type="button"
             data-testid="browser-panel-reconnect"
             onClick={() => {
-              if (loadedUrl) void useBrowserPanelStore.getState().openBrowserSession(loadedUrl);
+              if (loadedUrl) void openBrowserSession(loadedUrl);
             }}
             className="border-border bg-card text-foreground hover:bg-muted rounded-md border px-3 py-1"
           >

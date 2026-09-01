@@ -381,6 +381,8 @@ export function PRDetailDialog({
         else log.error('Failed to fetch PR commits', { error: commitsResult.error });
       } finally {
         if (!cancelled) {
+          // Effect cleanup flips cancelled, so only the mounted request clears these flags.
+          // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
           setLoadingFiles(false);
           setLoadingCommits(false);
         }

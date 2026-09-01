@@ -17,6 +17,14 @@ interface InspectOverlayProps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
 }
 
+interface HoverState {
+  cx: number;
+  cy: number;
+  overlayWidth: number;
+  overlayHeight: number;
+  info: AnnotationDomInfo;
+}
+
 /**
  * Inspect mode: while `inspectActive` is on (or the Pin tool is selected),
  * mousemove on the overlay triggers throttled CDP `inspect-at` requests; the
@@ -38,16 +46,36 @@ export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
   // Active when explicit Inspect mode OR the Pin tool is selected.
   const active = inspectActive || tool === 'pin';
 
-  const [hover, setHover] = useState<{ cx: number; cy: number; info: AnnotationDomInfo } | null>(
-    null,
+  if (!active) return null;
+
+  return (
+    <ActiveInspectOverlay
+      overlayRef={overlayRef}
+      canvasRef={canvasRef}
+      inspectActive={inspectActive}
+      sessionId={sessionId}
+      toggleInspectActive={toggleInspectActive}
+    />
   );
+}
+
+interface ActiveInspectOverlayProps extends InspectOverlayProps {
+  inspectActive: boolean;
+  sessionId: string | null;
+  toggleInspectActive: () => void;
+}
+
+function ActiveInspectOverlay({
+  overlayRef,
+  canvasRef,
+  inspectActive,
+  sessionId,
+  toggleInspectActive,
+}: ActiveInspectOverlayProps) {
+  const [hover, setHover] = useState<HoverState | null>(null);
   const lastSent = useRef(0);
 
   useEffect(() => {
-    if (!active) {
-      setHover(null);
-      return;
-    }
     // Escape only toggles explicit Inspect mode — never clears the active
     // tool (that would be surprising while the user is mid-annotation).
     if (!inspectActive) return;
@@ -56,10 +84,10 @@ export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, inspectActive, toggleInspectActive]);
+  }, [inspectActive, toggleInspectActive]);
 
   useEffect(() => {
-    if (!active || !sessionId) return;
+    if (!sessionId) return;
     const el = overlayRef.current;
     if (!el) return;
 
@@ -80,7 +108,13 @@ export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
         .inspectAt(sessionId, vx, vy)
         .then((info) => {
           if (info && typeof info === 'object') {
-            setHover({ cx, cy, info: info as AnnotationDomInfo });
+            setHover({
+              cx,
+              cy,
+              overlayWidth: rect.width,
+              overlayHeight: rect.height,
+              info: info as AnnotationDomInfo,
+            });
           } else {
             setHover(null);
           }
@@ -92,24 +126,21 @@ export function InspectOverlay({ overlayRef, canvasRef }: InspectOverlayProps) {
 
     el.addEventListener('mousemove', onMove);
     return () => el.removeEventListener('mousemove', onMove);
-  }, [active, sessionId, overlayRef, canvasRef]);
+  }, [sessionId, overlayRef, canvasRef]);
 
-  if (!active || !hover) return null;
-
-  const rect = overlayRef.current?.getBoundingClientRect();
-  if (!rect) return null;
+  if (!hover) return null;
 
   // Highlight rectangle is in viewport coords → scale back to overlay CSS coords.
   const bb = hover.info.boundingBox;
-  const hlLeft = (bb.x / VIEWPORT_W) * rect.width;
-  const hlTop = (bb.y / VIEWPORT_H) * rect.height;
-  const hlW = (bb.w / VIEWPORT_W) * rect.width;
-  const hlH = (bb.h / VIEWPORT_H) * rect.height;
+  const hlLeft = (bb.x / VIEWPORT_W) * hover.overlayWidth;
+  const hlTop = (bb.y / VIEWPORT_H) * hover.overlayHeight;
+  const hlW = (bb.w / VIEWPORT_W) * hover.overlayWidth;
+  const hlH = (bb.h / VIEWPORT_H) * hover.overlayHeight;
 
   // Tooltip placement: prefer below + right of cursor; flip if it would clip.
   const tooltipMaxW = 320;
   const tooltipLeft =
-    hover.cx + tooltipMaxW + 16 > rect.width ? hover.cx - tooltipMaxW - 8 : hover.cx + 12;
+    hover.cx + tooltipMaxW + 16 > hover.overlayWidth ? hover.cx - tooltipMaxW - 8 : hover.cx + 12;
   const tooltipTop = hover.cy + 12;
 
   return (

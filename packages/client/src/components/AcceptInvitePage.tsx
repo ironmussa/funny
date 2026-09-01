@@ -104,6 +104,8 @@ export function AcceptInvitePage({ token }: Props) {
       }
     } finally {
       if (submissionIdRef.current === submissionId) {
+        // The current submission owns this flag, and finally covers every exit path.
+        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
         setFormLoading(false);
       }
     }
@@ -149,6 +151,8 @@ export function AcceptInvitePage({ token }: Props) {
       }
     } finally {
       if (submissionIdRef.current === submissionId) {
+        // The current submission owns this flag, and finally covers every exit path.
+        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
         setFormLoading(false);
       }
     }

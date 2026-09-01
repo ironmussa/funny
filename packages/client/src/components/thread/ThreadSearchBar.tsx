@@ -182,6 +182,8 @@ export function ThreadSearchBar({
           onClearHighlights();
         }
       } finally {
+        // Aborted searches no longer own loading; the live request clears it in finally.
+        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
         if (!controller.signal.aborted) setLoading(false);
       }
     },

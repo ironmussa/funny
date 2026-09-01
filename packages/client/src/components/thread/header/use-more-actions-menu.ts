@@ -95,13 +95,11 @@ export function useMoreActionsMenu() {
     async (name: string) => {
       if (!name || !threadProjectId) return;
       setCreateBranchLoading(true);
-      try {
+      await (async () => {
         const result = await api.checkout(threadProjectId, name, 'carry', true, threadId);
         if (result.isErr()) toast.error(String(result.error));
         else setCreateBranchOpen(false);
-      } finally {
-        setCreateBranchLoading(false);
-      }
+      })().finally(() => setCreateBranchLoading(false));
     },
     [threadProjectId, threadId],
   );
@@ -112,7 +110,7 @@ export function useMoreActionsMenu() {
     if (!thread) return;
     const title = thread.title;
     setDeleteLoading(true);
-    try {
+    await (async () => {
       if (variant.isScratch(thread)) {
         await deleteScratchThread(threadId);
         setDeleteOpen(false);
@@ -126,9 +124,7 @@ export function useMoreActionsMenu() {
       setDeleteOpen(false);
       toast.success(t('toast.threadDeleted', { title }));
       navigate(buildPath(`/projects/${projId}`));
-    } finally {
-      setDeleteLoading(false);
-    }
+    })().finally(() => setDeleteLoading(false));
   }, [deleteScratchThread, navigate, t, threadId]);
 
   const handleCopy = useCallback(

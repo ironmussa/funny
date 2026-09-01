@@ -37,21 +37,26 @@ export function SystemSettings() {
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
-    try {
-      const result = await api.setupStatus();
-      if (result.isOk() && result.value.nativeGit) setNativeGit(result.value.nativeGit);
-    } finally {
-      setLoading(false);
-    }
+    const result = await Promise.resolve(api.setupStatus()).finally(() => setLoading(false));
+    if (result.isOk() && result.value.nativeGit) setNativeGit(result.value.nativeGit);
   }, []);
 
   useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
+    let cancelled = false;
+    void (async () => {
+      const result = await api.setupStatus();
+      if (cancelled) return;
+      if (result.isOk() && result.value.nativeGit) setNativeGit(result.value.nativeGit);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Auto-scroll build output
   useEffect(() => {
-    if (scrollRef.current) {
+    if (buildOutput && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [buildOutput]);

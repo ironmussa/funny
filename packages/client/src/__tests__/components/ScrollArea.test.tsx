@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { createRef } from 'react';
+import { describe, expect, test, vi } from 'vitest';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -46,5 +47,30 @@ describe('ScrollArea', () => {
     fireEvent.scroll(viewport);
     expect(screen.queryByTestId('scroll-area-fade-top')).not.toBeInTheDocument();
     expect(screen.queryByTestId('scroll-area-fade-bottom')).not.toBeInTheDocument();
+  });
+
+  test('forwards viewport refs and clears them on unmount', () => {
+    const objectRef = createRef<HTMLDivElement>();
+    const callbackRef = vi.fn<(node: HTMLDivElement | null) => void>();
+
+    const { unmount, rerender } = render(
+      <ScrollArea viewportRef={objectRef}>
+        <div>Content</div>
+      </ScrollArea>,
+    );
+
+    expect(objectRef.current).toBeInstanceOf(HTMLDivElement);
+
+    rerender(
+      <ScrollArea viewportRef={callbackRef}>
+        <div>Content</div>
+      </ScrollArea>,
+    );
+
+    expect(objectRef.current).toBeNull();
+    expect(callbackRef).toHaveBeenLastCalledWith(expect.any(HTMLDivElement));
+
+    unmount();
+    expect(callbackRef).toHaveBeenLastCalledWith(null);
   });
 });

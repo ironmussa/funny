@@ -18,6 +18,12 @@ const ThreadView = lazy(() =>
 
 const log = createClientLogger('design-view');
 
+interface DesignLoadResult {
+  designId: string;
+  design: Design | null;
+  error: string | null;
+}
+
 export function DesignView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -26,31 +32,34 @@ export function DesignView() {
 
   const selectThread = useThreadStore((s) => s.selectThread);
 
-  const [design, setDesign] = useState<Design | null>(null);
-  const [designLoading, setDesignLoading] = useState(true);
-  const [designError, setDesignError] = useState<string | null>(null);
+  const [loadResult, setLoadResult] = useState<DesignLoadResult | null>(null);
 
   useEffect(() => {
     if (!designId) return;
     let cancelled = false;
-    setDesignLoading(true);
-    setDesignError(null);
     (async () => {
       const res = await api.getDesign(designId);
       if (cancelled) return;
       if (res.isErr()) {
         log.error('getDesign failed', { designId, error: res.error });
-        setDesignError(res.error.friendlyMessage ?? res.error.message ?? 'Failed to load design');
-        setDesignLoading(false);
+        setLoadResult({
+          designId,
+          design: null,
+          error: res.error.friendlyMessage ?? res.error.message ?? 'Failed to load design',
+        });
         return;
       }
-      setDesign(res.value);
-      setDesignLoading(false);
+      setLoadResult({ designId, design: res.value, error: null });
     })();
     return () => {
       cancelled = true;
     };
   }, [designId]);
+
+  const currentResult = loadResult?.designId === designId ? loadResult : null;
+  const design = currentResult?.design ?? null;
+  const designError = currentResult?.error ?? null;
+  const designLoading = currentResult === null;
 
   const goBack = useCallback(() => {
     void selectThread(null);

@@ -40,7 +40,12 @@ interface WorktreeStatus {
   hasRemoteBranch: boolean;
 }
 
-export function WorktreeDeleteDialog({
+export function WorktreeDeleteDialog({ ...props }: WorktreeDeleteDialogProps) {
+  const targetKey = `${props.target?.projectId ?? ''}:${props.target?.worktreePath ?? ''}`;
+  return <WorktreeDeleteDialogInstance key={props.open ? targetKey : 'closed'} {...props} />;
+}
+
+function WorktreeDeleteDialogInstance({
   open,
   target,
   loading,
@@ -50,25 +55,26 @@ export function WorktreeDeleteDialog({
   const { t } = useTranslation();
   const [deleteBranch, setDeleteBranch] = useState(false);
   const [status, setStatus] = useState<WorktreeStatus | null>(null);
-  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(() =>
+    Boolean(open && target?.worktreePath && target.projectId),
+  );
 
   // Fetch worktree status when dialog opens
   useEffect(() => {
-    if (!open || !target?.worktreePath || !target?.projectId) {
-      setStatus(null);
-      setDeleteBranch(false);
-      return;
-    }
+    if (!open || !target?.worktreePath || !target?.projectId) return;
 
-    setStatusLoading(true);
-    setStatus(null);
+    let cancelled = false;
     api.worktreeStatus(target.projectId, target.worktreePath).then((result) => {
+      if (cancelled) return;
       result.match(
         (data) => setStatus(data),
         () => setStatus(null),
       );
       setStatusLoading(false);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [open, target?.projectId, target?.worktreePath]);
 
   const handleConfirm = useCallback(() => {

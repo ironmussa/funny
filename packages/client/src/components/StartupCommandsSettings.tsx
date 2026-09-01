@@ -8,7 +8,7 @@ import { CommandHighlight } from '@/components/CommandHighlight';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getActiveWS } from '@/hooks/use-ws';
+import { sendTerminalRealtime } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -19,8 +19,7 @@ function stopStartupCommand(cmd: StartupCommand) {
   const tab = store.tabs.find((candidate) => candidate.commandId === cmd.id && candidate.alive);
   if (!tab) return;
 
-  const ws = getActiveWS();
-  if (ws?.connected) ws.emit('pty:kill', { id: tab.id });
+  sendTerminalRealtime(tab.id, { case: 'close', reason: 'startup-command-stopped' });
   store.removeTab(tab.id);
 }
 

@@ -205,6 +205,8 @@ export function useVisibleMessageObserver({
     onVisibleMessageChange?.(id);
   });
 
+  // The effect cleanup disconnects both observers and clears the mutation debounce timeout.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (compact || !onVisibleMessageChange) return;
     const viewport = scrollViewportRef.current;

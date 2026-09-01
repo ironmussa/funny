@@ -69,12 +69,13 @@ export function ThreadIdleStarter({ activeThread }: Props) {
         toast.error(workflowParse.error);
         return false;
       }
-      if (workflowParse.invocation) {
+      const invocation = workflowParse.invocation;
+      if (invocation) {
         setSending(true);
-        try {
-          const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
+        return (async () => {
+          const result = await api.runWorkflow(invocation.workflowName, {
             threadId: activeThread.id,
-            ...buildWorkflowRunBody(workflowParse.invocation, {
+            ...buildWorkflowRunBody(invocation, {
               fileReferences: opts.fileReferences,
               symbolReferences: opts.symbolReferences,
             }),
@@ -85,13 +86,11 @@ export function ThreadIdleStarter({ activeThread }: Props) {
           }
           toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
           return true;
-        } finally {
-          setSending(false);
-        }
+        })().finally(() => setSending(false));
       }
 
       setSending(true);
-      try {
+      return (async () => {
         useThreadStore
           .getState()
           .appendOptimisticMessage(
@@ -133,9 +132,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
           useThreadStore.getState().rollbackOptimisticMessage(activeThread.id);
         }
         return true;
-      } finally {
-        setSending(false);
-      }
+      })().finally(() => setSending(false));
     },
     [activeThread.id, t],
   );

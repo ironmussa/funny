@@ -289,6 +289,8 @@ export function useDiffData({
       // flag to its successor; the live one always clears it — even if its
       // fetch was aborted — so the Changes tab never gets stuck on the spinner.
       if (refreshEpochRef.current === epoch) {
+        // The epoch check gives the latest refresh exclusive ownership of loading.
+        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
         setLoading(false);
         refreshingRef.current = false;
       }

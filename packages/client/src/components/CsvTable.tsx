@@ -65,6 +65,8 @@ export function CsvTable({ source, fill }: { source: string; fill?: boolean }) {
         <thead>
           <tr>
             {header.map((cell, i) => (
+              // CSV cells are positional, stateless, and may contain duplicate text.
+              // react-doctor-disable-next-line no-array-index-as-key
               <th
                 key={i}
                 className="border-border bg-muted/50 border px-2 py-1 text-left font-medium"

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import { useNavigate, type NavigateFunction } from 'react-router-dom';
 
 /**
@@ -17,10 +17,10 @@ export function useStableNavigate(): NavigateFunction {
   }, [navigate]);
 
   // Stable wrapper — same identity for the lifetime of the component.
-  const stable = useRef((...args: Parameters<NavigateFunction>) => {
+  const stable = useCallback((...args: Parameters<NavigateFunction>) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (ref.current as any)(...args);
-  }).current as NavigateFunction;
+  }, []) as NavigateFunction;
 
   return stable;
 }

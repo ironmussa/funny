@@ -65,10 +65,6 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [response]);
-
   const handleSelect = useCallback(
     (relativePath: string) => {
       if (!basePath) return;
@@ -105,40 +101,49 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
     overscan: 8,
   });
 
-  // Keep active row in view during keyboard navigation
+  // A response is an external search transition: reset its cursor and scroll
+  // together instead of chaining a second effect through activeIndex.
   useEffect(() => {
-    if (items.length === 0) return;
-    virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
-  }, [activeIndex, items.length, virtualizer]);
+    setActiveIndex(0);
+    if (items.length > 0) virtualizer.scrollToIndex(0, { align: 'auto' });
+  }, [response, items.length, virtualizer]);
+
+  const setActiveAndScroll = useCallback(
+    (index: number) => {
+      setActiveIndex(index);
+      virtualizer.scrollToIndex(index, { align: 'auto' });
+    },
+    [virtualizer],
+  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (items.length === 0) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveIndex((i) => (i + 1) % items.length);
+        setActiveAndScroll((activeIndex + 1) % items.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActiveIndex((i) => (i - 1 + items.length) % items.length);
+        setActiveAndScroll((activeIndex - 1 + items.length) % items.length);
       } else if (e.key === 'Home') {
         e.preventDefault();
-        setActiveIndex(0);
+        setActiveAndScroll(0);
       } else if (e.key === 'End') {
         e.preventDefault();
-        setActiveIndex(items.length - 1);
+        setActiveAndScroll(items.length - 1);
       } else if (e.key === 'PageDown') {
         e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 10, items.length - 1));
+        setActiveAndScroll(Math.min(activeIndex + 10, items.length - 1));
       } else if (e.key === 'PageUp') {
         e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 10, 0));
+        setActiveAndScroll(Math.max(activeIndex - 10, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const item = items[activeIndex];
         if (item) handleSelect(item.match.path);
       }
     },
-    [items, activeIndex, handleSelect],
+    [items, activeIndex, handleSelect, setActiveAndScroll],
   );
 
   const hasTarget = !!searchTarget;

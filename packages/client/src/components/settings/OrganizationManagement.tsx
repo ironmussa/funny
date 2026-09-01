@@ -1,5 +1,5 @@
 import { Building2, Check, Trash2 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -37,7 +37,7 @@ export function OrganizationManagement() {
   // Create form state
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const slugManuallyEditedRef = useRef(false);
   const [creating, setCreating] = useState(false);
 
   const loadProjects = useProjectStore((s) => s.loadProjects);
@@ -103,7 +103,7 @@ export function OrganizationManagement() {
       toast.success(`Organization "${trimmedName}" created`);
       setName('');
       setSlug('');
-      setSlugManuallyEdited(false);
+      slugManuallyEditedRef.current = false;
       await loadOrgs();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create organization');
@@ -173,7 +173,7 @@ export function OrganizationManagement() {
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
-                  if (!slugManuallyEdited) {
+                  if (!slugManuallyEditedRef.current) {
                     setSlug(slugify(e.target.value));
                   }
                 }}
@@ -194,7 +194,7 @@ export function OrganizationManagement() {
                 value={slug}
                 onChange={(e) => {
                   setSlug(e.target.value);
-                  setSlugManuallyEdited(true);
+                  slugManuallyEditedRef.current = true;
                 }}
                 placeholder="my-organization"
                 className="font-mono text-sm"

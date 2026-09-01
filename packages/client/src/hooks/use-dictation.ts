@@ -161,6 +161,8 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
         encoding: 'pcm_s16le',
         token,
       });
+      // cleanupResources closes this socket on stop, failure, session replacement, and hook unmount.
+      // react-doctor-disable-next-line effect-needs-cleanup
       const ws = new WebSocket(`${ASSEMBLYAI_WS_BASE}?${params.toString()}`);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;

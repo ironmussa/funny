@@ -92,21 +92,25 @@ export function SearchablePicker({
     setHighlightIndex(-1);
   }, [search]);
 
-  // Re-measure virtualizer and scroll selected item into view when popover opens
-  useEffect(() => {
-    if (open) {
-      requestAnimationFrame(() => {
-        rowVirtualizer.measure();
-        if (!search) {
-          const selectedIndex = filtered.findIndex((item) => item.isSelected);
-          if (selectedIndex >= 0) {
-            rowVirtualizer.scrollToIndex(selectedIndex, { align: 'center' });
-          }
-        }
-      });
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setSearch('');
+      setHighlightIndex(-1);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-measure on open
-  }, [open]);
+
+    // Wait for the open popover content to mount before measuring it.
+    requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+      if (!search) {
+        const selectedIndex = filtered.findIndex((item) => item.isSelected);
+        if (selectedIndex >= 0) {
+          rowVirtualizer.scrollToIndex(selectedIndex, { align: 'center' });
+        }
+      }
+    });
+  };
 
   const scrollToIndex = useCallback(
     (index: number) => {
@@ -171,16 +175,7 @@ export function SearchablePicker({
   };
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) {
-          setSearch('');
-          setHighlightIndex(-1);
-        }
-      }}
-    >
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           data-testid={testId}

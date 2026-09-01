@@ -1,5 +1,5 @@
 import { GitMerge, RotateCcw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,11 @@ interface PullStrategyDialogProps {
  * branch has diverged from the remote. Mirrors GitHub Desktop's behavior of
  * offering merge vs. rebase.
  */
-export function PullStrategyDialog({
+export function PullStrategyDialog({ ...props }: PullStrategyDialogProps) {
+  return <PullStrategyDialogInstance key={props.open ? 'open' : 'closed'} {...props} />;
+}
+
+function PullStrategyDialogInstance({
   open,
   onOpenChange,
   errorMessage,
@@ -38,10 +42,6 @@ export function PullStrategyDialog({
 }: PullStrategyDialogProps) {
   const { t } = useTranslation();
   const [strategy, setStrategy] = useState<ReconcileStrategy>('rebase');
-
-  useEffect(() => {
-    if (open) setStrategy('rebase');
-  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

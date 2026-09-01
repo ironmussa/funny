@@ -1,5 +1,14 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties } from 'react';
 
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
@@ -68,6 +77,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   const diffFontPx = DIFF_FONT_SIZE_PX[fontSize];
   const monoFont = useMemo(() => makeMonoFont(diffFontPx), [diffFontPx]);
   const monoLineHeight = rowHeight;
+  const scrollAreaId = useId();
   const scrollRef = useRef<HTMLDivElement>(null);
   const hScrollBarRef = useRef<HTMLDivElement>(null);
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
@@ -623,7 +633,10 @@ export const VirtualDiff = memo(function VirtualDiff({
         data-testid="diff-scroll-frame"
       >
         {/* Vertical scroll area */}
+        {/* Pointer handlers implement text/gutter selection; actionable checkboxes remain keyboard controls. */}
+        {/* react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions */}
         <div
+          id={scrollAreaId}
           ref={scrollCallbackRef}
           className={cn(
             'scroll-fade-none scrollbar-visible h-full min-h-0 relative',
@@ -834,7 +847,12 @@ export const VirtualDiff = memo(function VirtualDiff({
   return (
     <div className={cn('flex', className)}>
       {diffContent}
-      <DiffMinimap lines={parsed.lines} scrollElement={scrollElement} totalSize={totalSize} />
+      <DiffMinimap
+        lines={parsed.lines}
+        scrollElement={scrollElement}
+        scrollAreaId={scrollAreaId}
+        totalSize={totalSize}
+      />
     </div>
   );
 });

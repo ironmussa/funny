@@ -1,6 +1,13 @@
 import type { PermissionDecision } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
-import { useCallback, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import {
+  useCallback,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -39,11 +46,17 @@ interface Refs {
 export function useThreadHandlers(refs: Refs) {
   const { t } = useTranslation();
   const [sending, setSending] = useState(false);
-  refs.sendingRef.current = sending;
+  const inFlightRef = useRef(false);
+
+  const setSendingSafely = useCallback((value: SetStateAction<boolean>) => {
+    const next = typeof value === 'function' ? value(inFlightRef.current) : value;
+    inFlightRef.current = next;
+    setSending(next);
+  }, []);
 
   const handleSend = useCallback(
     async (prompt: string, opts: SendOpts, images?: any[]) => {
-      if (refs.sendingRef.current) {
+      if (inFlightRef.current) {
         log.warn('handleSend: blocked by sendingRef', { promptPreview: prompt.slice(0, 80) });
         return;
       }
@@ -55,7 +68,7 @@ export function useThreadHandlers(refs: Refs) {
         return false;
       }
       if (workflowParse.invocation) {
-        setSending(true);
+        setSendingSafely(true);
         try {
           const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
             threadId: thread.id,
@@ -71,7 +84,7 @@ export function useThreadHandlers(refs: Refs) {
           toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
           return true;
         } finally {
-          setSending(false);
+          setSendingSafely(false);
         }
       }
       const queuedCount = thread.queuedCount ?? 0;
@@ -83,7 +96,7 @@ export function useThreadHandlers(refs: Refs) {
 
       const toolPermissions = useSettingsStore.getState().toolPermissions;
 
-      setSending(true);
+      setSendingSafely(true);
       if (threadIsRunning && followUpMode === 'interrupt') {
         toast.info(t('thread.interruptingAgent'));
       }
@@ -109,10 +122,10 @@ export function useThreadHandlers(refs: Refs) {
         const result = await api.sendMessage(thread.id, prompt, payload, images);
         handleSendResult(result, thread.id, { rollbackOnQueue: !threadIsRunning }, t);
       } finally {
-        setSending(false);
+        setSendingSafely(false);
       }
     },
-    [refs, t],
+    [refs, setSendingSafely, t],
   );
 
   const handleStop = useCallback(async () => {
@@ -204,7 +217,7 @@ export function useThreadHandlers(refs: Refs) {
 
   return {
     sending,
-    setSending: setSending as Dispatch<SetStateAction<boolean>>,
+    setSending: setSendingSafely as Dispatch<SetStateAction<boolean>>,
     handleSend,
     handleStop,
     handlePermissionApproval,

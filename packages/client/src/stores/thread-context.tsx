@@ -9,7 +9,7 @@
  * Hooks throw when used without a provider.
  */
 
-import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useRef, type Context, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { AgentInitInfo, ThreadWithMessages } from './thread-store';
@@ -19,7 +19,16 @@ interface ThreadContextValue {
   threadId: string | null;
 }
 
-const ThreadContext = createContext<ThreadContextValue | null>(null);
+// Keep the context object stable across Vite hot replacements. Otherwise an
+// already-mounted provider can hold the previous module's context while newly
+// evaluated hooks read from a fresh one and incorrectly report no ancestor.
+const ThreadContext =
+  (import.meta.hot?.data?.threadContext as Context<ThreadContextValue | null> | undefined) ??
+  createContext<ThreadContextValue | null>(null);
+
+if (import.meta.hot?.data) {
+  import.meta.hot.data.threadContext = ThreadContext;
+}
 
 interface ThreadProviderProps {
   threadId: string | null;

@@ -362,154 +362,153 @@ export const AskQuestionCard = memo(function AskQuestionCard({
 
       {/* Tabs */}
       <div className="border-border/40 border-t">
-        {/* Fallback: when output exists but couldn't be parsed into selections, show the raw answer */}
-        {rawAnswerFallback ? (
-          <div className="px-3 py-2">
-            <p className="text-foreground text-xs leading-relaxed">{questions[0]?.question}</p>
-            <div className="border-border/40 bg-background/50 text-muted-foreground mt-1.5 rounded-md border px-2.5 py-1.5 text-xs">
-              {rawAnswerFallback}
-            </div>
+        {!rawAnswerFallback && questions.length > 1 && (
+          <div className="border-border/40 flex gap-0 border-b">
+            {questions.map((q, i) => (
+              <button
+                key={q.header}
+                onClick={() => goToTab(i)}
+                className={cn(
+                  'px-3 py-1.5 text-sm font-medium transition-colors relative',
+                  i === activeTab
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground/80',
+                )}
+              >
+                {q.header}
+                {selections.get(i)?.size ? (
+                  <Check className="icon-2xs text-status-success/80 ml-1 inline" />
+                ) : null}
+                {i === activeTab && (
+                  <div className="bg-primary absolute right-0 bottom-0 left-0 h-[2px] rounded-full" />
+                )}
+              </button>
+            ))}
           </div>
-        ) : (
-          <>
-            {questions.length > 1 && (
-              <div className="border-border/40 flex gap-0 border-b">
-                {questions.map((q, i) => (
-                  <button
-                    key={q.header}
-                    onClick={() => goToTab(i)}
-                    className={cn(
-                      'px-3 py-1.5 text-sm font-medium transition-colors relative',
-                      i === activeTab
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground/80',
-                    )}
-                  >
-                    {q.header}
-                    {selections.get(i)?.size ? (
-                      <Check className="icon-2xs text-status-success/80 ml-1 inline" />
-                    ) : null}
-                    {i === activeTab && (
-                      <div className="bg-primary absolute right-0 bottom-0 left-0 h-[2px] rounded-full" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+        )}
 
-            {/* Active question — vertical slide between tabs */}
-            <div className="relative overflow-hidden">
-              <AnimatePresence mode="wait" initial={false} custom={slideDirection}>
-                <m.div
-                  key={activeTab}
-                  custom={slideDirection}
-                  variants={{
-                    enter: (dir: number) => ({
-                      x: prefersReducedMotion ? 0 : dir >= 0 ? 24 : -24,
-                      opacity: prefersReducedMotion ? 1 : 0,
-                    }),
-                    center: { x: 0, opacity: 1 },
-                    exit: (dir: number) => ({
-                      x: prefersReducedMotion ? 0 : dir >= 0 ? -24 : 24,
-                      opacity: prefersReducedMotion ? 1 : 0,
-                    }),
-                  }}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: prefersReducedMotion ? 0 : 0.18, ease: 'easeOut' }}
-                  className="space-y-2 px-3 py-2"
+        {/* AnimatePresence remains mounted so both tab changes and fallback transitions can exit. */}
+        <div className="relative overflow-hidden">
+          <AnimatePresence mode="wait" initial={false} custom={slideDirection}>
+            {rawAnswerFallback ? (
+              <m.div key="raw-answer" className="px-3 py-2">
+                <p className="text-foreground text-xs leading-relaxed">{questions[0]?.question}</p>
+                <div className="border-border/40 bg-background/50 text-muted-foreground mt-1.5 rounded-md border px-2.5 py-1.5 text-xs">
+                  {rawAnswerFallback}
+                </div>
+              </m.div>
+            ) : (
+              <m.div
+                key={activeTab}
+                custom={slideDirection}
+                variants={{
+                  enter: (dir: number) => ({
+                    x: prefersReducedMotion ? 0 : dir >= 0 ? 24 : -24,
+                    opacity: prefersReducedMotion ? 1 : 0,
+                  }),
+                  center: { x: 0, opacity: 1 },
+                  exit: (dir: number) => ({
+                    x: prefersReducedMotion ? 0 : dir >= 0 ? -24 : 24,
+                    opacity: prefersReducedMotion ? 1 : 0,
+                  }),
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: prefersReducedMotion ? 0 : 0.18, ease: 'easeOut' }}
+                className="space-y-2 px-3 py-2"
+              >
+                <p className="text-foreground text-xs leading-relaxed">{activeQ.question}</p>
+
+                {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
+                <div
+                  className="space-y-1"
+                  style={
+                    !submitted && maxContentHeight > 0
+                      ? { minHeight: `${maxContentHeight}px` }
+                      : undefined
+                  }
                 >
-                  <p className="text-foreground text-xs leading-relaxed">{activeQ.question}</p>
-
-                  {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
-                  <div
-                    className="space-y-1"
-                    style={
-                      !submitted && maxContentHeight > 0
-                        ? { minHeight: `${maxContentHeight}px` }
-                        : undefined
-                    }
-                  >
-                    {activeQ.options.map((opt, oi) => {
-                      const isSelected = activeSelections.has(oi);
-                      return (
-                        <button
-                          key={opt.label}
-                          onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
-                          disabled={submitted}
-                          className={cn(
-                            'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
-                            isSelected
-                              ? 'border-primary/50 bg-primary/10'
-                              : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
-                            submitted && 'opacity-70 cursor-default',
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              'mt-0.5 shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
-                              activeQ.multiSelect && 'rounded-sm',
-                              isSelected
-                                ? 'border-primary bg-primary'
-                                : 'border-muted-foreground/40',
-                            )}
-                          >
-                            {isSelected && <Check className="text-primary-foreground size-2" />}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-foreground text-xs font-medium">{opt.label}</span>
-                            <p className="text-muted-foreground text-xs leading-snug">
-                              {opt.description}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-
-                    {/* Other option */}
-                    <button
-                      onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
-                      disabled={submitted}
-                      className={cn(
-                        'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
-                        isOtherSelected
-                          ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
-                          : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
-                        submitted && 'opacity-70 cursor-default',
-                      )}
-                    >
-                      <div
+                  {activeQ.options.map((opt, oi) => {
+                    const isSelected = activeSelections.has(oi);
+                    return (
+                      <button
+                        key={opt.label}
+                        onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
+                        disabled={submitted}
                         className={cn(
-                          'mt-0.5 shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
-                          activeQ.multiSelect && 'rounded-sm',
-                          isOtherSelected
-                            ? 'border-primary bg-primary'
-                            : 'border-muted-foreground/40',
+                          'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
+                          isSelected
+                            ? 'border-primary/50 bg-primary/10'
+                            : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
+                          submitted && 'opacity-70 cursor-default',
                         )}
                       >
-                        {isOtherSelected && <Check className="text-primary-foreground size-2" />}
-                      </div>
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <PenLine
+                        <div
                           className={cn(
-                            'icon-xs shrink-0 transition-colors',
-                            isOtherSelected ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        />
-                        <span
-                          className={cn(
-                            'text-xs font-medium transition-colors',
-                            isOtherSelected ? 'text-foreground' : 'text-foreground',
+                            'mt-0.5 shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
+                            activeQ.multiSelect && 'rounded-sm',
+                            isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
                           )}
                         >
-                          {t('tools.other')}
-                        </span>
-                      </div>
-                    </button>
+                          {isSelected && <Check className="text-primary-foreground size-2" />}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-foreground text-xs font-medium">{opt.label}</span>
+                          <p className="text-muted-foreground text-xs leading-snug">
+                            {opt.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
 
-                    {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
-                    {isOtherSelected && !submitted && (
+                  {/* Other option */}
+                  <button
+                    onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
+                    disabled={submitted}
+                    className={cn(
+                      'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
+                      isOtherSelected
+                        ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                        : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
+                      submitted && 'opacity-70 cursor-default',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'mt-0.5 shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
+                        activeQ.multiSelect && 'rounded-sm',
+                        isOtherSelected
+                          ? 'border-primary bg-primary'
+                          : 'border-muted-foreground/40',
+                      )}
+                    >
+                      {isOtherSelected && <Check className="text-primary-foreground size-2" />}
+                    </div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <PenLine
+                        className={cn(
+                          'icon-xs shrink-0 transition-colors',
+                          isOtherSelected ? 'text-primary' : 'text-muted-foreground',
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          'text-xs font-medium transition-colors',
+                          isOtherSelected ? 'text-foreground' : 'text-foreground',
+                        )}
+                      >
+                        {t('tools.other')}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
+                  {isOtherSelected &&
+                    !submitted && (
+                      // Padding clicks forward focus to the nested editor; the wrapper is not an input itself.
+                      // react-doctor-disable-next-line react-doctor/no-static-element-interactions
                       <div
                         ref={otherEditorContainerRef}
                         onMouseDown={(e) => {
@@ -592,54 +591,53 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                         )}
                       </div>
                     )}
-                    {isOtherSelected && submitted && otherText.trim() && (
-                      <div className="border-border/40 bg-background/50 text-muted-foreground rounded-md border px-2.5 py-1.5 text-xs opacity-70">
-                        {otherText}
-                      </div>
-                    )}
-                  </div>
+                  {isOtherSelected && submitted && otherText.trim() && (
+                    <div className="border-border/40 bg-background/50 text-muted-foreground rounded-md border px-2.5 py-1.5 text-xs opacity-70">
+                      {otherText}
+                    </div>
+                  )}
+                </div>
 
-                  {/* Action buttons */}
-                  {onRespond && !submitted && (
-                    <div className="flex items-center pt-1">
-                      {/* Continue button for "Other" option — shown when user needs to advance manually */}
-                      {isOtherSelected && !isLastTab && (
-                        <button
-                          onClick={() => goToTab(activeTab + 1)}
-                          disabled={!currentTabAnswered}
-                          className={cn(
-                            'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                            currentTabAnswered
-                              ? 'bg-primary/15 text-primary hover:bg-primary/25'
-                              : 'bg-muted text-muted-foreground cursor-not-allowed',
-                          )}
-                        >
-                          {t('tools.continue')}
-                          <ChevronRight className="icon-xs" />
-                        </button>
-                      )}
-
-                      {/* Submit button — bottom-right */}
+                {/* Action buttons */}
+                {onRespond && !submitted && (
+                  <div className="flex items-center pt-1">
+                    {/* Continue button for "Other" option — shown when user needs to advance manually */}
+                    {isOtherSelected && !isLastTab && (
                       <button
-                        onClick={handleSubmit}
-                        disabled={!allAnswered}
+                        onClick={() => goToTab(activeTab + 1)}
+                        disabled={!currentTabAnswered}
                         className={cn(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
-                          allAnswered
-                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          currentTabAnswered
+                            ? 'bg-primary/15 text-primary hover:bg-primary/25'
                             : 'bg-muted text-muted-foreground cursor-not-allowed',
                         )}
                       >
-                        <Send className="icon-xs" />
-                        {t('tools.respond')}
+                        {t('tools.continue')}
+                        <ChevronRight className="icon-xs" />
                       </button>
-                    </div>
-                  )}
-                </m.div>
-              </AnimatePresence>
-            </div>
-          </>
-        )}
+                    )}
+
+                    {/* Submit button — bottom-right */}
+                    <button
+                      onClick={handleSubmit}
+                      disabled={!allAnswered}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
+                        allAnswered
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'bg-muted text-muted-foreground cursor-not-allowed',
+                      )}
+                    >
+                      <Send className="icon-xs" />
+                      {t('tools.respond')}
+                    </button>
+                  </div>
+                )}
+              </m.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );

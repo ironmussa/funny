@@ -39,8 +39,23 @@ export function TeamProjects() {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    void (async () => {
+      const [teamResult, userResult] = await Promise.all([
+        api.listTeamProjects(),
+        api.listProjects(),
+      ]);
+      if (cancelled) return;
+      if (teamResult.isOk()) setTeamProjects(teamResult.value);
+      else toast.error('Failed to load team projects');
+      if (userResult.isOk()) setUserProjects(userResult.value);
+      else toast.error('Failed to load projects');
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const teamProjectIds = new Set(teamProjects.map((p) => p.id));
   const availableProjects = userProjects.filter((p) => !teamProjectIds.has(p.id));

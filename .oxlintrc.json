@@ -12,6 +12,28 @@
   "jsPlugins": ["eslint-plugin-zod"],
   "rules": {
     "react/react-in-jsx-scope": "off",
+    "react/capitalized-calls": "error",
+    "react/error-boundaries": "error",
+    "react/exhaustive-effect-dependencies": "warn",
+    "react/globals": "error",
+    "react/hooks": "error",
+    "react/immutability": "warn",
+    "react/incompatible-library": "warn",
+    "react/invariant": "warn",
+    "react/memo-dependencies": "warn",
+    "react/no-deriving-state-in-effects": "error",
+    "react/preserve-manual-memoization": "warn",
+    "react/purity": "error",
+    "react/refs": "warn",
+    "react/rule-suppression": "warn",
+    "react/set-state-in-effect": "warn",
+    "react/set-state-in-render": "error",
+    "react/static-components": "error",
+    "react/syntax": "error",
+    "react/todo": "warn",
+    "react/unsupported-syntax": "error",
+    "react/use-memo": "error",
+    "react/void-use-memo": "error",
     "no-unused-vars": "warn",
     "no-shadow": "off",
     "no-await-in-loop": "off",
@@ -47,6 +69,12 @@
         "no-constant-binary-expression": "off",
         "max-lines": "off",
         "max-lines-per-function": "off"
+      }
+    },
+    {
+      "files": ["packages/client/vendor/satteri-wasm32-wasi/wasi-worker.mjs"],
+      "rules": {
+        "no-eval": "off"
       }
     }
   ],

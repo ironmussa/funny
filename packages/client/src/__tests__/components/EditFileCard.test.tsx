@@ -353,4 +353,28 @@ describe('EditFileCard', () => {
     expect(await screen.findByTestId('edit-file-inline-diff-unavailable')).toBeInTheDocument();
     expect(apiMocks.getFileDiff).toHaveBeenCalledTimes(1);
   });
+
+  test('treats hideLabel as the initial uncontrolled expansion default', () => {
+    const parsed = {
+      file_path: '/repo/src/app.ts',
+      old_string: 'const value = 1;',
+      new_string: 'const value = 2;',
+    };
+    const { rerender } = render(
+      <TooltipProvider>
+        <EditFileCard parsed={parsed} />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'tools.editFile' }));
+    expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
+
+    rerender(
+      <TooltipProvider>
+        <EditFileCard parsed={parsed} hideLabel />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
+  });
 });

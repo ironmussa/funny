@@ -88,6 +88,8 @@ export function ChangedFilesSummary({
     [threadId, diffCache, files, fallbackDiffs],
   );
 
+  // `loadDiffForFile` is local to this component, not a callback into a parent.
+  // The effect synchronizes the expanded dialog with its asynchronously loaded resource.
   useEffect(() => {
     if (expandedFile && !diffCache.has(expandedFile)) {
       loadDiffForFile(expandedFile);

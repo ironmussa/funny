@@ -43,7 +43,16 @@ export const KanbanColumn = memo(function KanbanColumn({
   const ref = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(20);
+  const paginationKey = `${projectId}:${search}`;
+  const [pagination, setPagination] = useState({ key: paginationKey, visibleCount: 20 });
+  const storedVisibleCount = pagination.key === paginationKey ? pagination.visibleCount : 20;
+  const highlightedIndex = highlightThreadId
+    ? threads.findIndex((thread) => thread.id === highlightThreadId)
+    : -1;
+  const visibleCount = Math.max(storedVisibleCount, highlightedIndex + 1);
+  if (pagination.key !== paginationKey || pagination.visibleCount !== visibleCount) {
+    setPagination({ key: paginationKey, visibleCount });
+  }
 
   useEffect(() => {
     const el = ref.current;
@@ -63,18 +72,6 @@ export const KanbanColumn = memo(function KanbanColumn({
     if (!el) return;
     return autoScrollForElements({ element: el });
   }, []);
-
-  useEffect(() => {
-    setVisibleCount(20);
-  }, [search, projectId]);
-
-  useEffect(() => {
-    if (!highlightThreadId) return;
-    const idx = threads.findIndex((th) => th.id === highlightThreadId);
-    if (idx >= visibleCount) {
-      setVisibleCount(idx + 1);
-    }
-  }, [highlightThreadId, threads, visibleCount]);
 
   const visibleThreads = threads.slice(0, visibleCount);
   const hasMore = threads.length > visibleCount;
@@ -125,7 +122,12 @@ export const KanbanColumn = memo(function KanbanColumn({
             {hasMore && (
               <button
                 data-testid={`kanban-load-more-${stage}`}
-                onClick={() => setVisibleCount((prev) => prev + 20)}
+                onClick={() =>
+                  setPagination((prev) => ({
+                    key: paginationKey,
+                    visibleCount: (prev.key === paginationKey ? prev.visibleCount : 20) + 20,
+                  }))
+                }
                 className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
               >
                 {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}

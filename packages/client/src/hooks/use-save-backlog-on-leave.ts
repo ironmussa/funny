@@ -48,7 +48,7 @@ export function useSaveBacklogOnLeave({
       return;
     }
     setSavingBacklog(true);
-    try {
+    await (async () => {
       const result = await api.createIdleThread({
         projectId: effectiveProjectId,
         title: text.slice(0, 200),
@@ -62,9 +62,7 @@ export function useSaveBacklogOnLeave({
       await loadThreadsForProject(effectiveProjectId);
       toast.success(t('toast.threadCreated', { title: text.slice(0, 200) }));
       blocker.proceed?.();
-    } finally {
-      setSavingBacklog(false);
-    }
+    })().finally(() => setSavingBacklog(false));
   }, [
     effectiveProjectId,
     defaultThreadMode,

@@ -51,6 +51,8 @@ function InteractiveWrapper({
             Annotations ({comments.length})
           </p>
           {comments.map((c, i) => (
+            // Story-only rows are stateless; removal cannot transfer state between annotations.
+            // react-doctor-disable-next-line no-array-index-as-key
             <div key={i} className="text-muted-foreground text-xs">
               {c.emoji || 'Comment'}: &quot;{c.selectedText.slice(0, 40)}
               {c.selectedText.length > 40 ? '...' : ''}&quot;

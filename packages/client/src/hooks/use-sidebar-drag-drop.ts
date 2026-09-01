@@ -56,6 +56,8 @@ export function useSidebarDragDrop({
       sync(t);
       ro.observe(t.el);
       for (const c of Array.from(t.el.children)) ro.observe(c);
+      // Every observer is retained in mos and disconnected by the effect cleanup.
+      // react-doctor-disable-next-line effect-observer-needs-disconnect
       const mo = new MutationObserver(() => {
         for (const c of Array.from(t.el.children)) ro.observe(c);
         sync(t);

@@ -1,6 +1,6 @@
 import type { FunnyProjectConfig, FunnyPortGroup } from '@funny/shared';
 import { Plus, Trash2, FileText, Network, Terminal } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -16,7 +16,7 @@ export function ProjectConfigSettings() {
   const { t } = useTranslation();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const [config, setConfig] = useState<FunnyProjectConfig>({});
-  const [loading, setLoading] = useState(true);
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
 
   // ── Env Files state ──
   const [newEnvFile, setNewEnvFile] = useState('');
@@ -30,20 +30,21 @@ export function ProjectConfigSettings() {
   // ── Post Create state ──
   const [newPostCreate, setNewPostCreate] = useState('');
 
-  const loadConfig = useCallback(async () => {
+  useEffect(() => {
     if (!selectedProjectId) return;
-    setLoading(true);
-    try {
+    let cancelled = false;
+    void (async () => {
       const result = await api.getProjectConfig(selectedProjectId);
+      if (cancelled) return;
       if (result.isOk()) setConfig(result.value);
-    } finally {
-      setLoading(false);
-    }
+      setLoadedProjectId(selectedProjectId);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedProjectId]);
 
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+  const loading = loadedProjectId !== selectedProjectId;
 
   const saveConfig = async (updated: FunnyProjectConfig) => {
     if (!selectedProjectId) return;

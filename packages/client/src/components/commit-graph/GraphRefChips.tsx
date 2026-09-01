@@ -11,7 +11,6 @@ import {
   Tag,
   Upload,
 } from 'lucide-react';
-import { type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -104,10 +103,11 @@ function displayNameForRef(ref: FoldedRef): string {
   return ref.kind === 'remote' ? remoteBranchName(ref.name) : ref.name;
 }
 
-function iconForRef(ref: FoldedRef): ComponentType<{ className?: string }> {
-  if (ref.kind === 'tag') return Tag;
-  if (ref.kind === 'remote') return Cloud;
-  return ref.syncedRemote ? CloudCheck : Monitor;
+function renderRefIcon(ref: FoldedRef) {
+  const props = { className: 'icon-2xs shrink-0', 'aria-hidden': true } as const;
+  if (ref.kind === 'tag') return <Tag {...props} />;
+  if (ref.kind === 'remote') return <Cloud {...props} />;
+  return ref.syncedRemote ? <CloudCheck {...props} /> : <Monitor {...props} />;
 }
 
 function tooltipForRef(
@@ -437,7 +437,6 @@ function GraphRefChip({
   onPullCurrentBranch: (branch: string) => void;
 }) {
   const { t } = useTranslation();
-  const Icon = iconForRef(ref);
   const displayName = displayNameForRef(ref);
 
   return (
@@ -456,7 +455,7 @@ function GraphRefChip({
             onClick={(event) => event.stopPropagation()}
             data-testid={`graph-branch-info-${ref.name}`}
           >
-            <Icon className="icon-2xs shrink-0" aria-hidden="true" />
+            {renderRefIcon(ref)}
             <span
               className={cn(
                 'truncate text-[10px] leading-tight font-medium whitespace-nowrap',

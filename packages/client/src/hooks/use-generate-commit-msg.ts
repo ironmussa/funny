@@ -65,7 +65,7 @@ export function useGenerateCommitMsg({
     generateAbortRef.current = ac;
 
     setGeneratingCommitMsg(capturedDraftId, true);
-    try {
+    await (async () => {
       const result = capturedThreadId
         ? await gitApi.generateCommitMessage(capturedThreadId, true, ac.signal)
         : await gitApi.projectGenerateCommitMessage(capturedProjectModeId!, true, ac.signal);
@@ -88,12 +88,12 @@ export function useGenerateCommitMsg({
       } else if (!ac.signal.aborted) {
         toast.error(t('review.generateFailed', { message: result.error.message }));
       }
-    } finally {
+    })().finally(() => {
       setGeneratingCommitMsg(capturedDraftId, false);
       if (generateAbortRef.current === ac) {
         generateAbortRef.current = null;
       }
-    }
+    });
   }, [
     hasGitContext,
     generatingMsg,

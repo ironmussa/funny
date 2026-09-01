@@ -13,10 +13,12 @@ const MINIMAP_WIDTH = 48;
 export const DiffMinimap = memo(function DiffMinimap({
   lines,
   scrollElement,
+  scrollAreaId,
   totalSize,
 }: {
   lines: DiffLine[];
   scrollElement: HTMLDivElement | null;
+  scrollAreaId: string;
   /** Total virtual scroll height in px (from virtualizer.getTotalSize()) */
   totalSize: number;
 }) {
@@ -24,6 +26,7 @@ export const DiffMinimap = memo(function DiffMinimap({
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewportTop, setViewportTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
 
   // Build a flat array of line types for the minimap
@@ -98,10 +101,12 @@ export const DiffMinimap = memo(function DiffMinimap({
 
     const updateViewport = () => {
       const totalHeight = totalSize;
-      if (totalHeight === 0 || containerHeight === 0) return;
+      if (totalHeight === 0) return;
 
       const scrollTop = scrollElement.scrollTop;
       const clientHeight = scrollElement.clientHeight;
+      setScrollTop(scrollTop);
+      if (containerHeight === 0) return;
 
       const ratio = containerHeight / totalHeight;
       setViewportTop(scrollTop * ratio);
@@ -137,6 +142,42 @@ export const DiffMinimap = memo(function DiffMinimap({
     [scrollElement, containerHeight, totalSize],
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!scrollElement) return;
+
+      const maxScroll = Math.max(0, totalSize - scrollElement.clientHeight);
+      let targetScroll: number | null = null;
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'ArrowLeft':
+          targetScroll = scrollElement.scrollTop - 40;
+          break;
+        case 'ArrowDown':
+        case 'ArrowRight':
+          targetScroll = scrollElement.scrollTop + 40;
+          break;
+        case 'PageUp':
+          targetScroll = scrollElement.scrollTop - scrollElement.clientHeight;
+          break;
+        case 'PageDown':
+          targetScroll = scrollElement.scrollTop + scrollElement.clientHeight;
+          break;
+        case 'Home':
+          targetScroll = 0;
+          break;
+        case 'End':
+          targetScroll = maxScroll;
+          break;
+      }
+
+      if (targetScroll === null) return;
+      e.preventDefault();
+      scrollElement.scrollTo({ top: Math.max(0, Math.min(targetScroll, maxScroll)) });
+    },
+    [scrollElement, totalSize],
+  );
+
   // Handle drag on viewport indicator
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -166,9 +207,22 @@ export const DiffMinimap = memo(function DiffMinimap({
   return (
     <div
       ref={containerRef}
+      role="scrollbar"
+      tabIndex={0}
+      aria-label="Diff overview"
+      aria-controls={scrollAreaId}
+      aria-orientation="vertical"
+      aria-valuemin={0}
+      aria-valuemax={Math.max(0, totalSize - (scrollElement?.clientHeight ?? 0))}
+      aria-valuenow={Math.round(scrollTop)}
       className="border-border/50 bg-muted/20 relative shrink-0 cursor-pointer border-l"
       style={{ width: MINIMAP_WIDTH }}
       onClick={scrollToClick}
+      onKeyDown={handleKeyDown}
+      onMouseDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-diff-minimap-viewport]')) handleMouseDown(e);
+      }}
       data-testid="diff-minimap"
     >
       <canvas ref={canvasRef} className="block" />
@@ -179,7 +233,7 @@ export const DiffMinimap = memo(function DiffMinimap({
           top: viewportTop,
           height: viewportHeight,
         }}
-        onMouseDown={handleMouseDown}
+        data-diff-minimap-viewport
         data-testid="diff-minimap-viewport"
       />
     </div>

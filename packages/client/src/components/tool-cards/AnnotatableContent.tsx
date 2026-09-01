@@ -75,6 +75,8 @@ export function AnnotatableContent({
   });
 
   // Dismiss popover on outside click
+  // Cleanup cancels the delayed registration and removes the listener if it was installed.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (!selection) return;
     const handleClick = (e: MouseEvent) => onOutsideMouseDown(e);
@@ -142,6 +144,8 @@ export function AnnotatableContent({
   }, [active, planComments, ...highlightDeps]);
 
   return (
+    // Mouse-up observes text selection inside children; this wrapper has no standalone action.
+    // react-doctor-disable-next-line react-doctor/no-static-element-interactions
     <div
       ref={containerRef}
       className={cn('relative', className)}

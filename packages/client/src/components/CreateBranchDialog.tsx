@@ -1,5 +1,5 @@
 import { GitBranch, Loader2, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -50,12 +50,30 @@ export function CreateBranchDialog({
   loading,
   onCreate,
 }: CreateBranchDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <CreateBranchDialogContent
+          sourceBranch={sourceBranch}
+          threadTitle={threadTitle}
+          loading={loading}
+          onCreate={onCreate}
+          onOpenChange={onOpenChange}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function CreateBranchDialogContent({
+  sourceBranch,
+  threadTitle,
+  loading,
+  onCreate,
+  onOpenChange,
+}: Omit<CreateBranchDialogProps, 'open'>) {
   const { t } = useTranslation();
   const [branchName, setBranchName] = useState('');
-
-  useEffect(() => {
-    if (!open) setBranchName('');
-  }, [open]);
 
   const submit = () => {
     const name = sanitizeBranchName(branchName);
@@ -66,66 +84,60 @@ export function CreateBranchDialog({
   const canSubmit = !!branchName.trim() && !loading;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" data-testid="create-branch-dialog">
-        <DialogHeader>
-          <DialogTitle>{t('dialog.createBranchTitle')}</DialogTitle>
-          <DialogDescription className="flex flex-wrap items-center gap-1">
-            <span>{t('dialog.createBranchBasedOn', 'Your new branch will be based on')}</span>
-            <span className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs">
-              <GitBranch className="icon-xs" />
-              {sourceBranch || t('dialog.createBranchBasedOnUnknown', 'current branch')}
-            </span>
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex items-center gap-2">
-          <Input
-            data-testid="create-branch-input"
-            placeholder={t('dialog.createBranchPlaceholder')}
-            value={branchName}
-            onChange={(e) => setBranchName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
-              if (e.key === 'Enter' && canSubmit) submit();
-            }}
-            autoFocus
-          />
-          {threadTitle && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  data-testid="create-branch-suggest"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => {
-                    const slug = suggestSlug(threadTitle);
-                    if (slug) setBranchName(slug);
-                  }}
-                >
-                  <Sparkles className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('dialog.suggestBranchName', 'Suggest from title')}</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-        <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            data-testid="create-branch-cancel"
-          >
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={submit} disabled={!canSubmit} data-testid="create-branch-confirm">
-            {loading ? (
-              <Loader2 className="icon-base animate-spin" />
-            ) : (
-              t('common.create', 'Create')
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DialogContent className="sm:max-w-md" data-testid="create-branch-dialog">
+      <DialogHeader>
+        <DialogTitle>{t('dialog.createBranchTitle')}</DialogTitle>
+        <DialogDescription className="flex flex-wrap items-center gap-1">
+          <span>{t('dialog.createBranchBasedOn', 'Your new branch will be based on')}</span>
+          <span className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs">
+            <GitBranch className="icon-xs" />
+            {sourceBranch || t('dialog.createBranchBasedOnUnknown', 'current branch')}
+          </span>
+        </DialogDescription>
+      </DialogHeader>
+      <div className="flex items-center gap-2">
+        <Input
+          data-testid="create-branch-input"
+          placeholder={t('dialog.createBranchPlaceholder')}
+          value={branchName}
+          onChange={(e) => setBranchName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter' && canSubmit) submit();
+          }}
+          autoFocus
+        />
+        {threadTitle && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-testid="create-branch-suggest"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => {
+                  const slug = suggestSlug(threadTitle);
+                  if (slug) setBranchName(slug);
+                }}
+              >
+                <Sparkles className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('dialog.suggestBranchName', 'Suggest from title')}</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      <DialogFooter>
+        <Button
+          variant="ghost"
+          onClick={() => onOpenChange(false)}
+          data-testid="create-branch-cancel"
+        >
+          {t('common.cancel')}
+        </Button>
+        <Button onClick={submit} disabled={!canSubmit} data-testid="create-branch-confirm">
+          {loading ? <Loader2 className="icon-base animate-spin" /> : t('common.create', 'Create')}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }

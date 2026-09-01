@@ -324,6 +324,8 @@ function SatteriMessageContentInner({ content }: { content: string }) {
   }
 
   return (
+    // Clicks are delegated to sanitized nested links and copy buttons; this container is not a control.
+    // react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions
     <div
       ref={rootRef}
       className={cn(markdownProseClassName, 'overflow-hidden')}
@@ -332,12 +334,16 @@ function SatteriMessageContentInner({ content }: { content: string }) {
     >
       {state.segments.map((segment, index) =>
         segment.type === 'html' ? (
+          // The content-keyed error boundary remounts this static segment list as a unit.
+          // react-doctor-disable-next-line no-array-index-as-key
           <div
             key={`html-${index}`}
             // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- renderMarkdownToSafeHtml sanitizes every compiler result
             dangerouslySetInnerHTML={{ __html: segment.html }}
           />
         ) : (
+          // Islands cannot reorder within a compiled result and remount when message content changes.
+          // react-doctor-disable-next-line no-array-index-as-key
           <MarkdownIsland key={`island-${index}`} segment={segment} />
         ),
       )}

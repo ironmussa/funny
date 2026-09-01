@@ -32,21 +32,32 @@ export function ExtensionsSettings() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    try {
+    const result = await Promise.resolve(api.listInstalledExtensions()).finally(() =>
+      setLoading(false),
+    );
+    if (result.isOk()) setExtensions(result.value);
+    else {
+      log.error('failed to list extensions', { error: result.error.message });
+      toast.error('Failed to load extensions', { description: result.error.message });
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
       const result = await api.listInstalledExtensions();
+      if (cancelled) return;
       if (result.isOk()) setExtensions(result.value);
       else {
         log.error('failed to list extensions', { error: result.error.message });
         toast.error('Failed to load extensions', { description: result.error.message });
       }
-    } finally {
       setLoading(false);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const handleInstall = useCallback(async () => {
     const path = installPath.trim();

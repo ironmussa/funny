@@ -276,7 +276,7 @@ export function AttachmentChip({
         <FileText className="icon-xs shrink-0 opacity-70" />
       )}
       <span className="max-w-[160px] truncate">{name}</span>
-      {size && <span className="shrink-0 opacity-60">{size}</span>}
+      {Boolean(size) && <span className="shrink-0 opacity-60">{size}</span>}
       {onRemove && (
         <button
           type="button"

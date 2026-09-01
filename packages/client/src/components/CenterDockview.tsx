@@ -108,6 +108,10 @@ function clearStoredLayout() {
   }
 }
 
+function hidePanelHeader(panel: IDockviewPanel) {
+  panel.group.header.hidden = true;
+}
+
 type Props = {
   /** Thread/main content — fills the left of the inner split. */
   thread: ReactNode;
@@ -134,21 +138,29 @@ export function CenterDockview({
   const [hosts, setHosts] = useState<Record<string, HTMLElement | null>>({});
   const apiRef = useRef<DockviewApi | null>(null);
 
-  const storedRightWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_RIGHT_WIDTH));
-  const initialRightWidthRef = useRef(storedRightWidth.current ?? initialRightWidth);
+  const [storedRightWidth] = useState(() => readStoredSize(STORAGE_KEY_RIGHT_WIDTH));
+  const initialRightWidthRef = useRef(storedRightWidth ?? initialRightWidth);
 
   const isTabbedRight = !!(rightTabs && rightTabs.length > 0);
+  const hasStandaloneRight = right !== undefined;
   const rightPaneOpenRef = useRef(rightPaneOpen);
   const rightTabsRef = useRef(rightTabs);
   const onActiveRightTabChangeRef = useRef(onActiveRightTabChange);
   const activeRightTabRef = useRef(activeRightTab);
   useLayoutEffect(() => {
-    initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
+    initialRightWidthRef.current = storedRightWidth ?? initialRightWidth;
     rightPaneOpenRef.current = rightPaneOpen;
     rightTabsRef.current = rightTabs;
     onActiveRightTabChangeRef.current = onActiveRightTabChange;
     activeRightTabRef.current = activeRightTab;
-  }, [activeRightTab, initialRightWidth, onActiveRightTabChange, rightPaneOpen, rightTabs]);
+  }, [
+    activeRightTab,
+    initialRightWidth,
+    onActiveRightTabChange,
+    rightPaneOpen,
+    rightTabs,
+    storedRightWidth,
+  ]);
 
   const setHostRef = useCallback((id: string, el: HTMLElement | null) => {
     setHosts((prev) => (prev[id] === el ? prev : { ...prev, [id]: el }));
@@ -173,10 +185,6 @@ export function CenterDockview({
     }),
     [],
   );
-
-  const hideHeader = useCallback((panel: IDockviewPanel) => {
-    panel.group.header.hidden = true;
-  }, []);
 
   const isAnimatingRef = useRef(false);
   // Suppress onDidActivePanelChange during programmatic open/close of right
@@ -211,7 +219,7 @@ export function CenterDockview({
           const desired = activeRightTabRef.current ?? tabs[0].id;
           const target = api.getPanel(rightPanelId(desired));
           target?.api.setActive();
-        } else if (right !== undefined) {
+        } else if (hasStandaloneRight) {
           const panel = api.addPanel({
             id: PANEL_RIGHT,
             component: PANEL_RIGHT,
@@ -219,13 +227,13 @@ export function CenterDockview({
             position: { direction: 'right' },
             initialWidth: desiredWidth,
           });
-          hideHeader(panel);
+          hidePanelHeader(panel);
         }
       } finally {
         isMutatingRightRef.current = false;
       }
     },
-    [hideHeader, right],
+    [hasStandaloneRight],
   );
 
   const getCurrentRightWidth = useCallback((api: DockviewApi): number | null => {
@@ -254,20 +262,17 @@ export function CenterDockview({
         component: PANEL_THREAD,
         title: 'Thread',
       });
-      hideHeader(threadPanel);
+      hidePanelHeader(threadPanel);
       if (rightPaneOpen) addRightPanels(api);
     },
-    [addRightPanels, hideHeader, rightPaneOpen],
+    [addRightPanels, rightPaneOpen],
   );
 
-  const reconcileAfterRestore = useCallback(
-    (api: DockviewApi): boolean => {
-      if (!api.getPanel(PANEL_THREAD)) return false;
-      hideHeader(api.getPanel(PANEL_THREAD)!);
-      return true;
-    },
-    [hideHeader],
-  );
+  const reconcileAfterRestore = useCallback((api: DockviewApi): boolean => {
+    if (!api.getPanel(PANEL_THREAD)) return false;
+    hidePanelHeader(api.getPanel(PANEL_THREAD)!);
+    return true;
+  }, []);
 
   const persistLayoutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const schedulePersistLayout = useCallback((api: DockviewApi) => {

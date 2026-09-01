@@ -1323,7 +1323,9 @@ export const PromptInputUI = memo(function PromptInputUI({
         )}
 
         {/* Editor + bottom toolbar */}
+        {/* This wrapper only forwards blank-area clicks to the nested editor; it is not a separate control. */}
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+        {/* react-doctor-disable-next-line react-doctor/no-static-element-interactions */}
         <div
           ref={promptBoxRef}
           className={cn(

@@ -601,6 +601,8 @@ export function McpServerSettings() {
     };
     window.addEventListener('message', handleMessage);
 
+    // cleanupOAuth clears this interval on completion, replacement, and component unmount.
+    // react-doctor-disable-next-line effect-needs-cleanup
     const checkClosed = setInterval(() => {
       if (popup && popup.closed) {
         cleanupOAuth();

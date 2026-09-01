@@ -50,14 +50,28 @@ export function TeamInvitations() {
       }
     } catch (err) {
       console.error('[TeamInvitations] Failed to load invitations:', err);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadInvitations();
-  }, [loadInvitations]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authClient.organization.listInvitations();
+        if (!cancelled && res.data) {
+          setInvitations(
+            (res.data as unknown as PendingInvitation[]).filter((i) => i.status === 'pending'),
+          );
+        }
+      } catch (err) {
+        console.error('[TeamInvitations] Failed to load invitations:', err);
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleInvite = useCallback(async () => {
     if (!email.trim()) return;
@@ -72,9 +86,8 @@ export function TeamInvitations() {
       await loadInvitations();
     } catch (err: any) {
       toast.error(err.message || 'Failed to send invitation');
-    } finally {
-      setSending(false);
     }
+    setSending(false);
   }, [email, role, loadInvitations]);
 
   const handleCancel = useCallback(async (invitationId: string) => {

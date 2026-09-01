@@ -1,5 +1,5 @@
 import { Building2, User } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -28,22 +28,15 @@ export function OrgSwitcher() {
   const setActiveOrg = useAuthStore((s) => s.setActiveOrg);
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
   // Read the org restored by auth-store.initialize() so we don't re-fetch
-  const restoredOrgId = useAuthStore((s) => s.activeOrgId);
-  const [activeOrgId, setActiveOrgId] = useState<string | null>(restoredOrgId);
+  const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const [loading, setLoading] = useState(true);
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const navigate = useNavigate();
 
-  // Keep local state in sync when the auth store restores the org
+  // Every post-await write is guarded by the effect's cancelled flag before unmount or rerun.
+  // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect
   useEffect(() => {
-    setActiveOrgId(restoredOrgId);
-  }, [restoredOrgId]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setLoading(false);
-      return;
-    }
+    if (!isAuthenticated) return;
 
     let cancelled = false;
     (async () => {
@@ -59,7 +52,6 @@ export function OrgSwitcher() {
           const session = await authClient.getSession();
           const orgId = activeOrganizationIdFromSession(session.data);
           if (!cancelled && orgId) {
-            setActiveOrgId(orgId);
             const orgInfo = res.data?.find((o: any) => o.id === orgId);
             setActiveOrg(orgId, orgInfo?.name ?? null, orgInfo?.slug ?? null);
           }
@@ -93,8 +85,7 @@ export function OrgSwitcher() {
       if (value === PERSONAL_VALUE) {
         try {
           await authClient.organization.setActive({ organizationId: null as any });
-          setActiveOrgId(null);
-          useAuthStore.getState().setActiveOrg(null, null, null);
+          setActiveOrg(null, null, null);
           await clearAndReload();
           navigate('/');
         } catch (err) {
@@ -103,9 +94,8 @@ export function OrgSwitcher() {
       } else {
         try {
           await authClient.organization.setActive({ organizationId: value });
-          setActiveOrgId(value);
           const orgInfo = orgs.find((o) => o.id === value);
-          useAuthStore.getState().setActiveOrg(value, orgInfo?.name ?? null, orgInfo?.slug ?? null);
+          setActiveOrg(value, orgInfo?.name ?? null, orgInfo?.slug ?? null);
           await clearAndReload();
           if (orgInfo?.slug) navigate(`/${orgInfo.slug}/`);
         } catch (err) {
@@ -113,10 +103,10 @@ export function OrgSwitcher() {
         }
       }
     },
-    [orgs, clearAndReload, navigate],
+    [orgs, clearAndReload, navigate, setActiveOrg],
   );
 
-  if (loading) return null;
+  if (!isAuthenticated || loading) return null;
   if (orgs.length === 0) return null;
 
   const selectValue = activeOrgId ?? PERSONAL_VALUE;

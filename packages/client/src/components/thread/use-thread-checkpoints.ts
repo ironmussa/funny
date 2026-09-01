@@ -48,7 +48,7 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
       const thread = refs.activeThreadRef.current;
       if (!thread || forkingMessageId) return;
       setForkingMessageId(messageId);
-      try {
+      await (async () => {
         const result = await api.forkThread(thread.id, messageId);
         if (result.isErr()) {
           log.error('forkThread failed', {
@@ -66,9 +66,7 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
         await useThreadStore.getState().loadThreadsForProject(thread.projectId);
         navigate(buildPath(`/projects/${thread.projectId}/threads/${newThread.id}`));
         toast.success(t('thread.forkSuccess', 'Forked conversation'));
-      } finally {
-        setForkingMessageId(null);
-      }
+      })().finally(() => setForkingMessageId(null));
     },
     [forkingMessageId, navigate, refs, t],
   );
@@ -78,7 +76,7 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
       const thread = refs.activeThreadRef.current;
       if (!thread || forkingMessageId) return;
       setForkingMessageId(messageId);
-      try {
+      await (async () => {
         const result = await api.rewindCode(thread.id, messageId);
         if (result.isErr()) {
           log.error('rewindCode failed', {
@@ -107,9 +105,7 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
             defaultValue: 'Code rewound',
           }),
         );
-      } finally {
-        setForkingMessageId(null);
-      }
+      })().finally(() => setForkingMessageId(null));
     },
     [forkingMessageId, refs, t],
   );
@@ -119,7 +115,7 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
       const thread = refs.activeThreadRef.current;
       if (!thread || forkingMessageId) return;
       setForkingMessageId(messageId);
-      try {
+      await (async () => {
         const result = await api.forkAndRewind(thread.id, messageId);
         if (result.isErr()) {
           log.error('forkAndRewind failed', {
@@ -137,9 +133,7 @@ export function useThreadCheckpoints(refs: Refs): UseThreadCheckpointsResult {
         await useThreadStore.getState().loadThreadsForProject(thread.projectId);
         navigate(buildPath(`/projects/${thread.projectId}/threads/${newThread.id}`));
         toast.success(t('thread.forkAndRewindSuccess', 'Forked and rewound code'));
-      } finally {
-        setForkingMessageId(null);
-      }
+      })().finally(() => setForkingMessageId(null));
     },
     [forkingMessageId, navigate, refs, t],
   );

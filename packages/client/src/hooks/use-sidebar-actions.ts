@@ -54,14 +54,12 @@ export function useSidebarActions() {
     setActionLoading(true);
     const { threadId, projectId } = archiveConfirm;
     const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
-    try {
+    await (async () => {
       await archiveThread(threadId, projectId);
       setArchiveConfirm(null);
       toast.success(t('toast.threadArchived'));
       if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
-    } finally {
-      setActionLoading(false);
-    }
+    })().finally(() => setActionLoading(false));
   }, [archiveConfirm, archiveThread, t, navigate]);
 
   const handleDeleteThreadConfirm = useCallback(
@@ -121,15 +119,15 @@ export function useSidebarActions() {
       return;
     }
     setActionLoading(true);
-    try {
-      await renameProject(projectId, newName.trim());
-      setRenameProjectState(null);
-      toast.success(t('toast.projectRenamed', { name: newName.trim() }));
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to rename project');
-    } finally {
-      setActionLoading(false);
-    }
+    await renameProject(projectId, newName.trim())
+      .then(() => {
+        setRenameProjectState(null);
+        toast.success(t('toast.projectRenamed', { name: newName.trim() }));
+      })
+      .catch((error: any) => {
+        toast.error(error.message || 'Failed to rename project');
+      })
+      .finally(() => setActionLoading(false));
   }, [renameProjectState, renameProject, t]);
 
   const handleDeleteProjectConfirm = useCallback(async () => {

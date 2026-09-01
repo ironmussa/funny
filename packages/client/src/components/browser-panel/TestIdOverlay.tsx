@@ -48,6 +48,8 @@ export function TestIdOverlay() {
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const [labels, setLabels] = useState<TestIdLabel[]>([]);
 
+  // Every post-await update is guarded by cancelled, which cleanup owns.
+  // react-doctor-disable-next-line no-set-state-after-await-in-effect
   useEffect(() => {
     if (!showTestIds || !sessionId) {
       setLabels([]);

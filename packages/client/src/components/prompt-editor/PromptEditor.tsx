@@ -1435,40 +1435,6 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
   }, []);
 
-  // ── Animate height changes when text wraps to a new line ──
-  useEffect(() => {
-    if (!editor) return;
-    let el: HTMLElement | undefined;
-    try {
-      el = editor.view.dom as HTMLElement;
-    } catch {
-      return;
-    }
-    if (!el) return;
-    let prev = el.offsetHeight;
-    let anim: Animation | null = null;
-    const ro = new ResizeObserver(() => {
-      if (anim?.playState === 'running') return; // skip self-triggered fires
-      const next = el.offsetHeight;
-      if (next === prev) return;
-      const prevOverflow = el.style.overflowY;
-      el.style.overflowY = 'hidden';
-      anim = el.animate(
-        { height: [`${prev}px`, `${next}px`] },
-        { duration: 150, easing: 'ease-out' },
-      );
-      anim.onfinish = anim.oncancel = () => {
-        el.style.overflowY = prevOverflow;
-      };
-      prev = next;
-    });
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      anim?.cancel();
-    };
-  }, [editor]);
-
   // ── Close suggestion popup on click outside ──
   useEffect(() => {
     if (!suggestionType) return;

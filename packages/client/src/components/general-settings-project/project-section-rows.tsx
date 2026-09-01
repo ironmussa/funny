@@ -1,6 +1,6 @@
 import type { WeaveStatus } from '@funny/shared';
 import { MessageSquareText, Plus, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -24,20 +24,25 @@ export function ProjectUrlPatterns({
   currentUrls: string[];
   onSave: (projectId: string, data: { urls: string[] | null }) => void;
 }) {
-  const [urls, setUrls] = useState<string[]>(currentUrls);
+  const [urlRows, setUrlRows] = useState(() =>
+    currentUrls.map((value, index) => ({ id: `initial:${index}`, value })),
+  );
+  const nextAddedUrlIdRef = useRef(0);
   const [lastSeenUrls, setLastSeenUrls] = useState(currentUrls);
   const { t } = useTranslation();
 
   // Reset local edits when the parent passes a new currentUrls reference.
   if (currentUrls !== lastSeenUrls) {
     setLastSeenUrls(currentUrls);
-    setUrls(currentUrls);
+    setUrlRows(currentUrls.map((value, index) => ({ id: `external:${index}`, value })));
   }
 
-  const save = (newUrls: string[]) => {
-    const filtered = newUrls.filter((u) => u.trim() !== '');
-    setUrls(filtered.length > 0 ? filtered : []);
-    onSave(projectId, { urls: filtered.length > 0 ? filtered : null });
+  const save = (newRows: typeof urlRows) => {
+    const filtered = newRows.filter((row) => row.value.trim() !== '');
+    setUrlRows(filtered);
+    onSave(projectId, {
+      urls: filtered.length > 0 ? filtered.map((row) => row.value) : null,
+    });
   };
 
   return (
@@ -54,19 +59,19 @@ export function ProjectUrlPatterns({
         </p>
       </div>
       <div className="space-y-2">
-        {urls.map((url, i) => (
-          <div key={i} className="flex items-center gap-2">
+        {urlRows.map((row, i) => (
+          <div key={row.id} className="flex items-center gap-2">
             <Input
-              value={url}
+              value={row.value}
               onChange={(e) => {
-                const next = [...urls];
-                next[i] = e.target.value;
-                setUrls(next);
+                const next = [...urlRows];
+                next[i] = { ...row, value: e.target.value };
+                setUrlRows(next);
               }}
-              onBlur={() => save(urls)}
+              onBlur={() => save(urlRows)}
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing) return;
-                if (e.key === 'Enter') save(urls);
+                if (e.key === 'Enter') save(urlRows);
               }}
               placeholder="https://example.com"
               className="h-8 flex-1 font-mono text-xs"
@@ -75,7 +80,7 @@ export function ProjectUrlPatterns({
               size="icon-sm"
               className="shrink-0"
               onClick={() => {
-                const next = urls.filter((_, idx) => idx !== i);
+                const next = urlRows.filter((_, idx) => idx !== i);
                 save(next);
               }}
               tooltip={t('common.delete')}
@@ -87,7 +92,10 @@ export function ProjectUrlPatterns({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setUrls((prev) => [...prev, ''])}
+          onClick={() => {
+            const id = `added:${nextAddedUrlIdRef.current++}`;
+            setUrlRows((prev) => [...prev, { id, value: '' }]);
+          }}
           data-testid="settings-url-pattern-add"
         >
           <Plus className="icon-xs mr-1.5" />

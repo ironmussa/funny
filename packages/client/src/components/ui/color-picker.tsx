@@ -1,5 +1,5 @@
 import * as Slider from '@radix-ui/react-slider';
-import Color, { type ColorInstance } from 'color';
+import createColor, { type ColorInstance } from 'color';
 import { PipetteIcon } from 'lucide-react';
 import {
   type ComponentProps,
@@ -53,7 +53,7 @@ const HSL_CHANNEL_KEYS = ['hue', 'saturation', 'lightness'] as const;
 
 const tryParseColor = (input: string): ColorInstance | null => {
   try {
-    return Color(input.trim());
+    return createColor(input.trim());
   } catch {
     return null;
   }
@@ -70,7 +70,8 @@ const stateFromColor = (color: ColorInstance): ColorState => {
 };
 
 const rgbaFromState = ({ hue, saturation, lightness, alpha }: ColorState) => {
-  const rgba = Color.hsl(hue, saturation, lightness)
+  const rgba = createColor
+    .hsl(hue, saturation, lightness)
     .alpha(alpha / 100)
     .rgb()
     .array();
@@ -88,8 +89,8 @@ export const useColorPicker = () => {
 };
 
 export type ColorPickerProps = Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> & {
-  value?: Parameters<typeof Color>[0];
-  defaultValue?: Parameters<typeof Color>[0];
+  value?: Parameters<typeof createColor>[0];
+  defaultValue?: Parameters<typeof createColor>[0];
   onChange?: (value: [number, number, number, number]) => void;
 };
 
@@ -102,11 +103,11 @@ export const ColorPicker = ({
 }: ColorPickerProps) => {
   const isControlled = value !== undefined;
   const controlledColor = useMemo(
-    () => (isControlled ? stateFromColor(Color(value)) : null),
+    () => (isControlled ? stateFromColor(createColor(value)) : null),
     [isControlled, value],
   );
   const [draftColor, setDraftColor] = useState<ColorState>(() =>
-    stateFromColor(Color(isControlled ? value : defaultValue)),
+    stateFromColor(createColor(isControlled ? value : defaultValue)),
   );
   const colorState = controlledColor ?? draftColor;
   const colorStateRef = useRef(colorState);
@@ -316,7 +317,7 @@ export const ColorPickerEyeDropper = ({ className, ...props }: ColorPickerEyeDro
       // @ts-expect-error - EyeDropper API is experimental
       const eyeDropper = new EyeDropper();
       const result = await eyeDropper.open();
-      setColor(Color(result.sRGBHex));
+      setColor(createColor(result.sRGBHex));
     } catch {
       // User cancelled or EyeDropper not supported
     }
@@ -429,7 +430,7 @@ export type ColorPickerFormatProps = HTMLAttributes<HTMLDivElement>;
 
 export const ColorPickerFormat = ({ className, ...props }: ColorPickerFormatProps) => {
   const { hue, saturation, lightness, alpha, mode, setColor, setAlpha } = useColorPicker();
-  const color = Color.hsl(hue, saturation, lightness, alpha / 100);
+  const color = createColor.hsl(hue, saturation, lightness, alpha / 100);
 
   if (mode === 'hex') {
     const hex = color.hex();
@@ -465,7 +466,7 @@ export const ColorPickerFormat = ({ className, ...props }: ColorPickerFormatProp
       if (!Number.isFinite(n)) return;
       const next = [...rgb];
       next[index] = Math.max(0, Math.min(255, n));
-      setColor(Color.rgb(next[0], next[1], next[2]).alpha(alpha / 100));
+      setColor(createColor.rgb(next[0], next[1], next[2]).alpha(alpha / 100));
     };
     return (
       <div
@@ -521,7 +522,7 @@ export const ColorPickerFormat = ({ className, ...props }: ColorPickerFormatProp
       const next = [...hsl];
       const max = index === 0 ? 360 : 100;
       next[index] = Math.max(0, Math.min(max, n));
-      setColor(Color.hsl(next[0], next[1], next[2]).alpha(alpha / 100));
+      setColor(createColor.hsl(next[0], next[1], next[2]).alpha(alpha / 100));
     };
     return (
       <div

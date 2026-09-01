@@ -523,11 +523,7 @@ export function useReviewActions({
   const handlePull = useCallback(async () => {
     if (!hasGitContext || pullInProgress) return;
     setPullInProgress(true);
-    try {
-      await runPull('ff-only');
-    } finally {
-      setPullInProgress(false);
-    }
+    await runPull('ff-only').finally(() => setPullInProgress(false));
   }, [hasGitContext, pullInProgress, runPull]);
 
   const handlePullStrategyChosen = useCallback(
@@ -535,11 +531,7 @@ export function useReviewActions({
       setPullStrategyDialog({ open: false, errorMessage: '' });
       if (pullInProgress) return;
       setPullInProgress(true);
-      try {
-        await runPull(strategy);
-      } finally {
-        setPullInProgress(false);
-      }
+      await runPull(strategy).finally(() => setPullInProgress(false));
     },
     [pullInProgress, runPull],
   );

@@ -17,39 +17,50 @@ import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('designs-list-view');
 
+interface DesignsLoadResult {
+  requestKey: string;
+  designs: Design[];
+  error: string | null;
+}
+
 export function DesignsListView() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const projectId = useUIStore((s) => s.designsListProjectId);
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId) ?? null);
 
-  const [designs, setDesigns] = useState<Design[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadResult, setLoadResult] = useState<DesignsLoadResult | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    const requestKey = `${projectId}:${reloadKey}`;
     (async () => {
       const res = await api.listDesigns(projectId);
       if (cancelled) return;
       if (res.isErr()) {
         log.error('listDesigns failed', { projectId, error: res.error });
-        setError(res.error.friendlyMessage ?? res.error.message ?? 'Failed to load designs');
-        setLoading(false);
+        setLoadResult({
+          requestKey,
+          designs: [],
+          error: res.error.friendlyMessage ?? res.error.message ?? 'Failed to load designs',
+        });
         return;
       }
-      setDesigns(res.value);
-      setLoading(false);
+      setLoadResult({ requestKey, designs: res.value, error: null });
     })();
     return () => {
       cancelled = true;
     };
   }, [projectId, reloadKey]);
+
+  const requestKey = `${projectId}:${reloadKey}`;
+  const currentResult = loadResult?.requestKey === requestKey ? loadResult : null;
+  const designs = currentResult?.designs ?? [];
+  const error = currentResult?.error ?? null;
+  const loading = currentResult === null;
 
   const goBack = () => {
     if (projectId) {

@@ -48,6 +48,8 @@ export function ThreadAttachmentsBadge({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
+        {/* The optional click handler only stops parent-row bubbling; it does not activate this label. */}
+        {/* react-doctor-disable-next-line react-doctor/click-events-have-key-events, react-doctor/no-static-element-interactions */}
         <span
           data-testid={props['data-testid']}
           onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}

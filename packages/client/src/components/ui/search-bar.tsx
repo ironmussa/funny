@@ -8,7 +8,7 @@ import {
   WholeWord,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,17 +90,7 @@ export function SearchBar({
   inputRef: externalInputRef,
 }: SearchBarProps) {
   const internalInputRef = useRef<HTMLInputElement>(null);
-
-  const setInputRef = useCallback(
-    (node: HTMLInputElement | null) => {
-      internalInputRef.current = node;
-      if (typeof externalInputRef === 'function') externalInputRef(node);
-      else if (externalInputRef && 'current' in externalInputRef) {
-        (externalInputRef as React.MutableRefObject<HTMLInputElement | null>).current = node;
-      }
-    },
-    [externalInputRef],
-  );
+  useImperativeHandle(externalInputRef, () => internalInputRef.current as HTMLInputElement, []);
 
   useEffect(() => {
     if (autoFocus) {
@@ -162,6 +152,8 @@ export function SearchBar({
   const label = resultLabel ?? computedLabel;
 
   return (
+    // Blank-bar clicks only forward focus to the nested input; this layout wrapper is not a control.
+    // react-doctor-disable-next-line react-doctor/no-static-element-interactions
     <div
       className={cn('flex items-center gap-1.5', className)}
       onClick={(e) => {
@@ -171,7 +163,7 @@ export function SearchBar({
     >
       {showIcon && <Search className="text-muted-foreground size-3.5 shrink-0" />}
       <Input
-        ref={setInputRef}
+        ref={internalInputRef}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}

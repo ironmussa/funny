@@ -242,6 +242,9 @@ export function usePromptInputState({
     },
     [onProviderChange],
   );
+  // Intentional live-draft synchronization: provider can change from the model
+  // picker or from active-thread/default hydration effects below. The ref keeps
+  // the parent callback idempotent across both sources.
   useEffect(() => {
     notifyProviderChange(currentProvider);
   }, [currentProvider, notifyProviderChange]);

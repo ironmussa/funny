@@ -28,7 +28,7 @@ export function ArchivedThreadsSettings() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const pageRef = useRef(1);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +64,7 @@ export function ArchivedThreadsSettings() {
 
   // Reset to page 1 and refetch whenever the debounced query changes.
   useEffect(() => {
-    setPage(1);
+    pageRef.current = 1;
     fetchArchived(1, debouncedSearch);
   }, [fetchArchived, debouncedSearch]);
 
@@ -76,10 +76,10 @@ export function ArchivedThreadsSettings() {
 
   const handleLoadMore = useCallback(() => {
     if (loading || loadingMore || threads.length >= total) return;
-    const next = page + 1;
-    setPage(next);
+    const next = pageRef.current + 1;
+    pageRef.current = next;
     fetchArchived(next, debouncedSearch);
-  }, [loading, loadingMore, threads.length, total, page, fetchArchived, debouncedSearch]);
+  }, [loading, loadingMore, threads.length, total, fetchArchived, debouncedSearch]);
 
   const handleUnarchive = async (thread: Thread) => {
     const result = await api.archiveThread(thread.id, false);

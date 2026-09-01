@@ -46,6 +46,8 @@ export function usePushToTalk({
     stopRecordingRef.current = stopRecording;
   }, [stopRecording]);
 
+  // The effect cleanup removes all window listeners and clears the pending stop timeout.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (!enabled) return;
 

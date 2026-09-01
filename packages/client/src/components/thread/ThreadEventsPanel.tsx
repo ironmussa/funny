@@ -77,6 +77,8 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
   const [events, setEvents] = useState<ThreadEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Effect cleanup clears mounted before any late request may update state.
+  // react-doctor-disable-next-line no-set-state-after-await-in-effect
   useEffect(() => {
     let mounted = true;
 

@@ -240,7 +240,8 @@ export function EditFileCard({
 
   const threadId = useThreadId();
 
-  // Open by default in the thread; collapsed when nested inside a ToolCallGroup.
+  // hideLabel selects the initial uncontrolled state; user toggles own expansion after mount.
+  // react-doctor-disable-next-line no-derived-useState
   const [expanded, setExpanded] = useState(!hideLabel);
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);
   const [diffMounted, setDiffMounted] = useState(false);
@@ -370,6 +371,8 @@ export function EditFileCard({
         { rootMargin: '600px 0px' },
       );
       diffObserverRef.current = io;
+      // The observer is disconnected on intersection, callback-ref replacement, and component unmount.
+      // react-doctor-disable-next-line effect-needs-cleanup
       io.observe(el);
     },
     [diffMounted, expanded],

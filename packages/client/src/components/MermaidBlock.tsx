@@ -186,8 +186,9 @@ function useMermaidPanZoom(): PanZoom {
         const factor = e.deltaY > 0 ? 0.9 : 1.1;
         applyZoom(factor, mx, my);
       };
-      // oxlint-disable-next-line react-doctor/client-passive-event-listeners -- intentional non-passive: handler calls preventDefault to suppress page scroll during zoom
-      el.addEventListener('wheel', handler, { passive: false });
+      // The callback ref removes this listener before replacing the node and when React passes null.
+      // react-doctor-disable-next-line effect-needs-cleanup
+      el.addEventListener('wheel', handler, { passive: false }); // oxlint-disable-line react-doctor/client-passive-event-listeners -- intentional non-passive: handler calls preventDefault to suppress page scroll during zoom
       wheelCleanupRef.current = () => el.removeEventListener('wheel', handler);
     },
     [applyZoom],

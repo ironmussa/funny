@@ -98,6 +98,8 @@ export function useContainerWidth(itemContainerRef: RefObject<HTMLElement | null
 }
 
 export function usePretextWarmup(groupedItems: RenderItem[], fontConfig: FontConfig) {
+  // The effect cleanup cancels the idle callback or fallback timeout and gates the pending promise.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     let cancelled = false;
     const { proseFont } = fontConfig;

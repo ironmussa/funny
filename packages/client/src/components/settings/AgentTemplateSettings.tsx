@@ -1085,6 +1085,8 @@ function VariablesSection({
       {variables.length > 0 && (
         <div className="mb-2 space-y-2">
           {variables.map((v, idx) => (
+            // Variables are controlled positional entries; names may be blank or duplicated.
+            // react-doctor-disable-next-line no-array-index-as-key
             <div
               key={idx}
               className="bg-muted/30 flex items-start gap-2 rounded border p-2"

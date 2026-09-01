@@ -26,6 +26,8 @@ function useThreadTouchedPaths(enabled: boolean): Set<string> {
   const prevThreadIdRef = useRef<string | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Cleanup cancels the request and every post-await update checks both guards.
+  // react-doctor-disable-next-line no-set-state-after-await-in-effect
   useEffect(() => {
     // Clear when switching threads
     if (threadId !== prevThreadIdRef.current) {
@@ -155,6 +157,8 @@ export function useThreadChangedFiles(enabled: boolean = true) {
       } catch {
         // Keep the previous file list when the refresh fails.
       } finally {
+        // Cleanup owns cancelled, so only the live timer request clears loading.
+        // react-doctor-disable-next-line no-loading-flag-reset-outside-finally
         if (!cancelled) setLoading(false);
       }
     }, 300);

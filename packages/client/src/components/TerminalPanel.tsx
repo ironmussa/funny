@@ -96,11 +96,14 @@ export function TauriTerminalTabContent({
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   useThemeSync(termRef);
 
+  // The effect cleanup cancels the pending RAF and invokes the deferred terminal teardown closure.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (!containerRef.current || !isTauri) return;
 
     let cleanup: (() => void) | null = null;
     let isMounted = true;
+    let fitFrame: number | null = null;
 
     (async () => {
       const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { SearchAddon }, { WebglAddon }] =
@@ -149,7 +152,10 @@ export function TauriTerminalTabContent({
       markMemoryPhase('terminal-open');
       // Re-apply theme after terminal is attached to DOM
       terminal.options.theme = getTerminalTheme();
-      requestAnimationFrame(() => fitAddon.fit());
+      fitFrame = requestAnimationFrame(() => {
+        fitFrame = null;
+        if (isMounted) fitAddon.fit();
+      });
 
       const { invoke } = await import('@tauri-apps/api/core');
       const { listen } = await import('@tauri-apps/api/event');
@@ -176,6 +182,8 @@ export function TauriTerminalTabContent({
       await invoke('pty_spawn', { id, cwd, rows: dims?.rows ?? 24, cols: dims?.cols ?? 80 });
 
       const resizeScheduler = createResizeScheduler(() => fitAddon.fit());
+      // The deferred cleanup closure disconnects this observer after async terminal setup completes.
+      // react-doctor-disable-next-line effect-observer-needs-disconnect
       const resizeObserver = new ResizeObserver(() => resizeScheduler.schedule());
       resizeObserver.observe(containerRef.current!);
 
@@ -202,6 +210,7 @@ export function TauriTerminalTabContent({
 
     return () => {
       isMounted = false;
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame);
       cleanup?.();
     };
   }, [id, cwd]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -369,12 +378,16 @@ export function WebTerminalTabContent({
     };
   }, [send]);
 
+  // The effect cleanup clears the focus timeout, cancels both RAFs, and invokes terminal teardown.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (!containerRef.current) return;
 
     let cancelled = false;
     let cleanup: (() => void) | null = null;
     let focusTimeout: ReturnType<typeof setTimeout> | undefined;
+    let settleFrame: number | null = null;
+    let resolveSettleFrame: (() => void) | null = null;
     // Coalesced repaint kick. The WebGL renderer can leave the canvas frozen
     // on the live hot path — writes land in the buffer but the framebuffer
     // isn't flushed until an unrelated resize/refresh (e.g. a tab switch),
@@ -393,10 +406,12 @@ export function WebTerminalTabContent({
     //   2. Renderer is live but the canvas didn't composite the latest write
     //      (stale framebuffer). A plain refresh reflushes it.
     let repaintScheduled = false;
+    let repaintFrame: number | null = null;
     const scheduleRepaint = (terminal: import('@xterm/xterm').Terminal) => {
       if (repaintScheduled) return;
       repaintScheduled = true;
-      requestAnimationFrame(() => {
+      repaintFrame = requestAnimationFrame(() => {
+        repaintFrame = null;
         repaintScheduled = false;
         if (cancelled) return;
         repaintVisibleTerminal(terminal, containerRef.current);
@@ -454,7 +469,10 @@ export function WebTerminalTabContent({
       // display:hidden, so fitting would yield tiny dimensions and trigger
       // an onResize with wrong cols, resizing the daemon's headless xterm.
       await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
+        resolveSettleFrame = resolve;
+        settleFrame = requestAnimationFrame(() => {
+          settleFrame = null;
+          resolveSettleFrame = null;
           const el = containerRef.current;
           if (el && el.offsetParent !== null && el.clientHeight > 0) {
             fitAddon.fit();
@@ -540,6 +558,8 @@ export function WebTerminalTabContent({
         const el = containerRef.current;
         refitAndRepaintVisibleTerminal(terminal, fitAddon, el);
       });
+      // The deferred terminal cleanup disconnects this observer and disposes its scheduler.
+      // react-doctor-disable-next-line effect-observer-needs-disconnect
       const resizeObserver = new ResizeObserver(() => resizeScheduler.schedule());
       resizeObserver.observe(containerRef.current!);
 
@@ -567,6 +587,13 @@ export function WebTerminalTabContent({
     return () => {
       cancelled = true;
       if (focusTimeout !== undefined) clearTimeout(focusTimeout);
+      if (repaintFrame !== null) cancelAnimationFrame(repaintFrame);
+      if (settleFrame !== null) {
+        cancelAnimationFrame(settleFrame);
+        settleFrame = null;
+        resolveSettleFrame?.();
+        resolveSettleFrame = null;
+      }
       cleanup?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- label/initialCommand/codeFontSizePx are intentional one-shot reads at mount; rerunning on change would reset the live xterm

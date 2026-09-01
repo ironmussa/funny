@@ -18,6 +18,8 @@ export function AutomationInboxButton() {
   const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
+  // The cleanup clears the current retry timeout, while cancelled prevents an in-flight poll reschedule.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (!isAuthenticated) return;
 

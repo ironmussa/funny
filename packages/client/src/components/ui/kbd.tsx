@@ -45,6 +45,8 @@ function ShortcutHint({
       {keys && keys.length > 0 ? (
         <KbdGroup>
           {keys.map((k, i) => (
+            // Shortcut tokens are a fixed, stateless sequence and may repeat.
+            // react-doctor-disable-next-line no-array-index-as-key
             <Kbd key={`${k}-${i}`}>{k}</Kbd>
           ))}
         </KbdGroup>

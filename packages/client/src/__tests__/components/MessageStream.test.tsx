@@ -267,7 +267,7 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       viewportObserver?.trigger();
-      vi.runAllTimers();
+      vi.runOnlyPendingTimers();
     });
 
     expect(memoizedMessageListLifecycle.remeasureCalls).toBe(1);

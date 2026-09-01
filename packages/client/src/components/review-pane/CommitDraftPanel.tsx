@@ -103,6 +103,7 @@ export function CommitDraftPanel({
   readOnly,
 }: CommitDraftPanelProps) {
   const { t } = useTranslation();
+  const defaultEditor = useSettingsStore((s) => s.defaultEditor);
 
   // A read-only (steer-sharee) viewer never commits — hide the draft entirely.
   if (readOnly) return null;
@@ -301,7 +302,7 @@ export function CommitDraftPanel({
             >
               <ExternalLink className="icon-sm mr-1.5" />
               {t('review.openInEditor', {
-                editor: editorLabels[useSettingsStore.getState().defaultEditor],
+                editor: editorLabels[defaultEditor],
               })}
             </Button>
           )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -29,14 +29,22 @@ interface Props {
  * before the request rather than surfacing as a server error toast.
  */
 export function CreateBranchDialog({ open, onOpenChange, shortHash, onCreate }: Props) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <CreateBranchDialogContent
+          onOpenChange={onOpenChange}
+          shortHash={shortHash}
+          onCreate={onCreate}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function CreateBranchDialogContent({ onOpenChange, shortHash, onCreate }: Omit<Props, 'open'>) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
-
-  // Reset the field each time the dialog opens so a previous, abandoned name
-  // doesn't linger when creating a branch from a different commit.
-  useEffect(() => {
-    if (open) setName('');
-  }, [open]);
 
   const trimmed = name.trim();
   // Mirror of gitRefSchema: valid git-ref chars, no leading dash, non-empty.
@@ -50,44 +58,42 @@ export function CreateBranchDialog({ open, onOpenChange, shortHash, onCreate }: 
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t('graph.createBranchTitle', 'Create branch')}</DialogTitle>
-          <DialogDescription>
-            {t('graph.createBranchDesc', {
-              hash: shortHash,
-              defaultValue: `Create a new branch starting at ${shortHash} and switch to it.`,
-            })}
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return;
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder={t('graph.createBranchPlaceholder', 'branch name')}
-          data-testid="create-branch-name"
-        />
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            data-testid="create-branch-cancel"
-          >
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={submit} disabled={!isValid} data-testid="create-branch-confirm">
-            {t('graph.createBranchConfirm', 'Create branch')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DialogContent className="max-w-sm">
+      <DialogHeader>
+        <DialogTitle>{t('graph.createBranchTitle', 'Create branch')}</DialogTitle>
+        <DialogDescription>
+          {t('graph.createBranchDesc', {
+            hash: shortHash,
+            defaultValue: `Create a new branch starting at ${shortHash} and switch to it.`,
+          })}
+        </DialogDescription>
+      </DialogHeader>
+      <Input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder={t('graph.createBranchPlaceholder', 'branch name')}
+        data-testid="create-branch-name"
+      />
+      <DialogFooter>
+        <Button
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          data-testid="create-branch-cancel"
+        >
+          {t('common.cancel', 'Cancel')}
+        </Button>
+        <Button onClick={submit} disabled={!isValid} data-testid="create-branch-confirm">
+          {t('graph.createBranchConfirm', 'Create branch')}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }

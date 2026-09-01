@@ -1,12 +1,12 @@
 /**
  * @domain subdomain: Project Management
  * @domain subdomain-type: supporting
- * @domain type: domain-service
- * @domain layer: domain
+ * @domain type: benchmark-adapter
+ * @domain layer: infrastructure
  *
- * Text-search service backed by ripgrep. Mirrors what VSCode's "Search in
- * Files" panel does — spawn `rg --json`, parse the line-delimited JSON
- * events, group matches by file, return a capped result set.
+ * Benchmark-only snapshot of the removed ripgrep text-search service. It
+ * preserves the historical comparison baseline and is never imported by
+ * production runtime code.
  *
  * Ripgrep is resolved at first use via {@link findRipgrep} with a cascade of
  * fallbacks so the feature works even when Bun fails to hoist the
@@ -19,8 +19,8 @@ import { existsSync } from 'node:fs';
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync, err, ok, type Result } from 'neverthrow';
 
-import { log } from '../lib/logger.js';
-import { metric } from '../lib/telemetry.js';
+import { log } from '../../lib/logger.js';
+import { metric } from '../../lib/telemetry.js';
 
 const NS = 'text-search';
 

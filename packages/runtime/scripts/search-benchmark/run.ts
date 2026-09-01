@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -19,12 +20,19 @@ interface ScenarioResult {
   backend: BackendName;
   roots: number;
   indexedFiles: number;
-  coldReadyMs: number;
+  fileReadyMs: number;
+  contentReadyMs: number;
   file: LatencySummary;
   content: LatencySummary;
   rssDeltaBytes: number;
   watcherDelta: number | null;
   eventLoopDelayP95Ms: number;
+  corpus: CorpusSummary;
+}
+
+interface CorpusSummary {
+  count: number;
+  sha256: string;
 }
 
 interface LatencySummary {
@@ -37,7 +45,9 @@ interface Comparison {
   current: ScenarioResult;
   fff: ScenarioResult;
   gate: {
-    coldReadiness: boolean;
+    corpusParity: boolean;
+    fileReadiness: boolean;
+    contentReadiness: boolean;
     fileLatency: boolean;
     contentLatency: boolean;
   };
@@ -61,6 +71,8 @@ async function runComparison(): Promise<void> {
     process.env.SEARCH_BENCH_OUTPUT ?? join(import.meta.dir, 'results.json'),
   );
   const largeFileCount = positiveInteger(process.env.SEARCH_BENCH_LARGE_FILES, 10_000);
+  const rounds = positiveInteger(process.env.SEARCH_BENCH_ROUNDS, 3);
+  const fffMaxThreads = positiveInteger(process.env.SEARCH_BENCH_FFF_MAX_THREADS, 1);
 
   try {
     const smallRoot = join(temporaryRoot, 'small');
@@ -79,19 +91,28 @@ async function runComparison(): Promise<void> {
       { name: 'multi-worktree-3', roots: worktreeRoots },
     ];
     const comparisons: Comparison[] = [];
-    for (const scenario of scenarios) {
-      const [current, fff] = await Promise.all([
-        invokeWorker('current', scenario.roots, temporaryRoot),
-        invokeWorker('fff', scenario.roots, temporaryRoot),
-      ]);
+    for (const [scenarioIndex, scenario] of scenarios.entries()) {
+      const roundResults: Record<BackendName, ScenarioResult[]> = { current: [], fff: [] };
+      for (let round = 0; round < rounds; round += 1) {
+        const order: BackendName[] =
+          (scenarioIndex + round) % 2 === 0 ? ['current', 'fff'] : ['fff', 'current'];
+        for (const backend of order) {
+          roundResults[backend].push(await invokeWorker(backend, scenario.roots, temporaryRoot));
+        }
+      }
+      const current = aggregateRounds(roundResults.current);
+      const fff = aggregateRounds(roundResults.fff);
+      const corpusParity = current.corpus.sha256 === fff.corpus.sha256;
       comparisons.push({
         scenario: scenario.name,
         current,
         fff,
         gate: {
-          coldReadiness: fff.coldReadyMs <= current.coldReadyMs * 1.25,
-          fileLatency: improvesAtP50OrP95(current.file, fff.file),
-          contentLatency: improvesAtP50OrP95(current.content, fff.content),
+          corpusParity,
+          fileReadiness: fff.fileReadyMs <= current.fileReadyMs * 1.25,
+          contentReadiness: fff.contentReadyMs <= current.contentReadyMs * 1.25,
+          fileLatency: corpusParity && improvesAtP50OrP95(current.file, fff.file),
+          contentLatency: corpusParity && improvesAtP50OrP95(current.content, fff.content),
         },
       });
     }
@@ -102,6 +123,8 @@ async function runComparison(): Promise<void> {
       bun: Bun.version,
       configuration: {
         largeFileCount,
+        rounds,
+        fffMaxThreads,
         fileIterations: positiveInteger(process.env.SEARCH_BENCH_FILE_ITERATIONS, 50),
         contentIterations: positiveInteger(process.env.SEARCH_BENCH_CONTENT_ITERATIONS, 20),
       },
@@ -135,7 +158,10 @@ async function runWorker(
       adapters.push(
         backend === 'current'
           ? await createCurrentAdapter(root)
-          : await createFffAdapter(root, { disableWatch: false }),
+          : await createFffAdapter(root, {
+              disableWatch: false,
+              maxThreads: positiveInteger(process.env.SEARCH_BENCH_FFF_MAX_THREADS, 1),
+            }),
       );
     }
     await immediate();
@@ -161,12 +187,18 @@ async function runWorker(
     }
     await immediate();
     delay.disable();
+    const corpus = summarizeCorpus(
+      adapters.flatMap((adapter, rootIndex) =>
+        adapter.listIndexedFiles().map((file) => `${rootIndex}:${file}`),
+      ),
+    );
 
     const result: ScenarioResult = {
       backend,
       roots: adapters.length,
       indexedFiles: adapters.reduce((total, adapter) => total + adapter.indexedFiles, 0),
-      coldReadyMs: adapters.reduce((total, adapter) => total + adapter.readyMs, 0),
+      fileReadyMs: adapters.reduce((total, adapter) => total + adapter.fileReadyMs, 0),
+      contentReadyMs: adapters.reduce((total, adapter) => total + adapter.contentReadyMs, 0),
       file: summarize(fileDurations),
       content: summarize(contentDurations),
       rssDeltaBytes: Math.max(0, process.memoryUsage.rss() - rssBefore),
@@ -174,11 +206,20 @@ async function runWorker(
       eventLoopDelayP95Ms: Number.isFinite(delay.percentile(95))
         ? delay.percentile(95) / 1_000_000
         : 0,
+      corpus,
     };
     await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
   } finally {
     for (const adapter of adapters) adapter.destroy();
   }
+}
+
+function summarizeCorpus(files: string[]): CorpusSummary {
+  const normalizedFiles = [...new Set(files.map((file) => file.replaceAll('\\', '/')))].sort();
+  return {
+    count: normalizedFiles.length,
+    sha256: createHash('sha256').update(normalizedFiles.join('\n')).digest('hex'),
+  };
 }
 
 async function invokeWorker(
@@ -198,6 +239,52 @@ async function invokeWorker(
 
 function summarize(values: number[]): LatencySummary {
   return { p50Ms: percentile(values, 50), p95Ms: percentile(values, 95) };
+}
+
+function aggregateRounds(rounds: ScenarioResult[]): ScenarioResult {
+  const first = rounds[0];
+  if (!first) throw new Error('Cannot aggregate an empty benchmark round set');
+  for (const round of rounds.slice(1)) {
+    if (round.backend !== first.backend || round.roots !== first.roots) {
+      throw new Error('Benchmark round identity changed during aggregation');
+    }
+    if (round.corpus.sha256 !== first.corpus.sha256) {
+      throw new Error(
+        `${first.backend} benchmark corpus changed between rounds ` +
+          `(${first.corpus.count}/${first.corpus.sha256.slice(0, 8)} -> ` +
+          `${round.corpus.count}/${round.corpus.sha256.slice(0, 8)})`,
+      );
+    }
+  }
+
+  return {
+    backend: first.backend,
+    roots: first.roots,
+    indexedFiles: Math.round(median(rounds.map((round) => round.indexedFiles))),
+    fileReadyMs: median(rounds.map((round) => round.fileReadyMs)),
+    contentReadyMs: median(rounds.map((round) => round.contentReadyMs)),
+    file: {
+      p50Ms: median(rounds.map((round) => round.file.p50Ms)),
+      p95Ms: median(rounds.map((round) => round.file.p95Ms)),
+    },
+    content: {
+      p50Ms: median(rounds.map((round) => round.content.p50Ms)),
+      p95Ms: median(rounds.map((round) => round.content.p95Ms)),
+    },
+    rssDeltaBytes: median(rounds.map((round) => round.rssDeltaBytes)),
+    watcherDelta: medianNullable(rounds.map((round) => round.watcherDelta)),
+    eventLoopDelayP95Ms: median(rounds.map((round) => round.eventLoopDelayP95Ms)),
+    corpus: first.corpus,
+  };
+}
+
+function median(values: number[]): number {
+  return percentile(values, 50);
+}
+
+function medianNullable(values: Array<number | null>): number | null {
+  const present = values.filter((value): value is number => value !== null);
+  return present.length === values.length ? median(present) : null;
 }
 
 function percentile(values: number[], requested: number): number {
@@ -243,17 +330,18 @@ function formatReport(comparisons: Comparison[]): string {
       return [
         comparison.scenario,
         backend,
-        result.coldReadyMs.toFixed(1),
+        `${result.fileReadyMs.toFixed(1)}/${result.contentReadyMs.toFixed(1)}`,
         `${result.file.p50Ms.toFixed(2)}/${result.file.p95Ms.toFixed(2)}`,
         `${result.content.p50Ms.toFixed(2)}/${result.content.p95Ms.toFixed(2)}`,
         (result.rssDeltaBytes / 1_048_576).toFixed(1),
         String(result.watcherDelta ?? 'n/a'),
         result.eventLoopDelayP95Ms.toFixed(2),
+        `${result.corpus.count}/${result.corpus.sha256.slice(0, 8)}`,
       ].join('\t');
     }),
   );
   return [
-    'scenario\tbackend\tcold ms\tfile p50/p95 ms\tcontent p50/p95 ms\tRSS MiB\twatchers\tloop p95 ms',
+    'scenario\tbackend\tfile/content ready ms\tfile p50/p95 ms\tcontent p50/p95 ms\tRSS MiB\twatchers\tloop p95 ms\tcorpus count/hash',
     ...rows,
     '',
     ...comparisons.map(

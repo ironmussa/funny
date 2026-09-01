@@ -30,6 +30,7 @@ import {
 } from '../agent-runner-control.js';
 import { stopCommandsByCwd } from '../command-runner.js';
 import { stopContainer } from '../podman-service.js';
+import { projectSearchRegistry } from '../project-search-registry.js';
 import type { IProjectRepository } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { scratchPathFor } from '../thread-context.js';
@@ -97,6 +98,14 @@ async function updateThreadImpl(params: UpdateThreadParams) {
     const archivePath = archivePathResult.isOk() ? archivePathResult.value : undefined;
     if (archivePath) {
       await stopCommandsByCwd(thread.worktreePath).catch(() => {});
+      await projectSearchRegistry.invalidate(thread.worktreePath).match(
+        () => undefined,
+        (e) =>
+          log.warn('Failed to dispose worktree search index', {
+            namespace: 'cleanup',
+            error: e.message,
+          }),
+      );
       await removeWorktree(archivePath, thread.worktreePath).match(
         () => undefined,
         (e) => log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) }),
@@ -360,6 +369,14 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
   // Only remove worktree/branch for worktree-mode threads
   if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
     await stopCommandsByCwd(thread.worktreePath).catch(() => {});
+    await projectSearchRegistry.invalidate(thread.worktreePath).match(
+      () => undefined,
+      (e) =>
+        log.warn('Failed to dispose worktree search index', {
+          namespace: 'cleanup',
+          error: e.message,
+        }),
+    );
 
     const deletePathResult = await getServices().projects.resolveProjectPath(
       thread.projectId,
@@ -385,6 +402,14 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
   if (thread.isScratch) {
     const scratchPath = scratchPathFor(thread.userId, threadId);
     try {
+      await projectSearchRegistry.invalidate(scratchPath).match(
+        () => undefined,
+        (e) =>
+          log.warn('Failed to dispose scratch search index', {
+            namespace: 'scratch-threads',
+            error: e.message,
+          }),
+      );
       rmSync(scratchPath, { recursive: true, force: true });
       log.info('Removed scratch directory', {
         namespace: 'scratch-threads',

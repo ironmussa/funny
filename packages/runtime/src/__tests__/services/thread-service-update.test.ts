@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   git: vi.fn(),
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
   stopContainer: vi.fn(() => ({ match: (_ok: () => void) => _ok() })),
+  invalidateSearch: vi.fn(() => ({ match: (_ok: () => void) => _ok() })),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -79,6 +80,10 @@ vi.mock('../../services/ws-broker.js', () => ({
 
 vi.mock('../../services/podman-service.js', () => ({
   stopContainer: mocks.stopContainer,
+}));
+
+vi.mock('../../services/project-search-registry.js', () => ({
+  projectSearchRegistry: { invalidate: mocks.invalidateSearch },
 }));
 
 import { ok, err } from 'neverthrow';
@@ -205,6 +210,9 @@ describe('deleteThread', () => {
     expect(mocks.messageQueue.clearQueue).toHaveBeenCalledWith('t-1');
     expect(mocks.cleanupThreadState).toHaveBeenCalledWith('t-1');
     expect(mocks.tm.deleteThread).toHaveBeenCalledWith('t-1');
+    expect(mocks.invalidateSearch).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]\.funny[\\/]scratch[\\/]u-1[\\/]t-1$/),
+    );
   });
 
   test('stops running agent before delete', async () => {
@@ -230,6 +238,10 @@ describe('deleteThread', () => {
     const result = await deleteThread('t-1');
 
     expect(result.isOk()).toBe(true);
+    expect(mocks.invalidateSearch).toHaveBeenCalledWith('/repo/.worktrees/t-1');
+    expect(mocks.invalidateSearch.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.removeWorktree.mock.invocationCallOrder[0]!,
+    );
     expect(mocks.removeWorktree).toHaveBeenCalledWith('/repo', '/repo/.worktrees/t-1');
     expect(mocks.removeBranch).toHaveBeenCalledWith('/repo', 'my-app/feature-t-1');
   });
@@ -258,6 +270,10 @@ describe('updateThread — archive worktree cleanup', () => {
     const result = await updateThread({ threadId: 't-1', userId: 'u-1', archived: true });
 
     expect(result.isOk()).toBe(true);
+    expect(mocks.invalidateSearch).toHaveBeenCalledWith('/repo/.worktrees/t-1');
+    expect(mocks.invalidateSearch.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.removeWorktree.mock.invocationCallOrder[0]!,
+    );
     expect(mocks.removeWorktree).toHaveBeenCalledWith('/repo', '/repo/.worktrees/t-1');
     expect(mocks.removeBranch).toHaveBeenCalledWith('/repo', 'my-app/feature-t-1');
     expect(mocks.messageQueue.clearQueue).toHaveBeenCalledWith('t-1');

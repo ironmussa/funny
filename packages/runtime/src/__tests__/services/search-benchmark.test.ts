@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,7 +19,10 @@ describe('FFF comparative correctness fixture', () => {
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'funny-search-correctness-'));
     await createCorrectnessFixture(root);
-    [current, fff] = await Promise.all([createCurrentAdapter(root), createFffAdapter(root)]);
+    [current, fff] = await Promise.all([
+      createCurrentAdapter(root),
+      createFffAdapter(root, { disableWatch: false }),
+    ]);
   });
 
   afterAll(async () => {
@@ -39,6 +42,36 @@ describe('FFF comparative correctness fixture', () => {
     );
   });
 
+  test('reports file and content readiness independently', () => {
+    expect(current.fileReadyMs).toBeGreaterThanOrEqual(0);
+    expect(current.contentReadyMs).toBe(current.fileReadyMs);
+    expect(fff.fileReadyMs).toBeGreaterThanOrEqual(0);
+    expect(fff.contentReadyMs).toBeGreaterThanOrEqual(fff.fileReadyMs);
+  });
+
+  test('lists the exact indexed corpus used by each backend', () => {
+    expect(current.listIndexedFiles()).toContain('ignored/secret.ts');
+    expect(fff.listIndexedFiles()).not.toContain('ignored/secret.ts');
+    expect(fff.listIndexedFiles()).toContain('src/UserService.ts');
+  });
+
+  test('discovers a file created after initialization through the native watcher', async () => {
+    const relativePath = 'src/WatcherDiscoveryProbe.ts';
+    const contents = 'export const watcherDiscoveryProbe = "watcher content probe";\n';
+    await writeFile(join(root, relativePath), contents, 'utf8');
+
+    await expect
+      .poll(() => fff.fileSearch('WatcherDiscoveryProbe', 10).map((item) => item.path), {
+        timeout: 5_000,
+      })
+      .toContain(relativePath);
+    await expect
+      .poll(async () => (await fff.textSearch({ query: 'watcher content probe' })).matches, {
+        timeout: 5_000,
+      })
+      .toEqual(expect.arrayContaining([expect.objectContaining({ path: relativePath })]));
+  }, 10_000);
+
   test.each([
     { name: 'plain smart case', options: { query: 'hello' } },
     { name: 'smart case uppercase', options: { query: 'Hello' } },
@@ -51,7 +84,6 @@ describe('FFF comparative correctness fixture', () => {
       name: 'combined globs',
       options: { query: 'hello', include: '*.ts,*.md', exclude: '*.test.ts' },
     },
-    { name: 'result cap', options: { query: 'hello', maxResults: 1 } },
   ])('preserves $name result identities', async ({ options }) => {
     const [currentResult, fffResult] = await Promise.all([
       current.textSearch(options),

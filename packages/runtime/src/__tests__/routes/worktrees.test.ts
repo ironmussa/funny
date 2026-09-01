@@ -8,12 +8,14 @@ const {
   mockRemoveWorktree,
   mockGetStatusSummary,
   mockCheckWorktreePathInProject,
+  mockInvalidateSearch,
 } = vi.hoisted(() => ({
   mockListWorktrees: vi.fn(),
   mockCreateWorktree: vi.fn(),
   mockRemoveWorktree: vi.fn(),
   mockGetStatusSummary: vi.fn(),
   mockCheckWorktreePathInProject: vi.fn(),
+  mockInvalidateSearch: vi.fn(),
 }));
 
 vi.mock('@funny/core/git', () => ({
@@ -35,6 +37,10 @@ vi.mock('../../utils/route-helpers.js', () => ({
   requireProject: mockRequireProject,
 }));
 
+vi.mock('../../services/project-search-registry.js', () => ({
+  projectSearchRegistry: { invalidate: mockInvalidateSearch },
+}));
+
 // Import after mocks
 import { worktreeRoutes } from '../../routes/worktrees.js';
 
@@ -47,6 +53,7 @@ describe('Worktree Routes', () => {
     mockRemoveWorktree.mockReset();
     mockGetStatusSummary.mockReset();
     mockCheckWorktreePathInProject.mockReset();
+    mockInvalidateSearch.mockReset();
     mockRequireProject.mockReset();
 
     mockListWorktrees.mockReturnValue(ok([{ path: '/tmp/wt1', branch: 'feature/x' }]) as any);
@@ -56,6 +63,7 @@ describe('Worktree Routes', () => {
       okAsync({ unpushedCommitCount: 0, dirtyFileCount: 0, hasRemoteBranch: true }) as any,
     );
     mockCheckWorktreePathInProject.mockReturnValue(null); // null = passes containment
+    mockInvalidateSearch.mockReturnValue(okAsync(false));
     mockRequireProject.mockReturnValue(ok({ id: 'p1', path: '/tmp/project', name: 'Test' }) as any);
 
     app = new Hono();
@@ -126,6 +134,10 @@ describe('Worktree Routes', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
+    expect(mockInvalidateSearch).toHaveBeenCalledWith('/tmp/wt1');
+    expect(mockInvalidateSearch.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRemoveWorktree.mock.invocationCallOrder[0]!,
+    );
   });
 
   /*

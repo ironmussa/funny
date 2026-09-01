@@ -53,6 +53,7 @@
     "test:coverage": "bun --bun vitest run --coverage",
     "test:bun": "bun --bun vitest run",
     "bench:search": "bun scripts/search-benchmark/run.ts",
+    "verify:fff-native": "bun scripts/verify-fff-native.ts",
     "lint:promises": "node ./scripts/lint-promises.mjs src/",
     "prepublishOnly": "bun run build"
   },
@@ -63,7 +64,6 @@
     "@ff-labs/fff-node": "0.10.6",
     "@grpc/grpc-js": "1.14.0",
     "@openai/codex-sdk": "0.151.0",
-    "@vscode/ripgrep": "^1.18.0",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
     "assemblyai": "^4.35.0",
@@ -94,6 +94,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.18.0",
     "@types/ws": "^8.18.1",
+    "@vscode/ripgrep": "^1.18.0",
     "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@typescript-eslint/parser": "^8.63.0",
     "@vitest/coverage-istanbul": "^4.1.10",
@@ -106,15 +107,6 @@
     "vitest": "^4.1.9"
   },
   "optionalDependencies": {
-    "@vscode/ripgrep-darwin-arm64": "1.18.0",
-    "@vscode/ripgrep-darwin-x64": "1.18.0",
-    "@vscode/ripgrep-linux-arm": "1.18.0",
-    "@vscode/ripgrep-linux-arm64": "1.18.0",
-    "@vscode/ripgrep-linux-ia32": "1.18.0",
-    "@vscode/ripgrep-linux-x64": "1.18.0",
-    "@vscode/ripgrep-win32-arm64": "1.18.0",
-    "@vscode/ripgrep-win32-ia32": "1.18.0",
-    "@vscode/ripgrep-win32-x64": "1.18.0",
     "node-pty": "^1.1.0",
     "playwright": "^1.50.0"
   },

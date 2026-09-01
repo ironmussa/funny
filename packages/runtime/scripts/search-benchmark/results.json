@@ -1,9 +1,11 @@
 {
-  "generatedAt": "2026-08-31T01:08:28.876Z",
+  "generatedAt": "2026-08-31T01:49:33.141Z",
   "platform": "linux-x64",
   "bun": "1.4.0",
   "configuration": {
     "largeFileCount": 10000,
+    "rounds": 3,
+    "fffMaxThreads": 1,
     "fileIterations": 50,
     "contentIterations": 20
   },
@@ -14,41 +16,53 @@
       "current": {
         "backend": "current",
         "roots": 1,
-        "indexedFiles": 3790,
-        "coldReadyMs": 90.92499799999999,
+        "indexedFiles": 3823,
+        "fileReadyMs": 19.96745,
+        "contentReadyMs": 19.96745,
         "file": {
-          "p50Ms": 0.9957039999999893,
-          "p95Ms": 1.5791360000000054
+          "p50Ms": 0.4177840000000117,
+          "p95Ms": 1.2939650000000142
         },
         "content": {
-          "p50Ms": 10.845724999999959,
-          "p95Ms": 13.027198999999996
+          "p50Ms": 11.277570000000026,
+          "p95Ms": 12.857693000000012
         },
-        "rssDeltaBytes": 35524608,
+        "rssDeltaBytes": 34127872,
         "watcherDelta": 0,
-        "eventLoopDelayP95Ms": 0.585727
+        "eventLoopDelayP95Ms": 1.228799,
+        "corpus": {
+          "count": 3823,
+          "sha256": "90b7a45755a43bc3ab182dd867e16af9c81d6862eacf367413bc1828d7065d2d"
+        }
       },
       "fff": {
         "backend": "fff",
         "roots": 1,
-        "indexedFiles": 2539,
-        "coldReadyMs": 106.582071,
+        "indexedFiles": 2542,
+        "fileReadyMs": 55.36047699999999,
+        "contentReadyMs": 55.97534,
         "file": {
-          "p50Ms": 2.6235619999999926,
-          "p95Ms": 4.4007489999999905
+          "p50Ms": 1.894993000000028,
+          "p95Ms": 4.318215000000009
         },
         "content": {
-          "p50Ms": 2.3032419999999547,
-          "p95Ms": 6.289616000000024
+          "p50Ms": 2.1806980000000067,
+          "p95Ms": 3.0882589999999936
         },
-        "rssDeltaBytes": 47747072,
-        "watcherDelta": 341,
-        "eventLoopDelayP95Ms": 0.061055
+        "rssDeltaBytes": 54575104,
+        "watcherDelta": 342,
+        "eventLoopDelayP95Ms": 0.065247,
+        "corpus": {
+          "count": 2542,
+          "sha256": "62319a773d290d1eaf5b9ed725730f25a6ffc1a6dbc1be401cf6060af2f56c2a"
+        }
       },
       "gate": {
-        "coldReadiness": true,
+        "corpusParity": false,
+        "fileReadiness": false,
+        "contentReadiness": false,
         "fileLatency": false,
-        "contentLatency": true
+        "contentLatency": false
       }
     },
     {
@@ -57,40 +71,52 @@
         "backend": "current",
         "roots": 1,
         "indexedFiles": 6,
-        "coldReadyMs": 9.710218999999995,
+        "fileReadyMs": 8.415596000000008,
+        "contentReadyMs": 8.415596000000008,
         "file": {
-          "p50Ms": 0.007844000000005735,
-          "p95Ms": 0.01948600000000056
+          "p50Ms": 0.0030259999999913134,
+          "p95Ms": 0.03261100000000283
         },
         "content": {
-          "p50Ms": 5.267481000000004,
-          "p95Ms": 7.1594340000000045
+          "p50Ms": 4.984853999999984,
+          "p95Ms": 6.127545999999995
         },
-        "rssDeltaBytes": 17534976,
+        "rssDeltaBytes": 19673088,
         "watcherDelta": 0,
-        "eventLoopDelayP95Ms": 1.132543
+        "eventLoopDelayP95Ms": 1.078271,
+        "corpus": {
+          "count": 6,
+          "sha256": "160e19309fe3665298c84f7495a7d8e96f66b000965baaa4a27972934fff3b43"
+        }
       },
       "fff": {
         "backend": "fff",
         "roots": 1,
         "indexedFiles": 5,
-        "coldReadyMs": 55.90898200000001,
+        "fileReadyMs": 55.99814199999999,
+        "contentReadyMs": 56.63999599999998,
         "file": {
-          "p50Ms": 0.7102299999999957,
-          "p95Ms": 1.0220329999999933
+          "p50Ms": 0.07923900000000117,
+          "p95Ms": 0.2559799999999939
         },
         "content": {
-          "p50Ms": 0.21432199999998147,
-          "p95Ms": 0.5428970000000106
+          "p50Ms": 0.1538189999999986,
+          "p95Ms": 0.45572400000000357
         },
-        "rssDeltaBytes": 17739776,
+        "rssDeltaBytes": 18411520,
         "watcherDelta": 4,
-        "eventLoopDelayP95Ms": 0.061631
+        "eventLoopDelayP95Ms": 0.063583,
+        "corpus": {
+          "count": 5,
+          "sha256": "1460e0e5da8040f42a30ba2d9f2d9643e085a87bf4544bb7f578534b4219a759"
+        }
       },
       "gate": {
-        "coldReadiness": false,
+        "corpusParity": false,
+        "fileReadiness": false,
+        "contentReadiness": false,
         "fileLatency": false,
-        "contentLatency": true
+        "contentLatency": false
       }
     },
     {
@@ -99,38 +125,50 @@
         "backend": "current",
         "roots": 1,
         "indexedFiles": 10001,
-        "coldReadyMs": 21.25886,
+        "fileReadyMs": 26.794157,
+        "contentReadyMs": 26.794157,
         "file": {
-          "p50Ms": 3.5912340000000427,
-          "p95Ms": 5.256330000000048
+          "p50Ms": 0.6943919999999935,
+          "p95Ms": 1.4583030000000008
         },
         "content": {
-          "p50Ms": 14.032110999999986,
-          "p95Ms": 18.02701000000002
+          "p50Ms": 14.61517699999996,
+          "p95Ms": 17.137225
         },
-        "rssDeltaBytes": 37163008,
+        "rssDeltaBytes": 34922496,
         "watcherDelta": 0,
-        "eventLoopDelayP95Ms": 1.679359
+        "eventLoopDelayP95Ms": 0.930815,
+        "corpus": {
+          "count": 10001,
+          "sha256": "e0dcdee5fb2b3091b00a1b78f947f7995b70966176573e6728412ad90f09d543"
+        }
       },
       "fff": {
         "backend": "fff",
         "roots": 1,
         "indexedFiles": 10001,
-        "coldReadyMs": 55.78539000000001,
+        "fileReadyMs": 55.676379,
+        "contentReadyMs": 56.231570000000005,
         "file": {
-          "p50Ms": 4.558895000000007,
-          "p95Ms": 7.5786280000000374
+          "p50Ms": 5.171313999999995,
+          "p95Ms": 7.628911000000016
         },
         "content": {
-          "p50Ms": 9.566168999999945,
-          "p95Ms": 13.487631000000079
+          "p50Ms": 5.967376000000002,
+          "p95Ms": 10.49326000000002
         },
-        "rssDeltaBytes": 51847168,
+        "rssDeltaBytes": 105111552,
         "watcherDelta": 203,
-        "eventLoopDelayP95Ms": 0.059871
+        "eventLoopDelayP95Ms": 0.067391,
+        "corpus": {
+          "count": 10001,
+          "sha256": "e0dcdee5fb2b3091b00a1b78f947f7995b70966176573e6728412ad90f09d543"
+        }
       },
       "gate": {
-        "coldReadiness": false,
+        "corpusParity": true,
+        "fileReadiness": false,
+        "contentReadiness": false,
         "fileLatency": false,
         "contentLatency": true
       }
@@ -141,40 +179,52 @@
         "backend": "current",
         "roots": 3,
         "indexedFiles": 18,
-        "coldReadyMs": 14.879846999999998,
+        "fileReadyMs": 19.134488999999988,
+        "contentReadyMs": 19.134488999999988,
         "file": {
-          "p50Ms": 0.005269999999995889,
-          "p95Ms": 0.016151000000007798
+          "p50Ms": 0.0027949999999918873,
+          "p95Ms": 0.017803999999998155
         },
         "content": {
-          "p50Ms": 4.952571999999975,
-          "p95Ms": 6.081524999999999
+          "p50Ms": 5.070615000000032,
+          "p95Ms": 6.210081000000002
         },
-        "rssDeltaBytes": 33603584,
+        "rssDeltaBytes": 36528128,
         "watcherDelta": 0,
-        "eventLoopDelayP95Ms": 0.798719
+        "eventLoopDelayP95Ms": 0.776703,
+        "corpus": {
+          "count": 18,
+          "sha256": "d90777063b3c1acef1ed4852f29a61736d6b584d96236b279314f35e49e6923a"
+        }
       },
       "fff": {
         "backend": "fff",
         "roots": 3,
         "indexedFiles": 15,
-        "coldReadyMs": 156.99504199999998,
+        "fileReadyMs": 156.35212,
+        "contentReadyMs": 157.336817,
         "file": {
-          "p50Ms": 0.6776990000000183,
-          "p95Ms": 1.0763450000000034
+          "p50Ms": 0.07891800000001581,
+          "p95Ms": 0.20847099999997454
         },
         "content": {
-          "p50Ms": 0.22434000000004062,
-          "p95Ms": 0.452637999999979
+          "p50Ms": 0.14267799999998942,
+          "p95Ms": 0.3166530000000023
         },
-        "rssDeltaBytes": 32239616,
+        "rssDeltaBytes": 29507584,
         "watcherDelta": 12,
-        "eventLoopDelayP95Ms": 0.063167
+        "eventLoopDelayP95Ms": 0.065183,
+        "corpus": {
+          "count": 15,
+          "sha256": "31851b5d48cc647613ff5515bc14fb92f7c232477c154fae41cbd2895cd0e968"
+        }
       },
       "gate": {
-        "coldReadiness": false,
+        "corpusParity": false,
+        "fileReadiness": false,
+        "contentReadiness": false,
         "fileLatency": false,
-        "contentLatency": true
+        "contentLatency": false
       }
     }
   ],

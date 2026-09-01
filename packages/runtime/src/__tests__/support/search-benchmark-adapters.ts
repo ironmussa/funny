@@ -1,9 +1,10 @@
 import { performance } from 'node:perf_hooks';
 
 import { FileFinder, type GrepMatch } from '@ff-labs/fff-node';
+import { scoreFilePath } from '@funny/shared/lib/file-search';
 
-import { searchText, type TextSearchOptions } from '../../services/text-search-service.js';
 import { resolveGitFiles } from '../../utils/git-files.js';
+import { searchText, type TextSearchOptions } from './legacy-ripgrep-adapter.js';
 
 export interface RankedFileMatch {
   path: string;
@@ -25,10 +26,12 @@ export interface BenchmarkTextResult {
 
 export interface SearchBenchmarkAdapter {
   readonly name: 'current' | 'fff';
-  readonly readyMs: number;
+  readonly fileReadyMs: number;
+  readonly contentReadyMs: number;
   readonly indexedFiles: number;
   fileSearch(query: string, limit: number): RankedFileMatch[];
   textSearch(options: TextSearchOptions): Promise<BenchmarkTextResult>;
+  listIndexedFiles(): string[];
   destroy(): void;
 }
 
@@ -45,7 +48,8 @@ export async function createCurrentAdapter(root: string): Promise<SearchBenchmar
 
   return {
     name: 'current',
-    readyMs,
+    fileReadyMs: readyMs,
+    contentReadyMs: readyMs,
     indexedFiles: files.length,
     fileSearch(query, limit) {
       return scoreCurrentPaths(files, query, limit);
@@ -65,13 +69,16 @@ export async function createCurrentAdapter(root: string): Promise<SearchBenchmar
         truncated: result.value.truncated,
       };
     },
+    listIndexedFiles() {
+      return [...files];
+    },
     destroy() {},
   };
 }
 
 export async function createFffAdapter(
   root: string,
-  options: { disableWatch?: boolean; timeoutMs?: number } = {},
+  options: { disableWatch?: boolean; maxThreads?: number; timeoutMs?: number } = {},
 ): Promise<SearchBenchmarkAdapter> {
   const startedAt = performance.now();
   const created = FileFinder.create({
@@ -82,24 +89,38 @@ export async function createFffAdapter(
   if (!created.ok) throw new Error(`FFF initialization failed: ${created.error}`);
 
   const finder = created.value;
-  const ready = await finder.waitForIndexReady(options.timeoutMs ?? 30_000);
-  if (!ready.ok || !ready.value) {
+  const scanReady = await finder.waitForScan(options.timeoutMs ?? 30_000);
+  if (!scanReady.ok || !scanReady.value) {
     finder.destroy();
-    throw new Error(`FFF index readiness failed: ${ready.ok ? 'timed out' : ready.error}`);
+    throw new Error(
+      `FFF file-scan readiness failed: ${scanReady.ok ? 'timed out' : scanReady.error}`,
+    );
+  }
+  const fileReadyMs = performance.now() - startedAt;
+  const contentReady = await finder.waitForIndexReady(options.timeoutMs ?? 30_000);
+  if (!contentReady.ok || !contentReady.value) {
+    finder.destroy();
+    throw new Error(
+      `FFF content-index readiness failed: ${contentReady.ok ? 'timed out' : contentReady.error}`,
+    );
   }
   const progress = finder.getScanProgress();
   if (!progress.ok) {
     finder.destroy();
     throw new Error(`FFF scan progress failed: ${progress.error}`);
   }
-  const readyMs = performance.now() - startedAt;
+  const contentReadyMs = performance.now() - startedAt;
 
   return {
     name: 'fff',
-    readyMs,
+    fileReadyMs,
+    contentReadyMs,
     indexedFiles: progress.value.scannedFilesCount,
     fileSearch(query, limit) {
-      const result = finder.fileSearch(query, { pageSize: limit });
+      const result = finder.fileSearch(query, {
+        maxThreads: options.maxThreads ?? 1,
+        pageSize: limit,
+      });
       if (!result.ok) throw new Error(`FFF file search failed: ${result.error}`);
       return result.value.items.map((item, index) => ({
         path: normalizeRelativePath(item.relativePath),
@@ -110,10 +131,29 @@ export async function createFffAdapter(
     async textSearch(options) {
       return searchFffText(finder, options);
     },
+    listIndexedFiles() {
+      return listFffFiles(finder);
+    },
     destroy() {
       finder.destroy();
     },
   };
+}
+
+function listFffFiles(finder: FileFinder): string[] {
+  const files: string[] = [];
+  const pageSize = 10_000;
+  let pageIndex = 0;
+
+  while (true) {
+    const result = finder.glob('**/*', { pageIndex, pageSize });
+    if (!result.ok) throw new Error(`FFF file listing failed: ${result.error}`);
+    files.push(...result.value.items.map((item) => normalizeRelativePath(item.relativePath)));
+    if (files.length >= result.value.totalMatched || result.value.items.length === 0) break;
+    pageIndex += 1;
+  }
+
+  return files;
 }
 
 async function searchFffText(
@@ -212,7 +252,7 @@ function scoreCurrentPaths(files: string[], query: string, limit: number): Ranke
 
   for (const path of files) {
     const haystack = caseSensitive ? path : path.toLowerCase();
-    const result = currentFuzzyScore(haystack, caseSensitive ? trimmed : lowerQuery, caseSensitive);
+    const result = scoreFilePath(haystack, caseSensitive ? trimmed : lowerQuery, caseSensitive);
     if (result) scored.push({ path, ...result });
   }
 
@@ -222,37 +262,6 @@ function scoreCurrentPaths(files: string[], query: string, limit: number): Ranke
     return a.path.localeCompare(b.path);
   });
   return scored.slice(0, limit);
-}
-
-function currentFuzzyScore(
-  haystack: string,
-  needle: string,
-  caseSensitive: boolean,
-): { score: number; indices: number[] } | null {
-  const filenameStart = haystack.lastIndexOf('/') + 1;
-  const indices = fuzzyHighlightIndices(haystack, needle);
-  if (indices.length !== needle.length) return null;
-
-  let score = 0;
-  for (let index = 0; index < indices.length; index += 1) {
-    const position = indices[index];
-    score += 16;
-    if (position >= filenameStart) score += 8;
-    if (isWordStart(haystack, position, filenameStart)) score += 24;
-    if (index > 0 && indices[index - 1] === position - 1) score += 16;
-    if (caseSensitive && haystack[position] === needle[index]) score += 4;
-  }
-  const span = indices.at(-1)! - indices[0] + 1;
-  score -= (span - indices.length) * 2;
-  if (indices[0] === filenameStart) score += 32;
-  if (
-    indices[0] === filenameStart &&
-    indices.every((position, index) => position === filenameStart + index)
-  ) {
-    score += 64;
-  }
-  score -= Math.floor(haystack.length / 32);
-  return { score, indices };
 }
 
 function fuzzyHighlightIndices(path: string, query: string): number[] {
@@ -270,9 +279,4 @@ function fuzzyHighlightIndices(path: string, query: string): number[] {
     cursor = found + 1;
   }
   return indices;
-}
-
-function isWordStart(value: string, index: number, filenameStart: number): boolean {
-  if (index === 0 || index === filenameStart) return true;
-  return '/\\_-. '.includes(value[index - 1]);
 }

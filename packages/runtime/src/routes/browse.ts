@@ -13,7 +13,6 @@ import { getRemoteUrl, extractRepoName, initRepo } from '@funny/core/git';
 import { Hono } from 'hono';
 
 import { openDirectoryOnHost } from '../services/directory-opener.js';
-import { getFileIndex, getFileIndexDelta } from '../services/file-index-service.js';
 import { getServices } from '../services/service-registry.js';
 import { resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
@@ -402,84 +401,6 @@ export function searchFilesAndFolders(
   const truncated = scored.length > limit;
   return { files: scored.slice(0, limit).map((s) => s.item), truncated };
 }
-
-/**
- * Return the full file index for a project. Used by the client-side fuzzy
- * search (Ctrl+P) — clients fetch once, then score locally on every keystroke.
- * Supports `?since=<version>` for cheap no-op responses when the index hasn't
- * changed since the client's last fetch.
- *
- * Two addressing modes:
- *   - `?path=<absolute>` — auth via {@link requireProjectPath} (project scope).
- *   - `?threadId=<id>` — auth via thread ownership; the cwd is resolved via
- *     {@link resolveThreadCwd}, which covers scratch / worktree / normal
- *     threads uniformly. The response includes `basePath` so the client can
- *     build absolute paths for opening files.
- */
-app.get('/files/index', async (c) => {
-  const userId = c.get('userId') as string;
-  const threadIdParam = c.req.query('threadId');
-  const pathParam = c.req.query('path');
-
-  let dirPath: string;
-  let resolvedBasePath: string | null = null;
-
-  if (threadIdParam) {
-    const thread = await tm.getThread(threadIdParam);
-    if (!thread || thread.userId !== userId) {
-      return c.json({ error: 'Thread not found' }, 404);
-    }
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
-    if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, 400);
-    }
-    dirPath = cwdResult.value;
-    resolvedBasePath = dirPath;
-    // Scratch dirs are created lazily on first agent run. Ctrl+P may be opened
-    // before that, so ensure the dir exists; an empty fs walk is fine.
-    if (thread.isScratch) {
-      try {
-        mkdirSync(dirPath, { recursive: true });
-      } catch {
-        // Will surface as an empty index — acceptable.
-      }
-    }
-  } else {
-    const dirPathOrRes = checkRequired(pathParam, 'path or threadId query parameter');
-    if (dirPathOrRes instanceof Response) return dirPathOrRes;
-    dirPath = dirPathOrRes;
-    const denied = await requireProjectPath(dirPath, userId);
-    if (denied) return denied;
-  }
-
-  const sinceParam = c.req.query('since');
-  const since = sinceParam ? Number(sinceParam) : NaN;
-
-  if (Number.isFinite(since) && since > 0) {
-    const delta = getFileIndexDelta(dirPath, since);
-    if (delta && delta.unchanged) {
-      return c.json({
-        unchanged: true,
-        version: delta.version,
-        ...(resolvedBasePath ? { basePath: resolvedBasePath } : {}),
-      });
-    }
-  }
-
-  const snapshotResult = await getFileIndex(dirPath);
-  if (snapshotResult.isErr()) return resultToResponse(c, snapshotResult);
-  return c.json({
-    files: snapshotResult.value.files,
-    version: snapshotResult.value.version,
-    ...(resolvedBasePath ? { basePath: resolvedBasePath } : {}),
-  });
-});
 
 // List files and folders in a git repository (respects .gitignore)
 app.get('/files', async (c) => {

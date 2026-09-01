@@ -37,6 +37,7 @@ import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { type Result, ResultAsync, err, errAsync, ok } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { projectSearchRegistry } from './project-search-registry.js';
 import { getServices } from './service-registry.js';
 import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
@@ -560,6 +561,14 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
               }
 
               if (params.cleanup && thread.worktreePath) {
+                await projectSearchRegistry.invalidate(thread.worktreePath).match(
+                  () => undefined,
+                  (e) =>
+                    log.warn('Failed to dispose worktree search index', {
+                      namespace: 'git',
+                      error: e.message,
+                    }),
+                );
                 await removeWorktree(project.path, thread.worktreePath).match(
                   () => undefined,
                   (e) =>

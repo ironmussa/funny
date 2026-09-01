@@ -19,6 +19,8 @@ import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
+import { log } from '../lib/logger.js';
+import { projectSearchRegistry } from '../services/project-search-registry.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireProject } from '../utils/route-helpers.js';
@@ -131,6 +133,14 @@ worktreeRoutes.delete('/', async (c) => {
   );
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
+  await projectSearchRegistry.invalidate(worktreePath).match(
+    () => undefined,
+    (error) =>
+      log.warn('Failed to dispose worktree search index', {
+        namespace: 'worktrees',
+        error: error.message,
+      }),
+  );
   const removeResult = await removeWorktree(projectResult.value.path, worktreePath);
   if (removeResult.isErr()) return resultToResponse(c, removeResult);
 

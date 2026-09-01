@@ -51,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Verify packaged FFF native loading
+        run: bun run --cwd packages/runtime verify:fff-native ${{ matrix.target }}
+
       - name: Build server sidecar
         env:
           TAURI_TARGET_TRIPLE: ${{ matrix.target }}

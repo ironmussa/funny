@@ -32,6 +32,7 @@ import type { YamlPipelineContext } from '../pipelines/yaml-compiler.js';
 import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
+import { projectSearchRegistry } from './project-search-registry.js';
 import { getServices } from './service-registry.js';
 import * as tm from './thread-manager.js';
 
@@ -472,6 +473,14 @@ export async function cleanupReviewerThread(
 
   if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
     const { removeWorktree, removeBranch } = await import('@funny/core/git');
+    await projectSearchRegistry.invalidate(reviewerThread.worktreePath).match(
+      () => undefined,
+      (error) =>
+        log.warn('Pipeline: failed to dispose reviewer search index', {
+          namespace: 'pipeline',
+          error: error.message,
+        }),
+    );
     await removeWorktree(project.path, reviewerThread.worktreePath).match(
       () => undefined,
       (e) =>

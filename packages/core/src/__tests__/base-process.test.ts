@@ -320,7 +320,7 @@ describe('BaseAgentProcess', () => {
   //
   // Regression: HTTP `POST /messages` previously blocked for the entire
   // turn because enqueuePrompt awaited the turn completion. That caused
-  // WS tunnel timeouts (30s) and duplicate POSTs for any provider whose
+  // runner tunnel timeouts (30s) and duplicate POSTs for any provider whose
   // sendPrompt awaited the full turn (Gemini ACP / Codex / Pi).
   describe('enqueuePrompt', () => {
     test('returns before the turn completes (fire-and-forget)', async () => {

@@ -271,6 +271,10 @@ export function buildGroupedRenderItems(
 
   const filteredEvents = (threadEvents ?? []).filter(
     (e) =>
+      // gRPC v2 persists durable agent lifecycle events for replay/auditing.
+      // They have no timeline card, so including them would create invisible
+      // virtual rows (and large blank gaps) between actual chat messages.
+      !e.type.startsWith('agent:') &&
       e.type !== 'git:changed' &&
       e.type !== 'compact_boundary' &&
       // Consumed by ThreadChatView to render the per-session changed-files

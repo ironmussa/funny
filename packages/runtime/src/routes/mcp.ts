@@ -170,7 +170,7 @@ app.post('/oauth/start', async (c) => {
     );
 
   // Use forwarded headers to reconstruct the public-facing origin.
-  // When requests arrive via the WS tunnel, c.req.url is http://localhost (no port).
+  // When requests arrive via the gRPC tunnel, c.req.url is http://localhost (no port).
   const fwdHost = c.req.header('X-Forwarded-Host');
   const fwdProto = c.req.header('X-Forwarded-Proto');
   const callbackBaseUrl = fwdHost

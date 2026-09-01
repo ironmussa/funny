@@ -6,7 +6,7 @@
  *
  * Runner-side HTTP surface for the pipeline-driven dispatcher. The
  * server's `PipelineDispatchTunnelAdapter` calls these routes via the
- * runner WS tunnel when `SCHEDULER_USE_PIPELINE_DISPATCHER=true`.
+ * runner gRPC tunnel when `SCHEDULER_USE_PIPELINE_DISPATCHER=true`.
  *
  * The runner trusts the server's per-tunnel auth + tenant headers
  * (already enforced by middleware/auth.ts upstream) — these routes only

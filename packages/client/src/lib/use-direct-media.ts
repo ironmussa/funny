@@ -127,7 +127,7 @@ export interface ResolvedMedia {
  *  - local runner path → the proxied `/api/files/raw` URL IMMEDIATELY, then
  *    upgraded to a signed direct-runner URL (transport C) when the runner
  *    supports it — so the bytes stream straight from the runner instead of
- *    through the WS tunnel. Falls back silently to the proxied URL otherwise.
+ *    through the gRPC tunnel. Falls back silently to the proxied URL otherwise.
  *
  * `src` is `undefined` only when the input is empty/missing.
  */

@@ -249,6 +249,25 @@ describe('buildGroupedRenderItems', () => {
     expect(result[2].type).toBe('message');
   });
 
+  test('does not create invisible timeline rows for persisted agent lifecycle events', () => {
+    const messages = [
+      makeMessage('m1', 'User message', [], '2024-01-01T00:01:00Z'),
+      makeMessage('m2', 'Assistant response', [], '2024-01-01T00:03:00Z'),
+    ];
+    const events = [
+      makeThreadEvent('e1', 'agent:status', '2024-01-01T00:01:10Z'),
+      makeThreadEvent('e2', 'agent:init', '2024-01-01T00:01:20Z'),
+      makeThreadEvent('e3', 'agent:message', '2024-01-01T00:02:00Z'),
+      makeThreadEvent('e4', 'agent:result', '2024-01-01T00:02:50Z'),
+      makeThreadEvent('e5', 'git:commit', '2024-01-01T00:02:55Z'),
+    ];
+
+    const result = buildGroupedRenderItems(messages, events as any);
+
+    expect(result.map(getItemKey)).toEqual(['m1', 'e5', 'm2']);
+    expect(result.filter((item) => item.type === 'thread-event')).toHaveLength(1);
+  });
+
   test('returns items without events when no events provided', () => {
     const messages = [makeMessage('m1', 'Hello', [], '2024-01-01T00:01:00Z')];
     const result = buildGroupedRenderItems(messages);

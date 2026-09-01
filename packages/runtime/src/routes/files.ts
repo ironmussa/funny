@@ -456,7 +456,7 @@ async function streamRawFile(
     'Cache-Control': 'private, max-age=60',
     'Content-Disposition': `inline; filename="${encodeURIComponent(basename(canon.canonical))}"`,
     // Advertise range support so media players enable seek. Note: over the
-    // server's WS tunnel this header is filtered out by the proxy allowlist, so
+    // server's gRPC tunnel this header is filtered out by the proxy allowlist, so
     // seek only works on the direct path (`/raw-signed` or direct HTTP).
     'Accept-Ranges': 'bytes',
   };

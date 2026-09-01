@@ -49,3 +49,4 @@ docs/.vitepress/dist/
 
 # Rust connector build output
 packages/remote-connector/target/
+packages/runner-protocol-rust/target/

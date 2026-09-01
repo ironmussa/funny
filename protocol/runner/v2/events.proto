@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package runner.v2;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "runner/v2/common.proto";
+
+message EventScope {
+  string thread_id = 1;
+  string execution_id = 2;
+}
+
+enum EventDurability {
+  EVENT_DURABILITY_UNSPECIFIED = 0;
+  EVENT_DURABILITY_TRANSIENT = 1;
+  EVENT_DURABILITY_DURABLE = 2;
+  EVENT_DURABILITY_TERMINAL = 3;
+}
+
+message AgentEvent {
+  string event_type = 1;
+  google.protobuf.Struct data = 2;
+  EventDurability durability = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+}
+
+message EventGap {
+  uint64 requested_sequence = 1;
+  uint64 earliest_available_sequence = 2;
+  string reason = 3;
+}
+
+message EventsRequest {
+  SessionContext session = 1;
+  EventScope scope = 2;
+  uint64 sequence = 3;
+  oneof payload {
+    AgentEvent event = 10;
+    EventGap gap = 11;
+  }
+}
+
+message EventAccepted {
+  uint64 highest_contiguous_sequence = 1;
+}
+
+message EventsResponse {
+  SessionContext session = 1;
+  EventScope scope = 2;
+  oneof outcome {
+    EventAccepted accepted = 10;
+    EventGap gap = 11;
+    Failure failure = 12;
+  }
+}

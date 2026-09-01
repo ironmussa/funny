@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package runner.v2;
+
+import "runner/v2/common.proto";
+
+message TerminalOpen {
+  string terminal_id = 1;
+  string cwd = 2;
+  uint32 columns = 3;
+  uint32 rows = 4;
+  optional string shell = 5;
+  // Injected by the central server from the authenticated browser session.
+  string user_id = 6;
+  optional string project_id = 7;
+  optional string label = 8;
+}
+
+message TerminalResume {
+  string terminal_id = 1;
+  uint64 last_seen_output_sequence = 2;
+}
+
+message TerminalInput {
+  // Unique only for live-session duplicate suppression; input is never replayed.
+  uint64 ordinal = 1;
+  bytes data = 2;
+}
+
+message TerminalOutput {
+  uint64 sequence = 1;
+  bytes data = 2;
+}
+
+message TerminalResize {
+  uint32 columns = 1;
+  uint32 rows = 2;
+}
+
+message TerminalSignal {
+  string signal = 1;
+}
+
+message TerminalClose {
+  optional int32 exit_code = 1;
+  optional string signal = 2;
+  string reason = 3;
+}
+
+message TerminalGap {
+  uint64 requested_sequence = 1;
+  uint64 earliest_available_sequence = 2;
+}
+
+message TerminalStreamReady {}
+
+// Runner-to-server frames. Terminal input is deliberately absent so it can
+// never enter the runner's replay/outbox path.
+message TerminalRequest {
+  SessionContext session = 1;
+  string terminal_id = 2;
+  RequestMetadata metadata = 3;
+  oneof frame {
+    TerminalStreamReady ready = 10;
+    TerminalOutput output = 13;
+    TerminalClose close = 16;
+    TerminalGap gap = 17;
+    Failure failure = 18;
+  }
+}
+
+// Server-to-runner frames delivered on the runner-initiated call.
+message TerminalResponse {
+  SessionContext session = 1;
+  string terminal_id = 2;
+  RequestMetadata metadata = 3;
+  oneof frame {
+    TerminalOpen open = 10;
+    TerminalResume resume = 11;
+    TerminalInput input = 12;
+    TerminalResize resize = 14;
+    TerminalSignal signal = 15;
+    TerminalClose close = 16;
+    Failure failure = 18;
+  }
+}

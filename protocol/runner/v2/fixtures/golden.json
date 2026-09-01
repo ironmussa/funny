@@ -1,0 +1,158 @@
+[
+  {
+    "name": "version_negotiation",
+    "messageType": "runner.v2.RunnerHello",
+    "protoJson": {
+      "supportedVersions": [
+        {
+          "major": 2,
+          "minor": 1
+        },
+        {
+          "major": 2
+        }
+      ],
+      "runner": {
+        "instanceId": "runner-fixture",
+        "name": "Fixture Runner",
+        "hostname": "fixture.local",
+        "operatingSystem": "linux",
+        "workspace": "/workspace",
+        "activeProviderIds": [
+          "codex",
+          "claude"
+        ]
+      },
+      "capabilities": [
+        "RUNNER_CAPABILITY_OPERATIONS",
+        "RUNNER_CAPABILITY_EVENTS"
+      ],
+      "requestedLimits": {
+        "maxMessageBytes": 4194304,
+        "maxFrameBytes": 65536,
+        "maxPendingOperations": 32,
+        "maxActiveTunnels": 4,
+        "maxActiveTerminals": 8,
+        "maxBufferedBytesPerClass": "1048576"
+      },
+      "eventCursors": [
+        {
+          "executionId": "execution-1",
+          "lastAcceptedSequence": "41"
+        }
+      ],
+      "terminalCursors": [
+        {
+          "terminalId": "terminal-1",
+          "lastSeenOutputSequence": "7"
+        }
+      ]
+    },
+    "wireHex": "0a04080210010a02080212510a0e72756e6e65722d66697874757265120e466978747572652052756e6e65721a0d666978747572652e6c6f63616c22056c696e75782a0a2f776f726b73706163653205636f6465783206636c617564651a0201022213088080800210808004182020042808308080402a0f0a0b657865637574696f6e2d311029320e0a0a7465726d696e616c2d311007"
+  },
+  {
+    "name": "typed_failure",
+    "messageType": "runner.v2.Failure",
+    "protoJson": {
+      "code": "FAILURE_CODE_CONFLICT",
+      "message": "idempotency key reused with a different fingerprint",
+      "details": {
+        "operationKind": "insert_message"
+      }
+    },
+    "wireHex": "080512336964656d706f74656e6379206b6579207265757365642077697468206120646966666572656e742066696e6765727072696e7422230a210a0d6f7065726174696f6e4b696e6412101a0e696e736572745f6d657373616765"
+  },
+  {
+    "name": "binary_tunnel_frame",
+    "messageType": "runner.v2.TunnelRequest",
+    "protoJson": {
+      "session": {
+        "sessionEpoch": "19"
+      },
+      "tunnelId": "tunnel-1",
+      "metadata": {
+        "correlationId": "correlation-tunnel"
+      },
+      "data": {
+        "sequence": "3",
+        "data": "AP+AQUI="
+      }
+    },
+    "wireHex": "0a020813120874756e6e656c2d311a140a12636f7272656c6174696f6e2d74756e6e656c62090803120500ff804142"
+  },
+  {
+    "name": "operation_idempotency",
+    "messageType": "runner.v2.OperationsRequest",
+    "protoJson": {
+      "session": {
+        "sessionEpoch": "19"
+      },
+      "metadata": {
+        "correlationId": "correlation-operation",
+        "deadline": "2030-01-02T03:04:05.006Z",
+        "idempotencyKey": "runner-fixture:insert-message:1"
+      },
+      "insertMessage": {
+        "threadId": "thread-1",
+        "role": "assistant",
+        "content": "durable result",
+        "model": "gpt-fixture"
+      }
+    },
+    "wireHex": "0a02081312450a15636f7272656c6174696f6e2d6f7065726174696f6e120b08a5aaf5860710809bee021a1f72756e6e65722d666978747572653a696e736572742d6d6573736167653a31f201320a087468726561642d311209617373697374616e741a0e64757261626c6520726573756c742a0b6770742d66697874757265"
+  },
+  {
+    "name": "event_receipt",
+    "messageType": "runner.v2.EventsResponse",
+    "protoJson": {
+      "session": {
+        "sessionEpoch": "19"
+      },
+      "scope": {
+        "threadId": "thread-1",
+        "executionId": "execution-1"
+      },
+      "accepted": {
+        "highestContiguousSequence": "42"
+      }
+    },
+    "wireHex": "0a02081312170a087468726561642d31120b657865637574696f6e2d315202082a"
+  },
+  {
+    "name": "event_gap",
+    "messageType": "runner.v2.EventsResponse",
+    "protoJson": {
+      "session": {
+        "sessionEpoch": "19"
+      },
+      "scope": {
+        "threadId": "thread-1",
+        "executionId": "execution-1"
+      },
+      "gap": {
+        "requestedSequence": "10",
+        "earliestAvailableSequence": "24",
+        "reason": "retention window expired"
+      }
+    },
+    "wireHex": "0a02081312170a087468726561642d31120b657865637574696f6e2d315a1e080a10181a18726574656e74696f6e2077696e646f772065787069726564"
+  },
+  {
+    "name": "terminal_output_sequence",
+    "messageType": "runner.v2.TerminalRequest",
+    "protoJson": {
+      "session": {
+        "sessionEpoch": "19"
+      },
+      "terminalId": "terminal-1",
+      "metadata": {
+        "correlationId": "correlation-terminal"
+      },
+      "output": {
+        "sequence": "8",
+        "data": "aGVsbG8NCg=="
+      }
+    },
+    "wireHex": "0a020813120a7465726d696e616c2d311a160a14636f7272656c6174696f6e2d7465726d696e616c6a0b0808120768656c6c6f0d0a"
+  }
+]

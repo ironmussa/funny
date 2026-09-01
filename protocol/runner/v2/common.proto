@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package runner.v2;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Identifies a supported wire-protocol release.
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+// Features a runner can independently advertise during negotiation.
+enum RunnerCapability {
+  RUNNER_CAPABILITY_UNSPECIFIED = 0;
+  RUNNER_CAPABILITY_OPERATIONS = 1;
+  RUNNER_CAPABILITY_EVENTS = 2;
+  RUNNER_CAPABILITY_HTTP_TUNNEL = 3;
+  RUNNER_CAPABILITY_TERMINAL = 4;
+}
+
+// Runner metadata used for observability. Authorization identity is derived
+// from transport credentials, never from this message.
+message RunnerDescriptor {
+  string instance_id = 1;
+  string name = 2;
+  string hostname = 3;
+  string operating_system = 4;
+  optional string workspace = 5;
+  repeated string active_provider_ids = 6;
+}
+
+// Limits selected by the server for one authenticated runner session.
+message TransportLimits {
+  uint32 max_message_bytes = 1;
+  uint32 max_frame_bytes = 2;
+  uint32 max_pending_operations = 3;
+  uint32 max_active_tunnels = 4;
+  uint32 max_active_terminals = 5;
+  uint64 max_buffered_bytes_per_class = 6;
+}
+
+// Metadata common to independently multiplexed requests.
+message RequestMetadata {
+  string correlation_id = 1;
+  google.protobuf.Timestamp deadline = 2;
+  optional string idempotency_key = 3;
+}
+
+// Identifies the negotiated session on all streams after control activation.
+message SessionContext {
+  uint64 session_epoch = 1;
+}
+
+// Stable application failure categories. gRPC status still describes failures
+// that terminate an entire call.
+enum FailureCode {
+  FAILURE_CODE_UNSPECIFIED = 0;
+  FAILURE_CODE_INVALID_ARGUMENT = 1;
+  FAILURE_CODE_UNAUTHENTICATED = 2;
+  FAILURE_CODE_PERMISSION_DENIED = 3;
+  FAILURE_CODE_NOT_FOUND = 4;
+  FAILURE_CODE_CONFLICT = 5;
+  FAILURE_CODE_DEADLINE_EXCEEDED = 6;
+  FAILURE_CODE_CANCELLED = 7;
+  FAILURE_CODE_RESOURCE_EXHAUSTED = 8;
+  FAILURE_CODE_UNAVAILABLE = 9;
+  FAILURE_CODE_UNSUPPORTED_PROTOCOL = 10;
+  FAILURE_CODE_GAP = 11;
+  FAILURE_CODE_INTERNAL = 12;
+}
+
+// Typed failure for an individual command, operation, tunnel, or terminal.
+message Failure {
+  FailureCode code = 1;
+  string message = 2;
+  bool retryable = 3;
+  google.protobuf.Struct details = 4;
+}
+
+// A string-valued header. Repeated entries preserve multi-value headers.
+message Header {
+  string name = 1;
+  string value = 2;
+}

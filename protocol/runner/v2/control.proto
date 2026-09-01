@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package runner.v2;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "runner/v2/common.proto";
+import "runner/v2/events.proto";
+import "runner/v2/operations.proto";
+import "runner/v2/terminal.proto";
+import "runner/v2/tunnel.proto";
+
+// Native transport. The runner initiates every streaming call.
+service RunnerTransportService {
+  rpc Control(stream ControlRequest) returns (stream ControlResponse);
+  rpc Operations(stream OperationsRequest) returns (stream OperationsResponse);
+  rpc Events(stream EventsRequest) returns (stream EventsResponse);
+  rpc Tunnel(stream TunnelRequest) returns (stream TunnelResponse);
+  rpc Terminal(stream TerminalRequest) returns (stream TerminalResponse);
+}
+
+message EventResumeCursor {
+  string execution_id = 1;
+  uint64 last_accepted_sequence = 2;
+}
+
+message TerminalResumeCursor {
+  string terminal_id = 1;
+  uint64 last_seen_output_sequence = 2;
+}
+
+// First message on the control stream.
+message RunnerHello {
+  repeated ProtocolVersion supported_versions = 1;
+  RunnerDescriptor runner = 2;
+  repeated RunnerCapability capabilities = 3;
+  TransportLimits requested_limits = 4;
+  repeated EventResumeCursor event_cursors = 5;
+  repeated TerminalResumeCursor terminal_cursors = 6;
+}
+
+// First server response after successful authentication and negotiation.
+message ServerHello {
+  ProtocolVersion selected_version = 1;
+  uint64 session_epoch = 2;
+  repeated RunnerCapability enabled_capabilities = 3;
+  TransportLimits effective_limits = 4;
+  google.protobuf.Duration heartbeat_interval = 5;
+  google.protobuf.Duration heartbeat_timeout = 6;
+  repeated EventResumeCursor accepted_event_cursors = 7;
+  repeated TerminalResumeCursor accepted_terminal_cursors = 8;
+}
+
+message RunnerHeartbeat {
+  uint64 ordinal = 1;
+  google.protobuf.Timestamp sent_at = 2;
+  repeated string active_thread_ids = 3;
+}
+
+message ServerHeartbeat {
+  uint64 acknowledged_ordinal = 1;
+  google.protobuf.Timestamp received_at = 2;
+}
+
+message StartAgentCommand {
+  string thread_id = 1;
+  string prompt = 2;
+  string cwd = 3;
+  string model = 4;
+  string provider = 5;
+  string permission_mode = 6;
+  repeated bytes images = 7;
+  repeated string allowed_tools = 8;
+  repeated string disallowed_tools = 9;
+  optional string provider_session_id = 10;
+  optional string system_prefix = 11;
+}
+
+message StopAgentCommand {
+  string thread_id = 1;
+}
+
+message SendAgentMessageCommand {
+  string thread_id = 1;
+  string content = 2;
+  optional string model = 3;
+  optional string permission_mode = 4;
+  repeated bytes images = 5;
+}
+
+message GitCommand {
+  string thread_id = 1;
+  string operation = 2;
+  string cwd = 3;
+  google.protobuf.Struct parameters = 4;
+}
+
+message AssignProjectCommand {
+  string project_id = 1;
+  string local_path = 2;
+}
+
+message UnassignProjectCommand {
+  string project_id = 1;
+}
+
+message ServerCommand {
+  RequestMetadata metadata = 1;
+  oneof command {
+    StartAgentCommand start_agent = 10;
+    StopAgentCommand stop_agent = 11;
+    SendAgentMessageCommand send_agent_message = 12;
+    GitCommand git = 13;
+    AssignProjectCommand assign_project = 14;
+    UnassignProjectCommand unassign_project = 15;
+  }
+}
+
+message CancelCommand {
+  string correlation_id = 1;
+  string reason = 2;
+}
+
+message CommandOutcome {
+  string correlation_id = 1;
+  oneof outcome {
+    google.protobuf.Struct success = 10;
+    Failure failure = 11;
+  }
+}
+
+message CancellationAcknowledgement {
+  string correlation_id = 1;
+  bool work_stopped = 2;
+}
+
+message RunnerClosing {
+  string reason = 1;
+}
+
+message ServerDraining {
+  google.protobuf.Timestamp deadline = 1;
+  string reason = 2;
+}
+
+message ControlRequest {
+  oneof message {
+    RunnerHello hello = 1;
+    RunnerHeartbeat heartbeat = 2;
+    CommandOutcome command_outcome = 3;
+    CancellationAcknowledgement cancellation_acknowledgement = 4;
+    RunnerClosing closing = 5;
+  }
+}
+
+message ControlResponse {
+  oneof message {
+    ServerHello hello = 1;
+    ServerHeartbeat heartbeat = 2;
+    ServerCommand command = 3;
+    CancelCommand cancel = 4;
+    ServerDraining draining = 5;
+    Failure failure = 6;
+  }
+}

@@ -1,0 +1,298 @@
+syntax = "proto3";
+
+package runner.v2;
+
+import "google/protobuf/struct.proto";
+import "runner/v2/common.proto";
+
+enum MessagePageDirection {
+  MESSAGE_PAGE_DIRECTION_UNSPECIFIED = 0;
+  MESSAGE_PAGE_DIRECTION_BEFORE = 1;
+  MESSAGE_PAGE_DIRECTION_AFTER = 2;
+}
+
+message GetThread {
+  string thread_id = 1;
+}
+
+message GetThreadByExternalRequestId {
+  string external_request_id = 1;
+}
+
+message GetThreadByProviderSessionId {
+  string provider_session_id = 1;
+}
+
+message GetThreadWithMessages {
+  string thread_id = 1;
+  optional uint32 message_limit = 2;
+  optional uint32 message_progress = 3;
+  optional string message_anchor_id = 4;
+}
+
+message GetThreadMessages {
+  string thread_id = 1;
+  optional string cursor = 2;
+  uint32 limit = 3;
+  MessagePageDirection direction = 4;
+}
+
+message GetToolCall {
+  string tool_call_id = 1;
+}
+
+message FindToolCall {
+  string message_id = 1;
+  string name = 2;
+  string input = 3;
+}
+
+message InsertMessage {
+  string thread_id = 1;
+  string role = 2;
+  string content = 3;
+  optional string images_json = 4;
+  optional string model = 5;
+  optional string permission_mode = 6;
+  optional string effort = 7;
+  optional string author = 8;
+  optional string timestamp = 9;
+}
+
+message InsertToolCall {
+  string message_id = 1;
+  string name = 2;
+  string input = 3;
+  optional string author = 4;
+  optional string parent_tool_call_id = 5;
+}
+
+message UpdateThread {
+  string thread_id = 1;
+  google.protobuf.Struct updates = 2;
+}
+
+message UpdateMessage {
+  string message_id = 1;
+  string content = 2;
+}
+
+message UpdateToolCallOutput {
+  string tool_call_id = 1;
+  string output = 2;
+}
+
+message SaveThreadEvent {
+  string thread_id = 1;
+  string event_type = 2;
+  google.protobuf.Struct data = 3;
+}
+
+message CreatePendingPermission {
+  google.protobuf.Struct permission = 1;
+}
+
+message ResolvePendingPermission {
+  string permission_request_id = 1;
+  string decision = 2;
+}
+
+message ExpirePendingPermission {
+  string permission_request_id = 1;
+}
+
+message InsertComment {
+  string thread_id = 1;
+  string source = 2;
+  string content = 3;
+}
+
+message DeleteMessagesAfter {
+  string thread_id = 1;
+  string anchor_message_id = 2;
+}
+
+message SearchThreads {
+  optional string query = 1;
+  optional string author = 2;
+  optional string since = 3;
+  optional string until = 4;
+  optional string project_id = 5;
+  optional uint32 limit = 6;
+  optional bool case_sensitive = 7;
+}
+
+message FindLastUnansweredInteractiveToolCall { string thread_id = 1; }
+message GetProject { string project_id = 1; }
+message GetStartupCommand { string command_id = 1; string project_id = 2; }
+message GetAgentTemplate { string template_id = 1; }
+message ListProjects {}
+message ListProjectThreads { string project_id = 1; }
+message ResolveProjectPath { string project_id = 1; }
+message CreateProject {
+  string name = 1;
+  string path = 2;
+  optional string organization_id = 3;
+}
+message CreateThread { google.protobuf.Struct thread = 1; }
+message DeleteThread { string thread_id = 1; }
+message EnqueueMessage { string thread_id = 1; google.protobuf.Struct message = 2; }
+message DequeueMessage { string thread_id = 1; }
+message PeekMessage { string thread_id = 1; }
+message QueueCount { string thread_id = 1; }
+message ListQueue { string thread_id = 1; }
+message CancelQueuedMessage { string message_id = 1; }
+message UpdateQueuedMessage { string message_id = 1; string content = 2; }
+message GetProfile {}
+message GetProviderKey { string provider = 1; }
+message GetGithubToken {}
+message GetMinimaxApiKey {}
+message UpdateProfile { google.protobuf.Struct updates = 1; }
+message ResolveAgentExecutionProfile { string project_id = 1; }
+message GetBuiltinProviders {}
+message SetBuiltinProviders { repeated string active = 1; }
+message MarkAndListStaleThreads {}
+message WatcherInsert { string thread_id = 1; google.protobuf.Struct watcher = 2; }
+message WatcherGet { string watcher_id = 1; }
+message WatcherGetLiveByThreadKey { string thread_id = 1; string key = 2; }
+message WatcherListPending {}
+message WatcherListDue { uint64 now_ms = 1; }
+message WatcherListByUser {}
+message WatcherUpdate { string watcher_id = 1; google.protobuf.Struct patch = 2; }
+message WatcherDeleteByThread { string thread_id = 1; }
+message JobInsert { string thread_id = 1; google.protobuf.Struct job = 2; }
+message JobGet { string job_id = 1; }
+message JobListRunning {}
+message JobListByUser {}
+message JobUpdate { string job_id = 1; google.protobuf.Struct patch = 2; }
+message JobDeleteByThread { string thread_id = 1; }
+message CreatePermissionRule {
+  string project_path = 1;
+  string tool_name = 2;
+  optional string pattern = 3;
+  string decision = 4;
+}
+message FindPermissionRule {
+  string project_path = 1;
+  string tool_name = 2;
+  optional string tool_input = 3;
+}
+message ListPermissionRules { optional string project_path = 1; }
+
+message OperationsRequest {
+  SessionContext session = 1;
+  RequestMetadata metadata = 2;
+  oneof operation {
+    GetThread get_thread = 10;
+    GetThreadByExternalRequestId get_thread_by_external_request_id = 11;
+    GetThreadByProviderSessionId get_thread_by_provider_session_id = 12;
+    GetThreadWithMessages get_thread_with_messages = 13;
+    GetThreadMessages get_thread_messages = 14;
+    GetToolCall get_tool_call = 15;
+    FindToolCall find_tool_call = 16;
+    InsertMessage insert_message = 30;
+    InsertToolCall insert_tool_call = 31;
+    UpdateThread update_thread = 32;
+    UpdateMessage update_message = 33;
+    UpdateToolCallOutput update_tool_call_output = 34;
+    SaveThreadEvent save_thread_event = 35;
+    CreatePendingPermission create_pending_permission = 36;
+    ResolvePendingPermission resolve_pending_permission = 37;
+    ExpirePendingPermission expire_pending_permission = 38;
+    InsertComment insert_comment = 39;
+    DeleteMessagesAfter delete_messages_after = 40;
+    SearchThreads search_threads = 41;
+    FindLastUnansweredInteractiveToolCall find_last_unanswered_interactive_tool_call = 42;
+    GetProject get_project = 43;
+    GetStartupCommand get_startup_command = 44;
+    GetAgentTemplate get_agent_template = 45;
+    ListProjects list_projects = 46;
+    ListProjectThreads list_project_threads = 47;
+    ResolveProjectPath resolve_project_path = 48;
+    CreateProject create_project = 49;
+    CreateThread create_thread = 50;
+    DeleteThread delete_thread = 51;
+    EnqueueMessage enqueue_message = 52;
+    DequeueMessage dequeue_message = 53;
+    PeekMessage peek_message = 54;
+    QueueCount queue_count = 55;
+    ListQueue list_queue = 56;
+    CancelQueuedMessage cancel_queued_message = 57;
+    UpdateQueuedMessage update_queued_message = 58;
+    GetProfile get_profile = 59;
+    GetProviderKey get_provider_key = 60;
+    GetGithubToken get_github_token = 61;
+    GetMinimaxApiKey get_minimax_api_key = 62;
+    UpdateProfile update_profile = 63;
+    ResolveAgentExecutionProfile resolve_agent_execution_profile = 64;
+    GetBuiltinProviders get_builtin_providers = 65;
+    SetBuiltinProviders set_builtin_providers = 66;
+    MarkAndListStaleThreads mark_and_list_stale_threads = 67;
+    WatcherInsert watcher_insert = 68;
+    WatcherGet watcher_get = 69;
+    WatcherGetLiveByThreadKey watcher_get_live_by_thread_key = 70;
+    WatcherListPending watcher_list_pending = 71;
+    WatcherListDue watcher_list_due = 72;
+    WatcherListByUser watcher_list_by_user = 73;
+    WatcherUpdate watcher_update = 74;
+    WatcherDeleteByThread watcher_delete_by_thread = 75;
+    JobInsert job_insert = 76;
+    JobGet job_get = 77;
+    JobListRunning job_list_running = 78;
+    JobListByUser job_list_by_user = 79;
+    JobUpdate job_update = 80;
+    JobDeleteByThread job_delete_by_thread = 81;
+    CreatePermissionRule create_permission_rule = 82;
+    FindPermissionRule find_permission_rule = 83;
+    ListPermissionRules list_permission_rules = 84;
+  }
+}
+
+message ThreadRecord {
+  google.protobuf.Struct value = 1;
+}
+
+message ThreadMessages {
+  repeated google.protobuf.Struct messages = 1;
+  bool has_more = 2;
+  bool has_more_after = 3;
+  optional uint64 total = 4;
+  optional uint64 window_start = 5;
+  optional google.protobuf.Struct leading_user_message = 6;
+}
+
+message ToolCallRecord {
+  string id = 1;
+  optional string name = 2;
+  optional string input = 3;
+  optional string output = 4;
+}
+
+message InsertedRecord {
+  string id = 1;
+}
+
+message DeletedRecords {
+  uint64 count = 1;
+}
+
+message OperationSuccess {
+  oneof result {
+    google.protobuf.Struct acknowledgement = 1;
+    ThreadRecord thread = 2;
+    ThreadMessages thread_messages = 3;
+    ToolCallRecord tool_call = 4;
+    InsertedRecord inserted_record = 5;
+    DeletedRecords deleted_records = 6;
+    google.protobuf.Struct operation_response = 7;
+  }
+}
+
+message OperationsResponse {
+  SessionContext session = 1;
+  string correlation_id = 2;
+  oneof outcome {
+    OperationSuccess success = 10;
+    Failure failure = 11;
+  }
+}

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package runner.v2;
+
+import "runner/v2/common.proto";
+
+message TunnelRequestStart {
+  string method = 1;
+  string path = 2;
+  repeated Header headers = 3;
+}
+
+message TunnelResponseStart {
+  uint32 status_code = 1;
+  repeated Header headers = 2;
+}
+
+message TunnelData {
+  uint64 sequence = 1;
+  bytes data = 2;
+}
+
+message TunnelEnd {
+  uint64 final_sequence = 1;
+}
+
+message TunnelCancel {
+  string reason = 1;
+}
+
+message TunnelStreamReady {}
+
+// Runner-to-server frames. The empty ready frame opens the outbound stream;
+// subsequent frames carry the response to a server-issued tunnel request.
+message TunnelRequest {
+  SessionContext session = 1;
+  string tunnel_id = 2;
+  RequestMetadata metadata = 3;
+  oneof frame {
+    TunnelStreamReady ready = 10;
+    TunnelResponseStart response_start = 11;
+    TunnelData data = 12;
+    TunnelEnd end = 13;
+    Failure failure = 15;
+  }
+}
+
+// Server-to-runner frames delivered on the runner-initiated call.
+message TunnelResponse {
+  SessionContext session = 1;
+  string tunnel_id = 2;
+  RequestMetadata metadata = 3;
+  oneof frame {
+    TunnelRequestStart request_start = 10;
+    TunnelData data = 12;
+    TunnelEnd end = 13;
+    TunnelCancel cancel = 14;
+    Failure failure = 15;
+  }
+}

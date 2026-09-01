@@ -84,15 +84,16 @@ function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
   const handleAssign = async () => {
     if (!projectId || !localPath.trim()) return;
     setSaving(true);
-    const result = await api.assignRunnerProject(runnerId, projectId, localPath.trim());
-    setSaving(false);
-    if (result.isOk()) {
-      toast.success('Project assigned');
-      setProjectId('');
-      setLocalPath('');
-      onAssigned();
-    } else {
-      toast.error('Failed to assign project');
+    try {
+      const result = await api.assignRunnerProject(runnerId, projectId, localPath.trim());
+      if (result.isOk()) {
+        toast.success('Project assigned');
+        setProjectId('');
+        setLocalPath('');
+        onAssigned();
+      } else toast.error('Failed to assign project');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -167,14 +168,15 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
 
   const handleDelete = async () => {
     setDeleting(true);
-    const result = await api.deleteRunner(runner.runnerId);
-    setDeleting(false);
-    if (result.isOk()) {
-      setConfirmDelete(false);
-      toast.success('Runner removed');
-      onDeleted();
-    } else {
-      toast.error('Failed to remove runner');
+    try {
+      const result = await api.deleteRunner(runner.runnerId);
+      if (result.isOk()) {
+        setConfirmDelete(false);
+        toast.success('Runner removed');
+        onDeleted();
+      } else toast.error('Failed to remove runner');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -372,6 +374,7 @@ function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
         value={code}
         onChange={(e) => setCode(e.target.value)}
         onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
           if (e.key === 'Enter') handleLookup();
         }}
         placeholder="Enter runner code, e.g. WXYZ-1234"
@@ -415,9 +418,12 @@ export function RunnersSettings() {
 
   const loadRunners = async () => {
     setLoadingRunners(true);
-    const result = await api.getMyRunners();
-    setLoadingRunners(false);
-    if (result.isOk()) setRunners(result.value.runners);
+    try {
+      const result = await api.getMyRunners();
+      if (result.isOk()) setRunners(result.value.runners);
+    } finally {
+      setLoadingRunners(false);
+    }
   };
 
   useEffect(() => {

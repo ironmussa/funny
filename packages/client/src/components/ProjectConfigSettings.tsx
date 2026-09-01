@@ -33,11 +33,12 @@ export function ProjectConfigSettings() {
   const loadConfig = useCallback(async () => {
     if (!selectedProjectId) return;
     setLoading(true);
-    const result = await api.getProjectConfig(selectedProjectId);
-    if (result.isOk()) {
-      setConfig(result.value);
+    try {
+      const result = await api.getProjectConfig(selectedProjectId);
+      if (result.isOk()) setConfig(result.value);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -182,12 +183,13 @@ export function ProjectConfigSettings() {
 
         <div className="space-y-1.5">
           {(config.envFiles ?? []).map((file, i) => (
-            <div key={i} className="group flex items-center gap-2" data-testid={`env-file-${i}`}>
+            <div key={file} className="group flex items-center gap-2" data-testid={`env-file-${i}`}>
               <Input
                 className="h-8 flex-1 font-mono text-sm"
                 defaultValue={file}
                 onBlur={(e) => updateEnvFile(i, e.target.value)}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                 }}
                 data-testid={`env-file-edit-${i}`}
@@ -252,6 +254,7 @@ export function ProjectConfigSettings() {
                     defaultValue={group.name}
                     onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
                       if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                     }}
                     data-testid={`port-group-${gi}-name`}
@@ -298,6 +301,7 @@ export function ProjectConfigSettings() {
                     value={groupEnvVar}
                     onChange={(e) => setGroupEnvVar(e.target.value)}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
                       if (e.key === 'Enter') addEnvVarToGroup(gi);
                     }}
                     data-testid={`port-group-${gi}-var-input`}
@@ -385,12 +389,17 @@ export function ProjectConfigSettings() {
 
         <div className="space-y-1.5">
           {(config.postCreate ?? []).map((cmd, i) => (
-            <div key={i} className="group flex items-center gap-2" data-testid={`post-create-${i}`}>
+            <div
+              key={cmd}
+              className="group flex items-center gap-2"
+              data-testid={`post-create-${i}`}
+            >
               <Input
                 className="h-8 flex-1 font-mono text-sm"
                 defaultValue={cmd}
                 onBlur={(e) => updatePostCreate(i, e.target.value)}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                 }}
                 data-testid={`post-create-edit-${i}`}

@@ -65,6 +65,7 @@ export function ProjectUrlPatterns({
               }}
               onBlur={() => save(urls)}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
                 if (e.key === 'Enter') save(urls);
               }}
               placeholder="https://example.com"
@@ -185,6 +186,7 @@ export function LauncherUrlSetting({
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
           if (e.key === 'Enter') save();
         }}
         placeholder="http://localhost:4040"
@@ -217,6 +219,7 @@ export function DefaultTemplateSetting({
       description="Auto-select this template when creating new Deep Agent threads in this project."
     >
       <select
+        aria-label="Default agent template"
         className="border-input bg-background h-9 rounded-md border px-3 text-xs"
         value={currentTemplateId ?? ''}
         onChange={(e) => {
@@ -245,13 +248,12 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
-    const result = await projectsApi.getWeaveStatus(projectId);
-    if (result.isOk()) {
-      setStatus(result.value);
-    } else {
-      setStatus(null);
+    try {
+      const result = await projectsApi.getWeaveStatus(projectId);
+      setStatus(result.isOk() ? result.value : null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectId]);
 
   useEffect(() => {

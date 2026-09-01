@@ -59,10 +59,12 @@ function ShellEditor({
   value,
   onChange,
   testId,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   testId?: string;
+  ariaLabel: string;
 }) {
   const { resolvedTheme } = useTheme();
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
@@ -95,6 +97,7 @@ function ShellEditor({
           hideCursorInOverviewRuler: true,
           scrollbar: { vertical: 'auto', horizontal: 'hidden', verticalScrollbarSize: 8 },
           renderLineHighlight: 'none',
+          ariaLabel,
           padding: { top: 6, bottom: 6 },
         }}
       />
@@ -453,9 +456,15 @@ export function ProjectHooksSettings() {
               return (
                 <div key={key} data-testid={`hook-item-${key}`} className="settings-form-panel">
                   <div>
-                    <label className="settings-label">{t('hooks.hookType')}</label>
+                    <span id="hooks-edit-type-label" className="settings-label">
+                      {t('hooks.hookType')}
+                    </span>
                     <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
-                      <SelectTrigger className="text-sm" data-testid="hooks-type-select">
+                      <SelectTrigger
+                        aria-labelledby="hooks-edit-type-label"
+                        className="text-sm"
+                        data-testid="hooks-type-select"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -468,8 +477,11 @@ export function ProjectHooksSettings() {
                     </Select>
                   </div>
                   <div>
-                    <label className="settings-label">{t('hooks.label')}</label>
+                    <label htmlFor="hooks-edit-label" className="settings-label">
+                      {t('hooks.label')}
+                    </label>
                     <Input
+                      id="hooks-edit-label"
                       className="settings-form-input"
                       placeholder={t('hooks.label')}
                       value={label}
@@ -479,8 +491,9 @@ export function ProjectHooksSettings() {
                     />
                   </div>
                   <div>
-                    <label className="settings-label">{t('hooks.command')}</label>
+                    <span className="settings-label">{t('hooks.command')}</span>
                     <ShellEditor
+                      ariaLabel={t('hooks.command')}
                       value={command}
                       onChange={setCommand}
                       testId="hooks-command-input"
@@ -518,9 +531,15 @@ export function ProjectHooksSettings() {
       {adding && (
         <div className="settings-form-panel">
           <div>
-            <label className="settings-label">{t('hooks.hookType')}</label>
+            <span id="hooks-add-type-label" className="settings-label">
+              {t('hooks.hookType')}
+            </span>
             <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
-              <SelectTrigger className="text-sm" data-testid="hooks-type-select">
+              <SelectTrigger
+                aria-labelledby="hooks-add-type-label"
+                className="text-sm"
+                data-testid="hooks-type-select"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -533,8 +552,11 @@ export function ProjectHooksSettings() {
             </Select>
           </div>
           <div>
-            <label className="settings-label">{t('hooks.label')}</label>
+            <label htmlFor="hooks-add-label" className="settings-label">
+              {t('hooks.label')}
+            </label>
             <Input
+              id="hooks-add-label"
               className="settings-form-input"
               placeholder={t('hooks.label')}
               value={label}
@@ -544,8 +566,13 @@ export function ProjectHooksSettings() {
             />
           </div>
           <div>
-            <label className="settings-label">{t('hooks.command')}</label>
-            <ShellEditor value={command} onChange={setCommand} testId="hooks-command-input" />
+            <span className="settings-label">{t('hooks.command')}</span>
+            <ShellEditor
+              ariaLabel={t('hooks.command')}
+              value={command}
+              onChange={setCommand}
+              testId="hooks-command-input"
+            />
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" onClick={cancelEdit}>

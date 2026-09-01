@@ -102,22 +102,22 @@ export function PipelineSettings() {
   const loadPipeline = useCallback(async () => {
     if (!selectedProjectId) return;
     setLoading(true);
-    const result = await api.listPipelines(selectedProjectId);
-    if (result.isOk()) {
-      if (result.value.length > 0) {
-        setPipeline(result.value[0]);
-      } else {
-        // Auto-create pipeline if none exists
-        const createResult = await api.createPipeline({
-          projectId: selectedProjectId,
-          name: 'Code Review',
-        });
-        if (createResult.isOk()) {
-          setPipeline(createResult.value);
+    try {
+      const result = await api.listPipelines(selectedProjectId);
+      if (result.isOk()) {
+        if (result.value.length > 0) {
+          setPipeline(result.value[0]);
+        } else {
+          const createResult = await api.createPipeline({
+            projectId: selectedProjectId,
+            name: 'Code Review',
+          });
+          if (createResult.isOk()) setPipeline(createResult.value);
         }
       }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -443,8 +443,11 @@ function PromptField({
 
   return (
     <div className="space-y-1.5">
-      <label className="text-foreground text-xs font-medium">{label}</label>
+      <label htmlFor={testId} className="text-foreground text-xs font-medium">
+        {label}
+      </label>
       <Textarea
+        id={testId}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={() => onBlur(localValue)}

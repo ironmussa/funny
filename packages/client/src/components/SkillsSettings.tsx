@@ -62,6 +62,7 @@ function InstalledSkillCard({
                 href={skill.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Open source for ${skill.name}`}
                 className="text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-0.5 text-xs"
               >
                 <ExternalLink className="icon-2xs" />
@@ -240,23 +241,24 @@ export function SkillsSettings() {
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
-    const result = await api.listSkills(projectPath || undefined);
-    if (result.isOk()) {
-      setSkills(result.value.skills);
-    } else {
-      toastError(result.error);
+    try {
+      const result = await api.listSkills(projectPath || undefined);
+      if (result.isOk()) setSkills(result.value.skills);
+      else toastError(result.error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectPath]);
 
   const loadPlugins = useCallback(async () => {
     setLoadingPlugins(true);
-    const result = await api.listPlugins();
-    if (result.isOk()) {
-      setPlugins(result.value.plugins);
+    try {
+      const result = await api.listPlugins();
+      if (result.isOk()) setPlugins(result.value.plugins);
+      // Silently fail — plugins are optional
+    } finally {
+      setLoadingPlugins(false);
     }
-    // Silently fail — plugins are optional
-    setLoadingPlugins(false);
   }, []);
 
   const loadRecommended = useCallback(async () => {
@@ -332,9 +334,9 @@ export function SkillsSettings() {
             {t('skills.projectSkills')}
           </h3>
           <div className="space-y-1.5">
-            {projectSkills.map((skill, i) => (
+            {projectSkills.map((skill) => (
               <InstalledSkillCard
-                key={`project-${skill.source}-${skill.name}-${i}`}
+                key={`project-${skill.source}-${skill.name}`}
                 skill={skill}
                 onRemove={() => {}}
                 removing={false}
@@ -368,12 +370,13 @@ export function SkillsSettings() {
         {/* Custom install form */}
         {showCustom && (
           <div className="border-border/50 bg-muted/30 mb-3 space-y-2 rounded-lg border p-3">
-            <label className="text-muted-foreground block text-xs">
+            <label htmlFor="custom-skill-id" className="text-muted-foreground block text-xs">
               {t('skills.skillIdentifier')} (e.g.{' '}
               <code className="bg-muted rounded px-1 py-0.5 text-xs">owner/repo@skill-name</code>)
             </label>
             <div className="flex gap-2">
               <Input
+                id="custom-skill-id"
                 type="text"
                 value={customId}
                 onChange={(e) => setCustomId(e.target.value)}
@@ -412,9 +415,9 @@ export function SkillsSettings() {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {globalSkills.map((skill, i) => (
+            {globalSkills.map((skill) => (
               <InstalledSkillCard
-                key={`global-${skill.source}-${skill.name}-${i}`}
+                key={`global-${skill.source}-${skill.name}`}
                 skill={skill}
                 onRemove={() => handleRemove(skill.name)}
                 removing={removingName === skill.name}

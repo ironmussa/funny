@@ -111,37 +111,39 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
   const loadList = useCallback(async () => {
     if (!selectedProjectId) return;
     setLoading(true);
-    const result = await api.listWorkflows(selectedProjectId);
-    if (result.isOk()) {
-      setSummaries(result.value.workflows);
-      setSelectedName((current) => current ?? result.value.workflows[0]?.name ?? null);
-    } else {
-      toast.error(result.error.message);
+    try {
+      const result = await api.listWorkflows(selectedProjectId);
+      if (result.isOk()) {
+        setSummaries(result.value.workflows);
+        setSelectedName((current) => current ?? result.value.workflows[0]?.name ?? null);
+      } else toast.error(result.error.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [selectedProjectId]);
 
   const loadWorkflow = useCallback(
     async (name: string) => {
       if (!selectedProjectId) return;
       setLoading(true);
-      const result = await api.getWorkflow(selectedProjectId, name);
-      if (result.isOk()) {
-        applyDefinition(result.value, {
-          setDefinition,
-          setParsed,
-          setSource,
-          setDiagnostics,
-          setNodes,
-          setEdges,
-          runStates,
-          filter,
-        });
-        setSelectedNodeId(null);
-      } else {
-        toast.error(result.error.message);
+      try {
+        const result = await api.getWorkflow(selectedProjectId, name);
+        if (result.isOk()) {
+          applyDefinition(result.value, {
+            setDefinition,
+            setParsed,
+            setSource,
+            setDiagnostics,
+            setNodes,
+            setEdges,
+            runStates,
+            filter,
+          });
+          setSelectedNodeId(null);
+        } else toast.error(result.error.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     },
     [filter, runStates, selectedProjectId, setEdges, setNodes],
   );
@@ -557,6 +559,7 @@ function Inspector({
           className="h-8"
         />
         <select
+          aria-label="Action type"
           value={action.type}
           onChange={(event) => changeActionType(event.target.value as (typeof ACTION_KEYS)[number])}
           className="border-input bg-background h-8 rounded-md border px-2 text-sm"
@@ -573,6 +576,7 @@ function Inspector({
           className="h-8"
         />
         <select
+          aria-label="Error handling"
           value={node.on_error}
           onChange={(event) =>
             updateNode({ on_error: event.target.value as ParsedNode['on_error'] })
@@ -636,9 +640,9 @@ function SourcePanel({
       />
       {diagnostics.length > 0 ? (
         <div className="border-border max-h-28 overflow-auto border-t p-2">
-          {diagnostics.map((diagnostic, index) => (
+          {diagnostics.map((diagnostic) => (
             <div
-              key={`${diagnostic.path}-${index}`}
+              key={`${diagnostic.path}-${diagnostic.message}`}
               className="text-destructive flex gap-2 text-xs"
             >
               <AlertCircle className="mt-0.5 size-3.5 shrink-0" />

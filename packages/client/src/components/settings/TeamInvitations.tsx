@@ -106,6 +106,7 @@ export function TeamInvitations() {
               placeholder="user@example.com"
               className="flex-1 text-sm"
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
                 if (e.key === 'Enter') handleInvite();
               }}
               data-testid="team-invite-email"

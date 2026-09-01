@@ -108,10 +108,14 @@ export function UserManagement() {
       {showCreate && (
         <div className="border-border mx-4 space-y-3 rounded-md border p-3">
           <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label
+              htmlFor="new-user-username"
+              className="text-muted-foreground text-xs font-medium"
+            >
               {t('users.username')}
             </label>
             <Input
+              id="new-user-username"
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
               placeholder={t('users.usernamePlaceholder')}
@@ -119,28 +123,36 @@ export function UserManagement() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label
+              htmlFor="new-user-display-name"
+              className="text-muted-foreground text-xs font-medium"
+            >
               {t('users.displayName')}
             </label>
             <Input
+              id="new-user-display-name"
               value={newDisplayName}
               onChange={(e) => setNewDisplayName(e.target.value)}
               placeholder={t('users.displayNamePlaceholder')}
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label
+              htmlFor="new-user-password"
+              className="text-muted-foreground text-xs font-medium"
+            >
               {t('users.password')}
             </label>
             <Input
+              id="new-user-password"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder={t('users.passwordPlaceholder')}
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">{t('users.role')}</label>
+          <fieldset className="space-y-1.5">
+            <legend className="text-muted-foreground text-xs font-medium">{t('users.role')}</legend>
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -157,7 +169,7 @@ export function UserManagement() {
                 {t('users.roleAdmin')}
               </Button>
             </div>
-          </div>
+          </fieldset>
           {error && <p className="text-destructive text-xs">{error}</p>}
           <Button
             size="sm"

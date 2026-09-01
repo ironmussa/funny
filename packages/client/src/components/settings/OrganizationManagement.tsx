@@ -162,8 +162,14 @@ export function OrganizationManagement() {
           </p>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <label className="text-muted-foreground text-xs font-medium">Name</label>
+              <label
+                htmlFor="organization-name"
+                className="text-muted-foreground text-xs font-medium"
+              >
+                Name
+              </label>
               <Input
+                id="organization-name"
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);
@@ -177,8 +183,14 @@ export function OrganizationManagement() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-muted-foreground text-xs font-medium">Slug</label>
+              <label
+                htmlFor="organization-slug"
+                className="text-muted-foreground text-xs font-medium"
+              >
+                Slug
+              </label>
               <Input
+                id="organization-slug"
                 value={slug}
                 onChange={(e) => {
                   setSlug(e.target.value);

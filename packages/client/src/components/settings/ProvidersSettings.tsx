@@ -41,14 +41,16 @@ export function ProvidersSettings() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const result = await systemApi.getProviders();
-    if (result.isOk()) {
-      setProviders(result.value.providers);
-    } else {
-      log.error('failed to list providers', { error: result.error.message });
-      toast.error('Failed to load providers', { description: result.error.message });
+    try {
+      const result = await systemApi.getProviders();
+      if (result.isOk()) setProviders(result.value.providers);
+      else {
+        log.error('failed to list providers', { error: result.error.message });
+        toast.error('Failed to load providers', { description: result.error.message });
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -137,17 +139,22 @@ export function ProvidersSettings() {
       </div>
 
       <div className="settings-card mb-4 p-4">
-        <label className="text-muted-foreground mb-1 block text-xs font-medium">
+        <label
+          htmlFor="providers-install-source"
+          className="text-muted-foreground mb-1 block text-xs font-medium"
+        >
           Install from a git repo or a local path on the runner
         </label>
         <div className="flex gap-2">
           <Input
+            id="providers-install-source"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             placeholder="github:user/funny-myagent  ·  or  /path/to/funny-myagent"
             spellCheck={false}
             data-testid="providers-install-source"
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === 'Enter' && !installing) void handleInstall();
             }}
           />

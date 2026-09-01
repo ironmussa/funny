@@ -377,8 +377,11 @@ export function AutomationSettings() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="settings-label">Name</label>
+              <label htmlFor="automation-name" className="settings-label">
+                Name
+              </label>
               <Input
+                id="automation-name"
                 className="settings-form-input"
                 placeholder="e.g. Daily Issue Triage"
                 value={form.name}
@@ -387,8 +390,11 @@ export function AutomationSettings() {
               />
             </div>
             <div>
-              <label className="settings-label">Prompt</label>
+              <label htmlFor="automation-prompt" className="settings-label">
+                Prompt
+              </label>
               <Textarea
+                id="automation-prompt"
                 className="min-h-[100px] resize-y text-sm"
                 placeholder="What should the agent do?"
                 value={form.prompt}
@@ -396,8 +402,8 @@ export function AutomationSettings() {
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="settings-label">Schedule</label>
+              <fieldset>
+                <legend className="settings-label">Schedule</legend>
                 <Select
                   value={
                     SCHEDULE_PRESETS.some((p) => p.value === form.schedule)
@@ -431,15 +437,15 @@ export function AutomationSettings() {
                 <p className="text-muted-foreground mt-1 text-xs">
                   Cron: min hour day month weekday
                 </p>
-              </div>
-              <div>
-                <label className="settings-label">Model</label>
+              </fieldset>
+              <fieldset>
+                <legend className="settings-label">Model</legend>
                 <SegmentedControl
                   options={MODEL_OPTIONS}
                   value={form.model}
                   onChange={(v) => setForm((f) => ({ ...f, model: v }))}
                 />
-              </div>
+              </fieldset>
             </div>
             <p className="text-muted-foreground text-xs">
               Automations run locally in read-only mode (no file writes).

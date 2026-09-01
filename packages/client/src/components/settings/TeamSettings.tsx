@@ -38,27 +38,29 @@ export function TeamSettings() {
   const handleSaveApiKey = useCallback(async () => {
     if (!apiKey.trim()) return;
     setSaving(true);
-    const result = await api.updateTeamApiKey(apiKey.trim());
-    if (result.isOk()) {
-      setSettings((prev) => (prev ? { ...prev, hasApiKey: result.value.hasApiKey } : prev));
-      setApiKey('');
-      toast.success('API key saved');
-    } else {
-      toast.error('Failed to save API key');
+    try {
+      const result = await api.updateTeamApiKey(apiKey.trim());
+      if (result.isOk()) {
+        setSettings((prev) => (prev ? { ...prev, hasApiKey: result.value.hasApiKey } : prev));
+        setApiKey('');
+        toast.success('API key saved');
+      } else toast.error('Failed to save API key');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }, [apiKey]);
 
   const handleClearApiKey = useCallback(async () => {
     setSaving(true);
-    const result = await api.updateTeamApiKey(null);
-    if (result.isOk()) {
-      setSettings((prev) => (prev ? { ...prev, hasApiKey: false } : prev));
-      toast.success('API key cleared');
-    } else {
-      toast.error('Failed to clear API key');
+    try {
+      const result = await api.updateTeamApiKey(null);
+      if (result.isOk()) {
+        setSettings((prev) => (prev ? { ...prev, hasApiKey: false } : prev));
+        toast.success('API key cleared');
+      } else toast.error('Failed to clear API key');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }, []);
 
   if (loading) {

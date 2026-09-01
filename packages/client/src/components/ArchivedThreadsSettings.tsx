@@ -40,19 +40,24 @@ export function ArchivedThreadsSettings() {
     async (p: number, s: string) => {
       if (p === 1) setLoading(true);
       else setLoadingMore(true);
-      const result = await api.listArchivedThreads({
-        page: p,
-        limit: PAGE_SIZE,
-        search: s || undefined,
-        projectId: selectedProjectId || undefined,
-      });
-      if (result.isOk()) {
-        setTotal(result.value.total);
-        setThreads((prev) => (p === 1 ? result.value.threads : [...prev, ...result.value.threads]));
+      try {
+        const result = await api.listArchivedThreads({
+          page: p,
+          limit: PAGE_SIZE,
+          search: s || undefined,
+          projectId: selectedProjectId || undefined,
+        });
+        if (result.isOk()) {
+          setTotal(result.value.total);
+          setThreads((prev) =>
+            p === 1 ? result.value.threads : [...prev, ...result.value.threads],
+          );
+        }
+        // silently ignore errors
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-      // silently ignore errors
-      setLoading(false);
-      setLoadingMore(false);
     },
     [selectedProjectId],
   );

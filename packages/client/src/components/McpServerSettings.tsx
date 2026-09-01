@@ -436,13 +436,16 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setLoading(true);
     setError(null);
-    const result = await api.listMcpServers(projectPath, selectedProvider, projectId);
-    if (result.isOk()) {
-      setServers(result.value.servers);
-    } else {
-      setError(result.error.message);
+    try {
+      const result = await api.listMcpServers(projectPath, selectedProvider, projectId);
+      if (result.isOk()) {
+        setServers(result.value.servers);
+      } else {
+        setError(result.error.message);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectPath, projectId, selectedProvider]);
 
   // Load servers when projectPath changes (track previous to avoid duplicate calls)
@@ -454,8 +457,9 @@ export function McpServerSettings() {
     loadServers();
   }, [projectPath, selectedProvider, projectId, loadServers]);
 
-  // Load recommended servers once on mount
   const recommendedLoadedRef = useRef(false);
+  const oauthCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => oauthCleanupRef.current?.(), []);
   useEffect(() => {
     if (recommendedLoadedRef.current) return;
     recommendedLoadedRef.current = true;
@@ -567,6 +571,8 @@ export function McpServerSettings() {
 
     const { authUrl } = result.value;
 
+    oauthCleanupRef.current?.();
+
     const width = 600;
     const height = 700;
     const left = window.screenX + (window.innerWidth - width) / 2;
@@ -577,33 +583,32 @@ export function McpServerSettings() {
       `width=${width},height=${height},left=${left},top=${top},popup=yes`,
     );
 
+    const cleanupOAuth = () => {
+      clearInterval(checkClosed);
+      window.removeEventListener('message', handleMessage);
+    };
     const handleMessage = (event: MessageEvent) => {
       // Validate origin to prevent cross-origin message injection
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'mcp-oauth-callback') {
-        window.removeEventListener('message', handleMessage);
+        cleanupOAuth();
         setAuthenticatingName(null);
-        // Close popup from parent side (more reliable than window.close() in the popup
-        // after cross-origin OAuth navigation)
+        // Closing from the parent is more reliable after cross-origin OAuth navigation.
         if (popup && !popup.closed) popup.close();
-        if (event.data.success) {
-          loadServers();
-        } else {
-          setError(event.data.error || t('mcp.authFailed'));
-        }
+        if (event.data.success) loadServers();
+        else setError(event.data.error || t('mcp.authFailed'));
       }
     };
     window.addEventListener('message', handleMessage);
 
-    // Fallback: detect popup closed manually
     const checkClosed = setInterval(() => {
       if (popup && popup.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener('message', handleMessage);
+        cleanupOAuth();
         setAuthenticatingName(null);
         loadServers();
       }
     }, 500);
+    oauthCleanupRef.current = cleanupOAuth;
   };
 
   const handleSetToken = async (server: McpServer, token: string) => {
@@ -697,8 +702,11 @@ export function McpServerSettings() {
           <div className="settings-form-panel mb-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="settings-label">{t('mcp.name')}</label>
+                <label className="settings-label" htmlFor="mcp-custom-name">
+                  {t('mcp.name')}
+                </label>
                 <Input
+                  id="mcp-custom-name"
                   type="text"
                   value={addName}
                   onChange={(e) => setAddName(e.target.value)}
@@ -707,9 +715,11 @@ export function McpServerSettings() {
                 />
               </div>
               <div>
-                <label className="settings-label">{t('mcp.type')}</label>
+                <label className="settings-label" htmlFor="mcp-custom-type">
+                  {t('mcp.type')}
+                </label>
                 <Select value={addType} onValueChange={(v) => setAddType(v as McpServerType)}>
-                  <SelectTrigger className="h-8">
+                  <SelectTrigger id="mcp-custom-type" className="h-8">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -723,8 +733,11 @@ export function McpServerSettings() {
 
             {addType === 'http' || addType === 'sse' ? (
               <div>
-                <label className="settings-label">{t('mcp.url')}</label>
+                <label className="settings-label" htmlFor="mcp-custom-url">
+                  {t('mcp.url')}
+                </label>
                 <Input
+                  id="mcp-custom-url"
                   type="text"
                   value={addUrl}
                   onChange={(e) => setAddUrl(e.target.value)}
@@ -735,8 +748,11 @@ export function McpServerSettings() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="settings-label">{t('mcp.command')}</label>
+                  <label className="settings-label" htmlFor="mcp-custom-command">
+                    {t('mcp.command')}
+                  </label>
                   <Input
+                    id="mcp-custom-command"
                     type="text"
                     value={addCommand}
                     onChange={(e) => setAddCommand(e.target.value)}
@@ -745,8 +761,11 @@ export function McpServerSettings() {
                   />
                 </div>
                 <div>
-                  <label className="settings-label">{t('mcp.arguments')}</label>
+                  <label className="settings-label" htmlFor="mcp-custom-arguments">
+                    {t('mcp.arguments')}
+                  </label>
                   <Input
+                    id="mcp-custom-arguments"
                     type="text"
                     value={addArgs}
                     onChange={(e) => setAddArgs(e.target.value)}

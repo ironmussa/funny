@@ -71,18 +71,20 @@ export function AgentExecutionProfilesSettings() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const profilesResult = await api.listAgentExecutionProfiles();
-    if (profilesResult.isErr()) {
-      toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
-        description: profilesResult.error.message,
-      });
-      setLoading(false);
-      return;
-    }
+    try {
+      const profilesResult = await api.listAgentExecutionProfiles();
+      if (profilesResult.isErr()) {
+        toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
+          description: profilesResult.error.message,
+        });
+        return;
+      }
 
-    setProfiles(profilesResult.value.profiles);
-    setDrafts(profilesToDrafts(profilesResult.value.profiles));
-    setLoading(false);
+      setProfiles(profilesResult.value.profiles);
+      setDrafts(profilesToDrafts(profilesResult.value.profiles));
+    } finally {
+      setLoading(false);
+    }
   }, [t]);
 
   useEffect(() => {
@@ -247,32 +249,30 @@ export function ProjectAgentExecutionProfileSettings() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const profilesResult = await api.listAgentExecutionProfiles();
-    if (profilesResult.isErr()) {
-      toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
-        description: profilesResult.error.message,
-      });
-      setLoading(false);
-      return;
-    }
-
-    setProfiles(profilesResult.value.profiles);
-
-    if (selectedProjectId) {
-      const bindingResult = await api.getProjectAgentProfileBinding(selectedProjectId);
-      if (bindingResult.isOk()) {
-        setBindingProfileId(bindingResult.value.profile?.id ?? null);
-      } else {
-        toast.error(t('agentProfiles.bindingLoadError', 'Failed to load project profile'), {
-          description: bindingResult.error.message,
+    try {
+      const profilesResult = await api.listAgentExecutionProfiles();
+      if (profilesResult.isErr()) {
+        toast.error(t('agentProfiles.loadError', 'Failed to load agent profiles'), {
+          description: profilesResult.error.message,
         });
-        setBindingProfileId(null);
+        return;
       }
-    } else {
-      setBindingProfileId(null);
-    }
 
-    setLoading(false);
+      setProfiles(profilesResult.value.profiles);
+
+      if (selectedProjectId) {
+        const bindingResult = await api.getProjectAgentProfileBinding(selectedProjectId);
+        if (bindingResult.isOk()) setBindingProfileId(bindingResult.value.profile?.id ?? null);
+        else {
+          toast.error(t('agentProfiles.bindingLoadError', 'Failed to load project profile'), {
+            description: bindingResult.error.message,
+          });
+          setBindingProfileId(null);
+        }
+      } else setBindingProfileId(null);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedProjectId, t]);
 
   useEffect(() => {
@@ -285,22 +285,23 @@ export function ProjectAgentExecutionProfileSettings() {
       const nextProfileId = value === NO_PROFILE_VALUE ? null : value;
       setBindingProfileId(nextProfileId);
       setBindingSaving(true);
-
-      const result = await api.updateProjectAgentProfileBinding(selectedProjectId, {
-        profileId: nextProfileId,
-      });
-      setBindingSaving(false);
-
-      if (result.isErr()) {
-        toast.error(t('agentProfiles.bindingSaveError', 'Failed to save project profile'), {
-          description: result.error.message,
+      try {
+        const result = await api.updateProjectAgentProfileBinding(selectedProjectId, {
+          profileId: nextProfileId,
         });
-        await load();
-        return;
-      }
+        if (result.isErr()) {
+          toast.error(t('agentProfiles.bindingSaveError', 'Failed to save project profile'), {
+            description: result.error.message,
+          });
+          await load();
+          return;
+        }
 
-      setBindingProfileId(result.value.profile?.id ?? null);
-      toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
+        setBindingProfileId(result.value.profile?.id ?? null);
+        toast.success(t('agentProfiles.bindingSaved', 'Project profile saved'));
+      } finally {
+        setBindingSaving(false);
+      }
     },
     [load, selectedProjectId, t],
   );

@@ -87,13 +87,13 @@ export function WorktreeSettings() {
     if (!project) return;
     setLoading(true);
     setError(null);
-    const result = await api.listWorktrees(project.id);
-    if (result.isOk()) {
-      setWorktrees(result.value);
-    } else {
-      setError(result.error.message);
+    try {
+      const result = await api.listWorktrees(project.id);
+      if (result.isOk()) setWorktrees(result.value);
+      else setError(result.error.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
   }, [project?.id]);
 
@@ -209,23 +209,30 @@ export function WorktreeSettings() {
           ) : (
             <div className="border-border/50 bg-muted/30 mb-3 space-y-3 rounded-lg border p-3">
               <div>
-                <label className="text-muted-foreground mb-1 block text-xs">
+                <label
+                  htmlFor="worktree-branch-name"
+                  className="text-muted-foreground mb-1 block text-xs"
+                >
                   {t('worktreeSettings.branchName')}
                 </label>
                 <Input
+                  id="worktree-branch-name"
                   type="text"
                   value={branchName}
                   onChange={(e) => setBranchName(e.target.value)}
                   placeholder="feature/my-new-branch"
                   className="h-8 px-2 font-mono text-xs"
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return;
+                    if (e.key === 'Enter') handleCreate();
+                  }}
                 />
               </div>
 
-              <div>
-                <label className="text-muted-foreground mb-1 block text-xs">
+              <fieldset>
+                <legend className="text-muted-foreground mb-1 block text-xs">
                   {t('worktreeSettings.baseBranch')}
-                </label>
+                </legend>
                 <BranchPicker
                   branches={branches}
                   selected={baseBranch}
@@ -236,7 +243,7 @@ export function WorktreeSettings() {
                   showCopy={false}
                   placeholder="main (default)"
                 />
-              </div>
+              </fieldset>
 
               <Button
                 size="sm"

@@ -32,14 +32,16 @@ export function ExtensionsSettings() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const result = await api.listInstalledExtensions();
-    if (result.isOk()) {
-      setExtensions(result.value);
-    } else {
-      log.error('failed to list extensions', { error: result.error.message });
-      toast.error('Failed to load extensions', { description: result.error.message });
+    try {
+      const result = await api.listInstalledExtensions();
+      if (result.isOk()) setExtensions(result.value);
+      else {
+        log.error('failed to list extensions', { error: result.error.message });
+        toast.error('Failed to load extensions', { description: result.error.message });
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -105,17 +107,22 @@ export function ExtensionsSettings() {
       {/* Install by local path (admin only) */}
       {isAdmin && (
         <div className="settings-card mb-4 p-4">
-          <label className="text-muted-foreground mb-1 block text-xs font-medium">
+          <label
+            htmlFor="extensions-install-path"
+            className="text-muted-foreground mb-1 block text-xs font-medium"
+          >
             Install from a local package directory (on the server)
           </label>
           <div className="flex gap-2">
             <Input
+              id="extensions-install-path"
               value={installPath}
               onChange={(e) => setInstallPath(e.target.value)}
               placeholder="/path/to/funny-visualizer-xyz"
               spellCheck={false}
               data-testid="extensions-install-path"
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
                 if (e.key === 'Enter' && !installing) void handleInstall();
               }}
             />

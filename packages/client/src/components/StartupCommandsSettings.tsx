@@ -14,6 +14,16 @@ import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
+function stopStartupCommand(cmd: StartupCommand) {
+  const store = useTerminalStore.getState();
+  const tab = store.tabs.find((candidate) => candidate.commandId === cmd.id && candidate.alive);
+  if (!tab) return;
+
+  const ws = getActiveWS();
+  if (ws?.connected) ws.emit('pty:kill', { id: tab.id });
+  store.removeTab(tab.id);
+}
+
 export function StartupCommandsSettings() {
   const { t } = useTranslation();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
@@ -114,18 +124,6 @@ export function StartupCommandsSettings() {
     });
   };
 
-  const handleStop = (cmd: StartupCommand) => {
-    const store = useTerminalStore.getState();
-    const tab = store.tabs.find((t) => t.commandId === cmd.id && t.alive);
-    if (tab) {
-      const ws = getActiveWS();
-      if (ws && ws.connected) {
-        ws.emit('pty:kill', { id: tab.id });
-      }
-      store.removeTab(tab.id);
-    }
-  };
-
   const startEditing = (cmd: StartupCommand) => {
     setEditingId(cmd.id);
     setLabel(cmd.label);
@@ -191,8 +189,11 @@ export function StartupCommandsSettings() {
             <div key={cmd.id} className="settings-form-panel">
               <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <label className="settings-label">{t('startup.label')}</label>
+                  <label htmlFor={`startup-label-${cmd.id}`} className="settings-label">
+                    {t('startup.label')}
+                  </label>
                   <Input
+                    id={`startup-label-${cmd.id}`}
                     className="settings-form-input"
                     placeholder={t('startup.label')}
                     value={label}
@@ -201,13 +202,17 @@ export function StartupCommandsSettings() {
                   />
                 </div>
                 <div className="col-span-3">
-                  <label className="settings-label">{t('startup.command')}</label>
+                  <label htmlFor={`startup-command-${cmd.id}`} className="settings-label">
+                    {t('startup.command')}
+                  </label>
                   <Input
+                    id={`startup-command-${cmd.id}`}
                     className="settings-form-input font-mono"
                     placeholder={t('startup.command')}
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
                       if (e.key === 'Enter') handleUpdate(cmd.id);
                       if (e.key === 'Escape') cancelEdit();
                     }}
@@ -251,7 +256,7 @@ export function StartupCommandsSettings() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => handleStop(cmd)}
+                      onClick={() => stopStartupCommand(cmd)}
                       className="text-status-error hover:text-status-error/80"
                     >
                       <Square className="icon-sm" />
@@ -310,8 +315,11 @@ export function StartupCommandsSettings() {
         <div className="settings-form-panel">
           <div className="grid grid-cols-4 gap-2">
             <div>
-              <label className="settings-label">{t('startup.label')}</label>
+              <label htmlFor="startup-new-label" className="settings-label">
+                {t('startup.label')}
+              </label>
               <Input
+                id="startup-new-label"
                 className="h-auto py-1.5"
                 placeholder={t('startup.label')}
                 value={label}
@@ -320,13 +328,17 @@ export function StartupCommandsSettings() {
               />
             </div>
             <div className="col-span-3">
-              <label className="settings-label">{t('startup.command')}</label>
+              <label htmlFor="startup-new-command" className="settings-label">
+                {t('startup.command')}
+              </label>
               <Input
+                id="startup-new-command"
                 className="h-auto py-1.5 font-mono"
                 placeholder={t('startup.commandPlaceholder')}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
                   if (e.key === 'Enter') handleAdd();
                   if (e.key === 'Escape') cancelEdit();
                 }}

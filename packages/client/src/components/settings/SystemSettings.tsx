@@ -37,11 +37,12 @@ export function SystemSettings() {
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
-    const result = await api.setupStatus();
-    if (result.isOk() && result.value.nativeGit) {
-      setNativeGit(result.value.nativeGit);
+    try {
+      const result = await api.setupStatus();
+      if (result.isOk() && result.value.nativeGit) setNativeGit(result.value.nativeGit);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

@@ -103,21 +103,24 @@ export function AgentResourcesSettings() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await api.listAgentResources({
-      projectPath,
-      projectId,
-      provider,
-      phase: 'settings',
-    });
-    if (result.isOk()) {
-      setResources(result.value.resources);
-      setHidden(result.value.hidden);
-    } else {
-      toastError(result.error);
-      setResources([]);
-      setHidden([]);
+    try {
+      const result = await api.listAgentResources({
+        projectPath,
+        projectId,
+        provider,
+        phase: 'settings',
+      });
+      if (result.isOk()) {
+        setResources(result.value.resources);
+        setHidden(result.value.hidden);
+      } else {
+        toastError(result.error);
+        setResources([]);
+        setHidden([]);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectPath, projectId, provider]);
 
   useEffect(() => {
@@ -175,8 +178,11 @@ export function AgentResourcesSettings() {
                   {KIND_META[kind].label}
                 </h3>
                 <div className="space-y-1.5">
-                  {items.map((r, i) => (
-                    <ResourceRow key={`${r.kind}-${r.name}-${i}`} resource={r} />
+                  {items.map((resource) => (
+                    <ResourceRow
+                      key={`${resource.kind}-${resource.name}-${resource.origin}`}
+                      resource={resource}
+                    />
                   ))}
                 </div>
               </div>
@@ -197,8 +203,12 @@ export function AgentResourcesSettings() {
                 {t('agentResources.incompatible')}
               </h3>
               <div className="space-y-1.5">
-                {hidden.map((r, i) => (
-                  <ResourceRow key={`hidden-${r.kind}-${r.name}-${i}`} resource={r} dimmed />
+                {hidden.map((resource) => (
+                  <ResourceRow
+                    key={`hidden-${resource.kind}-${resource.name}-${resource.origin}`}
+                    resource={resource}
+                    dimmed
+                  />
                 ))}
               </div>
             </div>

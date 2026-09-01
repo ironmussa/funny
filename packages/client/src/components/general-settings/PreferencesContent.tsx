@@ -384,33 +384,39 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
 
   const handleSaveSmtp = useCallback(async () => {
     setSmtpSaving(true);
-    const result = await api.updateSmtpSettings({
-      host: smtpHost,
-      port: smtpPort,
-      user: smtpUser,
-      pass: smtpPass || undefined,
-      from: smtpFrom,
-    });
-    if (result.isOk()) {
-      toast.success('SMTP settings saved');
-      if (smtpPass) setSmtpHasPassword(true);
-      setSmtpSource('database');
-      setSmtpPass('');
-    } else {
-      toast.error('Failed to save SMTP settings');
+    try {
+      const result = await api.updateSmtpSettings({
+        host: smtpHost,
+        port: smtpPort,
+        user: smtpUser,
+        pass: smtpPass || undefined,
+        from: smtpFrom,
+      });
+      if (result.isOk()) {
+        toast.success('SMTP settings saved');
+        if (smtpPass) setSmtpHasPassword(true);
+        setSmtpSource('database');
+        setSmtpPass('');
+      } else {
+        toast.error('Failed to save SMTP settings');
+      }
+    } finally {
+      setSmtpSaving(false);
     }
-    setSmtpSaving(false);
   }, [smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom]);
 
   const handleTestSmtp = useCallback(async () => {
     setSmtpTesting(true);
-    const result = await api.testSmtpSettings();
-    if (result.isOk()) {
-      toast.success(`Test email sent to ${result.value.sentTo}`);
-    } else {
-      toast.error('Failed to send test email. Check your SMTP settings.');
+    try {
+      const result = await api.testSmtpSettings();
+      if (result.isOk()) {
+        toast.success(`Test email sent to ${result.value.sentTo}`);
+      } else {
+        toast.error('Failed to send test email. Check your SMTP settings.');
+      }
+    } finally {
+      setSmtpTesting(false);
     }
-    setSmtpTesting(false);
   }, []);
 
   // Defense in depth: the nav hides admin-only pages for non-admins, but a
@@ -933,8 +939,14 @@ function SmtpPanel({
         <div className="space-y-3 px-4 py-3.5">
           <div className="grid grid-cols-[1fr_80px] gap-2">
             <div>
-              <label className="text-muted-foreground mb-1 block text-xs">Host</label>
+              <label
+                htmlFor="preferences-smtp-host"
+                className="text-muted-foreground mb-1 block text-xs"
+              >
+                Host
+              </label>
               <Input
+                id="preferences-smtp-host"
                 value={smtpHost}
                 onChange={(e) => setSmtpHost(e.target.value)}
                 placeholder="smtp.gmail.com"
@@ -943,8 +955,14 @@ function SmtpPanel({
               />
             </div>
             <div>
-              <label className="text-muted-foreground mb-1 block text-xs">Port</label>
+              <label
+                htmlFor="preferences-smtp-port"
+                className="text-muted-foreground mb-1 block text-xs"
+              >
+                Port
+              </label>
               <Input
+                id="preferences-smtp-port"
                 value={smtpPort}
                 onChange={(e) => setSmtpPort(e.target.value)}
                 placeholder="587"
@@ -954,8 +972,14 @@ function SmtpPanel({
             </div>
           </div>
           <div>
-            <label className="text-muted-foreground mb-1 block text-xs">Username</label>
+            <label
+              htmlFor="preferences-smtp-user"
+              className="text-muted-foreground mb-1 block text-xs"
+            >
+              Username
+            </label>
             <Input
+              id="preferences-smtp-user"
               value={smtpUser}
               onChange={(e) => setSmtpUser(e.target.value)}
               placeholder="you@example.com"
@@ -964,8 +988,14 @@ function SmtpPanel({
             />
           </div>
           <div>
-            <label className="text-muted-foreground mb-1 block text-xs">Password</label>
+            <label
+              htmlFor="preferences-smtp-password"
+              className="text-muted-foreground mb-1 block text-xs"
+            >
+              Password
+            </label>
             <Input
+              id="preferences-smtp-password"
               type="password"
               value={smtpPass}
               onChange={(e) => setSmtpPass(e.target.value)}
@@ -979,8 +1009,14 @@ function SmtpPanel({
             />
           </div>
           <div>
-            <label className="text-muted-foreground mb-1 block text-xs">From address</label>
+            <label
+              htmlFor="preferences-smtp-from"
+              className="text-muted-foreground mb-1 block text-xs"
+            >
+              From address
+            </label>
             <Input
+              id="preferences-smtp-from"
               value={smtpFrom}
               onChange={(e) => setSmtpFrom(e.target.value)}
               placeholder="noreply@example.com"

@@ -15,7 +15,7 @@
         "deepagents-acp": "^0.1.12",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.12.25",
-        "nanoid": "^5.0.9",
+        "nanoid": "^6.0.1",
         "neverthrow": "^8.2.0",
         "nodemailer": "^9.0.1",
         "undici": "^8.5.0",
@@ -55,7 +55,7 @@
         "@hono/zod-validator": "^0.8.0",
         "eventemitter3": "^5.0.1",
         "hono": "^4.12.25",
-        "nanoid": "^5.0.9",
+        "nanoid": "^6.0.1",
         "pino": "^10.3.1",
         "yaml": "^2.6.1",
         "zod": "^4.5.4",
@@ -428,7 +428,7 @@
         "@funny/sdk": "workspace:*",
         "@funny/shared": "workspace:*",
         "hono": "^4.12.25",
-        "nanoid": "^5.0.9",
+        "nanoid": "^6.0.1",
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
@@ -466,7 +466,7 @@
         "croner": "^10.0.1",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.12.25",
-        "nanoid": "^5.0.9",
+        "nanoid": "^6.0.1",
         "neverthrow": "^8.2.0",
         "nodemailer": "^9.0.1",
         "p-limit": "^7.3.0",
@@ -517,7 +517,7 @@
         "@funny/pipelines": "workspace:*",
         "@funny/shared": "workspace:*",
         "@funny/workflows": "workspace:*",
-        "nanoid": "^5.1.6",
+        "nanoid": "^6.0.1",
         "zod": "^4.5.4",
       },
       "devDependencies": {
@@ -551,7 +551,7 @@
         "drizzle-orm": "^0.45.1",
         "hono": "^4.12.25",
         "kysely": "^0.29.2",
-        "nanoid": "^5.0.9",
+        "nanoid": "^6.0.1",
         "neverthrow": "^8.2.0",
         "nodemailer": "^9.0.1",
         "pg": "^8.20.0",
@@ -575,7 +575,7 @@
         "@bufbuild/protobuf": "2.14.0",
         "@funny/evflow": "workspace:*",
         "drizzle-orm": "^0.45.1",
-        "nanoid": "^5.1.5",
+        "nanoid": "^6.0.1",
         "pg": "^8.20.0",
         "semver": "^7.7.3",
         "xstate": "^5.32.1",
@@ -3184,7 +3184,7 @@
 
     "mute-stream": ["mute-stream@3.0.0", "", {}, "sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw=="],
 
-    "nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
+    "nanoid": ["nanoid@6.0.1", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw=="],
 
     "nanostores": ["nanostores@1.3.0", "", {}, "sha512-XPUa/jz+P1oJvN9VBxw4L9MtdFfaH3DAryqPssqhb2kXjmb9npz0dly6rCsgFWOPr4Yg9mTfM3MDZgZZ+7A3lA=="],
 

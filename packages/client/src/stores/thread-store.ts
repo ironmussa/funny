@@ -300,7 +300,7 @@ function mergeMessagesById(local: LocalMessage[], fresh: LocalMessage[]): LocalM
   const newest = Math.max(...freshTimes);
   const freshIds = new Set(fresh.map((m) => m.id));
   const freshUserKeys = new Set(
-    fresh.filter((m) => m.role === 'user').map((m) => userMessageDedupKey(m)),
+    fresh.flatMap((message) => (message.role === 'user' ? [userMessageDedupKey(message)] : [])),
   );
 
   const before: LocalMessage[] = [];
@@ -1135,16 +1135,17 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const threadEvents = eventsResult.isOk() ? eventsResult.value.events : eventsFallback;
 
     // Reconstruct compactionEvents from persisted thread events
-    const persistedCompaction: CompactionEvent[] = (threadEvents ?? [])
-      .filter((e) => e.type === 'compact_boundary')
-      .map((e) => {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        return {
+    const persistedCompaction: CompactionEvent[] = (threadEvents ?? []).flatMap((event) => {
+      if (event.type !== 'compact_boundary') return [];
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      return [
+        {
           trigger: data.trigger ?? 'auto',
           preTokens: data.preTokens ?? 0,
-          timestamp: data.timestamp ?? e.createdAt,
-        };
-      });
+          timestamp: data.timestamp ?? event.createdAt,
+        },
+      ];
+    });
     // Clear waitingReason/pendingPermission if server status is no longer waiting
     // (handles case where agent:result WS event was lost during disconnect)
     const isServerWaiting = thread.status === 'waiting';

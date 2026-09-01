@@ -78,7 +78,9 @@ export function buildFileHistoryEntries({
   if (fileHistory.length === 0) return blameEntries;
 
   const blameByCommit = new Map(
-    blameEntries.filter((entry) => !entry.uncommitted).map((entry) => [entry.commitHash, entry]),
+    blameEntries.flatMap((entry) =>
+      entry.uncommitted ? [] : [[entry.commitHash, entry] as const],
+    ),
   );
   const seen = new Set<string>();
   const entries = fileHistory.map((history) => {

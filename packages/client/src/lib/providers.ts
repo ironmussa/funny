@@ -216,14 +216,15 @@ export function filterVisibleModelGroups(
   pinnedModel?: string,
 ): ModelSelectGroup[] {
   const hidden = new Set(hiddenModels);
-  return groups
-    .map((group) => ({
+  return groups.flatMap((group) => {
+    const filtered = {
       ...group,
       models: group.models.filter((model) => {
         if (!isPromptModelConfigurable(model.value)) return true;
         if (model.value === pinnedModel) return true;
         return !hidden.has(model.value);
       }),
-    }))
-    .filter((group) => group.models.length > 0);
+    };
+    return filtered.models.length > 0 ? [filtered] : [];
+  });
 }

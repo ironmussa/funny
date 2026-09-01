@@ -202,7 +202,10 @@ const AUTODETECT_SUBSET = [
 export async function detectLanguageFromContent(content: string): Promise<string> {
   if (!content.trim()) return 'plaintext';
   await Promise.all(AUTODETECT_SUBSET.map((l) => ensureLanguage(l)));
-  const candidates = AUTODETECT_SUBSET.map(resolveLang).filter((l) => registeredLangs.has(l));
+  const candidates = AUTODETECT_SUBSET.flatMap((language) => {
+    const resolved = resolveLang(language);
+    return registeredLangs.has(resolved) ? [resolved] : [];
+  });
   if (candidates.length === 0) return 'plaintext';
   try {
     // Cap the sample so auto-detection stays cheap on large files.

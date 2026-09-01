@@ -11,10 +11,20 @@ import { useTerminalStore } from '@/stores/terminal-store';
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
 
 async function getTauriApis() {
-  const { invoke } = await import('@tauri-apps/api/core');
-  const { listen } = await import('@tauri-apps/api/event');
+  const [{ invoke }, { listen }] = await Promise.all([
+    import('@tauri-apps/api/core'),
+    import('@tauri-apps/api/event'),
+  ]);
   return { invoke, listen };
 }
+
+function getCssVar(name: string) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return raw ? `hsl(${raw})` : '#1b1b1b';
+}
+
+const getRawCssVar = (name: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 interface UseTerminalOptions {
   id: string;
@@ -27,14 +37,6 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const fontSize = useSettingsStore((s) => s.fontSize);
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[fontSize];
-
-  const getCssVar = (name: string) => {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return raw ? `hsl(${raw})` : '#1b1b1b';
-  };
-
-  const getRawCssVar = (name: string) =>
-    getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   const getTerminalTheme = () => ({
     background: getCssVar('--background'),
@@ -100,14 +102,14 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
       if (!isMounted) return;
 
       // Listen for PTY output
-      const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {
-        terminal.write(event.payload.data);
-      });
-
-      // Listen for PTY exit
-      const unlistenExit = await listen(`pty:exit:${id}`, () => {
-        useTerminalStore.getState().removeTab(id);
-      });
+      const [unlistenData, unlistenExit] = await Promise.all([
+        listen<{ data: string }>(`pty:data:${id}`, (event) => {
+          terminal.write(event.payload.data);
+        }),
+        listen(`pty:exit:${id}`, () => {
+          useTerminalStore.getState().removeTab(id);
+        }),
+      ]);
 
       // Send user input to PTY
       const onDataDisposable = terminal.onData((data) => {

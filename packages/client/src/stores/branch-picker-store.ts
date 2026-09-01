@@ -45,7 +45,14 @@ function normalizeBranchName(branch: string): string {
 }
 
 function normalizeRemoteBranches(branches: string[]): string[] {
-  return [...new Set(branches.map(normalizeBranchName).filter(Boolean))];
+  return [
+    ...new Set(
+      branches.flatMap((branch) => {
+        const normalized = normalizeBranchName(branch);
+        return normalized ? [normalized] : [];
+      }),
+    ),
+  ];
 }
 
 function findPreferredBranch(

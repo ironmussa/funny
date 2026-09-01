@@ -72,8 +72,9 @@ export function selectOtherViewers(
   const viewers = state.viewersByThread[threadId] ?? [];
   const byUser = new Map<string, PresenceViewer['user']>();
   for (const v of viewers) {
-    if (v.user.id === selfUserId) continue;
-    if (!byUser.has(v.user.id)) byUser.set(v.user.id, v.user);
+    const { user } = v;
+    if (user.id === selfUserId) continue;
+    if (!byUser.has(user.id)) byUser.set(user.id, user);
   }
   return Array.from(byUser.values());
 }

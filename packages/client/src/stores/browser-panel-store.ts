@@ -430,8 +430,10 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   closeBrowserSession: async () => {
     const { sessionId } = get();
     if (!sessionId) return;
-    const { browserSessionClient } = await import('@/lib/browser-session-client');
-    const { clearLatestFrame } = await import('@/lib/browser-session-frames');
+    const [{ browserSessionClient }, { clearLatestFrame }] = await Promise.all([
+      import('@/lib/browser-session-client'),
+      import('@/lib/browser-session-frames'),
+    ]);
     browserSessionClient.close(sessionId, 'user');
     clearLatestFrame(sessionId);
     set({ sessionId: null, sessionStatus: 'idle', sessionError: null });

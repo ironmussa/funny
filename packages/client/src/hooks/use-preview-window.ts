@@ -42,7 +42,7 @@ export function usePreviewWindow() {
     async (opts: { commandId: string; projectId: string; port: number; commandLabel: string }) => {
       // In browser mode, simply open a new tab with the localhost URL
       if (!isTauri) {
-        window.open(`http://localhost:${opts.port}`, '_blank');
+        window.open(`http://localhost:${opts.port}`, '_blank', 'noopener,noreferrer');
         return;
       }
 

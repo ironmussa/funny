@@ -148,9 +148,9 @@ export const useTerminalStore = create<TerminalState>()(
         set((state) => {
           if (fromIndex === toIndex) return state;
           // Build the indices of this project's tabs within the global tabs array
-          const projectTabIndices = state.tabs
-            .map((t, i) => (t.projectId === projectId ? i : -1))
-            .filter((i) => i !== -1);
+          const projectTabIndices = state.tabs.flatMap((tab, index) =>
+            tab.projectId === projectId ? [index] : [],
+          );
           if (
             fromIndex < 0 ||
             toIndex < 0 ||

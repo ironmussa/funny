@@ -36,20 +36,19 @@ export function applyRunnerProviderGroups(
 
   // 2. Append the runner's external providers.
   const existing = new Set(visible.map((g) => g.provider));
-  const extra: ModelGroup[] = providers
-    .filter((p) => !existing.has(p.id))
-    .map((p) => {
-      const models =
-        p.models.kind === 'static' && p.models.entries && p.models.entries.length > 0
-          ? p.models.entries.map((e) => ({ value: `${p.id}:${e.id}`, label: e.label }))
-          : [
-              {
-                value: `${p.id}:${p.models.defaultModel}`,
-                label: `${p.label} (configured default)`,
-              },
-            ];
-      return { provider: p.id, providerLabel: p.label, models };
-    });
+  const extra: ModelGroup[] = providers.flatMap((p) => {
+    if (existing.has(p.id)) return [];
+    const models =
+      p.models.kind === 'static' && p.models.entries && p.models.entries.length > 0
+        ? p.models.entries.map((e) => ({ value: `${p.id}:${e.id}`, label: e.label }))
+        : [
+            {
+              value: `${p.id}:${p.models.defaultModel}`,
+              label: `${p.label} (configured default)`,
+            },
+          ];
+    return [{ provider: p.id, providerLabel: p.label, models }];
+  });
   const shown = extra.length > 0 ? [...visible, ...extra] : visible;
 
   // 3. Availability: grey out (don't remove) providers that cannot run.

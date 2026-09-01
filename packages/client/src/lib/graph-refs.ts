@@ -120,7 +120,7 @@ export function foldGraphRefs(
   const named = rawRefs.filter((r) => (typeof r === 'string' ? r : r.name).trim() !== '');
   const allNames = new Set(named.map((r) => (typeof r === 'string' ? r : r.name)));
   const refs = named.map((r) => normalizeRef(r, allNames));
-  const localNames = new Set(refs.filter((r) => r.kind === 'local').map((r) => r.name));
+  const localNames = new Set(refs.flatMap((ref) => (ref.kind === 'local' ? [ref.name] : [])));
   // local branch name → its remote-tracking ref sitting on this same commit.
   const syncedRemoteFor = new Map<string, GraphRefDTO>();
   for (const r of refs) {

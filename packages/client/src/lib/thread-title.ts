@@ -236,8 +236,7 @@ export function parseThreadTitleForDisplay(title: string): ParsedThreadTitle {
   const githubPullRequest =
     titleParts.find((part) => part.kind === 'githubPullRequest')?.reference ?? null;
   const visibleText = titleParts
-    .filter((part) => part.kind === 'text')
-    .map((part) => part.text)
+    .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
     .join(' ')
     .trim();
 

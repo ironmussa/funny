@@ -211,7 +211,8 @@ export const useTestStore = create<TestState>((set, get) => ({
         if (s.availableProjects.length === 0 && projects.length > 0) {
           // Restore saved selection for this project, falling back to all
           const saved = s.activeProjectId ? loadSelectedProjects(s.activeProjectId) : null;
-          const validSaved = saved?.filter((p) => projects.includes(p));
+          const projectIds = new Set(projects);
+          const validSaved = saved?.filter((project) => projectIds.has(project));
           projectUpdate = {
             availableProjects: projects,
             selectedProjects: validSaved && validSaved.length > 0 ? validSaved : projects,

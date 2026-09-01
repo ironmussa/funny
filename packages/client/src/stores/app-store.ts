@@ -5,7 +5,7 @@
  * Optimized: Uses useSyncExternalStore to subscribe to all three stores but only
  * triggers re-renders when the selector result changes (shallow equality check).
  */
-import { useSyncExternalStore, useRef, useCallback } from 'react';
+import { useSyncExternalStore, useCallback } from 'react';
 
 import { useProjectStore } from './project-store';
 import { useThreadStore } from './thread-store';
@@ -70,19 +70,7 @@ function subscribeToCombined(onStoreChange: () => void): () => void {
  * Only re-renders when the selected value changes (referential equality).
  */
 export function useAppStore<T>(selector: (state: CombinedState) => T): T {
-  // Memoize selector result to prevent unnecessary re-renders
-  const prevRef = useRef<{ value: T } | null>(null);
-  const selectorRef = useRef(selector);
-  selectorRef.current = selector;
-
-  const getSnapshot = useCallback(() => {
-    const next = selectorRef.current(getCombinedState());
-    if (prevRef.current !== null && Object.is(prevRef.current.value, next)) {
-      return prevRef.current.value;
-    }
-    prevRef.current = { value: next };
-    return next;
-  }, []);
+  const getSnapshot = useCallback(() => selector(getCombinedState()), [selector]);
 
   return useSyncExternalStore(subscribeToCombined, getSnapshot, getSnapshot);
 }

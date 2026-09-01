@@ -61,14 +61,12 @@ export function getThreadsByProject(): Record<string, any[]> {
     const ids = state.threadIdsByProject[pid];
     if (!ids) continue;
     const seen = new Set<string>();
-    result[pid] = ids
-      .filter((id: string) => {
-        if (seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      })
-      .map((id: string) => state.threadsById[id])
-      .filter(Boolean);
+    result[pid] = ids.flatMap((id: string) => {
+      if (seen.has(id)) return [];
+      seen.add(id);
+      const thread = state.threadsById[id];
+      return thread ? [thread] : [];
+    });
   }
   return result;
 }

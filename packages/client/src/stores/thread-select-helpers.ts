@@ -40,16 +40,17 @@ export function deriveWaitingState(
 }
 
 export function reconstructCompactionEvents(threadEvents: ThreadEvent[]): CompactionEvent[] {
-  return threadEvents
-    .filter((e) => e.type === 'compact_boundary')
-    .map((e) => {
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      return {
+  return threadEvents.flatMap((event) => {
+    if (event.type !== 'compact_boundary') return [];
+    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    return [
+      {
         trigger: data.trigger ?? 'auto',
         preTokens: data.preTokens ?? 0,
-        timestamp: data.timestamp ?? e.createdAt,
-      };
-    });
+        timestamp: data.timestamp ?? event.createdAt,
+      },
+    ];
+  });
 }
 
 export function computeNextActiveThread(

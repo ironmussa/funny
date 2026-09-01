@@ -183,7 +183,9 @@ export function useReviewActions({
   const handleDiscardFolder = useCallback(
     (folderPath: string) => {
       const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
-      const paths = summaries.map((s) => s.path).filter((p) => p.startsWith(prefix));
+      const paths = summaries.flatMap((summary) =>
+        summary.path.startsWith(prefix) ? [summary.path] : [],
+      );
       if (paths.length === 0) return;
       setConfirmDialog({ type: 'discard-all', paths });
     },
@@ -313,7 +315,7 @@ export function useReviewActions({
             const s = summaries.find((f) => f.path === p);
             return s && !s.staged;
           })
-        : summaries.filter((f) => !f.staged).map((f) => f.path);
+        : summaries.flatMap((file) => (!file.staged ? [file.path] : []));
     if (paths.length === 0) {
       toast.info(t('review.allAlreadyStaged', { defaultValue: 'All files already staged' }));
       return;
@@ -347,7 +349,7 @@ export function useReviewActions({
             const s = summaries.find((f) => f.path === p);
             return s && s.staged;
           })
-        : summaries.filter((f) => f.staged).map((f) => f.path);
+        : summaries.flatMap((file) => (file.staged ? [file.path] : []));
     if (paths.length === 0) {
       toast.info(t('review.noneStaged', { defaultValue: 'No staged files to unstage' }));
       return;

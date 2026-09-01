@@ -232,9 +232,9 @@ export function useCommitWorkflow({
     commitLockRef.current = true;
     setActionInProgress(selectedAction);
 
-    const toUnstage = summaries
-      .filter((f) => f.staged && !checkedFiles.has(f.path))
-      .map((f) => f.path);
+    const toUnstage = summaries.flatMap((file) =>
+      file.staged && !checkedFiles.has(file.path) ? [file.path] : [],
+    );
     const toStage = Array.from(checkedFiles).filter((p) => {
       const s = summaries.find((f) => f.path === p);
       return s && !s.staged;

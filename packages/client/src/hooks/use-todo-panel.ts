@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { formatInput, getTodos, isTodoToolName } from '@/components/tool-cards/utils';
 import type { TodoItem } from '@/components/tool-cards/utils';
@@ -25,15 +25,10 @@ export interface AgentTodos {
  * preventing downstream recomputes on every WS message update.
  */
 function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: string }[] {
-  const prevRef = useRef<{ id: string; input: any; parentToolCallId?: string }[]>([]);
   const messages = useThreadMessages();
 
   return useMemo(() => {
-    if (!messages) {
-      if (prevRef.current.length === 0) return prevRef.current;
-      prevRef.current = [];
-      return prevRef.current;
-    }
+    if (!messages) return [];
 
     const calls: { id: string; input: any; parentToolCallId?: string }[] = [];
     for (const msg of messages) {
@@ -42,12 +37,6 @@ function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: strin
       }
     }
 
-    const prev = prevRef.current;
-    if (prev.length === calls.length && calls.every((c, i) => c === prev[i])) {
-      return prev;
-    }
-
-    prevRef.current = calls;
     return calls;
   }, [messages]);
 }

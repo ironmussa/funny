@@ -1,5 +1,5 @@
 import { CheckCircle2, Loader2, XCircle, UserPlus } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,10 @@ interface Props {
 }
 
 type Step = 'verifying' | 'register' | 'accepting' | 'success' | 'already' | 'error';
+
+function continueToApp() {
+  window.location.href = '/';
+}
 
 export function AcceptInvitePage({ token }: Props) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -29,6 +33,7 @@ export function AcceptInvitePage({ token }: Props) {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
+  const submissionIdRef = useRef(0);
 
   // Verify the token on mount
   useEffect(() => {
@@ -63,6 +68,7 @@ export function AcceptInvitePage({ token }: Props) {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submissionId = ++submissionIdRef.current;
     setFormError('');
     setFormLoading(true);
 
@@ -74,6 +80,8 @@ export function AcceptInvitePage({ token }: Props) {
         password,
         displayName: displayName || undefined,
       });
+
+      if (submissionIdRef.current !== submissionId) return;
 
       if (result.isOk()) {
         const { user } = result.value;
@@ -89,16 +97,21 @@ export function AcceptInvitePage({ token }: Props) {
         setStep('success');
       } else {
         setFormError(result.error.message || 'Registration failed');
-        setFormLoading(false);
       }
     } catch (err: any) {
-      setFormError(err.message || 'Registration failed');
-      setFormLoading(false);
+      if (submissionIdRef.current === submissionId) {
+        setFormError(err.message || 'Registration failed');
+      }
+    } finally {
+      if (submissionIdRef.current === submissionId) {
+        setFormLoading(false);
+      }
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submissionId = ++submissionIdRef.current;
     setFormError('');
     setFormLoading(true);
 
@@ -108,9 +121,10 @@ export function AcceptInvitePage({ token }: Props) {
         password,
       });
 
+      if (submissionIdRef.current !== submissionId) return;
+
       if (result.error) {
         setFormError(result.error.message || 'Login failed');
-        setFormLoading(false);
         return;
       }
 
@@ -130,13 +144,14 @@ export function AcceptInvitePage({ token }: Props) {
       // Now accept the invite
       await acceptInvite();
     } catch (err: any) {
-      setFormError(err.message || 'Login failed');
-      setFormLoading(false);
+      if (submissionIdRef.current === submissionId) {
+        setFormError(err.message || 'Login failed');
+      }
+    } finally {
+      if (submissionIdRef.current === submissionId) {
+        setFormLoading(false);
+      }
     }
-  };
-
-  const handleContinue = () => {
-    window.location.href = '/';
   };
 
   return (
@@ -239,7 +254,9 @@ export function AcceptInvitePage({ token }: Props) {
                     type="button"
                     className="text-primary hover:underline"
                     onClick={() => {
+                      submissionIdRef.current++;
                       setIsLoginMode(false);
+                      setFormLoading(false);
                       setFormError('');
                     }}
                     data-testid="invite-switch-register"
@@ -254,7 +271,9 @@ export function AcceptInvitePage({ token }: Props) {
                     type="button"
                     className="text-primary hover:underline"
                     onClick={() => {
+                      submissionIdRef.current++;
                       setIsLoginMode(true);
+                      setFormLoading(false);
                       setFormError('');
                     }}
                     data-testid="invite-switch-login"
@@ -284,7 +303,7 @@ export function AcceptInvitePage({ token }: Props) {
             <p className="text-muted-foreground text-sm">
               You've successfully joined <span className="font-medium">{orgName}</span>.
             </p>
-            <Button onClick={handleContinue} className="w-full" data-testid="invite-continue">
+            <Button onClick={continueToApp} className="w-full" data-testid="invite-continue">
               Continue to App
             </Button>
           </>
@@ -298,7 +317,7 @@ export function AcceptInvitePage({ token }: Props) {
             <p className="text-muted-foreground text-sm">
               You're already a member of <span className="font-medium">{orgName}</span>.
             </p>
-            <Button onClick={handleContinue} className="w-full" data-testid="invite-continue">
+            <Button onClick={continueToApp} className="w-full" data-testid="invite-continue">
               Continue to App
             </Button>
           </>
@@ -312,7 +331,7 @@ export function AcceptInvitePage({ token }: Props) {
             <p className="text-muted-foreground text-sm">{errorMessage}</p>
             <Button
               variant="outline"
-              onClick={handleContinue}
+              onClick={continueToApp}
               className="w-full"
               data-testid="invite-continue"
             >

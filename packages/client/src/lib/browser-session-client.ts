@@ -8,7 +8,9 @@
  * Frame events are routed elsewhere — see `dispatch-browser-session-events.ts`.
  */
 
-import { getActiveWS } from '@/hooks/use-ws';
+import type { JsonObject } from '@bufbuild/protobuf';
+
+import { sendBrowserSessionRealtime } from '@/hooks/use-ws';
 import { createClientLogger } from '@/lib/client-logger';
 
 const log = createClientLogger('browser-session');
@@ -55,18 +57,40 @@ function sendRequest(
   extra: Record<string, unknown>,
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const ws = getActiveWS();
-    if (!ws || !ws.connected) {
-      reject(new Error('ws-not-connected'));
-      return;
-    }
     const requestId = newRequestId();
     const timer = setTimeout(() => {
       pending.delete(requestId);
       reject(new Error('timeout'));
     }, REQUEST_TIMEOUT_MS);
     pending.set(requestId, { resolve, reject, timer });
-    ws.emit(type, { sessionId, requestId, ...extra });
+    const sent =
+      type === 'browser-session:inspect-at' || type === 'browser-session:inspect-rect'
+        ? sendBrowserSessionRealtime(sessionId, {
+            case: 'inspect',
+            requestId,
+            selector: {
+              kind: type === 'browser-session:inspect-rect' ? 'rect' : 'at',
+              ...extra,
+            },
+          })
+        : type === 'browser-session:execute'
+          ? sendBrowserSessionRealtime(sessionId, {
+              case: 'execute',
+              requestId,
+              expression: String(extra.expression ?? ''),
+            })
+          : type === 'browser-session:nav'
+            ? sendBrowserSessionRealtime(sessionId, {
+                case: 'historyNavigation',
+                requestId,
+                action: String(extra.action ?? ''),
+              })
+            : sendBrowserSessionRealtime(sessionId, { case: 'screenshot', requestId });
+    if (!sent) {
+      pending.delete(requestId);
+      clearTimeout(timer);
+      reject(new Error('ws-not-connected'));
+    }
   });
 }
 
@@ -75,9 +99,23 @@ function sendFireAndForget(
   sessionId: string,
   extra: Record<string, unknown> = {},
 ): void {
-  const ws = getActiveWS();
-  if (!ws || !ws.connected) return;
-  ws.emit(type, { sessionId, ...extra });
+  if (type === 'browser-session:open') {
+    sendBrowserSessionRealtime(sessionId, { case: 'open', targetUrl: String(extra.url ?? '') });
+  } else if (type === 'browser-session:navigate') {
+    sendBrowserSessionRealtime(sessionId, {
+      case: 'navigate',
+      targetUrl: String(extra.url ?? ''),
+    });
+  } else if (type === 'browser-session:input') {
+    sendBrowserSessionRealtime(sessionId, { case: 'input', action: extra as JsonObject });
+  } else if (type === 'browser-session:heartbeat') {
+    sendBrowserSessionRealtime(sessionId, { case: 'heartbeat' });
+  } else if (type === 'browser-session:close') {
+    sendBrowserSessionRealtime(sessionId, {
+      case: 'close',
+      reason: String(extra.reason ?? 'user'),
+    });
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────

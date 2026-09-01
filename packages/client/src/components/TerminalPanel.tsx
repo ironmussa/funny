@@ -60,7 +60,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
-import { getActiveWS } from '@/hooks/use-ws';
+import { getActiveWS, sendTerminalRealtime } from '@/hooks/use-ws';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
 import { jobsApi } from '@/lib/api/jobs';
@@ -279,15 +279,14 @@ export function WebTerminalTabContent({
   const emitRestoreRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     emitSpawnRef.current = () => {
-      const ws = getActiveWS();
-      if (!ws || !ws.connected || !termRef.current) return;
+      if (!termRef.current) return;
       const { fitAddon } = termRef.current;
       fitAddon.fit();
       const dims = fitAddon.proposeDimensions();
       const cols = Math.max(dims?.cols ?? 80, 20);
       const rows = Math.max(dims?.rows ?? 24, 4);
-      ws.emit('pty:spawn', {
-        id,
+      sendTerminalRealtime(id, {
+        case: 'spawn',
         cwd,
         // For scratch tabs we route through the server's "any runner owned by
         // this user" branch — sending the synthetic '__scratch__' as projectId
@@ -301,9 +300,7 @@ export function WebTerminalTabContent({
       });
     };
     emitRestoreRef.current = () => {
-      const ws = getActiveWS();
-      if (!ws || !ws.connected) return;
-      ws.emit('pty:restore', { id });
+      sendTerminalRealtime(id, { case: 'restore' });
     };
   }, [cwd, id, label, projectId, scratchThreadId, shell]);
 
@@ -505,18 +502,12 @@ export function WebTerminalTabContent({
         // Auto-execute initial command once the shell is ready (first output = prompt)
         if (!initialCommandSentRef.current && initialCommand) {
           initialCommandSentRef.current = true;
-          const ws = getActiveWS();
-          if (ws && ws.connected) {
-            ws.emit('pty:write', { id, data: initialCommand + '\n' });
-          }
+          sendTerminalRealtime(id, { case: 'write', data: initialCommand + '\n' });
         }
       });
 
       const onDataDisposable = terminal.onData((data) => {
-        const ws = getActiveWS();
-        if (ws && ws.connected) {
-          ws.emit('pty:write', { id, data });
-        }
+        sendTerminalRealtime(id, { case: 'write', data });
       });
 
       const onResizeDisposable = terminal.onResize(({ rows, cols }) => {
@@ -525,10 +516,7 @@ export function WebTerminalTabContent({
         // Sending these would resize the daemon's headless xterm to a tiny
         // size, causing the shell to wrap output at the wrong width.
         if (cols < 20 || rows < 4) return;
-        const ws = getActiveWS();
-        if (ws && ws.connected) {
-          ws.emit('pty:resize', { id, cols, rows });
-        }
+        sendTerminalRealtime(id, { case: 'resize', cols, rows });
       });
 
       // Bell notification — detect \x07 and set the tab badge. Desktop
@@ -618,10 +606,11 @@ export function WebTerminalTabContent({
         // (e.g. when dimensions match the stale cached value in xterm).
         const dims = fitAddon.proposeDimensions();
         if (dims && dims.cols > 0 && dims.rows > 0) {
-          const ws = getActiveWS();
-          if (ws && ws.connected) {
-            ws.emit('pty:resize', { id, cols: dims.cols, rows: dims.rows });
-          }
+          sendTerminalRealtime(id, {
+            case: 'resize',
+            cols: dims.cols,
+            rows: dims.rows,
+          });
         }
         // Only focus if no modal dialog is open (see aria-hidden note above)
         if (shouldFocus && !document.querySelector('[role="dialog"][data-state="open"]')) {
@@ -1370,10 +1359,7 @@ export function TerminalPanel() {
   );
 
   const sendSignal = useCallback((ptyId: string, signal: string) => {
-    const ws = getActiveWS();
-    if (ws && ws.connected) {
-      ws.emit('pty:signal', { id: ptyId, signal });
-    }
+    sendTerminalRealtime(ptyId, { case: 'signal', signal });
   }, []);
 
   // Open the search overlay when a terminal forwards Ctrl+F via custom event
@@ -1436,10 +1422,7 @@ export function TerminalPanel() {
       const tab = tabs.find((t) => t.id === tabId);
       // Send pty:kill for interactive PTY tabs (user explicitly closing)
       if (tab?.type === 'pty') {
-        const ws = getActiveWS();
-        if (ws && ws.connected) {
-          ws.emit('pty:kill', { id: tabId });
-        }
+        sendTerminalRealtime(tabId, { case: 'close', reason: 'tab-closed' });
       }
       removeTab(tabId);
     },
@@ -1450,10 +1433,7 @@ export function TerminalPanel() {
     (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId);
       if (tab?.type !== 'pty') return;
-      const ws = getActiveWS();
-      if (ws && ws.connected) {
-        ws.emit('pty:signal', { id: tabId, signal: 'SIGKILL' });
-      }
+      sendTerminalRealtime(tabId, { case: 'signal', signal: 'SIGKILL' });
     },
     [tabs],
   );

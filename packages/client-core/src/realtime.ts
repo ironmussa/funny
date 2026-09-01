@@ -1,9 +1,45 @@
+import type { Cursor, ScopeReference } from '@funny/shared/browser-v1/common';
+import type {
+  ApplicationEvent,
+  SubscriptionOutcome,
+  SubscriptionRequest,
+} from '@funny/shared/browser-v1/events';
+import type { InteractiveEnvelope } from '@funny/shared/browser-v1/interactive';
+import type { NegotiationOutcome, NegotiationRequest } from '@funny/shared/browser-v1/negotiation';
+import type { OperationOutcome, OperationRequest } from '@funny/shared/browser-v1/operations';
+
 import type { LifecycleService, NavigationService, Unsubscribe } from './platform';
 
 export interface RealtimeEvent<T = unknown> {
   type: string;
   threadId: string;
   data: T;
+}
+
+export type ClientRealtimePhase = 'idle' | 'connected' | 'disconnected' | 'error';
+
+export interface ClientRealtimeSnapshot {
+  phase: ClientRealtimePhase;
+  protocol: 'legacy' | 'browser.v1';
+  error: string | null;
+}
+
+/** Renderer-neutral realtime boundary. Socket.IO never crosses this interface. */
+export interface ClientRealtimePort {
+  current(): ClientRealtimeSnapshot;
+  subscribeLifecycle(listener: (snapshot: ClientRealtimeSnapshot) => void): Unsubscribe;
+  start(): void;
+  stop(): void;
+  negotiate(request: NegotiationRequest): Promise<NegotiationOutcome>;
+  operate(request: OperationRequest): Promise<OperationOutcome>;
+  subscribeScope(request: SubscriptionRequest): Promise<SubscriptionOutcome>;
+  unsubscribeScope(scope: ScopeReference): Promise<void>;
+  onApplicationEvent(listener: (event: ApplicationEvent) => void): Unsubscribe;
+  onInteractive(listener: (message: InteractiveEnvelope) => void): Unsubscribe;
+  onRecoveryRequired(listener: (scope: ScopeReference) => void): Unsubscribe;
+  sendInteractive(message: InteractiveEnvelope): void;
+  cancel(requestId: string, reason?: string): void;
+  recover(cursors: readonly Cursor[]): Promise<SubscriptionOutcome[]>;
 }
 
 export type RealtimeEffect =

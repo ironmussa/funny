@@ -220,6 +220,11 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
   realtimeDispatcher.dispatch({ type, threadId, data });
 }
 
+/** Feed a transport-neutral event through the same state pipeline as legacy Socket.IO events. */
+export function dispatchRealtimeEvent(type: string, threadId: string, data: unknown): void {
+  dispatchEvent(type, threadId, data);
+}
+
 function applyWebEvent(type: string, threadId: string, data: any): void {
   switch (type) {
     case 'agent:message': {

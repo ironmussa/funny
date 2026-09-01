@@ -21,7 +21,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
-import { getActiveWS } from '@/hooks/use-ws';
+import { sendTerminalRealtime } from '@/hooks/use-ws';
 import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import {
@@ -326,8 +326,7 @@ export function useTerminalDockview(): {
     (id: string) => {
       const tab = tabs.find((t) => t.id === id);
       if (tab?.type === 'pty') {
-        const ws = getActiveWS();
-        if (ws && ws.connected) ws.emit('pty:kill', { id });
+        sendTerminalRealtime(id, { case: 'close', reason: 'tab-closed' });
       }
       removeTab(id);
     },

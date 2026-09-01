@@ -1,4 +1,5 @@
 export * from './api-client';
+export * from './browser-event-recovery';
 export * from './endpoint-policy';
 export * from './platform';
 export * from './realtime';

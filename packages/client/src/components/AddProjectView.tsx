@@ -142,8 +142,11 @@ export function AddProjectView() {
               })}
             </p>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">{t('sidebar.projectName')}</label>
+              <label htmlFor="add-project-name" className="mb-1.5 block text-sm font-medium">
+                {t('sidebar.projectName')}
+              </label>
               <Input
+                id="add-project-name"
                 data-testid="add-project-name"
                 placeholder={t('sidebar.projectName')}
                 value={newProjectName}
@@ -152,11 +155,12 @@ export function AddProjectView() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">
+              <label htmlFor="add-project-path" className="mb-1.5 block text-sm font-medium">
                 {t('sidebar.absolutePath')}
               </label>
               <div className="flex gap-2">
                 <Input
+                  id="add-project-path"
                   data-testid="add-project-path"
                   className="flex-1"
                   placeholder={t('sidebar.absolutePath')}

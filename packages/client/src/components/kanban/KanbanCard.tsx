@@ -95,6 +95,8 @@ export const KanbanCard = memo(function KanbanCard({
     <div
       ref={ref}
       data-testid={`kanban-card-${thread.id}`}
+      role="link"
+      tabIndex={0}
       className={cn(
         'group/card flex items-stretch rounded-md border bg-card cursor-pointer transition-[opacity,box-shadow] duration-300',
         isDragging && 'opacity-40',
@@ -103,6 +105,14 @@ export const KanbanCard = memo(function KanbanCard({
       )}
       onClick={() => {
         if (!isDragging) {
+          startTransition(() => {
+            setKanbanContext({ projectId, search, threadId: thread.id, viewMode: 'board' });
+            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
+          });
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && event.key === 'Enter' && !isDragging) {
           startTransition(() => {
             setKanbanContext({ projectId, search, threadId: thread.id, viewMode: 'board' });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));

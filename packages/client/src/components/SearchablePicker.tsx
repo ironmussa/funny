@@ -120,6 +120,7 @@ export function SearchablePicker({
   );
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (filtered.length > 0) {
@@ -308,6 +309,7 @@ export function SearchablePicker({
                     {onCopy && (
                       <button
                         type="button"
+                        aria-label={`Copy ${item.label}`}
                         className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/item:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -463,6 +465,7 @@ export function BranchPicker({
           value={newBranchName}
           onChange={(e) => setNewBranchName(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter') {
               e.preventDefault();
               handleConfirmNewBranch();
@@ -485,6 +488,7 @@ export function BranchPicker({
         />
         <button
           type="button"
+          aria-label={t('newThread.confirmNewBranch', 'Create branch')}
           onClick={handleConfirmNewBranch}
           disabled={!newBranchName.trim()}
           data-testid={testId ? `${testId}-new-confirm` : undefined}

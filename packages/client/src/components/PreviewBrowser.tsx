@@ -100,7 +100,7 @@ export function PreviewBrowser() {
 
   const handleOpenExternal = () => {
     if (activeTab) {
-      window.open(`http://localhost:${activeTab.port}`, '_blank');
+      window.open(`http://localhost:${activeTab.port}`, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -113,21 +113,28 @@ export function PreviewBrowser() {
             <div
               key={tab.commandId}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-border min-w-0 max-w-[200px] group',
+                'flex items-center text-xs border-r border-border min-w-0 max-w-[200px] group',
                 tab.commandId === activeTabId
                   ? 'bg-background text-foreground'
                   : 'text-muted-foreground hover:bg-accent/50',
               )}
-              onClick={() => setActiveTabId(tab.commandId)}
             >
-              <span className="truncate">{tab.label}</span>
-              <span className="text-muted-foreground/60 shrink-0 text-xs">:{tab.port}</span>
               <button
+                type="button"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1.5 pl-3"
+                onClick={() => setActiveTabId(tab.commandId)}
+              >
+                <span className="truncate">{tab.label}</span>
+                <span className="text-muted-foreground/60 shrink-0 text-xs">:{tab.port}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Close ${tab.label} preview tab`}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseTab(tab.commandId);
                 }}
-                className="hover:text-status-error ml-auto shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                className="hover:text-status-error mr-3 ml-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
               >
                 <X className="icon-xs" />
               </button>

@@ -66,12 +66,14 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
 
   return createPortal(
     <div
-      className="animate-in fade-in-0 fixed inset-0 z-100 flex items-center justify-center bg-black/80 duration-200"
+      className="animate-in fade-in-0 fixed inset-0 z-100 flex items-center justify-center bg-black/80 transition-opacity duration-200"
       onClick={onClose}
       data-testid="image-lightbox"
     >
       {/* Close button */}
       <button
+        type="button"
+        aria-label="Close image preview"
         onClick={onClose}
         className="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
         data-testid="lightbox-close"
@@ -82,6 +84,8 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
       {/* Previous button */}
       {images.length > 1 && (
         <button
+          type="button"
+          aria-label="Previous image"
           onClick={(e) => {
             e.stopPropagation();
             goPrev();
@@ -110,6 +114,8 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
       {/* Next button */}
       {images.length > 1 && (
         <button
+          type="button"
+          aria-label="Next image"
           onClick={(e) => {
             e.stopPropagation();
             goNext();

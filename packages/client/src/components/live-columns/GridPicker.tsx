@@ -48,6 +48,8 @@ export function GridPicker({ cols, rows, onChange }: Props) {
               const isHighlighted = c + 1 <= displayCol && r + 1 <= displayRow;
               return (
                 <button
+                  type="button"
+                  aria-label={`Use a ${c + 1} by ${r + 1} grid`}
                   key={`${c}-${r}`}
                   className={cn(
                     'w-5 h-5 rounded-sm border transition-colors',

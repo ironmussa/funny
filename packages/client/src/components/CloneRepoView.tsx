@@ -166,19 +166,24 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
     loadingRef.current = true;
     setLoadingRepos(true);
     log.debug('github repo search', { page: pageNum, query: searchQuery, append });
-    const result = await api.githubRepos({
-      page: pageNum,
-      per_page: 30,
-      sort: 'updated',
-      search: searchQuery || undefined,
-    });
-    if (fetchId !== fetchIdRef.current) return;
-    if (result.isOk()) {
-      setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
-      setHasMore(result.value.hasMore);
+    try {
+      const result = await api.githubRepos({
+        page: pageNum,
+        per_page: 30,
+        sort: 'updated',
+        search: searchQuery || undefined,
+      });
+      if (fetchId !== fetchIdRef.current) return;
+      if (result.isOk()) {
+        setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
+        setHasMore(result.value.hasMore);
+      }
+    } finally {
+      if (fetchId === fetchIdRef.current) {
+        loadingRef.current = false;
+        setLoadingRepos(false);
+      }
     }
-    loadingRef.current = false;
-    setLoadingRepos(false);
   }, []);
 
   // Debounce the search input to avoid firing a GitHub search on every keystroke.
@@ -634,19 +639,24 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
 
         {/* Project name */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium">
+          <label htmlFor="clone-project-name" className="mb-1.5 block text-sm font-medium">
             {t('github.clone.projectName')}
           </label>
-          <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+          <Input
+            id="clone-project-name"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+          />
         </div>
 
         {/* Destination path */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium">
+          <label htmlFor="clone-destination-path" className="mb-1.5 block text-sm font-medium">
             {t('github.clone.destination')}
           </label>
           <div className="flex gap-2">
             <Input
+              id="clone-destination-path"
               className="flex-1"
               placeholder={t('github.clone.destinationDesc')}
               value={destinationPath}

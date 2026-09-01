@@ -90,7 +90,8 @@ export function ToolToolbar() {
       } else {
         // Fallback: open in a new tab so the user can save it manually.
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        window.open(url, '_blank', 'noopener,noreferrer');
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
         toast.success('Viewport opened in new tab');
       }
     } catch (err) {

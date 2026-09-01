@@ -1,7 +1,7 @@
 import type { RunTriageStatus } from '@funny/shared';
 import { includesSearchText } from '@funny/shared/lib/text-search';
 import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
@@ -48,7 +48,9 @@ export function AutomationInboxView() {
 
   // Keep a stable ref to avoid restarting the effect on re-renders
   const loadInboxRef = useRef(loadInbox);
-  loadInboxRef.current = loadInbox;
+  useLayoutEffect(() => {
+    loadInboxRef.current = loadInbox;
+  }, [loadInbox]);
 
   // Always load all inbox items so tab counts stay accurate; filter client-side
   useEffect(() => {
@@ -263,6 +265,8 @@ export function AutomationInboxView() {
                 return (
                   <div
                     key={run.id}
+                    role="button"
+                    tabIndex={0}
                     className={cn(
                       'rounded-lg border bg-card p-4 space-y-3 cursor-pointer transition-colors',
                       selectedThreadId === thread.id
@@ -270,6 +274,15 @@ export function AutomationInboxView() {
                         : 'border-border/50 hover:border-border',
                     )}
                     onClick={() => handleSelectItem(thread.id)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === 'Enter' || event.key === ' ')
+                      ) {
+                        event.preventDefault();
+                        handleSelectItem(thread.id);
+                      }
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="min-w-0">

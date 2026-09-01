@@ -36,12 +36,12 @@ export function SetupProjectDialog({
     setFolderPickerOpen(false);
     setSaving(true);
     setError('');
-    const success = await setProjectLocalPath(projectId, path);
-    setSaving(false);
-    if (success) {
-      onOpenChange(false);
-    } else {
-      setError('Failed to set directory. Make sure the path is a valid git repository.');
+    try {
+      const success = await setProjectLocalPath(projectId, path);
+      if (success) onOpenChange(false);
+      else setError('Failed to set directory. Make sure the path is a valid git repository.');
+    } finally {
+      setSaving(false);
     }
   };
 

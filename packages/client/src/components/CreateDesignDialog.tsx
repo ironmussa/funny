@@ -54,37 +54,36 @@ export function CreateDesignDialog({
   const submit = async (payload: Parameters<typeof api.createDesign>[1]): Promise<void> => {
     setSubmitting(true);
     setError(null);
+    try {
+      const created = await api.createDesign(projectId, payload);
+      if (created.isErr()) {
+        log.error('createDesign failed', { projectId, type: payload.type, error: created.error });
+        setError(
+          created.error.friendlyMessage ?? created.error.message ?? 'Failed to create design',
+        );
+        return;
+      }
 
-    const created = await api.createDesign(projectId, payload);
-    if (created.isErr()) {
-      log.error('createDesign failed', { projectId, type: payload.type, error: created.error });
-      setError(created.error.friendlyMessage ?? created.error.message ?? 'Failed to create design');
+      const design = created.value;
+      log.info('design created', { designId: design.id, projectId, type: design.type });
+      const dir = await api.createDesignDirectory(projectId, design.id);
+      if (dir.isErr()) {
+        log.warn('createDesignDirectory failed (db row kept)', {
+          designId: design.id,
+          error: dir.error,
+        });
+      }
+      toast.success(
+        t('createDesign.toast.created', {
+          name: design.name,
+          defaultValue: `Design "${design.name}" created`,
+        }),
+      );
+      resetAndClose();
+      navigate(buildPath(`/projects/${projectId}/designs/${design.id}`));
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    const design = created.value;
-    log.info('design created', { designId: design.id, projectId, type: design.type });
-
-    // Best-effort: ask the runner to create the folder. DB row stays even if this fails.
-    const dir = await api.createDesignDirectory(projectId, design.id);
-    if (dir.isErr()) {
-      log.warn('createDesignDirectory failed (db row kept)', {
-        designId: design.id,
-        error: dir.error,
-      });
-    }
-
-    toast.success(
-      t('createDesign.toast.created', {
-        name: design.name,
-        defaultValue: `Design "${design.name}" created`,
-      }),
-    );
-
-    setSubmitting(false);
-    resetAndClose();
-    navigate(buildPath(`/projects/${projectId}/designs/${design.id}`));
   };
 
   const handleCreatePrototype = () =>

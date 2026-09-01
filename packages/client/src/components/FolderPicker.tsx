@@ -158,29 +158,26 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   const loadDir = async (path: string) => {
     setLoading(true);
     setError('');
-    const result = await api.browseList(path);
-    // Navigation failure (e.g. permission denied) is a no-op on the view: stay
-    // on the directory we were already in — keep its listing, breadcrumb, and
-    // search intact — and surface the error transiently instead of leaving a
-    // stale banner sitting over the previous directory's contents.
-    if (result.isErr()) {
+    try {
+      const result = await api.browseList(path);
+      if (result.isErr()) {
+        toast.error(result.error.message);
+        return;
+      }
+      const data = result.value;
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+      if (data.path) setCurrentPath(data.path);
+      if (data.parent !== undefined) setParentPath(data.parent);
+      if (data.dirs) setDirs(data.dirs);
+      setSearch('');
+      pushHistory(data.path);
+      localStorage.setItem('funny:last-browse-path', data.path);
+    } finally {
       setLoading(false);
-      toast.error(result.error.message);
-      return;
     }
-    const data = result.value;
-    if (data.error) {
-      setLoading(false);
-      toast.error(data.error);
-      return;
-    }
-    if (data.path) setCurrentPath(data.path);
-    if (data.parent !== undefined) setParentPath(data.parent);
-    if (data.dirs) setDirs(data.dirs);
-    setSearch('');
-    pushHistory(data.path);
-    localStorage.setItem('funny:last-browse-path', data.path);
-    setLoading(false);
   };
 
   const goBack = useCallback(() => {
@@ -362,6 +359,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                   setNewFolderError('');
                 }}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing) return;
                   if (e.key === 'Enter') handleCreateFolder();
                   if (e.key === 'Escape') cancelCreateFolder();
                 }}

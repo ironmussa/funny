@@ -131,6 +131,8 @@ export const KanbanCard = memo(function KanbanCard({
     <div
       ref={ref}
       data-testid={`kanban-card-${thread.id}`}
+      role="link"
+      tabIndex={0}
       className={cn(
         'group/card flex items-stretch rounded-md border bg-card cursor-pointer transition-[opacity,box-shadow] duration-300',
         isDragging && 'opacity-40',
@@ -139,6 +141,14 @@ export const KanbanCard = memo(function KanbanCard({
       )}
       onClick={() => {
         if (!isDragging) {
+          startTransition(() => {
+            setKanbanContext({ projectId, search, caseSensitive, threadId: thread.id });
+            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
+          });
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && event.key === 'Enter' && !isDragging) {
           startTransition(() => {
             setKanbanContext({ projectId, search, caseSensitive, threadId: thread.id });
             navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
@@ -616,11 +626,14 @@ export function KanbanView({
     setDeleteLoading(true);
     const { threadId, projectId: threadProjectId, title } = deleteConfirm;
     const wasSelected = selectedThreadId === threadId;
-    await deleteThread(threadId, threadProjectId);
-    setDeleteLoading(false);
-    setDeleteConfirm(null);
-    toast.success(t('toast.threadDeleted', { title }));
-    if (wasSelected) navigate(buildPath(`/projects/${threadProjectId}`));
+    try {
+      await deleteThread(threadId, threadProjectId);
+      setDeleteConfirm(null);
+      toast.success(t('toast.threadDeleted', { title }));
+      if (wasSelected) navigate(buildPath(`/projects/${threadProjectId}`));
+    } finally {
+      setDeleteLoading(false);
+    }
   }, [deleteConfirm, selectedThreadId, deleteThread, navigate, t]);
 
   const handleMergeWarningConfirm = useCallback(() => {

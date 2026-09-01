@@ -12,7 +12,15 @@ import {
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { useMachine } from '@xstate/react';
 import { Plus, X, Square, AlertCircle, RotateCcw, Zap } from 'lucide-react';
-import { useRef, useState, useCallback, useEffect, useEffectEvent, useMemo } from 'react';
+import {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -269,33 +277,35 @@ export function WebTerminalTabContent({
   // here once via .provide() inside useMemo.
   const emitSpawnRef = useRef<() => void>(() => {});
   const emitRestoreRef = useRef<() => void>(() => {});
-  emitSpawnRef.current = () => {
-    const ws = getActiveWS();
-    if (!ws || !ws.connected || !termRef.current) return;
-    const { fitAddon } = termRef.current;
-    fitAddon.fit();
-    const dims = fitAddon.proposeDimensions();
-    const cols = Math.max(dims?.cols ?? 80, 20);
-    const rows = Math.max(dims?.rows ?? 24, 4);
-    ws.emit('pty:spawn', {
-      id,
-      cwd,
-      // For scratch tabs we route through the server's "any runner owned by
-      // this user" branch — sending the synthetic '__scratch__' as projectId
-      // would fail the server's project ownership lookup.
-      ...(scratchThreadId ? {} : { projectId }),
-      label,
-      rows,
-      cols,
-      ...(shell !== 'default' && { shell }),
-      ...(scratchThreadId && { scratchThreadId }),
-    });
-  };
-  emitRestoreRef.current = () => {
-    const ws = getActiveWS();
-    if (!ws || !ws.connected) return;
-    ws.emit('pty:restore', { id });
-  };
+  useLayoutEffect(() => {
+    emitSpawnRef.current = () => {
+      const ws = getActiveWS();
+      if (!ws || !ws.connected || !termRef.current) return;
+      const { fitAddon } = termRef.current;
+      fitAddon.fit();
+      const dims = fitAddon.proposeDimensions();
+      const cols = Math.max(dims?.cols ?? 80, 20);
+      const rows = Math.max(dims?.rows ?? 24, 4);
+      ws.emit('pty:spawn', {
+        id,
+        cwd,
+        // For scratch tabs we route through the server's "any runner owned by
+        // this user" branch — sending the synthetic '__scratch__' as projectId
+        // would fail the server's project ownership lookup.
+        ...(scratchThreadId ? {} : { projectId }),
+        label,
+        rows,
+        cols,
+        ...(shell !== 'default' && { shell }),
+        ...(scratchThreadId && { scratchThreadId }),
+      });
+    };
+    emitRestoreRef.current = () => {
+      const ws = getActiveWS();
+      if (!ws || !ws.connected) return;
+      ws.emit('pty:restore', { id });
+    };
+  }, [cwd, id, label, projectId, scratchThreadId, shell]);
 
   const machineWithActions = useMemo(
     () =>
@@ -367,6 +377,7 @@ export function WebTerminalTabContent({
 
     let cancelled = false;
     let cleanup: (() => void) | null = null;
+    let focusTimeout: ReturnType<typeof setTimeout> | undefined;
     // Coalesced repaint kick. The WebGL renderer can leave the canvas frozen
     // on the live hot path — writes land in the buffer but the framebuffer
     // isn't flushed until an unrelated resize/refresh (e.g. a tab switch),
@@ -455,6 +466,15 @@ export function WebTerminalTabContent({
         });
       });
 
+      if (cancelled || !containerRef.current) {
+        searchAddonRegistry.delete(id);
+        terminalRegistry.delete(id);
+        termRef.current = null;
+        markMemoryPhase('terminal-close');
+        terminal.dispose();
+        return;
+      }
+
       // Focus the terminal after a short delay so that any closing dialog
       // (e.g. NewThreadDialog) has time to unmount and the panel expand
       // animation can finish.  Without this, the caret won't appear inside
@@ -463,14 +483,12 @@ export function WebTerminalTabContent({
         const cAt = useTerminalStore.getState().tabs.find((t) => t.id === id)?.createdAt;
         return cAt ? Date.now() - cAt < 1000 : false;
       })();
-      setTimeout(() => {
+      focusTimeout = setTimeout(() => {
         if (cancelled) return;
         if (isNewlyCreated && !document.querySelector('[role="dialog"][data-state="open"]')) {
           terminal.focus();
         }
       }, 250);
-
-      if (cancelled || !containerRef.current) return;
 
       // Register the PTY data callback. Any data that arrived before
       // registration (e.g. from an early pty:restore response) is replayed
@@ -560,6 +578,7 @@ export function WebTerminalTabContent({
 
     return () => {
       cancelled = true;
+      if (focusTimeout !== undefined) clearTimeout(focusTimeout);
       cleanup?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- label/initialCommand/codeFontSizePx are intentional one-shot reads at mount; rerunning on change would reset the live xterm
@@ -1166,6 +1185,10 @@ function DraggableTerminalTab({
               value={draftLabel}
               onChange={(e) => setDraftLabel(e.target.value)}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) {
+                  e.stopPropagation();
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   commitRename();

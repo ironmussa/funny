@@ -15,6 +15,13 @@ import { DrawTool } from './tools/DrawTool';
 import { PinTool } from './tools/PinTool';
 import { RegionTool } from './tools/RegionTool';
 
+// CDP modifiers bitmask: 1=Alt, 2=Ctrl, 4=Meta, 8=Shift
+const buildModifiers = (event: React.KeyboardEvent<HTMLDivElement>): number =>
+  (event.altKey ? 1 : 0) |
+  (event.ctrlKey ? 2 : 0) |
+  (event.metaKey ? 4 : 0) |
+  (event.shiftKey ? 8 : 0);
+
 export function BrowserViewport() {
   const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
   const tool = useBrowserPanelStore((s) => s.tool);
@@ -60,10 +67,6 @@ export function BrowserViewport() {
       y: Math.round((e.clientY - rect.top) * scaleY),
     };
   };
-
-  // CDP modifiers bitmask: 1=Alt, 2=Ctrl, 4=Meta, 8=Shift
-  const buildModifiers = (e: React.KeyboardEvent<HTMLDivElement>): number =>
-    (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
 
   // Inspect mode overrides Browse pointer routing — while inspect is on, the
   // overlay's mousemove drives the hover tooltip and mouse/keys are NOT
@@ -183,6 +186,8 @@ export function BrowserViewport() {
           <div
             ref={overlayRef}
             data-testid="browser-panel-overlay"
+            role="application"
+            aria-label="Remote browser viewport"
             tabIndex={0}
             className="absolute inset-0 select-none focus:outline-hidden"
             style={{

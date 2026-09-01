@@ -82,14 +82,14 @@ export function TestIdOverlay() {
       data-testid="browser-panel-testid-overlay"
       className="pointer-events-none absolute inset-0"
     >
-      {labels.map((label, i) => {
+      {labels.map((label) => {
         const left = `${(label.x / VIEWPORT_W) * 100}%`;
         const top = `${(label.y / VIEWPORT_H) * 100}%`;
         const width = `${(label.w / VIEWPORT_W) * 100}%`;
         const height = `${(label.h / VIEWPORT_H) * 100}%`;
         return (
           <div
-            key={`${label.testid}-${i}`}
+            key={`${label.testid}-${label.x}-${label.y}-${label.w}-${label.h}`}
             className="border-primary/70 absolute border"
             style={{ left, top, width, height }}
           >

@@ -1,7 +1,7 @@
 import { Check, Code, Image, Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import mermaid from 'mermaid';
 import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -99,13 +99,13 @@ function useMermaidPanZoom(): PanZoom {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
 
-  // Live refs so the native wheel listener always reads current values. Refs
-  // can be safely assigned during render — they're not state and don't trigger
-  // re-renders, and this keeps the hook free of "sync state into ref" effects.
+  // Live refs so the native wheel listener always reads committed values.
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
-  scaleRef.current = scale;
-  offsetRef.current = offset;
+  useLayoutEffect(() => {
+    scaleRef.current = scale;
+    offsetRef.current = offset;
+  }, [scale, offset]);
 
   const dragRef = useRef<{
     startX: number;

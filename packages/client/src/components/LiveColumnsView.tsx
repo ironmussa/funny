@@ -117,6 +117,10 @@ export function LiveColumnsView() {
     { kind: 'new-column' } | { kind: 'cell'; cellIndex: number } | null
   >(null);
 
+  useEffect(() => {
+    localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(gridCells));
+  }, [gridCells]);
+
   const consumePreset = useCallback((cellIndex: number) => {
     setPendingProjectByCell((prev) => {
       if (!(cellIndex in prev)) return prev;
@@ -138,7 +142,6 @@ export function LiveColumnsView() {
           if (val === threadId) delete updated[key];
         }
         updated[String(cellIndex)] = threadId;
-        localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
         return updated;
       });
       // Focus the freshly placed thread (created or loaded) so its header
@@ -152,56 +155,53 @@ export function LiveColumnsView() {
 
   const handleRemoveFromGrid = useCallback(
     (cellIndex: number) => {
-      setGridCells((prev) => {
-        const updated = { ...prev };
-        delete updated[String(cellIndex)];
+      const updated = { ...gridCells };
+      delete updated[String(cellIndex)];
 
-        const col = cellIndex % gridCols;
+      const col = cellIndex % gridCols;
 
-        if (gridCols <= 1) {
-          localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
-          return updated;
-        }
+      if (gridCols <= 1) {
+        setGridCells(updated);
+        return;
+      }
 
-        const columnEmpty = Array.from({ length: gridRows }).every((_, r) => {
-          const idx = r * gridCols + col;
-          return !updated[String(idx)];
-        });
+      const columnEmpty = Array.from({ length: gridRows }).every((_, r) => {
+        const idx = r * gridCols + col;
+        return !updated[String(idx)];
+      });
 
-        if (!columnEmpty) {
-          localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
-          return updated;
-        }
+      if (!columnEmpty) {
+        setGridCells(updated);
+        return;
+      }
 
-        const newCols = gridCols - 1;
-        const collapsed: GridCellAssignments = {};
-        for (const [key, val] of Object.entries(updated)) {
+      const newCols = gridCols - 1;
+      const collapsed: GridCellAssignments = {};
+      for (const [key, val] of Object.entries(updated)) {
+        const oldIdx = Number(key);
+        const oldCol = oldIdx % gridCols;
+        const oldRow = Math.floor(oldIdx / gridCols);
+        if (oldCol === col) continue;
+        const newCol = oldCol > col ? oldCol - 1 : oldCol;
+        collapsed[String(oldRow * newCols + newCol)] = val;
+      }
+      setGridCells(collapsed);
+      setGridCols(newCols);
+      setPendingProjectByCell((prevPending) => {
+        const remapped: Record<number, string> = {};
+        for (const [key, val] of Object.entries(prevPending)) {
           const oldIdx = Number(key);
           const oldCol = oldIdx % gridCols;
           const oldRow = Math.floor(oldIdx / gridCols);
           if (oldCol === col) continue;
           const newCol = oldCol > col ? oldCol - 1 : oldCol;
-          collapsed[String(oldRow * newCols + newCol)] = val;
+          remapped[oldRow * newCols + newCol] = val;
         }
-        setGridCols(newCols);
-        setPendingProjectByCell((prevPending) => {
-          const remapped: Record<number, string> = {};
-          for (const [key, val] of Object.entries(prevPending)) {
-            const oldIdx = Number(key);
-            const oldCol = oldIdx % gridCols;
-            const oldRow = Math.floor(oldIdx / gridCols);
-            if (oldCol === col) continue;
-            const newCol = oldCol > col ? oldCol - 1 : oldCol;
-            remapped[oldRow * newCols + newCol] = val;
-          }
-          return remapped;
-        });
-        localStorage.setItem(GRID_COLS_KEY, String(newCols));
-        localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(collapsed));
-        return collapsed;
+        return remapped;
       });
+      localStorage.setItem(GRID_COLS_KEY, String(newCols));
     },
-    [gridCols, gridRows],
+    [gridCells, gridCols, gridRows],
   );
 
   // Header "+" flow: pick a project, append a new empty column, and pre-select
@@ -226,7 +226,6 @@ export function LiveColumnsView() {
           const oldRow = Math.floor(oldIdx / oldCols);
           updated[String(oldRow * newCols + oldCol)] = val;
         }
-        localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
         return updated;
       });
       setPendingProjectByCell((prev) => {
@@ -320,7 +319,6 @@ export function LiveColumnsView() {
             }
 
             updated[String(cellIndex)] = threadId;
-            localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
             return updated;
           });
           return;
@@ -346,7 +344,6 @@ export function LiveColumnsView() {
               updated[String(newIdx)] = val;
             }
             updated[String(insertIndex)] = threadId;
-            localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
             return updated;
           });
           setPendingProjectByCell((prevPending) => {

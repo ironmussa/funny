@@ -10,8 +10,10 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import type { UseStashStateResult } from '@/hooks/use-stash-state';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
+import { timeAgo } from '@/lib/thread-utils';
 
 interface StashTabProps {
   stash: UseStashStateResult;
@@ -23,6 +25,7 @@ interface StashTabProps {
 
 export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }: StashTabProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const {
     stashEntries,
     filteredStashEntries,
@@ -93,7 +96,9 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
               >
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{entry.message}</span>
-                  <span className="text-muted-foreground text-[10px]">{entry.relativeDate}</span>
+                  <span className="text-muted-foreground text-[10px]">
+                    {timeAgo(entry.createdAt, t, now)}
+                  </span>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -188,7 +193,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
               <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
                 <Archive className="icon-xs shrink-0" />
                 <code className="text-primary shrink-0 font-mono">{selectedStashEntry.index}</code>
-                <span className="shrink-0">{selectedStashEntry.relativeDate}</span>
+                <span className="shrink-0">{timeAgo(selectedStashEntry.createdAt, t, now)}</span>
                 <span className="text-muted-foreground shrink-0">
                   &middot; {stashFiles.length} file{stashFiles.length !== 1 ? 's' : ''}
                 </span>

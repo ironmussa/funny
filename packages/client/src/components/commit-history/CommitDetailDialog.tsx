@@ -16,17 +16,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCommitActions } from '@/hooks/use-commit-actions';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { copyCommitHashToClipboard } from '@/lib/commit-hash-copy';
 import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
-import { shortRelativeDate } from '@/lib/thread-utils';
+import { shortTimeAgo } from '@/lib/thread-utils';
 
 interface LogEntry {
   hash: string;
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   body: string;
 }
@@ -74,6 +75,7 @@ export function CommitDetailDialog({
   onAfterAction,
 }: Props) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [commitFiles, setCommitFiles] = useState<CommitFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [commitBody, setCommitBody] = useState<string | null>(null);
@@ -136,6 +138,8 @@ export function CommitDetailDialog({
   }, [selectedCommit, t]);
 
   // Load commit files + body when selection changes
+  // Async writes are owned by this selection and ignored after cleanup flips cancelled.
+  // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect
   useEffect(() => {
     if (!selectedHash || !hasGitContext) {
       setCommitFiles([]);
@@ -171,6 +175,8 @@ export function CommitDetailDialog({
                 : await api.projectCommitFileDiff(projectModeId!, selectedHash, firstPath);
               if (!cancelled && diffResult.isOk()) setDiffContent(diffResult.value.diff);
             } finally {
+              // The nested request clears its flag in finally and only while this selection owns it.
+              // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
               if (!cancelled) setDiffLoading(false);
             }
           }
@@ -292,7 +298,7 @@ export function CommitDetailDialog({
                   avatarUrl={githubAvatarBySha.get(selectedCommit.hash)}
                   size="sm"
                 />
-                <span className="shrink-0">{shortRelativeDate(selectedCommit.relativeDate)}</span>
+                <span className="shrink-0">{shortTimeAgo(selectedCommit.authoredAt, now)}</span>
                 <span className="text-muted-foreground shrink-0">
                   &middot; {commitFiles.length} file{commitFiles.length !== 1 ? 's' : ''}
                 </span>

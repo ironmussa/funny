@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
 
-function timeAgo(ts: number): string {
-  const seconds = Math.floor((Date.now() - ts) / 1000);
+function timeAgo(ts: number, now: number): string {
+  const seconds = Math.floor((now - ts) / 1000);
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -23,6 +24,7 @@ function timeAgo(ts: number): string {
 }
 
 export function HistoryPopover() {
+  const now = useMinuteTick();
   const history = useBrowserPanelStore((s) => s.sentHistory);
   const clearSentHistory = useBrowserPanelStore((s) => s.clearSentHistory);
   const closePanel = useBrowserPanelStore((s) => s.closePanel);
@@ -93,7 +95,7 @@ export function HistoryPopover() {
                     <span className="truncate text-sm">{entry.title}</span>
                     <span className="text-muted-foreground text-xs">
                       {projectName(entry.projectId)} · {entry.annotationCount} annotation
-                      {entry.annotationCount === 1 ? '' : 's'} · {timeAgo(entry.sentAt)}
+                      {entry.annotationCount === 1 ? '' : 's'} · {timeAgo(entry.sentAt, now)}
                     </span>
                   </button>
                 </li>

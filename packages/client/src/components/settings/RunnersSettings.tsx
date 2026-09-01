@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -60,8 +61,8 @@ function osEmoji(os: string) {
   return '🐧';
 }
 
-function formatRelativeTime(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
+function formatRelativeTime(iso: string, now: number) {
+  const diff = now - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -140,6 +141,7 @@ interface RunnerCardProps {
 }
 
 function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
+  const now = useMinuteTick();
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [assignments, setAssignments] = useState<RunnerProjectAssignment[]>([]);
@@ -222,7 +224,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             </Badge>
           </div>
           <div className="text-muted-foreground truncate text-xs">
-            {runner.hostname} · last seen {formatRelativeTime(runner.lastHeartbeatAt)}
+            {runner.hostname} · last seen {formatRelativeTime(runner.lastHeartbeatAt, now)}
             {runner.assignedProjectIds.length > 0 && (
               <>
                 {' '}

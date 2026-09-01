@@ -12,7 +12,7 @@ export interface BlameHunk {
   commitHash: string;
   shortHash: string;
   author: string;
-  relativeDate: string;
+  authoredAt: number;
   summary: string;
 }
 
@@ -27,7 +27,7 @@ export interface FileHistoryEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
   path: string;

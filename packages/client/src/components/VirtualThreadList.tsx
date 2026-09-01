@@ -50,7 +50,7 @@ export function VirtualThreadList({
   className,
 }: VirtualThreadListProps) {
   const { t } = useTranslation();
-  useMinuteTick();
+  const now = useMinuteTick();
   const pinThread = useThreadStore((s) => s.pinThread);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [highlightIndex, setHighlightIndex] = useState(-1);
@@ -194,7 +194,7 @@ export function VirtualThreadList({
                   </div>
                 </div>
                 <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
-                  {timeAgo(thread.completedAt ?? thread.createdAt, t)}
+                  {timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
                 </span>
                 {renderActions?.(thread)}
               </Wrapper>

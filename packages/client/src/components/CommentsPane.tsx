@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
@@ -24,6 +25,7 @@ import { useThreadSelector } from '@/stores/thread-context';
  */
 export function CommentsPane() {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const threadId = useRightPaneThreadId();
   const contextThread = useThreadSelector((th) => th);
   const lightThread = useThreadById(threadId);
@@ -122,7 +124,7 @@ export function CommentsPane() {
                         {mine ? t('comments.you', '{{name}} (you)', { name }) : name}
                       </span>
                       <span className="text-muted-foreground shrink-0 text-xs">
-                        {timeAgo(c.createdAt, t)}
+                        {timeAgo(c.createdAt, t, now)}
                       </span>
                       {isOwner && (
                         <Button

@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
 import { createClientLogger } from '@/lib/client-logger';
@@ -32,8 +33,8 @@ const log = createClientLogger('issues-tab');
 
 type IssueState = 'open' | 'closed';
 
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+function timeAgo(dateStr: string, now: number): string {
+  const seconds = Math.floor((now - new Date(dateStr).getTime()) / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
@@ -51,6 +52,7 @@ interface IssuesTabProps {
 
 export function IssuesTab({ visible }: IssuesTabProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const activeThreadProjectId = useThreadProjectId();
   const projectId = activeThreadProjectId ?? selectedProjectId;
@@ -291,7 +293,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
                       />
                     )}
                     <span className="text-muted-foreground text-[10px]">
-                      {timeAgo(issue.created_at)}
+                      {timeAgo(issue.created_at, now)}
                     </span>
                     {issue.user && (
                       <span className="text-muted-foreground text-[10px]">{issue.user.login}</span>

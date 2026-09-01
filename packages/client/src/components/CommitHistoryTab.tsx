@@ -26,7 +26,7 @@ interface LogEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   body: string;
 }

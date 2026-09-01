@@ -31,7 +31,7 @@ const entries = [
     shortHash: '1111111',
     author: 'Argenis Leon',
     authorEmail: 'argenis@example.com',
-    relativeDate: '1 hour ago',
+    authoredAt: new Date('2026-01-01T00:00:00.000Z').getTime(),
     message: 'feat: current page',
     body: '',
   },

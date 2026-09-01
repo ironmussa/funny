@@ -11,6 +11,7 @@ import { useMemo, useRef, useEffect, type RefObject } from 'react';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { cn } from '@/lib/utils';
 
 type MilestoneType = 'prompt' | 'todo' | 'question' | 'plan' | 'start' | 'end';
@@ -34,10 +35,9 @@ function formatTime(dateStr: string): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatRelativeTime(dateStr: string): string {
+function formatRelativeTime(dateStr: string, now: number): string {
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = now - date.getTime();
   const diffSecs = Math.floor(diffMs / 1000);
   const diffMins = Math.floor(diffSecs / 60);
   const diffHours = Math.floor(diffMins / 60);
@@ -446,6 +446,7 @@ function TimelineMilestone({
   isActive: boolean;
   onScrollTo?: (messageId: string, toolCallId?: string) => void;
 }) {
+  const now = useMinuteTick();
   const Icon = MILESTONE_ICON[milestone.type];
   const colors = MILESTONE_COLOR[milestone.type];
 
@@ -505,7 +506,7 @@ function TimelineMilestone({
         <TooltipContent side="left" align="start" className="max-w-[300px] p-3">
           <div className="space-y-1.5">
             <div className="text-muted-foreground font-mono text-[10px]">
-              {formatRelativeTime(milestone.timestamp)}
+              {formatRelativeTime(milestone.timestamp, now)}
             </div>
             <ScrollArea className="max-h-[200px]">
               <pre className="font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">

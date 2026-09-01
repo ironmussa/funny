@@ -9,7 +9,7 @@ export interface BlameHistoryEntry {
   commitHash: string;
   shortHash: string;
   author: string;
-  relativeDate: string;
+  authoredAt: number | null;
   summary: string;
   lineCount: number;
   ranges: BlameHistoryLineRange[];
@@ -39,7 +39,7 @@ export function buildBlameHistoryEntries(
       commitHash: hunk.commitHash,
       shortHash: hunk.shortHash,
       author: hunk.author,
-      relativeDate: hunk.relativeDate,
+      authoredAt: hunk.authoredAt,
       summary: hunk.summary,
       lineCount: hunk.lineCount,
       ranges: [toRange(hunk)],
@@ -54,7 +54,7 @@ export function buildBlameHistoryEntries(
       commitHash: UNCOMMITTED_KEY,
       shortHash: 'worktree',
       author: 'You',
-      relativeDate: 'Uncommitted',
+      authoredAt: null,
       summary: 'Uncommitted changes',
       lineCount: workingTreeLines - blame.blamedLineCount,
       ranges: [{ startLine, endLine: workingTreeLines }],
@@ -90,7 +90,7 @@ export function buildFileHistoryEntries({
       commitHash: history.hash,
       shortHash: history.shortHash,
       author: history.author,
-      relativeDate: history.relativeDate,
+      authoredAt: history.authoredAt,
       summary: history.message,
       lineCount: blamed?.lineCount ?? 0,
       ranges: blamed?.ranges ?? [],

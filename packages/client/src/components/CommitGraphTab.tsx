@@ -37,6 +37,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useElementWidth } from '@/hooks/use-element-width';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
@@ -81,7 +82,7 @@ import {
 import { metric } from '@/lib/telemetry';
 import { middleTruncate } from '@/lib/text-truncate';
 import { useThreadById } from '@/lib/thread-selectors';
-import { shortRelativeDate } from '@/lib/thread-utils';
+import { shortTimeAgo } from '@/lib/thread-utils';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
@@ -99,9 +100,10 @@ interface GraphEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
+  authoredAt: number;
   committer: string;
   committerEmail: string;
-  relativeDate: string;
+  committedAt: string;
   message: string;
   body: string;
   parentHashes: string[];
@@ -1340,8 +1342,8 @@ function GraphCommitRow({
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const commitTime = useMemo(
-    () => <GraphCommitTime relativeDate={entry.relativeDate} />,
-    [entry.relativeDate],
+    () => <GraphCommitTime committedAt={entry.committedAt} />,
+    [entry.committedAt],
   );
 
   // When the row carries a branch/tag powerline, raise the node to the chip's
@@ -1714,8 +1716,10 @@ function RebaseEventDialog({
   );
 }
 
-export function GraphCommitTime({ relativeDate }: { relativeDate: string }) {
-  return <span>{shortRelativeDate(relativeDate)}</span>;
+export function GraphCommitTime({ committedAt }: { committedAt: string }) {
+  const now = useMinuteTick();
+
+  return <span>{shortTimeAgo(committedAt, now)}</span>;
 }
 
 export function GraphCommitSyncMarkers({

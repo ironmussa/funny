@@ -44,7 +44,7 @@ export function RecentThreads({
   onDeleteThread,
 }: RecentThreadsProps) {
   const { t } = useTranslation();
-  useMinuteTick();
+  const now = useMinuteTick();
   const navigate = useNavigate();
   const threadsByProject = useThreadsByProject();
   // Highlight follows the URL (route-driven), not the async selectedThreadId.
@@ -110,7 +110,7 @@ export function RecentThreads({
             isSelected={activeThreadId === thread.id}
             subtitle={thread.projectName}
             projectColor={thread.projectColor}
-            timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
+            timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
             gitStatus={statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)]}
             href={buildThreadPath(thread)}
             onSelect={() => goToThread(navigate, thread)}

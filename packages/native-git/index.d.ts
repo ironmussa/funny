@@ -28,7 +28,7 @@ export interface BlameHunk {
   commitHash: string;
   shortHash: string;
   author: string;
-  relativeDate: string;
+  authoredAt: number;
   /** First line of the commit message (subject). */
   summary: string;
 }
@@ -161,7 +161,7 @@ export interface GitLogEntry {
   hash: string;
   shortHash: string;
   author: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   body: string;
 }
@@ -212,7 +212,7 @@ export declare function resetSoft(cwd: string): Promise<void>;
 export interface StashEntry {
   index: string;
   message: string;
-  relativeDate: string;
+  createdAt: number;
 }
 
 export interface StashFileEntry {

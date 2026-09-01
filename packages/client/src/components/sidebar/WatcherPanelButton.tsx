@@ -67,7 +67,7 @@ function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
   // when they last woke. Either way expose the exact "hora" on hover.
   const timing = isPending
     ? formatCountdown(watcher.nextWakeAt, now)
-    : timeAgo(watcher.updatedAt, t);
+    : timeAgo(watcher.updatedAt, t, now);
   // Absolute fire timestamp, shown inline: when it will fire (pending) or last
   // fired (concluded/fired).
   const fireAt = isPending ? watcher.nextWakeAt : watcher.updatedAt;
@@ -147,10 +147,12 @@ function jobStatusVariant(status: JobStatus): 'default' | 'secondary' | 'destruc
 function JobRow({
   job,
   scopeId,
+  now,
   onOpened,
 }: {
   job: Job;
   scopeId: string | null;
+  now: number;
   onOpened: () => void;
 }) {
   const { t } = useTranslation();
@@ -191,8 +193,8 @@ function JobRow({
               </div>
               {/* Relative timing, same format as thread activity rows. */}
               <p className="text-muted-foreground truncate text-xs">
-                started {timeAgo(job.startedAt, t)}
-                {!isRunning ? ` · ended ${timeAgo(job.updatedAt, t)}` : null}
+                started {timeAgo(job.startedAt, t, now)}
+                {!isRunning ? ` · ended ${timeAgo(job.updatedAt, t, now)}` : null}
               </p>
               <p className="text-muted-foreground/70 truncate font-mono text-xs">{job.command}</p>
             </button>
@@ -319,7 +321,13 @@ export function WatcherPanelButton() {
                 <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Active</div>
                 <div className="flex flex-col gap-0.5">
                   {runningJobs.map((j) => (
-                    <JobRow key={j.id} job={j} scopeId={scopeId} onOpened={() => setOpen(false)} />
+                    <JobRow
+                      key={j.id}
+                      job={j}
+                      scopeId={scopeId}
+                      now={now}
+                      onOpened={() => setOpen(false)}
+                    />
                   ))}
                   {activeWatchers.map((w) => (
                     <WatcherRow key={w.id} watcher={w} now={now} />
@@ -332,7 +340,13 @@ export function WatcherPanelButton() {
                 <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">History</div>
                 <div className="flex flex-col gap-0.5">
                   {historicalJobs.map((j) => (
-                    <JobRow key={j.id} job={j} scopeId={scopeId} onOpened={() => setOpen(false)} />
+                    <JobRow
+                      key={j.id}
+                      job={j}
+                      scopeId={scopeId}
+                      now={now}
+                      onOpened={() => setOpen(false)}
+                    />
                   ))}
                   {historicalWatchers.map((w) => (
                     <WatcherRow key={w.id} watcher={w} now={now} />

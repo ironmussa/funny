@@ -8,6 +8,7 @@ import { PromptInput } from '@/components/PromptInput';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import type { ExternalClaudeTranscript } from '@/lib/api/system';
 import { timeAgo } from '@/lib/thread-utils';
@@ -141,7 +142,8 @@ function ExternalClaudeHeader({
   projectName?: string;
 }) {
   const { t } = useTranslation();
-  const updatedLabel = transcript.updatedAt ? timeAgo(transcript.updatedAt, t) : null;
+  const now = useMinuteTick();
+  const updatedLabel = transcript.updatedAt ? timeAgo(transcript.updatedAt, t, now) : null;
   const title =
     transcript.title || projectName || transcript.projectName || t('externalClaude.title');
 

@@ -14,7 +14,8 @@ import { gitRead } from './process.js';
 export interface StashEntry {
   index: string;
   message: string;
-  relativeDate: string;
+  /** Absolute stash reflog timestamp in milliseconds since Unix epoch. */
+  createdAt: number;
 }
 
 // ─── Public API ─────────────────────────────────────────
@@ -68,7 +69,7 @@ export function stashList(cwd: string): ResultAsync<StashEntry[], DomainError> {
   const SEP = '@@SEP@@';
   return ResultAsync.fromPromise(
     (async () => {
-      const result = await gitRead(['stash', 'list', `--format=%gd${SEP}%gs${SEP}%ar`], {
+      const result = await gitRead(['stash', 'list', `--format=%gd${SEP}%gs${SEP}%at`], {
         cwd,
         reject: false,
       });
@@ -77,8 +78,12 @@ export function stashList(cwd: string): ResultAsync<StashEntry[], DomainError> {
         .trim()
         .split('\n')
         .map((line) => {
-          const [index, message, relativeDate] = line.split(SEP);
-          return { index: index || '', message: message || '', relativeDate: relativeDate || '' };
+          const [index, message, createdAt] = line.split(SEP);
+          return {
+            index: index || '',
+            message: message || '',
+            createdAt: Number(createdAt) * 1000,
+          };
         });
     })(),
     (error) => internal(String(error)),

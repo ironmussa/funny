@@ -10,8 +10,9 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { githubCommitUrlForRemoteCommit } from '@/lib/github-url';
-import { shortRelativeDate } from '@/lib/thread-utils';
+import { shortTimeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
 interface LogEntry {
@@ -19,7 +20,7 @@ interface LogEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   body: string;
 }
@@ -44,7 +45,7 @@ const FILTER_MAX_SCAN = 2000;
  * Search bar + virtualized commit list. Owns its own commit search state and
  * the load-more sentinel logic. Extracted from CommitHistoryTab so the parent
  * doesn't import @tanstack/react-virtual, AuthorBadge, HighlightText,
- * SearchBar, shortRelativeDate, or the row-specific icons.
+ * SearchBar, or the row-specific icons.
  */
 export function CommitListPanel({
   logEntries,
@@ -265,6 +266,7 @@ function CommitRow({
   onClick: () => void;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const copyCommitHash = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -326,7 +328,7 @@ function CommitRow({
             <HighlightText text={entry.author} query={commitSearch} />
           </AuthorBadge>
           <span className="text-muted-foreground shrink-0">
-            {shortRelativeDate(entry.relativeDate)}
+            {shortTimeAgo(entry.authoredAt, now)}
           </span>
           <span className="flex shrink-0 items-center gap-1">
             {unpushed && (

@@ -38,6 +38,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
@@ -282,6 +283,7 @@ export const ThreadItem = memo(function ThreadItem({
   href,
 }: ThreadItemProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
 
   // Rename dialog state
   const [isRenameOpen, setIsRenameOpen] = useState(false);
@@ -336,7 +338,7 @@ export const ThreadItem = memo(function ThreadItem({
   const isRunning = thread.status === 'running';
   const isSettingUp = thread.status === 'setting_up';
   const isBusy = isRunning || isSettingUp;
-  const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
+  const displayTime = timeValue ?? timeAgo(thread.createdAt, t, now);
   const threadHref = href ?? buildPath(getThreadRoute(thread));
 
   // Keep the last known git status so the widget doesn't flicker away

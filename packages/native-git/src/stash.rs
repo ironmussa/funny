@@ -2,7 +2,6 @@ use gix::bstr::ByteSlice;
 
 use crate::commit_info::{commit_files_for_hash, CommitFileEntry};
 use crate::file_diff::commit_file_diff_inner;
-use crate::log::format_relative_date;
 use crate::repo_cache::with_repo;
 
 #[napi(object)]
@@ -10,7 +9,7 @@ use crate::repo_cache::with_repo;
 pub struct StashEntry {
   pub index: String,
   pub message: String,
-  pub relative_date: String,
+  pub created_at: i64,
 }
 
 #[napi(object)]
@@ -79,7 +78,7 @@ pub async fn get_stash_list(cwd: String) -> napi::Result<Vec<StashEntry>> {
       entries.push(StashEntry {
         index: format!("stash@{{{}}}", idx),
         message,
-        relative_date: format_relative_date(time_seconds),
+        created_at: time_seconds * 1000,
       });
     }
     Ok(entries)

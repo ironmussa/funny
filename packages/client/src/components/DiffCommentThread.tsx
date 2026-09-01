@@ -1,6 +1,7 @@
 import type { PRReviewThread } from '@funny/shared';
 import { CheckCircle2, Clock, MessageSquare } from 'lucide-react';
 
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { cn } from '@/lib/utils';
 
 interface DiffCommentThreadProps {
@@ -8,9 +9,8 @@ interface DiffCommentThreadProps {
   className?: string;
 }
 
-function formatRelativeTime(dateStr: string): string {
+function formatRelativeTime(dateStr: string, now: number): string {
   const date = new Date(dateStr);
-  const now = Date.now();
   const diffMs = now - date.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
   if (diffMin < 1) return 'just now';
@@ -23,6 +23,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 export function DiffCommentThread({ thread, className }: DiffCommentThreadProps) {
+  const now = useMinuteTick();
   return (
     <div
       className={cn(
@@ -72,7 +73,7 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
                 </span>
               )}
               <span className="text-muted-foreground ml-auto text-[10px]">
-                {formatRelativeTime(comment.created_at)}
+                {formatRelativeTime(comment.created_at, now)}
               </span>
             </div>
             <div className="text-foreground/90 text-[11px] leading-relaxed whitespace-pre-wrap">

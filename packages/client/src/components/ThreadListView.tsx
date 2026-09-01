@@ -74,7 +74,7 @@ export function ThreadListView({
   onCaseSensitiveChange,
 }: ThreadListViewProps) {
   const { t } = useTranslation();
-  useMinuteTick();
+  const now = useMinuteTick();
   const runnerStatus = useRunnerStatusStore((s) => s.status);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
@@ -267,7 +267,7 @@ export function ThreadListView({
                   </div>
                 </div>
                 <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
-                  {timeAgo(thread.completedAt ?? thread.createdAt, t)}
+                  {timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
                 </span>
                 {renderActions?.(thread)}
               </Wrapper>

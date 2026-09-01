@@ -9,7 +9,7 @@ import {
   gitSyncStateConfig,
   getStatusLabels,
   resolveModelLabel,
-  shortRelativeDate,
+  shortTimeAgo,
 } from '@/lib/thread-utils';
 
 // A mock translation function that returns the key and any interpolation options
@@ -275,16 +275,17 @@ describe('getDisplayThreadStatus', () => {
   });
 });
 
-describe('shortRelativeDate', () => {
-  test('converts git relative dates to short units', () => {
-    expect(shortRelativeDate('4 days ago')).toBe('4d');
-    expect(shortRelativeDate('22 hours ago')).toBe('22h');
-    expect(shortRelativeDate('3 months ago')).toBe('3mo');
+describe('shortTimeAgo', () => {
+  const now = new Date('2026-01-01T12:00:00.000Z').getTime();
+
+  test('derives compact labels from an absolute timestamp', () => {
+    expect(shortTimeAgo(now - 13 * 60_000, now)).toBe('13m');
+    expect(shortTimeAgo(now - 3 * 60 * 60_000, now)).toBe('3h');
+    expect(shortTimeAgo(now - 2 * 24 * 60 * 60_000, now)).toBe('2d');
   });
 
-  test('returns original string when format is unknown', () => {
-    expect(shortRelativeDate('yesterday')).toBe('yesterday');
-    expect(shortRelativeDate('')).toBe('');
+  test('clamps future timestamps to now', () => {
+    expect(shortTimeAgo(now + 60_000, now)).toBe('now');
   });
 });
 

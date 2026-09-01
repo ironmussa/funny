@@ -24,6 +24,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
@@ -51,6 +52,7 @@ interface CloneRepoViewProps {
 
 export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const navigate = useNavigate();
   const loadProjects = useAppStore((s) => s.loadProjects);
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
@@ -365,7 +367,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   // ── Format relative time ───────────────────────
 
   const relativeTime = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
+    const diff = now - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return t('time.minutes', { count: mins });
     const hours = Math.floor(mins / 60);

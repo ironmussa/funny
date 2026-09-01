@@ -4,8 +4,6 @@ use std::path::PathBuf;
 use gix::bstr::{BStr, ByteSlice};
 use gix::ObjectId;
 
-use crate::log::format_relative_date;
-
 /// One contiguous run of lines in the blamed file that share the same source
 /// commit. Lines are 1-based and refer to the file *as of HEAD* (see the note
 /// on `blame_file` for how this maps to a working-tree view).
@@ -19,7 +17,7 @@ pub struct BlameHunk {
   pub commit_hash: String,
   pub short_hash: String,
   pub author: String,
-  pub relative_date: String,
+  pub authored_at: i64,
   /// First line of the commit message (subject).
   pub summary: String,
 }
@@ -39,7 +37,7 @@ pub struct BlameResult {
 struct CommitMeta {
   short_hash: String,
   author: String,
-  relative_date: String,
+  authored_at: i64,
   summary: String,
 }
 
@@ -53,7 +51,7 @@ fn resolve_commit_meta(repo: &gix::Repository, id: ObjectId) -> CommitMeta {
       return CommitMeta {
         short_hash,
         author: String::new(),
-        relative_date: String::new(),
+        authored_at: 0,
         summary: String::new(),
       };
     }
@@ -69,15 +67,13 @@ fn resolve_commit_meta(repo: &gix::Repository, id: ObjectId) -> CommitMeta {
     .and_then(|a| a.time().ok())
     .map(|t| t.seconds)
     .unwrap_or(0);
-  let relative_date = format_relative_date(time_seconds);
-
   let raw = commit.message_raw_sloppy();
   let summary = raw.to_str_lossy().lines().next().unwrap_or("").trim().to_string();
 
   CommitMeta {
     short_hash,
     author,
-    relative_date,
+    authored_at: time_seconds * 1000,
     summary,
   }
 }
@@ -155,7 +151,7 @@ pub async fn blame_file(file_path: String) -> napi::Result<BlameResult> {
       commit_hash: id.to_string(),
       short_hash: meta.short_hash,
       author: meta.author,
-      relative_date: meta.relative_date,
+      authored_at: meta.authored_at,
       summary: meta.summary,
     });
   }

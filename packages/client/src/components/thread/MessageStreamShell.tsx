@@ -3,6 +3,7 @@ import { ArrowDown } from 'lucide-react';
 import type { ReactNode, RefObject } from 'react';
 
 import { LoadingState } from '@/components/ui/loading-state';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -96,6 +97,7 @@ export function MessageStreamShell({
   onPermissionDecision,
   footer,
 }: MessageStreamShellProps) {
+  const now = useMinuteTick();
   const hasMore = pagination?.hasMore ?? false;
   const loadingMore = pagination?.loadingMore ?? false;
 
@@ -142,7 +144,7 @@ export function MessageStreamShell({
           <div className="py-2 text-center">
             <span className="text-muted-foreground text-xs">
               {t('thread.beginningOfConversation', 'Beginning of conversation')}
-              {createdAt && <> &middot; {timeAgo(createdAt, t)}</>}
+              {createdAt && <> &middot; {timeAgo(createdAt, t, now)}</>}
             </span>
           </div>
         )}

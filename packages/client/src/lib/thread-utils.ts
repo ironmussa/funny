@@ -71,10 +71,14 @@ export const stageConfig: Record<
   archived: { icon: Archive, className: 'text-muted-foreground', labelKey: 'kanban.archived' },
 };
 
-export function timeAgo(dateStr: string, t: (key: string, opts?: any) => string): string {
+export function timeAgo(
+  dateStr: string | number,
+  t: (key: string, opts?: any) => string,
+  now = Date.now(),
+): string {
   const ms = new Date(dateStr).getTime();
-  if (isNaN(ms)) return dateStr;
-  const seconds = Math.floor((Date.now() - ms) / 1000);
+  if (isNaN(ms)) return String(dateStr);
+  const seconds = Math.floor((now - ms) / 1000);
   if (seconds < 60) return t('time.now');
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return t('time.minutes', { count: minutes });
@@ -85,26 +89,21 @@ export function timeAgo(dateStr: string, t: (key: string, opts?: any) => string)
   return t('time.months', { count: Math.floor(days / 30) });
 }
 
-/**
- * Convert git's relative date string (e.g. "4 days ago", "22 hours ago")
- * to the same short format used by `timeAgo` (e.g. "4d", "22h", "3mo", "2y").
- */
-export function shortRelativeDate(rel: string): string {
-  if (!rel) return '';
-  const m = rel.match(/^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$/);
-  if (!m) return rel;
-  const n = m[1];
-  const unit = m[2];
-  const map: Record<string, string> = {
-    second: 's',
-    minute: 'm',
-    hour: 'h',
-    day: 'd',
-    week: 'w',
-    month: 'mo',
-    year: 'y',
-  };
-  return `${n}${map[unit] ?? ''}`;
+/** Derive a compact relative label from an absolute timestamp. */
+export function shortTimeAgo(dateStr: string | number, now = Date.now()): string {
+  const ms = new Date(dateStr).getTime();
+  if (isNaN(ms)) return String(dateStr);
+  const seconds = Math.max(0, Math.floor((now - ms) / 1000));
+  if (seconds < 60) return 'now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  return `${Math.floor(months / 12)}y`;
 }
 
 export const gitSyncStateConfig: Record<

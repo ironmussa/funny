@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { EFFORT_LEVELS } from '@/lib/providers';
@@ -350,6 +351,7 @@ export function UserMessageCard({
   ...props
 }: UserMessageCardProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const { files, inlineContent, fileMap } = parseReferencedFiles(content);
   const [, copyToClipboard] = useCopyToClipboard();
   const visibleContent = inlineContent.trim();
@@ -564,7 +566,7 @@ export function UserMessageCard({
           )}
           {timestamp && (
             <span className="thread-timestamp text-background/50 text-right">
-              {timeAgo(timestamp, t)}
+              {timeAgo(timestamp, t, now)}
             </span>
           )}
         </div>

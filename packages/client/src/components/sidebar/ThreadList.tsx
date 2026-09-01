@@ -64,7 +64,6 @@ interface ThreadListProps {
 
 export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: ThreadListProps) {
   const { t: _t } = useTranslation();
-  useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const navigate = useStableNavigate();
   const threadsByProject = useThreadsByProject();
   const scratchThreads = useScratchThreads();
@@ -303,6 +302,7 @@ const ThreadListItem = memo(function ThreadListItem({
   onDelete: (thread: EnrichedThread) => void;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   // Use a ref for the thread so callbacks stay stable even when the
   // thread object reference changes (e.g. cost/sessionId updates).
   const threadRef = useRef(thread) as MutableRefObject<EnrichedThread>;
@@ -350,7 +350,7 @@ const ThreadListItem = memo(function ThreadListItem({
         isSelected={isSelected}
         subtitle={thread.projectName}
         projectColor={thread.projectColor}
-        timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
+        timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
         gitStatus={gitStatus}
         href={buildThreadPath(thread)}
         onSelect={handleSelect}

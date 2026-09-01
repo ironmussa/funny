@@ -6,6 +6,7 @@ import { AuthorBadge } from '@/components/AuthorBadge';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { cn } from '@/lib/utils';
 
 import { getLastCommitAuthor } from './last-commit-author';
@@ -88,6 +89,7 @@ export function PRCompactIdentity({
   statusTestId,
 }: PRCompactIdentityProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const title = pr.title ?? fallbackTitle;
   const lastCommitAuthor = getLastCommitAuthor(pr);
   const resolvedState = resolvePRState(pr, fallbackState);
@@ -168,7 +170,7 @@ export function PRCompactIdentity({
         >
           {pr.updated_at ? (
             <span>
-              {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at)}
+              {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at, now)}
             </span>
           ) : null}
           {lastCommitAuthor ? (

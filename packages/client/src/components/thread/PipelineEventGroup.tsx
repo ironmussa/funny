@@ -9,6 +9,7 @@ import { ChevronRight, Shield, CheckCircle2, XCircle, Loader2 } from 'lucide-rea
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -54,6 +55,7 @@ export const PipelineEventGroup = memo(function PipelineEventGroup({
   events: ThreadEvent[];
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [expanded, setExpanded] = useState(false);
   const status = getPipelineStatus(events);
   const StatusIcon = status.icon;
@@ -90,7 +92,7 @@ export const PipelineEventGroup = memo(function PipelineEventGroup({
         </span>
         {timestamp && (
           <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-            {timeAgo(timestamp, t)}
+            {timeAgo(timestamp, t, now)}
           </span>
         )}
       </button>

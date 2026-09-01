@@ -8,7 +8,7 @@ import type { ReviewSubTab } from '@/stores/ui-store';
 interface StashEntry {
   index: string;
   message: string;
-  relativeDate: string;
+  createdAt: number;
 }
 
 interface StashFile {
@@ -190,6 +190,8 @@ export function useStashState({
   }, [gitContextKey, reviewPaneOpen, reviewSubTab]);
 
   // When a stash is selected, load its file list + first diff.
+  // All post-await updates are ignored after this stash selection is cleaned up.
+  // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect
   useEffect(() => {
     if (!selectedStashIndex || !hasGitContext) {
       setStashFiles([]);
@@ -220,6 +222,8 @@ export function useStashState({
                 : await gitApi.projectStashFileDiff(projectModeId!, selectedStashIndex, firstPath);
               if (!cancelled && diffResult.isOk()) setStashDialogDiff(diffResult.value.diff);
             } finally {
+              // The diff request clears its flag in finally only while this selection remains current.
+              // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
               if (!cancelled) setStashDialogDiffLoading(false);
             }
           }

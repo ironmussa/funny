@@ -21,6 +21,7 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +52,7 @@ const eventConfig: Record<string, { icon: typeof GitCommit; label: string }> = {
 
 export const GitEventCard = memo(function GitEventCard({ event }: { event: ThreadEvent }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [expanded, setExpanded] = useState(false);
   const metadata = useMemo(() => parseEventData(event.data), [event.data]);
   const config = eventConfig[event.type];
@@ -97,7 +99,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
         )}
         {event.createdAt && (
           <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-            {timeAgo(event.createdAt, t)}
+            {timeAgo(event.createdAt, t, now)}
           </span>
         )}
       </button>

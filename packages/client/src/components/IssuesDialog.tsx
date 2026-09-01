@@ -24,6 +24,7 @@ import {
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
 
@@ -40,8 +41,8 @@ interface IssuesDialogProps {
   onCreateThread?: (params: IssueThreadParams) => void;
 }
 
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+function timeAgo(dateStr: string, now: number): string {
+  const seconds = Math.floor((now - new Date(dateStr).getTime()) / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
@@ -54,6 +55,7 @@ function timeAgo(dateStr: string): string {
 
 export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: IssuesDialogProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [issues, setIssues] = useState<EnrichedGitHubIssue[]>([]);
   const [state, setState] = useState<'open' | 'closed'>('open');
   const [loading, setLoading] = useState(false);
@@ -242,7 +244,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                       )}
 
                       <span className="text-muted-foreground text-xs">
-                        {timeAgo(issue.created_at)}
+                        {timeAgo(issue.created_at, now)}
                       </span>
                       {issue.user && (
                         <span className="text-muted-foreground text-xs">{issue.user.login}</span>

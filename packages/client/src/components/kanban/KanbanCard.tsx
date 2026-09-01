@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { openThreadTerminal } from '@/lib/open-terminal-tab';
@@ -55,6 +56,7 @@ export const KanbanCard = memo(function KanbanCard({
   gitStatus: gitStatusProp,
 }: Props) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const navigate = useNavigate();
   const setKanbanContext = useUIStore((s) => s.setKanbanContext);
   const pinThread = useThreadStore((s) => s.pinThread);
@@ -166,7 +168,7 @@ export const KanbanCard = memo(function KanbanCard({
               openDropdown && 'opacity-0 pointer-events-none',
             )}
           >
-            {timeAgo(thread.completedAt || thread.createdAt, t)}
+            {timeAgo(thread.completedAt || thread.createdAt, t, now)}
           </span>
           <div
             className={cn(

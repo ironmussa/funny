@@ -17,7 +17,8 @@ export interface GitLogEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  /** Absolute author timestamp in milliseconds since Unix epoch. */
+  authoredAt: number;
   /** Subject line (first line of the commit message). */
   message: string;
   /** Body text after the subject (blank line separator). Empty when none. */
@@ -58,6 +59,8 @@ export interface GraphRef {
 export interface GitGraphLogEntry extends GitLogEntry {
   committer: string;
   committerEmail: string;
+  /** Absolute committer timestamp used to keep client-side relative labels fresh. */
+  committedAt: string;
   /** Parent commit hashes. 0 = root, 1 = normal, 2+ = merge commit. */
   parentHashes: string[];
   /**
@@ -124,7 +127,8 @@ export interface FileHistoryEntry {
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  /** Absolute author timestamp in milliseconds since Unix epoch. */
+  authoredAt: number;
   message: string;
   status: CommitFileEntry['status'];
   path: string;
@@ -167,7 +171,7 @@ export function getLog(
           shortHash: e.shortHash,
           author: e.author,
           authorEmail: emailMap.get(e.hash) ?? '',
-          relativeDate: e.relativeDate,
+          authoredAt: e.authoredAt,
           message: e.message,
           body: e.body ?? '',
         }));
@@ -178,7 +182,7 @@ export function getLog(
   // Field/record separators so multi-line commit bodies do not break parsing.
   const FIELD_SEP = '\x1f';
   const RECORD_SEP = '\x1e';
-  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%ar%x1F%s%x1F%b%x1E`;
+  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%at%x1F%s%x1F%b%x1E`;
   const args = ['log', `--format=${format}`, `-n`, String(limit)];
   if (skip > 0) {
     args.push(`--skip=${skip}`);
@@ -196,14 +200,14 @@ export function getLog(
         .map((record) => record.trim())
         .filter(Boolean)
         .map((record) => {
-          const [hash, shortHash, author, authorEmail, relativeDate, message, body = ''] =
+          const [hash, shortHash, author, authorEmail, authoredAt, message, body = ''] =
             record.split(FIELD_SEP);
           return {
             hash,
             shortHash,
             author,
             authorEmail,
-            relativeDate,
+            authoredAt: Number(authoredAt) * 1000,
             message,
             body: body.trim(),
           };
@@ -288,14 +292,13 @@ export function getGraphLog(
   const { limit = 50, skip = 0, all = false } = opts;
   const FIELD_SEP = '\x1f';
   const RECORD_SEP = '\x1e';
-  // hash, shortHash, author, author email, committer, committer email, relDate,
-  // parents (space-sep), refs (%D), subject, body.
-  // relDate uses the COMMITTER date (%cr), not the author date (%ar): the rows
-  // are sorted by `--date-order` (committer timestamp), so showing the committer
-  // date keeps each row's displayed "Nm ago" monotonic with its position. With
-  // %ar, a rebased/cherry-picked commit (author ≠ committer date) would read as
-  // out of order relative to its neighbours.
-  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%cn%x1F%ce%x1F%cr%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
+  // hash, shortHash, author, author email, author timestamp, committer,
+  // committer email, committer timestamp, parents (space-sep), refs (%D),
+  // subject, body.
+  // The displayed timestamp uses the COMMITTER date (%cI), not the author date:
+  // rows are sorted by `--date-order` (committer timestamp), so their labels
+  // remain monotonic even for rebased or cherry-picked commits.
+  const format = `%H%x1F%h%x1F%an%x1F%ae%x1F%at%x1F%cn%x1F%ce%x1F%cI%x1F%P%x1F%D%x1F%s%x1F%b%x1E`;
   // `--decorate=full` keeps full ref paths in `%D` so parseRefs can classify
   // each ref as local/remote/tag without guessing from the `origin/` convention.
   const args = [
@@ -323,9 +326,10 @@ export function getGraphLog(
             shortHash,
             author,
             authorEmail,
+            authoredAt,
             committer,
             committerEmail,
-            relativeDate,
+            committedAt,
             parents = '',
             refs = '',
             message,
@@ -337,9 +341,10 @@ export function getGraphLog(
             shortHash,
             author,
             authorEmail,
+            authoredAt: Number(authoredAt) * 1000,
             committer,
             committerEmail,
-            relativeDate,
+            committedAt,
             message,
             body: body.trim(),
             parentHashes: parents.trim() ? parents.trim().split(' ').filter(Boolean) : [],
@@ -838,7 +843,7 @@ export function getFileHistory(
   limit = 50,
 ): ResultAsync<FileHistoryEntry[], DomainError> {
   const COMMIT_PREFIX = 'FUNNY_FILE_HISTORY_COMMIT';
-  const format = `${COMMIT_PREFIX}%x1F%H%x1F%h%x1F%an%x1F%ae%x1F%cr%x1F%s`;
+  const format = `${COMMIT_PREFIX}%x1F%H%x1F%h%x1F%an%x1F%ae%x1F%at%x1F%s`;
 
   return ResultAsync.fromPromise(
     (async () => {
@@ -881,8 +886,15 @@ function parseFileHistoryLog(stdout: string, commitPrefix: string): FileHistoryE
     const line = rawLine.trimEnd();
     if (!line) continue;
     if (line.startsWith(commitPrefix)) {
-      const [, hash, shortHash, author, authorEmail, relativeDate, message] = line.split('\x1f');
-      current = { hash, shortHash, author, authorEmail, relativeDate, message };
+      const [, hash, shortHash, author, authorEmail, authoredAt, message] = line.split('\x1f');
+      current = {
+        hash,
+        shortHash,
+        author,
+        authorEmail,
+        authoredAt: Number(authoredAt) * 1000,
+        message,
+      };
       continue;
     }
     if (!current) continue;

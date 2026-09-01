@@ -555,7 +555,7 @@ describe.skipIf(!nativeAvailable)('native vs CLI parity', () => {
 
   // ─── getLog / getCommitBody ──────────────────────────────────
 
-  test('getLog: commit metadata matches CLI (excluding relativeDate)', async () => {
+  test('getLog: commit metadata matches CLI', async () => {
     const repo = initRepo();
     writeFileSync(resolve(repo, 'a.txt'), 'a\n');
     commitAll(repo, 'first');
@@ -573,6 +573,7 @@ describe.skipIf(!nativeAvailable)('native vs CLI parity', () => {
       expect(native.value[i].hash).toBe(cli.value[i].hash);
       expect(native.value[i].shortHash).toBe(cli.value[i].shortHash);
       expect(native.value[i].author).toBe(cli.value[i].author);
+      expect(native.value[i].authoredAt).toBe(cli.value[i].authoredAt);
       expect(native.value[i].message).toBe(cli.value[i].message);
       expect(native.value[i].body).toBe(cli.value[i].body);
     }

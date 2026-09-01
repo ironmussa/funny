@@ -8,7 +8,7 @@ interface GitLogEntryDTO {
   shortHash: string;
   author: string;
   authorEmail: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   body: string;
 }
@@ -31,6 +31,7 @@ export interface GraphRefDTO {
 interface GitGraphLogEntryDTO extends GitLogEntryDTO {
   committer: string;
   committerEmail: string;
+  committedAt: string;
   parentHashes: string[];
   refs: GraphRefDTO[];
   headBranch: string | null;
@@ -250,7 +251,7 @@ export const gitApi = {
     }),
   stashList: (threadId: string, signal?: AbortSignal) =>
     request<{
-      entries: Array<{ index: string; message: string; relativeDate: string }>;
+      entries: Array<{ index: string; message: string; createdAt: number }>;
     }>(`/git/${threadId}/stash/list`, { signal }),
   stashShow: (threadId: string, stashIndex: string) =>
     request<{
@@ -452,7 +453,7 @@ export const gitApi = {
     }),
   projectStashList: (projectId: string, signal?: AbortSignal) =>
     request<{
-      entries: Array<{ index: string; message: string; relativeDate: string }>;
+      entries: Array<{ index: string; message: string; createdAt: number }>;
     }>(`/git/project/${projectId}/stash/list`, { signal }),
   projectStashShow: (projectId: string, stashIndex: string) =>
     request<{

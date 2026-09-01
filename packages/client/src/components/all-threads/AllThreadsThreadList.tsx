@@ -17,6 +17,7 @@ import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { normalize } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { timeAgo } from '@/lib/thread-utils';
 import { isScratch } from '@/lib/thread-variant';
@@ -66,6 +67,7 @@ export function AllThreadsThreadList({
   className,
 }: Props) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const activeThreadId = useActiveThreadId();
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
@@ -251,7 +253,7 @@ export function AllThreadsThreadList({
                           }))
                     }
                     projectColor={projectInfo?.color}
-                    timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
+                    timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
                     search={search || undefined}
                     contentSnippet={contentSnippet}
                     metadataBadge={

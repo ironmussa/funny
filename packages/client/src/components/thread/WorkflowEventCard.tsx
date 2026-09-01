@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
@@ -93,6 +94,7 @@ const HooksEventCard = memo(function HooksEventCard({
   metadata: Record<string, any>;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [expanded, setExpanded] = useState(false);
   const hasFailed = metadata.status === 'failed';
   const hooks: Array<{ label: string; status: string; error?: string }> = metadata.hooks ?? [];
@@ -150,7 +152,7 @@ const HooksEventCard = memo(function HooksEventCard({
         )}
         {!hasError && event.createdAt && (
           <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-            {timeAgo(event.createdAt, t)}
+            {timeAgo(event.createdAt, t, now)}
           </span>
         )}
       </button>
@@ -172,6 +174,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
   event: ThreadEvent;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const navigateToThread = useNavigateToThread();
   const metadata = parseEventData(event.data);
 
@@ -365,7 +368,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       {detail}
       {event.createdAt && (
         <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-          {timeAgo(event.createdAt, t)}
+          {timeAgo(event.createdAt, t, now)}
         </span>
       )}
     </div>

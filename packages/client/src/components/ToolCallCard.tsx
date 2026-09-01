@@ -59,7 +59,7 @@ export const ToolCallCard = memo(
     timestamp,
   }: ToolCallCardProps) {
     const { t } = useTranslation();
-    useMinuteTick();
+    const now = useMinuteTick();
     const isTodo = isTodoToolName(name);
     const parsed = useMemo(() => formatInput(input), [input]);
     const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
@@ -77,7 +77,10 @@ export const ToolCallCard = memo(
     const filePath = getFilePath(name, parsed);
     const projectPath = useCurrentProjectPath();
     const displayPath = filePath ? makeRelativePath(filePath, projectPath) : null;
-    const displayTime = useMemo(() => (timestamp ? timeAgo(timestamp, t) : null), [timestamp, t]);
+    const displayTime = useMemo(
+      () => (timestamp ? timeAgo(timestamp, t, now) : null),
+      [timestamp, t, now],
+    );
     const displayOutput = useMemo(
       () => (shouldSuppressDuplicateProviderErrorOutput(name, parsed, output) ? undefined : output),
       [name, parsed, output],

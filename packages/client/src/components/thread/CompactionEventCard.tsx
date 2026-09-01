@@ -6,12 +6,14 @@
 import { Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
 
 export function CompactionEventCard({ event }: { event: CompactionEvent }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const tokenK = Math.round(event.preTokens / 1000);
 
   return (
@@ -28,7 +30,7 @@ export function CompactionEventCard({ event }: { event: CompactionEvent }) {
       </span>
       {event.timestamp && (
         <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-          {timeAgo(event.timestamp, t)}
+          {timeAgo(event.timestamp, t, now)}
         </span>
       )}
     </div>

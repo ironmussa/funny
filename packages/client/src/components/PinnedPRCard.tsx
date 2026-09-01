@@ -44,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import {
@@ -73,9 +74,9 @@ const LazyMarkdown = lazy(() =>
   ),
 );
 
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string, now = Date.now()): string {
   if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff = now - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
@@ -283,6 +284,7 @@ export function PinnedPRCard({
   onCreateThreadForBranch,
 }: PinnedPRCardProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [threads, setThreads] = useState<PRReviewThread[]>([]);
   const [conversation, setConversation] = useState<PRConversation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -521,7 +523,7 @@ export function PinnedPRCard({
       <div key={c.id} className={cn('flex flex-col gap-1', !isRoot && 'pl-3')}>
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
-          <span className="text-muted-foreground">{timeAgo(c.created_at)}</span>
+          <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
             <Badge variant="outline" className="h-3.5 px-1 text-[9px]">
               {c.author_association}
@@ -590,7 +592,7 @@ export function PinnedPRCard({
       >
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={c.author} avatarUrl={c.author_avatar_url} size="xs" />
-          <span className="text-muted-foreground">{timeAgo(c.created_at)}</span>
+          <span className="text-muted-foreground">{timeAgo(c.created_at, now)}</span>
           {c.author_association && c.author_association !== 'NONE' && (
             <Badge variant="outline" className="h-3.5 px-1 text-[9px]">
               {c.author_association}
@@ -673,7 +675,7 @@ export function PinnedPRCard({
           <Badge variant="outline" className={cn('h-3.5 px-1 text-[9px]', s.cls)}>
             {s.label}
           </Badge>
-          <span className="text-muted-foreground">{timeAgo(rv.submitted_at)}</span>
+          <span className="text-muted-foreground">{timeAgo(rv.submitted_at, now)}</span>
         </div>
         {rv.body && <MarkdownBody body={rv.body} />}
       </div>
@@ -741,7 +743,7 @@ export function PinnedPRCard({
               )}
               {pr.user ? <span>&middot;</span> : null}
               <span>
-                {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at)}
+                {t('review.pullRequests.updated', 'Updated')} {timeAgo(pr.updated_at, now)}
               </span>
               {lastCommitAuthor ? (
                 <>

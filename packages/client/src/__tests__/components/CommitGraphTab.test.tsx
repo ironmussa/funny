@@ -35,12 +35,15 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('GraphCommitTime', () => {
-  test('shows the short commit date without sync markers', () => {
-    renderWithProviders(<GraphCommitTime relativeDate="13 minutes ago" />);
+  test('derives the label from the absolute commit timestamp', () => {
+    const dateNow = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-01-01T00:13:00.000Z').getTime());
+
+    renderWithProviders(<GraphCommitTime committedAt="2026-01-01T00:00:00.000Z" />);
 
     expect(screen.getByText('13m')).toBeInTheDocument();
-    expect(screen.queryByTestId('graph-unpushed-1111111')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('graph-unpulled-1111111')).not.toBeInTheDocument();
+    dateNow.mockRestore();
   });
 });
 

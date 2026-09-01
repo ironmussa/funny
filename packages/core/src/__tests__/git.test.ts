@@ -477,7 +477,7 @@ describe('git operations', () => {
         expect(entry.shortHash).toBeTruthy();
         expect(entry.author).toBe('Test');
         expect(entry.message).toBe('initial commit');
-        expect(entry.relativeDate).toBeTruthy();
+        expect(entry.authoredAt).toBeGreaterThan(0);
       }
     });
 
@@ -596,6 +596,7 @@ describe('git operations', () => {
         expect(result.value.length).toBe(1);
         expect(result.value[0].index).toBe('stash@{0}');
         expect(result.value[0].message).toContain('my stash message');
+        expect(result.value[0].createdAt).toBeGreaterThan(0);
       }
     });
   });

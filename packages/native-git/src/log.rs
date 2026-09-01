@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use gix::bstr::ByteSlice;
 
 use crate::repo_cache::with_repo;
@@ -10,60 +8,9 @@ pub struct GitLogEntry {
   pub hash: String,
   pub short_hash: String,
   pub author: String,
-  pub relative_date: String,
+  pub authored_at: i64,
   pub message: String,
   pub body: String,
-}
-
-/// Format a timestamp as a relative date string (e.g. "2 hours ago", "3 days ago").
-pub(crate) fn format_relative_date(seconds_since_epoch: i64) -> String {
-  let now = SystemTime::now()
-    .duration_since(SystemTime::UNIX_EPOCH)
-    .map(|d| d.as_secs() as i64)
-    .unwrap_or(0);
-
-  let diff = now - seconds_since_epoch;
-  if diff < 0 {
-    return "just now".to_string();
-  }
-
-  let diff = diff as u64;
-  if diff < 60 {
-    return format!("{} seconds ago", diff);
-  }
-  let minutes = diff / 60;
-  if minutes < 60 {
-    if minutes == 1 {
-      return "1 minute ago".to_string();
-    }
-    return format!("{} minutes ago", minutes);
-  }
-  let hours = minutes / 60;
-  if hours < 24 {
-    if hours == 1 {
-      return "1 hour ago".to_string();
-    }
-    return format!("{} hours ago", hours);
-  }
-  let days = hours / 24;
-  if days < 30 {
-    if days == 1 {
-      return "1 day ago".to_string();
-    }
-    return format!("{} days ago", days);
-  }
-  let months = days / 30;
-  if months < 12 {
-    if months == 1 {
-      return "1 month ago".to_string();
-    }
-    return format!("{} months ago", months);
-  }
-  let years = months / 12;
-  if years == 1 {
-    return "1 year ago".to_string();
-  }
-  format!("{} years ago", years)
 }
 
 #[napi]
@@ -108,8 +55,6 @@ pub async fn get_log(cwd: String, limit: Option<u32>) -> napi::Result<Vec<GitLog
         .map(|t| t.seconds)
         .unwrap_or(0);
 
-      let relative_date = format_relative_date(time_seconds);
-
       let raw_message = commit.message_raw_sloppy();
       let full = raw_message.to_str_lossy();
       let message = full.lines().next().unwrap_or("").trim().to_string();
@@ -122,7 +67,7 @@ pub async fn get_log(cwd: String, limit: Option<u32>) -> napi::Result<Vec<GitLog
         hash,
         short_hash,
         author: author_name,
-        relative_date,
+        authored_at: time_seconds * 1000,
         message,
         body,
       });

@@ -25,7 +25,7 @@ export interface NativeGitLogEntry {
   hash: string;
   shortHash: string;
   author: string;
-  relativeDate: string;
+  authoredAt: number;
   message: string;
   body?: string;
 }
@@ -62,7 +62,7 @@ export interface NativeListFilesOptions {
 export interface NativeStashEntry {
   index: string;
   message: string;
-  relativeDate: string;
+  createdAt: number;
 }
 
 export interface NativeStashFileEntry {
@@ -77,7 +77,7 @@ export interface NativeBlameHunk {
   commitHash: string;
   shortHash: string;
   author: string;
-  relativeDate: string;
+  authoredAt: number;
   summary: string;
 }
 

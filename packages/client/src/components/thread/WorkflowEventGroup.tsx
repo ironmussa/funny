@@ -12,6 +12,7 @@ import { useShallow } from 'zustand/shallow';
 
 import { SubItemsList } from '@/components/GitProgressModal';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import type { GitProgressStep } from '@/lib/git-progress-types';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -170,6 +171,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
   events: ThreadEvent[];
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const status = getWorkflowStatus(events);
   const [expanded, setExpanded] = useState(status.running || !!status.error);
   const StatusIcon = status.icon;
@@ -245,7 +247,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
         )}
         {timestamp && (
           <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-            {timeAgo(timestamp, t)}
+            {timeAgo(timestamp, t, now)}
           </span>
         )}
       </button>

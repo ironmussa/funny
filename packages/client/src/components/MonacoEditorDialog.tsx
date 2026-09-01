@@ -32,6 +32,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import type { BlameHunk, BlameResponse, FileHistoryEntry } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
@@ -43,6 +44,7 @@ import {
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
+import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
@@ -70,6 +72,7 @@ export function MonacoEditorDialog({
   initialContent,
 }: MonacoEditorDialogProps) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const { resolvedTheme } = useTheme();
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   const [content, setContent] = useState<string>('');
@@ -319,14 +322,14 @@ export function MonacoEditorDialog({
     const lineCount = model.getLineCount();
     const line = Math.min(Math.max(currentLine, 1), lineCount);
     const endColumn = model.getLineMaxColumn(line);
-    const decorations = buildCurrentLineBlameDecoration(line, endColumn, blame);
+    const decorations = buildCurrentLineBlameDecoration(line, endColumn, blame, t, now);
     if (blameDecorationsRef.current) {
       blameDecorationsRef.current.set(decorations);
     } else {
       blameDecorationsRef.current = editor.createDecorationsCollection(decorations);
     }
     blameLog.info('blame render', { line: currentLine, count: decorations.length });
-  }, [blame, showBlame, inCodeView, currentLine, content, editorNonce]);
+  }, [blame, showBlame, inCodeView, currentLine, content, editorNonce, t, now]);
 
   // Ctrl+F → open the unified search bar (both code and markdown views).
   // Capture phase + preventDefault prevents Monaco's built-in find widget from opening.
@@ -691,6 +694,7 @@ function FileHistorySidebar({
   onSelect: (entry: BlameHistoryEntry) => void;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   return (
     <aside
       className="border-border bg-sidebar/70 hidden w-[290px] shrink-0 border-l lg:flex lg:flex-col"
@@ -725,7 +729,11 @@ function FileHistorySidebar({
                 </span>
               </div>
               <div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1 text-xs">
-                <span className="truncate">{entry.relativeDate}</span>
+                <span className="truncate">
+                  {entry.authoredAt === null
+                    ? t('editor.uncommitted', 'Uncommitted')
+                    : timeAgo(entry.authoredAt, t, now)}
+                </span>
                 <span aria-hidden="true">-</span>
                 <span className="shrink-0">{formatHistoryMeta(entry, t)}</span>
               </div>
@@ -817,14 +825,17 @@ function buildCurrentLineBlameDecoration(
   line: number,
   endColumn: number,
   blame: BlameResponse,
+  t: ReturnType<typeof useTranslation>['t'],
+  now: number,
 ): monacoEditor.IModelDeltaDecoration[] {
   const hunk = hunkForLine(blame, line);
+  const relativeLabel = hunk ? timeAgo(hunk.authoredAt, t, now) : t('time.now', 'now');
   const label = hunk
-    ? `${hunk.author}, ${hunk.relativeDate} • ${hunk.summary}`
+    ? `${hunk.author}, ${relativeLabel} • ${hunk.summary}`
     : 'You • Uncommitted changes';
   const hoverMessage = hunk
     ? {
-        value: `**${escapeMarkdown(hunk.summary)}**\n\n${escapeMarkdown(hunk.author)} • ${hunk.relativeDate}\n\n\`${hunk.shortHash}\``,
+        value: `**${escapeMarkdown(hunk.summary)}**\n\n${escapeMarkdown(hunk.author)} • ${relativeLabel}\n\n\`${hunk.shortHash}\``,
       }
     : { value: '_Not committed yet_' };
   return [

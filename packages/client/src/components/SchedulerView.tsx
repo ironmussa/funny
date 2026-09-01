@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -45,9 +46,9 @@ function StatusBadge({ status }: { status: RunStatus }) {
   );
 }
 
-function formatRelative(ms: number | null | undefined): string {
+function formatRelative(ms: number | null | undefined, now: number): string {
   if (!ms) return '—';
-  const delta = ms - Date.now();
+  const delta = ms - now;
   const abs = Math.abs(delta);
   const sec = Math.round(abs / 1000);
   const past = delta < 0;
@@ -59,6 +60,7 @@ function formatRelative(ms: number | null | undefined): string {
 }
 
 export function SchedulerView() {
+  const now = useMinuteTick();
   const navigate = useNavigate();
   const runsByThread = useSchedulerStore((s) => s.runsByThread);
   const loading = useSchedulerStore((s) => s.loading);
@@ -165,8 +167,10 @@ export function SchedulerView() {
                       {run.pipelineRunId && (
                         <span className="font-mono">pipeline {run.pipelineRunId.slice(0, 8)}</span>
                       )}
-                      <span>last event {formatRelative(run.lastEventAtMs)}</span>
-                      {run.nextRetryAtMs && <span>retry {formatRelative(run.nextRetryAtMs)}</span>}
+                      <span>last event {formatRelative(run.lastEventAtMs, now)}</span>
+                      {run.nextRetryAtMs && (
+                        <span>retry {formatRelative(run.nextRetryAtMs, now)}</span>
+                      )}
                     </div>
                     {run.lastError && (
                       <Tooltip>

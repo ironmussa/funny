@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
@@ -137,6 +138,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
   event: ThreadEvent;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const navigateToThread = useNavigateToThread();
   const config = eventConfig[event.type];
   if (!config) return null;
@@ -334,7 +336,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
       {detail}
       {event.createdAt && (
         <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-          {timeAgo(event.createdAt, t)}
+          {timeAgo(event.createdAt, t, now)}
         </span>
       )}
     </div>
@@ -357,6 +359,7 @@ function PrecommitHooksCard({
   metadata: Record<string, any>;
 }) {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [isOpen, setIsOpen] = useState(metadata.status === 'failed');
   const Icon = config.icon;
   const hooks: Array<{ label: string; status: string; error?: string }> = metadata.hooks ?? [];
@@ -408,7 +411,7 @@ function PrecommitHooksCard({
         </span>
         {event.createdAt && (
           <span className="thread-timestamp text-muted-foreground/50 ml-auto">
-            {timeAgo(event.createdAt, t)}
+            {timeAgo(event.createdAt, t, now)}
           </span>
         )}
       </button>

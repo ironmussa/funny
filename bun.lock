@@ -96,7 +96,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@abbacchio/browser-transport": "^0.3.0",
-        "@atlaskit/pragmatic-drag-and-drop": "^2.0.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
         "@bruits/satteri-wasm32-wasi": "file:vendor/satteri-wasm32-wasi",
@@ -666,7 +666,7 @@
 
     "@asamuzakjp/nwsapi": ["@asamuzakjp/nwsapi@2.3.9", "", {}, "sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q=="],
 
-    "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@2.0.1", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-5iSbCveKuWYh0HijDxfSsYKD2VE0UPObI9jO1pqq+RBk9LzaoOYeKyW0Fobv/6db8HAPcyT3vhRy8bmk5TMcMw=="],
+    "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@3.0.0", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-EEKBELv757wrvhMHBAoFcXjfzGZ4Y2FJ2xnSsWovsOKywkN1Q4IWRH52hQpPmJnATLcmO9viVhoXWSXFBLKSLQ=="],
 
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.0.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^2.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-8TlkMi417zIPrTnCpbNV0Ce63JTKBn3dGkqiadkGQROvzDAox7Y9TYRHpvbQiEdtPoHWnmyRBi+RsGDxXsQxgQ=="],
 

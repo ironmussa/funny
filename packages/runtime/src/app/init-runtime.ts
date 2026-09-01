@@ -128,7 +128,8 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
  * mark them as interrupted, and automatically resume each one.
  */
 async function autoResumeStaleThreads(): Promise<void> {
-  const { remoteMarkAndListStaleThreads } = await import('../services/team-client.js');
+  const { remoteMarkAndListStaleThreads } =
+    await import('../services/remote-thread-data-client.js');
   const staleThreads = await remoteMarkAndListStaleThreads();
   if (staleThreads.length === 0) return;
 

@@ -260,7 +260,8 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     // (provider-toggle persistence). Best-effort: a standalone runner with no
     // server connection keeps the previous session-only behavior.
     try {
-      const { remoteSetActiveBuiltinProviders } = await import('../services/team-client.js');
+      const { remoteSetActiveBuiltinProviders } =
+        await import('../services/remote-project-identity-client.js');
       await remoteSetActiveBuiltinProviders(active);
     } catch (err) {
       log.warn('Failed to persist built-in provider selection', {

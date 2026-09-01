@@ -1,5 +1,5 @@
 import { Inbox } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { NavItem } from '@/components/ui/nav-item';
@@ -18,30 +18,32 @@ export function AutomationInboxButton() {
   const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const loadInboxRef = useRef(loadInbox);
-  loadInboxRef.current = loadInbox;
-
   useEffect(() => {
     if (!isAuthenticated) return;
 
     let failures = 0;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
 
     const poll = async () => {
       try {
-        await loadInboxRef.current();
+        await loadInbox();
         failures = 0; // reset on success
       } catch {
         failures++;
       }
+      if (cancelled) return;
       // Exponential backoff: 60s, 120s, 240s, capped at 5 min
       const delay = Math.min(BASE_POLL_MS * Math.pow(2, failures), MAX_POLL_MS);
       timer = setTimeout(poll, delay);
     };
 
     poll();
-    return () => clearTimeout(timer);
-  }, [isAuthenticated]);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [isAuthenticated, loadInbox]);
 
   return (
     <NavItem

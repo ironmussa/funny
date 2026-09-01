@@ -46,8 +46,6 @@ export default defineConfig({
         'src/lib/api/**',
         'src/lib/diff/**',
         'src/lib/monaco-setup.ts',
-        'src/lib/file-search-worker-client.ts',
-        'src/lib/file-index-db.ts',
         'src/lib/markdown-components.tsx',
         'src/lib/file-icons.tsx',
         // Dev-only or socket singleton — exercised via E2E / integration tests.

@@ -7,17 +7,15 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
-import { createClientLogger } from '@/lib/client-logger';
+import { useRankedFileSearch } from '@/hooks/use-ranked-file-search';
+import { api } from '@/lib/api';
+import type { RankedFileSearchMatch, RankedFileSearchTarget } from '@/lib/api/browse';
 import { FileExtensionIcon } from '@/lib/file-icons';
-import { FileSearchWorkerClient, type FileSearchMatch } from '@/lib/file-search-worker-client';
 import { isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useFileIndexStore, type FileIndexTarget } from '@/stores/file-index-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadCore, useThreadWorktreePath } from '@/stores/thread-context';
-
-const log = createClientLogger('file-search-dialog');
 
 interface FileSearchDialogProps {
   open: boolean;
@@ -27,6 +25,7 @@ interface FileSearchDialogProps {
 const RESULT_LIMIT = 200;
 const ROW_HEIGHT_PX = 32;
 const LIST_MAX_HEIGHT_PX = 360;
+const EMPTY_MATCHES: RankedFileSearchMatch[] = [];
 
 export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) {
   if (!open) {
@@ -45,122 +44,42 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
   const threadCore = useThreadCore();
   const scratch = isScratch(threadCore);
 
-  // Scratch threads have no project/worktree path the client can compute —
-  // we ask the server to resolve the cwd by threadId and echo it back as
-  // `resolvedBasePath`. Non-scratch threads keep using the local path.
-  const [resolvedBasePath, setResolvedBasePath] = useState<string | undefined>(undefined);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const localBasePath = worktreePath || project?.path;
-  const basePath = scratch ? resolvedBasePath : localBasePath;
 
-  const indexTarget = useMemo<FileIndexTarget | null>(() => {
+  const searchTarget = useMemo<RankedFileSearchTarget | null>(() => {
     if (scratch) return threadCore ? { threadId: threadCore.id } : null;
     return localBasePath ? { path: localBasePath } : null;
   }, [scratch, threadCore, localBasePath]);
 
-  const ensureIndex = useFileIndexStore((s) => s.ensureIndex);
-  const indexEntry = useFileIndexStore((s) => (basePath ? s.byPath[basePath] : undefined));
-
   const [query, setQuery] = useState('');
-  const [matches, setMatches] = useState<FileSearchMatch[]>([]);
-  const [truncated, setTruncated] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const { response, searching, error } = useRankedFileSearch({
+    enabled: open,
+    target: searchTarget,
+    query,
+    limit: RESULT_LIMIT,
+  });
+  const matches = response?.matches ?? EMPTY_MATCHES;
+  const basePath = response?.basePath ?? localBasePath;
 
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const workerRef = useRef<FileSearchWorkerClient | null>(null);
-
-  const getWorker = useCallback(() => {
-    if (!workerRef.current && typeof window !== 'undefined') {
-      workerRef.current = new FileSearchWorkerClient();
-      if (basePath && indexEntry) {
-        workerRef.current.setIndex(`${basePath}:${indexEntry.version}`, indexEntry.files);
-      }
-    }
-    return workerRef.current;
-  }, [basePath, indexEntry]);
-
   useEffect(() => {
-    return () => {
-      workerRef.current?.dispose();
-      workerRef.current = null;
-    };
-  }, []);
-
-  // Hydrate the index when the dialog opens (or target changes). For scratch
-  // threads the server resolves the cwd by threadId and returns it as
-  // `basePath`; we stash it locally so `handleSelect` can build absolute paths.
-  useEffect(() => {
-    if (!open || !indexTarget) return;
-    setLoadError(null);
-    ensureIndex(indexTarget)
-      .then((result) => {
-        if (scratch && result.basePath) {
-          setResolvedBasePath(result.basePath);
-        }
-        // Resolved but no usable index — surface as an error so the dialog
-        // doesn't sit spinning forever (e.g. 404 / 502 from the runner).
-        if (!result.entry && !result.basePath) {
-          setLoadError('Could not load file index');
-        }
-      })
-      .catch((err) => {
-        log.warn('failed to load file index', { target: indexTarget, error: String(err) });
-        setLoadError(String(err?.message ?? err));
-      });
-  }, [open, indexTarget, scratch, ensureIndex]);
-
-  // Push the index into the worker whenever it changes
-  useEffect(() => {
-    if (!basePath || !indexEntry) return;
-    const w = getWorker();
-    if (w) w.setIndex(`${basePath}:${indexEntry.version}`, indexEntry.files);
-  }, [basePath, indexEntry, getWorker]);
-
-  const runSearch = useCallback(
-    async (q: string) => {
-      const w = getWorker();
-      if (!w || !indexEntry) {
-        setMatches([]);
-        setTruncated(false);
-        return;
-      }
-      setSearching(true);
-      const result = await w.search(q, RESULT_LIMIT);
-      setMatches(result.matches);
-      setTruncated(result.truncated);
-      setSearching(false);
-      setActiveIndex(0);
-    },
-    [indexEntry, getWorker],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    runSearch(query);
-  }, [query, open, runSearch]);
-
-  // Reset state when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setQuery('');
-      setMatches([]);
-      setTruncated(false);
-      setActiveIndex(0);
-      setLoadError(null);
-    }
-  }, [open]);
+    setActiveIndex(0);
+  }, [response]);
 
   const handleSelect = useCallback(
     (relativePath: string) => {
       if (!basePath) return;
       onOpenChange(false);
       const absolutePath = `${basePath}/${relativePath}`;
-      useInternalEditorStore.getState().openFile(absolutePath);
+      void useInternalEditorStore.getState().openFile(absolutePath);
+      if (searchTarget) {
+        void api.trackFileSelection(searchTarget, query, relativePath);
+      }
     },
-    [onOpenChange, basePath],
+    [onOpenChange, basePath, searchTarget, query],
   );
 
   // Compute filename + per-result highlight indices once per result set
@@ -170,9 +89,9 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
         const slash = m.path.lastIndexOf('/');
         const filename = slash === -1 ? m.path : m.path.slice(slash + 1);
         const filenameStart = slash + 1;
-        const filenameIndices = m.indices
-          .filter((i) => i >= filenameStart)
-          .map((i) => i - filenameStart);
+        const filenameIndices = m.indices.every((index) => index >= filenameStart)
+          ? m.indices.map((index) => index - filenameStart)
+          : [];
         return { match: m, filename, filenameIndices };
       }),
     [matches],
@@ -222,12 +141,9 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
     [items, activeIndex, handleSelect],
   );
 
-  // Scratch threads wait for the server to resolve their cwd, so we show
-  // "indexing" while the resolve+fetch is in flight even before basePath
-  // is known locally.
-  const hasTarget = !!indexTarget;
-  const isLoadingIndex = hasTarget && !loadError && (!basePath || !indexEntry);
-  const showEmpty = hasTarget && !isLoadingIndex && !loadError && !searching && items.length === 0;
+  const hasTarget = !!searchTarget;
+  const showLoading = hasTarget && searching && items.length === 0;
+  const showEmpty = hasTarget && !searching && !error && items.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -266,10 +182,10 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
           >
             {!hasTarget ? (
               <EmptyRow text={t('fileSearch.noProject', 'Select a project first')} />
-            ) : loadError ? (
-              <EmptyRow text={t('fileSearch.loadError', 'Could not load file index')} />
-            ) : isLoadingIndex ? (
-              <LoadingRow text={t('fileSearch.indexing', 'Indexing files...')} />
+            ) : error ? (
+              <EmptyRow text={error} />
+            ) : showLoading ? (
+              <LoadingRow text={t('fileSearch.searching', 'Searching files...')} />
             ) : showEmpty ? (
               <EmptyRow text={t('fileSearch.noResults', 'No files found')} />
             ) : items.length > 0 ? (
@@ -290,6 +206,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
                       data-testid={`file-search-item-${item.match.path}`}
                       role="option"
                       aria-selected={isActive}
+                      tabIndex={isActive ? 0 : -1}
                       className={cn(
                         'absolute left-0 top-0 flex w-full cursor-pointer items-center gap-2 px-3',
                         isActive && 'bg-accent text-accent-foreground',
@@ -300,6 +217,12 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
                       }}
                       onMouseEnter={() => setActiveIndex(vRow.index)}
                       onClick={() => handleSelect(item.match.path)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleSelect(item.match.path);
+                        }
+                      }}
                     >
                       <FileExtensionIcon
                         filePath={item.match.path}
@@ -311,18 +234,21 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
                         indices={item.filenameIndices}
                         className="truncate text-xs"
                       />
-                      <span className="text-muted-foreground ml-auto truncate text-xs">
-                        {item.match.path}
-                      </span>
+                      <HighlightText
+                        text={item.match.path}
+                        query={query}
+                        indices={item.match.indices}
+                        className="text-muted-foreground ml-auto truncate text-xs"
+                      />
                     </div>
                   );
                 })}
               </div>
             ) : null}
-            {truncated && items.length > 0 && (
+            {response?.truncated && items.length > 0 && (
               <div className="text-muted-foreground border-t px-3 py-1.5 text-center text-xs">
                 {t('fileSearch.truncated', 'Showing first {{count}} results — refine your search', {
-                  count: RESULT_LIMIT,
+                  count: matches.length,
                 })}
               </div>
             )}

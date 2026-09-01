@@ -1,5 +1,19 @@
 import { request } from './_core';
 
+export type RankedFileSearchTarget = { path: string } | { threadId: string };
+
+export interface RankedFileSearchMatch {
+  path: string;
+  indices: number[];
+}
+
+export interface RankedFileSearchResponse {
+  matches: RankedFileSearchMatch[];
+  total: number;
+  truncated: boolean;
+  basePath: string;
+}
+
 export const browseApi = {
   browseRoots: () => request<{ roots: string[]; home: string }>('/browse/roots'),
   browseList: (path: string) =>
@@ -42,31 +56,26 @@ export const browseApi = {
       truncated: boolean;
     }>(`/browse/files?${params.toString()}`);
   },
-  /**
-   * Fetch the full file index for a project. Returns the entire list of
-   * tracked files and a monotonic `version`. Pass `since` to get a no-op
-   * `{ unchanged: true }` response when the server-side index is unchanged.
-   *
-   * Accepts either `{ path }` (project scope) or `{ threadId }`. The thread
-   * variant lets scratch/worktree threads be indexed without the client
-   * knowing the cwd — the server resolves it and echoes it back as
-   * `basePath` so the client can build absolute paths.
-   */
-  getFileIndex: (
-    target: { path: string; since?: number } | { threadId: string; since?: number },
+  searchFiles: (
+    target: RankedFileSearchTarget,
+    query: string,
+    limit?: number,
+    signal?: AbortSignal,
   ) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ q: query });
     if ('threadId' in target) {
       params.set('threadId', target.threadId);
     } else {
       params.set('path', target.path);
     }
-    if (target.since && target.since > 0) params.set('since', String(target.since));
-    return request<
-      | { files: string[]; version: number; basePath?: string }
-      | { unchanged: true; version: number; basePath?: string }
-    >(`/browse/files/index?${params.toString()}`);
+    if (limit) params.set('limit', String(limit));
+    return request<RankedFileSearchResponse>(`/search/files?${params.toString()}`, { signal });
   },
+  trackFileSelection: (target: RankedFileSearchTarget, query: string, relativePath: string) =>
+    request<{ ok: boolean }>('/search/files/selection', {
+      method: 'POST',
+      body: JSON.stringify({ ...target, query, relativePath }),
+    }),
   searchSymbols: (path: string, query?: string, file?: string) => {
     const params = new URLSearchParams({ path });
     if (query) params.set('query', query);

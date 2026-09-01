@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
-import { useFileIndexStore } from '@/stores/file-index-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -88,11 +87,13 @@ type Story = StoryObj;
 /*  Stories                                                            */
 /* ------------------------------------------------------------------ */
 
-function seedIndex(basePath: string, files: string[]) {
-  useFileIndexStore.setState({
-    byPath: { [basePath]: { files, version: 1, stale: false } },
-    inflight: {},
-  });
+function rankedResponse(files: string[], total = files.length) {
+  return {
+    matches: files.map((path) => ({ path, indices: [] })),
+    total,
+    truncated: total > files.length,
+    basePath: '/home/user/project',
+  };
 }
 
 /** Default — file list loaded. */
@@ -102,8 +103,7 @@ export const Default: Story = {
       label="Search files"
       setupMocks={() => {
         setupStores();
-        seedIndex('/home/user/project', MOCK_FILES);
-        api.getFileIndex = () => okAsync({ files: MOCK_FILES, version: 1 });
+        api.searchFiles = () => okAsync(rankedResponse(MOCK_FILES));
       }}
     />
   ),
@@ -113,13 +113,13 @@ export const Default: Story = {
 export const Truncated: Story = {
   render: () => {
     const manyFiles = Array.from({ length: 500 }, (_, i) => `src/components/Component${i}.tsx`);
+    const visibleFiles = manyFiles.slice(0, 200);
     return (
       <FileSearchTrigger
         label="Search (truncated)"
         setupMocks={() => {
           setupStores();
-          seedIndex('/home/user/project', manyFiles);
-          api.getFileIndex = () => okAsync({ files: manyFiles, version: 1 });
+          api.searchFiles = () => okAsync(rankedResponse(visibleFiles, manyFiles.length));
         }}
       />
     );
@@ -133,8 +133,7 @@ export const NoResults: Story = {
       label="Search (no results)"
       setupMocks={() => {
         setupStores();
-        seedIndex('/home/user/project', []);
-        api.getFileIndex = () => okAsync({ files: [], version: 1 });
+        api.searchFiles = () => okAsync(rankedResponse([]));
       }}
     />
   ),
@@ -147,8 +146,7 @@ export const Loading: Story = {
       label="Search (loading)"
       setupMocks={() => {
         setupStores();
-        useFileIndexStore.setState({ byPath: {}, inflight: {} });
-        api.getFileIndex = () => new Promise(() => {}) as any;
+        api.searchFiles = () => new Promise(() => {}) as never;
       }}
     />
   ),

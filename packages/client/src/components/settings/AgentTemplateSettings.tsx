@@ -261,27 +261,92 @@ function TemplateCard({
     <div
       className={cn(
         'group flex items-center gap-3 rounded-md border bg-card p-3 transition-colors',
-        !isBuiltin && 'cursor-pointer hover:bg-accent/50',
+        !isBuiltin && 'hover:bg-accent/50',
       )}
-      onClick={isBuiltin ? undefined : onEdit}
       data-testid={`agent-template-card-${template.id}`}
     >
-      {template.color && (
-        <div className="size-3 shrink-0 rounded-full" style={{ backgroundColor: template.color }} />
+      {isBuiltin ? (
+        <TemplateCardSummary template={template} threadCount={threadCount} isBuiltin />
+      ) : (
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+          onClick={onEdit}
+          aria-label={`Edit ${template.name}`}
+        >
+          <TemplateCardSummary template={template} threadCount={threadCount} />
+        </button>
       )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="truncate text-sm font-medium">{template.name}</p>
+      <div className="flex shrink-0 gap-1 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          onClick={onExport}
+          data-testid={`agent-template-export-${template.id}`}
+          aria-label={`Export ${template.name}`}
+        >
+          <Download className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          onClick={onDuplicate}
+          data-testid={`agent-template-duplicate-${template.id}`}
+          aria-label={`Duplicate ${template.name}`}
+        >
+          <Copy className="size-3" />
+        </Button>
+        {!isBuiltin && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive size-6"
+            onClick={onDelete}
+            data-testid={`agent-template-delete-${template.id}`}
+            aria-label={`Delete ${template.name}`}
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TemplateCardSummary({
+  template,
+  threadCount,
+  isBuiltin = false,
+}: {
+  template: AgentTemplate;
+  threadCount: number;
+  isBuiltin?: boolean;
+}) {
+  return (
+    <>
+      {template.color && (
+        <span
+          className="size-3 shrink-0 rounded-full"
+          style={{ backgroundColor: template.color }}
+        />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium">{template.name}</span>
           {isBuiltin && (
             <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium">
               Built-in
             </span>
           )}
-        </div>
+        </span>
         {template.description && (
-          <p className="text-muted-foreground truncate text-xs">{template.description}</p>
+          <span className="text-muted-foreground block truncate text-xs">
+            {template.description}
+          </span>
         )}
-      </div>
+      </span>
       <span
         className="text-muted-foreground shrink-0 text-[10px]"
         data-testid={`agent-template-thread-count-${template.id}`}
@@ -293,47 +358,7 @@ function TemplateCard({
           {template.model}
         </span>
       )}
-      <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          onClick={(e) => {
-            e.stopPropagation();
-            onExport();
-          }}
-          data-testid={`agent-template-export-${template.id}`}
-        >
-          <Download className="size-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDuplicate();
-          }}
-          data-testid={`agent-template-duplicate-${template.id}`}
-        >
-          <Copy className="size-3" />
-        </Button>
-        {!isBuiltin && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive size-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            data-testid={`agent-template-delete-${template.id}`}
-          >
-            <Trash2 className="size-3" />
-          </Button>
-        )}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -368,6 +393,7 @@ function TemplateEditor({
             size="sm"
             className="text-destructive"
             onClick={onDelete}
+            aria-label={`Delete ${template.name}`}
             data-testid="agent-template-editor-delete"
           >
             <Trash2 className="icon-sm" />
@@ -463,8 +489,11 @@ function IdentitySection({
     <div className="space-y-3">
       <div className="flex gap-2">
         <div className="flex-1">
-          <label className="text-muted-foreground mb-1 block text-xs">Name</label>
+          <label htmlFor="agent-template-name" className="text-muted-foreground mb-1 block text-xs">
+            Name
+          </label>
           <Input
+            id="agent-template-name"
             defaultValue={template.name}
             onBlur={(e) => {
               if (e.target.value !== template.name) onSave({ name: e.target.value });
@@ -474,8 +503,14 @@ function IdentitySection({
         </div>
       </div>
       <div>
-        <label className="text-muted-foreground mb-1 block text-xs">Description</label>
+        <label
+          htmlFor="agent-template-description"
+          className="text-muted-foreground mb-1 block text-xs"
+        >
+          Description
+        </label>
         <Input
+          id="agent-template-description"
           defaultValue={template.description ?? ''}
           placeholder="What does this agent do?"
           onBlur={(e) => {
@@ -485,8 +520,8 @@ function IdentitySection({
           data-testid="agent-template-description"
         />
       </div>
-      <div>
-        <label className="text-muted-foreground mb-1 block text-xs">Color</label>
+      <fieldset>
+        <legend className="text-muted-foreground mb-1 block text-xs">Color</legend>
         <div className="flex gap-1.5">
           {PASTEL_COLORS.map((color) => (
             <button
@@ -497,6 +532,8 @@ function IdentitySection({
               )}
               style={{ backgroundColor: color }}
               onClick={() => onSave({ color })}
+              aria-label={`Set color ${color}`}
+              aria-pressed={template.color === color}
               data-testid={`agent-template-color-${color}`}
             />
           ))}
@@ -509,10 +546,16 @@ function IdentitySection({
             </button>
           )}
         </div>
-      </div>
+      </fieldset>
       <div>
-        <label className="text-muted-foreground mb-1 block text-xs">Agent Name</label>
+        <label
+          htmlFor="agent-template-agent-name"
+          className="text-muted-foreground mb-1 block text-xs"
+        >
+          Agent Name
+        </label>
         <Input
+          id="agent-template-agent-name"
           defaultValue={template.agentName ?? ''}
           placeholder="funny-coding-assistant"
           onBlur={(e) => {
@@ -539,9 +582,15 @@ function ModelSection({
 
   return (
     <div>
-      <label className="text-muted-foreground mb-1 block text-xs">Default Model</label>
+      <span id="agent-template-model-label" className="text-muted-foreground mb-1 block text-xs">
+        Default Model
+      </span>
       <Select value={template.model ?? ''} onValueChange={(v) => onSave({ model: v as any })}>
-        <SelectTrigger className="w-full" data-testid="agent-template-model">
+        <SelectTrigger
+          aria-labelledby="agent-template-model-label"
+          className="w-full"
+          data-testid="agent-template-model"
+        >
           <SelectValue placeholder="Use project default" />
         </SelectTrigger>
         <SelectContent>
@@ -572,8 +621,8 @@ function SystemPromptSection({
 
   return (
     <div className="space-y-2">
-      <div>
-        <label className="text-muted-foreground mb-1 block text-xs">Mode</label>
+      <fieldset>
+        <legend className="text-muted-foreground mb-1 block text-xs">Mode</legend>
         <div className="flex gap-1">
           {(['prepend', 'replace', 'append'] as const).map((mode) => (
             <button
@@ -598,10 +647,16 @@ function SystemPromptSection({
               ? 'Added after the default system prompt.'
               : 'Added before the default system prompt.'}
         </p>
-      </div>
+      </fieldset>
       <div>
-        <label className="text-muted-foreground mb-1 block text-xs">Prompt</label>
+        <label
+          htmlFor="agent-template-system-prompt"
+          className="text-muted-foreground mb-1 block text-xs"
+        >
+          Prompt
+        </label>
         <textarea
+          id="agent-template-system-prompt"
           className="bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-3 py-2 text-xs leading-relaxed focus:ring-1 focus:outline-hidden"
           rows={6}
           value={promptText}
@@ -649,9 +704,11 @@ function ToolsSection({
         {DEEPAGENT_TOOLS.map((tool) => (
           <label
             key={tool}
+            htmlFor={`agent-template-tool-${tool}`}
             className="hover:bg-accent/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs"
           >
             <Checkbox
+              id={`agent-template-tool-${tool}`}
               checked={!disallowed.has(tool)}
               onCheckedChange={() => toggleTool(tool)}
               data-testid={`agent-template-tool-${tool}`}
@@ -696,9 +753,11 @@ function SkillsSection({
         {BUILTIN_SKILLS.map((skill) => (
           <label
             key={skill}
+            htmlFor={`agent-template-skill-${skill}`}
             className="hover:bg-accent/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs"
           >
             <Checkbox
+              id={`agent-template-skill-${skill}`}
               checked={!disabled.has(skill)}
               onCheckedChange={() => toggleSkill(skill)}
               data-testid={`agent-template-skill-${skill}`}
@@ -754,14 +813,14 @@ function McpServersSection({
           {servers.map((srv, idx) =>
             editingIdx === idx ? (
               <McpServerForm
-                key={idx}
+                key={`${srv.name}-${srv.type}`}
                 initial={srv}
                 onSave={(s) => saveServer(s, idx)}
                 onCancel={() => setEditingIdx(null)}
               />
             ) : (
               <div
-                key={idx}
+                key={`${srv.name}-${srv.type}`}
                 className="flex items-center gap-2 rounded border px-2 py-1.5 text-xs"
                 data-testid={`agent-template-mcp-server-${idx}`}
               >
@@ -775,6 +834,7 @@ function McpServersSection({
                 </span>
                 <div className="ml-auto flex gap-1">
                   <button
+                    aria-label={`Edit ${srv.name}`}
                     onClick={() => setEditingIdx(idx)}
                     className="text-muted-foreground hover:text-foreground rounded p-0.5"
                     data-testid={`agent-template-mcp-edit-${idx}`}
@@ -782,6 +842,7 @@ function McpServersSection({
                     <Pencil className="size-3" />
                   </button>
                   <button
+                    aria-label={`Delete ${srv.name}`}
                     onClick={() => removeServer(idx)}
                     className="text-muted-foreground hover:text-destructive rounded p-0.5"
                     data-testid={`agent-template-mcp-delete-${idx}`}
@@ -865,8 +926,11 @@ function McpServerForm({
     <div className="bg-muted/30 space-y-2 rounded border p-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-muted-foreground text-[10px]">Name</label>
+          <label htmlFor="agent-template-mcp-name" className="text-muted-foreground text-[10px]">
+            Name
+          </label>
           <Input
+            id="agent-template-mcp-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="server-name"
@@ -875,9 +939,15 @@ function McpServerForm({
           />
         </div>
         <div>
-          <label className="text-muted-foreground text-[10px]">Type</label>
+          <span id="agent-template-mcp-type-label" className="text-muted-foreground text-[10px]">
+            Type
+          </span>
           <Select value={type} onValueChange={(v) => setType(v as McpServerType)}>
-            <SelectTrigger size="xs" data-testid="agent-template-mcp-type">
+            <SelectTrigger
+              aria-labelledby="agent-template-mcp-type-label"
+              size="xs"
+              data-testid="agent-template-mcp-type"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -892,8 +962,14 @@ function McpServerForm({
       {type === 'stdio' ? (
         <>
           <div>
-            <label className="text-muted-foreground text-[10px]">Command</label>
+            <label
+              htmlFor="agent-template-mcp-command"
+              className="text-muted-foreground text-[10px]"
+            >
+              Command
+            </label>
             <Input
+              id="agent-template-mcp-command"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               placeholder="npx -y @modelcontextprotocol/server-..."
@@ -902,10 +978,11 @@ function McpServerForm({
             />
           </div>
           <div>
-            <label className="text-muted-foreground text-[10px]">
+            <label htmlFor="agent-template-mcp-args" className="text-muted-foreground text-[10px]">
               Args <span className="text-muted-foreground">(comma-separated)</span>
             </label>
             <Input
+              id="agent-template-mcp-args"
               value={argsStr}
               onChange={(e) => setArgsStr(e.target.value)}
               placeholder="--port, 3000"
@@ -916,8 +993,11 @@ function McpServerForm({
         </>
       ) : (
         <div>
-          <label className="text-muted-foreground text-[10px]">URL</label>
+          <label htmlFor="agent-template-mcp-url" className="text-muted-foreground text-[10px]">
+            URL
+          </label>
           <Input
+            id="agent-template-mcp-url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://..."
@@ -928,11 +1008,12 @@ function McpServerForm({
       )}
 
       <div>
-        <label className="text-muted-foreground text-[10px]">
+        <label htmlFor="agent-template-mcp-env" className="text-muted-foreground text-[10px]">
           Environment Variables{' '}
           <span className="text-muted-foreground">(KEY=VALUE, one per line)</span>
         </label>
         <textarea
+          id="agent-template-mcp-env"
           value={envStr}
           onChange={(e) => setEnvStr(e.target.value)}
           placeholder="API_KEY=sk-..."
@@ -1011,6 +1092,8 @@ function VariablesSection({
             >
               <div className="flex-1 space-y-1">
                 <Input
+                  id={`agent-template-variable-name-${idx}`}
+                  aria-label={`Variable ${idx + 1} name`}
                   value={v.name}
                   onChange={(e) => updateVariable(idx, 'name', e.target.value)}
                   placeholder="VARIABLE_NAME"
@@ -1018,6 +1101,8 @@ function VariablesSection({
                   data-testid={`agent-template-variable-name-${idx}`}
                 />
                 <Input
+                  id={`agent-template-variable-description-${idx}`}
+                  aria-label={`Variable ${idx + 1} description`}
                   value={v.description ?? ''}
                   onChange={(e) => updateVariable(idx, 'description', e.target.value)}
                   placeholder="Description (shown to user)"
@@ -1025,6 +1110,8 @@ function VariablesSection({
                   data-testid={`agent-template-variable-desc-${idx}`}
                 />
                 <Input
+                  id={`agent-template-variable-default-${idx}`}
+                  aria-label={`Variable ${idx + 1} default value`}
                   value={v.defaultValue ?? ''}
                   onChange={(e) => updateVariable(idx, 'defaultValue', e.target.value)}
                   placeholder="Default value (optional)"
@@ -1033,6 +1120,7 @@ function VariablesSection({
                 />
               </div>
               <button
+                aria-label={`Delete variable ${v.name || idx + 1}`}
                 onClick={() => removeVariable(idx)}
                 className="text-muted-foreground hover:text-destructive mt-1 rounded p-0.5"
                 data-testid={`agent-template-variable-delete-${idx}`}
@@ -1076,8 +1164,10 @@ function SharingSection({
             Shared templates are visible to everyone on this instance.
           </p>
         </div>
-        <label className="flex cursor-pointer items-center gap-2">
+        <label htmlFor="agent-template-shared" className="flex cursor-pointer items-center gap-2">
           <Checkbox
+            id="agent-template-shared"
+            aria-label="Shared"
             checked={template.shared ?? false}
             onCheckedChange={(checked) => onSave({ shared: checked === true })}
             data-testid="agent-template-shared"

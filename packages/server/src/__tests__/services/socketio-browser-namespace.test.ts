@@ -1,11 +1,24 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import { setupBrowserNamespace } from '../../services/socketio/browser-namespace.js';
 import { bindSocketIOServer, closeSocketIOServer } from '../../services/socketio/state.js';
-import { userHasConnectedRunner } from '../../services/ws-relay.js';
 import { createMockIo, createMockSocket } from '../helpers/socketio-test-mocks.js';
 
 describe('setupBrowserNamespace', () => {
+  let presence: RunnerGrpcSessionRegistry;
+
+  beforeEach(() => {
+    presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
+  });
+
+  const dependencies = () => ({
+    presence,
+    findAnyRunnerForUser: async () => null,
+    findRunnerForProject: async () => null,
+    getRunnerUserId: async () => null,
+    getProjectOwnerId: async () => null,
+  });
   afterEach(async () => {
     await closeSocketIOServer();
   });
@@ -24,7 +37,7 @@ describe('setupBrowserNamespace', () => {
     });
 
     bindSocketIOServer(ioWithClose as any, {} as any, { api: {} }, ['http://localhost:5173']);
-    setupBrowserNamespace();
+    setupBrowserNamespace(dependencies());
 
     let rejected: Error | undefined;
     await authMiddlewares[0]?.(
@@ -51,7 +64,7 @@ describe('setupBrowserNamespace', () => {
     });
 
     bindSocketIOServer(ioWithClose as any, {} as any, { api: {} }, ['http://localhost:5173']);
-    setupBrowserNamespace();
+    setupBrowserNamespace(dependencies());
 
     const socket = createMockSocket({
       data: { userId: 'user-1' },
@@ -61,10 +74,10 @@ describe('setupBrowserNamespace', () => {
 
     connectionHandlers[0]?.(socket);
 
-    // ws-relay resolves asynchronously inside setupBrowserNamespace
+    // The connection handler emits readiness asynchronously.
     await new Promise((r) => setTimeout(r, 0));
 
     expect(socket.emitted.some((e) => e.event === 'runner:status')).toBe(true);
-    expect(userHasConnectedRunner('user-1')).toBe(false);
+    expect(presence.userHasAvailableRunner('user-1')).toBe(false);
   });
 });

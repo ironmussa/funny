@@ -1,5 +1,5 @@
 /**
- * Socket.IO server setup for runner and browser communication.
+ * Socket.IO server setup for browser communication.
  *
  * Uses @socket.io/bun-engine for native Bun WebSocket integration
  * instead of the default engine.io (which requires Node.js HTTP server events).
@@ -11,12 +11,10 @@ import { Server as BunEngine } from '@socket.io/bun-engine';
 import { Server as SocketIOServer } from 'socket.io';
 
 import { log } from '../lib/logger.js';
-import { setupBrowserNamespace } from './socketio/browser-namespace.js';
+import { setBrowserEventSink } from './browser-events.js';
+import { SocketIoBrowserEventSink } from './socketio/browser-event-sink.js';
 import { isAllowedBrowserOrigin } from './socketio/origin.js';
-import { setupRunnerNamespace } from './socketio/runner-namespace.js';
 import { bindSocketIOServer, closeSocketIOServer, getEngine, getIO } from './socketio/state.js';
-import { setIO as setRelayIO } from './ws-relay.js';
-import { setIO as setTunnelIO } from './ws-tunnel.js';
 
 export { isAllowedBrowserOrigin, getEngine, getIO };
 
@@ -27,7 +25,7 @@ export { isAllowedBrowserOrigin, getEngine, getIO };
 export function createSocketIOServer(
   auth: any,
   corsOrigins: string[],
-): { io: SocketIOServer; engine: BunEngine } {
+): { io: SocketIOServer; engine: BunEngine; browserEvents: SocketIoBrowserEventSink } {
   const engine = new BunEngine({
     path: '/socket.io/',
     pingInterval: 25_000,
@@ -43,15 +41,12 @@ export function createSocketIOServer(
   io.bind(engine as any);
 
   bindSocketIOServer(io, engine, auth, corsOrigins);
-  setRelayIO(io);
-  setTunnelIO(io);
-
-  setupBrowserNamespace();
-  setupRunnerNamespace();
+  const browserEvents = new SocketIoBrowserEventSink(io);
+  setBrowserEventSink(browserEvents);
 
   log.info('Socket.IO server created with Bun engine', { namespace: 'socketio' });
 
-  return { io, engine };
+  return { io, engine, browserEvents };
 }
 
 export async function closeSocketIO(): Promise<void> {

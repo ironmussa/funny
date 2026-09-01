@@ -10,19 +10,12 @@ const source = readSocketioImplementationSources();
 describe('socketio runner-readiness channel', () => {
   test('browser connect emits current runner:status to the new socket', () => {
     expect(source).toMatch(/socket\.emit\(\s*['"]runner:status['"]/);
-    expect(source).toMatch(/userHasConnectedRunner\(\s*userId\s*\)/);
+    expect(source).toMatch(/presence\?\.userHasAvailableRunner\(userId\)/);
   });
 
-  test('runner connect emits runner:status: online to the user room', () => {
-    expect(source).toMatch(
-      /to\(\s*`user:\$\{runnerUserId\}`\s*\)\s*\.emit\(\s*['"]runner:status['"][\s\S]*?status:\s*['"]online['"]/,
-    );
-  });
-
-  test('runner disconnect emits runner:status: offline gated on user index', () => {
-    expect(source).toMatch(
-      /!wsRelay\.userHasConnectedRunner\(\s*runnerUserId\s*\)[\s\S]*?status:\s*['"]offline['"]/,
-    );
+  test('browser presentation does not import the concrete gRPC registry or relay presence', () => {
+    expect(source).not.toMatch(/grpc\/session-registry/);
+    expect(source).not.toMatch(/wsRelay\.userHasConnectedRunner/);
   });
 });
 
@@ -34,17 +27,16 @@ describe('socketio pty:list RPC contract', () => {
 
   test('responds with no-runner when the user has no connected runner', () => {
     const noRunnerHits = source.match(/status:\s*['"]no-runner['"]/g) ?? [];
-    expect(noRunnerHits.length).toBeGreaterThanOrEqual(3);
+    expect(noRunnerHits.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('forwards to runner with central:pty_list ack', () => {
-    expect(source).toMatch(/emitWithAck\(\s*['"]central:pty_list['"]/);
+  test('lists sessions through the terminal port', () => {
+    expect(source).toMatch(/terminals\.listSessions\(runnerId, userId\)/);
     expect(source).toMatch(/status:\s*['"]ok['"][\s\S]*?sessions/);
   });
 
-  test('produces a timeout response on runner ack timeout', () => {
-    expect(source).toMatch(/runnerSocket[\s\S]*?\.timeout\(/);
-    expect(source).toMatch(/status:\s*['"]timeout['"]/);
+  test('checks terminal availability before listing sessions', () => {
+    expect(source).toMatch(/terminals\?\.isAvailable\(runnerId\)/);
   });
 
   test('produces an error response on internal failure', () => {

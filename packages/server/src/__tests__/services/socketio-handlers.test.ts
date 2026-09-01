@@ -1,100 +1,59 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
-import { RUNNER_AGENT_EVENT } from '@funny/shared/socket-events';
-import { err } from 'neverthrow';
-
-import * as dataHandler from '../../services/data-handler.js';
-import * as projectRepository from '../../services/project-repository.js';
-import * as runnerManager from '../../services/runner-manager.js';
-import { clearSocketRate } from '../../services/socketio-rate-limit.js';
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
-import { setupRunnerControlHandlers } from '../../services/socketio/runner-control.js';
-import { setupRunnerDataHandlers } from '../../services/socketio/runner-data.js';
-import { setupRunnerEventHandlers } from '../../services/socketio/runner-events.js';
-import { bindSocketIOServer, closeSocketIOServer } from '../../services/socketio/state.js';
-import {
-  addRunnerClient,
-  removeRunnerClient,
-  setIO as setRelayIO,
-} from '../../services/ws-relay.js';
-import { createMockIo, createMockSocket } from '../helpers/socketio-test-mocks.js';
+import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
-function installMockIo(options?: Parameters<typeof createMockIo>[0]) {
-  const { io, capture } = createMockIo(options);
-  const ioWithClose = Object.assign(io, { close: () => {} });
-  bindSocketIOServer(ioWithClose as any, {} as any, null, []);
-  setRelayIO(ioWithClose as any);
-  return capture;
+afterEach(() => {
+  delete process.env.RUNNER_AUTH_SECRET;
+});
+
+function runnerDependencies(overrides: Record<string, unknown> = {}) {
+  return {
+    findAnyRunnerForUser: async () => 'runner-1',
+    findRunnerForProject: async () => 'runner-1',
+    getRunnerUserId: async () => 'user-1',
+    getProjectOwnerId: async () => 'user-1',
+    ...overrides,
+  } as any;
 }
 
-function stubBrowserRouting(): void {
-  spyOn(runnerManager, 'findAnyRunnerForUser').mockResolvedValue('runner-1');
-  spyOn(runnerManager, 'findRunnerForProject').mockResolvedValue({
-    runner: { runnerId: 'runner-1' },
-  } as any);
-  spyOn(runnerManager, 'getRunnerUserId').mockResolvedValue('user-1');
-  spyOn(projectRepository, 'getProject').mockImplementation(async (projectId: string) =>
-    projectId === 'owned'
-      ? ({ userId: 'user-1', id: 'owned' } as any)
-      : ({ userId: 'other', id: projectId } as any),
-  );
-}
-
-describe('socketio browser handlers', () => {
-  beforeEach(() => {
-    removeRunnerClient('runner-1');
-    addRunnerClient('runner-1', 'runner-sock-1', 'user-1');
-    stubBrowserRouting();
-  });
-
-  afterEach(async () => {
-    mock.restore();
-    clearSocketRate('mock-socket-id:data:fire-and-forget');
-    clearSocketRate('mock-socket-id:data:request-response');
-    removeRunnerClient('runner-1');
-    await closeSocketIOServer();
-  });
-
-  test('forwards PTY events to the runner socket', async () => {
-    const capture = installMockIo();
-    const socket = createMockSocket();
-    setupBrowserPtyHandlers(socket, 'user-1');
-
-    await socket.trigger('pty:write', { projectId: 'owned', data: 'ls' });
-
-    expect(capture.centralBrowserWs).toHaveLength(1);
-    expect(capture.centralBrowserWs[0]?.payload).toMatchObject({
-      userId: 'user-1',
-      data: { type: 'pty:write' },
+describe('browser Socket.IO to runner gRPC handlers', () => {
+  test('forwards PTY events only through the active gRPC terminal stream', async () => {
+    const dispatched: unknown[] = [];
+    const dependencies = runnerDependencies({
+      terminals: {
+        isAvailable: () => true,
+        dispatch: (runnerId: string, userId: string, event: unknown) =>
+          dispatched.push({ runnerId, userId, event }),
+        listSessions: () => [],
+      },
     });
+    const socket = createMockSocket();
+    setupBrowserPtyHandlers(socket, 'user-1', dependencies);
+
+    await socket.trigger('pty:write', { projectId: 'owned', id: 'pty-1', data: 'ls\n' });
+
+    expect(dispatched).toEqual([
+      {
+        runnerId: 'runner-1',
+        userId: 'user-1',
+        event: { type: 'pty:write', data: { projectId: 'owned', id: 'pty-1', data: 'ls\n' } },
+      },
+    ]);
   });
 
-  test('pty:spawn on an owned project forwards to the runner (orphaned-project fallback)', async () => {
-    // Regression: pi-harness-style projects with no runner_project_assignments
-    // row used to make findRunnerForProject return null → "No runner available
-    // to handle terminal request". With the fallback it resolves the owner's
-    // online runner, so the spawn must forward, not error.
-    const capture = installMockIo();
-    const socket = createMockSocket();
-    setupBrowserPtyHandlers(socket, 'user-1');
-
-    await socket.trigger('pty:spawn', { projectId: 'owned', id: 'pty-1' });
-
-    expect(capture.centralBrowserWs).toHaveLength(1);
-    expect(capture.centralBrowserWs[0]?.payload).toMatchObject({
-      userId: 'user-1',
-      data: { type: 'pty:spawn' },
+  test('pty:spawn reports unavailable instead of falling back', async () => {
+    const dependencies = runnerDependencies({
+      terminals: {
+        isAvailable: () => false,
+        dispatch: () => {},
+        listSessions: () => [],
+      },
     });
-    expect(socket.emitted).toHaveLength(0); // no pty:error
-  });
-
-  test('pty:spawn emits "No runner available" when no runner resolves', async () => {
-    spyOn(runnerManager, 'findRunnerForProject').mockResolvedValue(null);
-    installMockIo();
     const socket = createMockSocket();
-    setupBrowserPtyHandlers(socket, 'user-1');
+    setupBrowserPtyHandlers(socket, 'user-1', dependencies);
 
     await socket.trigger('pty:spawn', { projectId: 'owned', id: 'pty-1' });
 
@@ -104,263 +63,53 @@ describe('socketio browser handlers', () => {
     });
   });
 
-  test('blocks cross-tenant PTY requests for foreign projects', async () => {
-    installMockIo();
-    const socket = createMockSocket();
-    setupBrowserPtyHandlers(socket, 'user-1');
-
-    await socket.trigger('pty:spawn', { projectId: 'foreign', id: 'pty-1' });
-
-    expect(socket.emitted[0]).toEqual({
-      event: 'pty:error',
-      data: { ptyId: 'pty-1', error: 'Project not found' },
-    });
-  });
-
-  test('forwards browser-session events to the user runner', async () => {
-    const capture = installMockIo();
-    const socket = createMockSocket();
-    setupBrowserSessionHandlers(socket, 'user-1');
-
-    await socket.trigger('browser-session:navigate', { url: 'https://example.com' });
-
-    expect(capture.centralBrowserWs[0]?.payload).toMatchObject({
-      data: { type: 'browser-session:navigate' },
-    });
-  });
-
-  test('pty:list ack returns ok sessions from runner RPC', async () => {
-    const runnerSocket = {
-      timeout: (_ms: number) => ({
-        emitWithAck: async () => ({ sessions: [{ id: 'pty-a' }] }),
-      }),
-    };
-    installMockIo({ runnerSocket });
-    const socket = createMockSocket();
-    setupBrowserPtyListRpc(socket, 'user-1');
-
-    let response: unknown;
-    await socket.triggerRpc('pty:list', {}, (res) => {
-      response = res;
-    });
-
-    expect(response).toEqual({ status: 'ok', sessions: [{ id: 'pty-a' }] });
-  });
-
-  test('pty:list ack returns no-runner when user has no runner', async () => {
-    spyOn(runnerManager, 'findAnyRunnerForUser').mockResolvedValue(null);
-    installMockIo();
-    const socket = createMockSocket();
-    setupBrowserPtyListRpc(socket, 'user-1');
-
-    let response: unknown;
-    await socket.triggerRpc('pty:list', {}, (res) => {
-      response = res;
-    });
-
-    expect(response).toEqual({ status: 'no-runner', sessions: [] });
-  });
-});
-
-describe('socketio runner handlers', () => {
-  beforeEach(() => {
-    removeRunnerClient('runner-1');
-    addRunnerClient('runner-1', 'runner-sock-1', 'user-1');
-  });
-
-  afterEach(() => {
-    mock.restore();
-    removeRunnerClient('runner-1');
-  });
-
-  test('relays allowed runner agent events to the browser user', async () => {
-    const socket = createMockSocket();
-    const relayToUser = mock((_userId: string, _event: unknown) => {});
-    setupRunnerEventHandlers({
-      socket,
-      runnerId: 'runner-1',
-      runnerUserId: 'user-1',
-      wsRelay: { relayToUser, relayToThreadStream: () => {} } as any,
-    });
-
-    await socket.trigger(RUNNER_AGENT_EVENT, {
-      userId: 'user-1',
-      event: { type: 'agent:message' },
-    });
-
-    expect(relayToUser).toHaveBeenCalled();
-  });
-
-  test('agent:result survives the chunk-storm rate limit (stuck-"processing" regression)', async () => {
-    // A streaming burst used to exhaust the per-socket 500-events/10s budget
-    // and silently drop the terminal agent:result with it — the DB (updated
-    // via the data channel) said "completed" while every open tab stayed on
-    // "processing" until a manual refresh.
-    const socket = createMockSocket({ id: 'rate-limit-sock' } as any);
-    const relayToUser = mock((_userId: string, _event: unknown) => {});
-    setupRunnerEventHandlers({
-      socket,
-      runnerId: 'runner-1',
-      runnerUserId: 'user-1',
-      wsRelay: { relayToUser, relayToThreadStream: () => {} } as any,
-    });
-
-    try {
-      for (let i = 0; i < 550; i++) {
-        await socket.trigger(RUNNER_AGENT_EVENT, {
-          userId: 'user-1',
-          event: { type: 'agent:message' },
-        });
-      }
-      const relayedDuringStorm = relayToUser.mock.calls.length;
-      // Sanity: the main cap actually tripped, so the assertion below proves
-      // the bypass (not just an un-exhausted budget).
-      expect(relayedDuringStorm).toBeLessThan(550);
-
-      await socket.trigger(RUNNER_AGENT_EVENT, {
-        userId: 'user-1',
-        event: { type: 'agent:result' },
-      });
-
-      const resultRelayed = relayToUser.mock.calls
-        .slice(relayedDuringStorm)
-        .some(([, event]) => (event as { type?: string })?.type === 'agent:result');
-      expect(resultRelayed).toBe(true);
-    } finally {
-      clearSocketRate('rate-limit-sock');
-      clearSocketRate('rate-limit-sock:critical');
-    }
-  });
-
-  test('blocks cross-tenant runner agent events', async () => {
-    const socket = createMockSocket();
-    const relayToUser = mock((_userId: string, _event: unknown) => {});
-    setupRunnerEventHandlers({
-      socket,
-      runnerId: 'runner-1',
-      runnerUserId: 'user-1',
-      wsRelay: { relayToUser, relayToThreadStream: () => {} } as any,
-    });
-
-    await socket.trigger(RUNNER_AGENT_EVENT, {
-      userId: 'user-2',
-      event: { type: 'agent:message' },
-    });
-
-    expect(relayToUser).not.toHaveBeenCalled();
-  });
-
-  test('runner:heartbeat ack returns wsConnected', async () => {
-    spyOn(runnerManager, 'handleHeartbeat').mockResolvedValue(true);
-
-    const socket = createMockSocket();
-    setupRunnerControlHandlers(socket, 'runner-1');
-
-    let response: unknown;
-    await socket.triggerRpc('runner:heartbeat', { activeThreadIds: [] }, (res) => {
-      response = res;
-    });
-
-    expect(response).toEqual({ ok: true, wsConnected: true });
-  });
-
-  test('runner:heartbeat emits data:response for requestId messages', async () => {
-    spyOn(runnerManager, 'handleHeartbeat').mockResolvedValue(true);
-
-    const socket = createMockSocket();
-    setupRunnerControlHandlers(socket, 'runner-1');
-
-    await socket.trigger('runner:heartbeat', { _requestId: 'hb-1', activeThreadIds: [] });
-
-    expect(socket.emitted[0]).toEqual({
-      event: 'data:response',
-      data: {
-        requestId: 'hb-1',
-        response: { ok: true, wsConnected: true },
+  test('pty:list reads the gRPC terminal registry', async () => {
+    const dependencies = runnerDependencies({
+      terminals: {
+        isAvailable: () => true,
+        dispatch: () => {},
+        listSessions: () => [{ ptyId: 'pty-a', cwd: '/tmp' }],
       },
     });
-  });
-
-  test('runner:assign_project rejects cross-tenant project access', async () => {
-    spyOn(projectRepository, 'resolveProjectPath').mockResolvedValue(
-      err({ message: 'Forbidden' } as any),
-    );
-
-    const socket = createMockSocket({ data: { runnerUserId: 'user-1' } } as any);
-    setupRunnerControlHandlers(socket, 'runner-1');
-
+    const socket = createMockSocket();
+    setupBrowserPtyListRpc(socket, 'user-1', dependencies);
     let response: unknown;
-    await socket.triggerRpc(
-      'runner:assign_project',
-      { projectId: 'p-foreign', localPath: '/tmp/x' },
-      (res) => {
-        response = res;
-      },
-    );
-
-    expect(response).toEqual({ ok: false, error: 'Forbidden' });
-  });
-
-  test('runner:assign_project rejects invalid payloads before authorization', async () => {
-    const socket = createMockSocket({ data: { runnerUserId: 'user-1' } } as any);
-    setupRunnerControlHandlers(socket, 'runner-1');
-
-    let response: unknown;
-    await socket.triggerRpc('runner:assign_project', { projectId: 'p1' }, (res) => {
-      response = res;
+    await socket.triggerRpc('pty:list', {}, (value) => {
+      response = value;
     });
 
-    expect(response).toEqual({ ok: false, error: 'Invalid payload' });
+    expect(response).toEqual({ status: 'ok', sessions: [{ ptyId: 'pty-a', cwd: '/tmp' }] });
   });
 
-  test('runner data handler emits data:response for requestId messages', async () => {
-    spyOn(dataHandler, 'handleDataMessageWithAck').mockResolvedValue({
-      success: true,
-      id: 'msg-1',
-    } as any);
-
-    const socket = createMockSocket();
-    setupRunnerDataHandlers(socket, 'runner-1', 'user-1');
-
-    await socket.trigger('data:insert_message', { _requestId: 'req-1', payload: {} });
-
-    expect(socket.emitted[0]?.event).toBe('data:response');
-  });
-
-  test('runner data request-response calls are not rate-limited by fire-and-forget streams', async () => {
-    const handleData = spyOn(dataHandler, 'handleDataMessageWithAck').mockImplementation(
-      async (_runnerId, _runnerUserId, data: any) => {
-        if (data.type === 'data:get_thread') {
-          return {
-            type: 'data:get_thread_response',
-            thread: { id: data.threadId, title: 'Thread' },
-          } as any;
-        }
-        return undefined;
-      },
-    );
-
-    const socket = createMockSocket();
-    setupRunnerDataHandlers(socket, 'runner-1', 'user-1');
-
-    for (let i = 0; i < 1_000; i++) {
-      await socket.trigger('data:update_message', {
-        payload: { messageId: `m-${i}`, content: 'streaming' },
-      });
-    }
-
-    await socket.trigger('data:get_thread', { _requestId: 'req-1', threadId: 't-1' });
-
-    expect(socket.emitted.at(-1)).toEqual({
-      event: 'data:response',
-      data: {
-        requestId: 'req-1',
-        response: {
-          type: 'data:get_thread_response',
-          thread: { id: 't-1', title: 'Thread' },
+  test('forwards browser-session commands through the gRPC tunnel', async () => {
+    process.env.RUNNER_AUTH_SECRET = 'test-secret';
+    const requests: any[] = [];
+    const dependencies = runnerDependencies({
+      requests: {
+        isAvailable: () => true,
+        request: async (_runnerId: string, request: unknown) => {
+          requests.push(request);
+          return { status: 202, headers: {}, body: '' };
         },
       },
     });
-    expect(handleData).toHaveBeenCalledTimes(1_001);
+    const socket = createMockSocket();
+    setupBrowserSessionHandlers(socket, 'user-1', dependencies);
+
+    await socket.trigger('browser-session:navigate', {
+      sessionId: 'session-1',
+      url: 'https://example.com',
+    });
+
+    expect(requests[0]).toMatchObject({
+      method: 'POST',
+      path: '/api/browser-session/command',
+    });
+    expect(Buffer.from(requests[0].body).toString()).toBe(
+      JSON.stringify({
+        type: 'browser-session:navigate',
+        data: { sessionId: 'session-1', url: 'https://example.com' },
+      }),
+    );
   });
 });

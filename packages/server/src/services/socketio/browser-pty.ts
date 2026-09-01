@@ -6,15 +6,38 @@ import type { Socket } from 'socket.io';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import type { RunnerTerminalEvent, RunnerTerminalPort } from '../runner-ports.js';
 import { rateLimitMiddleware } from './middleware.js';
 import { registerSocketHandlersWithSchema } from './router.js';
-import { getIO } from './state.js';
+
+const TERMINAL_EVENTS = new Set<RunnerTerminalEvent['type']>([
+  'pty:spawn',
+  'pty:write',
+  'pty:resize',
+  'pty:close',
+  'pty:kill',
+  'pty:signal',
+  'pty:reconnect',
+  'pty:restore',
+]);
 
 /**
  * Set up PTY command handlers for a browser socket.
  * Forwards PTY commands to the appropriate runner.
  */
-export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
+export interface BrowserPtyDependencies {
+  terminals?: RunnerTerminalPort;
+  findAnyRunnerForUser(userId: string): Promise<string | null>;
+  findRunnerForProject(projectId: string, userId: string): Promise<string | null>;
+  getRunnerUserId(runnerId: string): Promise<string | null>;
+  getProjectOwnerId(projectId: string): Promise<string | null>;
+}
+
+export function setupBrowserPtyHandlers(
+  socket: Socket,
+  userId: string,
+  dependencies: BrowserPtyDependencies,
+): void {
   registerSocketHandlersWithSchema(socket, {
     events: BROWSER_PTY_FORWARD_EVENTS,
     payloadSchema: browserPtyForwardPayloadSchema,
@@ -24,25 +47,38 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
 
       const forwardToRunner = async (runnerId: string | null) => {
         if (runnerId) {
-          const wsRelay = await import('../ws-relay.js');
-          const socketId = wsRelay.getRunnerSocketId(runnerId);
-          if (socketId) {
-            getIO()
-              .of('/runner')
-              .to(socketId)
-              .emit('central:browser_ws', {
+          if (
+            dependencies.terminals?.isAvailable(runnerId) &&
+            TERMINAL_EVENTS.has(eventName as RunnerTerminalEvent['type'])
+          ) {
+            try {
+              dependencies.terminals.dispatch(runnerId, userId, {
+                type: eventName,
+                data: payload,
+              } as RunnerTerminalEvent);
+            } catch (error) {
+              log.warn('gRPC PTY forward failed', {
+                namespace: 'socketio',
+                event: eventName,
                 userId,
-                data: { type: eventName, data: payload },
+                runnerId,
+                error: error instanceof Error ? error.message : String(error),
               });
-          } else if (eventName === 'pty:spawn') {
-            // Runner resolved but its socket isn't registered (just dropped /
-            // reconnecting). Log so this stops being a silent failure.
-            log.warn('PTY spawn: resolved runner has no live socket', {
-              namespace: 'socketio',
-              userId,
-              projectId,
-              runnerId,
-            });
+              sock.emit('pty:error', {
+                ptyId: payload.id,
+                error: error instanceof Error ? error.message : 'Terminal request failed',
+              });
+            }
+            return;
+          }
+          log.warn('PTY request has no active compatible gRPC terminal stream', {
+            namespace: 'socketio',
+            event: eventName,
+            userId,
+            projectId,
+            runnerId,
+          });
+          if (eventName === 'pty:spawn') {
             sock.emit('pty:error', {
               ptyId: payload.id,
               error: 'No runner available to handle terminal request',
@@ -65,19 +101,16 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
         }
       };
 
-      const rm = await import('../runner-manager.js');
-
       if (projectId) {
         try {
-          const projectRepo = await import('../project-repository.js');
-          const project = await projectRepo.getProject(projectId);
-          if (!project || project.userId !== userId) {
+          const projectOwnerId = await dependencies.getProjectOwnerId(projectId);
+          if (projectOwnerId !== userId) {
             log.warn('Blocked cross-user PTY request', {
               namespace: 'socketio',
               event: eventName,
               userId,
               projectId,
-              ownerId: project?.userId ?? null,
+              ownerId: projectOwnerId,
             });
             audit({
               action: 'authz.cross_tenant_refused',
@@ -87,7 +120,7 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
                 source: 'socketio:browser_pty',
                 event: eventName,
                 projectId,
-                ownerId: project?.userId ?? null,
+                ownerId: projectOwnerId,
               },
             });
             if (eventName === 'pty:spawn') {
@@ -101,10 +134,9 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
           // Scope to the caller's own runner (runner isolation) — never pick
           // another user's runner assigned to the same project. The ownership
           // guard below stays as defense-in-depth.
-          const result = await rm.findRunnerForProject(projectId, userId);
-          const runnerId = result?.runner.runnerId ?? null;
+          const runnerId = await dependencies.findRunnerForProject(projectId, userId);
           if (runnerId) {
-            const runnerUserId = await rm.getRunnerUserId(runnerId);
+            const runnerUserId = await dependencies.getRunnerUserId(runnerId);
             if (runnerUserId !== userId) {
               log.warn('Runner for project owned by different user', {
                 namespace: 'socketio',
@@ -152,7 +184,7 @@ export function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
           }
         }
       } else {
-        const runnerId = await rm.findAnyRunnerForUser(userId);
+        const runnerId = await dependencies.findAnyRunnerForUser(userId);
         await forwardToRunner(runnerId);
       }
     },

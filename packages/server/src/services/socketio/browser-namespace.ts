@@ -1,15 +1,23 @@
 import type { Socket } from 'socket.io';
 
 import { log } from '../../lib/logger.js';
+import type { RunnerPresencePort, RunnerRequestPort, RunnerTerminalPort } from '../runner-ports.js';
 import { clearSocketRate } from '../socketio-rate-limit.js';
 import { setupBrowserPtyListRpc } from './browser-pty-list.js';
 import { setupBrowserPtyHandlers } from './browser-pty.js';
+import type { BrowserPtyDependencies } from './browser-pty.js';
 import { setupBrowserSessionHandlers } from './browser-session.js';
 import { isAllowedBrowserOrigin } from './origin.js';
 import { allowedOrigins, authInstance, getIO } from './state.js';
 import { setupThreadPresenceHandlers } from './thread-presence.js';
 
-export function setupBrowserNamespace(): void {
+export interface BrowserNamespaceDependencies extends Omit<BrowserPtyDependencies, 'terminals'> {
+  presence?: RunnerPresencePort;
+  requests?: RunnerRequestPort;
+  terminals?: RunnerTerminalPort;
+}
+
+export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies): void {
   const io = getIO();
   const browserNsp = io.of('/');
 
@@ -59,15 +67,13 @@ export function setupBrowserNamespace(): void {
       transport: socket.conn.transport.name,
     });
 
-    import('../ws-relay.js').then((wsRelay) => {
-      socket.emit('runner:status', {
-        status: wsRelay.userHasConnectedRunner(userId) ? 'online' : 'offline',
-      });
+    socket.emit('runner:status', {
+      status: dependencies.presence?.userHasAvailableRunner(userId) ? 'online' : 'offline',
     });
 
-    setupBrowserPtyHandlers(socket, userId);
-    setupBrowserPtyListRpc(socket, userId);
-    setupBrowserSessionHandlers(socket, userId);
+    setupBrowserPtyHandlers(socket, userId, dependencies);
+    setupBrowserPtyListRpc(socket, userId, dependencies);
+    setupBrowserSessionHandlers(socket, userId, dependencies);
     setupThreadPresenceHandlers(socket, userId);
 
     socket.on('disconnect', (reason) => {

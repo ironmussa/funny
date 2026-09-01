@@ -20,9 +20,9 @@ import {
 import type { Socket } from 'socket.io';
 
 import { log } from '../../lib/logger.js';
+import { threadPresenceRoom, threadStreamRoom } from '../browser-events.js';
 import { isRateLimited } from '../socketio-rate-limit.js';
 import { canUserViewThread, getUserDisplay, isThreadOwnedBy } from '../thread-access-check.js';
-import { threadPresenceRoom, threadStreamRoom } from '../ws-relay.js';
 
 interface Viewer {
   clientId: string;

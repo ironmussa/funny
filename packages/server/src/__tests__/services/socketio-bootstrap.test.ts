@@ -1,20 +1,3 @@
-import { mock } from 'bun:test';
-
-let browserNamespaceCalled = 0;
-let runnerNamespaceCalled = 0;
-
-mock.module('../../services/socketio/browser-namespace.js', () => ({
-  setupBrowserNamespace: () => {
-    browserNamespaceCalled++;
-  },
-}));
-
-mock.module('../../services/socketio/runner-namespace.js', () => ({
-  setupRunnerNamespace: () => {
-    runnerNamespaceCalled++;
-  },
-}));
-
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { resolveCorsOrigins } from '../../lib/cors-origins.js';
@@ -26,12 +9,10 @@ describe('socketio bootstrap', () => {
     await closeSocketIO();
   });
 
-  test('createSocketIOServer wires engine, auth, and namespaces', () => {
-    browserNamespaceCalled = 0;
-    runnerNamespaceCalled = 0;
+  test('createSocketIOServer wires engine, auth, and the browser event sink', () => {
     const auth = { api: { getSession: async () => null } };
 
-    const { io, engine } = createSocketIOServer(auth, ['http://localhost:5173']);
+    const { io, engine, browserEvents } = createSocketIOServer(auth, ['http://localhost:5173']);
 
     expect(io).toBeDefined();
     expect(engine).toBeDefined();
@@ -39,8 +20,7 @@ describe('socketio bootstrap', () => {
     expect(getEngine()).toBe(engine);
     expect(authInstance).toBe(auth);
     expect(allowedOrigins).toEqual(['http://localhost:5173']);
-    expect(browserNamespaceCalled).toBe(1);
-    expect(runnerNamespaceCalled).toBe(1);
+    expect(browserEvents.stats()).toEqual({ browserClients: 0, browserUsers: 0 });
   });
 
   test('closeSocketIO clears server state', async () => {

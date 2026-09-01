@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 /**
  * Returns a referentially-stable callback that always invokes the latest
@@ -18,7 +18,9 @@ import { useRef } from 'react';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
   const ref = useRef(fn);
-  ref.current = fn;
+  useLayoutEffect(() => {
+    ref.current = fn;
+  }, [fn]);
 
   // Create the wrapper only once — its identity never changes.
   const stable = useRef((...args: Parameters<T>) => ref.current(...args)).current;

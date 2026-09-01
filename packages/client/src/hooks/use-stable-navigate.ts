@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { useNavigate, type NavigateFunction } from 'react-router-dom';
 
 /**
@@ -12,7 +12,9 @@ import { useNavigate, type NavigateFunction } from 'react-router-dom';
 export function useStableNavigate(): NavigateFunction {
   const navigate = useNavigate();
   const ref = useRef(navigate);
-  ref.current = navigate;
+  useLayoutEffect(() => {
+    ref.current = navigate;
+  }, [navigate]);
 
   // Stable wrapper — same identity for the lifetime of the component.
   const stable = useRef((...args: Parameters<NavigateFunction>) => {

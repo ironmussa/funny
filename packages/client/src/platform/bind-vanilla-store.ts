@@ -7,9 +7,7 @@ export type BoundVanillaStore<T> = {
 } & StoreApi<T>;
 
 export function bindVanillaStore<T>(store: StoreApi<T>): BoundVanillaStore<T> {
-  const useBound = (<U>(selector?: (state: T) => U) => {
-    if (selector) return useStore(store, selector);
-    return useStore(store);
-  }) as BoundVanillaStore<T>;
+  const useBound = (<U>(selector?: (state: T) => U) =>
+    useStore(store, selector as (state: T) => U)) as BoundVanillaStore<T>;
   return Object.assign(useBound, store);
 }

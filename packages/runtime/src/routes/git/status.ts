@@ -12,7 +12,6 @@ import {
   getCommittedBranchSummary,
   getCurrentBranch,
   deriveGitSyncState,
-  getPRForBranch,
   type BranchPRInfo,
 } from '@funny/core/git';
 import { badRequest } from '@funny/shared/errors';
@@ -113,31 +112,18 @@ statusRoutes.get('/status', async (c) => {
     mergedCount: mergedThreads.length,
   });
 
-  // Run git status + PR lookups in parallel
-  const prLookupPromise = (async () => {
-    const prByBranch = new Map<
-      string,
-      { prNumber: number; prUrl: string; prState: 'OPEN' | 'MERGED' | 'CLOSED' }
-    >();
-    const entries = await Promise.all(
-      Array.from(uniqueBranches).map(async (branch) => {
-        const span = startSpan('github.pr_lookup', {
-          traceId: statusSpan.traceId,
-          parentSpanId: statusSpan.spanId,
-          attributes: { projectId, branch },
-        });
-        const pr = await getPRForBranch(project.path, branch, ghEnv);
-        span.end('ok');
-        return [branch, pr] as const;
-      }),
-    );
-    for (const [branch, pr] of entries) {
-      if (pr) prByBranch.set(branch, pr);
-    }
-    return prByBranch;
-  })();
+  // PR discovery must not delay or multiply the already-expensive working-tree
+  // scan. Attach cached metadata now and refresh cache misses after the status
+  // response is ready; the callback pushes the resulting metadata over WS.
+  const prByBranch = new Map<string, BranchPRInfo>();
+  const branchesNeedingPRLookup: string[] = [];
+  for (const branch of uniqueBranches) {
+    const cachedPR = getCachedPR(project.path, branch);
+    if (cachedPR === undefined) branchesNeedingPRLookup.push(branch);
+    else if (cachedPR) prByBranch.set(branch, cachedPR);
+  }
 
-  const [worktreeResults, localResults, prByBranch] = await Promise.all([
+  const [worktreeResults, localResults] = await Promise.all([
     Promise.allSettled(
       worktreeThreads.map(async (thread) => {
         const span = startSpan('git.status_summary', {
@@ -315,7 +301,6 @@ statusRoutes.get('/status', async (c) => {
 
       return results;
     })(),
-    prLookupPromise,
   ]);
 
   statusSpan.end('ok');
@@ -336,6 +321,7 @@ statusRoutes.get('/status', async (c) => {
   const threadBranchMap = new Map<string, string>();
   for (const t of worktreeThreads) if (t.branch) threadBranchMap.set(t.id, t.branch);
   for (const t of localThreads) if (t.branch) threadBranchMap.set(t.id, t.branch);
+  for (const t of mergedThreads) if (t.baseBranch) threadBranchMap.set(t.id, t.baseBranch);
 
   const statuses = [
     ...worktreeResults
@@ -380,6 +366,35 @@ statusRoutes.get('/status', async (c) => {
 
   const response = { statuses };
   _gitStatusCache.set(projectId, { data: response, ts: Date.now() });
+
+  for (const branch of branchesNeedingPRLookup) {
+    const matchingStatuses = statuses.filter(
+      (status) => threadBranchMap.get(status.threadId) === branch,
+    );
+    if (matchingStatuses.length === 0) continue;
+    schedulePRLookup({
+      projectPath: project.path,
+      branch,
+      ghEnv,
+      onUpdate: (pr) => {
+        for (const status of matchingStatuses) {
+          if (pr) {
+            status.prNumber = pr.prNumber;
+            status.prUrl = pr.prUrl;
+            status.prState = pr.prState;
+          }
+          emitPRUpdateForThread({
+            userId,
+            threadId: status.threadId,
+            branchKey: status.branchKey,
+            status,
+            pr,
+          });
+        }
+      },
+    });
+  }
+
   return c.json(response);
 });
 

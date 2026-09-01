@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => ({
   getUnpushedHashes: vi.fn(),
   getUnpulledHashes: vi.fn(),
   getCachedPR: vi.fn(),
+  schedulePRLookup: vi.fn(),
+  emitPRUpdateForThread: vi.fn(),
   stashList: vi.fn(),
   stash: vi.fn(),
   stashShow: vi.fn(),
@@ -109,8 +111,8 @@ vi.mock('../../routes/git/helpers.js', async (importOriginal) => {
     ...actual,
     getCachedPR: mocks.getCachedPR,
     scheduleBackgroundFetch: vi.fn(),
-    schedulePRLookup: vi.fn(),
-    emitPRUpdateForThread: vi.fn(),
+    schedulePRLookup: mocks.schedulePRLookup,
+    emitPRUpdateForThread: mocks.emitPRUpdateForThread,
   };
 });
 
@@ -264,6 +266,8 @@ describe('gitRoutes (mounted)', () => {
     mocks.getUnpulledHashes.mockReturnValue(okAsync(new Set()));
     mocks.getPRForBranch.mockResolvedValue(null);
     mocks.getCachedPR.mockReturnValue(undefined);
+    mocks.schedulePRLookup.mockReset();
+    mocks.emitPRUpdateForThread.mockReset();
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
     mocks.stash.mockReturnValue(okAsync('Saved working directory'));
     mocks.stashShow.mockReturnValue(okAsync([{ path: 'src/a.ts', status: 'modified' }]));
@@ -437,6 +441,10 @@ describe('gitRoutes (mounted)', () => {
       userId: 'user-1',
       isScratch: 'exclude',
     });
+    expect(mocks.getPRForBranch).not.toHaveBeenCalled();
+    expect(mocks.schedulePRLookup).toHaveBeenCalledWith(
+      expect.objectContaining({ projectPath: '/tmp/repo', branch: 'feat/a' }),
+    );
   });
 
   test('GET /api/git/status without projectId returns 400', async () => {

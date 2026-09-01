@@ -56,7 +56,13 @@ export function createBrowserTransportService(
           text: () => response.text(),
         } satisfies ClientHttpResponse;
       } catch (error) {
-        diagnostics.report({ capability: 'transport', operation: 'request', error });
+        // An aborted request is an expected control-flow outcome when an effect
+        // is cleaned up or a newer request supersedes an older one. Reporting
+        // it as a platform failure floods the console during React StrictMode
+        // startup and makes genuine transport failures harder to spot.
+        if (!controller.signal.aborted) {
+          diagnostics.report({ capability: 'transport', operation: 'request', error });
+        }
         throw error;
       } finally {
         stopCancellation?.();

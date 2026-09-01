@@ -183,6 +183,53 @@ describe('web client platform', () => {
     expect(() => createClientComposition({} as never)).toThrow(/missing capabilities/);
   });
 
+  test('does not report an intentional request cancellation as a transport failure', async () => {
+    const log = diagnostics();
+    let cancel: (() => void) | undefined;
+    const transport = createBrowserTransportService(
+      resolveWebEnvironment({ isTauri: false, pageOrigin: 'https://funny.test' }),
+      vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('Aborted', 'AbortError'));
+            });
+          }),
+      ),
+      log.service,
+    );
+
+    const request = transport.request({
+      url: '/api/projects',
+      cancellation: {
+        aborted: false,
+        subscribe(listener) {
+          cancel = listener;
+          return () => undefined;
+        },
+      },
+    });
+    cancel?.();
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    expect(log.values).toEqual([]);
+  });
+
+  test('continues to report genuine browser transport failures', async () => {
+    const log = diagnostics();
+    const failure = new TypeError('Failed to fetch');
+    const transport = createBrowserTransportService(
+      resolveWebEnvironment({ isTauri: false, pageOrigin: 'https://funny.test' }),
+      vi.fn(async () => {
+        throw failure;
+      }),
+      log.service,
+    );
+
+    await expect(transport.request({ url: '/api/projects' })).rejects.toBe(failure);
+    expect(log.values).toEqual([{ capability: 'transport', operation: 'request', error: failure }]);
+  });
+
   test('keeps browser connectivity listeners at the web edge and disposes them', () => {
     const listeners = new Map<string, EventListener>();
     const win = {

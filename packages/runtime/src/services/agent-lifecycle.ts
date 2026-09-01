@@ -357,7 +357,7 @@ export class AgentLifecycleManager {
         const builtinTpl = BUILTIN_AGENT_TEMPLATES.find(
           (t: { id: string }) => t.id === thread.agentTemplateId,
         );
-        const { remoteGetAgentTemplate } = await import('./team-client.js');
+        const { remoteGetAgentTemplate } = await import('./remote-thread-data-client.js');
         const tpl = builtinTpl ?? (await remoteGetAgentTemplate(thread.agentTemplateId));
         if (tpl) {
           // Helper to parse JSON text columns that may already be parsed

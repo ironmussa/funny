@@ -14,6 +14,8 @@
  *   RUNNER_AUTH_SECRET  — Shared secret for runner ↔ server authentication
  */
 
+import 'zod/compile';
+
 // On Windows, bun --watch forks worker processes — each has its own globalThis.
 // Ghost sockets from previous workers can block the port.
 if (process.platform === 'win32') {
@@ -100,6 +102,9 @@ const server = Bun.serve({
   port,
   hostname: host,
   reusePort: true,
+  // A queued team-data request may wait up to 30s for the runner gRPC session
+  // to reconnect. Keep Bun from aborting that request at its 10s default.
+  idleTimeout: 40,
   fetch(req: Request) {
     return app.fetch(req);
   },

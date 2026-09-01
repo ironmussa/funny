@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 
+import { handleBrowserSessionMessage } from '../app/browser-session-message-handler.js';
 import { log } from '../lib/logger.js';
 import { browserSessionManager } from '../services/browser-session-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -14,6 +15,23 @@ export const browserSessionRoutes = new Hono<HonoEnv>();
 const openBrowserSessionSchema = z.object({
   sessionId: z.string().min(1, 'sessionId is required'),
   url: z.string().min(1, 'url is required'),
+});
+
+const browserSessionCommandSchema = z.object({
+  type: z.string().startsWith('browser-session:'),
+  data: z.unknown(),
+});
+
+/** Internal command endpoint reached only through the authenticated gRPC tunnel. */
+browserSessionRoutes.post('/command', async (c) => {
+  const parsed = await parseJsonBody(c, browserSessionCommandSchema);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const handled = handleBrowserSessionMessage(
+    parsed.value.type,
+    parsed.value.data,
+    c.get('userId'),
+  );
+  return c.json({ handled }, handled ? 202 : 400);
 });
 
 /**

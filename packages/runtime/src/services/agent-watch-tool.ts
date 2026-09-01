@@ -271,7 +271,7 @@ export function buildWatchMcpServer(threadId: string, userId: string) {
               isError: true,
             };
           }
-          const { remoteSearchThreads } = await import('./team-client.js');
+          const { remoteSearchThreads } = await import('./remote-thread-data-client.js');
           const results = await remoteSearchThreads({
             query: args.query,
             author: args.author,

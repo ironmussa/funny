@@ -5,8 +5,8 @@
  * This is the ONLY service provider — there is no in-process alternative.
  *
  * This provider:
- *  - Proxies thread/message/toolcall/project/profile ops via the WebSocket
- *    data channel (using remote* functions from team-client.ts)
+ *  - Proxies thread/message/toolcall/project/profile ops through narrow
+ *    domain clients over the shared gRPC data channel
  *  - Provides no-op stubs for server-only concerns (analytics, search, etc.)
  *    since those routes are handled by the server directly
  *  - Uses the wsBroker for local WebSocket event delivery
@@ -24,37 +24,40 @@ function notAvailable(method: string): never {
 
 export function createRunnerServiceProvider(): RuntimeServiceProvider {
   return {
-    // ── Threads — proxy to server via team-client ────────────
+    // ── Threads — proxy to server via remote data client ─────
     threads: {
       async getThread(id) {
-        const { remoteGetThread } = await import('./team-client.js');
+        const { remoteGetThread } = await import('./remote-thread-data-client.js');
         return remoteGetThread(id);
       },
       async updateThread(id, updates) {
-        const { remoteUpdateThread } = await import('./team-client.js');
+        const { remoteUpdateThread } = await import('./remote-thread-data-client.js');
         return remoteUpdateThread(id, updates);
       },
       async createPendingPermissionRequest(request) {
-        const { remoteCreatePendingPermissionRequest } = await import('./team-client.js');
+        const { remoteCreatePendingPermissionRequest } =
+          await import('./remote-automation-policy-client.js');
         return remoteCreatePendingPermissionRequest(request);
       },
       async resolvePendingPermissionRequest(requestId, decision) {
-        const { remoteResolvePendingPermissionRequest } = await import('./team-client.js');
+        const { remoteResolvePendingPermissionRequest } =
+          await import('./remote-automation-policy-client.js');
         return remoteResolvePendingPermissionRequest(requestId, decision);
       },
       async expirePendingPermissionRequest(requestId) {
-        const { remoteExpirePendingPermissionRequest } = await import('./team-client.js');
+        const { remoteExpirePendingPermissionRequest } =
+          await import('./remote-automation-policy-client.js');
         return remoteExpirePendingPermissionRequest(requestId);
       },
       async getThreadWithMessages(id, messageLimit, opts) {
-        const { remoteGetThreadWithMessages } = await import('./team-client.js');
+        const { remoteGetThreadWithMessages } = await import('./remote-thread-data-client.js');
         return remoteGetThreadWithMessages(id, messageLimit, opts);
       },
       async listThreads(opts) {
         if (!opts.projectId || opts.includeArchived || opts.isScratch === true) {
           return { threads: [], total: 0 };
         }
-        const { remoteListProjectThreads } = await import('./team-client.js');
+        const { remoteListProjectThreads } = await import('./remote-project-identity-client.js');
         const allThreads = await remoteListProjectThreads(opts.projectId);
         const offset = opts.offset ?? 0;
         const threads =
@@ -67,19 +70,20 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return [];
       },
       async getThreadByExternalRequestId(externalRequestId) {
-        const { remoteGetThreadByExternalRequestId } = await import('./team-client.js');
+        const { remoteGetThreadByExternalRequestId } =
+          await import('./remote-thread-data-client.js');
         return remoteGetThreadByExternalRequestId(externalRequestId);
       },
       async getThreadBySessionId(sessionId) {
-        const { remoteGetThreadBySessionId } = await import('./team-client.js');
+        const { remoteGetThreadBySessionId } = await import('./remote-thread-data-client.js');
         return remoteGetThreadBySessionId(sessionId);
       },
       async createThread(data) {
-        const { remoteCreateThread } = await import('./team-client.js');
+        const { remoteCreateThread } = await import('./remote-thread-data-client.js');
         return remoteCreateThread(data);
       },
       async deleteThread(id) {
-        const { remoteDeleteThread } = await import('./team-client.js');
+        const { remoteDeleteThread } = await import('./remote-thread-data-client.js');
         return remoteDeleteThread(id);
       },
       async markStaleThreadsInterrupted() {},
@@ -88,39 +92,40 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return [];
       },
       async getThreadMessages(opts) {
-        const { remoteGetThreadMessages } = await import('./team-client.js');
+        const { remoteGetThreadMessages } = await import('./remote-thread-data-client.js');
         return remoteGetThreadMessages(opts);
       },
       async insertMessage(data) {
-        const { remoteInsertMessage } = await import('./team-client.js');
+        const { remoteInsertMessage } = await import('./remote-thread-data-client.js');
         return remoteInsertMessage(data);
       },
       async updateMessage(id, content) {
-        const { remoteUpdateMessage } = await import('./team-client.js');
+        const { remoteUpdateMessage } = await import('./remote-thread-data-client.js');
         return remoteUpdateMessage(id, content);
       },
       async deleteMessagesAfter(threadId: string, anchorMessageId: string) {
-        const { remoteDeleteMessagesAfter } = await import('./team-client.js');
+        const { remoteDeleteMessagesAfter } = await import('./remote-thread-data-client.js');
         return remoteDeleteMessagesAfter(threadId, anchorMessageId);
       },
       async insertToolCall(data) {
-        const { remoteInsertToolCall } = await import('./team-client.js');
+        const { remoteInsertToolCall } = await import('./remote-thread-data-client.js');
         return remoteInsertToolCall(data);
       },
       async updateToolCallOutput(id, output) {
-        const { remoteUpdateToolCallOutput } = await import('./team-client.js');
+        const { remoteUpdateToolCallOutput } = await import('./remote-thread-data-client.js');
         return remoteUpdateToolCallOutput(id, output);
       },
       async findToolCall(messageId, name, input) {
-        const { remoteFindToolCall } = await import('./team-client.js');
+        const { remoteFindToolCall } = await import('./remote-thread-data-client.js');
         return remoteFindToolCall(messageId, name, input);
       },
       async getToolCall(id) {
-        const { remoteGetToolCall } = await import('./team-client.js');
+        const { remoteGetToolCall } = await import('./remote-thread-data-client.js');
         return remoteGetToolCall(id);
       },
       async findLastUnansweredInteractiveToolCall(threadId: string) {
-        const { remoteFindLastUnansweredInteractiveToolCall } = await import('./team-client.js');
+        const { remoteFindLastUnansweredInteractiveToolCall } =
+          await import('./remote-thread-data-client.js');
         return remoteFindLastUnansweredInteractiveToolCall(threadId);
       },
       async insertComment() {
@@ -141,7 +146,7 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     // ── Projects — proxy reads to server, writes handled by server routes ──
     projects: {
       async listProjects(userId) {
-        const { remoteListProjects } = await import('./team-client.js');
+        const { remoteListProjects } = await import('./remote-project-identity-client.js');
         return remoteListProjects(userId);
       },
       async listProjectsByOrg() {
@@ -151,14 +156,14 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return false;
       },
       async getProject(id) {
-        const { remoteGetProject } = await import('./team-client.js');
+        const { remoteGetProject } = await import('./remote-project-identity-client.js');
         return remoteGetProject(id);
       },
       async projectNameExists() {
         return false;
       },
       async createProject(name, path, userId, orgId) {
-        const { remoteCreateProject } = await import('./team-client.js');
+        const { remoteCreateProject } = await import('./remote-project-identity-client.js');
         const response = await remoteCreateProject(name, path, userId, orgId);
         if (response?.error) {
           return err({
@@ -177,7 +182,7 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return null;
       },
       async resolveProjectPath(projectId, userId) {
-        const { remoteResolveProjectPath } = await import('./team-client.js');
+        const { remoteResolveProjectPath } = await import('./remote-project-identity-client.js');
         const result = await remoteResolveProjectPath(projectId, userId);
         if (result.ok && result.path) return ok(result.path);
         return err({
@@ -254,27 +259,27 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
 
     profile: {
       async getProfile(userId) {
-        const { remoteGetProfile } = await import('./team-client.js');
+        const { remoteGetProfile } = await import('./remote-project-identity-client.js');
         return remoteGetProfile(userId);
       },
       async getProviderKey(userId, provider) {
-        const { remoteGetProviderKey } = await import('./team-client.js');
+        const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');
         return remoteGetProviderKey(userId, provider);
       },
       async getGithubToken(userId) {
-        const { remoteGetProviderKey } = await import('./team-client.js');
+        const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');
         return remoteGetProviderKey(userId, 'github');
       },
       async getAssemblyaiApiKey(userId) {
-        const { remoteGetProviderKey } = await import('./team-client.js');
+        const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');
         return remoteGetProviderKey(userId, 'assemblyai');
       },
       async getMinimaxApiKey(userId) {
-        const { remoteGetProviderKey } = await import('./team-client.js');
+        const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');
         return remoteGetProviderKey(userId, 'minimax');
       },
       async getGitIdentity(userId) {
-        const { remoteGetProfile } = await import('./team-client.js');
+        const { remoteGetProfile } = await import('./remote-project-identity-client.js');
         const profile = await remoteGetProfile(userId);
         if (profile?.gitName && profile?.gitEmail) {
           return { name: profile.gitName, email: profile.gitEmail };
@@ -282,19 +287,20 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return null;
       },
       async isSetupCompleted(userId) {
-        const { remoteGetProfile } = await import('./team-client.js');
+        const { remoteGetProfile } = await import('./remote-project-identity-client.js');
         const profile = await remoteGetProfile(userId);
         return !!profile?.setupCompleted;
       },
       async updateProfile(userId, data) {
-        const { remoteUpdateProfile } = await import('./team-client.js');
+        const { remoteUpdateProfile } = await import('./remote-project-identity-client.js');
         return remoteUpdateProfile(userId, data);
       },
     },
 
     agentProfiles: {
       async resolveEffectiveProfile(projectId, userId) {
-        const { remoteResolveAgentExecutionProfile } = await import('./team-client.js');
+        const { remoteResolveAgentExecutionProfile } =
+          await import('./remote-project-identity-client.js');
         return remoteResolveAgentExecutionProfile(projectId, userId);
       },
     },
@@ -324,7 +330,7 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async updateCommand() {},
       async deleteCommand() {},
       async getCommand(cmdId, projectId) {
-        const { remoteGetStartupCommand } = await import('./team-client.js');
+        const { remoteGetStartupCommand } = await import('./remote-project-identity-client.js');
         return remoteGetStartupCommand(cmdId, projectId);
       },
     },
@@ -332,7 +338,7 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     threadEvents: {
       async createThreadEvent() {},
       async saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>) {
-        const { remoteSaveThreadEvent } = await import('./team-client.js');
+        const { remoteSaveThreadEvent } = await import('./remote-thread-data-client.js');
         await remoteSaveThreadEvent(threadId, type, data);
       },
       async getThreadEvents() {
@@ -343,31 +349,31 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
 
     messageQueue: {
       async enqueue(threadId, data) {
-        const { remoteEnqueueMessage } = await import('./team-client.js');
+        const { remoteEnqueueMessage } = await import('./remote-thread-data-client.js');
         return remoteEnqueueMessage(threadId, data);
       },
       async peek(threadId) {
-        const { remotePeekMessage } = await import('./team-client.js');
+        const { remotePeekMessage } = await import('./remote-thread-data-client.js');
         return remotePeekMessage(threadId);
       },
       async dequeue(threadId) {
-        const { remoteDequeueMessage } = await import('./team-client.js');
+        const { remoteDequeueMessage } = await import('./remote-thread-data-client.js');
         return remoteDequeueMessage(threadId);
       },
       async cancel(messageId) {
-        const { remoteCancelQueuedMessage } = await import('./team-client.js');
+        const { remoteCancelQueuedMessage } = await import('./remote-thread-data-client.js');
         return remoteCancelQueuedMessage(messageId);
       },
       async update(messageId, content) {
-        const { remoteUpdateQueuedMessage } = await import('./team-client.js');
+        const { remoteUpdateQueuedMessage } = await import('./remote-thread-data-client.js');
         return remoteUpdateQueuedMessage(messageId, content);
       },
       async listQueue(threadId) {
-        const { remoteListQueue } = await import('./team-client.js');
+        const { remoteListQueue } = await import('./remote-thread-data-client.js');
         return remoteListQueue(threadId);
       },
       async queueCount(threadId) {
-        const { remoteQueueCount } = await import('./team-client.js');
+        const { remoteQueueCount } = await import('./remote-thread-data-client.js');
         return remoteQueueCount(threadId);
       },
       async clearQueue() {},
@@ -391,66 +397,68 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async recordStageChange() {},
     },
 
-    // ── Agent watchers — proxy to server via team-client ──────
+    // ── Agent watchers — proxy via automation/policy client ───
     watchers: {
       async insertWatcher(row) {
-        const { remoteInsertWatcher } = await import('./team-client.js');
+        const { remoteInsertWatcher } = await import('./remote-automation-policy-client.js');
         return remoteInsertWatcher(row);
       },
       async getWatcher(id) {
-        const { remoteGetWatcher } = await import('./team-client.js');
+        const { remoteGetWatcher } = await import('./remote-automation-policy-client.js');
         return remoteGetWatcher(id);
       },
       async getLiveWatcherByThreadKey(threadId, key) {
-        const { remoteGetLiveWatcherByThreadKey } = await import('./team-client.js');
+        const { remoteGetLiveWatcherByThreadKey } =
+          await import('./remote-automation-policy-client.js');
         return remoteGetLiveWatcherByThreadKey(threadId, key);
       },
       async listPendingWatchers() {
-        const { remoteListPendingWatchers } = await import('./team-client.js');
+        const { remoteListPendingWatchers } = await import('./remote-automation-policy-client.js');
         return remoteListPendingWatchers();
       },
       async listDueWatchers(now) {
-        const { remoteListDueWatchers } = await import('./team-client.js');
+        const { remoteListDueWatchers } = await import('./remote-automation-policy-client.js');
         return remoteListDueWatchers(now);
       },
       async listWatchersByUser(userId) {
-        const { remoteListWatchersByUser } = await import('./team-client.js');
+        const { remoteListWatchersByUser } = await import('./remote-automation-policy-client.js');
         return remoteListWatchersByUser(userId);
       },
       async updateWatcher(id, patch) {
-        const { remoteUpdateWatcher } = await import('./team-client.js');
+        const { remoteUpdateWatcher } = await import('./remote-automation-policy-client.js');
         return remoteUpdateWatcher(id, patch);
       },
       async deleteWatchersByThread(threadId) {
-        const { remoteDeleteWatchersByThread } = await import('./team-client.js');
+        const { remoteDeleteWatchersByThread } =
+          await import('./remote-automation-policy-client.js');
         return remoteDeleteWatchersByThread(threadId);
       },
     },
 
-    // ── Agent jobs — proxy to server via team-client ──────────
+    // ── Agent jobs — proxy via automation/policy client ───────
     jobs: {
       async insertJob(row) {
-        const { remoteInsertJob } = await import('./team-client.js');
+        const { remoteInsertJob } = await import('./remote-automation-policy-client.js');
         return remoteInsertJob(row);
       },
       async getJob(id) {
-        const { remoteGetJob } = await import('./team-client.js');
+        const { remoteGetJob } = await import('./remote-automation-policy-client.js');
         return remoteGetJob(id);
       },
       async listRunningJobs() {
-        const { remoteListRunningJobs } = await import('./team-client.js');
+        const { remoteListRunningJobs } = await import('./remote-automation-policy-client.js');
         return remoteListRunningJobs();
       },
       async listJobsByUser(userId) {
-        const { remoteListJobsByUser } = await import('./team-client.js');
+        const { remoteListJobsByUser } = await import('./remote-automation-policy-client.js');
         return remoteListJobsByUser(userId);
       },
       async updateJob(id, patch) {
-        const { remoteUpdateJob } = await import('./team-client.js');
+        const { remoteUpdateJob } = await import('./remote-automation-policy-client.js');
         return remoteUpdateJob(id, patch);
       },
       async deleteJobsByThread(threadId) {
-        const { remoteDeleteJobsByThread } = await import('./team-client.js');
+        const { remoteDeleteJobsByThread } = await import('./remote-automation-policy-client.js');
         return remoteDeleteJobsByThread(threadId);
       },
     },

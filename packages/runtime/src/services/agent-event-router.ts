@@ -17,9 +17,9 @@ import { log } from '../lib/logger.js';
 import { metric, type startSpan } from '../lib/telemetry.js';
 import type { AgentMessageHandler } from './agent-message-handler.js';
 import type { AgentStateTracker } from './agent-state.js';
+import { flushPendingMessageUpdates } from './remote-thread-data-client.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
-import { flushPendingMessageUpdates } from './team-client.js';
 import { threadEventBus, type AgentCompletedEvent } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 

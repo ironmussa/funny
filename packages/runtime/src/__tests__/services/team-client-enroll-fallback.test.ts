@@ -8,7 +8,7 @@
  * delivered credentials, load the delivered forwarded-identity secret into the
  * environment, and then resume successfully.
  *
- * This drives initTeamMode end-to-end with a mocked socket, fetch, enrollment
+ * This drives initTeamMode end-to-end with a mocked gRPC transport, fetch, enrollment
  * client, and credentials store.
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -56,22 +56,16 @@ vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { listProjects: vi.fn(async () => []) } }),
 }));
 
-let mockSocket: any;
-vi.mock('socket.io-client', () => ({ io: vi.fn(() => mockSocket) }));
-
-function installSocket() {
-  mockSocket = {
-    connected: true,
-    io: { on: vi.fn() },
-    emit: vi.fn(),
-    on: vi.fn(),
-    once: vi.fn((event: string, handler: () => void) => {
-      if (event === 'connect') queueMicrotask(handler);
-    }),
-    removeAllListeners: vi.fn(),
-    disconnect: vi.fn(),
-  };
-}
+vi.mock('../../services/grpc-team-transport.js', () => ({
+  GrpcTeamTransport: class {
+    start = vi.fn();
+    shutdown = vi.fn();
+    publish = vi.fn();
+    request = vi.fn(async (eventType: string) =>
+      eventType === 'data:get_builtin_providers' ? null : { success: true },
+    );
+  },
+}));
 
 import { initTeamMode, shutdownTeamMode } from '../../services/team-client.js';
 
@@ -79,7 +73,7 @@ describe('team-client device-link fallback on 401', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.credStore.value = null;
-    installSocket();
+    process.env.RUNNER_GRPC_ENDPOINT = 'grpc.test:50051';
     // Stale secret in env so maybeEnroll skips and we exercise the FALLBACK.
     process.env.RUNNER_AUTH_SECRET = 'stale-secret';
     delete process.env.RUNNER_INVITE_TOKEN;
@@ -105,6 +99,7 @@ describe('team-client device-link fallback on 401', () => {
     shutdownTeamMode();
     vi.unstubAllGlobals();
     delete process.env.RUNNER_AUTH_SECRET;
+    delete process.env.RUNNER_GRPC_ENDPOINT;
   });
 
   test('rejected credentials fall back to enrollment and resume', async () => {

@@ -235,7 +235,7 @@ const ACTIVE_STATUSES = new Set(['running', 'waiting', 'pending']);
 
 export async function rehydrateWatchers(): Promise<void> {
   const projects = await getServices().projects.listProjects('');
-  const { remoteListProjectThreads } = await import('./team-client.js');
+  const { remoteListProjectThreads } = await import('./remote-project-identity-client.js');
 
   // Fetch threads for all projects in parallel
   const projectThreads = await Promise.all(

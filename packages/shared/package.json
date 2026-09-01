@@ -21,6 +21,7 @@
     "./thread-machine": "./src/thread-machine.ts",
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
+    "./runner-v2/*": "./src/generated/runner-v2/runner/v2/*_pb.ts",
     "./remote-connector-protocol": "./src/remote-connector-protocol.ts",
     "./socket-events": "./src/socket-events.ts",
     "./types/workflows": "./src/types/workflows.ts",
@@ -48,6 +49,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "2.14.0",
     "@funny/evflow": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.5",

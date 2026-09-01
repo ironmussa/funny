@@ -33,7 +33,11 @@
     "./services/service-registry": "./src/services/service-registry.ts",
     "./services/automation-manager": "./src/services/automation-manager.ts",
     "./services/mcp-oauth": "./src/services/mcp-oauth.ts",
-    "./services/ws-broker": "./src/services/ws-broker.ts"
+    "./services/ws-broker": "./src/services/ws-broker.ts",
+    "./services/grpc-team-transport": "./src/services/grpc-team-transport.ts",
+    "./services/grpc-operation-outbox": "./src/services/grpc-operation-outbox.ts",
+    "./services/grpc-event-replay-store": "./src/services/grpc-event-replay-store.ts",
+    "./services/grpc-terminal-replay-store": "./src/services/grpc-terminal-replay-store.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -57,6 +61,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.251",
     "@anthropic-ai/sdk": "^0.111.0",
     "@ff-labs/fff-node": "0.10.6",
+    "@grpc/grpc-js": "1.14.0",
     "@openai/codex-sdk": "0.151.0",
     "@vscode/ripgrep": "^1.18.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -72,7 +77,6 @@
     "p-limit": "^7.3.0",
     "pg": "^8.20.0",
     "postgres": "^3.4.8",
-    "socket.io-client": "4",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "winston-transport": "^4.9.0",

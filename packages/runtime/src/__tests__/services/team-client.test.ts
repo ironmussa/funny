@@ -1,97 +1,79 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const socketHandlers: Record<string, (...args: unknown[]) => void> = {};
-let mockSocket: {
-  connected: boolean;
-  emit: ReturnType<typeof vi.fn>;
-  on: ReturnType<typeof vi.fn>;
-  once: ReturnType<typeof vi.fn>;
-  removeAllListeners: ReturnType<typeof vi.fn>;
-  disconnect: ReturnType<typeof vi.fn>;
-};
-
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => mockSocket),
+const h = vi.hoisted(() => ({
+  request: vi.fn(async (eventType: string, payload: Record<string, any>) => {
+    if (eventType === 'data:get_thread') {
+      return {
+        type: 'data:get_thread_response',
+        thread: { id: payload.threadId, title: 'Cached' },
+      };
+    }
+    if (eventType === 'data:create_project') {
+      return {
+        type: 'data:create_project_response',
+        project: {
+          id: 'created-project',
+          name: payload.name,
+          path: payload.path,
+          userId: payload.userId,
+          createdAt: '2026-06-21T00:00:00.000Z',
+        },
+      };
+    }
+    if (eventType === 'data:get_builtin_providers') return null;
+    return { type: 'data:ack', success: true };
+  }),
+  start: vi.fn(),
+  shutdown: vi.fn(),
 }));
 
+vi.mock('../../services/grpc-team-transport.js', () => ({
+  GrpcTeamTransport: class {
+    request = h.request;
+    start = h.start;
+    shutdown = h.shutdown;
+    publish = vi.fn();
+  },
+}));
 vi.mock('../../services/ws-broker.js', () => ({
   wsBroker: { onEvent: vi.fn(() => () => {}) },
 }));
-
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-
 vi.mock('../../services/service-registry.js', () => ({
-  getServices: () => ({
-    projects: { listProjects: vi.fn(async () => []) },
-  }),
+  getServices: () => ({ projects: { listProjects: vi.fn(async () => []) } }),
+}));
+vi.mock('../../services/runner-credentials.js', () => ({
+  clearRunnerCredentials: vi.fn(),
+  loadRunnerCredentials: vi.fn(() => null),
+  saveRunnerCredentials: vi.fn(),
 }));
 
 import {
-  assignProjectToRunner,
+  invalidateProjectCache,
+  remoteCreateProject,
+} from '../../services/remote-project-identity-client.js';
+import {
   flushPendingMessageUpdates,
+  invalidateThreadCache,
+  remoteGetThread,
+  remoteSaveThreadEvent,
+  remoteUpdateMessage,
+} from '../../services/remote-thread-data-client.js';
+import {
+  assignProjectToRunner,
   getLocalProjects,
   getTeamServerUrl,
   initTeamMode,
-  invalidateProjectCache,
-  invalidateThreadCache,
-  remoteGetThread,
-  remoteCreateProject,
-  remoteSaveThreadEvent,
-  remoteUpdateMessage,
   shutdownTeamMode,
 } from '../../services/team-client.js';
-
-function installSocket() {
-  mockSocket = {
-    connected: true,
-    io: { on: vi.fn() },
-    emit: vi.fn((event: string, payload: Record<string, unknown>) => {
-      if (typeof event === 'string' && event.startsWith('data:') && payload._requestId) {
-        const requestId = payload._requestId as string;
-        const response =
-          event === 'data:get_thread'
-            ? {
-                type: 'data:get_thread_response',
-                thread: { id: payload.threadId, title: 'Cached' },
-              }
-            : event === 'data:create_project'
-              ? {
-                  type: 'data:create_project_response',
-                  project: {
-                    id: 'created-project',
-                    name: payload.name,
-                    path: payload.path,
-                    userId: payload.userId,
-                    createdAt: '2026-06-21T00:00:00.000Z',
-                  },
-                }
-              : { type: 'data:ack', success: true };
-        queueMicrotask(() => {
-          socketHandlers['data:response']?.({ requestId, response });
-        });
-      }
-      if (event === 'data:update_message') {
-        // fire-and-forget — no response expected
-      }
-    }),
-    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-      socketHandlers[event] = handler;
-    }),
-    once: vi.fn((event: string, handler: () => void) => {
-      if (event === 'connect') queueMicrotask(handler);
-    }),
-    removeAllListeners: vi.fn(),
-    disconnect: vi.fn(),
-  } as any;
-}
 
 describe('team-client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    socketHandlers['data:response'] = undefined as unknown as (...args: unknown[]) => void;
-    installSocket();
+    process.env.RUNNER_AUTH_SECRET = 'test-secret';
+    process.env.RUNNER_GRPC_ENDPOINT = 'grpc.test:50051';
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo) => {
@@ -99,21 +81,18 @@ describe('team-client', () => {
         if (url.endsWith('/api/runners/register')) {
           return Response.json({ runnerId: 'runner-test', token: 'tok-test' });
         }
-        if (url.endsWith('/api/runners/heartbeat')) {
-          return new Response(JSON.stringify({ ok: true }), { status: 200 });
-        }
-        if (url.includes('/projects')) {
-          return new Response(JSON.stringify({ ok: true }), { status: 200 });
-        }
+        if (url.endsWith('/api/runners/heartbeat')) return Response.json({ ok: true });
         return new Response('not found', { status: 404 });
       }),
     );
-    process.env.RUNNER_AUTH_SECRET = 'test-secret';
   });
 
   afterEach(() => {
     shutdownTeamMode();
     vi.unstubAllGlobals();
+    delete process.env.RUNNER_AUTH_SECRET;
+    delete process.env.RUNNER_GRPC_ENDPOINT;
+    vi.useRealTimers();
   });
 
   test('getLocalProjects is null before assignment warmup', () => {
@@ -132,90 +111,53 @@ describe('team-client', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('remoteCreateProject immediately assigns the new project to this runner', async () => {
+  test('remoteCreateProject updates the local cache without HTTP fallback', async () => {
     await initTeamMode('http://127.0.0.1:3001');
-
     const response = await remoteCreateProject('Created', '/tmp/created', 'user-1');
-
     expect(response.project).toMatchObject({ id: 'created-project', path: '/tmp/created' });
-    expect(fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:3001/api/runners/runner-test/projects',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: 'created-project',
-          localPath: '/tmp/created',
-        }),
-      }),
-    );
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('/projects'), expect.anything());
     expect(getLocalProjects()).toEqual([
       expect.objectContaining({ id: 'created-project', path: '/tmp/created' }),
     ]);
   });
 
-  test('remoteSaveThreadEvent waits for server persistence ack', async () => {
+  test('remoteSaveThreadEvent waits for the gRPC persistence acknowledgement', async () => {
     await initTeamMode('http://127.0.0.1:3001');
-
     await expect(remoteSaveThreadEvent('t1', 'evt', { x: 1 })).resolves.toBeUndefined();
-
-    expect(mockSocket.emit).toHaveBeenCalledWith(
-      'data:save_thread_event',
-      expect.objectContaining({
-        payload: { threadId: 't1', eventType: 'evt', data: { x: 1 } },
-        _requestId: expect.any(String),
-      }),
-    );
+    expect(h.request).toHaveBeenCalledWith('data:save_thread_event', {
+      payload: { threadId: 't1', eventType: 'evt', data: { x: 1 } },
+    });
   });
 
-  test('remoteSaveThreadEvent rejects when socket is disconnected', async () => {
+  test('data operations reject before gRPC initialization', async () => {
     await expect(remoteSaveThreadEvent('t1', 'evt', { x: 1 })).rejects.toThrow(
-      'Socket.IO not initialized',
+      'gRPC runner transport not initialized',
     );
   });
 
-  test('flushPendingMessageUpdates is safe when queue is empty', () => {
-    expect(() => flushPendingMessageUpdates()).not.toThrow();
-  });
-
-  test('remoteGetThread deduplicates in-flight requests after initTeamMode', async () => {
+  test('remoteGetThread deduplicates in-flight gRPC requests', async () => {
     await initTeamMode('http://127.0.0.1:3001');
     expect(getTeamServerUrl()).toBe('http://127.0.0.1:3001');
-
     const [a, b] = await Promise.all([remoteGetThread('t-cache'), remoteGetThread('t-cache')]);
-
     expect(a).toEqual({ id: 't-cache', title: 'Cached' });
     expect(b).toEqual(a);
-    const dataEmits = mockSocket.emit.mock.calls.filter(([ev]) => String(ev) === 'data:get_thread');
-    expect(dataEmits.length).toBe(1);
-
+    expect(h.request.mock.calls.filter(([event]) => event === 'data:get_thread')).toHaveLength(1);
     invalidateThreadCache('t-cache');
     await remoteGetThread('t-cache');
-    const afterInvalidate = mockSocket.emit.mock.calls.filter(
-      ([ev]) => String(ev) === 'data:get_thread',
-    );
-    expect(afterInvalidate.length).toBe(2);
+    expect(h.request.mock.calls.filter(([event]) => event === 'data:get_thread')).toHaveLength(2);
   });
 
-  test('remoteUpdateMessage debounces emits and flush sends latest content', async () => {
+  test('remoteUpdateMessage debounces gRPC operations and flushes latest content', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await initTeamMode('http://127.0.0.1:3001');
-
     await remoteUpdateMessage('m1', 'Hello');
     await remoteUpdateMessage('m1', 'Hello world');
-
-    expect(mockSocket.emit).not.toHaveBeenCalledWith(
-      'data:update_message',
-      expect.objectContaining({ payload: { messageId: 'm1', content: 'Hello world' } }),
-    );
-
+    expect(h.request).not.toHaveBeenCalledWith('data:update_message', expect.anything());
     await vi.advanceTimersByTimeAsync(110);
-
-    expect(mockSocket.emit).toHaveBeenCalledWith('data:update_message', {
+    expect(h.request).toHaveBeenCalledWith('data:update_message', {
       payload: { messageId: 'm1', content: 'Hello world' },
     });
-
     flushPendingMessageUpdates();
-    vi.useRealTimers();
   });
 
   test('invalidateProjectCache does not throw', () => {

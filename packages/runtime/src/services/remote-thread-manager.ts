@@ -19,27 +19,30 @@ import type { IThreadManager } from './server-interfaces.js';
 export function createRemoteThreadManager(): IThreadManager {
   return {
     async getThread(id: string) {
-      const { remoteGetThread } = await import('./team-client.js');
+      const { remoteGetThread } = await import('./remote-thread-data-client.js');
       return remoteGetThread(id);
     },
 
     async updateThread(id: string, updates: Record<string, any>) {
-      const { remoteUpdateThread } = await import('./team-client.js');
+      const { remoteUpdateThread } = await import('./remote-thread-data-client.js');
       return remoteUpdateThread(id, updates);
     },
 
     async createPendingPermissionRequest(request) {
-      const { remoteCreatePendingPermissionRequest } = await import('./team-client.js');
+      const { remoteCreatePendingPermissionRequest } =
+        await import('./remote-automation-policy-client.js');
       return remoteCreatePendingPermissionRequest(request);
     },
 
     async resolvePendingPermissionRequest(requestId, decision) {
-      const { remoteResolvePendingPermissionRequest } = await import('./team-client.js');
+      const { remoteResolvePendingPermissionRequest } =
+        await import('./remote-automation-policy-client.js');
       return remoteResolvePendingPermissionRequest(requestId, decision);
     },
 
     async expirePendingPermissionRequest(requestId) {
-      const { remoteExpirePendingPermissionRequest } = await import('./team-client.js');
+      const { remoteExpirePendingPermissionRequest } =
+        await import('./remote-automation-policy-client.js');
       return remoteExpirePendingPermissionRequest(requestId);
     },
 
@@ -48,42 +51,42 @@ export function createRemoteThreadManager(): IThreadManager {
       messageLimit?: number,
       opts?: { messageProgress?: number },
     ) {
-      const { remoteGetThreadWithMessages } = await import('./team-client.js');
+      const { remoteGetThreadWithMessages } = await import('./remote-thread-data-client.js');
       return remoteGetThreadWithMessages(id, messageLimit, opts);
     },
 
     async insertMessage(data) {
-      const { remoteInsertMessage } = await import('./team-client.js');
+      const { remoteInsertMessage } = await import('./remote-thread-data-client.js');
       return remoteInsertMessage(data);
     },
 
     async updateMessage(id: string, content: string | { content: string; images?: string | null }) {
-      const { remoteUpdateMessage } = await import('./team-client.js');
+      const { remoteUpdateMessage } = await import('./remote-thread-data-client.js');
       return remoteUpdateMessage(id, content);
     },
 
     async deleteMessagesAfter(threadId: string, anchorMessageId: string) {
-      const { remoteDeleteMessagesAfter } = await import('./team-client.js');
+      const { remoteDeleteMessagesAfter } = await import('./remote-thread-data-client.js');
       return remoteDeleteMessagesAfter(threadId, anchorMessageId);
     },
 
     async insertToolCall(data) {
-      const { remoteInsertToolCall } = await import('./team-client.js');
+      const { remoteInsertToolCall } = await import('./remote-thread-data-client.js');
       return remoteInsertToolCall(data);
     },
 
     async updateToolCallOutput(id: string, output: string) {
-      const { remoteUpdateToolCallOutput } = await import('./team-client.js');
+      const { remoteUpdateToolCallOutput } = await import('./remote-thread-data-client.js');
       return remoteUpdateToolCallOutput(id, output);
     },
 
     async findToolCall(messageId: string, name: string, input: string) {
-      const { remoteFindToolCall } = await import('./team-client.js');
+      const { remoteFindToolCall } = await import('./remote-thread-data-client.js');
       return remoteFindToolCall(messageId, name, input);
     },
 
     async getToolCall(id: string) {
-      const { remoteGetToolCall } = await import('./team-client.js');
+      const { remoteGetToolCall } = await import('./remote-thread-data-client.js');
       return remoteGetToolCall(id);
     },
   };

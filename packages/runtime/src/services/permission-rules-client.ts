@@ -3,8 +3,8 @@
  *
  * The authoritative store for permission rules is the central server's
  * SQLite/PG database. This module is the runtime-side facade callers use
- * to create and query rules — it proxies through the Socket.IO data
- * tunnel that team-client.ts maintains with the central server.
+ * to create and query rules — it delegates to the automation/policy client,
+ * which uses the shared gRPC data channel to reach the central server.
  *
  * @domain subdomain: Permissions
  * @domain subdomain-type: supporting
@@ -49,7 +49,7 @@ export async function createPermissionRule(
   input: CreatePermissionRuleInput,
 ): Promise<PermissionRule | null> {
   try {
-    const { remoteCreatePermissionRule } = await import('./team-client.js');
+    const { remoteCreatePermissionRule } = await import('./remote-automation-policy-client.js');
     const rule = await remoteCreatePermissionRule(input);
     log.info('permission-rules-client.created', {
       namespace: 'permission-rules-client',
@@ -77,7 +77,7 @@ export async function findPermissionRule(
   query: PermissionRuleQuery,
 ): Promise<PermissionRule | null> {
   try {
-    const { remoteFindPermissionRule } = await import('./team-client.js');
+    const { remoteFindPermissionRule } = await import('./remote-automation-policy-client.js');
     const rule = await remoteFindPermissionRule(query);
     return rule ?? null;
   } catch (err) {
@@ -99,7 +99,7 @@ export async function listPermissionRules(query: {
   projectPath?: string;
 }): Promise<PermissionRule[]> {
   try {
-    const { remoteListPermissionRules } = await import('./team-client.js');
+    const { remoteListPermissionRules } = await import('./remote-automation-policy-client.js');
     const rules = await remoteListPermissionRules(query);
     return Array.isArray(rules) ? rules : [];
   } catch (err) {

@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   remoteListProjectThreads: vi.fn(),
 }));
 
-vi.mock('../../services/team-client.js', () => ({
+vi.mock('../../services/remote-project-identity-client.js', () => ({
   remoteListProjectThreads: mocks.remoteListProjectThreads,
 }));
 

@@ -65,6 +65,19 @@ function formatSize(bytes: number | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function withStableOccurrenceKeys<T>(
+  items: T[],
+  getIdentity: (item: T) => string,
+): Array<{ key: string; value: T }> {
+  const occurrences = new Map<string, number>();
+  return items.map((value) => {
+    const identity = getIdentity(value);
+    const occurrence = occurrences.get(identity) ?? 0;
+    occurrences.set(identity, occurrence + 1);
+    return { key: `${identity}\u0000${occurrence}`, value };
+  });
+}
+
 function shortenUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -128,6 +141,14 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
       newline: false,
     });
   }, [themeKey]);
+  const keyedOutputLines = useMemo(
+    () =>
+      withStableOccurrenceKeys(
+        outputLines,
+        ({ line, stream, timestamp }) => `${timestamp}\u0000${stream}\u0000${line}`,
+      ),
+    [outputLines],
+  );
 
   useEffect(() => {
     if (!logRef.current || userScrolled.current) return;
@@ -152,9 +173,9 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
         </div>
       ) : (
         <pre className="text-foreground px-3 py-1 leading-relaxed wrap-break-word whitespace-pre-wrap">
-          {outputLines.map((line, i) => (
+          {keyedOutputLines.map(({ key, value: line }) => (
             <div
-              key={i}
+              key={key}
               className={cn(line.stream === 'stderr' ? 'text-destructive' : '')}
               dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line.line) }}
             />
@@ -170,6 +191,15 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
 function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const userScrolled = useRef(false);
+  const keyedEntries = useMemo(
+    () =>
+      withStableOccurrenceKeys(
+        entries,
+        ({ column, level, line, text, timestamp, url }) =>
+          `${timestamp}\u0000${level}\u0000${url ?? ''}\u0000${line ?? ''}\u0000${column ?? ''}\u0000${text}`,
+      ),
+    [entries],
+  );
 
   useEffect(() => {
     if (!ref.current || userScrolled.current) return;
@@ -194,9 +224,9 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
         </div>
       ) : (
         <div>
-          {entries.map((entry, i) => (
+          {keyedEntries.map(({ key, value: entry }) => (
             <div
-              key={i}
+              key={key}
               className={cn(
                 'flex items-start gap-2 border-b border-border/30 px-3 py-1',
                 CONSOLE_LEVEL_STYLES[entry.level] ?? '',
@@ -225,6 +255,16 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
 // ─── Tab: Errors ───────────────────────────────────────────
 
 function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
+  const keyedEntries = useMemo(
+    () =>
+      withStableOccurrenceKeys(
+        entries,
+        ({ column, line, message, source, stack, timestamp }) =>
+          `${timestamp}\u0000${source ?? ''}\u0000${line ?? ''}\u0000${column ?? ''}\u0000${message}\u0000${stack ?? ''}`,
+      ),
+    [entries],
+  );
+
   return (
     <ScrollArea className="h-full font-mono text-xs">
       {entries.length === 0 ? (
@@ -233,8 +273,8 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
         </div>
       ) : (
         <div>
-          {entries.map((entry, i) => (
-            <div key={i} className="border-border/30 border-b px-3 py-2">
+          {keyedEntries.map(({ key, value: entry }) => (
+            <div key={key} className="border-border/30 border-b px-3 py-2">
               <div className="flex items-start gap-2 text-red-500">
                 <AlertTriangle className="mt-0.5 size-3 shrink-0" />
                 <span className="break-all whitespace-pre-wrap">{entry.message}</span>
@@ -368,11 +408,12 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                 Name
               </div>
               {filtered.map((entry) => (
-                <div
+                <button
+                  type="button"
                   key={entry.id}
                   onClick={() => setSelectedId(entry.id)}
                   className={cn(
-                    'cursor-pointer truncate border-b border-border/20 px-3 py-1 hover:bg-muted/30',
+                    'block w-full cursor-pointer truncate border-b border-border/20 px-3 py-1 text-left hover:bg-muted/30',
                     entry.id === selectedId && 'bg-primary/10 text-primary',
                     entry.failed && 'text-red-500',
                     entry.status && entry.status >= 400 && 'text-red-500',
@@ -382,7 +423,7 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                   <DetailTooltip label={entry.url}>
                     <span className="block truncate">{getUrlName(entry.url)}</span>
                   </DetailTooltip>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -403,6 +444,13 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                   <tr
                     key={entry.id}
                     onClick={() => setSelectedId(entry.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedId(entry.id);
+                      }
+                    }}
+                    tabIndex={0}
                     className={cn(
                       'cursor-pointer border-b border-border/20 hover:bg-muted/30',
                       entry.failed && 'text-red-500',
@@ -640,6 +688,10 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   const [bodyOpen, setBodyOpen] = useState(true);
 
   const queryParams = useMemo(() => parseQueryString(entry.url), [entry.url]);
+  const keyedQueryParams = useMemo(
+    () => withStableOccurrenceKeys(queryParams, ([key, value]) => `${key}\u0000${value}`),
+    [queryParams],
+  );
   const hasBody = !!entry.postData;
 
   // Format body with line numbers
@@ -651,7 +703,7 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
     } catch {
       // not JSON, show raw
     }
-    return text.split('\n');
+    return withStableOccurrenceKeys(text.split('\n'), (line) => line);
   }, [entry.postData]);
 
   if (queryParams.length === 0 && !hasBody) {
@@ -666,8 +718,8 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
           open={queryOpen}
           onToggle={() => setQueryOpen(!queryOpen)}
         >
-          {queryParams.map(([k, v], i) => (
-            <HeaderRow key={`${k}-${i}`} label={k} value={v} />
+          {keyedQueryParams.map(({ key, value: [name, value] }) => (
+            <HeaderRow key={key} label={name} value={value} />
           ))}
         </CollapsibleSection>
       )}
@@ -680,10 +732,10 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
         >
           <div className="bg-muted/30 overflow-x-auto rounded">
             <pre className="text-xs whitespace-pre">
-              {bodyLines.map((line, i) => (
-                <div key={i} className="flex">
+              {bodyLines.map(({ key, value: line }, lineIndex) => (
+                <div key={key} className="flex">
                   <span className="text-muted-foreground/50 w-8 shrink-0 pr-2 text-right select-none">
-                    {i + 1}
+                    {lineIndex + 1}
                   </span>
                   <span className="break-all">{line}</span>
                 </div>
@@ -700,16 +752,20 @@ function ResponseDetail({ entry }: { entry: TestNetworkEntry }) {
   // All hooks must be called unconditionally (React rules of hooks)
   const { isJson, lines } = useMemo(() => {
     if (!entry.responseBody || entry.responseBodyBase64) {
-      return { formatted: '', isJson: false, lines: [] as string[] };
+      return { formatted: '', isJson: false, lines: [] as Array<{ key: string; value: string }> };
     }
     try {
       const f = JSON.stringify(JSON.parse(entry.responseBody), null, 2);
-      return { formatted: f, isJson: true, lines: f.split('\n') };
+      return {
+        formatted: f,
+        isJson: true,
+        lines: withStableOccurrenceKeys(f.split('\n'), (line) => line),
+      };
     } catch {
       return {
         formatted: entry.responseBody,
         isJson: false,
-        lines: entry.responseBody.split('\n'),
+        lines: withStableOccurrenceKeys(entry.responseBody.split('\n'), (line) => line),
       };
     }
   }, [entry.responseBody, entry.responseBodyBase64]);
@@ -749,10 +805,10 @@ function ResponseDetail({ entry }: { entry: TestNetworkEntry }) {
   return (
     <div className="bg-muted/30 overflow-x-auto rounded">
       <pre className="text-xs whitespace-pre">
-        {lines.map((line, i) => (
-          <div key={i} className="flex">
+        {lines.map(({ key, value: line }, lineIndex) => (
+          <div key={key} className="flex">
             <span className="text-muted-foreground/50 w-8 shrink-0 pr-2 text-right select-none">
-              {i + 1}
+              {lineIndex + 1}
             </span>
             <span className={cn('break-all', isJson && 'text-foreground')}>{line}</span>
           </div>
@@ -1012,9 +1068,12 @@ function CallTab({
         </div>
       ) : (
         <div>
-          {parsedActions.map((action, i) => (
+          {withStableOccurrenceKeys(
+            parsedActions,
+            ({ isError, text, timestamp }) => `${timestamp}\u0000${isError}\u0000${text}`,
+          ).map(({ key, value: action }) => (
             <div
-              key={i}
+              key={key}
               className={cn(
                 'border-b border-border/20 px-3 py-1',
                 action.isError && 'text-destructive',
@@ -1075,8 +1134,11 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
         </div>
       ) : (
         <div>
-          {annotations.map((anno, i) => (
-            <div key={i} className="border-border/30 flex items-start gap-2 border-b px-3 py-1.5">
+          {annotations.map((anno) => (
+            <div
+              key={`${anno.type}\u0000${anno.description}`}
+              className="border-border/30 flex items-start gap-2 border-b px-3 py-1.5"
+            >
               <Badge variant="outline" className="shrink-0 text-[10px]">
                 @{anno.type}
               </Badge>

@@ -109,7 +109,20 @@ function SpecItem({
         data-testid={`test-spec-${spec.file}-${spec.line}`}
         className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
         style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
-        onClick={hasMultipleProjects ? () => setExpanded(!expanded) : undefined}
+        role={hasMultipleProjects ? 'button' : undefined}
+        tabIndex={hasMultipleProjects ? 0 : undefined}
+        aria-expanded={hasMultipleProjects ? expanded : undefined}
+        onClick={hasMultipleProjects ? () => setExpanded((current) => !current) : undefined}
+        onKeyDown={
+          hasMultipleProjects
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setExpanded((current) => !current);
+                }
+              }
+            : undefined
+        }
       >
         {hasMultipleProjects ? (
           <ChevronRight
@@ -225,10 +238,12 @@ function SuiteItem({
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        aria-expanded={isExpanded}
         data-testid={`test-suite-${suite.file}-${suite.line}`}
         className={cn(
-          'flex h-[24px] cursor-pointer select-none items-center gap-1.5 text-xs',
+          'flex h-[24px] w-full cursor-pointer select-none items-center gap-1.5 text-left text-xs',
           'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
         )}
         style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
@@ -248,7 +263,7 @@ function SuiteItem({
             {suite.title}
           </TooltipContent>
         </Tooltip>
-      </div>
+      </button>
       {isExpanded && (
         <>
           {suite.specs.map((spec) => (
@@ -335,11 +350,13 @@ function TreeItem({
   if (node.isFolder) {
     return (
       <>
-        <div
+        <button
+          type="button"
+          aria-expanded={isExpanded}
           data-testid={`test-folder-${node.path}`}
           onClick={() => toggleFolder(node.path)}
           className={cn(
-            'flex h-[24px] cursor-pointer select-none items-center gap-1.5 text-xs',
+            'flex h-[24px] w-full cursor-pointer select-none items-center gap-1.5 text-left text-xs',
             'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
           )}
           style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
@@ -353,7 +370,7 @@ function TreeItem({
             <Folder className="icon-base text-muted-foreground/70 shrink-0" />
           )}
           <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
-        </div>
+        </button>
         {isExpanded &&
           node.children.map((child) => (
             <TreeItem
@@ -400,21 +417,20 @@ function TreeItem({
       <div
         data-testid={`test-file-${node.path}`}
         className={cn(
-          'group flex h-[24px] items-center gap-1.5 text-xs cursor-pointer transition-colors',
+          'group flex h-[24px] items-center gap-1.5 text-xs transition-colors',
           status === 'running'
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
             : 'hover:bg-sidebar-accent/50 text-muted-foreground',
         )}
         style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
-        onClick={handleToggleFile}
       >
         <button
+          type="button"
+          aria-label={`${isFileExpanded ? 'Collapse' : 'Expand'} ${node.name}`}
+          aria-expanded={isFileExpanded}
           data-testid={`test-file-expand-${node.path}`}
-          className="shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleToggleFile();
-          }}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          onClick={handleToggleFile}
         >
           <ChevronRight
             className={cn(
@@ -422,15 +438,16 @@ function TreeItem({
               isFileExpanded && 'rotate-90',
             )}
           />
+          <FileExtensionIcon
+            filePath={node.path}
+            className="text-muted-foreground/80 size-4 shrink-0"
+          />
+          <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
+          <StatusDot status={status} />
         </button>
-        <FileExtensionIcon
-          filePath={node.path}
-          className="text-muted-foreground/80 size-4 shrink-0"
-        />
-        <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
-        <StatusDot status={status} />
         {status === 'running' ? (
           <Button
+            aria-label={`Stop ${node.name}`}
             data-testid={`test-stop-${node.path}`}
             variant="ghost"
             size="icon"
@@ -444,6 +461,7 @@ function TreeItem({
           </Button>
         ) : (
           <Button
+            aria-label={`Run ${node.name}`}
             data-testid={`test-play-${node.path}`}
             variant="ghost"
             size="icon"
@@ -460,6 +478,8 @@ function TreeItem({
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
+              type="button"
+              aria-label={`Open actions for ${node.name}`}
               data-testid={`test-file-menu-${node.path}`}
               className={cn(
                 'flex size-6 shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',

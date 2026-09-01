@@ -123,10 +123,11 @@ export function ActionList({
         const isActive = origIndex === activeIndex;
 
         return (
-          <div
+          <button
+            type="button"
             key={action.id}
             className={cn(
-              'flex cursor-pointer items-start gap-2 border-b border-border/20 px-2 py-1.5 transition-colors',
+              'flex w-full cursor-pointer items-start gap-2 border-b border-border/20 px-2 py-1.5 text-left transition-colors',
               isActive && 'bg-primary/10',
               !isActive && 'hover:bg-muted/40',
               action.error && 'bg-destructive/5',
@@ -159,7 +160,7 @@ export function ActionList({
                 <div className="text-muted-foreground mt-0.5">{formatMs(action.duration)}</div>
               )}
             </div>
-          </div>
+          </button>
         );
       })}
     </ScrollArea>

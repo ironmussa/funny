@@ -82,7 +82,9 @@ export function ActionTimeline({
           return (
             <Tooltip key={action.id}>
               <TooltipTrigger asChild>
-                <div
+                <button
+                  type="button"
+                  aria-label={tooltipLabel}
                   className={cn(
                     'absolute top-0 h-full cursor-pointer rounded-[1px] transition-opacity',
                     colorClass,

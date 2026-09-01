@@ -7,7 +7,8 @@ Panel counters, and the metric sink that persists a run.
 
 The profiler is installed in development builds and in any build where OTLP is
 configured (`VITE_OTLP_ENDPOINT`), because a run is only worth keeping when there
-is a sink to persist it into. It never starts sampling on its own.
+is a sink to persist it into. It stays idle by default; set
+`VITE_MEMORY_PROFILER_AUTO_START=true` to start a bounded run when Funny loads.
 
 The profiler cannot see all of Chrome's native memory. Use it together with
 Chrome Task Manager to distinguish V8/DOM retention from canvas, image decoder,
@@ -15,8 +16,20 @@ and GPU/WebGL growth.
 
 ## Start a profile
 
-Run Funny in development and open the browser DevTools console. The API is
-installed as `window.__funnyMemory` but does not start a timer by itself:
+For unattended profiling, configure the client and restart the Vite server:
+
+```bash
+VITE_MEMORY_PROFILER_AUTO_START=true
+```
+
+The automatic run samples every 30 seconds, retains at most 1,440 local samples,
+uses the label `memory-investigation`, and prints its `sessionId` to the console.
+With `VITE_OTLP_ENDPOINT` configured, every sample is also persisted in
+Abbacchio. The default remains opt-in so ordinary tabs do not create profiling
+runs on every reload.
+
+For a one-off manual run, open the browser DevTools console. The API is installed
+as `window.__funnyMemory` but does not start a timer by itself:
 
 ```js
 __funnyMemory.status();

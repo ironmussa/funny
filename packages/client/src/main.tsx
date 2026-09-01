@@ -126,6 +126,8 @@ function AuthGate() {
   // Retries on failure so a slow server start doesn't force the user
   // back through the setup wizard.
   const canCheckSetup = !isLoading && isAuthenticated;
+  // The cleanup clears the retry timeout, and cancelled gates both pending promise continuations.
+  // react-doctor-disable-next-line effect-needs-cleanup
   useEffect(() => {
     if (!canCheckSetup) return;
 
@@ -318,7 +320,7 @@ if (import.meta.env.DEV || import.meta.env.VITE_OTLP_ENDPOINT) {
       { publishMemorySample },
       { getWorkerDiagnostics },
     ]) => {
-      installMemoryProfiler({
+      const profiler = installMemoryProfiler({
         globalName: '__funnyMemory',
         filenamePrefix: 'funny-memory',
         domSelectors: {
@@ -336,6 +338,18 @@ if (import.meta.env.DEV || import.meta.env.VITE_OTLP_ENDPOINT) {
           '[funny:memory] Profiler ready. Start with __funnyMemory.start(); see openwiki/operations/client-memory-diagnostics.md',
         hot: import.meta.hot,
       });
+
+      if (import.meta.env.VITE_MEMORY_PROFILER_AUTO_START === 'true') {
+        void import('./lib/memory-profiler-auto-start').then(({ autoStartMemoryProfiler }) => {
+          const status = autoStartMemoryProfiler(
+            profiler,
+            import.meta.env.VITE_MEMORY_PROFILER_AUTO_START,
+          );
+          if (status) {
+            console.info(`[funny:memory] Automatic profile started: ${status.sessionId}`);
+          }
+        });
+      }
     },
   );
 }

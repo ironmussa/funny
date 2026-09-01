@@ -10,6 +10,7 @@
  *   PP_DB_URL=file:memory.db PP_PROJECT_ID=my-project bun src/server.ts
  */
 
+import 'zod/compile';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 

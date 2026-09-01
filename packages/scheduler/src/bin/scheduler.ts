@@ -23,6 +23,7 @@
  *   SCHEDULER_LOG_LEVEL     (debug | info | warn | error, default info)
  */
 
+import 'zod/compile';
 import { createConsoleLogger } from '../logger.js';
 import { buildStandalone, type StandaloneConfig } from '../standalone.js';
 

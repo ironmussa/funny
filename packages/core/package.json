@@ -35,7 +35,7 @@
     "playwright": "^1.50.0",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "0.20.8",
-    "zod": "^4.3.6",
+    "zod": "^4.5.4",
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {

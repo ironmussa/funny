@@ -2,6 +2,7 @@
  * Bun server bootstrap for the Agent Service.
  */
 
+import 'zod/compile';
 import {
   app,
   ciRetryWorkflow,

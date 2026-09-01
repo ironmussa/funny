@@ -82,7 +82,7 @@
     "winston-transport": "^4.9.0",
     "ws": "^8.19.0",
     "xstate": "^5.32.1",
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@funny/core": "workspace:*",

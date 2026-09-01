@@ -31,7 +31,7 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "hono": "^4.12.25",
     "neverthrow": "^8.2.0",
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

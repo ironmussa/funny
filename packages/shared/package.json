@@ -57,7 +57,7 @@
     "pg": "^8.20.0",
     "semver": "^7.7.3",
     "xstate": "^5.32.1",
-    "zod": "^4.3.6"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

@@ -114,6 +114,24 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     expect(focus).toHaveBeenCalledTimes(1);
   });
 
+  test('cancels pending focus retries when the shortcuts hook unmounts', () => {
+    const focus = vi.fn();
+    useTerminalStore.setState({
+      tabs: [{ id: 'tab-1', label: 'Terminal 1', cwd: '/p1', alive: true, projectId: 'p1' }],
+      activeTabId: 'tab-1',
+      panelVisibleByProject: { p1: false },
+    });
+
+    const { unmount } = renderShortcuts();
+    pressCtrlBacktick();
+
+    unmount();
+    terminalRegistry.set('tab-1', { focus } as never);
+    vi.runAllTimers();
+
+    expect(focus).not.toHaveBeenCalled();
+  });
+
   test('stops retrying focus if the panel is hidden again before the xterm mounts', () => {
     const focus = vi.fn();
     useTerminalStore.setState({

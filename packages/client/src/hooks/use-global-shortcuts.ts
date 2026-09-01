@@ -35,6 +35,14 @@ export function useGlobalShortcuts(
 
   useEffect(() => {
     const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
+    const focusTimeouts = new Set<ReturnType<typeof setTimeout>>();
+    const scheduleFocus = (callback: () => void) => {
+      const timeout = setTimeout(() => {
+        focusTimeouts.delete(timeout);
+        callback();
+      }, 60);
+      focusTimeouts.add(timeout);
+    };
 
     const handler = (e: KeyboardEvent) => {
       // Ctrl+K or Ctrl+Shift+P for command palette (toggle)
@@ -282,16 +290,20 @@ export function useGlobalShortcuts(
                   term.focus();
                   return;
                 }
-                if (tries++ < 30) setTimeout(tryFocus, 60);
+                if (tries++ < 30) scheduleFocus(tryFocus);
               };
-              setTimeout(tryFocus, 60);
+              scheduleFocus(tryFocus);
             }
           }
         }
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      for (const timeout of focusTimeouts) clearTimeout(timeout);
+      focusTimeouts.clear();
+    };
   }, [navigate, toggleCommandPalette, toggleFileSearch, toggleTextSearch]);
 
   // Ctrl+Shift+F for text search (matches VSCode). Registered in CAPTURE

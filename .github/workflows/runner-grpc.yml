@@ -1,0 +1,86 @@
+name: Runner gRPC assurance
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'packages/runtime/src/services/**'
+      - 'packages/runtime/src/__tests__/services/**'
+      - 'packages/server/src/services/grpc/**'
+      - 'packages/server/src/services/socketio/**'
+      - 'packages/server/src/__tests__/**'
+      - 'packages/runner-grpc-harness/**'
+      - 'packages/runner-protocol-rust/**'
+      - 'protocol/runner/v2/**'
+      - 'scripts/fitness/check-runner-transport.ts'
+      - '.github/workflows/runner-grpc.yml'
+  schedule:
+    - cron: '23 4 * * 2,5'
+  workflow_dispatch:
+    inputs:
+      soak_minutes:
+        description: 'Chaos soak duration (15–30 minutes)'
+        required: false
+        default: '20'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-grpc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-assurance:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/runner-protocol-rust
+      - run: bun install --frozen-lockfile
+      - name: Architecture fitness
+        run: bun run fitness:runner-transport
+      - name: Runtime adapter contracts
+        run: >-
+          FUNNY_DATA_DIR=/tmp/funny-grpc-runtime bun --bun
+          packages/runtime/node_modules/vitest/vitest.mjs run
+          src/__tests__/services/grpc-team-transport.test.ts
+          src/__tests__/services/runner-tunnel-adapter.test.ts
+          src/__tests__/services/runner-terminal-adapter.test.ts
+          src/__tests__/services/runner-event-publisher.test.ts
+          --root packages/runtime --pool=threads --maxWorkers=1
+      - name: Production vertical and failure matrix
+        run: >-
+          FUNNY_DATA_DIR=/tmp/funny-grpc-server bun test
+          packages/server/src/__tests__/services/grpc-production-adapters.test.ts
+          packages/server/src/__tests__/services/grpc-runner-server.test.ts
+      - name: Rust compatibility smoke
+        run: bun run protocol:compat:harness
+
+  chaos-soak:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/runner-protocol-rust
+      - run: bun install --frozen-lockfile
+      - name: Reconnect, stall, slow-consumer, RSS, and backlog soak
+        env:
+          RUNNER_GRPC_SOAK_MINUTES: ${{ inputs.soak_minutes || '20' }}
+          RUNNER_GRPC_MAX_RSS_MIB: '512'
+          RUNNER_GRPC_MAX_RSS_GROWTH_MIB: '128'
+        run: bun run --cwd packages/runner-grpc-harness test:soak

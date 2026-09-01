@@ -1,0 +1,21 @@
+{
+  "name": "@funny/runner-grpc-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun src/run.ts",
+    "test:sustained": "bun src/run-sustained.ts",
+    "test:soak": "bun src/run-sustained.ts --soak",
+    "test:ingress": "bun src/run-ingress.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "1.14.0",
+    "@grpc/proto-loader": "0.8.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "typescript": "^7.0.2"
+  }
+}

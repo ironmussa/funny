@@ -9,12 +9,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
-import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useReducer, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
+import { reduceQuestionTab } from '@/components/tool-cards/question-tab-state';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDictation } from '@/hooks/use-dictation';
@@ -134,17 +135,11 @@ export const AskQuestionCard = memo(function AskQuestionCard({
     return output!;
   }, [alreadyAnswered, restoredState, output]);
 
-  const [activeTab, setActiveTab] = useState(0);
-  const [slideDirection, setSlideDirection] = useState(0);
+  const [{ activeTab, slideDirection }, goToTab] = useReducer(reduceQuestionTab, {
+    activeTab: 0,
+    slideDirection: 0,
+  });
   const prefersReducedMotion = useReducedMotion();
-
-  const goToTab = useCallback((nextTab: number) => {
-    setActiveTab((prev) => {
-      if (nextTab === prev) return prev;
-      setSlideDirection(nextTab > prev ? 1 : -1);
-      return nextTab;
-    });
-  }, []);
   const [selections, setSelections] = useState<Map<number, Set<number>>>(
     () => restoredState?.selections ?? new Map(),
   );
@@ -223,17 +218,17 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   // Restore editor content on mount via callback ref. The PromptEditor lives
   // inside an AnimatePresence(mode="wait") subtree keyed by activeTab, so it
   // remounts on every tab switch — a regular effect would run before the new
-  // editor exists. Reading current state via refs keeps the callback stable.
-  const otherTextsRef = useRef(otherTexts);
-  otherTextsRef.current = otherTexts;
-  const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
-  const handleOtherEditorRef = useCallback((handle: PromptEditorHandle | null) => {
-    otherEditorRef.current = handle;
-    if (!handle) return;
-    const savedText = otherTextsRef.current.get(activeTabRef.current) || '';
-    if (savedText) handle.setContent(savedText);
-  }, []);
+  // editor exists. The callback is recreated for committed tab state, so it
+  // never depends on mutating refs during render.
+  const handleOtherEditorRef = useCallback(
+    (handle: PromptEditorHandle | null) => {
+      otherEditorRef.current = handle;
+      if (!handle) return;
+      const savedText = otherTexts.get(activeTab) || '';
+      if (savedText) handle.setContent(savedText);
+    },
+    [activeTab, otherTexts],
+  );
 
   const toggleOption = (qIndex: number, optIndex: number, multiSelect: boolean) => {
     if (submitted) return;

@@ -5,36 +5,8 @@
  * against an in-memory SQLite database with real route handlers.
  */
 
-import { mock } from 'bun:test';
-
 // Set env before module imports
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
-
-// Mock WebSocket modules
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  addRunnerClient: () => {},
-  removeRunnerClient: () => {},
-  isRunnerConnected: () => false,
-  relayToUser: () => {},
-  relayToThreadViewers: () => {},
-  evictUserFromThread: () => {},
-  broadcast: () => {},
-  sendToRunner: () => false,
-  forwardBrowserMessageToRunner: () => {},
-  getAnyConnectedRunnerId: () => null,
-  getConnectedBrowserUserIds: () => [],
-  getRelayStats: () => ({ runners: 0, browserClients: 0 }),
-}));
-
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {
-    name = 'TunnelTimeoutError';
-  },
-  isTunnelTimeoutError: () => false,
-}));
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
@@ -303,7 +275,7 @@ describe('Runner Routes (Integration)', () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.ok).toBe(true);
-      expect(body.wsConnected).toBe(false);
+      expect(body.grpcConnected).toBe(false);
     });
 
     test('returns 401 without runner context', async () => {

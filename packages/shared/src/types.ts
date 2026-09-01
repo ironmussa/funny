@@ -776,6 +776,8 @@ export interface WSCommentDeletedData {
 
 export interface WSThreadUpdatedData {
   status?: string;
+  /** Forces clients to reload durable state after a recoverable stream gap. */
+  resync?: boolean;
   archived?: number;
   schedulerManaged?: number;
   branch?: string | null;

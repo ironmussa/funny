@@ -688,6 +688,34 @@ export const runnerEnrollments = sqliteTable('runner_enrollments', {
   expiresAt: text('expires_at').notNull(),
 });
 
+export const runnerOperationIdempotency = sqliteTable(
+  'runner_operation_idempotency',
+  {
+    runnerId: text('runner_id').notNull(),
+    operationKind: text('operation_kind').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestFingerprint: text('request_fingerprint').notNull(),
+    status: text('status').notNull(),
+    outcomeJson: text('outcome_json'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+    expiresAt: text('expires_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.runnerId, t.operationKind, t.idempotencyKey] })],
+);
+
+export const runnerEventReceipts = sqliteTable(
+  'runner_event_receipts',
+  {
+    runnerId: text('runner_id').notNull(),
+    threadId: text('thread_id').notNull(),
+    executionId: text('execution_id').notNull(),
+    highestContiguousSequence: text('highest_contiguous_sequence').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.runnerId, t.executionId] })],
+);
+
 // ── Better Auth tables ──────────────────────────────────────────
 // These must be passed explicitly to drizzleAdapter since they live
 // outside the runtime schema. Column names match migration 026.

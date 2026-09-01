@@ -43,6 +43,7 @@
     "./repositories": "./src/repositories/index.ts",
     "./evflow-model": "./src/evflow.model.ts",
     "./lib/crypto": "./src/lib/crypto.ts",
+    "./lib/canonical-json": "./src/lib/canonical-json.ts",
     "./lib/text-search": "./src/lib/text-search.ts"
   },
   "scripts": {

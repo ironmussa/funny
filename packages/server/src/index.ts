@@ -6,6 +6,7 @@
  * connected via WebSocket tunnel.
  */
 
+import 'zod/compile';
 import { createHash } from 'crypto';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
@@ -417,7 +418,23 @@ const HOST = resolveHost(process.env.HOST);
 
 // Initialize Socket.IO server with Bun-native engine
 const { createSocketIOServer, closeSocketIO } = await import('./services/socketio.js');
-const { engine: socketEngine } = createSocketIOServer(authInstance, corsOrigins);
+const { engine: socketEngine, browserEvents } = createSocketIOServer(authInstance, corsOrigins);
+const { startRunnerServerComposition } = await import('./services/runner-server-composition.js');
+const runnerTransport = await startRunnerServerComposition(browserEvents);
+const browserRunnerManager = await import('./services/runner-manager.js');
+const browserProjectRepository = await import('./services/project-repository.js');
+const { setupBrowserNamespace } = await import('./services/socketio/browser-namespace.js');
+setupBrowserNamespace({
+  presence: runnerTransport?.presence,
+  requests: runnerTransport?.requests,
+  terminals: runnerTransport?.terminals,
+  findAnyRunnerForUser: browserRunnerManager.findAnyRunnerForUser,
+  findRunnerForProject: async (projectId, userId) =>
+    (await browserRunnerManager.findRunnerForProject(projectId, userId))?.runner.runnerId ?? null,
+  getRunnerUserId: browserRunnerManager.getRunnerUserId,
+  getProjectOwnerId: async (projectId) =>
+    (await browserProjectRepository.getProject(projectId))?.userId ?? null,
+});
 
 // Scheduler runs as a separate process (`@funny/thread-scheduler` binary)
 // that talks to the server via /api/scheduler/system/*. The server no
@@ -439,7 +456,12 @@ const server = Bun.serve({
     if (url.pathname.startsWith('/socket.io/')) {
       return socketEngine.handleRequest(req, server);
     }
-    return app.fetch(req, { IP: server.requestIP(req) });
+    return app.fetch(req, {
+      IP: server.requestIP(req),
+      runnerRequests: runnerTransport?.requests,
+      runnerPresence: runnerTransport?.presence,
+      browserEvents,
+    });
   },
 });
 
@@ -447,6 +469,9 @@ log.info(`funny-server running on http://${HOST}:${PORT}`, {
   namespace: 'server',
 });
 
+// Native runner transport uses a dedicated HTTP/2 listener and is disabled by
+// default. The deployment ingress terminates public TLS before forwarding to
+// this listener; bearer metadata is authenticated at the transport boundary.
 // ── Runner status monitor (debug) ────────────────────────
 // Socket.IO handles heartbeats natively (pingInterval/pingTimeout),
 // so we only check periodically for DB↔connection state mismatches.
@@ -457,18 +482,19 @@ let lastRunnerStateHash = '';
 if (process.env.NODE_ENV !== 'production') {
   runnerStatusTimer = setInterval(async () => {
     try {
-      const wsRelay = await import('./services/ws-relay.js');
+      const browserEvents = await import('./services/browser-events.js');
       const rm = await import('./services/runner-manager.js');
-      const stats = wsRelay.getRelayStats();
+      const stats = browserEvents.getRelayStats();
       const allRunners = await rm.listRunners();
+      const presence = runnerTransport?.presence;
 
-      if (allRunners.length === 0 && stats.runners === 0) return; // nothing to report
+      if (allRunners.length === 0 && !presence?.availableRunnerCount()) return; // nothing to report
 
       const runnerDetails = allRunners.map((r) => ({
         id: r.runnerId.slice(0, 8),
         name: r.name,
         dbStatus: r.status,
-        connected: wsRelay.isRunnerConnected(r.runnerId),
+        connected: presence?.isAvailable(r.runnerId) ?? false,
         lastHb: r.lastHeartbeatAt,
         threads: r.activeThreadCount,
         projects: r.assignedProjectIds.length,
@@ -490,7 +516,7 @@ if (process.env.NODE_ENV !== 'production') {
       const level = hasIssue ? 'warn' : 'info';
       log[level]('Runner status', {
         namespace: 'runner-monitor',
-        runners: stats.runners,
+        runners: presence?.availableRunnerCount() ?? 0,
         browsers: stats.browserClients,
         runnerDetails: JSON.stringify(runnerDetails),
       });
@@ -518,6 +544,9 @@ async function shutdown() {
 
   // Close Socket.IO connections
   await closeSocketIO();
+
+  // Stop accepting new runner gRPC streams and drain existing handlers.
+  if (runnerTransport) await runnerTransport.shutdown();
 
   // Stop accepting new connections (don't wait for in-flight)
   server.stop();

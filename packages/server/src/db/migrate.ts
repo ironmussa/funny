@@ -1589,6 +1589,44 @@ const migrations: Migration[] = [
       await ctx().addColumn('projects', 'default_effort', 'TEXT');
     },
   },
+  {
+    name: '075_runner_operation_idempotency',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_operation_idempotency (
+          runner_id TEXT NOT NULL,
+          operation_kind TEXT NOT NULL,
+          idempotency_key TEXT NOT NULL,
+          request_fingerprint TEXT NOT NULL,
+          status TEXT NOT NULL,
+          outcome_json TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          PRIMARY KEY (runner_id, operation_kind, idempotency_key)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_runner_operation_idempotency_expiry
+        ON runner_operation_idempotency (expires_at)
+      `);
+    },
+  },
+  {
+    name: '076_runner_event_receipts',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_event_receipts (
+          runner_id TEXT NOT NULL,
+          thread_id TEXT NOT NULL,
+          execution_id TEXT NOT NULL,
+          highest_contiguous_sequence TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (runner_id, execution_id)
+        )
+      `);
+    },
+  },
 ];
 
 /**

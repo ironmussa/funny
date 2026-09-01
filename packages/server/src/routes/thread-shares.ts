@@ -22,7 +22,6 @@ import { db, dbAll, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
 import { isProjectMember } from '../services/project-manager.js';
-import { evictUserFromThread, relayToUser } from '../services/ws-relay.js';
 import { parseJsonBody } from '../validation/request.js';
 import { requireThreadOwner } from './threads.js';
 
@@ -91,7 +90,7 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   });
   // Push the thread into the target's "Shared with me" bucket live (no reload).
   if (!grant.alreadyExisted) {
-    relayToUser(targetUserId, { type: THREAD_SHARE_GRANTED_EVENT, threadId: id });
+    c.env?.browserEvents?.toUser(targetUserId, { type: THREAD_SHARE_GRANTED_EVENT, threadId: id });
   }
   return c.json(grant, grant.alreadyExisted ? 200 : 201);
 });
@@ -137,8 +136,8 @@ shareRoutes.delete('/:id/shares/:userId', requireThreadOwner, async (c) => {
   // Live eviction: drop the revoked user's sockets from the thread's rooms so
   // they stop receiving the stream/presence immediately, and tell their client
   // to drop the thread. Access already fails closed on their next HTTP request.
-  evictUserFromThread(targetUserId, id);
-  relayToUser(targetUserId, { type: THREAD_SHARE_REVOKED_EVENT, threadId: id });
+  c.env?.browserEvents?.evictFromThread(targetUserId, id);
+  c.env?.browserEvents?.toUser(targetUserId, { type: THREAD_SHARE_REVOKED_EVENT, threadId: id });
 
   return c.json({ ok: true });
 });

@@ -6,7 +6,7 @@
  * When the requesting user's runner advertised a browser-reachable
  * `publicMediaUrl` (`RUNNER_PUBLIC_MEDIA_URL`), we mint a short-lived HMAC-signed
  * URL to that runner's `/api/files/raw-signed` so the browser streams the media
- * directly from the runner (native Range/seek, no bytes through the WS tunnel).
+ * directly from the runner (native Range/seek, no bytes through the gRPC tunnel).
  * When no public URL is configured, we return `{ url: null }` and the client
  * falls back to the proxied `/api/files/raw` (transport A).
  *
@@ -51,7 +51,7 @@ mediaRoutes.post('/sign', async (c) => {
   // Resolve the requesting user's runner. With a non-thread/non-project path the
   // resolver falls through to the user's runner (strategy 4) — never another
   // user's runner (the runner-isolation invariant holds).
-  const resolved = await resolveRunner(c.req.path, {}, userId);
+  const resolved = await resolveRunner(c.req.path, {}, userId, c.env?.runnerPresence);
   if (!resolved) return c.json({ url: null });
 
   const publicMediaUrl = await getRunnerPublicMediaUrl(resolved.runnerId);

@@ -1,7 +1,7 @@
 /**
  * Central server build script — bundles into dist/index.js.
  */
-import { rm, mkdir } from 'fs/promises';
+import { cp, mkdir, rm } from 'fs/promises';
 
 import { getBuildInfo } from '../../scripts/build-info';
 
@@ -30,5 +30,9 @@ await Bun.build({
     'playwright',
   ],
 });
+
+// grpc-js loads the canonical proto descriptor at runtime. Keep it beside the
+// bundled server so published artifacts do not depend on repository sources.
+await cp('../../protocol', './dist/protocol', { recursive: true });
 
 console.log(`✓ Central server built successfully (${BUILD_INFO.label})`);

@@ -15,6 +15,11 @@ import { Hono } from 'hono';
 
 import type { AppDatabase } from '../../db/index.js';
 import type { ServerEnv } from '../../lib/types.js';
+import type {
+  BrowserEventSink,
+  RunnerPresencePort,
+  RunnerRequestPort,
+} from '../../services/runner-ports.js';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -23,6 +28,9 @@ export interface TestAppOptions {
   userId?: string;
   /** Default userRole ('user' | 'admin') */
   userRole?: 'user' | 'admin';
+  runnerRequests?: RunnerRequestPort;
+  runnerPresence?: RunnerPresencePort;
+  browserEvents?: BrowserEventSink;
 }
 
 export interface TestApp {
@@ -68,6 +76,19 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   // 4. Create Hono app with mock auth middleware
   const app = new Hono<ServerEnv>();
+  if (opts.runnerRequests || opts.runnerPresence || opts.browserEvents) {
+    const request = app.request.bind(app);
+    app.request = ((input: RequestInfo | URL, init?: RequestInit, env?: ServerEnv['Bindings']) =>
+      request(
+        input,
+        init,
+        env ?? {
+          runnerRequests: opts.runnerRequests,
+          runnerPresence: opts.runnerPresence,
+          browserEvents: opts.browserEvents,
+        },
+      )) as typeof app.request;
+  }
 
   app.use('*', async (c, next) => {
     c.set('userId', c.req.header('X-Test-User-Id') ?? opts.userId ?? 'test-user-1');

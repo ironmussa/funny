@@ -112,7 +112,7 @@ describe('thread-registry service', () => {
   });
 
   describe('getRunnerForThread', () => {
-    test('returns runner httpUrl when thread belongs to the user', async () => {
+    test('returns the runner identity when thread belongs to the user', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/repo' });
       seedRunner(t.db as any, {
         id: 'runner-1',
@@ -127,7 +127,7 @@ describe('thread-registry service', () => {
       });
 
       const info = await tr.getRunnerForThread('t1', 'user-1');
-      expect(info).toEqual({ runnerId: 'runner-1', httpUrl: 'http://127.0.0.1:3003' });
+      expect(info).toEqual({ runnerId: 'runner-1' });
     });
 
     test('returns null for cross-tenant lookup', async () => {

@@ -15,6 +15,11 @@ export function normalizeUserRole(raw: unknown): UserRole {
 
 /** Hono environment type for context variables set by auth middleware. */
 export type ServerEnv = {
+  Bindings: {
+    runnerRequests?: import('../services/runner-ports.js').RunnerRequestPort;
+    runnerPresence?: import('../services/runner-ports.js').RunnerPresencePort;
+    browserEvents?: import('../services/runner-ports.js').BrowserEventSink;
+  };
   Variables: {
     userId: string;
     userRole: UserRole;

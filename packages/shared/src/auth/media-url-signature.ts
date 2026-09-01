@@ -5,7 +5,7 @@
  * (`RUNNER_PUBLIC_MEDIA_URL`), the server hands the browser a short-lived signed
  * URL pointing straight at the runner's `/api/files/raw-signed`, so media bytes
  * stream directly from the runner (native `Range`/seek) instead of being
- * buffered through the server's WS tunnel. The signature lets the runner
+ * buffered through the server's gRPC tunnel. The signature lets the runner
  * authenticate the request WITHOUT a session cookie or the shared-secret header
  * — neither of which a cross-origin `<img>`/`<video>` request carries.
  *

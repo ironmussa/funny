@@ -21,8 +21,7 @@ const STEERER = 'cleo-4';
 
 process.env.RUNNER_AUTH_SECRET ??= 'test-secret';
 
-/** A transport that records the userId resolveRunner was called with and
- *  answers via a direct (non-tunnel) HTTP fetch. */
+/** A gRPC transport that records the userId resolveRunner was called with. */
 function spyTransport() {
   const calls: string[] = [];
   const transport: ProxyTransport = {
@@ -31,12 +30,14 @@ function spyTransport() {
       return { runnerId: 'runner-owner', httpUrl: 'http://runner.local' };
     },
     resolveAnyRunner: async () => ({ runnerId: 'runner-owner', httpUrl: 'http://runner.local' }),
-    isRunnerConnected: () => false, // force the direct-HTTP path
-    tunnelFetch: async () => {
-      throw new Error('should not tunnel');
+    requests: {
+      isAvailable: () => true,
+      request: async () => ({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: '{"ok":true}',
+      }),
     },
-    isTunnelTimeoutError: () => false,
-    directFetch: async () => new Response('{"ok":true}', { status: 200 }),
   };
   return { transport, calls };
 }

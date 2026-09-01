@@ -23,34 +23,6 @@ let tunnelFetchImpl: (
 ) => Promise<{ status: number; body: string | null }> = () =>
   Promise.reject(new Error('tunnel not configured'));
 
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  addRunnerClient: () => {},
-  removeRunnerClient: () => {},
-  isRunnerConnected: () => false,
-  relayToUser: (userId: string, event: Record<string, unknown>) => {
-    relayCalls.push({ userId, event });
-  },
-  relayToThreadViewers: () => {},
-  evictUserFromThread: () => {},
-  broadcast: () => {},
-  sendToRunner: () => false,
-  forwardBrowserMessageToRunner: () => {},
-  getAnyConnectedRunnerId: () => null,
-  getConnectedBrowserUserIds: () => [],
-  getRelayStats: () => ({ runners: 0, browserClients: 0 }),
-}));
-
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  tunnelFetch: (runnerId: string, req: Parameters<typeof tunnelFetchImpl>[1]) =>
-    tunnelFetchImpl(runnerId, req),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {
-    name = 'TunnelTimeoutError';
-  },
-  isTunnelTimeoutError: () => false,
-}));
-
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { Hono } from 'hono';
@@ -58,6 +30,7 @@ import { Hono } from 'hono';
 import type { ServerEnv } from '../../lib/types.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { schedulerSystemRoutes } from '../../routes/scheduler-system.js';
+import type { BrowserEventSink } from '../../services/runner-ports.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedSchedulerRun,
@@ -67,8 +40,30 @@ import {
   seedThreadDependency,
 } from '../helpers/test-db.js';
 
+const browserEvents: BrowserEventSink = {
+  toUser: (userId, event) => relayCalls.push({ userId, event }),
+  toAll: () => {},
+  toThreadStream: () => {},
+  toThreadPresence: () => {},
+  toThreadViewers: () => {},
+  evictFromThread: () => {},
+};
+
 function systemApp() {
   const app = new Hono<ServerEnv>();
+  const request = app.request.bind(app);
+  app.request = ((input: RequestInfo | URL, init?: RequestInit, env?: ServerEnv['Bindings']) =>
+    request(
+      input,
+      init,
+      env ?? {
+        browserEvents,
+        runnerRequests: {
+          isAvailable: () => true,
+          request: (runnerId, request) => tunnelFetchImpl(runnerId, request as any) as any,
+        },
+      },
+    )) as typeof app.request;
   app.use('*', authMiddleware);
   app.route('/api/scheduler/system', schedulerSystemRoutes);
   return app;
@@ -223,7 +218,7 @@ describe('Scheduler System Routes (Integration)', () => {
   });
 
   describe('POST /api/scheduler/system/emit', () => {
-    test('relays events to the target user via ws-relay', async () => {
+    test('publishes events to the target user through BrowserEventSink', async () => {
       const res = await app.request('/api/scheduler/system/emit', {
         method: 'POST',
         headers: {

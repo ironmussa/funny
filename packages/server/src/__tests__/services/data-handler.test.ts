@@ -6,9 +6,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 
 import { eq } from 'drizzle-orm';
 
+import { setIO } from '../../services/browser-events.js';
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
+import { SqlOperationIdempotencyStore } from '../../services/grpc/operation-idempotency.js';
 import { upsertProfile } from '../../services/profile-service.js';
-import { setIO } from '../../services/ws-relay.js';
 import { createMockIo } from '../helpers/socketio-test-mocks.js';
 import {
   seedProject,
@@ -36,6 +37,7 @@ describe('data-handler handleDataMessageWithAck', () => {
 
   beforeEach(() => {
     const tables = [
+      'pending_permission_requests',
       'tool_calls',
       'messages',
       'message_queue',
@@ -47,6 +49,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       'agent_execution_profiles',
       'runner_project_assignments',
       'runner_tasks',
+      'runner_operation_idempotency',
       'runners',
       'user_profiles',
       'project_members',
@@ -292,6 +295,43 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
   });
 
+  test('persistent fire-and-forget mutation returns a replayable acknowledgement', async () => {
+    seedMessage(db as any, { id: 'm1', threadId: 't1', content: 'before' });
+    const store = new SqlOperationIdempotencyStore({ retentionMs: 60_000 });
+    const input = {
+      runnerId: 'runner-1',
+      operationKind: 'updateMessage',
+      idempotencyKey: 'update-message-1',
+      request: { messageId: 'm1', content: 'after' },
+    };
+
+    const first = await store.execute(input, () =>
+      handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:update_message',
+        threadId: 't1',
+        payload: input.request,
+      }),
+    );
+    const replay = await store.execute<{ type: string; success: boolean }>(input, async () => {
+      throw new Error('replayed mutation must not execute');
+    });
+
+    expect(first).toEqual({
+      kind: 'executed',
+      outcome: { type: 'data:ack', success: true },
+    });
+    expect(replay).toEqual({
+      kind: 'replayed',
+      outcome: { type: 'data:ack', success: true },
+    });
+    const claim = await db
+      .select()
+      .from(schema.runnerOperationIdempotency)
+      .where(eq(schema.runnerOperationIdempotency.idempotencyKey, input.idempotencyKey))
+      .get();
+    expect(claim?.status).toBe('completed');
+  });
+
   test('get_agent_template returns builtin template without user', async () => {
     const res = await handleDataMessageWithAck('runner-1', null, {
       type: 'data:get_agent_template',
@@ -485,6 +525,57 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(row?.name).toBe('Read');
   });
 
+  test('insert_tool_call rejects a message owned by another user', async () => {
+    seedProject(db as any, { id: 'p2', userId: 'user-2', path: '/tmp/other' });
+    seedThread(db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+    seedMessage(db as any, { id: 'foreign-message', threadId: 't2' });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:insert_tool_call',
+      payload: { messageId: 'foreign-message', name: 'Read', input: '{}' },
+    });
+
+    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(
+      await db
+        .select()
+        .from(schema.toolCalls)
+        .where(eq(schema.toolCalls.messageId, 'foreign-message'))
+        .get(),
+    ).toBeUndefined();
+  });
+
+  test('resolve_pending_permission rejects a request belonging to another user', async () => {
+    seedProject(db as any, { id: 'p2', userId: 'user-2', path: '/tmp/other' });
+    seedThread(db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+    await db.insert(schema.pendingPermissionRequests).values({
+      requestId: 'permission-2',
+      threadId: 't2',
+      runId: 'run-2',
+      transport: 'codex-acp',
+      toolCallId: 'tool-2',
+      toolName: 'Write',
+      canAlwaysAllow: 0,
+      canDeny: 1,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:resolve_pending_permission_request',
+      payload: { requestId: 'permission-2', decision: 'allow_once' },
+    });
+
+    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
+    expect(
+      await db
+        .select({ status: schema.pendingPermissionRequests.status })
+        .from(schema.pendingPermissionRequests)
+        .where(eq(schema.pendingPermissionRequests.requestId, 'permission-2'))
+        .get(),
+    ).toEqual({ status: 'active' });
+  });
+
   test('get_tool_call returns tool call for owner', async () => {
     seedMessage(db as any, { id: 'm1', threadId: 't1' });
     seedToolCall(db as any, { id: 'tc-1', messageId: 'm1', name: 'Write' });
@@ -661,7 +752,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       payload: { toolCallId: 'tc-1', output: 'done' },
     });
 
-    expect(res).toBeUndefined();
+    expect(res).toEqual({ type: 'data:ack', success: true });
 
     const row = await db
       .select()
@@ -669,6 +760,16 @@ describe('data-handler handleDataMessageWithAck', () => {
       .where(eq(schema.toolCalls.id, 'tc-1'))
       .get();
     expect(row?.output).toBe('done');
+  });
+
+  test('save_thread_event returns a serializable acknowledgement', async () => {
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:save_thread_event',
+      threadId: 't1',
+      payload: { threadId: 't1', eventType: 'agent:test', data: { ok: true } },
+    });
+
+    expect(res).toEqual({ type: 'data:ack', success: true });
   });
 
   test('create_thread persists thread for runner user', async () => {

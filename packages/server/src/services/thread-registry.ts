@@ -86,18 +86,17 @@ export async function registerThread(entry: {
 }
 
 /**
- * Get the runner ID and httpUrl for a thread, scoped to the requesting user.
+ * Get the runner ID for a thread, scoped to the requesting user.
  * Returns null if the thread has no runner, the runner doesn't belong to the user,
  * or the runner no longer exists.
  */
 export async function getRunnerForThread(
   threadId: string,
   userId: string,
-): Promise<{ runnerId: string; httpUrl: string | null } | null> {
+): Promise<{ runnerId: string } | null> {
   const rows = await db
     .select({
       runnerId: threads.runnerId,
-      httpUrl: runners.httpUrl,
     })
     .from(threads)
     .innerJoin(runners, eq(runners.id, threads.runnerId))
@@ -106,10 +105,7 @@ export async function getRunnerForThread(
   const row = rows[0];
   if (!row || !row.runnerId) return null;
 
-  return {
-    runnerId: row.runnerId,
-    httpUrl: row.httpUrl ?? null,
-  };
+  return { runnerId: row.runnerId };
 }
 
 /**

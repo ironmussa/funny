@@ -2,8 +2,8 @@
  * Runner ↔ Central Server Protocol Types
  *
  * Defines the contract between local runners and the central funny server.
- * Communication uses Socket.IO for real-time events, tunnel requests,
- * and data persistence. HTTP is used for registration and heartbeat fallback.
+ * Communication uses native gRPC for realtime events, tunnel requests, and
+ * data persistence. HTTP remains only for registration and enrollment bootstrap.
  *
  * Key design: Runners are project-agnostic. They register as available machines.
  * The central server assigns projects to runners via the admin UI/API.
@@ -21,21 +21,16 @@ import type {
 // ─── Tunnel Limits ──────────────────────────────────────
 
 /**
- * Hard cap on the response body size that fits through the Socket.IO tunnel
- * ack. Must stay ≤ the server's `maxHttpBufferSize` (see
- * `packages/server/src/services/socketio.ts`). When exceeded, Socket.IO drops
- * the ack silently and the request appears to hang until the 30s tunnel
- * timeout fires — so the runner short-circuits with a 413 instead.
- *
- * 32 MB matches the server config; we keep a 1 MB headroom for envelope
- * overhead (status, headers, JSON framing).
+ * gRPC operations carry project/thread and tunnel payloads. Keep both channel
+ * directions above that payload ceiling while still
+ * bounding allocations at the transport boundary.
  */
-export const TUNNEL_MAX_RESPONSE_BODY_BYTES = 31 * 1024 * 1024;
+export const RUNNER_GRPC_MAX_MESSAGE_BYTES = 32 * 1024 * 1024;
 
 /**
  * How a tunneled response body string is encoded on the wire.
  *
- * The Socket.IO ack carries the body as a JSON string. A `utf8` body is the
+ * The central proxy represents the assembled body as a string. A `utf8` body is the
  * response text verbatim (JSON API responses, HTML, SVG…). A `base64` body is a
  * base64 encoding of the raw bytes — used for binary responses (images, video,
  * PDFs, octet-stream) that `response.text()` would corrupt by decoding as UTF-8.
@@ -43,7 +38,7 @@ export const TUNNEL_MAX_RESPONSE_BODY_BYTES = 31 * 1024 * 1024;
  */
 export type TunnelBodyEncoding = 'utf8' | 'base64';
 
-/** A tunneled HTTP response carried back to the server over the Socket.IO ack. */
+/** A tunneled HTTP response assembled from the gRPC response stream. */
 export interface TunnelHttpResponse {
   status: number;
   headers: Record<string, string>;
@@ -84,12 +79,10 @@ export interface RunnerInfo {
   os: string;
   /** Optional base directory where repos live (for admin reference) */
   workspace?: string;
-  /** HTTP base URL where this runner accepts requests (e.g. "http://192.168.1.5:3001") */
-  httpUrl?: string;
   /** Browser-reachable public base URL for direct media streaming (transport C).
    *  When set, the server hands browsers a signed URL to `<this>/api/files/raw-signed`
-   *  so media bytes stream straight from the runner instead of through the WS tunnel.
-   *  Absent ⇒ media falls back to the proxied `/api/files/raw` (tunnel). */
+   *  so media bytes stream straight from the runner instead of through the central proxy.
+   *  Absent ⇒ media falls back to the proxied `/api/files/raw` gRPC tunnel. */
   publicMediaUrl?: string;
   status: RunnerStatus;
   activeThreadCount: number;
@@ -139,9 +132,6 @@ export interface RunnerRegisterRequest {
   os: string;
   /** Optional base workspace directory where repos live */
   workspace?: string;
-  /** HTTP base URL where this runner accepts proxied requests (e.g. "http://192.168.1.5:3001").
-   *  Optional — if not provided, the server uses the WebSocket tunnel for all communication. */
-  httpUrl?: string;
   /** Browser-reachable public base URL for direct media streaming (transport C).
    *  From `RUNNER_PUBLIC_MEDIA_URL`. Optional — absent disables direct media. */
   publicMediaUrl?: string;
@@ -379,12 +369,6 @@ export interface AssignProjectRequest {
 export interface UnassignProjectRequest {
   projectId: string;
 }
-
-// ─── Socket.IO: Agent Streaming ─────────────────────────
-// The runner connects to the central server via Socket.IO to
-// stream real-time agent events (messages, tool calls, status changes).
-// Authentication is handled via Socket.IO handshake auth (bearer token).
-// Tunnel requests use Socket.IO emit + ack callbacks.
 
 // ─── Pending Tasks Response ─────────────────────────────
 

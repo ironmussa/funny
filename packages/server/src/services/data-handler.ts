@@ -26,15 +26,16 @@ import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import { relayToThreadStream, relayToUser } from './browser-events.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
-import { relayToThreadStream, relayToUser } from './ws-relay.js';
 
 // Create shared repository instances (lazy-initialized)
 let _messageRepo: ReturnType<typeof createMessageRepository> | null = null;
 let _toolCallRepo: ReturnType<typeof createToolCallRepository> | null = null;
 let _threadRepo: ReturnType<typeof createThreadRepository> | null = null;
+let commentRepository: ReturnType<typeof createCommentRepository> | null = null;
 let _watcherRepo: ReturnType<typeof createWatcherRepository> | null = null;
 let _jobRepo: ReturnType<typeof createJobRepository> | null = null;
 let _pendingPermissionRepo: ReturnType<typeof createPendingPermissionRepository> | null = null;
@@ -144,12 +145,7 @@ function getThreadRepo() {
       schema: schema as any,
       dbRun,
     });
-    const commentRepo = createCommentRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbRun,
-    });
+    const commentRepo = getCommentRepo();
     _threadRepo = createThreadRepository({
       db,
       schema: schema as any,
@@ -161,6 +157,35 @@ function getThreadRepo() {
     });
   }
   return _threadRepo;
+}
+
+function getCommentRepo() {
+  if (!commentRepository) {
+    commentRepository = createCommentRepository({ db, schema: schema as any, dbAll, dbRun });
+  }
+  return commentRepository;
+}
+
+async function assertPendingPermissionOwnership(
+  runnerUserId: string,
+  requestId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const permission = (await dbGet(
+    db
+      .select({ threadId: schema.pendingPermissionRequests.threadId })
+      .from(schema.pendingPermissionRequests)
+      .where(eq(schema.pendingPermissionRequests.requestId, requestId)),
+  )) as { threadId: string } | undefined;
+  if (!permission) return { ok: false, reason: 'permission request not found' };
+  const thread = (await dbGet(
+    db
+      .select({ userId: schema.threads.userId })
+      .from(schema.threads)
+      .where(eq(schema.threads.id, permission.threadId)),
+  )) as { userId: string } | undefined;
+  return thread?.userId === runnerUserId
+    ? { ok: true }
+    : { ok: false, reason: 'permission request cross-tenant' };
 }
 
 /**
@@ -289,7 +314,10 @@ async function assertDataOwnership(
   // ── Message ownership (message → thread → user) ────────────────
   const messageIdForToolCall =
     typeof payload?.messageId === 'string' ? payload.messageId : undefined;
-  if (data?.type === 'data:find_tool_call' && messageIdForToolCall) {
+  if (
+    (data?.type === 'data:find_tool_call' || data?.type === 'data:insert_tool_call') &&
+    messageIdForToolCall
+  ) {
     const m = (await dbGet(
       db
         .select({ threadId: schema.messages.threadId })
@@ -436,6 +464,16 @@ async function assertDataOwnership(
     }
   }
 
+  // Permission mutations identify the durable request rather than its thread.
+  // Resolve that indirection before allowing the runner to change its state.
+  if (
+    (data?.type === 'data:resolve_pending_permission_request' ||
+      data?.type === 'data:expire_pending_permission_request') &&
+    typeof payload?.requestId === 'string'
+  ) {
+    return assertPendingPermissionOwnership(runnerUserId, payload.requestId);
+  }
+
   return { ok: true };
 }
 
@@ -470,8 +508,8 @@ function notifyTerminalStatusPersisted(
 }
 
 /**
- * Handle a data persistence message from a runner (Socket.IO ack pattern).
- * Returns the response data instead of calling sendToRunner.
+ * Handle a data persistence message from an authenticated runner request.
+ * Returns the serializable response data to the active gRPC operation.
  *
  * `runnerUserId` is the DB-recorded owner of the runner; it is used to reject
  * any request that references entities belonging to a different user.
@@ -540,7 +578,7 @@ export async function handleDataMessageWithAck(
       case 'data:update_message': {
         const messageRepo = getMessageRepo();
         await messageRepo.updateMessage(data.payload.messageId, data.payload.content);
-        return undefined; // fire-and-forget
+        return { type: 'data:ack', success: true };
       }
       case 'data:delete_messages_after': {
         const messageRepo = getMessageRepo();
@@ -550,10 +588,17 @@ export async function handleDataMessageWithAck(
         );
         return { type: 'data:delete_messages_after_response', deletedCount };
       }
+      case 'data:insert_comment': {
+        const inserted = await getCommentRepo().insertComment({
+          ...data.payload,
+          userId: runnerUserId,
+        });
+        return { type: 'data:insert_comment_response', commentId: inserted.id };
+      }
       case 'data:update_tool_call_output': {
         const toolCallRepo = getToolCallRepo();
         await toolCallRepo.updateToolCallOutput(data.payload.toolCallId, data.payload.output);
-        return undefined; // fire-and-forget
+        return { type: 'data:ack', success: true };
       }
       case 'data:get_thread': {
         const threadRepo = getThreadRepo();
@@ -862,7 +907,7 @@ export async function handleDataMessageWithAck(
       case 'data:save_thread_event': {
         const { saveThreadEvent } = await import('./thread-event-repository.js');
         await saveThreadEvent(data.payload.threadId, data.payload.eventType, data.payload.data);
-        return undefined; // fire-and-forget
+        return { type: 'data:ack', success: true };
       }
       case 'data:get_profile': {
         const { getProfile } = await import('./profile-service.js');
@@ -1002,6 +1047,26 @@ export async function handleDataMessageWithAck(
       case 'data:job_delete_by_thread': {
         await getJobRepo().deleteByThread(data.payload.threadId);
         return { type: 'data:job_delete_by_thread_response', ok: true };
+      }
+
+      // ── Durable permission rules ────────────────────────────────
+      case 'data:create_permission_rule': {
+        const { createRule } = await import('./permission-rules-service.js');
+        const result = await createRule({ ...data.payload, userId: runnerUserId! });
+        if (result.isErr()) throw result.error;
+        return { type: 'data:create_permission_rule_response', rule: result.value };
+      }
+      case 'data:find_permission_rule': {
+        const { findMatch } = await import('./permission-rules-service.js');
+        const result = await findMatch({ ...data.payload, userId: runnerUserId! });
+        if (result.isErr()) throw result.error;
+        return { type: 'data:find_permission_rule_response', rule: result.value };
+      }
+      case 'data:list_permission_rules': {
+        const { listRules } = await import('./permission-rules-service.js');
+        const result = await listRules({ ...data.payload, userId: runnerUserId! });
+        if (result.isErr()) throw result.error;
+        return { type: 'data:list_permission_rules_response', rules: result.value };
       }
 
       default:

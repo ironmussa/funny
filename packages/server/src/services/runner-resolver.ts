@@ -6,8 +6,7 @@
  * user's runner. No cross-user fallbacks. If the user has no runner
  * reachable, return null → 502.
  *
- * A runner is considered "reachable" if it has an active WebSocket tunnel
- * OR a direct HTTP URL. The proxy tries tunnel first, then httpUrl fallback.
+ * A runner is considered reachable only while it has an active gRPC session.
  *
  * Resolution strategies:
  * 1. Thread cache (in-memory)
@@ -21,13 +20,11 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { runnerProjectAssignments, runners } from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import type { RunnerPresencePort } from './runner-ports.js';
 import { getRunnerForThread } from './thread-registry.js';
-import { isRunnerConnected } from './ws-relay.js';
 
 export interface ResolvedRunner {
   runnerId: string;
-  /** Null if the runner has no direct HTTP URL (behind NAT — use tunnel) */
-  httpUrl: string | null;
 }
 
 type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
@@ -41,28 +38,22 @@ function threadCacheKey(userId: string, threadId: string): string {
   return `${userId}:${threadId}`;
 }
 
-/**
- * A runner is reachable if it has a live WebSocket OR a direct HTTP URL.
- * Set WS_ONLY=true to disable httpUrl fallback (for testing WS stability).
- */
-const WS_ONLY = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
-
-function isReachable(runnerId: string, httpUrl: string | null): boolean {
-  if (WS_ONLY) return isRunnerConnected(runnerId);
-  return isRunnerConnected(runnerId) || !!httpUrl;
+function isReachable(presence: RunnerPresencePort, runnerId: string): boolean {
+  return presence.isAvailable(runnerId);
 }
 
 /**
  * Resolve which runner should handle a request.
- * Returns { runnerId, httpUrl } or null if no runner is reachable for this user.
+ * Returns the runner identity or null if no runner is reachable for this user.
  *
  * All resolution paths are scoped to the requesting user's runners.
- * Runners must be reachable (WS connected or httpUrl available).
+ * Runners must have an active gRPC session.
  */
 export async function resolveRunner(
   path: string,
   query: Record<string, string>,
   userId?: string,
+  presence?: RunnerPresencePort,
 ): Promise<ResolvedRunner | null> {
   const projectId = extractProjectId(path, query);
   const threadId = extractThreadId(path);
@@ -71,8 +62,8 @@ export async function resolveRunner(
   if (threadId && userId) {
     const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
     if (cached) {
-      if (isReachable(cached.runnerId, cached.httpUrl)) {
-        return { runnerId: cached.runnerId, httpUrl: cached.httpUrl };
+      if (presence?.isAvailable(cached.runnerId)) {
+        return { runnerId: cached.runnerId };
       }
       // Stale cache entry — runner unreachable, evict it
       threadRunnerCache.delete(threadCacheKey(userId, threadId));
@@ -81,7 +72,7 @@ export async function resolveRunner(
 
   // Strategy 2: Project assignment (scoped to userId)
   if (projectId && userId) {
-    const resolved = await resolveByProject(projectId, userId);
+    const resolved = presence ? await resolveByProject(projectId, userId, presence) : null;
     if (resolved) return resolved;
   }
 
@@ -89,12 +80,8 @@ export async function resolveRunner(
   if (threadId && userId) {
     const fromDb = await getRunnerForThread(threadId, userId);
     if (fromDb) {
-      const httpUrl = WS_ONLY ? null : (fromDb.httpUrl ?? null);
-      if (isReachable(fromDb.runnerId, httpUrl)) {
-        const resolved: ResolvedRunner = {
-          runnerId: fromDb.runnerId,
-          httpUrl,
-        };
+      if (presence?.isAvailable(fromDb.runnerId)) {
+        const resolved: ResolvedRunner = { runnerId: fromDb.runnerId };
         threadRunnerCache.set(threadCacheKey(userId, threadId), { ...resolved, threadId, userId });
         return resolved;
       }
@@ -103,14 +90,12 @@ export async function resolveRunner(
 
   // Strategy 4: User's runner (last resort, still user-scoped)
   if (userId) {
-    const resolved = await resolveUserRunner(userId);
+    const resolved = presence ? await resolveUserRunner(userId, presence) : null;
     if (resolved) return resolved;
   }
 
   // Diagnostic: log all runners in DB to identify userId mismatches
-  const allRunners = await db
-    .select({ id: runners.id, userId: runners.userId, httpUrl: runners.httpUrl })
-    .from(runners);
+  const allRunners = await db.select({ id: runners.id, userId: runners.userId }).from(runners);
   log.warn('No reachable runner found', {
     namespace: 'proxy',
     requestUserId: userId ?? 'none',
@@ -120,8 +105,7 @@ export async function resolveRunner(
     runnersInDb: allRunners.map((r) => ({
       id: r.id,
       userId: r.userId ?? 'null',
-      connected: isRunnerConnected(r.id),
-      hasHttpUrl: !!r.httpUrl,
+      connected: presence?.isAvailable(r.id) ?? false,
     })),
   });
 
@@ -131,13 +115,8 @@ export async function resolveRunner(
 /**
  * Cache a thread → runner mapping (called when threads are created).
  */
-export function cacheThreadRunner(
-  threadId: string,
-  userId: string,
-  runnerId: string,
-  httpUrl: string | null,
-): void {
-  threadRunnerCache.set(threadCacheKey(userId, threadId), { threadId, userId, runnerId, httpUrl });
+export function cacheThreadRunner(threadId: string, userId: string, runnerId: string): void {
+  threadRunnerCache.set(threadCacheKey(userId, threadId), { threadId, userId, runnerId });
 }
 
 /**
@@ -196,19 +175,14 @@ function extractThreadId(path: string): string | null {
  * Used for unauthenticated callbacks (e.g., MCP OAuth redirect from external provider).
  * The runtime itself validates the request (e.g., via state parameter).
  */
-export async function resolveAnyRunner(): Promise<ResolvedRunner | null> {
-  const allRunners = await db.select({ id: runners.id, httpUrl: runners.httpUrl }).from(runners);
+export async function resolveAnyRunner(
+  presence?: RunnerPresencePort,
+): Promise<ResolvedRunner | null> {
+  const allRunners = await db.select({ id: runners.id }).from(runners);
 
   for (const r of allRunners) {
-    if (isRunnerConnected(r.id)) {
-      return { runnerId: r.id, httpUrl: WS_ONLY ? null : (r.httpUrl ?? null) };
-    }
-  }
-  if (!WS_ONLY) {
-    for (const r of allRunners) {
-      if (r.httpUrl) {
-        return { runnerId: r.id, httpUrl: r.httpUrl };
-      }
+    if (presence?.isAvailable(r.id)) {
+      return { runnerId: r.id };
     }
   }
   return null;
@@ -216,27 +190,20 @@ export async function resolveAnyRunner(): Promise<ResolvedRunner | null> {
 
 /**
  * Find a reachable runner belonging to this user.
- * Prefers WS-connected runners, falls back to httpUrl-only runners.
+ * Requires an active gRPC session.
  */
-async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null> {
+async function resolveUserRunner(
+  userId: string,
+  presence: RunnerPresencePort,
+): Promise<ResolvedRunner | null> {
   const userRunners = await db
-    .select({ id: runners.id, httpUrl: runners.httpUrl })
+    .select({ id: runners.id })
     .from(runners)
     .where(eq(runners.userId, userId));
 
-  // First pass: prefer Socket.IO-connected runners
   for (const r of userRunners) {
-    if (isRunnerConnected(r.id)) {
-      return { runnerId: r.id, httpUrl: WS_ONLY ? null : (r.httpUrl ?? null) };
-    }
-  }
-
-  // Second pass: accept runners with httpUrl (direct HTTP fallback)
-  if (!WS_ONLY) {
-    for (const r of userRunners) {
-      if (r.httpUrl) {
-        return { runnerId: r.id, httpUrl: r.httpUrl };
-      }
+    if (isReachable(presence, r.id)) {
+      return { runnerId: r.id };
     }
   }
 
@@ -245,29 +212,24 @@ async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null>
 
 /**
  * Resolve runner for a project, scoped to the requesting user.
- * Only returns reachable runners (WS connected or httpUrl available).
+ * Only returns runners with active gRPC sessions.
  */
-async function resolveByProject(projectId: string, userId: string): Promise<ResolvedRunner | null> {
+async function resolveByProject(
+  projectId: string,
+  userId: string,
+  presence: RunnerPresencePort,
+): Promise<ResolvedRunner | null> {
   const assignments = await db
     .select({
       runnerId: runnerProjectAssignments.runnerId,
-      httpUrl: runners.httpUrl,
     })
     .from(runnerProjectAssignments)
     .innerJoin(runners, eq(runners.id, runnerProjectAssignments.runnerId))
     .where(and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId)));
 
-  // Prefer Socket.IO-connected runners, fall back to httpUrl
   for (const a of assignments) {
-    if (a.runnerId && isRunnerConnected(a.runnerId)) {
-      return { runnerId: a.runnerId, httpUrl: WS_ONLY ? null : (a.httpUrl ?? null) };
-    }
-  }
-  if (!WS_ONLY) {
-    for (const a of assignments) {
-      if (a.runnerId && a.httpUrl) {
-        return { runnerId: a.runnerId, httpUrl: a.httpUrl };
-      }
+    if (a.runnerId && isReachable(presence, a.runnerId)) {
+      return { runnerId: a.runnerId };
     }
   }
 

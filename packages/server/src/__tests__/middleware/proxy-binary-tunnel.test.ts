@@ -1,23 +1,14 @@
 /**
  * Regression: a binary response (image/video/PDF…) tunneled from a runner must
  * reach the browser byte-for-byte. The runner base64-encodes non-text bodies
- * (`bodyEncoding: 'base64'`) because the Socket.IO ack carries the body as a
+ * (`bodyEncoding: 'base64'`) because the assembled tunnel response carries the body as a
  * JSON string and `response.text()` would corrupt the bytes as UTF-8. The proxy
  * must decode that base64 back to raw bytes before responding.
  */
 
-import { mock } from 'bun:test';
-
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-import {
-  MockTunnelTimeoutError,
-  createRunnerResolverMock,
-  createWsRelayMock,
-} from '../helpers/proxy-test-mocks.js';
-
-// Runner is connected → tunnel is the primary transport.
-mock.module('../../services/ws-relay.js', () => createWsRelayMock(() => true));
+import { createRunnerResolverMock } from '../helpers/proxy-test-mocks.js';
 
 // 8 bytes that are NOT valid UTF-8 (lone 0xFF/0xFE etc.) — a UTF-8 round-trip
 // would mangle these into replacement chars; base64 preserves them exactly.
@@ -25,11 +16,9 @@ const ORIGINAL_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0x00,
 
 let tunnelBodyEncoding: 'utf8' | 'base64' = 'base64';
 
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  TunnelTimeoutError: MockTunnelTimeoutError,
-  isTunnelTimeoutError: () => false,
-  tunnelFetch: async () => ({
+const requests = {
+  isAvailable: () => true,
+  request: async () => ({
     status: 200,
     headers: { 'content-type': 'image/png' },
     body:
@@ -38,16 +27,14 @@ mock.module('../../services/ws-tunnel.js', () => ({
         : Buffer.from(ORIGINAL_BYTES).toString('utf8'),
     bodyEncoding: tunnelBodyEncoding,
   }),
-}));
-
-mock.module('../../services/runner-resolver.js', () => createRunnerResolverMock());
+};
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
-import { proxyToRunner } from '../../middleware/proxy.js';
+import { createProxyToRunner } from '../../middleware/proxy.js';
 
 function makeApp() {
   const app = new Hono<ServerEnv>();
@@ -56,7 +43,7 @@ function makeApp() {
     c.set('userRole', 'admin');
     return next();
   });
-  app.all('/api/*', proxyToRunner);
+  app.all('/api/*', createProxyToRunner({ ...createRunnerResolverMock(), requests }));
   return app;
 }
 

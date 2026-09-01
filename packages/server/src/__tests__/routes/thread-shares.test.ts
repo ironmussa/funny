@@ -6,36 +6,7 @@
  * mutation. Runner-proxied routes (follow-up/start/stop) are not exercised here.
  */
 
-import { mock } from 'bun:test';
-
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
-
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  addRunnerClient: () => {},
-  removeRunnerClient: () => {},
-  isRunnerConnected: () => false,
-  relayToUser: () => {},
-  broadcast: () => {},
-  sendToRunner: () => false,
-  forwardBrowserMessageToRunner: () => {},
-  getAnyConnectedRunnerId: () => null,
-  getConnectedBrowserUserIds: () => [],
-  getRelayStats: () => ({ runners: 0, browserClients: 0 }),
-  threadStreamRoom: (id: string) => `thread:${id}:stream`,
-  threadPresenceRoom: (id: string) => `thread:${id}:presence`,
-  relayToThreadStream: () => {},
-  relayToThreadPresence: () => {},
-  relayToThreadViewers: () => {},
-  evictUserFromThread: () => {},
-}));
-
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  isTunnelTimeoutError: () => false,
-}));
-
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { sql } from 'drizzle-orm';

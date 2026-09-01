@@ -1,8 +1,8 @@
 /**
  * HMAC-signed forwarded identity for server → runtime proxy requests.
  *
- * The server proxies authenticated requests to a runtime over either a WS tunnel
- * or direct HTTP. Historically the runtime trusted plaintext `X-Forwarded-User`
+ * The server proxies authenticated requests to a runtime over its gRPC tunnel.
+ * Historically the runtime trusted plaintext `X-Forwarded-User`
  * headers whenever `X-Runner-Auth` matched the shared secret. Any client able to
  * present the shared secret (e.g. leak, reused runner secret, direct connection
  * to a runner's HTTP port) could impersonate any user, including admin.
@@ -23,8 +23,8 @@
  * port directly). In a multi-runner deployment where every runner shares one
  * `RUNNER_AUTH_SECRET`, a malicious/compromised runner can impersonate any
  * user against another runner's directly-reachable HTTP port. Mitigations:
- * keep runners on the WS tunnel (their HTTP port defaults to loopback under
- * WS_TUNNEL_ONLY) and isolate runners from each other at the network layer.
+ * keep runner HTTP ports private and isolate runners from each other at the
+ * network layer.
  *
  * This is an ACCEPTED limitation of the shared-secret model, not a pending fix
  * — see the "Cross-runner trust boundary" note in INSTALL.md. A hard

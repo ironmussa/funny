@@ -111,7 +111,6 @@ function toRunnerInfo(
     hostname: r.hostname,
     os: r.os,
     workspace: r.workspace ?? undefined,
-    httpUrl: r.httpUrl ?? undefined,
     publicMediaUrl: r.publicMediaUrl ?? undefined,
     status,
     activeThreadCount: (JSON.parse(r.activeThreadIds) as string[]).length,
@@ -155,7 +154,7 @@ export async function registerRunner(
       name: req.name,
       status: 'online',
       os: req.os,
-      httpUrl: req.httpUrl ?? null,
+      httpUrl: null,
       publicMediaUrl: req.publicMediaUrl ?? null,
       lastHeartbeatAt: now,
     };
@@ -189,7 +188,7 @@ export async function registerRunner(
     status: 'online',
     os: req.os,
     workspace: req.workspace ?? null,
-    httpUrl: req.httpUrl ?? null,
+    httpUrl: null,
     publicMediaUrl: req.publicMediaUrl ?? null,
     activeThreadIds: '[]',
     registeredAt: now,
@@ -288,8 +287,8 @@ export async function getRunner(runnerId: string): Promise<RunnerInfo | null> {
  * Return the owning user ID for a runner (raw DB column).
  *
  * Unlike {@link getRunner}, this exposes the `userId` column that `RunnerInfo`
- * intentionally hides — used by tenant-isolation checks in the Socket.IO and
- * data-handler layers to reject cross-tenant requests from a compromised or
+ * intentionally hides — used by tenant-isolation checks in the gRPC operation
+ * layer to reject cross-tenant requests from a compromised or
  * misconfigured runner. Returns `null` when the runner has no owner (legacy
  * rows pre-dating per-user runners).
  */
@@ -525,14 +524,6 @@ export async function completeTask(req: RunnerTaskResultRequest): Promise<void> 
     .where(eq(runnerTasks.id, req.taskId));
 }
 
-export async function getRunnerHttpUrl(runnerId: string): Promise<string | null> {
-  const rows = await db
-    .select({ httpUrl: runners.httpUrl })
-    .from(runners)
-    .where(eq(runners.id, runnerId));
-  return rows[0]?.httpUrl ?? null;
-}
-
 /** Browser-reachable public media base URL for a runner (transport C), or null. */
 export async function getRunnerPublicMediaUrl(runnerId: string): Promise<string | null> {
   const rows = await db
@@ -570,11 +561,8 @@ export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number>
 
 /**
  * Mark ALL runners as offline on server startup.
- * After a restart no runner has an active WebSocket, so mark them offline.
- * Runners will re-register via heartbeat and re-establish their WS tunnel.
- * We keep the runner records (and project assignments) so that the proxy can
- * use httpUrl fallback while the runner reconnects, avoiding 502 errors
- * during the restart window.
+ * After a restart no runner has an active gRPC session, so mark them offline.
+ * Runner records and project assignments remain intact while clients reconnect.
  */
 export async function purgeAllRunners(): Promise<void> {
   await db.update(runners).set({ status: 'offline' });
@@ -586,18 +574,26 @@ export async function purgeAllRunners(): Promise<void> {
 }
 
 /**
- * Mark a single runner as offline when its WebSocket disconnects.
+ * Mark a single runner as offline when its gRPC session disconnects.
  * This prevents the resolver from routing requests to a runner
- * that is no longer reachable via tunnel.
+ * that is no longer reachable through the runner data plane.
  */
 export async function markRunnerOffline(runnerId: string): Promise<void> {
   await db.update(runners).set({ status: 'offline' }).where(eq(runners.id, runnerId));
-  log.info('Runner marked offline (WS disconnected)', { namespace: 'runner', runnerId });
+  log.info('Runner marked offline (transport disconnected)', { namespace: 'runner', runnerId });
+}
+
+/** Mark an authenticated transport session online and refresh its presence. */
+export async function markRunnerOnline(runnerId: string): Promise<void> {
+  await db
+    .update(runners)
+    .set({ status: 'online', lastHeartbeatAt: new Date().toISOString() })
+    .where(eq(runners.id, runnerId));
 }
 
 /**
  * Mark ALL runners as offline on server startup.
- * When the server restarts, no runner has an active WebSocket connection,
+ * When the server restarts, no runner has an active gRPC connection,
  * so any "online" status from a previous session is stale.
  */
 export async function markAllRunnersOffline(): Promise<void> {

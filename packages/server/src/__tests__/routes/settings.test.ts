@@ -15,31 +15,6 @@ mock.module('@funny/core/git', () => ({
   ensureWeaveConfigured: () => Promise.resolve(),
 }));
 
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  addRunnerClient: () => {},
-  removeRunnerClient: () => {},
-  isRunnerConnected: () => false,
-  relayToUser: () => {},
-  relayToThreadViewers: () => {},
-  evictUserFromThread: () => {},
-  broadcast: () => {},
-  sendToRunner: () => false,
-  forwardBrowserMessageToRunner: () => {},
-  getAnyConnectedRunnerId: () => null,
-  getConnectedBrowserUserIds: () => [],
-  getRelayStats: () => ({ runners: 0, browserClients: 0 }),
-}));
-
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {
-    name = 'TunnelTimeoutError';
-  },
-  isTunnelTimeoutError: () => false,
-}));
-
 const sendMailCalls: Array<Record<string, unknown>> = [];
 const createTransportCalls: Array<Record<string, unknown>> = [];
 

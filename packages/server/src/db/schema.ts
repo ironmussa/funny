@@ -38,6 +38,8 @@ export {
   runnerProjectAssignments,
   runnerTasks,
   runnerEnrollments,
+  runnerOperationIdempotency,
+  runnerEventReceipts,
   projectMembers,
   projectMemberConfig,
   resourceGrants,

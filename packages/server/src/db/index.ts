@@ -10,6 +10,7 @@
  */
 
 import { existsSync, writeFileSync, chmodSync } from 'fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { resolve } from 'path';
 
 import {
@@ -38,6 +39,7 @@ export type { AppDatabase };
 export const dbDialect: DbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
 
 let _provider: DatabaseProvider | null = null;
+const transactionContext = new AsyncLocalStorage<any>();
 
 // Legacy compat — kept so `getConnection()` / `setConnection()` callers
 // (middleware/auth.ts, server/index.ts) continue to work.
@@ -95,9 +97,20 @@ export const db: AppDatabase = new Proxy({} as AppDatabase, {
     if (!_provider) {
       throw new Error('Database not initialized. Call initDatabase() at startup.');
     }
-    return (_provider.db as any)[prop];
+    return (transactionContext.getStore() ?? (_provider.db as any))[prop];
   },
 });
+
+/**
+ * Run async database work in one transaction when the active driver supports it.
+ * Bun SQLite transactions are synchronous, so callers receive a non-transactional
+ * execution there rather than a transaction that commits before awaited work ends.
+ */
+export async function withDatabaseTransaction<T>(work: () => Promise<T>): Promise<T> {
+  if (!_provider) throw new Error('Database not initialized. Call initDatabase() at startup.');
+  if (_provider.dialect === 'sqlite') return work();
+  return _provider.db.transaction((tx: any) => transactionContext.run(tx, work));
+}
 
 export { schema };
 

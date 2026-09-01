@@ -8,26 +8,15 @@
  * symptom on non-faststart MP4s).
  */
 
-import { mock } from 'bun:test';
-
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-import {
-  MockTunnelTimeoutError,
-  createRunnerResolverMock,
-  createWsRelayMock,
-} from '../helpers/proxy-test-mocks.js';
-
-// Runner connected → tunnel is the primary transport.
-mock.module('../../services/ws-relay.js', () => createWsRelayMock(() => true));
+import { createRunnerResolverMock } from '../helpers/proxy-test-mocks.js';
 
 let capturedHeaders: Record<string, string> = {};
 
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  TunnelTimeoutError: MockTunnelTimeoutError,
-  isTunnelTimeoutError: () => false,
-  tunnelFetch: async (_runnerId: string, req: { headers: Record<string, string> }) => {
+const requests = {
+  isAvailable: () => true,
+  request: async (_runnerId: string, req: { headers: Record<string, string> }) => {
     capturedHeaders = req.headers;
     return {
       status: 206,
@@ -40,19 +29,17 @@ mock.module('../../services/ws-tunnel.js', () => ({
         'set-cookie': 'session=leak',
       },
       body: Buffer.from([0x00, 0x01]).toString('base64'),
-      bodyEncoding: 'base64',
+      bodyEncoding: 'base64' as const,
     };
   },
-}));
-
-mock.module('../../services/runner-resolver.js', () => createRunnerResolverMock());
+};
 
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
-import { proxyToRunner } from '../../middleware/proxy.js';
+import { createProxyToRunner } from '../../middleware/proxy.js';
 
 function makeApp() {
   const app = new Hono<ServerEnv>();
@@ -61,7 +48,7 @@ function makeApp() {
     c.set('userRole', 'admin');
     return next();
   });
-  app.all('/api/*', proxyToRunner);
+  app.all('/api/*', createProxyToRunner({ ...createRunnerResolverMock(), requests }));
   return app;
 }
 

@@ -3,12 +3,11 @@
  */
 import { describe, test, expect, beforeAll, beforeEach, afterEach, mock, spyOn } from 'bun:test';
 
-import * as wsRelay from '../../services/ws-relay.js';
-import * as wsTunnel from '../../services/ws-tunnel.js';
-
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-const tunnelFetch = mock<typeof wsTunnel.tunnelFetch>(async () => ({
+import type { RunnerRequest } from '../../services/runner-ports.js';
+
+const tunnelFetch = mock(async (_runnerId: string, _request: RunnerRequest) => ({
   status: 201,
   headers: {},
   body: JSON.stringify({
@@ -32,7 +31,18 @@ describe('Thread routes — runner proxy', () => {
   let t: TestApp;
 
   beforeAll(async () => {
-    t = await createTestApp();
+    t = await createTestApp({
+      runnerPresence: {
+        isAvailable: () => true,
+        userHasAvailableRunner: () => true,
+        userIdForRunner: () => 'user-1',
+        availableRunnerCount: () => 1,
+      },
+      runnerRequests: {
+        isAvailable: () => true,
+        request: (runnerId, request) => tunnelFetch(runnerId, request),
+      },
+    });
   });
 
   const resolvedRunner = {
@@ -42,8 +52,6 @@ describe('Thread routes — runner proxy', () => {
 
   beforeEach(() => {
     t.cleanup();
-    spyOn(wsRelay, 'isRunnerConnected').mockReturnValue(true);
-    spyOn(wsTunnel, 'tunnelFetch').mockImplementation(tunnelFetch);
     spyOn(threadRegistry, 'registerThread').mockResolvedValue(undefined);
     spyOn(runnerManager, 'findRunnerForProject').mockResolvedValue({
       runner: { runnerId: 'runner-1', httpUrl: 'http://runner.local' },

@@ -29,8 +29,6 @@ import type { ServerEnv } from '../lib/types.js';
 import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import { getSchedulerEventBuffer } from '../services/scheduler-event-buffer.js';
 import { createDefaultThreadQuery } from '../services/scheduler-thread-query.js';
-import { relayToUser } from '../services/ws-relay.js';
-import { tunnelFetch } from '../services/ws-tunnel.js';
 import { parseQuery } from '../validation/request.js';
 
 export const schedulerSystemRoutes = new Hono<ServerEnv>();
@@ -350,7 +348,7 @@ schedulerSystemRoutes.post('/dispatch', async (c) => {
 
   let response: { status: number; body: string | null };
   try {
-    response = await tunnelFetch(runnerId, {
+    response = await c.env.runnerRequests!.request(runnerId, {
       method: 'POST',
       path: '/api/scheduler/dispatch',
       headers,
@@ -412,7 +410,7 @@ schedulerSystemRoutes.post('/cancel/:pipelineRunId', async (c) => {
   if (runnerSecret) headers['X-Runner-Auth'] = runnerSecret;
 
   try {
-    await tunnelFetch(runnerId, {
+    await c.env.runnerRequests!.request(runnerId, {
       method: 'POST',
       path: `/api/scheduler/cancel/${pipelineRunId}`,
       headers,
@@ -447,7 +445,7 @@ schedulerSystemRoutes.post('/emit', async (c) => {
   }
   const body = parsed.data;
   if (body.userId !== '*') {
-    relayToUser(body.userId, { type: body.type, ...(body.data ?? {}) });
+    c.env?.browserEvents?.toUser(body.userId, { type: body.type, ...(body.data ?? {}) });
   }
   // '*' broadcasts are silently dropped today — same as the in-process emitter.
   return c.json({ ok: true });

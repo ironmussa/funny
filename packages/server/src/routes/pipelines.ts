@@ -15,7 +15,6 @@ import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { pipelineApprovalStore } from '../services/pipeline-approval-store.js';
 import * as pipelineRepo from '../services/pipeline-repository.js';
-import { relayToUser } from '../services/ws-relay.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const pipelineRoutes = new Hono<ServerEnv>();
@@ -210,7 +209,7 @@ pipelineRoutes.post('/scheduler/approvals/request', async (c) => {
   const requestedAt = new Date().toISOString();
   const expiresAt = timeoutMs ? new Date(Date.now() + timeoutMs).toISOString() : undefined;
 
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: 'pipeline:approval_requested',
     threadId,
     data: {
@@ -234,7 +233,7 @@ pipelineRoutes.post('/scheduler/approvals/request', async (c) => {
     );
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
-    relayToUser(userId, {
+    c.env?.browserEvents?.toUser(userId, {
       type: 'pipeline:approval_resolved',
       threadId,
       data: { approvalId, gateId, threadId, decision: 'timeout', payload: errMessage },
@@ -246,7 +245,7 @@ pipelineRoutes.post('/scheduler/approvals/request', async (c) => {
     );
   }
 
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: 'pipeline:approval_resolved',
     threadId,
     data: {
@@ -302,7 +301,7 @@ pipelineRoutes.post('/scheduler/progress', async (c) => {
   const metadata = body.metadata as Record<string, unknown> | undefined;
   const eventType = kind === 'completed' ? 'pipeline:run_completed' : 'pipeline:stage_update';
 
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: eventType,
     threadId,
     data: {

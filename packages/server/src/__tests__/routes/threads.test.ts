@@ -5,56 +5,17 @@
  * runner-proxied operations (POST /, POST /idle, POST /:id/message, etc.).
  */
 
-import { mock } from 'bun:test';
-
 // Set env vars before any module imports
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 const relayCalls: Array<{ userId: string; event: Record<string, unknown> }> = [];
 const threadViewerCalls: Array<{ threadId: string; event: Record<string, unknown> }> = [];
 
-// Mock WebSocket/Socket.IO modules to prevent side effects. Must export EVERY
-// symbol any app module binds from ws-relay (ESM binding is checked at import
-// time) — capture the two we assert on, no-op the rest.
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  addRunnerClient: () => {},
-  removeRunnerClient: () => {},
-  isRunnerConnected: () => false,
-  getRunnerSocketId: () => null,
-  userHasConnectedRunner: () => false,
-  relayToUser: (userId: string, event: Record<string, unknown>) => {
-    relayCalls.push({ userId, event });
-  },
-  broadcast: () => {},
-  threadStreamRoom: (id: string) => `thread:${id}:stream`,
-  threadPresenceRoom: (id: string) => `thread:${id}:presence`,
-  relayToThreadStream: () => {},
-  relayToThreadPresence: () => {},
-  relayToThreadViewers: (threadId: string, event: Record<string, unknown>) => {
-    threadViewerCalls.push({ threadId, event });
-  },
-  evictUserFromThread: () => {},
-  sendToRunner: () => false,
-  forwardBrowserMessageToRunner: () => {},
-  getAnyConnectedRunnerId: () => null,
-  getConnectedBrowserUserIds: () => [],
-  getRelayStats: () => ({ runners: 0, browserClients: 0 }),
-}));
-
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {
-    name = 'TunnelTimeoutError';
-  },
-  isTunnelTimeoutError: () => false,
-}));
-
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 
+import type { BrowserEventSink } from '../../services/runner-ports.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedProject,
@@ -65,16 +26,26 @@ import {
   seedToolCall,
 } from '../helpers/test-db.js';
 
+const browserEvents: BrowserEventSink = {
+  toUser: (userId, event) => relayCalls.push({ userId, event }),
+  toAll: () => {},
+  toThreadStream: () => {},
+  toThreadPresence: () => {},
+  toThreadViewers: (threadId, event) => threadViewerCalls.push({ threadId, event }),
+  evictFromThread: () => {},
+};
+
 describe('Thread Routes (Integration)', () => {
   let t: TestApp;
 
   beforeAll(async () => {
-    t = await createTestApp();
+    t = await createTestApp({ browserEvents });
   });
 
   beforeEach(() => {
     t.cleanup();
     relayCalls.length = 0;
+    threadViewerCalls.length = 0;
   });
 
   // ── GET /api/threads ───────────────────────────────────

@@ -30,6 +30,8 @@
     "@funny/core": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/thread-scheduler": "workspace:*",
+    "@grpc/grpc-js": "1.14.0",
+    "@grpc/proto-loader": "0.8.0",
     "@ironmussa/funny-runtime": "workspace:*",
     "@socket.io/bun-engine": "^0.1.0",
     "better-auth": "^1.6.19",

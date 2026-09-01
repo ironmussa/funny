@@ -4,14 +4,14 @@
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 
+import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import {
-  resolveRunner,
-  resolveAnyRunner,
+  resolveRunner as resolveRunnerWithPresence,
+  resolveAnyRunner as resolveAnyRunnerWithPresence,
   cacheThreadRunner,
   uncacheThread,
   evictRunnerFromCache,
 } from '../../services/runner-resolver.js';
-import { addRunnerClient, removeRunnerClient } from '../../services/ws-relay.js';
 import {
   createTestDb,
   seedProject,
@@ -23,6 +23,11 @@ import {
 const RUNNER_IDS = ['r-a', 'r-b', 'r-other'] as const;
 
 let testDb: ReturnType<typeof createTestDb>;
+let presence: RunnerGrpcSessionRegistry;
+
+const resolveRunner = (path: string, query: Record<string, string>, userId?: string) =>
+  resolveRunnerWithPresence(path, query, userId, presence);
+const resolveAnyRunner = () => resolveAnyRunnerWithPresence(presence);
 
 async function bindTestDb() {
   testDb = createTestDb();
@@ -36,18 +41,18 @@ async function bindTestDb() {
   });
 }
 
-function wireRunner(runnerId: string, userId: string, opts: { httpUrl?: string | null } = {}) {
+function wireRunner(runnerId: string, userId: string) {
   seedRunner(testDb.db, {
     id: runnerId,
     userId,
-    httpUrl: opts.httpUrl ?? `http://${runnerId}.local:3002`,
+    httpUrl: null,
     token: `tok-${runnerId}`,
   });
-  addRunnerClient(runnerId, `sock-${runnerId}`, userId);
+  presence.activate(runnerId, { invalidate: () => {} }, userId);
 }
 
 beforeEach(async () => {
-  for (const id of RUNNER_IDS) removeRunnerClient(id);
+  presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
   uncacheThread('t-a');
   uncacheThread('t-b');
   uncacheThread('t-shared');
@@ -55,6 +60,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  presence.closeAll();
   testDb.sqlite.close();
   const { closeDatabase, resetDatabaseForTests } = await import('../../db/index.js');
   await closeDatabase().catch(() => {});
@@ -62,12 +68,12 @@ afterEach(async () => {
 });
 
 describe('resolveRunner — user isolation', () => {
-  test('returns the user’s WS-connected runner (strategy 4)', async () => {
+  test('returns the user’s gRPC-connected runner (strategy 4)', async () => {
     wireRunner('r-a', 'user-a');
 
     const resolved = await resolveRunner('/api/browse', {}, 'user-a');
 
-    expect(resolved).toEqual({ runnerId: 'r-a', httpUrl: 'http://r-a.local:3002' });
+    expect(resolved).toEqual({ runnerId: 'r-a' });
   });
 
   test('does not return another user’s runner for the same project path', async () => {
@@ -131,7 +137,7 @@ describe('resolveRunner — user isolation', () => {
     expect(resolved).toBeNull();
   });
 
-  test('falls back to httpUrl when WS is disconnected', async () => {
+  test('does not fall back to httpUrl without a gRPC session', async () => {
     seedRunner(testDb.db, {
       id: 'r-http',
       userId: 'user-a',
@@ -140,20 +146,21 @@ describe('resolveRunner — user isolation', () => {
     });
 
     const resolved = await resolveRunner('/api/browse', {}, 'user-a');
-    expect(resolved).toEqual({ runnerId: 'r-http', httpUrl: 'http://runner-http:3002' });
+    expect(resolved).toBeNull();
   });
 });
 
 describe('resolveRunner — cache', () => {
   test('uses cached thread mapping when runner is still reachable', async () => {
-    cacheThreadRunner('t-shared', 'user-a', 'r-a', 'http://cached.local');
+    presence.activate('r-a', { invalidate: () => {} }, 'user-a');
+    cacheThreadRunner('t-shared', 'user-a', 'r-a');
 
     const resolved = await resolveRunner('/api/threads/t-shared/messages', {}, 'user-a');
-    expect(resolved).toEqual({ runnerId: 'r-a', httpUrl: 'http://cached.local' });
+    expect(resolved).toEqual({ runnerId: 'r-a' });
   });
 
   test('does not use another user’s cached thread mapping', async () => {
-    cacheThreadRunner('t-shared', 'user-a', 'r-a', 'http://cached.local');
+    cacheThreadRunner('t-shared', 'user-a', 'r-a');
     wireRunner('r-b', 'user-b');
 
     const resolved = await resolveRunner('/api/threads/t-shared/messages', {}, 'user-b');
@@ -164,8 +171,8 @@ describe('resolveRunner — cache', () => {
 
   test('evicts stale cache when runner disconnects', async () => {
     wireRunner('r-a', 'user-a');
-    cacheThreadRunner('t-shared', 'user-a', 'r-a', null);
-    removeRunnerClient('r-a');
+    cacheThreadRunner('t-shared', 'user-a', 'r-a');
+    presence.deactivate('r-a', presence.activeEpoch('r-a')!);
 
     wireRunner('r-b', 'user-b');
 
@@ -174,9 +181,9 @@ describe('resolveRunner — cache', () => {
   });
 
   test('uncacheThread and evictRunnerFromCache clear entries', async () => {
-    cacheThreadRunner('t1', 'user-a', 'r-a', null);
-    cacheThreadRunner('t2', 'user-a', 'r-a', null);
-    cacheThreadRunner('t3', 'user-b', 'r-b', null);
+    cacheThreadRunner('t1', 'user-a', 'r-a');
+    cacheThreadRunner('t2', 'user-a', 'r-a');
+    cacheThreadRunner('t3', 'user-b', 'r-b');
 
     uncacheThread('t1');
     evictRunnerFromCache('r-a');
@@ -189,7 +196,7 @@ describe('resolveRunner — cache', () => {
 });
 
 describe('resolveAnyRunner', () => {
-  test('returns any WS-connected runner', async () => {
+  test('returns any gRPC-connected runner', async () => {
     wireRunner('r-a', 'user-a');
 
     const resolved = await resolveAnyRunner();

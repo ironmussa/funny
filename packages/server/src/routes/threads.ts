@@ -37,12 +37,11 @@ import { proxyToRunner } from '../middleware/proxy.js';
 import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
 import { findRunnerForProject } from '../services/runner-manager.js';
+import type { RunnerPresencePort, RunnerRequestPort } from '../services/runner-ports.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import type { ResolvedRunner } from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
-import { relayToUser, relayToThreadViewers } from '../services/ws-relay.js';
-import { tunnelFetch } from '../services/ws-tunnel.js';
 import { parseJsonBody, parseQuery } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
@@ -170,6 +169,7 @@ export const { requireThreadView, requireThreadOwner, requireThreadSteer } =
 async function resolveRunnerForProject(
   projectId: string,
   userId?: string,
+  presence?: RunnerPresencePort,
 ): Promise<ResolvedRunner | null> {
   // CRITICAL (runner isolation): scope the project→runner lookup to the
   // requesting user. Without userId, findRunnerForProject returns ANY runner
@@ -178,61 +178,29 @@ async function resolveRunnerForProject(
   // server's data-handler correctly refuses, breaking the thread). A
   // collaborator must run on THEIR OWN runner.
   const runnerResult = await findRunnerForProject(projectId, userId);
-  if (runnerResult) {
-    return {
-      runnerId: runnerResult.runner.runnerId,
-      httpUrl: runnerResult.runner.httpUrl ?? null,
-    };
+  if (runnerResult && presence?.isAvailable(runnerResult.runner.runnerId)) {
+    return { runnerId: runnerResult.runner.runnerId };
   }
-  return await runnerResolver.resolveRunner('/api/threads', { projectId }, userId);
+  return await runnerResolver.resolveRunner('/api/threads', { projectId }, userId, presence);
 }
 
 async function fetchFromRunner(
+  requests: RunnerRequestPort,
   resolved: ResolvedRunner,
   path: string,
   opts: { method: string; headers: Record<string, string>; body?: string },
 ): Promise<{ ok: boolean; status: number; body: string }> {
-  if (resolved.runnerId === '__default__' && resolved.httpUrl) {
-    return await directFetch(resolved.httpUrl, path, opts);
-  }
-
-  try {
-    const resp = await tunnelFetch(resolved.runnerId, {
-      method: opts.method,
-      path,
-      headers: opts.headers,
-      body: opts.body ?? null,
-    });
-    return {
-      ok: resp.status >= 200 && resp.status < 400,
-      status: resp.status,
-      body: resp.body ?? '',
-    };
-  } catch (tunnelErr) {
-    if (resolved.httpUrl) {
-      log.warn('Tunnel failed, falling back to direct HTTP', {
-        namespace: 'threads',
-        runnerId: resolved.runnerId,
-        error: (tunnelErr as Error).message,
-      });
-      return await directFetch(resolved.httpUrl, path, opts);
-    }
-    throw tunnelErr;
-  }
-}
-
-async function directFetch(
-  baseUrl: string,
-  path: string,
-  opts: { method: string; headers: Record<string, string>; body?: string },
-): Promise<{ ok: boolean; status: number; body: string }> {
-  const res = await fetch(`${baseUrl}${path}`, {
+  const resp = await requests.request(resolved.runnerId, {
     method: opts.method,
+    path,
     headers: opts.headers,
-    body: opts.method !== 'GET' && opts.method !== 'HEAD' ? opts.body : undefined,
+    body: opts.body ?? null,
   });
-  const body = await res.text();
-  return { ok: res.ok, status: res.status, body };
+  return {
+    ok: resp.status >= 200 && resp.status < 400,
+    status: resp.status,
+    body: resp.body ?? '',
+  };
 }
 
 function buildForwardHeaders(
@@ -538,7 +506,7 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
 
   // Live append for every current viewer (owner + sharees) via the thread's
   // presence room. The client also refetches on panel open as a backstop.
-  relayToThreadViewers(id, { type: THREAD_COMMENT_EVENT, threadId: id, comment });
+  c.env?.browserEvents?.toThreadViewers(id, { type: THREAD_COMMENT_EVENT, threadId: id, comment });
 
   return c.json(comment, 201);
 });
@@ -548,7 +516,11 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
   const id = c.req.param('id');
   const commentId = c.req.param('commentId');
   await commentRepo.deleteComment(commentId);
-  relayToThreadViewers(id, { type: THREAD_COMMENT_DELETED_EVENT, threadId: id, commentId });
+  c.env?.browserEvents?.toThreadViewers(id, {
+    type: THREAD_COMMENT_DELETED_EVENT,
+    threadId: id,
+    commentId,
+  });
   return c.json({ ok: true });
 });
 
@@ -625,7 +597,7 @@ threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
 
   if (transitionTo !== null && transitionTo !== transitionFrom) {
     await stageHistoryRepo.recordStageChange(id, transitionFrom, transitionTo);
-    relayToUser(userId, {
+    c.env?.browserEvents?.toUser(userId, {
       type: 'thread:stage-changed',
       threadId: id,
       data: { fromStage: transitionFrom, toStage: transitionTo, projectId: thread.projectId },
@@ -652,7 +624,7 @@ threadRoutes.patch('/:id/permission-mode', requireThreadOwner, async (c) => {
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
 
   await threadRepo.updateThread(id, { permissionMode: parsed.value.permissionMode });
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: 'thread:updated',
     threadId: id,
     data: { permissionMode: parsed.value.permissionMode },
@@ -691,7 +663,7 @@ threadRoutes.patch('/:id/status', requireThreadOwner, async (c) => {
   const reason = typeof body.reason === 'string' ? body.reason : undefined;
 
   await threadRepo.updateThread(id, { status: body.value });
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: 'thread:updated',
     threadId: id,
     data: { status: body.value, reason },
@@ -733,7 +705,7 @@ threadRoutes.patch('/:id/stage', requireThreadOwner, async (c) => {
   await threadRepo.updateThread(id, { stage: body.value });
   if (body.value !== fromStage) {
     await stageHistoryRepo.recordStageChange(id, fromStage ?? null, body.value);
-    relayToUser(userId, {
+    c.env?.browserEvents?.toUser(userId, {
       type: 'thread:stage-changed',
       threadId: id,
       data: {
@@ -790,7 +762,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   // Mirror broadcastThreadEvent shape from packages/runtime/src/services/workflow-event-helpers.ts
   const eventId = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: 'thread:event',
     threadId: id,
     data: {
@@ -847,8 +819,8 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
   // Resolve the runner. Scratch threads have no project, so we ask
   // resolveRunner for any reachable runner that belongs to this user.
   const resolved = isScratch
-    ? await runnerResolver.resolveRunner(runnerPath, {}, userId)
-    : await resolveRunnerForProject(projectId!, userId);
+    ? await runnerResolver.resolveRunner(runnerPath, {}, userId, c.env?.runnerPresence)
+    : await resolveRunnerForProject(projectId!, userId, c.env?.runnerPresence);
   if (!resolved) {
     return c.json(
       {
@@ -867,7 +839,7 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
       c.get('userRole') as string | undefined,
       c.get('organizationName') as string | undefined,
     );
-    const result = await fetchFromRunner(resolved, runnerPath, {
+    const result = await fetchFromRunner(c.env.runnerRequests!, resolved, runnerPath, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -895,7 +867,7 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
         isScratch,
       });
 
-      runnerResolver.cacheThreadRunner(threadId, userId, resolved.runnerId, resolved.httpUrl);
+      runnerResolver.cacheThreadRunner(threadId, userId, resolved.runnerId);
     }
 
     return c.json(threadData, 201);
@@ -939,7 +911,7 @@ threadRoutes.post('/:id/scheduler/workflow-event', async (c) => {
     return c.json({ error: 'event must be a string starting with "workflow:"' }, 400);
   }
 
-  relayToUser(userId, {
+  c.env?.browserEvents?.toUser(userId, {
     type: event,
     threadId,
     data: { ...((body.data ?? {}) as Record<string, unknown>) },
@@ -984,7 +956,7 @@ threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
 
   const source = c.get('thread');
 
-  const resolved = await resolveRunnerForProject(source.projectId, userId);
+  const resolved = await resolveRunnerForProject(source.projectId, userId, c.env?.runnerPresence);
   if (!resolved) {
     return c.json({ error: 'No online runner found for this project' }, 502);
   }
@@ -997,11 +969,16 @@ threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
       c.get('organizationName') as string | undefined,
     );
     const body = await c.req.text();
-    const result = await fetchFromRunner(resolved, `/api/threads/${sourceThreadId}/fork`, {
-      method: 'POST',
-      headers,
-      body,
-    });
+    const result = await fetchFromRunner(
+      c.env.runnerRequests!,
+      resolved,
+      `/api/threads/${sourceThreadId}/fork`,
+      {
+        method: 'POST',
+        headers,
+        body,
+      },
+    );
 
     if (!result.ok) return c.json({ error: runnerErrorMessage(result.body) }, result.status as any);
 
@@ -1018,7 +995,7 @@ threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
         mode: newThread.mode,
         branch: newThread.branch ?? undefined,
       });
-      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId, resolved.httpUrl);
+      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId);
     }
 
     return c.json(newThread, 201);
@@ -1043,7 +1020,7 @@ threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
 
   const source = c.get('thread');
 
-  const resolved = await resolveRunnerForProject(source.projectId, userId);
+  const resolved = await resolveRunnerForProject(source.projectId, userId, c.env?.runnerPresence);
   if (!resolved) {
     return c.json({ error: 'No online runner found for this project' }, 502);
   }
@@ -1057,6 +1034,7 @@ threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
     );
     const body = await c.req.text();
     const result = await fetchFromRunner(
+      c.env.runnerRequests!,
       resolved,
       `/api/threads/${sourceThreadId}/fork-and-rewind`,
       { method: 'POST', headers, body },
@@ -1080,7 +1058,7 @@ threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
         mode: newThread.mode,
         branch: newThread.branch ?? undefined,
       });
-      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId, resolved.httpUrl);
+      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId);
     }
 
     return c.json(parsed, 201);
@@ -1198,10 +1176,7 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
 
   // Proxy the delete to the runner
   if (runnerInfo) {
-    const resolved: ResolvedRunner = {
-      runnerId: runnerInfo.runnerId,
-      httpUrl: runnerInfo.httpUrl,
-    };
+    const resolved: ResolvedRunner = { runnerId: runnerInfo.runnerId };
     try {
       const headers = buildForwardHeaders(
         userId,
@@ -1209,7 +1184,7 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
         c.get('userRole') as string | undefined,
         c.get('organizationName') as string | undefined,
       );
-      await fetchFromRunner(resolved, `/api/threads/${threadId}`, {
+      await fetchFromRunner(c.env.runnerRequests!, resolved, `/api/threads/${threadId}`, {
         method: 'DELETE',
         headers,
       });

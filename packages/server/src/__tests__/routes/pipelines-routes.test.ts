@@ -20,31 +20,6 @@ mock.module('@funny/core/git', () => ({
   validateProjectRootPath,
 }));
 
-mock.module('../../services/ws-relay.js', () => ({
-  setIO: () => {},
-  addRunnerClient: () => {},
-  removeRunnerClient: () => {},
-  isRunnerConnected: () => false,
-  relayToUser: () => {},
-  relayToThreadViewers: () => {},
-  evictUserFromThread: () => {},
-  broadcast: () => {},
-  sendToRunner: () => false,
-  forwardBrowserMessageToRunner: () => {},
-  getAnyConnectedRunnerId: () => null,
-  getConnectedBrowserUserIds: () => [],
-  getRelayStats: () => ({ runners: 0, browserClients: 0 }),
-}));
-
-mock.module('../../services/ws-tunnel.js', () => ({
-  setIO: () => {},
-  tunnelFetch: () => Promise.reject(new Error('not available in test')),
-  TunnelTimeoutError: class TunnelTimeoutError extends Error {
-    name = 'TunnelTimeoutError';
-  },
-  isTunnelTimeoutError: () => false,
-}));
-
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';

@@ -166,15 +166,15 @@ export function useStashState({
       setStashDialogFile(filePath);
       setStashDialogDiffLoading(true);
       setStashDialogDiff(null);
-      const result = effectiveThreadId
-        ? await gitApi.stashFileDiff(effectiveThreadId, index, filePath)
-        : await gitApi.projectStashFileDiff(projectModeId!, index, filePath);
-      if (result.isOk()) {
-        setStashDialogDiff(result.value.diff);
-      } else {
-        toast.error(`Failed to load diff: ${result.error.message}`);
+      try {
+        const result = effectiveThreadId
+          ? await gitApi.stashFileDiff(effectiveThreadId, index, filePath)
+          : await gitApi.projectStashFileDiff(projectModeId!, index, filePath);
+        if (result.isOk()) setStashDialogDiff(result.value.diff);
+        else toast.error(`Failed to load diff: ${result.error.message}`);
+      } finally {
+        setStashDialogDiffLoading(false);
       }
-      setStashDialogDiffLoading(false);
     },
     [hasGitContext, effectiveThreadId, projectModeId],
   );
@@ -202,30 +202,34 @@ export function useStashState({
     setStashFilesLoading(true);
     setStashFileSearch('');
     const load = async () => {
-      const filesResult = effectiveThreadId
-        ? await gitApi.stashShow(effectiveThreadId, selectedStashIndex)
-        : await gitApi.projectStashShow(projectModeId!, selectedStashIndex);
-      if (cancelled) return;
-      if (filesResult.isOk()) {
-        setStashFiles(filesResult.value.files);
-        if (filesResult.value.files.length > 0) {
-          const firstPath = filesResult.value.files[0].path;
-          setStashDialogFile(firstPath);
-          setStashDialogDiffLoading(true);
-          setStashDialogDiff(null);
-          const diffResult = effectiveThreadId
-            ? await gitApi.stashFileDiff(effectiveThreadId, selectedStashIndex, firstPath)
-            : await gitApi.projectStashFileDiff(projectModeId!, selectedStashIndex, firstPath);
-          if (!cancelled && diffResult.isOk()) {
-            setStashDialogDiff(diffResult.value.diff);
+      try {
+        const filesResult = effectiveThreadId
+          ? await gitApi.stashShow(effectiveThreadId, selectedStashIndex)
+          : await gitApi.projectStashShow(projectModeId!, selectedStashIndex);
+        if (cancelled) return;
+        if (filesResult.isOk()) {
+          setStashFiles(filesResult.value.files);
+          if (filesResult.value.files.length > 0) {
+            const firstPath = filesResult.value.files[0].path;
+            setStashDialogFile(firstPath);
+            setStashDialogDiffLoading(true);
+            setStashDialogDiff(null);
+            try {
+              const diffResult = effectiveThreadId
+                ? await gitApi.stashFileDiff(effectiveThreadId, selectedStashIndex, firstPath)
+                : await gitApi.projectStashFileDiff(projectModeId!, selectedStashIndex, firstPath);
+              if (!cancelled && diffResult.isOk()) setStashDialogDiff(diffResult.value.diff);
+            } finally {
+              if (!cancelled) setStashDialogDiffLoading(false);
+            }
           }
-          if (!cancelled) setStashDialogDiffLoading(false);
+        } else {
+          toast.error(`Failed to load stash files: ${filesResult.error.message}`);
+          setStashFiles([]);
         }
-      } else {
-        toast.error(`Failed to load stash files: ${filesResult.error.message}`);
-        setStashFiles([]);
+      } finally {
+        if (!cancelled) setStashFilesLoading(false);
       }
-      if (!cancelled) setStashFilesLoading(false);
     };
     load();
     return () => {

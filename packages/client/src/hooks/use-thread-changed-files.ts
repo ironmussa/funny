@@ -141,26 +141,22 @@ export function useThreadChangedFiles(enabled: boolean = true) {
     let cancelled = false;
     const timer = setTimeout(async () => {
       setLoading(true);
-      let result;
       try {
-        result = await api.getDiffSummary(threadId);
+        const result = await api.getDiffSummary(threadId);
+        if (!cancelled && result.isOk()) {
+          const filtered = result.value.files.filter((file) => {
+            for (const path of touchedPaths) {
+              if (path.endsWith(`/${file.path}`) || path === file.path) return true;
+            }
+            return false;
+          });
+          setFiles(filtered);
+        }
       } catch {
+        // Keep the previous file list when the refresh fails.
+      } finally {
         if (!cancelled) setLoading(false);
-        return;
       }
-      if (!cancelled && result.isOk()) {
-        // Filter to only files this thread's agent actually touched
-        const filtered = result.value.files.filter((f) => {
-          // Match by basename suffix — tool calls use absolute paths,
-          // diff summary uses relative paths from the repo root.
-          for (const tp of touchedPaths) {
-            if (tp.endsWith(`/${f.path}`) || tp === f.path) return true;
-          }
-          return false;
-        });
-        setFiles(filtered);
-      }
-      if (!cancelled) setLoading(false);
     }, 300);
 
     return () => {

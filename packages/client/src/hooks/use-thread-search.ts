@@ -1,5 +1,5 @@
 import { findTextSearchMatches } from '@funny/shared/lib/text-search';
-import { useCallback, useRef, useState, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { useThreadStore } from '@/stores/thread-store';
@@ -23,7 +23,9 @@ export function useThreadSearchState(
   // the user has already navigated to occurrence N+1.
   const navTokenRef = useRef(0);
   const threadIdRef = useRef(threadId);
-  threadIdRef.current = threadId;
+  useLayoutEffect(() => {
+    threadIdRef.current = threadId;
+  }, [threadId]);
 
   const clearSearchHighlights = useCallback(() => {
     const viewport = streamRef.current?.scrollViewport;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { PromptSlashResource } from '@/components/prompt-editor/PromptEditor';
 import { api } from '@/lib/api';
@@ -52,7 +52,9 @@ export function useSlashSkills({
   const [slashSkillsLoading, setSlashSkillsLoading] = useState(false);
   // Mirror for synchronous reads on the submit path.
   const slashSkillsRef = useRef<PromptSlashResource[]>(slashSkills);
-  slashSkillsRef.current = slashSkills;
+  useLayoutEffect(() => {
+    slashSkillsRef.current = slashSkills;
+  }, [slashSkills]);
   // In-flight fetch (de-dupes concurrent ensure() calls); reset on dep change.
   const loadPromiseRef = useRef<Promise<PromptSlashResource[]> | null>(null);
   // Monotonic token so a late-resolving stale fetch can't clobber fresh state.

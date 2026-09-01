@@ -90,22 +90,26 @@ export function useBranchSwitch() {
     async (strategy: 'stash' | 'carry') => {
       if (!dialogState) return;
       setLoading(true);
-
-      const result = await api.checkout(dialogState.projectId, dialogState.targetBranch, strategy);
-      setLoading(false);
-
-      if (result.isOk()) {
-        if (!result.value.worktreePath) {
-          useProjectStore.getState().setBranch(dialogState.projectId, dialogState.targetBranch);
-          useBranchPickerStore.getState().setCurrentBranch(dialogState.targetBranch);
-          // Force-refresh git status so ReviewPane shows origin info for the new branch
-          useGitStatusStore.getState().fetchProjectStatus(dialogState.projectId, true);
+      try {
+        const result = await api.checkout(
+          dialogState.projectId,
+          dialogState.targetBranch,
+          strategy,
+        );
+        if (result.isOk()) {
+          if (!result.value.worktreePath) {
+            useProjectStore.getState().setBranch(dialogState.projectId, dialogState.targetBranch);
+            useBranchPickerStore.getState().setCurrentBranch(dialogState.targetBranch);
+            useGitStatusStore.getState().fetchProjectStatus(dialogState.projectId, true);
+          }
+          setDialogState(null);
+          resolverRef.current?.(true);
+          resolverRef.current = null;
+        } else {
+          toast.error(result.error.message || t('switchBranch.failed', 'Failed to switch branch'));
         }
-        setDialogState(null);
-        resolverRef.current?.(true);
-        resolverRef.current = null;
-      } else {
-        toast.error(result.error.message || t('switchBranch.failed', 'Failed to switch branch'));
+      } finally {
+        setLoading(false);
       }
     },
     [dialogState, t],

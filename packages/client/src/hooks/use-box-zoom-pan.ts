@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 
 /**
  * Container-relative zoom + pan for an inline media box (a chat image card, a
@@ -44,8 +44,10 @@ export function useBoxZoomPan(): BoxZoomPan {
   // values without re-subscribing. Refs may be assigned during render.
   const scaleRef = useRef(scale);
   const offsetRef = useRef(offset);
-  scaleRef.current = scale;
-  offsetRef.current = offset;
+  useLayoutEffect(() => {
+    scaleRef.current = scale;
+    offsetRef.current = offset;
+  }, [scale, offset]);
 
   const dragRef = useRef<{
     startX: number;

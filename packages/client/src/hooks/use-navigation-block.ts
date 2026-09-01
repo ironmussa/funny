@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 type BlockerState = 'idle' | 'blocked';
@@ -23,9 +23,11 @@ export function useNavigationBlock(
   const [state, setState] = useState<BlockerState>('idle');
   const pendingLocationRef = useRef<string | null>(null);
   const shouldBlockRef = useRef(shouldBlock);
-  shouldBlockRef.current = shouldBlock;
   const locationRef = useRef(location.pathname);
-  locationRef.current = location.pathname;
+  useLayoutEffect(() => {
+    shouldBlockRef.current = shouldBlock;
+    locationRef.current = location.pathname;
+  }, [location.pathname, shouldBlock]);
   // When true, bypass all blocking (used during proceed to avoid re-blocking)
   const proceedingRef = useRef(false);
 

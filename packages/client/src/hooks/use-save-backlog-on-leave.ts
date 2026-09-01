@@ -48,20 +48,23 @@ export function useSaveBacklogOnLeave({
       return;
     }
     setSavingBacklog(true);
-    const result = await api.createIdleThread({
-      projectId: effectiveProjectId,
-      title: text.slice(0, 200),
-      mode: defaultThreadMode,
-      prompt: text,
-    });
-    setSavingBacklog(false);
-    if (result.isErr()) {
-      toastError(result.error, 'createThread');
-      return;
+    try {
+      const result = await api.createIdleThread({
+        projectId: effectiveProjectId,
+        title: text.slice(0, 200),
+        mode: defaultThreadMode,
+        prompt: text,
+      });
+      if (result.isErr()) {
+        toastError(result.error, 'createThread');
+        return;
+      }
+      await loadThreadsForProject(effectiveProjectId);
+      toast.success(t('toast.threadCreated', { title: text.slice(0, 200) }));
+      blocker.proceed?.();
+    } finally {
+      setSavingBacklog(false);
     }
-    await loadThreadsForProject(effectiveProjectId);
-    toast.success(t('toast.threadCreated', { title: text.slice(0, 200) }));
-    blocker.proceed?.();
   }, [
     effectiveProjectId,
     defaultThreadMode,

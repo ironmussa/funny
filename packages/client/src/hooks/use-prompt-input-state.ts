@@ -8,7 +8,15 @@ import {
   getModelContextWindow,
 } from '@funny/shared/models';
 import type { WorkflowSummary } from '@funny/shared/types/workflows';
-import { useState, useRef, useEffect, useCallback, useMemo, type ReactElement } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+  type ReactElement,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -519,6 +527,7 @@ export function usePromptInputState({
   } | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     if (!isNewThread && selectedProjectId) {
       const cached = followUpBranchCacheRef.current;
       if (cached?.projectId === selectedProjectId) {
@@ -530,6 +539,7 @@ export function usePromptInputState({
       }
       (async () => {
         const result = await api.listBranches(selectedProjectId);
+        if (cancelled) return;
         if (result.isOk()) {
           const data = result.value;
           followUpBranchCacheRef.current = {
@@ -553,6 +563,9 @@ export function usePromptInputState({
       setFollowUpCurrentBranch(null);
       followUpBranchCacheRef.current = null;
     }
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNewThread, selectedProjectId]);
 
@@ -635,7 +648,9 @@ export function usePromptInputState({
   // Stable ref for effectiveThreadId — used by queue handlers and draft persistence
   // to avoid recreating callbacks on every thread switch.
   const threadIdRef = useRef(effectiveThreadId);
-  threadIdRef.current = effectiveThreadId;
+  useLayoutEffect(() => {
+    threadIdRef.current = effectiveThreadId;
+  }, [effectiveThreadId]);
 
   useEffect(() => {
     if (!effectiveThreadId) {
@@ -937,9 +952,11 @@ export function usePromptInputState({
 
   // ── Wrapped onSubmit to track submission for draft ──
   const onSubmitRef = useRef(onSubmit);
-  onSubmitRef.current = onSubmit;
   const clearPromptDraftRef = useRef(clearPromptDraft);
-  clearPromptDraftRef.current = clearPromptDraft;
+  useLayoutEffect(() => {
+    onSubmitRef.current = onSubmit;
+    clearPromptDraftRef.current = clearPromptDraft;
+  }, [clearPromptDraft, onSubmit]);
 
   const handleCompact = useCallback(async () => {
     const tid = threadIdRef.current;

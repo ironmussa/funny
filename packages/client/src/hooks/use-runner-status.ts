@@ -22,9 +22,19 @@ export function useRunnerStatus(pollMs = 15_000) {
   };
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, pollMs);
-    return () => clearInterval(id);
+    let cancelled = false;
+    const poll = async () => {
+      const result = await api.getMyRunners();
+      if (cancelled) return;
+      if (result.isOk()) setHasRunner(result.value.runners.length > 0);
+      setLoading(false);
+    };
+    poll();
+    const id = setInterval(poll, pollMs);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [pollMs]);
 
   return { hasRunner, loading, refresh };

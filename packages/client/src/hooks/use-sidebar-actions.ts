@@ -54,11 +54,14 @@ export function useSidebarActions() {
     setActionLoading(true);
     const { threadId, projectId } = archiveConfirm;
     const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
-    await archiveThread(threadId, projectId);
-    setActionLoading(false);
-    setArchiveConfirm(null);
-    toast.success(t('toast.threadArchived'));
-    if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
+    try {
+      await archiveThread(threadId, projectId);
+      setArchiveConfirm(null);
+      toast.success(t('toast.threadArchived'));
+      if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
+    } finally {
+      setActionLoading(false);
+    }
   }, [archiveConfirm, archiveThread, t, navigate]);
 
   const handleDeleteThreadConfirm = useCallback(

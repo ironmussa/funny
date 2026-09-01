@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { useDraftStore } from '@/stores/draft-store';
 
@@ -29,9 +29,11 @@ export function useCommitDraft(draftId: string | null | undefined): UseCommitDra
   // Always-current refs so the auto-persist setters can read the *other*
   // field's latest value without nesting setStates.
   const commitTitleRef = useRef(commitTitle);
-  commitTitleRef.current = commitTitle;
   const commitBodyRef = useRef(commitBody);
-  commitBodyRef.current = commitBody;
+  useLayoutEffect(() => {
+    commitTitleRef.current = commitTitle;
+    commitBodyRef.current = commitBody;
+  }, [commitBody, commitTitle]);
 
   const setCommitTitle = useCallback(
     (v: string | ((prev: string) => string)) => {

@@ -139,6 +139,56 @@ recovering phase marks.
 
 ## Controlled experiment
 
+### Automated soak
+
+The preferred repeatable check runs Funny in a dedicated Playwright Chromium and
+samples the complete process tree alongside CDP heap and DOM counters:
+
+```bash
+bun run profile:client:soak
+```
+
+The default run uses 20-minute idle, long-thread, Browser Panel, and terminal
+phases, with five-minute release windows after closing Browser Panel and the
+terminal. It requires the same admin credentials as authenticated E2E tests:
+
+```bash
+E2E_ADMIN_PASSWORD=<password> bun run profile:client:soak
+```
+
+Useful development options:
+
+```bash
+# Contract smoke; the result is intentionally inconclusive.
+bun run profile:client:soak --smoke --skip-browser --skip-terminal
+
+# Show Chromium or target another already-running Funny client.
+bun run profile:client:soak --headed --base-url=http://localhost:5173
+```
+
+The harness creates and deletes its own temporary project. Results are written
+under `benchmark-results/client-memory-soak/<timestamp>/`:
+
+- `samples.jsonl` contains timestamped RSS by Chromium process role, CPU, main
+  isolate heap, DOM counters, worker count, and phase.
+- `summary.json` contains the options, Abbacchio session id, phase summaries,
+  recovery after panel closure, and the machine-readable verdict.
+- `report.md` is the concise human-readable result.
+
+Runs shorter than five minutes per measured phase are reported as
+`inconclusive`. A run is classified as likely native retention when RSS grows
+by more than 128 MiB within a measured phase while the main JavaScript heap
+stays within 32 MiB in that same phase.
+That signal narrows the problem to workers, WASM, decoded images, canvas, GPU,
+or other native buffers; it does not attribute the bytes to one of those alone.
+
+Each raw sample contains both the complete harness tree and a Chromium-only RSS
+total. Reports and verdicts use the Chromium total (browser, renderer, GPU,
+utility, and zygote) and exclude Playwright and the Bun harness. Use the per-role
+values in `samples.jsonl` to identify which Chromium process class moved.
+Absolute values differ from Chrome Task Manager's single-tab row, while
+controlled deltas remain reproducible.
+
 Use one Chrome tab and avoid opening DevTools panels other than Console/Memory
 while a phase is running. In Chrome Task Manager (`Shift+Esc`), enable the
 **Memory footprint** and **JavaScript memory** columns for the Funny tab.

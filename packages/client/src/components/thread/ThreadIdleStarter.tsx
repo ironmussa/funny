@@ -71,65 +71,71 @@ export function ThreadIdleStarter({ activeThread }: Props) {
       }
       if (workflowParse.invocation) {
         setSending(true);
-        const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
-          threadId: activeThread.id,
-          ...buildWorkflowRunBody(workflowParse.invocation, {
-            fileReferences: opts.fileReferences,
-            symbolReferences: opts.symbolReferences,
-          }),
-        });
-        setSending(false);
-        if (result.isErr()) {
-          toast.error(result.error.message);
-          return false;
+        try {
+          const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
+            threadId: activeThread.id,
+            ...buildWorkflowRunBody(workflowParse.invocation, {
+              fileReferences: opts.fileReferences,
+              symbolReferences: opts.symbolReferences,
+            }),
+          });
+          if (result.isErr()) {
+            toast.error(result.error.message);
+            return false;
+          }
+          toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+          return true;
+        } finally {
+          setSending(false);
         }
-        toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
-        return true;
       }
 
       setSending(true);
-      useThreadStore
-        .getState()
-        .appendOptimisticMessage(
+      try {
+        useThreadStore
+          .getState()
+          .appendOptimisticMessage(
+            activeThread.id,
+            prompt,
+            images,
+            opts.model as any,
+            opts.mode as any,
+            opts.fileReferences,
+            opts.effort as any,
+          );
+        const { allowedTools, disallowedTools } = deriveToolLists(
+          useSettingsStore.getState().toolPermissions,
+        );
+        const result = await api.sendMessage(
           activeThread.id,
           prompt,
+          {
+            provider: opts.provider || undefined,
+            model: opts.model || undefined,
+            permissionMode: opts.mode || undefined,
+            effort: opts.effort || undefined,
+            allowedTools,
+            disallowedTools,
+            fileReferences: opts.fileReferences,
+            symbolReferences: opts.symbolReferences,
+            baseBranch: opts.baseBranch,
+          },
           images,
-          opts.model as any,
-          opts.mode as any,
-          opts.fileReferences,
-          opts.effort as any,
         );
-      const { allowedTools, disallowedTools } = deriveToolLists(
-        useSettingsStore.getState().toolPermissions,
-      );
-      const result = await api.sendMessage(
-        activeThread.id,
-        prompt,
-        {
-          provider: opts.provider || undefined,
-          model: opts.model || undefined,
-          permissionMode: opts.mode || undefined,
-          effort: opts.effort || undefined,
-          allowedTools,
-          disallowedTools,
-          fileReferences: opts.fileReferences,
-          symbolReferences: opts.symbolReferences,
-          baseBranch: opts.baseBranch,
-        },
-        images,
-      );
-      if (result.isErr()) {
-        const err = result.error;
-        toast.error(
-          err.type === 'INTERNAL'
-            ? t('thread.sendFailed')
-            : t('thread.sendFailedGeneric', { error: err.message }),
-        );
-      } else if (result.value.handledLocally === 'shell_escape') {
-        useThreadStore.getState().rollbackOptimisticMessage(activeThread.id);
+        if (result.isErr()) {
+          const err = result.error;
+          toast.error(
+            err.type === 'INTERNAL'
+              ? t('thread.sendFailed')
+              : t('thread.sendFailedGeneric', { error: err.message }),
+          );
+        } else if (result.value.handledLocally === 'shell_escape') {
+          useThreadStore.getState().rollbackOptimisticMessage(activeThread.id);
+        }
+        return true;
+      } finally {
+        setSending(false);
       }
-      setSending(false);
-      return true;
     },
     [activeThread.id, t],
   );

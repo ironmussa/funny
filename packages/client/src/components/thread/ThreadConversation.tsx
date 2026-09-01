@@ -1,6 +1,6 @@
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { useReducedMotion } from 'motion/react';
-import { useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
@@ -89,7 +89,9 @@ export function ThreadConversation({
 
   const setPromptRef = useRef<((text: string) => void) | null>(null);
   const activeThreadRef = useRef(activeThread);
-  activeThreadRef.current = activeThread;
+  useLayoutEffect(() => {
+    activeThreadRef.current = activeThread;
+  }, [activeThread]);
   const sendingRef = useRef(false);
   const handlerRefs = useMemo(() => ({ activeThreadRef, sendingRef, streamRef }), [streamRef]);
   const checkpointRefs = useMemo(() => ({ activeThreadRef }), []);
@@ -106,11 +108,7 @@ export function ThreadConversation({
     useThreadCheckpoints(checkpointRefs);
 
   // Track which message/tool-call IDs existed when the thread was loaded.
-  const knownIdsRef = useRef<Set<string> | null>(null);
-  if (knownIdsRef.current === null) knownIdsRef.current = new Set();
-  const prevThreadIdRef = useRef<string | null>(null);
-  if (activeThread && activeThread.id !== prevThreadIdRef.current) {
-    prevThreadIdRef.current = activeThread.id;
+  const knownIds = useMemo(() => {
     const ids = new Set<string>();
     if (stableMessages) {
       for (const m of stableMessages) {
@@ -118,20 +116,16 @@ export function ThreadConversation({
         if (m.toolCalls) for (const tc of m.toolCalls) ids.add(tc.id);
       }
     }
-    knownIdsRef.current = ids;
-  }
+    return ids;
+    // Capture only the messages present when this thread becomes active. New
+    // messages must remain absent so the stream can animate their entrance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThread?.id]);
 
   const snapshots = useTodoSnapshots();
-  const snapshotMapRef = useRef<Map<string, number> | null>(null);
-  if (snapshotMapRef.current === null) snapshotMapRef.current = new Map();
   const snapshotMap = useMemo(() => {
     const next = new Map<string, number>();
     snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    const prev = snapshotMapRef.current!;
-    if (prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) {
-      return prev;
-    }
-    snapshotMapRef.current = next;
     return next;
   }, [snapshots]);
 
@@ -222,7 +216,7 @@ export function ThreadConversation({
         }
         createdAt={activeThread.createdAt}
         snapshotMap={snapshotMap}
-        knownIds={knownIdsRef.current}
+        knownIds={knownIds}
         onOpenLightbox={openLightbox}
         onVisibleMessageChange={onVisibleMessageChange}
         prefersReducedMotion={prefersReducedMotion}

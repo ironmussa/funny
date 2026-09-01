@@ -64,7 +64,6 @@ export function useMessageStreamScroll({
   const loadedCount = scrollMessages.length;
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const threadIdRef = useRef(threadId);
-  threadIdRef.current = threadId;
   // threadIdRef is assigned during render, which under startTransition runs
   // BEFORE the DOM commits. committedThreadIdRef only advances in an effect,
   // so it always matches the thread whose content is actually in the DOM.
@@ -80,10 +79,7 @@ export function useMessageStreamScroll({
   const pendingLoadAfterBottomPinRef = useRef(false);
   const prevScrollHeightRef = useRef(0);
   const prevStickyMetricsRef = useRef<{ scrollHeight: number; clientHeight: number } | null>(null);
-  const threadScrollPositionsRef = useRef<Map<string, ThreadScrollPosition> | null>(null);
-  if (threadScrollPositionsRef.current === null) {
-    threadScrollPositionsRef.current = new Map();
-  }
+  const threadScrollPositionsRef = useRef(new Map<string, ThreadScrollPosition>());
   const scrollDownRef = useRef<HTMLDivElement>(null);
   const contentStackRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<MemoizedMessageListHandle>(null);
@@ -92,17 +88,20 @@ export function useMessageStreamScroll({
   const pinnedPromptIdRef = useRef<string | null>(null);
   const [promptPinSpacerHeight, setPromptPinSpacerHeight] = useState(0);
   const promptPinSpacerHeightRef = useRef(0);
-  promptPinSpacerHeightRef.current = promptPinSpacerHeight;
 
   const { lastUserMessageId, lastVisibleUserMessageIdRef } =
     useLastUserMessageTracking(scrollMessages);
   const lastMessage = getLastMessage(scrollMessages);
   const prevLastUserMessageIdRef = useRef(lastUserMessageId);
   const lastUserMessageIdForThreadSwitchRef = useRef(lastUserMessageId);
-  lastUserMessageIdForThreadSwitchRef.current = lastUserMessageId;
   const prevWaitingReasonRef = useRef(waitingReason);
   const waitingReasonForThreadSwitchRef = useRef(waitingReason);
-  waitingReasonForThreadSwitchRef.current = waitingReason;
+  useLayoutEffect(() => {
+    threadIdRef.current = threadId;
+    promptPinSpacerHeightRef.current = promptPinSpacerHeight;
+    lastUserMessageIdForThreadSwitchRef.current = lastUserMessageId;
+    waitingReasonForThreadSwitchRef.current = waitingReason;
+  }, [lastUserMessageId, promptPinSpacerHeight, threadId, waitingReason]);
 
   const scrollFingerprint = [
     lastMessage?.id,
@@ -352,7 +351,7 @@ export function useMessageStreamScroll({
     threadId,
   });
 
-  handleViewportScrollRef.current = () => {
+  const handleViewportScroll = useEffectEvent(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
@@ -422,7 +421,10 @@ export function useMessageStreamScroll({
     ) {
       onVisibleMessageChange(lastVisibleUserMessageIdRef.current);
     }
-  };
+  });
+  useLayoutEffect(() => {
+    handleViewportScrollRef.current = handleViewportScroll;
+  }, []);
 
   useViewportScrollListeners({
     onScrollRef: handleViewportScrollRef,

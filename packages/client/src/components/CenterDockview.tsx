@@ -9,7 +9,15 @@ import {
   type SerializedDockview,
 } from 'dockview-react';
 import { useTheme } from 'next-themes';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import 'dockview-react/dist/styles/dockview.css';
 
@@ -128,17 +136,19 @@ export function CenterDockview({
 
   const storedRightWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_RIGHT_WIDTH));
   const initialRightWidthRef = useRef(storedRightWidth.current ?? initialRightWidth);
-  initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
 
   const isTabbedRight = !!(rightTabs && rightTabs.length > 0);
   const rightPaneOpenRef = useRef(rightPaneOpen);
-  rightPaneOpenRef.current = rightPaneOpen;
   const rightTabsRef = useRef(rightTabs);
-  rightTabsRef.current = rightTabs;
   const onActiveRightTabChangeRef = useRef(onActiveRightTabChange);
-  onActiveRightTabChangeRef.current = onActiveRightTabChange;
   const activeRightTabRef = useRef(activeRightTab);
-  activeRightTabRef.current = activeRightTab;
+  useLayoutEffect(() => {
+    initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
+    rightPaneOpenRef.current = rightPaneOpen;
+    rightTabsRef.current = rightTabs;
+    onActiveRightTabChangeRef.current = onActiveRightTabChange;
+    activeRightTabRef.current = activeRightTab;
+  }, [activeRightTab, initialRightWidth, onActiveRightTabChange, rightPaneOpen, rightTabs]);
 
   const setHostRef = useCallback((id: string, el: HTMLElement | null) => {
     setHosts((prev) => (prev[id] === el ? prev : { ...prev, [id]: el }));

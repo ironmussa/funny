@@ -252,6 +252,9 @@ export function PromptTimeline({
     const totalTodos = lastTodoSnapshot ? lastTodoSnapshot.todos.length : 0;
     // Track global todo index for step numbering
     let todoIndex = 0;
+    const todoSnapshotIndexByToolCallId = new Map(
+      todoSnapshots.map((snapshot, index) => [snapshot.toolCallId, index]),
+    );
 
     for (const m of messages) {
       // User messages become prompt milestones
@@ -277,7 +280,7 @@ export function PromptTimeline({
               break;
             }
             // Find which snapshot index this tool call corresponds to
-            const snapIdx = todoSnapshots.findIndex((s) => s.toolCallId === tc.id);
+            const snapIdx = todoSnapshotIndexByToolCallId.get(tc.id) ?? -1;
             if (snapIdx < 0) continue;
 
             // Emit all pending snapshot groups up to this one

@@ -241,40 +241,39 @@ export function NewThreadInput({
         const workflowPrompt =
           workflowParse.invocation.prompt ??
           `Run workflow ${workflowParse.invocation.workflowName}`;
-        const createResult = await api.createIdleThread({
-          projectId: effectiveProjectId,
-          title: workflowPrompt.slice(0, 200),
-          mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
-          baseBranch: opts.baseBranch,
-          prompt: workflowPrompt,
-          images,
-          ...(activeDesignId ? { designId: activeDesignId } : {}),
-        });
+        try {
+          const createResult = await api.createIdleThread({
+            projectId: effectiveProjectId,
+            title: workflowPrompt.slice(0, 200),
+            mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
+            baseBranch: opts.baseBranch,
+            prompt: workflowPrompt,
+            images,
+            ...(activeDesignId ? { designId: activeDesignId } : {}),
+          });
 
-        if (createResult.isErr()) {
-          toast.error(createResult.error.message);
+          if (createResult.isErr()) {
+            toast.error(createResult.error.message);
+            setRestoredPrompt(lastPromptRef.current);
+            return false;
+          }
+
+          const runResult = await api.runWorkflow(workflowParse.invocation.workflowName, {
+            threadId: createResult.value.id,
+            ...buildWorkflowRunBody(workflowParse.invocation, {
+              fileReferences: opts.fileReferences,
+              symbolReferences: opts.symbolReferences,
+            }),
+          });
+
+          if (runResult.isErr()) toast.error(runResult.error.message);
+          else toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+
+          await handleThreadCreated(createResult.value.id, 'normal', createResult.value);
+          return true;
+        } finally {
           setWorkflowSubmitting(false);
-          setRestoredPrompt(lastPromptRef.current);
-          return false;
         }
-
-        const runResult = await api.runWorkflow(workflowParse.invocation.workflowName, {
-          threadId: createResult.value.id,
-          ...buildWorkflowRunBody(workflowParse.invocation, {
-            fileReferences: opts.fileReferences,
-            symbolReferences: opts.symbolReferences,
-          }),
-        });
-
-        if (runResult.isErr()) {
-          toast.error(runResult.error.message);
-        } else {
-          toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
-        }
-
-        await handleThreadCreated(createResult.value.id, 'normal', createResult.value);
-        setWorkflowSubmitting(false);
-        return true;
       }
 
       // Reset restored-prompt before the call so the field clears if it succeeds.

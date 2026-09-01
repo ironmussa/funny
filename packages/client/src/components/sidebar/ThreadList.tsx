@@ -6,6 +6,7 @@ import {
   useMemo,
   useCallback,
   useRef,
+  useLayoutEffect,
   memo,
   type MutableRefObject,
 } from 'react';
@@ -16,7 +17,6 @@ import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { setDashedDragPreview } from '@/lib/drag-preview';
-import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { isScratch } from '@/lib/thread-variant';
@@ -62,16 +62,6 @@ interface ThreadListProps {
   onDeleteThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
 }
 
-/** Compare only fields that affect the sidebar display of an enriched thread. */
-function enrichedThreadVisuallyEqual(a: EnrichedThread, b: EnrichedThread): boolean {
-  return (
-    threadsVisuallyEqual(a, b) &&
-    a.projectName === b.projectName &&
-    a.projectPath === b.projectPath &&
-    a.projectColor === b.projectColor
-  );
-}
-
 export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: ThreadListProps) {
   const { t: _t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
@@ -81,11 +71,6 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   // Highlight follows the URL (route-driven), not the async selectedThreadId.
   const activeThreadId = useActiveThreadId();
   const projects = useProjectStore((s) => s.projects);
-
-  // Cache enriched threads to maintain stable references across renders.
-  // Without this, every useMemo run creates new objects via spread even
-  // when the underlying thread data hasn't changed, defeating memo().
-  const enrichedCacheRef = useRef<Map<string, EnrichedThread>>(new Map());
 
   const { threads, totalCount } = useMemo(() => {
     const result: EnrichedThread[] = [];
@@ -110,9 +95,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
         projectPath,
         projectColor,
       };
-      // Reuse previous reference if visual fields are identical
-      const cached = enrichedCacheRef.current.get(thread.id);
-      result.push(cached && enrichedThreadVisuallyEqual(cached, enriched) ? cached : enriched);
+      result.push(enriched);
     };
 
     for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
@@ -141,13 +124,6 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
     // Always show at most 5 threads total, prioritizing running ones
     const visible = result.slice(0, 5);
-
-    // Update cache with current visible threads
-    const nextCache = new Map<string, EnrichedThread>();
-    for (const th of visible) {
-      nextCache.set(th.id, th);
-    }
-    enrichedCacheRef.current = nextCache;
 
     return { threads: visible, totalCount: result.length };
   }, [threadsByProject, scratchThreads, projects, _t]);
@@ -200,7 +176,9 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
   // Keep a ref to threads so the async handleSelect always reads the latest list.
   const threadsRef = useRef(threads);
-  threadsRef.current = threads;
+  useLayoutEffect(() => {
+    threadsRef.current = threads;
+  }, [threads]);
 
   // Stable callbacks that avoid creating new closures per thread inside .map().
   // ThreadItem is memo'd, so stable references prevent unnecessary re-renders.
@@ -328,7 +306,9 @@ const ThreadListItem = memo(function ThreadListItem({
   // Use a ref for the thread so callbacks stay stable even when the
   // thread object reference changes (e.g. cost/sessionId updates).
   const threadRef = useRef(thread) as MutableRefObject<EnrichedThread>;
-  threadRef.current = thread;
+  useLayoutEffect(() => {
+    threadRef.current = thread;
+  }, [thread]);
 
   // Drag support: allow dragging threads into grid cells
   const dragRef = useRef<HTMLDivElement>(null);

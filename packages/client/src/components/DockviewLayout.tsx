@@ -268,48 +268,68 @@ export function DockviewLayout({
   const storedBottomHeight = useRef<number | null>(readStoredSize(STORAGE_KEY_BOTTOM_HEIGHT));
   const storedBrowserWidth = useRef<number | null>(readStoredSize(STORAGE_KEY_BROWSER_WIDTH));
   const initialRightWidthRef = useRef(storedRightWidth.current ?? initialRightWidth);
-  initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
   const initialBottomHeightRef = useRef(storedBottomHeight.current ?? initialBottomHeight);
-  initialBottomHeightRef.current = storedBottomHeight.current ?? initialBottomHeight;
   const initialBrowserWidthRef = useRef(storedBrowserWidth.current ?? initialBrowserWidth);
-  initialBrowserWidthRef.current = storedBrowserWidth.current ?? initialBrowserWidth;
   const initialLeftWidthResolved = storedLeftWidth.current ?? initialLeftWidth;
 
   // ── Latest-prop refs so callbacks/effects don't need to re-create ──
   const isTabbedRight = !!(rightTabs && rightTabs.length > 0);
   const rightTabsRef = useRef(rightTabs);
-  rightTabsRef.current = rightTabs;
   const onActiveRightTabChangeRef = useRef(onActiveRightTabChange);
-  onActiveRightTabChangeRef.current = onActiveRightTabChange;
   const activeRightTabRef = useRef(activeRightTab);
-  activeRightTabRef.current = activeRightTab;
 
   const bottomTabsRef = useRef(bottomTabs);
-  bottomTabsRef.current = bottomTabs;
   const onActiveBottomTabChangeRef = useRef(onActiveBottomTabChange);
-  onActiveBottomTabChangeRef.current = onActiveBottomTabChange;
   const onBottomTabCloseRef = useRef(onBottomTabClose);
-  onBottomTabCloseRef.current = onBottomTabClose;
   const onBottomTabsReorderRef = useRef(onBottomTabsReorder);
-  onBottomTabsReorderRef.current = onBottomTabsReorder;
   const activeBottomTabRef = useRef(activeBottomTab);
-  activeBottomTabRef.current = activeBottomTab;
 
   const onBrowserCloseRef = useRef(onBrowserClose);
-  onBrowserCloseRef.current = onBrowserClose;
   const leftPaneOpenRef = useRef(leftPaneOpen);
-  leftPaneOpenRef.current = leftPaneOpen;
   const browserTitleRef = useRef(browserTitle);
-  browserTitleRef.current = browserTitle;
 
   // Bottom header action components are rendered globally by dockview; we read
   // their JSX at render time via refs so the renderer functions stay stable.
   const bottomPrefixActionsRef = useRef(bottomPrefixActions);
-  bottomPrefixActionsRef.current = bottomPrefixActions;
   const bottomLeftActionsRef = useRef(bottomLeftActions);
-  bottomLeftActionsRef.current = bottomLeftActions;
   const bottomRightActionsRef = useRef(bottomRightActions);
-  bottomRightActionsRef.current = bottomRightActions;
+  useLayoutEffect(() => {
+    initialRightWidthRef.current = storedRightWidth.current ?? initialRightWidth;
+    initialBottomHeightRef.current = storedBottomHeight.current ?? initialBottomHeight;
+    initialBrowserWidthRef.current = storedBrowserWidth.current ?? initialBrowserWidth;
+    rightTabsRef.current = rightTabs;
+    onActiveRightTabChangeRef.current = onActiveRightTabChange;
+    activeRightTabRef.current = activeRightTab;
+    bottomTabsRef.current = bottomTabs;
+    onActiveBottomTabChangeRef.current = onActiveBottomTabChange;
+    onBottomTabCloseRef.current = onBottomTabClose;
+    onBottomTabsReorderRef.current = onBottomTabsReorder;
+    activeBottomTabRef.current = activeBottomTab;
+    onBrowserCloseRef.current = onBrowserClose;
+    leftPaneOpenRef.current = leftPaneOpen;
+    browserTitleRef.current = browserTitle;
+    bottomPrefixActionsRef.current = bottomPrefixActions;
+    bottomLeftActionsRef.current = bottomLeftActions;
+    bottomRightActionsRef.current = bottomRightActions;
+  }, [
+    activeBottomTab,
+    activeRightTab,
+    bottomLeftActions,
+    bottomPrefixActions,
+    bottomRightActions,
+    bottomTabs,
+    browserTitle,
+    initialBottomHeight,
+    initialBrowserWidth,
+    initialRightWidth,
+    leftPaneOpen,
+    onActiveBottomTabChange,
+    onActiveRightTabChange,
+    onBottomTabClose,
+    onBottomTabsReorder,
+    onBrowserClose,
+    rightTabs,
+  ]);
   const bottomHeaderActions = useMemo(
     () => ({
       prefix: bottomPrefixActionsRef,

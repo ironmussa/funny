@@ -151,9 +151,9 @@ export function AllThreadsToolbar(props: Props) {
       <FilterDropdown
         testId="all-threads-status-filter"
         label={t('allThreads.filterStatus')}
-        options={threadStatuses
-          .filter((s) => (statusCounts[s] || 0) > 0)
-          .map((s) => ({ value: s, label: statusLabels[s] }))}
+        options={threadStatuses.flatMap((status) =>
+          (statusCounts[status] || 0) > 0 ? [{ value: status, label: statusLabels[status] }] : [],
+        )}
         selected={statusFilter}
         onToggle={toggleFilter(setStatusFilter)}
         counts={statusCounts}
@@ -162,9 +162,11 @@ export function AllThreadsToolbar(props: Props) {
       <FilterDropdown
         testId="all-threads-git-filter"
         label="Git"
-        options={gitStates
-          .filter((gs) => (gitCounts[gs] || 0) > 0)
-          .map((gs) => ({ value: gs, label: t(`gitStatus.${gs}`) }))}
+        options={gitStates.flatMap((gitState) =>
+          (gitCounts[gitState] || 0) > 0
+            ? [{ value: gitState, label: t(`gitStatus.${gitState}`) }]
+            : [],
+        )}
         selected={gitFilter}
         onToggle={toggleFilter(setGitFilter)}
         counts={gitCounts}

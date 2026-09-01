@@ -129,20 +129,26 @@ export function ShareThreadButton({
 
   const share = async (userId: string) => {
     setBusy(true);
-    const res = await threadsApi.shareThread(threadId, userId, level);
-    res.mapErr((err) => {
-      log.warn('Failed to share thread', { error: String(err) });
-      toast.error('Could not share thread', { description: String(err) });
-    });
-    await refreshShares();
-    setBusy(false);
+    try {
+      const res = await threadsApi.shareThread(threadId, userId, level);
+      res.mapErr((err) => {
+        log.warn('Failed to share thread', { error: String(err) });
+        toast.error('Could not share thread', { description: String(err) });
+      });
+      await refreshShares();
+    } finally {
+      setBusy(false);
+    }
   };
 
   const revoke = async (userId: string) => {
     setBusy(true);
-    await threadsApi.unshareThread(threadId, userId);
-    await refreshShares();
-    setBusy(false);
+    try {
+      await threadsApi.unshareThread(threadId, userId);
+      await refreshShares();
+    } finally {
+      setBusy(false);
+    }
   };
 
   const copyLink = () => {

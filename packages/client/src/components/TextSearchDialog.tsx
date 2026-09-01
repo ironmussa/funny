@@ -350,6 +350,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
                       key={vRow.key}
                       role="option"
                       aria-selected={isActive}
+                      tabIndex={isActive ? 0 : -1}
                       data-testid={
                         row.kind === 'file'
                           ? `text-search-file-${row.path}`
@@ -362,6 +363,12 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
                       style={{ height: vRow.size, transform: `translateY(${vRow.start}px)` }}
                       onMouseEnter={() => setActiveRow(vRow.index)}
                       onClick={() => activateRow(row)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          activateRow(row);
+                        }
+                      }}
                     >
                       {row.kind === 'file' ? (
                         <FileHeader

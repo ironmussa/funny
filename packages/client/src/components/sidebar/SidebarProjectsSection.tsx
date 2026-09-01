@@ -1,6 +1,6 @@
 import type { Project, Thread } from '@funny/shared';
 import { ChevronRight, FolderPlus } from 'lucide-react';
-import { type RefObject, useMemo, useRef, useState } from 'react';
+import { type RefObject, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useExternalClaudeSessionsSync } from '@/hooks/use-external-claude-sessions';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 
@@ -78,27 +77,12 @@ export function SidebarProjectsSection({
     return { activeProjects: active, closedProjects: closed };
   }, [projects]);
 
-  // Memoize per-project thread lists, preserving referential identity for
-  // projects whose threads didn't change visually.
-  const prevFilteredRef = useRef<Record<string, Thread[]>>({});
   const filteredThreadsByProject = useMemo(() => {
-    const prev = prevFilteredRef.current;
     const result: Record<string, Thread[]> = {};
     for (const project of activeProjects) {
       const src = threadsByProject[project.id];
-      const filtered = (Array.isArray(src) ? src : []).filter((thread) => !thread.archived);
-      const previous = prev[project.id];
-      if (
-        previous &&
-        previous.length === filtered.length &&
-        previous.every((prevT, i) => threadsVisuallyEqual(prevT, filtered[i]))
-      ) {
-        result[project.id] = previous;
-      } else {
-        result[project.id] = filtered;
-      }
+      result[project.id] = (Array.isArray(src) ? src : []).filter((thread) => !thread.archived);
     }
-    prevFilteredRef.current = result;
     return result;
   }, [threadsByProject, activeProjects]);
 

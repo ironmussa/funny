@@ -19,8 +19,9 @@ export function PresenceAvatars({ threadId }: { threadId: string }) {
   const viewers = useMemo(() => {
     const byUser = new Map<string, { id: string; name: string; image: string | null }>();
     for (const v of roster ?? []) {
-      if (v.user.id === selfId) continue;
-      if (!byUser.has(v.user.id)) byUser.set(v.user.id, v.user);
+      const { user } = v;
+      if (user.id === selfId) continue;
+      if (!byUser.has(user.id)) byUser.set(user.id, user);
     }
     return Array.from(byUser.values());
   }, [roster, selfId]);

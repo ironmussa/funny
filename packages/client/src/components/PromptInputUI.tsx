@@ -1341,16 +1341,21 @@ export const PromptInputUI = memo(function PromptInputUI({
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2 px-3 pt-2">
               {images.map((img, idx) => (
-                <div key={`preview-${idx}`} className="group relative">
-                  <img
-                    src={`data:${img.source.media_type};base64,${img.source.data}`}
-                    alt={`Attachment ${idx + 1}`}
-                    className="border-foreground max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border-2 object-cover transition-opacity hover:opacity-80"
+                <div key={`${img.source.media_type}-${img.source.data}`} className="group relative">
+                  <button
+                    type="button"
+                    aria-label={`Preview attachment ${idx + 1}`}
                     onClick={() => {
                       setLightboxIndex(idx);
                       setLightboxOpen(true);
                     }}
-                  />
+                  >
+                    <img
+                      src={`data:${img.source.media_type};base64,${img.source.data}`}
+                      alt={`Attachment ${idx + 1}`}
+                      className="border-foreground max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border-2 object-cover transition-opacity hover:opacity-80"
+                    />
+                  </button>
                   <button
                     onClick={() => removeImage(idx)}
                     aria-label={t('prompt.removeImage', 'Remove image')}
@@ -1376,7 +1381,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                     : `${sizeKb} KB`;
                 return (
                   <AttachmentChip
-                    key={`file-preview-${idx}`}
+                    key={`${f.name}-${f.size}-${f.mode}-${f.mode === 'upload' ? f.path : ''}`}
                     data-testid={`prompt-attached-file-${idx}`}
                     name={f.name}
                     size={sizeLabel}
@@ -1423,13 +1428,17 @@ export const PromptInputUI = memo(function PromptInputUI({
                   <div key={v.name} className="flex items-center gap-1.5">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <label className="text-muted-foreground text-[10px] font-medium">
+                        <label
+                          htmlFor={`template-variable-${v.name}`}
+                          className="text-muted-foreground text-[10px] font-medium"
+                        >
                           {v.name}
                         </label>
                       </TooltipTrigger>
                       <TooltipContent>{v.description || v.name}</TooltipContent>
                     </Tooltip>
                     <Input
+                      id={`template-variable-${v.name}`}
                       value={templateVarValues[v.name] ?? v.defaultValue ?? ''}
                       onChange={(e) =>
                         setTemplateVarValues((prev) => ({

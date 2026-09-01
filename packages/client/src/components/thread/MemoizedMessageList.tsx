@@ -540,7 +540,9 @@ export const MemoizedMessageList = memo(
         }
       }
     }
-    stickyPushBaseRef.current = stickyPushBase;
+    useLayoutEffect(() => {
+      stickyPushBaseRef.current = stickyPushBase;
+    }, [stickyPushBase]);
 
     const applyStickyPush = useEffectEvent(() => {
       const el = stickySectionContentRef.current;

@@ -61,7 +61,7 @@ export function KeyboardShortcutsDialog() {
               <span className="text-foreground">{t(s.labelKey)}</span>
               <KbdGroup>
                 {s.keys.map((k, i) => (
-                  <Fragment key={`${k}-${i}`}>
+                  <Fragment key={`${s.labelKey}-${k}`}>
                     {i > 0 && <span className="text-muted-foreground">+</span>}
                     <Kbd>{k}</Kbd>
                   </Fragment>

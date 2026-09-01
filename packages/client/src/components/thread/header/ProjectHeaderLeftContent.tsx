@@ -152,12 +152,14 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
                     {titleDraft || ' '}
                   </span>
                   <input
+                    aria-label="Thread title"
                     ref={titleInputRef}
                     data-testid="header-thread-title-input"
                     value={titleDraft}
                     onChange={(e) => setTitleDraft(e.target.value)}
                     onBlur={commitTitleEdit}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
                       if (e.key === 'Enter') {
                         e.preventDefault();
                         commitTitleEdit();
@@ -172,9 +174,8 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
               ) : (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
                       data-testid="header-thread-title"
                       onClick={startEditingTitle}
                       onKeyDown={(e) => {
@@ -192,7 +193,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
                         className="text-sm font-medium"
                         containerClassName="max-w-full"
                       />
-                    </span>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>{t('thread.renameTitle', 'Click to rename')}</TooltipContent>
                 </Tooltip>

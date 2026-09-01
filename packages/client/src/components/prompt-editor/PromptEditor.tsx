@@ -26,6 +26,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -569,30 +570,45 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   // Slash skills come from the owner (single source of truth) — mirror them
   // into refs for synchronous reads inside the TipTap suggestion callbacks.
   const slashSkillsRef = useRef<readonly PromptSlashResource[]>(slashSkills ?? []);
-  slashSkillsRef.current = slashSkills ?? [];
   const slashSkillsLoadingRef = useRef(slashSkillsLoading);
-  slashSkillsLoadingRef.current = slashSkillsLoading;
   const onSlashOpenRef = useRef(onSlashOpen);
-  onSlashOpenRef.current = onSlashOpen;
   // Keep cwd ref current for async callbacks
   const cwdRef = useRef(cwd);
-  cwdRef.current = cwd;
   const sdkSlashCommandsRef = useRef(sdkSlashCommands);
-  sdkSlashCommandsRef.current = sdkSlashCommands;
   const workflowsRef = useRef<readonly PromptWorkflowResource[]>(workflows ?? []);
-  workflowsRef.current = workflows ?? [];
   const workflowsLoadingRef = useRef(workflowsLoading);
-  workflowsLoadingRef.current = workflowsLoading;
   const commandProviderRef = useRef(commandProvider);
-  commandProviderRef.current = commandProvider;
 
   // Refs for suggestion state accessed inside closures captured at editor creation time
   const suggestionItemsRef = useRef(suggestionItems);
-  suggestionItemsRef.current = suggestionItems;
   const suggestionTypeRef = useRef(suggestionType);
-  suggestionTypeRef.current = suggestionType;
   const suggestionQueryRef = useRef(suggestionQuery);
-  suggestionQueryRef.current = suggestionQuery;
+
+  useLayoutEffect(() => {
+    slashSkillsRef.current = slashSkills ?? [];
+    slashSkillsLoadingRef.current = slashSkillsLoading;
+    onSlashOpenRef.current = onSlashOpen;
+    cwdRef.current = cwd;
+    sdkSlashCommandsRef.current = sdkSlashCommands;
+    workflowsRef.current = workflows ?? [];
+    workflowsLoadingRef.current = workflowsLoading;
+    commandProviderRef.current = commandProvider;
+    suggestionItemsRef.current = suggestionItems;
+    suggestionTypeRef.current = suggestionType;
+    suggestionQueryRef.current = suggestionQuery;
+  }, [
+    commandProvider,
+    cwd,
+    onSlashOpen,
+    sdkSlashCommands,
+    slashSkills,
+    slashSkillsLoading,
+    suggestionItems,
+    suggestionQuery,
+    suggestionType,
+    workflows,
+    workflowsLoading,
+  ]);
 
   // Track the trigger position so we can read the full query (@ to next space/EOL)
   // regardless of caret position
@@ -628,6 +644,17 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     } catch {
       return tiptapQuery;
     }
+  }, []);
+
+  const applySuggestionItems = useCallback((items: SuggestionItem[]) => {
+    const previousItems = suggestionItemsRef.current;
+    const changed =
+      previousItems.length !== items.length ||
+      previousItems.some((item, index) => item.id !== items[index]?.id);
+
+    suggestionItemsRef.current = items;
+    setSuggestionItems(items);
+    if (changed) setSuggestionIndex(0);
   }, []);
 
   // Every trigger (@, /, #, >>) renders the same popup off one shared
@@ -737,13 +764,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
         onUpdate: (props: any) => {
           // Only reset the selected index when items actually change
-          setSuggestionItems((prev) => {
-            const next = props.items as SuggestionItem[];
-            const changed =
-              prev.length !== next.length || prev.some((item, i) => item.id !== next[i]?.id);
-            if (changed) setSuggestionIndex(0);
-            return next;
-          });
+          applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(getFullQuery(props.query ?? ''));
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
@@ -761,19 +782,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     }),
     // Intentionally minimal: cwd/loadSkills accessed via refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [makeSuggestionKeyDown],
+    [applySuggestionItems, makeSuggestionKeyDown],
   );
 
   // ── Slash command suggestion config ──
-  const applySlashSuggestionItems = useCallback((items: SuggestionItem[]) => {
-    setSuggestionItems((prev) => {
-      const changed =
-        prev.length !== items.length || prev.some((item, i) => item.id !== items[i]?.id);
-      if (changed) setSuggestionIndex(0);
-      return items;
-    });
-  }, []);
-
   // Rebuild the open `/` menu whenever the owner's resolved skills, the SDK
   // commands, or the provider change — so a late eager-load, a lazy first
   // fetch, or a model/provider switch is reflected without re-opening the menu.
@@ -781,7 +793,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   useEffect(() => {
     if (suggestionType !== 'slash') return;
     setSuggestionLoading(Boolean(slashSkillsLoading) && (slashSkills?.length ?? 0) === 0);
-    applySlashSuggestionItems(
+    applySuggestionItems(
       buildSlashSuggestionItems({
         skills: slashSkills ?? [],
         sdkCommands: sdkSlashCommands ?? [],
@@ -795,7 +807,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     slashSkillsLoading,
     sdkSlashCommands,
     commandProvider,
-    applySlashSuggestionItems,
+    applySuggestionItems,
   ]);
 
   const slashSuggestion = useCallback(
@@ -847,13 +859,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
         onUpdate: (props: any) => {
           // Only reset the selected index when items actually change
-          setSuggestionItems((prev) => {
-            const next = props.items as SuggestionItem[];
-            const changed =
-              prev.length !== next.length || prev.some((item, i) => item.id !== next[i]?.id);
-            if (changed) setSuggestionIndex(0);
-            return next;
-          });
+          applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(getFullQuery(props.query ?? ''));
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
@@ -868,29 +874,20 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    [getFullQuery, makeSuggestionKeyDown],
+    [applySuggestionItems, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Workflow suggestion config (>> trigger) ──
-  const applyWorkflowSuggestionItems = useCallback((items: SuggestionItem[]) => {
-    setSuggestionItems((prev) => {
-      const changed =
-        prev.length !== items.length || prev.some((item, i) => item.id !== items[i]?.id);
-      if (changed) setSuggestionIndex(0);
-      return items;
-    });
-  }, []);
-
   useEffect(() => {
     if (suggestionType !== 'workflow') return;
     setSuggestionLoading(Boolean(workflowsLoading) && (workflows?.length ?? 0) === 0);
-    applyWorkflowSuggestionItems(
+    applySuggestionItems(
       buildWorkflowSuggestionItems({
         workflows: workflows ?? [],
         query: suggestionQueryRef.current,
       }),
     );
-  }, [suggestionType, workflows, workflowsLoading, applyWorkflowSuggestionItems]);
+  }, [suggestionType, workflows, workflowsLoading, applySuggestionItems]);
 
   const workflowSuggestion = useCallback(
     () => ({
@@ -960,13 +957,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
             return;
           }
           setSuggestionType('workflow');
-          setSuggestionItems((prev) => {
-            const next = props.items as SuggestionItem[];
-            const changed =
-              prev.length !== next.length || prev.some((item, i) => item.id !== next[i]?.id);
-            if (changed) setSuggestionIndex(0);
-            return next;
-          });
+          applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(normalizeWorkflowQuery(fullQuery));
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
@@ -981,7 +972,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         },
       }),
     }),
-    [getFullQuery, makeSuggestionKeyDown],
+    [applySuggestionItems, getFullQuery, makeSuggestionKeyDown],
   );
 
   // ── Symbol suggestion config (# trigger) ──
@@ -1058,13 +1049,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           suggestionCommandRef.current = props.command;
         },
         onUpdate: (props: any) => {
-          setSuggestionItems((prev) => {
-            const next = props.items as SuggestionItem[];
-            const changed =
-              prev.length !== next.length || prev.some((item, i) => item.id !== next[i]?.id);
-            if (changed) setSuggestionIndex(0);
-            return next;
-          });
+          applySuggestionItems(props.items as SuggestionItem[]);
           setSuggestionQuery(getFullQuery(props.query ?? ''));
           setSuggestionRect(() => props.clientRect);
           suggestionCommandRef.current = props.command;
@@ -1081,20 +1066,23 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       }),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [makeSuggestionKeyDown],
+    [applySuggestionItems, makeSuggestionKeyDown],
   );
 
   // ── TipTap editor ──
   const onSubmitRef = useRef(onSubmit);
-  onSubmitRef.current = onSubmit;
   const onCycleModeRef = useRef(onCycleMode);
-  onCycleModeRef.current = onCycleMode;
   const onHistoryNavigateRef = useRef(onHistoryNavigate);
-  onHistoryNavigateRef.current = onHistoryNavigate;
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
   const onFileMentionDropRef = useRef(onFileMentionDrop);
-  onFileMentionDropRef.current = onFileMentionDrop;
+
+  useLayoutEffect(() => {
+    onSubmitRef.current = onSubmit;
+    onCycleModeRef.current = onCycleMode;
+    onHistoryNavigateRef.current = onHistoryNavigate;
+    onChangeRef.current = onChange;
+    onFileMentionDropRef.current = onFileMentionDrop;
+  }, [onChange, onCycleMode, onFileMentionDrop, onHistoryNavigate, onSubmit]);
 
   const editor = useEditor({
     immediatelyRender: true,
@@ -1297,7 +1285,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     },
     editable: !disabled,
   });
-  editorRef.current = editor;
+  useLayoutEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   useEffect(
     () => () => {

@@ -49,14 +49,16 @@ export function useFrozenScroll({
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
 
   const threadIdRef = useRef(threadId);
-  threadIdRef.current = threadId;
   const userHasScrolledUpRef = useRef(false);
   const saveRafRef = useRef<number | null>(null);
 
   // Latest pagination state, read from inside stable observers/listeners so
   // they never close over stale flags.
   const paginationRef = useRef(pagination);
-  paginationRef.current = pagination;
+  useLayoutEffect(() => {
+    threadIdRef.current = threadId;
+    paginationRef.current = pagination;
+  }, [pagination, threadId]);
 
   const updateScrollDownButton = useCallback((viewport: HTMLDivElement) => {
     const hasOverflow = viewport.scrollHeight > viewport.clientHeight + 10;

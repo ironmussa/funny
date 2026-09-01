@@ -172,6 +172,7 @@ export function SidebarDialogs({
                 setRenameProjectState((prev) => (prev ? { ...prev, newName: value } : prev));
               }}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
                 if (e.key === 'Enter') {
                   handleRenameProjectConfirm();
                 }

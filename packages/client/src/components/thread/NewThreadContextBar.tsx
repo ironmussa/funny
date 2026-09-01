@@ -58,15 +58,20 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
   const projectPath = useMemo(() => project?.path ?? '', [project?.path]);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   useEffect(() => {
+    let cancelled = false;
     if (projectPath) {
       (async () => {
         const result = await api.remoteUrl(projectPath);
+        if (cancelled) return;
         if (result.isOk()) setRemoteUrl(result.value.url);
         else setRemoteUrl(null);
       })();
     } else {
       setRemoteUrl(null);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [projectPath]);
 
   return (

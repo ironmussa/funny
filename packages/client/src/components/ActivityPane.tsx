@@ -58,15 +58,10 @@ interface RunningAgent {
 
 /** Only returns active sub-agents (Task tool calls without output). */
 function useRunningAgents(): RunningAgent[] {
-  const prevRef = useRef<RunningAgent[]>([]);
   const messages = useThreadMessages();
 
   const agents = useMemo<RunningAgent[]>(() => {
-    if (!messages) {
-      if (prevRef.current.length === 0) return prevRef.current;
-      prevRef.current = [];
-      return prevRef.current;
-    }
+    if (!messages) return [];
 
     const allToolCalls: {
       id: string;
@@ -97,16 +92,6 @@ function useRunningAgents(): RunningAgent[] {
       }
     }
 
-    const prev = prevRef.current;
-    if (
-      prev.length === running.length &&
-      running.every(
-        (r, i) => r.id === prev[i].id && r.childToolCallCount === prev[i].childToolCallCount,
-      )
-    ) {
-      return prev;
-    }
-    prevRef.current = running;
     return running;
   }, [messages]);
 

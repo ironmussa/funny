@@ -20,6 +20,17 @@ import { useUIStore } from '@/stores/ui-store';
 type SortField = 'updated' | 'created';
 type SortDir = 'desc' | 'asc';
 
+const THREAD_STATUSES: ThreadStatus[] = [
+  'running',
+  'waiting',
+  'completed',
+  'failed',
+  'stopped',
+  'pending',
+  'interrupted',
+];
+const GIT_STATES: GitSyncState[] = ['dirty', 'unpushed', 'pushed', 'merged', 'clean'];
+
 export function AllThreadsView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -308,9 +319,11 @@ export function AllThreadsView() {
     try {
       const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
       await Promise.all(
-        relevantProjects
-          .filter((pid) => (threadsByProject[pid] ?? []).length < (threadTotalByProject[pid] ?? 0))
-          .map((pid) => loadMoreThreads(pid, showArchived)),
+        relevantProjects.flatMap((projectId) =>
+          (threadsByProject[projectId] ?? []).length < (threadTotalByProject[projectId] ?? 0)
+            ? [loadMoreThreads(projectId, showArchived)]
+            : [],
+        ),
       );
     } finally {
       setLoadingMore(false);
@@ -488,17 +501,6 @@ export function AllThreadsView() {
 
   if (!allThreadsProjectId) return null;
 
-  const threadStatuses: ThreadStatus[] = [
-    'running',
-    'waiting',
-    'completed',
-    'failed',
-    'stopped',
-    'pending',
-    'interrupted',
-  ];
-  const gitStates: GitSyncState[] = ['dirty', 'unpushed', 'pushed', 'merged', 'clean'];
-
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
@@ -567,8 +569,8 @@ export function AllThreadsView() {
         typeCounts={typeCounts}
         statusCounts={statusCounts}
         gitCounts={gitCounts}
-        threadStatuses={threadStatuses}
-        gitStates={gitStates}
+        threadStatuses={THREAD_STATUSES}
+        gitStates={GIT_STATES}
         sortField={sortField}
         setSortField={setSortField}
         sortDir={sortDir}

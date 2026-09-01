@@ -68,6 +68,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleSubmitInput();
@@ -136,6 +137,7 @@ export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleSubmitInput();

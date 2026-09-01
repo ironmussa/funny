@@ -95,12 +95,12 @@ export function useMoreActionsMenu() {
     async (name: string) => {
       if (!name || !threadProjectId) return;
       setCreateBranchLoading(true);
-      const result = await api.checkout(threadProjectId, name, 'carry', true, threadId);
-      setCreateBranchLoading(false);
-      if (result.isErr()) {
-        toast.error(String(result.error));
-      } else {
-        setCreateBranchOpen(false);
+      try {
+        const result = await api.checkout(threadProjectId, name, 'carry', true, threadId);
+        if (result.isErr()) toast.error(String(result.error));
+        else setCreateBranchOpen(false);
+      } finally {
+        setCreateBranchLoading(false);
       }
     },
     [threadProjectId, threadId],
@@ -112,24 +112,23 @@ export function useMoreActionsMenu() {
     if (!thread) return;
     const title = thread.title;
     setDeleteLoading(true);
-    if (variant.isScratch(thread)) {
-      await deleteScratchThread(threadId);
-      setDeleteLoading(false);
+    try {
+      if (variant.isScratch(thread)) {
+        await deleteScratchThread(threadId);
+        setDeleteOpen(false);
+        toast.success(t('toast.threadDeleted', { title }));
+        navigate(buildPath('/'));
+        return;
+      }
+      const projId = thread.projectId;
+      if (!projId) return;
+      await useThreadStore.getState().deleteThread(threadId, projId);
       setDeleteOpen(false);
       toast.success(t('toast.threadDeleted', { title }));
-      navigate(buildPath('/'));
-      return;
-    }
-    const projId = thread.projectId;
-    if (!projId) {
+      navigate(buildPath(`/projects/${projId}`));
+    } finally {
       setDeleteLoading(false);
-      return;
     }
-    await useThreadStore.getState().deleteThread(threadId, projId);
-    setDeleteLoading(false);
-    setDeleteOpen(false);
-    toast.success(t('toast.threadDeleted', { title }));
-    navigate(buildPath(`/projects/${projId}`));
   }, [deleteScratchThread, navigate, t, threadId]);
 
   const handleCopy = useCallback(

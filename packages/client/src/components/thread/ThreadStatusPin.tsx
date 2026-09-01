@@ -77,14 +77,20 @@ export function ThreadStatusPin({
     <span className="inline-flex shrink-0 items-center gap-1">
       <span className={cn('relative size-3.5 shrink-0', className)}>
         {showPinRest ? (
-          <span
+          <button
+            type="button"
+            aria-label={t('thread.unpin', 'Unpin thread')}
             className={cn(
-              'absolute inset-0 flex items-center justify-center text-muted-foreground',
+              'absolute inset-0 flex items-center justify-center p-0 text-muted-foreground',
               hideOnHover,
             )}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPin(false);
+            }}
           >
             <Pin className="icon-sm" />
-          </span>
+          </button>
         ) : showUnreadDot ? (
           <span
             className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}
@@ -98,9 +104,13 @@ export function ThreadStatusPin({
           </span>
         )}
         {canPin && (
-          <span
+          <button
+            type="button"
+            aria-label={
+              thread.pinned ? t('thread.unpin', 'Unpin thread') : t('thread.pin', 'Pin thread')
+            }
             className={cn(
-              'absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground',
+              'absolute inset-0 hidden cursor-pointer items-center justify-center p-0 text-muted-foreground hover:text-foreground',
               showOnHover,
             )}
             onClick={(e) => {
@@ -110,7 +120,7 @@ export function ThreadStatusPin({
             data-testid={`thread-pin-toggle-${thread.id}`}
           >
             {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
-          </span>
+          </button>
         )}
       </span>
       <ThreadWatcherIndicator threadId={thread.id} />

@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
@@ -52,7 +52,9 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   // send/stop/permission/tool-respond behave identically across form factors.
   const streamRef = useRef<MessageStreamHandle>(null);
   const activeThreadRef = useRef<ThreadCore | null>(activeThread);
-  activeThreadRef.current = activeThread;
+  useLayoutEffect(() => {
+    activeThreadRef.current = activeThread;
+  }, [activeThread]);
   const sendingRef = useRef(false);
   const { sending, handleSend, handleStop, handlePermissionApproval, handleToolRespond } =
     useThreadHandlers({ activeThreadRef, sendingRef, streamRef });
@@ -75,13 +77,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
 
   // Track which message/tool-call IDs existed when the thread was loaded, so
   // already-present items skip the entrance animation (matches desktop).
-  const knownIdsRef = useRef<Set<string> | null>(null);
-  if (knownIdsRef.current === null) {
-    knownIdsRef.current = new Set();
-  }
-  const prevThreadIdRef = useRef<string | null>(null);
-  if (activeThread?.id && activeThread.id !== prevThreadIdRef.current) {
-    prevThreadIdRef.current = activeThread.id;
+  const knownIds = useMemo(() => {
     const ids = new Set<string>();
     if (stableMessages) {
       for (const m of stableMessages) {
@@ -89,19 +85,16 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
         if (m.toolCalls) for (const tc of m.toolCalls) ids.add(tc.id);
       }
     }
-    knownIdsRef.current = ids;
-  }
+    return ids;
+    // Capture only the messages present when this thread becomes active. New
+    // messages must remain absent so the stream can animate their entrance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeThread?.id]);
 
   const snapshots = useTodoSnapshots();
-  const snapshotMapRef = useRef<Map<string, number> | null>(null);
   const snapshotMap = useMemo(() => {
     const next = new Map<string, number>();
     snapshots.forEach((s, i) => next.set(s.toolCallId, i));
-    const prev = snapshotMapRef.current;
-    if (prev && prev.size === next.size && [...next].every(([k, v]) => prev.get(k) === v)) {
-      return prev;
-    }
-    snapshotMapRef.current = next;
     return next;
   }, [snapshots]);
 
@@ -188,7 +181,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
           pagination={{ hasMore, loadingMore, load: loadOlderMessages, total: totalMessages }}
           createdAt={activeThread.createdAt}
           snapshotMap={snapshotMap}
-          knownIds={knownIdsRef.current}
+          knownIds={knownIds}
           onOpenLightbox={openLightbox}
           prefersReducedMotion={prefersReducedMotion}
           footer={

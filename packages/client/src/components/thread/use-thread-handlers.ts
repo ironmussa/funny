@@ -56,20 +56,23 @@ export function useThreadHandlers(refs: Refs) {
       }
       if (workflowParse.invocation) {
         setSending(true);
-        const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
-          threadId: thread.id,
-          ...buildWorkflowRunBody(workflowParse.invocation, {
-            fileReferences: opts.fileReferences,
-            symbolReferences: opts.symbolReferences,
-          }),
-        });
-        setSending(false);
-        if (result.isErr()) {
-          toast.error(result.error.message);
-          return false;
+        try {
+          const result = await api.runWorkflow(workflowParse.invocation.workflowName, {
+            threadId: thread.id,
+            ...buildWorkflowRunBody(workflowParse.invocation, {
+              fileReferences: opts.fileReferences,
+              symbolReferences: opts.symbolReferences,
+            }),
+          });
+          if (result.isErr()) {
+            toast.error(result.error.message);
+            return false;
+          }
+          toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+          return true;
+        } finally {
+          setSending(false);
         }
-        toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
-        return true;
       }
       const queuedCount = thread.queuedCount ?? 0;
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;
@@ -100,11 +103,14 @@ export function useThreadHandlers(refs: Refs) {
             opts.effort as any,
           );
       }
-      requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
-      const payload = buildSendMessagePayload(opts, toolPermissions);
-      const result = await api.sendMessage(thread.id, prompt, payload, images);
-      handleSendResult(result, thread.id, { rollbackOnQueue: !threadIsRunning }, t);
-      setSending(false);
+      try {
+        requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
+        const payload = buildSendMessagePayload(opts, toolPermissions);
+        const result = await api.sendMessage(thread.id, prompt, payload, images);
+        handleSendResult(result, thread.id, { rollbackOnQueue: !threadIsRunning }, t);
+      } finally {
+        setSending(false);
+      }
     },
     [refs, t],
   );

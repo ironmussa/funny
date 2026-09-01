@@ -180,6 +180,7 @@ export function ThreadListView({
           />
           {pageSizeOptions && onPageSizeChange && (
             <select
+              aria-label={t('archived.pageSize', 'Threads per page')}
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
               className="border-input bg-background text-foreground focus-visible:ring-ring/50 cursor-pointer rounded-md border px-2 py-1.5 text-xs focus-visible:ring-1 focus-visible:outline-hidden"

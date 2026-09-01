@@ -119,7 +119,9 @@ import {
   unregisterSocketIOHandlers,
 } from '@/hooks/ws-event-dispatch';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
+import { getProjectIdForThread } from '@/stores/thread-store-internals';
 
 function captureHandlers() {
   const handlers: Record<string, (e: any) => void> = {};
@@ -139,6 +141,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       threadToBranchKey: {},
       _loadingBranchKeys: new Set(),
     });
+    useProjectStore.setState({ selectedProjectId: null });
   });
 
   afterEach(() => {
@@ -251,6 +254,29 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       dirtyFileCount: 2,
     });
     expect(useGitStatusStore.getState().threadToBranchKey.t1).toBe('p1:main');
+  });
+
+  test('git:refs-updated only refreshes active slices for the matching project', () => {
+    const fetchForThread = vi.fn();
+    const fetchProjectStatus = vi.fn();
+    const fetchForProject = vi.fn();
+    useGitStatusStore.setState({ fetchForThread, fetchProjectStatus, fetchForProject } as any);
+    useThreadStore.setState({ selectedThreadId: 't1' });
+    useProjectStore.setState({ selectedProjectId: 'p1' });
+    vi.mocked(getProjectIdForThread).mockReturnValue('p1');
+    const handler = captureHandlers()['git:refs-updated'];
+
+    handler({ threadId: '', data: { projectId: 'p2' } });
+
+    expect(fetchForThread).not.toHaveBeenCalled();
+    expect(fetchProjectStatus).not.toHaveBeenCalled();
+    expect(fetchForProject).toHaveBeenCalledWith('p2');
+
+    handler({ threadId: '', data: { projectId: 'p1' } });
+
+    expect(fetchForThread).toHaveBeenCalledWith('t1', true);
+    expect(fetchProjectStatus).toHaveBeenCalledWith('p1', true);
+    expect(fetchForProject).toHaveBeenCalledWith('p1');
   });
 
   test('thread:created loads project threads when projectId is present', async () => {

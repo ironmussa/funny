@@ -34,6 +34,7 @@ import { resolveClientLogLevel } from './lib/client-logger';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
 import { useProfileStore } from './stores/profile-store';
+import { useProjectStore } from './stores/project-store';
 import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans/latin.css';
 import '@fontsource/geist-mono/latin.css';
@@ -65,8 +66,14 @@ if (typeof requestIdleCallback === 'function') {
   setTimeout(preloadThreadLayout, 0);
 }
 
-// Lazy-load conditional views to reduce initial bundle (~175KB savings)
-const App = lazy(() => import('./App').then((m) => ({ default: m.App })));
+// Cache the desktop App import so AuthGate can overlap the module graph with
+// its session request instead of starting it only after authentication.
+let appModulePromise: Promise<{ default: typeof import('./App').App }> | undefined;
+function preloadAppModule() {
+  appModulePromise ??= import('./App').then((m) => ({ default: m.App }));
+  return appModulePromise;
+}
+const App = lazy(preloadAppModule);
 const MobilePage = lazy(() =>
   import('./components/MobilePage').then((m) => ({ default: m.MobilePage })),
 );
@@ -119,7 +126,17 @@ function AuthGate() {
 
   useEffect(() => {
     initialize();
+    if (!mobileQuery.matches) void preloadAppModule();
   }, [initialize]);
+
+  // Start the project-name request as soon as auth and the cached setup gate
+  // allow it. Waiting for the lazy App chunk to evaluate and commit delayed
+  // this request by more than a second on a warm local reload (and much more
+  // under CPU pressure). App reuses the same in-flight store promise.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || setupCompleted !== true) return;
+    void useProjectStore.getState().loadProjects();
+  }, [isAuthenticated, isLoading, setupCompleted]);
 
   // Fetch profile from server once authenticated (or in local mode)
   // This loads setup status, settings, and theme in a single request.

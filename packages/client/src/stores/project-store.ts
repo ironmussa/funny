@@ -5,13 +5,11 @@ import { create } from 'zustand';
 
 import { parseRoute } from '@/hooks/route-parser';
 import { projectsApi } from '@/lib/api/projects';
-import { threadsApi } from '@/lib/api/threads';
 import { metric, startSpan } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 
 import { useAuthStore } from './auth-store';
 import {
-  batchUpdateThreads,
   ensureThreadsLoaded,
   clearProjectThreads,
   fetchGitStatusForProject,
@@ -112,10 +110,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (_loadProjectsPromise) return _loadProjectsPromise;
 
     _loadProjectsPromise = (async () => {
-      // Telemetry envelope for the whole load. Each milestone below is recorded
-      // as a gauge in ms-since-t0 so Abbacchio can graph the spread between the
-      // FIRST project's threads landing and the LAST — the progressive publish
-      // (vs. a Promise.all barrier) is exactly what compresses that gap.
+      // Telemetry envelope for the critical startup load. Background work is
+      // deliberately outside this span so it cannot obscure time-to-project-list.
       const loadSpan = startSpan('projects.load');
       const t0 = Date.now();
       try {
@@ -152,81 +148,43 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         metric('projects.count', projects.length, { type: 'gauge' });
         metric('projects.list_ms', Date.now() - t0, { type: 'gauge' });
 
-        // The browser caps concurrent connections per origin (~6), so whatever
-        // we dispatch first wins the sockets. The user's directive: load the
-        // thread that's ON SCREEN first, then everything else. So the active
-        // project (from the URL) is hoisted to the front of the thread-list
-        // fan-out, and git status / branches are deferred to idle (below) so
-        // they don't starve the lists — Abbacchio showed the eager git loop
-        // kicking off ~28 background git.fetch_remote (2s each) that saturated
-        // the runner's git pool and stalled the sidebar lists ~1.5s.
+        // Keep the project from the URL first for the small amount of deferred
+        // per-project work below. Git status and branches stay off the critical
+        // path so the visible thread owns the runner/browser capacity at startup.
         const activeProjectId = parseRoute(
           clientComposition.platform.navigation.current().pathname,
         ).projectId;
-        const ordered =
-          activeProjectId && projects.some((p) => p.id === activeProjectId)
-            ? [
-                ...projects.filter((p) => p.id === activeProjectId),
-                ...projects.filter((p) => p.id !== activeProjectId),
-              ]
-            : projects;
+        const ordered = activeProjectId
+          ? [
+              ...projects.filter((p) => p.id === activeProjectId),
+              ...projects.filter((p) => p.id !== activeProjectId),
+            ]
+          : projects;
 
-        // Load threads for all projects in parallel, but publish each project's
-        // rows as soon as they arrive. A single slow project should not keep
-        // the first visible thread hidden during app refresh.
-        let firstPublished = false;
-        const publishProjectThreads = async (p: Project, dispatchOrder: number) => {
-          // Dispatch instant (relative to t0): all lists are mapped synchronously,
-          // so these should cluster near list_ms. If list_latency_ms is far larger
-          // than the server-side span (~9ms), the delta is time spent waiting in the
-          // browser's per-origin connection queue — i.e. socket starvation, not the
-          // server or the Promise.all barrier.
-          const dispatchMs = Date.now() - t0;
-          metric('projects.list_dispatch_ms', dispatchMs, {
-            type: 'gauge',
-            attributes: { projectId: p.id, dispatchOrder: String(dispatchOrder) },
-          });
-          const fetchStart = Date.now();
-          try {
-            const result = await threadsApi.listThreads(p.id, false, 50);
-            metric('projects.list_latency_ms', Date.now() - fetchStart, {
-              type: 'gauge',
-              attributes: { projectId: p.id, dispatchOrder: String(dispatchOrder) },
-            });
-            const threads = result.isOk() ? result.value.threads : null;
-            batchUpdateThreads([
-              {
-                projectId: p.id,
-                threads,
-                total: result.isOk() ? result.value.total : 0,
-              },
-            ]);
-            const elapsed = Date.now() - t0;
-            // First tree rows on screen — the milestone the progressive
-            // publish advances ahead of the slowest project.
-            if (!firstPublished) {
-              firstPublished = true;
-              metric('projects.first_threads_ms', elapsed, { type: 'gauge' });
+        // A collapsed project only needs its name on screen. Loading 50 threads
+        // for every project at startup caused one request and one global Zustand
+        // publication per project, competing with the initial chat commit. The
+        // active project is needed immediately; persisted expanded projects are
+        // loaded after the first paint. All other projects load when expanded or
+        // selected via toggleProject/selectProject.
+        if (activeProjectId && validIds.has(activeProjectId)) {
+          ensureThreadsLoaded(activeProjectId);
+          metric('projects.first_threads_dispatch_ms', Date.now() - t0, { type: 'gauge' });
+        }
+
+        const loadExpandedProjects = () => {
+          for (const projectId of expanded) {
+            if (projectId !== activeProjectId && validIds.has(projectId)) {
+              ensureThreadsLoaded(projectId);
             }
-            metric('projects.threads_published_ms', elapsed, {
-              type: 'gauge',
-              attributes: {
-                projectId: p.id,
-                threadCount: String(threads?.length ?? 0),
-              },
-            });
-          } catch {
-            // Keep project loading resilient to per-project thread failures.
           }
         };
-        const publishPromises = ordered.map((p, i) => publishProjectThreads(p, i));
-        // Close the load envelope once every project has settled. The gap
-        // between projects.first_threads_ms and projects.all_threads_ms is the
-        // window the fix shrinks perceptually.
-        void Promise.all(publishPromises).then(() => {
-          metric('projects.all_threads_ms', Date.now() - t0, { type: 'gauge' });
-          loadSpan.end('OK');
-        });
+        if (typeof requestIdleCallback === 'function') {
+          requestIdleCallback(loadExpandedProjects, { timeout: 1000 });
+        } else {
+          setTimeout(loadExpandedProjects, 0);
+        }
+        loadSpan.end('OK');
 
         // Git status + branches are NOT on the critical path for showing the
         // sidebar thread rows, and they trigger the runner's expensive remote
@@ -235,7 +193,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         const { expandedProjects, fetchBranch } = get();
         const fireGitStatus = () => {
           for (const p of ordered) {
-            fetchGitStatusForProject(p.id);
+            const isVisibleProject = p.id === activeProjectId || expandedProjects.has(p.id);
+            if (isVisibleProject) {
+              fetchGitStatusForProject(p.id);
+            }
             if (expandedProjects.has(p.id)) {
               fetchBranch(p.id);
             }

@@ -577,12 +577,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         queuedNextMessage,
         compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
       };
-      // Same rationale as the instant-swap above: hydrating the full thread
-      // payload mounts the heavy message list. On a cache miss this is the
-      // spinner→content render. Defer the React commit to a transition so it
-      // doesn't block; the zustand state still updates synchronously, so the
-      // eviction and flushWSBuffer below see the repointed activeThread.
-      startTransition(() => {
+      // Hydrating the full thread payload mounts the heavy message list. When
+      // switching from an existing thread, defer that React commit so the
+      // current content remains responsive. On a cold load there is no useful
+      // content to preserve: publishing at transition priority lets sidebar
+      // updates starve the first chat paint (especially while git badges are
+      // arriving). Publish the initial thread urgently instead.
+      const publishHydratedThread = () => {
         set((state) => {
           const queuePatch =
             queuedCount > 0
@@ -604,7 +605,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
             ...mutations.setThreadData(state, threadId, hydrated),
           };
         });
-      });
+      };
+      if (prevActive) startTransition(publishHydratedThread);
+      else publishHydratedThread();
 
       // Deferred eviction for the `keepStale` path: we skipped it above so the
       // back-fill subscriber wouldn't see `activeThread` pointing at an entry

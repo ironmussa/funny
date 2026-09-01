@@ -5,13 +5,6 @@ import { CenterDockview } from '@/components/CenterDockview';
 import { DockviewLayout, type RightTabSpec } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { OverlayDialogs } from '@/components/OverlayDialogs';
-import {
-  ChangesPanel,
-  GraphPanel,
-  IssuesPanel,
-  PRsPanel,
-  StashPanel,
-} from '@/components/review-pane/panels/ChangesPanel';
 import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStateContext';
 import { RunnerOnboardingBanner } from '@/components/RunnerOnboardingBanner';
 import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
@@ -61,6 +54,7 @@ const ThreadView = lazy(() => threadViewImport);
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
 const DEFAULT_SIDEBAR_WIDTH = 240;
+const RIGHT_PANE_LOADING_FALLBACK = <LoadingState testId="right-pane-loading" label="Loading…" />;
 
 /** Placeholder matching the persisted sidebar width to avoid CLS during lazy load */
 function SidebarPlaceholder() {
@@ -81,6 +75,23 @@ const AllThreadsView = lazy(() =>
 const reviewPaneImport = () =>
   import('@/components/ReviewPane').then((m) => ({ default: m.ReviewPane }));
 const ReviewPane = lazy(reviewPaneImport);
+const ChangesPanel = lazy(() =>
+  import('@/components/review-pane/panels/ChangesPanel').then((m) => ({
+    default: m.ChangesPanel,
+  })),
+);
+const GraphPanel = lazy(() =>
+  import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.GraphPanel })),
+);
+const StashPanel = lazy(() =>
+  import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.StashPanel })),
+);
+const PRsPanel = lazy(() =>
+  import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.PRsPanel })),
+);
+const IssuesPanel = lazy(() =>
+  import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.IssuesPanel })),
+);
 const TestRunnerPane = lazy(() =>
   import('@/components/TestRunnerPane').then((m) => ({ default: m.TestRunnerPane })),
 );
@@ -122,18 +133,6 @@ const ExternalClaudeSessionView = lazy(() =>
     default: m.ExternalClaudeSessionView,
   })),
 );
-// Prefetch ReviewPane on idle so the first review toggle is instant. (The
-// global overlays — command palette, search dialogs, Monaco editor, media
-// preview — and their prefetch now live in OverlayDialogs.)
-if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(() => {
-    reviewPaneImport();
-  });
-} else {
-  setTimeout(() => {
-    reviewPaneImport();
-  }, 3000);
-}
 const BrowserPanel = lazy(() =>
   import('@/components/browser-panel/BrowserPanel').then((m) => ({ default: m.BrowserPanel })),
 );
@@ -142,6 +141,7 @@ export function App() {
   useAppScrollLock();
 
   const loadProjects = useProjectStore((s) => s.loadProjects);
+  const projectsInitialized = useProjectStore((s) => s.initialized);
   const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
@@ -216,16 +216,21 @@ export function App() {
   // Sync URL ↔ store
   useRouteSync();
 
-  // Load projects, agent templates, and scratch threads on mount (auth already initialized by AuthGate)
+  // Project loading normally starts in AuthGate so it overlaps the lazy App
+  // chunk. Keep this fallback for callers that mount App directly.
   useEffect(() => {
-    loadProjects();
+    if (!projectsInitialized) loadProjects();
+  }, [loadProjects, projectsInitialized]);
+
+  // Load the remaining app data on mount (auth already initialized by AuthGate).
+  useEffect(() => {
     loadTemplates();
     loadScratchThreads();
     loadSharedThreads();
     // Load installed visualizer extensions (best-effort; failures are logged
     // and never block the app). Runs after auth since AuthGate gates App.
     void loadInstalledVisualizers();
-  }, [loadProjects, loadTemplates, loadScratchThreads, loadSharedThreads]);
+  }, [loadTemplates, loadScratchThreads, loadSharedThreads]);
 
   useDocumentTitle();
 
@@ -268,39 +273,81 @@ export function App() {
   // is split into native dockview tabs (Changes/History/Stash/PRs/Issues). For the
   // other top-level tabs (files / activity / project-mode), we fall back to a
   // single header-less panel.
-  const useReviewTabs = rightPaneTab === 'review' && (activeThreadCanShowGit || hasSelectedProject);
+  const useReviewTabs =
+    rightPaneVisible && rightPaneTab === 'review' && (activeThreadCanShowGit || hasSelectedProject);
 
   const rightTabs: RightTabSpec[] | undefined = useReviewTabs
     ? [
-        { id: 'changes', title: 'Changes', content: <ChangesPanel /> },
-        { id: 'graph', title: 'History', content: <GraphPanel /> },
-        { id: 'stash', title: 'Stash', content: <StashPanel /> },
-        { id: 'prs', title: 'PRs', content: <PRsPanel /> },
-        { id: 'issues', title: 'Issues', content: <IssuesPanel /> },
+        {
+          id: 'changes',
+          title: 'Changes',
+          content: (
+            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
+              <ChangesPanel />
+            </Suspense>
+          ),
+        },
+        {
+          id: 'graph',
+          title: 'History',
+          content: (
+            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
+              <GraphPanel />
+            </Suspense>
+          ),
+        },
+        {
+          id: 'stash',
+          title: 'Stash',
+          content: (
+            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
+              <StashPanel />
+            </Suspense>
+          ),
+        },
+        {
+          id: 'prs',
+          title: 'PRs',
+          content: (
+            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
+              <PRsPanel />
+            </Suspense>
+          ),
+        },
+        {
+          id: 'issues',
+          title: 'Issues',
+          content: (
+            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
+              <IssuesPanel />
+            </Suspense>
+          ),
+        },
       ]
     : undefined;
 
-  const singleRightPanel = !useReviewTabs ? (
-    <div className="bg-sidebar h-full w-full overflow-hidden">
-      <ErrorBoundary area="right-pane">
-        <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
-          {rightPaneTab === 'comments' ? (
-            // Comments work for any viewable thread (owner or sharee), with or
-            // without git — unlike files, they are not gated on git context.
-            <CommentsPane />
-          ) : rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
-            <ProjectFilesPane />
-          ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
-            // Compose mode (no thread) — activity has nothing to render, so
-            // show the branch-level review instead via tabs at next render.
-            <ReviewPane />
-          ) : (
-            <ActivityPane />
-          )}
-        </Suspense>
-      </ErrorBoundary>
-    </div>
-  ) : undefined;
+  const singleRightPanel =
+    rightPaneVisible && !useReviewTabs ? (
+      <div className="bg-sidebar h-full w-full overflow-hidden">
+        <ErrorBoundary area="right-pane">
+          <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
+            {rightPaneTab === 'comments' ? (
+              // Comments work for any viewable thread (owner or sharee), with or
+              // without git — unlike files, they are not gated on git context.
+              <CommentsPane />
+            ) : rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
+              <ProjectFilesPane />
+            ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
+              // Compose mode (no thread) — activity has nothing to render, so
+              // show the branch-level review instead via tabs at next render.
+              <ReviewPane />
+            ) : (
+              <ActivityPane />
+            )}
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    ) : undefined;
 
   const threadContent = useMemo(
     () => (

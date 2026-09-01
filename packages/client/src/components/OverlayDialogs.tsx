@@ -8,22 +8,18 @@ import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { useUIStore } from '@/stores/ui-store';
 
-// Eagerly start the CommandPalette / FileSearch / TextSearch chunk downloads at
-// module-eval time so Ctrl+K and the search dialogs open instantly.
-// requestIdleCallback was firing too late on busy main threads and the user saw
-// a load delay before the dialog appeared.
-const commandPaletteImport = import('@/components/CommandPalette').then((m) => ({
-  default: m.CommandPalette,
-}));
-const CommandPalette = lazy(() => commandPaletteImport);
-const fileSearchImport = import('@/components/FileSearchDialog').then((m) => ({
-  default: m.FileSearchDialog,
-}));
-const FileSearchDialog = lazy(() => fileSearchImport);
-const textSearchImport = import('@/components/TextSearchDialog').then((m) => ({
-  default: m.TextSearchDialog,
-}));
-const TextSearchDialog = lazy(() => textSearchImport);
+// Keep global overlays out of startup. Starting these imports at module-eval
+// time made an ordinary thread reload fetch hundreds of modules that cannot be
+// used until the user opens a dialog, competing with the sidebar and chat.
+const CommandPalette = lazy(() =>
+  import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+);
+const FileSearchDialog = lazy(() =>
+  import('@/components/FileSearchDialog').then((m) => ({ default: m.FileSearchDialog })),
+);
+const TextSearchDialog = lazy(() =>
+  import('@/components/TextSearchDialog').then((m) => ({ default: m.TextSearchDialog })),
+);
 const CircuitBreakerDialog = lazy(() =>
   import('@/components/CircuitBreakerDialog').then((m) => ({ default: m.CircuitBreakerDialog })),
 );
@@ -40,19 +36,6 @@ const MonacoEditorDialog = lazy(monacoEditorImport);
 const MediaPreviewDialog = lazy(() =>
   import('@/components/MediaPreviewDialog').then((m) => ({ default: m.MediaPreviewDialog })),
 );
-
-// Prefetch Monaco (editor dialog + code view) on idle so the first file-open is
-// instant. Keeps the code-split (Monaco stays out of the main bundle) while
-// removing the on-open download latency.
-if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(() => {
-    monacoEditorImport();
-  });
-} else {
-  setTimeout(() => {
-    monacoEditorImport();
-  }, 3000);
-}
 
 /**
  * Stack of global, lazy-loaded overlays rendered once at the root of App.tsx
@@ -84,36 +67,46 @@ export function OverlayDialogs() {
         <CircuitBreakerDialog />
       </Suspense>
       <Suspense>
-        <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+        {commandPaletteOpen && (
+          <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+        )}
       </Suspense>
       <Suspense>
-        <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
+        {fileSearchOpen && (
+          <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
+        )}
       </Suspense>
       <Suspense>
-        <TextSearchDialog open={textSearchOpen} onOpenChange={setTextSearchOpen} />
+        {textSearchOpen && (
+          <TextSearchDialog open={textSearchOpen} onOpenChange={setTextSearchOpen} />
+        )}
       </Suspense>
 
       {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
       <Suspense>
-        <MonacoEditorDialog
-          open={internalEditorOpen}
-          onOpenChange={(open) => {
-            if (!open) useInternalEditorStore.getState().closeEditor();
-          }}
-          filePath={internalEditorFilePath || ''}
-          initialContent={internalEditorContent}
-        />
+        {internalEditorOpen && (
+          <MonacoEditorDialog
+            open={internalEditorOpen}
+            onOpenChange={(open) => {
+              if (!open) useInternalEditorStore.getState().closeEditor();
+            }}
+            filePath={internalEditorFilePath || ''}
+            initialContent={internalEditorContent}
+          />
+        )}
       </Suspense>
 
       {/* Media preview dialog (image/audio/video/pdf — global, lazy-loaded) */}
       <Suspense>
-        <MediaPreviewDialog
-          open={mediaPreviewOpen}
-          onOpenChange={(open) => {
-            if (!open) useMediaPreviewStore.getState().close();
-          }}
-          filePath={mediaPreviewPath}
-        />
+        {mediaPreviewOpen && (
+          <MediaPreviewDialog
+            open={mediaPreviewOpen}
+            onOpenChange={(open) => {
+              if (!open) useMediaPreviewStore.getState().close();
+            }}
+            filePath={mediaPreviewPath}
+          />
+        )}
       </Suspense>
     </>
   );

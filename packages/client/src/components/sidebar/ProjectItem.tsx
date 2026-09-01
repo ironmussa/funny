@@ -287,8 +287,13 @@ export const ProjectItem = memo(function ProjectItem({
   // Eagerly fetch git status for visible threads that don't have it yet.
   // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.
   useEffect(() => {
+    // Collapsed, inactive projects have no thread rows on screen. Fetching
+    // their status here turns startup into one repository scan per project and
+    // can starve the initial thread render. Expansion/selection will rerun the
+    // effect and populate badges before the rows need them.
+    if (!isExpanded && !isSelected) return;
     useGitStatusStore.getState().ensureStatusForThreads(visibleThreads);
-  }, [visibleThreads]);
+  }, [isExpanded, isSelected, visibleThreads]);
 
   const dragRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);

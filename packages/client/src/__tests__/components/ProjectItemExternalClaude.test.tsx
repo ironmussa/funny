@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ProjectItem } from '@/components/sidebar/ProjectItem';
 import { resetExternalClaudeSessionsForTests } from '@/hooks/use-external-claude-sessions';
 import { api } from '@/lib/api';
+import { useGitStatusStore } from '@/stores/git-status-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -172,6 +173,36 @@ describe('ProjectItem external Claude sessions', () => {
     // Hydration moved to the thread-data machine (covers Activity/direct-URL
     // navigation too) — selection must NOT trigger the import itself.
     expect(api.importExternalClaudeSession).not.toHaveBeenCalled();
+  });
+
+  test('defers git status for collapsed inactive projects until they become visible', async () => {
+    const ensureStatusForThreads = vi.fn();
+    useGitStatusStore.setState({ ensureStatusForThreads } as any);
+    const props = {
+      project,
+      threads: [thread],
+      threadsLoaded: true,
+      isSelected: false,
+      onToggle: vi.fn(),
+      onSelectProject: vi.fn(),
+      onNewThread: vi.fn(),
+      onRenameProject: vi.fn(),
+      onDeleteProject: vi.fn(),
+      onSelectThread: vi.fn(),
+      onRenameThread: vi.fn(),
+      onArchiveThread: vi.fn(),
+      onPinThread: vi.fn(),
+      onDeleteThread: vi.fn(),
+      onShowAllThreads: vi.fn(),
+      onShowIssues: vi.fn(),
+    };
+    const { rerender } = renderWithProviders(<ProjectItem {...props} isExpanded={false} />);
+
+    expect(ensureStatusForThreads).not.toHaveBeenCalled();
+
+    rerender(<ProjectItem {...props} isExpanded />);
+
+    await waitFor(() => expect(ensureStatusForThreads).toHaveBeenCalledWith([thread]));
   });
 
   test('dismisses an external Claude shell before normal delete flow', async () => {

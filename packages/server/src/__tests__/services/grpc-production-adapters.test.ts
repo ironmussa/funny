@@ -458,6 +458,47 @@ describe('production TypeScript runner gRPC adapters', () => {
     });
   });
 
+  test('preserves empty protobuf scalars and propagates persistence failures', async () => {
+    const received: Array<Record<string, any>> = [];
+    fixture = await createProductionGrpcFixture({
+      executeOperation: async (request) => {
+        received.push(request);
+        if (request.type === 'data:insert_message') {
+          return { type: 'data:insert_message_response', messageId: 'message-empty' };
+        }
+        if (request.type === 'data:insert_tool_call') {
+          return { type: 'data:insert_tool_call_response', toolCallId: 'tool-call-1' };
+        }
+        return { type: 'data:ack', success: false, error: 'persistence failed' };
+      },
+    });
+
+    await expect(
+      fixture.transport.request('data:insert_message', {
+        payload: { threadId: 'thread-1', role: 'assistant', content: '' },
+      }),
+    ).resolves.toEqual({ messageId: 'message-empty' });
+    await expect(
+      fixture.transport.request('data:insert_tool_call', {
+        payload: { messageId: 'message-empty', name: 'Bash', input: '{}' },
+      }),
+    ).resolves.toEqual({ toolCallId: 'tool-call-1' });
+    await expect(
+      fixture.transport.request('data:update_thread', {
+        payload: { threadId: 'thread-1', updates: { status: 'running' } },
+      }),
+    ).rejects.toThrow('persistence failed');
+
+    expect(received[0]).toMatchObject({
+      type: 'data:insert_message',
+      payload: { threadId: 'thread-1', role: 'assistant', content: '' },
+    });
+    expect(received[1]).toMatchObject({
+      type: 'data:insert_tool_call',
+      payload: { messageId: 'message-empty', name: 'Bash', input: '{}' },
+    });
+  });
+
   test('confirms an ambiguous commit from the same durable outbox without reapplying it', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'funny-grpc-ambiguous-'));
     const outboxPath = join(directory, 'outbox.db');

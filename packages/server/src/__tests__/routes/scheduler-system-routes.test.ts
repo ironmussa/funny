@@ -41,6 +41,7 @@ import {
 } from '../helpers/test-db.js';
 
 const browserEvents: BrowserEventSink = {
+  publish: () => {},
   toUser: (userId, event) => relayCalls.push({ userId, event }),
   toAll: () => {},
   toThreadStream: () => {},

@@ -1,5 +1,6 @@
 import type {
   BrowserEventSink,
+  BrowserPublication,
   RunnerPresencePort,
   RunnerRequest,
   RunnerRequestPort,
@@ -64,11 +65,19 @@ export class FakeRunnerPresencePort implements RunnerPresencePort {
 }
 
 export class FakeBrowserEventSink implements BrowserEventSink {
+  readonly publications: BrowserPublication[] = [];
   readonly deliveries: Array<{
     target: 'user' | 'all' | 'thread-stream' | 'thread-presence' | 'thread-viewers' | 'evict';
     id?: string;
     event?: Record<string, unknown>;
   }> = [];
+
+  publish(publication: BrowserPublication): void {
+    this.publications.push(publication);
+    const { scope } = publication;
+    const id = 'userId' in scope ? scope.userId : 'threadId' in scope ? scope.threadId : undefined;
+    this.deliveries.push({ target: scope.kind, id, event: publication.legacyEvent });
+  }
 
   toUser(userId: string, event: Record<string, unknown>): void {
     this.deliveries.push({ target: 'user', id: userId, event });

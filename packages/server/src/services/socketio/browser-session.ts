@@ -12,7 +12,7 @@ import type { RunnerRequestPort } from '../runner-ports.js';
 import { rateLimitMiddleware } from './middleware.js';
 import { registerSocketHandlersWithSchema } from './router.js';
 
-function signedRunnerHeaders(userId: string): Record<string, string> {
+export function signedRunnerHeaders(userId: string): Record<string, string> {
   const secret = process.env.RUNNER_AUTH_SECRET;
   if (!secret) throw new Error('RUNNER_AUTH_SECRET is not set');
   const { signature, timestamp, nonce } = signForwardedIdentity(

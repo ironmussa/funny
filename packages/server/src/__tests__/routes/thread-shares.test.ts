@@ -11,6 +11,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
+import { FakeBrowserEventSink } from '../helpers/runner-port-fakes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedProjectMember, seedThread } from '../helpers/test-db.js';
 
@@ -47,13 +48,16 @@ function seedIdentity(t: TestApp) {
 
 describe('Thread sharing (Integration)', () => {
   let t: TestApp;
+  const browserEvents = new FakeBrowserEventSink();
 
   beforeAll(async () => {
-    t = await createTestApp();
+    t = await createTestApp({ browserEvents });
   });
 
   beforeEach(() => {
     t.cleanup();
+    browserEvents.deliveries.length = 0;
+    browserEvents.publications.length = 0;
     t.db.run(sql`DELETE FROM thread_shares`);
     // unified-rbac-grants: shares dual-write resource_grants; clear it too so
     // grants don't leak across tests (hasShare reads both tables).
@@ -78,6 +82,19 @@ describe('Thread sharing (Integration)', () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body).toMatchObject({ threadId: 't1', sharedWithUserId: ANA, sharedByUserId: OWNER });
+    expect(browserEvents.publications).toHaveLength(1);
+    expect(browserEvents.publications[0]).toMatchObject({
+      scope: { kind: 'user', userId: ANA },
+      logicalType: 'thread:share-granted',
+      trafficClass: 'events',
+      delivery: { class: 'snapshot-recoverable' },
+      browserV1: {
+        payload: {
+          case: 'user',
+          value: { eventType: 'thread:share-granted', data: { threadId: 't1' } },
+        },
+      },
+    });
   });
 
   test('re-sharing the same pair is idempotent (200)', async () => {
@@ -144,6 +161,12 @@ describe('Thread sharing (Integration)', () => {
       .requestAs(OWNER, 'user', { orgId: ORG })
       .delete(`/api/threads/t1/shares/${ANA}`);
     expect(del.status).toBe(200);
+    expect(browserEvents.publications.at(-1)).toMatchObject({
+      logicalType: 'thread:share-revoked',
+      browserV1: {
+        payload: { case: 'user', value: { data: { threadId: 't1' } } },
+      },
+    });
 
     expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(404);
   });

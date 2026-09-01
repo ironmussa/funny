@@ -194,6 +194,7 @@ export async function createProductionGrpcFixture(
   const terminalEvents: WSEvent[] = [];
   const events: AcceptedAgentEvent[] = [];
   const browserEvents = options.browserEvents ?? {
+    publish: () => {},
     toUser: () => {},
     toAll: () => {},
     toThreadStream: () => {},

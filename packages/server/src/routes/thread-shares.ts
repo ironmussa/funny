@@ -9,6 +9,9 @@
  * is not captured by the `/:id` pattern.
  */
 
+import { create } from '@bufbuild/protobuf';
+import { DeliveryClass, DeliveryMetadataSchema } from '@funny/shared/browser-v1/common';
+import { ApplicationEventSchema } from '@funny/shared/browser-v1/events';
 import { createThreadShareRepository } from '@funny/shared/repositories';
 import {
   THREAD_SHARE_GRANTED_EVENT,
@@ -33,6 +36,30 @@ const createThreadShareSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
   level: z.unknown().optional(),
 });
+
+function publishShareEvent(
+  sink: ServerEnv['Bindings']['browserEvents'],
+  targetUserId: string,
+  eventType: string,
+  threadId: string,
+): void {
+  sink?.publish({
+    scope: { kind: 'user', userId: targetUserId },
+    logicalType: eventType,
+    trafficClass: 'events',
+    delivery: { class: 'snapshot-recoverable' },
+    legacyEvent: { type: eventType, threadId },
+    browserV1: create(ApplicationEventSchema, {
+      delivery: create(DeliveryMetadataSchema, {
+        deliveryClass: DeliveryClass.SNAPSHOT_RECOVERABLE,
+      }),
+      payload: {
+        case: 'user',
+        value: { eventType, data: { threadId } },
+      },
+    }),
+  });
+}
 
 // GET /api/threads/shared-with-me — threads other users have shared TO the
 // caller. Backs the "Shared with me" nav bucket. Returns only the caller's own
@@ -90,7 +117,7 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   });
   // Push the thread into the target's "Shared with me" bucket live (no reload).
   if (!grant.alreadyExisted) {
-    c.env?.browserEvents?.toUser(targetUserId, { type: THREAD_SHARE_GRANTED_EVENT, threadId: id });
+    publishShareEvent(c.env?.browserEvents, targetUserId, THREAD_SHARE_GRANTED_EVENT, id);
   }
   return c.json(grant, grant.alreadyExisted ? 200 : 201);
 });
@@ -137,7 +164,7 @@ shareRoutes.delete('/:id/shares/:userId', requireThreadOwner, async (c) => {
   // they stop receiving the stream/presence immediately, and tell their client
   // to drop the thread. Access already fails closed on their next HTTP request.
   c.env?.browserEvents?.evictFromThread(targetUserId, id);
-  c.env?.browserEvents?.toUser(targetUserId, { type: THREAD_SHARE_REVOKED_EVENT, threadId: id });
+  publishShareEvent(c.env?.browserEvents, targetUserId, THREAD_SHARE_REVOKED_EVENT, id);
 
   return c.json({ ok: true });
 });

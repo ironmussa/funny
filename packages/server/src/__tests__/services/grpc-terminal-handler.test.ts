@@ -85,7 +85,7 @@ describe('runner gRPC terminal stream', () => {
       {
         type: 'pty:data',
         threadId: '',
-        data: { ptyId: 'pty-1', data: 'ok' },
+        data: { ptyId: 'pty-1', data: 'ok', sequence: 1n },
       },
     ]);
     expect(call.writes.at(-1)?.resume).toEqual({
@@ -119,7 +119,7 @@ describe('runner gRPC terminal stream', () => {
       {
         type: 'pty:data',
         threadId: '',
-        data: { ptyId: 'pty-1', data: '€' },
+        data: { ptyId: 'pty-1', data: '€', sequence: 2n },
       },
     ]);
     sessions.closeAll();

@@ -225,7 +225,11 @@ function toLegacyRequest(
         payload: {
           threadId: value.threadId,
           role: value.role,
-          content: value.content,
+          // Proto3 omits non-optional scalar fields when they contain their
+          // default value. An empty assistant placeholder is valid application
+          // data, so restore the wire default instead of leaking `undefined`
+          // into the persistence boundary.
+          content: value.content ?? '',
           images: value.imagesJson ?? null,
           model: value.model ?? null,
           permissionMode: value.permissionMode ?? null,
@@ -624,11 +628,14 @@ export function createOperationsHandler(
           const operationResult = persistentMutation ? (result as any).outcome : result;
           if (!sessions.isActive(context.principal.runnerId, epoch)) {
             sendFailure(FailureCode.UNAVAILABLE, 'runner session was superseded', true);
-          } else if (
-            (operationResult as any)?.success === false &&
-            (operationResult as any)?.error === 'Forbidden'
-          ) {
-            sendFailure(FailureCode.PERMISSION_DENIED, 'operation is not authorized');
+          } else if ((operationResult as any)?.success === false) {
+            const operationError = String(
+              (operationResult as any)?.error ?? 'runner operation failed',
+            );
+            sendFailure(
+              operationError === 'Forbidden' ? FailureCode.PERMISSION_DENIED : FailureCode.INTERNAL,
+              operationError === 'Forbidden' ? 'operation is not authorized' : operationError,
+            );
           } else if (
             ((operationResult as any)?.type?.startsWith('data:get_thread') &&
               !(operationResult as any).thread) ||

@@ -7,6 +7,15 @@ import { setupBrowserPtyListRpc } from './browser-pty-list.js';
 import { setupBrowserPtyHandlers } from './browser-pty.js';
 import type { BrowserPtyDependencies } from './browser-pty.js';
 import { setupBrowserSessionHandlers } from './browser-session.js';
+import { setupBrowserV1Events } from './browser-v1-events.js';
+import { setupBrowserV1Interactive } from './browser-v1-interactive.js';
+import { setupBrowserV1Negotiation } from './browser-v1-negotiation.js';
+import { setupBrowserV1Operations } from './browser-v1-operations.js';
+import {
+  BrowserV1RolloutPolicy,
+  browserV1RolloutPolicyFromEnvironment,
+} from './browser-v1-rollout.js';
+import { setupBrowserV1SessionGuard } from './browser-v1-session-guard.js';
 import { isAllowedBrowserOrigin } from './origin.js';
 import { allowedOrigins, authInstance, getIO } from './state.js';
 import { setupThreadPresenceHandlers } from './thread-presence.js';
@@ -15,11 +24,13 @@ export interface BrowserNamespaceDependencies extends Omit<BrowserPtyDependencie
   presence?: RunnerPresencePort;
   requests?: RunnerRequestPort;
   terminals?: RunnerTerminalPort;
+  browserV1Rollout?: BrowserV1RolloutPolicy;
 }
 
 export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies): void {
   const io = getIO();
   const browserNsp = io.of('/');
+  const browserV1Rollout = dependencies.browserV1Rollout ?? browserV1RolloutPolicyFromEnvironment();
 
   browserNsp.use(async (socket, next) => {
     try {
@@ -75,6 +86,13 @@ export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies
     setupBrowserPtyListRpc(socket, userId, dependencies);
     setupBrowserSessionHandlers(socket, userId, dependencies);
     setupThreadPresenceHandlers(socket, userId);
+    setupBrowserV1Negotiation(socket, userId, browserV1Rollout);
+    setupBrowserV1Operations(socket, userId, dependencies);
+    setupBrowserV1Events(socket, userId);
+    setupBrowserV1Interactive(socket, userId, dependencies);
+    setupBrowserV1SessionGuard(socket, userId, {
+      getSession: (headers) => authInstance.api.getSession({ headers }),
+    });
 
     socket.on('disconnect', (reason) => {
       clearSocketRate(socket.id);

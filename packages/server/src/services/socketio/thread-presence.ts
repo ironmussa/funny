@@ -31,6 +31,7 @@ interface Viewer {
 
 /** threadId → (socketId → Viewer). Module-level live presence roster. */
 const presenceByThread = new Map<string, Map<string, Viewer>>();
+const presenceRevisionByThread = new Map<string, bigint>();
 
 function rosterFor(threadId: string): Viewer[] {
   return Array.from(presenceByThread.get(threadId)?.values() ?? []);
@@ -39,12 +40,19 @@ function rosterFor(threadId: string): Viewer[] {
 /** Test-only: clear the module-level presence roster between cases. */
 export function __resetPresenceForTests(): void {
   presenceByThread.clear();
+  presenceRevisionByThread.clear();
+}
+
+function advancePresenceRevision(threadId: string): bigint {
+  const revision = (presenceRevisionByThread.get(threadId) ?? 0n) + 1n;
+  presenceRevisionByThread.set(threadId, revision);
+  return revision;
 }
 
 /** Remove a socket from a thread's roster + rooms and announce the departure. */
-function leaveThread(socket: Socket, threadId: string): void {
+export function closeThreadForSocket(socket: Socket, threadId: string): bigint {
   const roster = presenceByThread.get(threadId);
-  if (!roster || !roster.has(socket.id)) return;
+  if (!roster || !roster.has(socket.id)) return presenceRevisionByThread.get(threadId) ?? 0n;
   roster.delete(socket.id);
   if (roster.size === 0) presenceByThread.delete(threadId);
 
@@ -56,6 +64,43 @@ function leaveThread(socket: Socket, threadId: string): void {
 
   const open = socket.data.openThreads as Set<string> | undefined;
   open?.delete(threadId);
+  return advancePresenceRevision(threadId);
+}
+
+export async function openThreadForSocket(
+  socket: Socket,
+  userId: string,
+  threadId: string,
+): Promise<{ authorized: boolean; revision: bigint }> {
+  if (!(await canUserViewThread(threadId, userId))) {
+    log.warn('Rejected thread open — no view access', {
+      namespace: 'socketio',
+      userId,
+      threadId,
+    });
+    return { authorized: false, revision: presenceRevisionByThread.get(threadId) ?? 0n };
+  }
+
+  const openThreads: Set<string> = (socket.data.openThreads ??= new Set<string>());
+  if (openThreads.has(threadId)) {
+    return { authorized: true, revision: presenceRevisionByThread.get(threadId) ?? 0n };
+  }
+  const display = (await getUserDisplay(userId)) ?? { id: userId, name: userId, image: null };
+  const viewer: Viewer = { clientId: socket.id, user: display };
+
+  socket.join(threadPresenceRoom(threadId));
+  if (!(await isThreadOwnedBy(threadId, userId))) socket.join(threadStreamRoom(threadId));
+
+  let roster = presenceByThread.get(threadId);
+  if (!roster) {
+    roster = new Map();
+    presenceByThread.set(threadId, roster);
+  }
+  socket.emit(PRESENCE_SYNC_EVENT, { threadId, viewers: rosterFor(threadId) });
+  roster.set(socket.id, viewer);
+  openThreads.add(threadId);
+  socket.to(threadPresenceRoom(threadId)).emit(PRESENCE_JOIN_EVENT, { threadId, viewer });
+  return { authorized: true, revision: advancePresenceRevision(threadId) };
 }
 
 export function setupThreadPresenceHandlers(socket: Socket, userId: string): void {
@@ -67,49 +112,18 @@ export function setupThreadPresenceHandlers(socket: Socket, userId: string): voi
     if (!parsed.success) return;
     const { threadId } = parsed.data;
 
-    // Gate: only the owner or a current sharee may join. A denied open is
-    // silent — the caller simply never receives presence/stream for the thread.
-    if (!(await canUserViewThread(threadId, userId))) {
-      log.warn('Rejected thread:open — no view access', {
-        namespace: 'socketio',
-        userId,
-        threadId,
-      });
-      return;
-    }
-
-    const display = (await getUserDisplay(userId)) ?? { id: userId, name: userId, image: null };
-    const viewer: Viewer = { clientId: socket.id, user: display };
-
-    socket.join(threadPresenceRoom(threadId));
-    // Sharees join the stream room to receive the mirrored agent stream; the
-    // owner does NOT (they get it via `user:` already — avoids double delivery).
-    if (!(await isThreadOwnedBy(threadId, userId))) {
-      socket.join(threadStreamRoom(threadId));
-    }
-
-    let roster = presenceByThread.get(threadId);
-    if (!roster) {
-      roster = new Map();
-      presenceByThread.set(threadId, roster);
-    }
-    // Send the current roster to the joining socket BEFORE adding itself, then
-    // announce the join to everyone else.
-    socket.emit(PRESENCE_SYNC_EVENT, { threadId, viewers: rosterFor(threadId) });
-    roster.set(socket.id, viewer);
-    openThreads.add(threadId);
-    socket.to(threadPresenceRoom(threadId)).emit(PRESENCE_JOIN_EVENT, { threadId, viewer });
+    await openThreadForSocket(socket, userId, threadId);
   });
 
   socket.on(THREAD_CLOSE_EVENT, (raw: unknown) => {
     const parsed = threadOpenSchema.safeParse(raw);
     if (!parsed.success) return;
-    leaveThread(socket, parsed.data.threadId);
+    closeThreadForSocket(socket, parsed.data.threadId);
   });
 
   socket.on('disconnect', () => {
     for (const threadId of Array.from(openThreads)) {
-      leaveThread(socket, threadId);
+      closeThreadForSocket(socket, threadId);
     }
   });
 }

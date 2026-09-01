@@ -150,6 +150,9 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
       case 'pty:signal':
         this.write(stream, terminalId, { signal: { signal: event.data.signal ?? '' } });
         return;
+      case 'pty:rename':
+        state.label = typeof event.data.label === 'string' ? event.data.label : state.label;
+        return;
       case 'pty:close':
       case 'pty:kill':
         this.pendingResizes.delete(key);
@@ -269,7 +272,7 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
     this.relayToUser(state.userId, {
       type: 'pty:data',
       threadId: '',
-      data: { ptyId: terminalId, data },
+      data: { ptyId: terminalId, data, sequence: state.lastOutputSequence },
     });
   }
 

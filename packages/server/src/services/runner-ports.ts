@@ -39,6 +39,7 @@ export type RunnerTerminalEvent =
   | { type: 'pty:resize'; data: Record<string, any> }
   | { type: 'pty:close' | 'pty:kill'; data: Record<string, any> }
   | { type: 'pty:signal'; data: Record<string, any> }
+  | { type: 'pty:rename'; data: Record<string, any> }
   | { type: 'pty:reconnect' | 'pty:restore'; data: Record<string, any> };
 
 export interface RunnerTerminalPort {
@@ -54,7 +55,38 @@ export interface RunnerPresencePort {
   availableRunnerCount(): number;
 }
 
+export type BrowserPublicationScope =
+  | { kind: 'user'; userId: string }
+  | { kind: 'all' }
+  | { kind: 'thread-stream'; threadId: string }
+  | { kind: 'thread-presence'; threadId: string }
+  | { kind: 'thread-viewers'; threadId: string };
+
+export type BrowserDeliveryClass =
+  | 'durable'
+  | 'snapshot-recoverable'
+  | 'coalescible'
+  | 'volatile'
+  | 'at-most-once';
+
+export interface BrowserPublication {
+  scope: BrowserPublicationScope;
+  logicalType: string;
+  trafficClass: 'operations' | 'events' | 'terminal' | 'browserSession';
+  delivery: {
+    class: BrowserDeliveryClass;
+    priority?: number;
+    coalescingKey?: string;
+  };
+  legacyEvent: Record<string, unknown>;
+  /** Pre-authorized application envelope. Omitted while a domain remains legacy-only. */
+  browserV1?: import('@funny/shared/browser-v1/events').ApplicationEvent;
+  /** Pre-authorized interactive envelope for terminal or browser-session traffic. */
+  browserV1Interactive?: import('@funny/shared/browser-v1/interactive').InteractiveEnvelope;
+}
+
 export interface BrowserEventSink {
+  publish(publication: BrowserPublication): void;
   toUser(userId: string, event: Record<string, unknown>): void;
   toAll(event: Record<string, unknown>): void;
   toThreadStream(threadId: string, event: Record<string, unknown>): void;

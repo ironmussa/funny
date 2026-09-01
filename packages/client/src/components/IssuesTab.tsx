@@ -71,26 +71,25 @@ export function IssuesTab({ visible }: IssuesTabProps) {
       setLoading(true);
       setError(null);
 
-      const result = await api.githubIssuesEnriched(projectId, {
-        state,
-        page: pageNum,
-        per_page: 30,
-      });
-
-      if (result.isOk()) {
-        const data = result.value;
-        setIssues((prev) => (append ? [...prev, ...data.issues] : data.issues));
-        setHasMore(data.hasMore);
-        setRepoInfo({ owner: data.owner, repo: data.repo });
-      } else {
-        log.error('failed to load issues', {
-          projectId,
+      try {
+        const result = await api.githubIssuesEnriched(projectId, {
           state,
-          error: result.error.message,
+          page: pageNum,
+          per_page: 30,
         });
-        setError(result.error.message || t('issues.error', 'Failed to load issues'));
+
+        if (result.isOk()) {
+          const data = result.value;
+          setIssues((prev) => (append ? [...prev, ...data.issues] : data.issues));
+          setHasMore(data.hasMore);
+          setRepoInfo({ owner: data.owner, repo: data.repo });
+        } else {
+          log.error('failed to load issues', { projectId, state, error: result.error.message });
+          setError(result.error.message || t('issues.error', 'Failed to load issues'));
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     },
     [projectId, state, t],
   );
@@ -187,6 +186,7 @@ export function IssuesTab({ visible }: IssuesTabProps) {
                   href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={t('review.issues.openOnGithub', 'Open issues on GitHub')}
                 >
                   <ExternalLink className="icon-base" />
                 </a>

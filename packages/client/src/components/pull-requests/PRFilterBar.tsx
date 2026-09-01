@@ -137,39 +137,46 @@ function MultiSelect({
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
-              {options.map((opt) => {
-                const isActive = selected.includes(opt.value);
-                return (
-                  <CommandItem
-                    key={opt.value}
-                    value={opt.label}
-                    onSelect={() => toggle(opt.value)}
-                    className="text-xs"
-                    data-testid={`${testId}-option-${opt.value}`}
-                  >
-                    <span
-                      className={cn(
-                        'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
-                        isActive
-                          ? 'bg-primary border-primary text-primary-foreground'
-                          : 'border-muted-foreground/30',
-                      )}
+              {(() => {
+                const selectedValues = new Set(selected);
+                return options.map((opt) => {
+                  const isActive = selectedValues.has(opt.value);
+                  return (
+                    <CommandItem
+                      key={opt.value}
+                      value={opt.label}
+                      onSelect={() => toggle(opt.value)}
+                      className="text-xs"
+                      data-testid={`${testId}-option-${opt.value}`}
                     >
-                      {isActive && <Check className="icon-2xs" />}
-                    </span>
-                    {opt.color !== undefined && (
                       <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: `#${opt.color}` }}
-                      />
-                    )}
-                    {opt.avatarUrl && (
-                      <img src={opt.avatarUrl} alt="" className="size-3.5 shrink-0 rounded-full" />
-                    )}
-                    <span className="flex-1 truncate">{opt.label}</span>
-                  </CommandItem>
-                );
-              })}
+                        className={cn(
+                          'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
+                          isActive
+                            ? 'bg-primary border-primary text-primary-foreground'
+                            : 'border-muted-foreground/30',
+                        )}
+                      >
+                        {isActive && <Check className="icon-2xs" />}
+                      </span>
+                      {opt.color !== undefined && (
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: `#${opt.color}` }}
+                        />
+                      )}
+                      {opt.avatarUrl && (
+                        <img
+                          src={opt.avatarUrl}
+                          alt=""
+                          className="size-3.5 shrink-0 rounded-full"
+                        />
+                      )}
+                      <span className="flex-1 truncate">{opt.label}</span>
+                    </CommandItem>
+                  );
+                });
+              })()}
             </CommandGroup>
           </CommandList>
         </Command>

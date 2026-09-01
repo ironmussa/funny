@@ -37,13 +37,9 @@ const LABEL_KEYS: Record<string, string> = {
 export function StageDistributionChart({ data }: Props) {
   const { t } = useTranslation();
 
-  const chartData = Object.entries(data)
-    .map(([stage, value]) => ({
-      name: t(LABEL_KEYS[stage] ?? stage),
-      value,
-      stage,
-    }))
-    .filter((item) => item.value > 0);
+  const chartData = Object.entries(data).flatMap(([stage, value]) =>
+    value > 0 ? [{ name: t(LABEL_KEYS[stage] ?? stage), value, stage }] : [],
+  );
 
   if (chartData.length === 0) {
     return (
@@ -93,7 +89,7 @@ export function StageDistributionChart({ data }: Props) {
               </div>
               <div className="bg-muted mt-1 h-1.5 overflow-hidden rounded-full">
                 <div
-                  className="h-full rounded-full transition-all"
+                  className="h-full rounded-full transition-[width,background-color]"
                   style={{
                     width: `${(entry.value / total) * 100}%`,
                     backgroundColor: COLORS[entry.stage],

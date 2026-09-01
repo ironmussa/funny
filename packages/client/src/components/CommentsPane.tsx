@@ -60,9 +60,12 @@ export function CommentsPane() {
   const submit = async () => {
     if (!canSend || !threadId) return;
     setSending(true);
-    const ok = await post(threadId, draft);
-    setSending(false);
-    if (ok) setDraft('');
+    try {
+      const ok = await post(threadId, draft);
+      if (ok) setDraft('');
+    } finally {
+      setSending(false);
+    }
   };
 
   const header = useMemo(
@@ -150,6 +153,7 @@ export function CommentsPane() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 void submit();

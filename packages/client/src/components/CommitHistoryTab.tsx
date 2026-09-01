@@ -150,40 +150,33 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       loadingRef.current = true;
       setLogLoading(true);
       const signal = abortRef.current?.signal;
-      const result = effectiveThreadId
-        ? await api.getGitLog(effectiveThreadId, PAGE_SIZE, true, skip, signal)
-        : await api.projectGitLog(projectModeId!, PAGE_SIZE, skip, signal);
-      if (signal?.aborted) {
-        loadingRef.current = false;
-        return;
-      }
-      if (result.isOk()) {
-        const { entries, hasMore: more, unpushedHashes: hashes } = result.value;
-        loadedLogSkipRef.current = append ? skip + entries.length : entries.length;
-        setLogEntries((prev) =>
-          append ? mergeLogEntriesByHash(prev, entries) : uniqueLogEntriesByHash(entries),
-        );
-        setHasMore(more);
-        if (hashes) {
-          setUnpushedHashes((prev) => {
-            if (!append) return new Set(hashes);
-            const next = new Set(prev);
-            for (const h of hashes) next.add(h);
-            return next;
-          });
-        } else if (!append) {
-          setUnpushedHashes(new Set());
+      try {
+        const result = effectiveThreadId
+          ? await api.getGitLog(effectiveThreadId, PAGE_SIZE, true, skip, signal)
+          : await api.projectGitLog(projectModeId!, PAGE_SIZE, skip, signal);
+        if (signal?.aborted) return;
+        if (result.isOk()) {
+          const { entries, hasMore: more, unpushedHashes: hashes } = result.value;
+          loadedLogSkipRef.current = append ? skip + entries.length : entries.length;
+          setLogEntries((prev) =>
+            append ? mergeLogEntriesByHash(prev, entries) : uniqueLogEntriesByHash(entries),
+          );
+          setHasMore(more);
+          if (hashes) {
+            setUnpushedHashes((prev) => (append ? new Set([...prev, ...hashes]) : new Set(hashes)));
+          } else if (!append) setUnpushedHashes(new Set());
+        } else if (!signal?.aborted && result.error.message !== 'Request aborted') {
+          toast.error(
+            t('review.logFailed', {
+              message: result.error.message,
+              defaultValue: `Failed to load log: ${result.error.message}`,
+            }),
+          );
         }
-      } else if (!signal?.aborted && result.error.message !== 'Request aborted') {
-        toast.error(
-          t('review.logFailed', {
-            message: result.error.message,
-            defaultValue: `Failed to load log: ${result.error.message}`,
-          }),
-        );
+      } finally {
+        setLogLoading(false);
+        loadingRef.current = false;
       }
-      setLogLoading(false);
-      loadingRef.current = false;
     },
     [hasGitContext, effectiveThreadId, projectModeId, t],
   );

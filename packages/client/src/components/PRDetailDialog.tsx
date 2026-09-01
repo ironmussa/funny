@@ -349,6 +349,7 @@ export function PRDetailDialog({
   // Fetch data when dialog opens
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     void usePRDetailStore.getState().fetchPRDetail(projectId, prNumber);
     setError(null);
     setSelectedFile(null);
@@ -359,32 +360,37 @@ export function PRDetailDialog({
     const loadData = async () => {
       setLoadingFiles(true);
       setLoadingCommits(true);
+      try {
+        const [filesResult, commitsResult] = await Promise.all([
+          api.githubPRFiles(projectId, prNumber),
+          api.githubPRCommits(projectId, prNumber),
+        ]);
+        if (cancelled) return;
 
-      const [filesResult, commitsResult] = await Promise.all([
-        api.githubPRFiles(projectId, prNumber),
-        api.githubPRCommits(projectId, prNumber),
-      ]);
-
-      if (filesResult.isOk()) {
-        setFiles(filesResult.value.files);
-        if (filesResult.value.files.length > 0) {
-          setSelectedFile(filesResult.value.files[0].filename);
+        if (filesResult.isOk()) {
+          setFiles(filesResult.value.files);
+          if (filesResult.value.files.length > 0) {
+            setSelectedFile(filesResult.value.files[0].filename);
+          }
+        } else {
+          log.error('Failed to fetch PR files', { error: filesResult.error });
+          setError(filesResult.error.message || 'Failed to load PR files');
         }
-      } else {
-        log.error('Failed to fetch PR files', { error: filesResult.error });
-        setError(filesResult.error.message || 'Failed to load PR files');
-      }
-      setLoadingFiles(false);
 
-      if (commitsResult.isOk()) {
-        setCommits(commitsResult.value.commits);
-      } else {
-        log.error('Failed to fetch PR commits', { error: commitsResult.error });
+        if (commitsResult.isOk()) setCommits(commitsResult.value.commits);
+        else log.error('Failed to fetch PR commits', { error: commitsResult.error });
+      } finally {
+        if (!cancelled) {
+          setLoadingFiles(false);
+          setLoadingCommits(false);
+        }
       }
-      setLoadingCommits(false);
     };
 
     loadData();
+    return () => {
+      cancelled = true;
+    };
   }, [open, projectId, prNumber]);
 
   // Fetch files for a specific commit

@@ -132,19 +132,20 @@ export function PublishRepoDialog({
     }
     setSavingRemote(true);
     setRemoteError(null);
+    try {
+      const result = await api.projectSetRemoteUrl(projectId, trimmed);
+      if (result.isErr()) {
+        const msg = String((result.error as { message?: string })?.message ?? result.error);
+        log.warn('publish.remote.failed', { projectId, error: msg });
+        setRemoteError(msg);
+        return;
+      }
 
-    const result = await api.projectSetRemoteUrl(projectId, trimmed);
-    setSavingRemote(false);
-
-    if (result.isErr()) {
-      const msg = String((result.error as { message?: string })?.message ?? result.error);
-      log.warn('publish.remote.failed', { projectId, error: msg });
-      setRemoteError(msg);
-      return;
+      log.info('publish.remote.success', { projectId });
+      onSuccess(trimmed);
+    } finally {
+      setSavingRemote(false);
     }
-
-    log.info('publish.remote.success', { projectId });
-    onSuccess(trimmed);
   }, [projectId, remoteUrl, onSuccess]);
 
   const remoteValid = REMOTE_URL_PATTERN.test(remoteUrl.trim());
@@ -175,13 +176,15 @@ export function PublishRepoDialog({
           <TabsContent value="github" className="mt-4">
             <div className="grid gap-4">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Owner</label>
+                <label htmlFor="publish-repo-owner" className="text-sm font-medium">
+                  Owner
+                </label>
                 <Select
                   value={selectedOrg}
                   onValueChange={setSelectedOrg}
                   disabled={orgsLoading || publishing}
                 >
-                  <SelectTrigger data-testid="publish-repo-owner">
+                  <SelectTrigger id="publish-repo-owner" data-testid="publish-repo-owner">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -196,8 +199,11 @@ export function PublishRepoDialog({
               </div>
 
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Repository name</label>
+                <label htmlFor="publish-repo-name" className="text-sm font-medium">
+                  Repository name
+                </label>
                 <Input
+                  id="publish-repo-name"
                   data-testid="publish-repo-name"
                   value={repoName}
                   onChange={(e) => setRepoName(e.target.value)}
@@ -208,10 +214,11 @@ export function PublishRepoDialog({
               </div>
 
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium">
+                <label htmlFor="publish-repo-description" className="text-sm font-medium">
                   Description <span className="text-muted-foreground font-normal">(optional)</span>
                 </label>
                 <Input
+                  id="publish-repo-description"
                   data-testid="publish-repo-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -254,8 +261,11 @@ export function PublishRepoDialog({
           <TabsContent value="remote" className="mt-4">
             <div className="grid gap-4">
               <div className="grid gap-1.5">
-                <label className="text-sm font-medium">Remote URL</label>
+                <label htmlFor="publish-remote-url" className="text-sm font-medium">
+                  Remote URL
+                </label>
                 <Input
+                  id="publish-remote-url"
                   data-testid="publish-remote-url"
                   value={remoteUrl}
                   onChange={(e) => setRemoteUrl(e.target.value)}

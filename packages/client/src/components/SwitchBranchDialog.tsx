@@ -23,6 +23,9 @@ export interface SwitchBranchDialogProps {
   onCancel: () => void;
 }
 
+const truncateBranch = (value: string, max = 40) =>
+  value.length > max ? `${value.slice(0, max)}\u2026` : value;
+
 export function SwitchBranchDialog({
   open,
   onOpenChange,
@@ -34,8 +37,6 @@ export function SwitchBranchDialog({
 }: SwitchBranchDialogProps) {
   const { t } = useTranslation();
   const [strategy, setStrategy] = useState<'stash' | 'carry'>('stash');
-
-  const truncate = (s: string, max = 40) => (s.length > max ? s.slice(0, max) + '\u2026' : s);
 
   return (
     <Dialog
@@ -53,8 +54,8 @@ export function SwitchBranchDialog({
           </DialogTitle>
           <DialogDescription>
             {t('switchBranch.description', {
-              branch: truncate(currentBranch),
-              defaultValue: `You have changes on ${truncate(currentBranch)}. What would you like to do with them?`,
+              branch: truncateBranch(currentBranch),
+              defaultValue: `You have changes on ${truncateBranch(currentBranch)}. What would you like to do with them?`,
             })}
           </DialogDescription>
         </DialogHeader>
@@ -76,8 +77,8 @@ export function SwitchBranchDialog({
           >
             <p className="text-foreground text-sm font-medium">
               {t('switchBranch.leaveChanges', {
-                branch: truncate(currentBranch),
-                defaultValue: `Leave my changes on ${truncate(currentBranch)}`,
+                branch: truncateBranch(currentBranch),
+                defaultValue: `Leave my changes on ${truncateBranch(currentBranch)}`,
               })}
             </p>
             <p className="text-muted-foreground mt-1.5 text-xs">
@@ -104,8 +105,8 @@ export function SwitchBranchDialog({
           >
             <p className="text-foreground text-sm font-medium">
               {t('switchBranch.bringChanges', {
-                branch: truncate(targetBranch),
-                defaultValue: `Bring my changes to ${truncate(targetBranch)}`,
+                branch: truncateBranch(targetBranch),
+                defaultValue: `Bring my changes to ${truncateBranch(targetBranch)}`,
               })}
             </p>
             <p className="text-muted-foreground mt-1.5 text-xs">

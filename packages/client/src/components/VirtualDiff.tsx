@@ -119,9 +119,9 @@ export const VirtualDiff = memo(function VirtualDiff({
     let cancelled = false;
     ensurePretextLoaded().then(() => {
       if (cancelled) return;
-      const toPrepare = parsed.lines
-        .map((l) => l.text)
-        .filter((t) => t.length > 0 && !getCachedPrepared(t, monoFont));
+      const toPrepare = parsed.lines.flatMap(({ text }) =>
+        text.length > 0 && !getCachedPrepared(text, monoFont) ? [text] : [],
+      );
       // Deduplicate
       const unique = [...new Set(toPrepare)];
       if (unique.length > 0) {

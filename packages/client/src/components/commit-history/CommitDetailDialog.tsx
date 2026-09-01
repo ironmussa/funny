@@ -148,43 +148,45 @@ export function CommitDetailDialog({
     setCommitBody(selectedCommit?.body.trim() || null);
     setFileSearch('');
     (async () => {
-      const [filesResult, bodyResult] = await Promise.all([
-        effectiveThreadId
-          ? api.getCommitFiles(effectiveThreadId, selectedHash)
-          : api.projectCommitFiles(projectModeId!, selectedHash),
-        effectiveThreadId
-          ? api.getCommitBody(effectiveThreadId, selectedHash)
-          : api.projectCommitBody(projectModeId!, selectedHash),
-      ]);
-      if (cancelled) return;
-      if (filesResult.isOk()) {
-        setCommitFiles(filesResult.value.files);
-        if (filesResult.value.files.length > 0) {
-          const firstPath = filesResult.value.files[0].path;
-          setExpandedFile(firstPath);
-          setDiffLoading(true);
-          setDiffContent(null);
-          const diffResult = effectiveThreadId
-            ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, firstPath)
-            : await api.projectCommitFileDiff(projectModeId!, selectedHash, firstPath);
-          if (!cancelled && diffResult.isOk()) {
-            setDiffContent(diffResult.value.diff);
+      try {
+        const [filesResult, bodyResult] = await Promise.all([
+          effectiveThreadId
+            ? api.getCommitFiles(effectiveThreadId, selectedHash)
+            : api.projectCommitFiles(projectModeId!, selectedHash),
+          effectiveThreadId
+            ? api.getCommitBody(effectiveThreadId, selectedHash)
+            : api.projectCommitBody(projectModeId!, selectedHash),
+        ]);
+        if (cancelled) return;
+        if (filesResult.isOk()) {
+          setCommitFiles(filesResult.value.files);
+          if (filesResult.value.files.length > 0) {
+            const firstPath = filesResult.value.files[0].path;
+            setExpandedFile(firstPath);
+            setDiffLoading(true);
+            setDiffContent(null);
+            try {
+              const diffResult = effectiveThreadId
+                ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, firstPath)
+                : await api.projectCommitFileDiff(projectModeId!, selectedHash, firstPath);
+              if (!cancelled && diffResult.isOk()) setDiffContent(diffResult.value.diff);
+            } finally {
+              if (!cancelled) setDiffLoading(false);
+            }
           }
-          if (!cancelled) setDiffLoading(false);
+        } else {
+          toast.error(
+            t('review.logFailed', {
+              message: filesResult.error.message,
+              defaultValue: `Failed to load commit files: ${filesResult.error.message}`,
+            }),
+          );
+          setCommitFiles([]);
         }
-      } else {
-        toast.error(
-          t('review.logFailed', {
-            message: filesResult.error.message,
-            defaultValue: `Failed to load commit files: ${filesResult.error.message}`,
-          }),
-        );
-        setCommitFiles([]);
+        if (bodyResult.isOk() && bodyResult.value.body) setCommitBody(bodyResult.value.body);
+      } finally {
+        if (!cancelled) setFilesLoading(false);
       }
-      if (bodyResult.isOk() && bodyResult.value.body) {
-        setCommitBody(bodyResult.value.body);
-      }
-      setFilesLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -197,15 +199,15 @@ export function CommitDetailDialog({
       setExpandedFile(filePath);
       setDiffLoading(true);
       setDiffContent(null);
-      const result = effectiveThreadId
-        ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, filePath)
-        : await api.projectCommitFileDiff(projectModeId!, selectedHash, filePath);
-      if (result.isOk()) {
-        setDiffContent(result.value.diff);
-      } else {
-        toast.error(`Failed to load diff: ${result.error.message}`);
+      try {
+        const result = effectiveThreadId
+          ? await api.getCommitFileDiff(effectiveThreadId, selectedHash, filePath)
+          : await api.projectCommitFileDiff(projectModeId!, selectedHash, filePath);
+        if (result.isOk()) setDiffContent(result.value.diff);
+        else toast.error(`Failed to load diff: ${result.error.message}`);
+      } finally {
+        setDiffLoading(false);
       }
-      setDiffLoading(false);
     },
     [selectedHash, hasGitContext, effectiveThreadId, projectModeId],
   );

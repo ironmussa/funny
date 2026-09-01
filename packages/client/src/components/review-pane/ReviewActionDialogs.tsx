@@ -150,7 +150,10 @@ export function MergeBranchDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <label className="text-muted-foreground text-xs font-medium">
+          <label
+            htmlFor="review-merge-target-select"
+            className="text-muted-foreground text-xs font-medium"
+          >
             {t('review.targetBranch', 'Target branch')}
           </label>
           {mergeDialog?.loading ? (
@@ -165,7 +168,11 @@ export function MergeBranchDialog({
                 setMergeDialog((prev) => (prev ? { ...prev, targetBranch: v } : null))
               }
             >
-              <SelectTrigger className="h-8 text-xs" data-testid="review-merge-target-select">
+              <SelectTrigger
+                id="review-merge-target-select"
+                className="h-8 text-xs"
+                data-testid="review-merge-target-select"
+              >
                 <SelectValue placeholder={t('review.selectBranch', 'Select branch')} />
               </SelectTrigger>
               <SelectContent>

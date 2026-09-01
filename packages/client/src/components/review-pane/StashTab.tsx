@@ -99,6 +99,11 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                   <TooltipTrigger asChild>
                     <button
                       type="button"
+                      aria-label={
+                        idx === '0'
+                          ? t('review.popStash', 'Pop stash')
+                          : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')
+                      }
                       className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent shrink-0 rounded p-1 transition-colors disabled:pointer-events-none disabled:opacity-50"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -124,6 +129,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                   <TooltipTrigger asChild>
                     <button
                       type="button"
+                      aria-label={t('review.dropStash', 'Discard stash')}
                       className="text-muted-foreground hover:text-destructive hover:bg-sidebar-accent shrink-0 rounded p-1 transition-colors disabled:pointer-events-none disabled:opacity-50"
                       onClick={(e) => {
                         e.stopPropagation();

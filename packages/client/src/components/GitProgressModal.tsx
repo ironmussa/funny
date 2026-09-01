@@ -126,9 +126,9 @@ export function SubItemsList({
 
   return (
     <div className="mt-1 space-y-0.5 pl-1">
-      {subItems.map((item, i) => (
+      {subItems.map((item) => (
         <div
-          key={i}
+          key={item.label}
           className={cn(
             'flex items-center gap-1.5 text-[11px]',
             item.status === 'completed' && 'text-muted-foreground',

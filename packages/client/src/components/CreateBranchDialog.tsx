@@ -85,6 +85,7 @@ export function CreateBranchDialog({
             value={branchName}
             onChange={(e) => setBranchName(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === 'Enter' && canSubmit) submit();
             }}
             autoFocus

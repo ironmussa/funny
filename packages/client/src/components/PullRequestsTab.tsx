@@ -191,6 +191,7 @@ function PullRequestsToolbar({
                 href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={t('review.pullRequests.openOnGithub', 'Open pull requests on GitHub')}
               >
                 <ExternalLink className="icon-base" />
               </a>
@@ -436,41 +437,44 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       setLoading(true);
       setError(null);
 
-      const result = searchMode
-        ? await api.githubPRsSearch(projectId, {
-            state: effectiveState,
-            page: pageNum,
-            per_page: 30,
-            sort: filters.sort,
-            labels: filters.labels,
-            authors: filters.authors,
-            assignees: filters.assignees,
-            reviewers: filters.reviewers,
-          })
-        : await api.githubPRs(projectId, {
-            state: effectiveState,
-            page: pageNum,
-            per_page: 30,
-            sort: filters.sort,
-          });
+      try {
+        const result = searchMode
+          ? await api.githubPRsSearch(projectId, {
+              state: effectiveState,
+              page: pageNum,
+              per_page: 30,
+              sort: filters.sort,
+              labels: filters.labels,
+              authors: filters.authors,
+              assignees: filters.assignees,
+              reviewers: filters.reviewers,
+            })
+          : await api.githubPRs(projectId, {
+              state: effectiveState,
+              page: pageNum,
+              per_page: 30,
+              sort: filters.sort,
+            });
 
-      if (result.isOk()) {
-        const data = result.value;
-        setPrs((prev) => (append ? [...prev, ...data.prs] : data.prs));
-        setHasMore(data.hasMore);
-        setRepoInfo({ owner: data.owner, repo: data.repo });
-      } else {
-        log.error('failed to load pull requests', {
-          projectId,
-          state: effectiveState,
-          error: result.error.message,
-        });
-        setError(
-          result.error.message ||
-            t('review.pullRequests.fetchError', 'Failed to load pull requests'),
-        );
+        if (result.isOk()) {
+          const data = result.value;
+          setPrs((prev) => (append ? [...prev, ...data.prs] : data.prs));
+          setHasMore(data.hasMore);
+          setRepoInfo({ owner: data.owner, repo: data.repo });
+        } else {
+          log.error('failed to load pull requests', {
+            projectId,
+            state: effectiveState,
+            error: result.error.message,
+          });
+          setError(
+            result.error.message ||
+              t('review.pullRequests.fetchError', 'Failed to load pull requests'),
+          );
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     },
     [projectId, effectiveState, searchMode, filters, t],
   );

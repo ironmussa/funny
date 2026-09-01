@@ -66,6 +66,7 @@ export function CreateBranchDialog({ open, onOpenChange, shortHash, onCreate }: 
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter') {
               e.preventDefault();
               submit();

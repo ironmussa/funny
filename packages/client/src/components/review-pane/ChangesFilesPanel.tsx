@@ -389,7 +389,7 @@ export function ChangesFilesPanel({
                             onClick={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             aria-label={t('review.moreActions', 'More actions')}
-                            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-[color,background-color,opacity] group-hover:opacity-100 data-[state=open]:opacity-100"
                             data-testid={`review-folder-menu-${row.path}`}
                           >
                             <MoreHorizontal className="icon-sm" />
@@ -705,7 +705,7 @@ export function ChangesFilesPanel({
                             e.stopPropagation();
                           }}
                           aria-label={t('review.moreActions', 'More actions')}
-                          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100 data-[state=open]:opacity-100"
+                          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded opacity-0 transition-[color,background-color,opacity] group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
                           <MoreHorizontal className="icon-sm" />
                         </button>

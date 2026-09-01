@@ -40,6 +40,18 @@ interface IssuesDialogProps {
   onCreateThread?: (params: IssueThreadParams) => void;
 }
 
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d`;
+  return `${Math.floor(days / 30)}mo`;
+}
+
 export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: IssuesDialogProps) {
   const { t } = useTranslation();
   const [issues, setIssues] = useState<EnrichedGitHubIssue[]>([]);
@@ -54,22 +66,23 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
     async (pageNum: number, append: boolean) => {
       setLoading(true);
       setError(null);
-      const result = await api.githubIssuesEnriched(projectId, {
-        state,
-        page: pageNum,
-        per_page: 30,
-      });
-      result.match(
-        (data) => {
-          setIssues((prev) => (append ? [...prev, ...data.issues] : data.issues));
-          setHasMore(data.hasMore);
-          setRepoInfo({ owner: data.owner, repo: data.repo });
-        },
-        (err) => {
-          setError(err.message);
-        },
-      );
-      setLoading(false);
+      try {
+        const result = await api.githubIssuesEnriched(projectId, {
+          state,
+          page: pageNum,
+          per_page: 30,
+        });
+        result.match(
+          (data) => {
+            setIssues((prev) => (append ? [...prev, ...data.issues] : data.issues));
+            setHasMore(data.hasMore);
+            setRepoInfo({ owner: data.owner, repo: data.repo });
+          },
+          (err) => setError(err.message),
+        );
+      } finally {
+        setLoading(false);
+      }
     },
     [projectId, state],
   );
@@ -99,19 +112,6 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
     },
     [onCreateThread, repoInfo],
   );
-
-  function timeAgo(dateStr: string): string {
-    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d`;
-    const months = Math.floor(days / 30);
-    return `${months}mo`;
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

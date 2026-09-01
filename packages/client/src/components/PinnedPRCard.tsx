@@ -249,6 +249,7 @@ function EditForm({
   return (
     <div className="flex flex-col gap-1.5">
       <textarea
+        aria-label="Comment body"
         className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
         rows={3}
         value={value}
@@ -305,22 +306,25 @@ export function PinnedPRCard({
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [threadsRes, convRes] = await Promise.all([
-      api.githubPRThreads(projectId, pr.number),
-      api.githubPRConversation(projectId, pr.number),
-    ]);
-    if (threadsRes.isOk()) setThreads(threadsRes.value.threads);
-    if (convRes.isOk()) setConversation(convRes.value);
-    if (threadsRes.isErr() || convRes.isErr()) {
-      setError(
-        threadsRes.isErr()
-          ? threadsRes.error.message
-          : convRes.isErr()
-            ? convRes.error.message
-            : 'Failed to load PR data',
-      );
+    try {
+      const [threadsRes, convRes] = await Promise.all([
+        api.githubPRThreads(projectId, pr.number),
+        api.githubPRConversation(projectId, pr.number),
+      ]);
+      if (threadsRes.isOk()) setThreads(threadsRes.value.threads);
+      if (convRes.isOk()) setConversation(convRes.value);
+      if (threadsRes.isErr() || convRes.isErr()) {
+        setError(
+          threadsRes.isErr()
+            ? threadsRes.error.message
+            : convRes.isErr()
+              ? convRes.error.message
+              : 'Failed to load PR data',
+        );
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [projectId, pr.number]);
 
   useEffect(() => {
@@ -350,19 +354,22 @@ export function PinnedPRCard({
     const body = newComment.trim();
     if (!body) return;
     setPosting(true);
-    const res = await api.githubPRCommentCreate(projectId, pr.number, body);
-    if (res.isOk()) {
-      setConversation((prev) =>
-        prev
-          ? { ...prev, comments: [...prev.comments, res.value] }
-          : { comments: [res.value], reviews: [] },
-      );
-      setNewComment('');
-    } else {
-      log.error('pr_comment_create_failed', { error: res.error.message, prNumber: pr.number });
-      setError(res.error.message);
+    try {
+      const res = await api.githubPRCommentCreate(projectId, pr.number, body);
+      if (res.isOk()) {
+        setConversation((prev) =>
+          prev
+            ? { ...prev, comments: [...prev.comments, res.value] }
+            : { comments: [res.value], reviews: [] },
+        );
+        setNewComment('');
+      } else {
+        log.error('pr_comment_create_failed', { error: res.error.message, prNumber: pr.number });
+        setError(res.error.message);
+      }
+    } finally {
+      setPosting(false);
     }
-    setPosting(false);
   };
 
   const handleReply = async (thread: PRReviewThread) => {
@@ -810,7 +817,12 @@ export function PinnedPRCard({
                 className="text-muted-foreground shrink-0"
                 data-testid={`pinned-pr-open-github-${pr.number}`}
               >
-                <a href={pr.html_url} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={pr.html_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open pull request ${pr.number} on GitHub`}
+                >
                   <ExternalLink className="icon-xs" />
                 </a>
               </Button>
@@ -909,7 +921,14 @@ export function PinnedPRCard({
                       </div>
                       {replyForThread === th.id ? (
                         <div className="flex flex-col gap-1.5 pl-3">
+                          <label
+                            className="text-muted-foreground text-xs font-medium"
+                            htmlFor={`pinned-pr-thread-reply-${th.id}`}
+                          >
+                            Reply
+                          </label>
                           <textarea
+                            id={`pinned-pr-thread-reply-${th.id}`}
                             className="border-border bg-background focus:ring-ring w-full rounded-md border p-2 text-xs focus:ring-1 focus:outline-hidden"
                             rows={2}
                             value={replyBody}

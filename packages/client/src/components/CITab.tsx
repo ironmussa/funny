@@ -158,7 +158,12 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
                 className="text-muted-foreground shrink-0"
                 data-testid="ci-open-github"
               >
-                <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t('review.ci.openOnGithub', 'Open PR on GitHub')}
+                >
                   <ExternalLink className="icon-base" />
                 </a>
               </Button>
@@ -200,6 +205,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
                     href={check.html_url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`Open ${check.name} check details`}
                     className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
                     data-testid={`ci-check-link-${check.id}`}
                   >

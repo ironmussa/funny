@@ -233,56 +233,55 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       if (!append) setLogErrorMessage(null);
       const started = performance.now();
       const signal = abortRef.current?.signal;
-      const result = effectiveThreadId
-        ? await api.getGitGraphLog(effectiveThreadId, PAGE_SIZE, allBranches, skip, signal)
-        : await api.projectGitGraphLog(projectModeId!, PAGE_SIZE, allBranches, skip, signal);
-      if (signal?.aborted) {
+      try {
+        const result = effectiveThreadId
+          ? await api.getGitGraphLog(effectiveThreadId, PAGE_SIZE, allBranches, skip, signal)
+          : await api.projectGitGraphLog(projectModeId!, PAGE_SIZE, allBranches, skip, signal);
+        if (signal?.aborted) return null;
+        let out: { entries: GraphEntry[]; hasMore: boolean } | null = null;
+        if (result.isOk()) {
+          const {
+            entries: next,
+            hasMore: more,
+            unpushedHashes,
+            unpulledHashes = [],
+          } = result.value;
+          setLogErrorMessage(null);
+          loadedLogSkipRef.current = append ? skip + next.length : next.length;
+          const merged = append
+            ? mergeLogEntriesByHash(entriesRef.current, next)
+            : uniqueLogEntriesByHash(next);
+          entriesRef.current = merged;
+          setEntries(merged);
+          hasMoreRef.current = more;
+          setHasMore(more);
+          setUnpushed((prev) => {
+            if (!append) return new Set(unpushedHashes);
+            return new Set([...prev, ...unpushedHashes]);
+          });
+          setUnpulled((prev) => {
+            if (!append) return new Set(unpulledHashes);
+            return new Set([...prev, ...unpulledHashes]);
+          });
+          metric('git.graph_log.loaded', performance.now() - started, {
+            attributes: { count: String(next.length), append: String(append) },
+          });
+          out = { entries: merged, hasMore: more };
+        } else if (result.error.message !== 'Request aborted') {
+          log.warn('graph-log load failed', { error: result.error.message });
+          setLogErrorMessage(result.error.message);
+          toast.error(
+            t('review.logFailed', {
+              message: result.error.message,
+              defaultValue: `Failed to load log: ${result.error.message}`,
+            }),
+          );
+        }
+        return out;
+      } finally {
+        setLogLoading(false);
         loadingRef.current = false;
-        return null;
       }
-      let out: { entries: GraphEntry[]; hasMore: boolean } | null = null;
-      if (result.isOk()) {
-        const { entries: next, hasMore: more, unpushedHashes, unpulledHashes = [] } = result.value;
-        setLogErrorMessage(null);
-        loadedLogSkipRef.current = append ? skip + next.length : next.length;
-        const merged = append
-          ? mergeLogEntriesByHash(entriesRef.current, next)
-          : uniqueLogEntriesByHash(next);
-        // Keep the synchronous mirror current so the next append builds on the
-        // freshly-loaded page without waiting for a React re-render.
-        entriesRef.current = merged;
-        setEntries(merged);
-        hasMoreRef.current = more;
-        setHasMore(more);
-        setUnpushed((prev) => {
-          if (!append) return new Set(unpushedHashes);
-          const updated = new Set(prev);
-          for (const h of unpushedHashes) updated.add(h);
-          return updated;
-        });
-        setUnpulled((prev) => {
-          if (!append) return new Set(unpulledHashes);
-          const updated = new Set(prev);
-          for (const h of unpulledHashes) updated.add(h);
-          return updated;
-        });
-        metric('git.graph_log.loaded', performance.now() - started, {
-          attributes: { count: String(next.length), append: String(append) },
-        });
-        out = { entries: merged, hasMore: more };
-      } else if (result.error.message !== 'Request aborted') {
-        log.warn('graph-log load failed', { error: result.error.message });
-        setLogErrorMessage(result.error.message);
-        toast.error(
-          t('review.logFailed', {
-            message: result.error.message,
-            defaultValue: `Failed to load log: ${result.error.message}`,
-          }),
-        );
-      }
-      setLogLoading(false);
-      loadingRef.current = false;
-      return out;
     },
     [hasGitContext, effectiveThreadId, projectModeId, allBranches, t],
   );
@@ -1014,11 +1013,13 @@ function useEmailAvatars(entries: GraphEntry[]): Map<string, string> {
         if (cancelled) return;
         const resolved = pairs.filter((p): p is [string, string] => !!p[1]);
         if (resolved.length === 0) return;
+        for (const [email, url] of resolved) {
+          emailAvatarCache.set(email, url);
+        }
         setAvatarByEmail((prev) => {
           const next = new Map(prev);
           for (const [email, url] of resolved) {
             next.set(email, url);
-            emailAvatarCache.set(email, url);
           }
           return next;
         });
@@ -1322,17 +1323,18 @@ function GraphCommitRow({
   // The detached-HEAD pseudo-ref isn't a branch, so it's excluded.
   const pushableBranches = useMemo(
     () =>
-      foldedRefs
-        .filter((r) => r.kind === 'local' && !r.syncedRemote && r.name !== 'HEAD')
-        .map((r) => r.name),
+      foldedRefs.flatMap((ref) =>
+        ref.kind === 'local' && !ref.syncedRemote && ref.name !== 'HEAD' ? [ref.name] : [],
+      ),
     [foldedRefs],
   );
   const targetBranches = useMemo(
     () =>
-      foldedRefs
-        .filter((r) => r.kind === 'local' && r.name !== 'HEAD')
-        .map((r) => r.name)
-        .filter((branch) => !branchSummaryByName.get(branch)?.isCurrent),
+      foldedRefs.flatMap((ref) =>
+        ref.kind === 'local' && ref.name !== 'HEAD' && !branchSummaryByName.get(ref.name)?.isCurrent
+          ? [ref.name]
+          : [],
+      ),
     [branchSummaryByName, foldedRefs],
   );
 

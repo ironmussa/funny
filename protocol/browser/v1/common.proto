@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// A browser-facing protocol release. Incompatible changes require a new major.
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+enum BrowserCapability {
+  BROWSER_CAPABILITY_UNSPECIFIED = 0;
+  BROWSER_CAPABILITY_OPERATIONS = 1;
+  BROWSER_CAPABILITY_EVENTS = 2;
+  BROWSER_CAPABILITY_TERMINAL = 3;
+  BROWSER_CAPABILITY_BROWSER_SESSION = 4;
+  BROWSER_CAPABILITY_CURSOR_RECOVERY = 5;
+  BROWSER_CAPABILITY_BINARY_POLLING = 6;
+}
+
+enum TrafficClass {
+  TRAFFIC_CLASS_UNSPECIFIED = 0;
+  TRAFFIC_CLASS_OPERATIONS = 1;
+  TRAFFIC_CLASS_EVENTS = 2;
+  TRAFFIC_CLASS_TERMINAL = 3;
+  TRAFFIC_CLASS_BROWSER_SESSION = 4;
+}
+
+enum Representation {
+  REPRESENTATION_UNSPECIFIED = 0;
+  REPRESENTATION_LEGACY = 1;
+  REPRESENTATION_BROWSER_V1 = 2;
+  REPRESENTATION_SHADOW = 3;
+}
+
+enum DeliveryClass {
+  DELIVERY_CLASS_UNSPECIFIED = 0;
+  DELIVERY_CLASS_DURABLE = 1;
+  DELIVERY_CLASS_SNAPSHOT_RECOVERABLE = 2;
+  DELIVERY_CLASS_COALESCIBLE = 3;
+  DELIVERY_CLASS_VOLATILE = 4;
+  DELIVERY_CLASS_AT_MOST_ONCE = 5;
+}
+
+enum StatusCode {
+  STATUS_CODE_UNSPECIFIED = 0;
+  STATUS_CODE_INCOMPATIBLE = 1;
+  STATUS_CODE_MALFORMED_INPUT = 2;
+  STATUS_CODE_UNAUTHENTICATED = 3;
+  STATUS_CODE_PERMISSION_DENIED = 4;
+  STATUS_CODE_DEADLINE_EXCEEDED = 5;
+  STATUS_CODE_CANCELLED = 6;
+  STATUS_CODE_CONFLICT = 7;
+  STATUS_CODE_RESOURCE_EXHAUSTED = 8;
+  STATUS_CODE_GAP = 9;
+  STATUS_CODE_SNAPSHOT_REQUIRED = 10;
+  STATUS_CODE_NOT_FOUND = 11;
+  STATUS_CODE_UNAVAILABLE = 12;
+  STATUS_CODE_REVOKED = 13;
+  STATUS_CODE_INTERNAL = 14;
+}
+
+// Safe application status. Details must not contain credentials or protected data.
+message Status {
+  StatusCode code = 1;
+  string message = 2;
+  bool retryable = 3;
+  google.protobuf.Struct details = 4;
+}
+
+enum ScopeKind {
+  SCOPE_KIND_UNSPECIFIED = 0;
+  SCOPE_KIND_USER = 1;
+  SCOPE_KIND_THREAD_STREAM = 2;
+  SCOPE_KIND_THREAD_PRESENCE = 3;
+  SCOPE_KIND_PROJECT = 4;
+  SCOPE_KIND_RUNNER = 5;
+  SCOPE_KIND_TERMINAL = 6;
+  SCOPE_KIND_BROWSER_SESSION = 7;
+  SCOPE_KIND_SHARE = 8;
+  SCOPE_KIND_TENANT = 9;
+}
+
+message ScopeReference {
+  ScopeKind kind = 1;
+  string id = 2;
+  optional string parent_id = 3;
+}
+
+enum ResourceKind {
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  RESOURCE_KIND_THREAD = 1;
+  RESOURCE_KIND_PROJECT = 2;
+  RESOURCE_KIND_RUNNER = 3;
+  RESOURCE_KIND_TERMINAL = 4;
+  RESOURCE_KIND_BROWSER_SESSION = 5;
+  RESOURCE_KIND_SHARE = 6;
+  RESOURCE_KIND_TENANT = 7;
+  RESOURCE_KIND_HTTP_OBJECT = 8;
+}
+
+message ResourceReference {
+  ResourceKind kind = 1;
+  string id = 2;
+  optional string parent_id = 3;
+}
+
+message LargeResourceReference {
+  ResourceReference resource = 1;
+  string authorized_url = 2;
+  string media_type = 3;
+  uint64 byte_length = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  optional string entity_tag = 6;
+}
+
+message RequestMetadata {
+  string request_id = 1;
+  google.protobuf.Timestamp deadline = 2;
+  optional string idempotency_key = 3;
+  optional string causal_request_id = 4;
+}
+
+message EventMetadata {
+  string event_id = 1;
+  ScopeReference scope = 2;
+  uint64 sequence = 3;
+  uint64 revision = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+  optional string causal_request_id = 6;
+}
+
+message Cursor {
+  ScopeReference scope = 1;
+  string last_event_id = 2;
+  uint64 last_sequence = 3;
+  uint64 last_revision = 4;
+}
+
+message DeliveryMetadata {
+  DeliveryClass delivery_class = 1;
+  uint32 priority = 2;
+  optional string coalescing_key = 3;
+}
+
+message RevisionReference {
+  ResourceReference resource = 1;
+  uint64 revision = 2;
+  optional string causal_request_id = 3;
+}
+
+message ClientDescriptor {
+  string instance_id = 1;
+  string application_version = 2;
+  string deployment = 3;
+  optional string cohort = 4;
+}
+
+message TransportLimits {
+  uint32 max_message_bytes = 1;
+  uint32 max_pending_operations = 2;
+  uint32 max_queued_messages_per_class = 3;
+  uint64 max_queued_bytes_per_class = 4;
+  uint32 reserved_control_messages = 5;
+}
+
+message TrafficAssignment {
+  TrafficClass traffic_class = 1;
+  Representation representation = 2;
+}

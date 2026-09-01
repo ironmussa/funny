@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "browser/v1/common.proto";
+import "google/protobuf/struct.proto";
+
+message SubscriptionRequest {
+  ScopeReference scope = 1;
+  optional Cursor cursor = 2;
+}
+
+message SubscriptionAccepted {
+  ScopeReference scope = 1;
+  Cursor accepted_cursor = 2;
+}
+
+message SubscriptionOutcome {
+  ScopeReference scope = 1;
+  oneof outcome {
+    SubscriptionAccepted accepted = 10;
+    Status status = 11;
+  }
+}
+
+message UserEvent {
+  string event_type = 1;
+  google.protobuf.Struct data = 2;
+}
+
+message ThreadStreamEvent {
+  string thread_id = 1;
+  string event_type = 2;
+  google.protobuf.Struct data = 3;
+}
+
+message ThreadPresenceEvent {
+  string thread_id = 1;
+  uint32 viewer_count = 2;
+  bool current_principal_present = 3;
+}
+
+message RunnerStateEvent {
+  string runner_id = 1;
+  string state = 2;
+}
+
+message ApplicationEvent {
+  EventMetadata metadata = 1;
+  DeliveryMetadata delivery = 2;
+  oneof payload {
+    UserEvent user = 10;
+    ThreadStreamEvent thread_stream = 11;
+    ThreadPresenceEvent thread_presence = 12;
+    RunnerStateEvent runner_state = 13;
+  }
+}
+
+message EventEnvelope {
+  oneof payload {
+    SubscriptionRequest subscribe = 1;
+    SubscriptionOutcome subscription_outcome = 2;
+    ApplicationEvent event = 3;
+  }
+}

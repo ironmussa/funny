@@ -1,0 +1,9 @@
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/bufbuild/es:v2.14.0
+    revision: 1
+    out: packages/shared/src/generated/browser-v1
+    opt:
+      - target=ts
+      - import_extension=js

@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "browser/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+message Acknowledgement {
+  optional string request_id = 1;
+  optional string event_id = 2;
+  optional uint64 accepted_sequence = 3;
+}
+
+message Heartbeat {
+  uint64 ordinal = 1;
+  google.protobuf.Timestamp sent_at = 2;
+  optional uint64 acknowledged_ordinal = 3;
+}
+
+message CancelOperation {
+  string request_id = 1;
+  string reason = 2;
+}
+
+message Gap {
+  ScopeReference scope = 1;
+  uint64 requested_sequence = 2;
+  uint64 earliest_available_sequence = 3;
+  string reason = 4;
+}
+
+message SnapshotRequired {
+  repeated ScopeReference scopes = 1;
+  string reason = 2;
+}
+
+message SubscriptionRevoked {
+  ScopeReference scope = 1;
+  Status status = 2;
+}
+
+message ProtocolControl {
+  oneof payload {
+    Gap gap = 1;
+    SnapshotRequired snapshot_required = 2;
+    SubscriptionRevoked subscription_revoked = 3;
+  }
+}
+
+message ControlEnvelope {
+  oneof payload {
+    Acknowledgement acknowledgement = 1;
+    Heartbeat heartbeat = 2;
+    CancelOperation cancel = 3;
+    ProtocolControl protocol = 4;
+    Status status = 5;
+  }
+}

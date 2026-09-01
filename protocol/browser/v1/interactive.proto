@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "browser/v1/common.proto";
+import "google/protobuf/struct.proto";
+
+message TerminalSpawn {
+  string terminal_id = 1;
+  string cwd = 2;
+  uint32 columns = 3;
+  uint32 rows = 4;
+  optional string shell = 5;
+  optional string project_id = 6;
+  optional string label = 7;
+  optional string scratch_thread_id = 8;
+}
+
+message TerminalWrite {
+  uint64 input_ordinal = 1;
+  bytes data = 2;
+}
+
+message TerminalResize {
+  uint32 columns = 1;
+  uint32 rows = 2;
+}
+
+message TerminalSignal {
+  string signal = 1;
+}
+
+message TerminalRename {
+  string title = 1;
+}
+
+message TerminalReconnect {
+  uint64 last_seen_output_sequence = 1;
+}
+
+message TerminalRestore {}
+
+message TerminalClose {
+  string reason = 1;
+}
+
+message TerminalOutput {
+  uint64 sequence = 1;
+  bytes data = 2;
+}
+
+message TerminalExit {
+  optional int32 exit_code = 1;
+  optional string signal = 2;
+}
+
+message TerminalError {
+  Status status = 1;
+}
+
+message TerminalMessage {
+  string terminal_id = 1;
+  oneof payload {
+    TerminalSpawn spawn = 10;
+    TerminalWrite write = 11;
+    TerminalResize resize = 12;
+    TerminalSignal signal = 13;
+    TerminalRename rename = 14;
+    TerminalReconnect reconnect = 15;
+    TerminalRestore restore = 16;
+    TerminalClose close = 17;
+    TerminalOutput output = 18;
+    TerminalExit exit = 19;
+    TerminalError error = 20;
+  }
+}
+
+message BrowserSessionOpen {
+  string target_url = 1;
+  optional string project_id = 2;
+}
+
+message BrowserSessionNavigate {
+  string target_url = 1;
+}
+
+message BrowserSessionInput {
+  uint64 input_ordinal = 1;
+  google.protobuf.Struct action = 2;
+}
+
+message BrowserSessionInspect {
+  google.protobuf.Struct selector = 1;
+}
+
+message BrowserSessionExecute {
+  string expression = 1;
+}
+
+message BrowserSessionHeartbeat {
+  uint64 ordinal = 1;
+}
+
+message BrowserSessionHistoryNavigation {
+  string action = 1;
+}
+
+message BrowserSessionScreenshot {}
+
+message BrowserSessionReady {
+  string target_url = 1;
+}
+
+message BrowserSessionConsole {
+  string level = 1;
+  string text = 2;
+  optional string url = 3;
+  optional uint32 line = 4;
+  optional uint32 column = 5;
+  uint64 occurred_at_ms = 6;
+}
+
+message BrowserSessionFrame {
+  uint64 sequence = 1;
+  LargeResourceReference frame = 2;
+}
+
+message BrowserSessionClose {
+  string reason = 1;
+}
+
+message BrowserSessionResult {
+  google.protobuf.Struct value = 1;
+}
+
+message BrowserSessionMessage {
+  string browser_session_id = 1;
+  oneof payload {
+    BrowserSessionOpen open = 10;
+    BrowserSessionNavigate navigate = 11;
+    BrowserSessionInput input = 12;
+    BrowserSessionInspect inspect = 13;
+    BrowserSessionExecute execute = 14;
+    BrowserSessionHeartbeat heartbeat = 15;
+    BrowserSessionFrame frame = 16;
+    BrowserSessionClose close = 17;
+    BrowserSessionResult result = 18;
+    Status status = 19;
+    BrowserSessionHistoryNavigation history_navigation = 20;
+    BrowserSessionScreenshot screenshot = 21;
+    BrowserSessionReady ready = 22;
+    BrowserSessionConsole console = 23;
+  }
+}
+
+message InteractiveEnvelope {
+  RequestMetadata metadata = 1;
+  DeliveryMetadata delivery = 2;
+  repeated ResourceReference resources = 3;
+  oneof payload {
+    TerminalMessage terminal = 10;
+    BrowserSessionMessage browser_session = 11;
+  }
+}

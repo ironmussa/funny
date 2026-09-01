@@ -1,0 +1,131 @@
+[
+  {
+    "name": "typed_conflict",
+    "messageType": "browser.v1.Status",
+    "protoJson": {
+      "code": "STATUS_CODE_CONFLICT",
+      "message": "idempotency key was reused for a different request",
+      "retryable": false
+    },
+    "wireHex": "080712326964656d706f74656e6379206b6579207761732072657573656420666f72206120646966666572656e742072657175657374"
+  },
+  {
+    "name": "negotiation",
+    "messageType": "browser.v1.NegotiationRequest",
+    "protoJson": {
+      "supportedVersions": [
+        {
+          "major": 1,
+          "minor": 0
+        }
+      ],
+      "generatedSchemaFingerprint": "browser.v1:test",
+      "capabilities": [
+        "BROWSER_CAPABILITY_OPERATIONS",
+        "BROWSER_CAPABILITY_BINARY_POLLING"
+      ],
+      "client": {
+        "instanceId": "browser-fixture",
+        "applicationVersion": "0.1.0",
+        "deployment": "web"
+      }
+    },
+    "wireHex": "0a020801120f62726f777365722e76313a746573741a020106221d0a0f62726f777365722d666978747572651205302e312e301a03776562"
+  },
+  {
+    "name": "pty_list_operation",
+    "messageType": "browser.v1.OperationRequest",
+    "protoJson": {
+      "metadata": {
+        "requestId": "request-pty-list-1",
+        "deadline": "2030-01-01T00:00:00Z"
+      },
+      "ptyList": {
+        "runnerId": "runner-1"
+      }
+    },
+    "wireHex": "0a1c0a12726571756573742d7074792d6c6973742d3112060880b1ef8607520a0a0872756e6e65722d31"
+  },
+  {
+    "name": "user_event",
+    "messageType": "browser.v1.ApplicationEvent",
+    "protoJson": {
+      "metadata": {
+        "eventId": "event-1",
+        "scope": {
+          "kind": "SCOPE_KIND_USER",
+          "id": "user-1"
+        },
+        "sequence": "7",
+        "revision": "3",
+        "occurredAt": "2030-01-01T00:00:00Z"
+      },
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_SNAPSHOT_RECOVERABLE"
+      },
+      "user": {
+        "eventType": "profile:updated",
+        "data": {
+          "nickname": "Ada"
+        }
+      }
+    },
+    "wireHex": "0a210a076576656e742d31120a08011206757365722d31180720032a060880b1ef86071202080252260a0f70726f66696c653a7570646174656412130a110a086e69636b6e616d6512051a03416461"
+  },
+  {
+    "name": "terminal_input",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "metadata": {
+        "requestId": "terminal-input-1"
+      },
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_AT_MOST_ONCE"
+      },
+      "terminal": {
+        "terminalId": "terminal-1",
+        "write": {
+          "inputOrdinal": "1",
+          "data": "bHMK"
+        }
+      }
+    },
+    "wireHex": "0a120a107465726d696e616c2d696e7075742d311202080552150a0a7465726d696e616c2d315a07080112036c730a"
+  },
+  {
+    "name": "snapshot_required",
+    "messageType": "browser.v1.ControlEnvelope",
+    "protoJson": {
+      "protocol": {
+        "snapshotRequired": {
+          "scopes": [
+            {
+              "kind": "SCOPE_KIND_THREAD_STREAM",
+              "id": "thread-1"
+            }
+          ],
+          "reason": "cursor expired"
+        }
+      }
+    },
+    "wireHex": "2220121e0a0c080212087468726561642d31120e637572736f722065787069726564"
+  },
+  {
+    "name": "carrier_operation",
+    "messageType": "browser.v1.CarrierEnvelope",
+    "protoJson": {
+      "generatedSchemaFingerprint": "browser.v1:test",
+      "operation": {
+        "request": {
+          "metadata": {
+            "requestId": "request-thread-open-1"
+          },
+          "threadOpen": {
+            "threadId": "thread-1"
+          }
+        }
+      }
+    },
+    "wireHex": "0a0f62726f777365722e76313a7465737462270a250a170a15726571756573742d7468726561642d6f70656e2d315a0a0a087468726561642d31"
+  }
+]

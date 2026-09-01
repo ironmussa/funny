@@ -1,0 +1,17 @@
+{
+  "iterations": 20000,
+  "sustainedIterations": 50000,
+  "soakIterationsPerClass": 25000,
+  "maxSoakAverageMicros": 300,
+  "maxSoakHeapGrowthBytes": 33554432,
+  "maxSoakRssGrowthBytes": 134217728,
+  "maxEncodeAverageMicros": 100,
+  "maxDecodeAverageMicros": 100,
+  "maxRoundTripAverageMicros": 200,
+  "maxPayloadBytes": 4096,
+  "maxSocketIoFrames": 2,
+  "maxFramedBytes": 4608,
+  "maxGeneratedSourceBytes": 120000,
+  "maxHeapGrowthBytes": 16777216,
+  "maxRssGrowthBytes": 67108864
+}

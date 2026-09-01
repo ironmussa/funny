@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "browser/v1/common.proto";
+
+message PtyListRequest {
+  optional string runner_id = 1;
+}
+
+message PtySummary {
+  string pty_id = 1;
+  string cwd = 2;
+  optional string project_id = 3;
+  optional string label = 4;
+  optional string shell = 5;
+  bool connected = 6;
+}
+
+message PtyListSuccess {
+  repeated PtySummary terminals = 1;
+}
+
+message ThreadOpenRequest {
+  string thread_id = 1;
+}
+
+message ThreadCloseRequest {
+  string thread_id = 1;
+}
+
+message ThreadLifecycleSuccess {
+  string thread_id = 1;
+  bool open = 2;
+  uint64 presence_revision = 3;
+}
+
+message OperationRequest {
+  RequestMetadata metadata = 1;
+  repeated ResourceReference resources = 2;
+  oneof operation {
+    PtyListRequest pty_list = 10;
+    ThreadOpenRequest thread_open = 11;
+    ThreadCloseRequest thread_close = 12;
+  }
+}
+
+message OperationSuccess {
+  oneof result {
+    PtyListSuccess pty_list = 1;
+    ThreadLifecycleSuccess thread_lifecycle = 2;
+  }
+}
+
+message OperationOutcome {
+  string request_id = 1;
+  repeated RevisionReference revisions = 2;
+  oneof outcome {
+    OperationSuccess success = 10;
+    Status status = 11;
+  }
+}
+
+message OperationEnvelope {
+  oneof payload {
+    OperationRequest request = 1;
+    OperationOutcome outcome = 2;
+  }
+}

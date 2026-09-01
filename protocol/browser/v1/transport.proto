@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "browser/v1/control.proto";
+import "browser/v1/events.proto";
+import "browser/v1/interactive.proto";
+import "browser/v1/negotiation.proto";
+import "browser/v1/operations.proto";
+
+// Transport-neutral application envelope. Socket.IO packet metadata is never
+// represented here, so a future native adapter can reuse the same messages.
+message CarrierEnvelope {
+  string generated_schema_fingerprint = 1;
+  oneof payload {
+    NegotiationRequest negotiation_request = 10;
+    NegotiationOutcome negotiation_outcome = 11;
+    OperationEnvelope operation = 12;
+    EventEnvelope event = 13;
+    InteractiveEnvelope interactive = 14;
+    ControlEnvelope control = 15;
+  }
+}
+
+message NegotiateRequest {
+  NegotiationRequest request = 1;
+}
+
+message NegotiateResponse {
+  NegotiationOutcome outcome = 1;
+}
+
+message OperateRequest {
+  OperationRequest request = 1;
+}
+
+message OperateResponse {
+  OperationOutcome outcome = 1;
+}
+
+message EventsRequest {
+  EventEnvelope envelope = 1;
+}
+
+message EventsResponse {
+  EventEnvelope envelope = 1;
+}
+
+message InteractiveRequest {
+  InteractiveEnvelope envelope = 1;
+}
+
+message InteractiveResponse {
+  InteractiveEnvelope envelope = 1;
+}
+
+message ControlRequest {
+  ControlEnvelope envelope = 1;
+}
+
+message ControlResponse {
+  ControlEnvelope envelope = 1;
+}
+
+// Describes native semantics without enabling or exposing a native endpoint.
+service BrowserTransportService {
+  rpc Negotiate(NegotiateRequest) returns (NegotiateResponse);
+  rpc Operate(OperateRequest) returns (OperateResponse);
+  rpc Events(stream EventsRequest) returns (stream EventsResponse);
+  rpc Interactive(stream InteractiveRequest) returns (stream InteractiveResponse);
+  rpc Control(stream ControlRequest) returns (stream ControlResponse);
+}

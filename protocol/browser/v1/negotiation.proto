@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package browser.v1;
+
+import "browser/v1/common.proto";
+import "google/protobuf/duration.proto";
+
+message NegotiationRequest {
+  repeated ProtocolVersion supported_versions = 1;
+  string generated_schema_fingerprint = 2;
+  repeated BrowserCapability capabilities = 3;
+  ClientDescriptor client = 4;
+  repeated Cursor resume_cursors = 5;
+}
+
+message NegotiationSuccess {
+  ProtocolVersion selected_version = 1;
+  string generated_schema_fingerprint = 2;
+  repeated BrowserCapability enabled_capabilities = 3;
+  repeated TrafficAssignment assignments = 4;
+  TransportLimits effective_limits = 5;
+  google.protobuf.Duration heartbeat_interval = 6;
+  google.protobuf.Duration heartbeat_timeout = 7;
+  repeated Cursor accepted_cursors = 8;
+}
+
+message NegotiationOutcome {
+  oneof outcome {
+    NegotiationSuccess success = 1;
+    Status status = 2;
+  }
+}

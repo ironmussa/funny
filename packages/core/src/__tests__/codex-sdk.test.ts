@@ -15,7 +15,7 @@ import {
 const options = {
   prompt: 'hello',
   cwd: '/tmp',
-  model: 'gpt-5.4',
+  model: 'gpt-6-astra',
 };
 
 describe('CodexSDKProcess', () => {
@@ -62,6 +62,12 @@ describe('CodexSDKProcess', () => {
       await writeFile(
         fixtureBinary,
         `#!/usr/bin/env node
+if (process.argv[process.argv.indexOf('--model') + 1] !== 'gpt-6-astra') {
+  throw new Error('SDK did not forward the GPT-6 Astra model');
+}
+if (!process.argv.includes('model_reasoning_effort="max"')) {
+  throw new Error('SDK did not forward max reasoning effort');
+}
 process.stdin.resume();
 process.stdin.on('end', () => {
   console.log(JSON.stringify({ type: 'thread.started', thread_id: 'sdk-permission-thread' }));
@@ -76,7 +82,7 @@ process.stdin.on('end', () => {
       await chmod(fixtureBinary, 0o755);
       process.env.CODEX_BINARY_PATH = fixtureBinary;
 
-      const agent = new CodexSDKProcess({ ...options, permissionMode: 'ask' });
+      const agent = new CodexSDKProcess({ ...options, effort: 'max', permissionMode: 'ask' });
       agent.on('message', (message) => messages.push(message));
 
       await new Promise<void>((resolve, reject) => {

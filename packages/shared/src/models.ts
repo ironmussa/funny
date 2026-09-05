@@ -15,7 +15,6 @@ import type { AgentProvider, FollowUpMode, PermissionMode, ThreadMode } from './
 // there is no runtime import cycle.
 import {
   ACP_MANIFESTS,
-  codexModels,
   cursorModels,
   geminiModels,
   opencodeModels,
@@ -102,8 +101,6 @@ const claudeModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
-// codex + gemini static catalogs are owned by their manifests (imported above).
-
 const deepagentModels = {
   'minimax-m2.7': {
     id: 'openai:MiniMax-M2.7',
@@ -185,10 +182,42 @@ const deepagentModels = {
   },
 } as const satisfies Record<string, ModelDefinition>;
 
-// pi / cursor / opencode dynamic sentinel catalogs are owned by their manifests
-// (imported above). Real model IDs are discovered at runtime via
-// `/system/:provider/models` and passed through `resolveModelId` as wire-format
-// strings that each agent's set-model method accepts.
+// Codex uses the official SDK and owns its catalog independently of ACP.
+export const codexModels = {
+  'gpt-6-astra': {
+    id: 'gpt-6-astra',
+    label: 'GPT-6 Astra',
+    contextWindow: 1_050_000,
+    i18nKey: 'gpt6astra',
+  },
+  'gpt-5.6-sol': {
+    id: 'gpt-5.6-sol',
+    label: 'GPT-5.6 Sol',
+    contextWindow: 372_000,
+    i18nKey: 'gpt56sol',
+  },
+  'gpt-5.6-terra': {
+    id: 'gpt-5.6-terra',
+    label: 'GPT-5.6 Terra',
+    contextWindow: 372_000,
+    i18nKey: 'gpt56terra',
+  },
+  'gpt-5.6-luna': {
+    id: 'gpt-5.6-luna',
+    label: 'GPT-5.6 Luna',
+    contextWindow: 372_000,
+    i18nKey: 'gpt56luna',
+  },
+  'gpt-5.5': { id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 272_000, i18nKey: 'gpt55' },
+  'gpt-5.4': { id: 'gpt-5.4', label: 'GPT-5.4', contextWindow: 272_000, i18nKey: 'gpt54' },
+  'gpt-5.4-mini': {
+    id: 'gpt-5.4-mini',
+    label: 'GPT-5.4 Mini',
+    contextWindow: 272_000,
+    i18nKey: 'gpt54mini',
+  },
+  'gpt-5.2': { id: 'gpt-5.2', label: 'GPT-5.2', contextWindow: 272_000, i18nKey: 'gpt52' },
+} as const satisfies Record<string, ModelDefinition>;
 
 export const MODEL_REGISTRY = {
   claude: claudeModels,
@@ -229,6 +258,7 @@ export const DEFAULT_MODEL: AgentModel = 'opus-4.8';
 // providers (Claude SDK, DeepAgent) are listed explicitly.
 const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
   claude: DEFAULT_MODEL,
+  codex: 'gpt-5.6-sol',
   deepagent: 'minimax-m2.7',
   pi: 'default',
   ...Object.fromEntries(
@@ -246,10 +276,11 @@ const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
 const KB = 1024;
 const MB = 1024 * 1024;
 
-// codex / gemini / cursor / opencode ceilings come from their manifests.
+// gemini / cursor / opencode ceilings come from their manifests.
 // Non-ACP providers route through multiple upstream providers — use the
 // smallest common ceiling so we never exceed the weakest backend.
 const PROVIDER_ATTACHMENT_LIMITS: Record<string, AttachmentLimits> = {
+  codex: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
   claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
   pi: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
@@ -265,9 +296,10 @@ export interface ModelInfo {
   label: string;
 }
 
-// codex / gemini / cursor / opencode labels come from their manifests.
+// gemini / cursor / opencode labels come from their manifests.
 export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
+  codex: 'Codex',
   deepagent: 'Deep Agent',
   pi: 'Pi',
   ...Object.fromEntries(Object.values(ACP_MANIFESTS).map((m) => [m.id, m.label])),
@@ -280,6 +312,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
  * ids fall through the runtime provider registry rather than a hardcoded union.
  */
 export const KNOWN_PROVIDER_IDS: string[] = [
+  'codex',
   'claude',
   'deepagent',
   'llm-api',

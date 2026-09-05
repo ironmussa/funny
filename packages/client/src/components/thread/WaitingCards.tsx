@@ -189,7 +189,7 @@ export function CodexSdkApprovalUnavailableCard() {
       <p className="text-muted-foreground text-xs">
         {t(
           'thread.codexSdkApprovalUnavailableBody',
-          'Start a new run with a suitable permission mode, or use a runner configured with Codex ACP.',
+          'Start a new run with a suitable permission mode.',
         )}
       </p>
     </div>

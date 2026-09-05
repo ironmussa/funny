@@ -7,16 +7,17 @@ funny's "integration surface" splits into three groups: (1) agent providers wire
 Multi-provider support lives in `packages/core/src/agents/`, selected per thread via `process-factory.ts`:
 
 - `sdk-claude.ts` — Claude via `@anthropic-ai/claude-agent-sdk`.
-- `codex-acp.ts`, `gemini-acp.ts`, `cursor-acp.ts`, `opencode-acp.ts`, `generic-acp.ts` — Agent Client Protocol (ACP) stdio adapters for Codex, Gemini, Cursor, opencode, and other installed ACP-compatible CLIs. `generic-acp.ts` resolves spawn commands from the pluggable provider-manifest system in `packages/shared/src/provider-manifest*.ts`.
+- `codex-sdk.ts` — Codex via `@openai/codex-sdk`, including GPT-6 Astra (`gpt-6-astra`).
+- `gemini-acp.ts`, `cursor-acp.ts`, `opencode-acp.ts`, `generic-acp.ts` — Agent Client Protocol (ACP) stdio adapters for Gemini, Cursor, opencode, and other installed ACP-compatible CLIs. `generic-acp.ts` resolves spawn commands from the pluggable provider-manifest system in `packages/shared/src/provider-manifest*.ts`.
 - `deepagent-process.ts`, `llm/llm-api-process.ts` — Deep Agent and generic LLM-API providers.
 
 **MCP (Model Context Protocol) support** for funny's own agents is implemented server-side: `packages/runtime/src/services/mcp-service.ts`, `mcp-oauth.ts`, `services/agent-startup/load-mcp-servers.ts`, exposed via `packages/runtime/src/routes/mcp.ts`, with client-side configuration UI at `packages/client/src/components/McpServerSettings.tsx`. This is unrelated to `packages/memory`'s own separate MCP server (see below) — same protocol, two independent implementations.
 
 ### Codex transport and permission approvals
 
-Codex uses the SDK transport by default (`FUNNY_CODEX_TRANSPORT=sdk`). The SDK can report a blocked operation but cannot receive an interactive response, so Funny shows a recovery state rather than an actionable per-tool approval.
+Codex uses only the official SDK transport. The retired `FUNNY_CODEX_TRANSPORT` setting has no effect. The SDK integration can report a blocked operation but cannot receive an interactive response, so Funny shows a recovery state with guidance to start a new run with a suitable permission mode.
 
-Set `FUNNY_CODEX_TRANSPORT=acp` on the runner to opt into `codex-acp`. This requires the `codex-acp` binary to be installed and available on that runner's `PATH`; Funny fails the run with a provider setup error if it cannot start, and does not fall back to the SDK. ACP enables exact, live `allow once`, `allow always`, and `deny` responses for the current request. An `allow always` response is sent only after its Funny project rule has been persisted.
+Legacy `codex-acp` permission payload types remain readable for persisted history and older remote runners; this version cannot launch the Codex ACP adapter.
 
 > Note: `packages/api-acp` (`@funny/api-acp`) despite its name has **nothing to do with** this ACP provider layer — see §3.
 

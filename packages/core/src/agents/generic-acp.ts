@@ -38,7 +38,7 @@ import {
 } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import { buildAgentChildEnv } from './reap-orphaned-agents.js';
-import type { CLIMessage, ClaudeProcessOptions, PermissionDecision } from './types.js';
+import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
 type ACPSDK = typeof import('@agentclientprotocol/sdk');
@@ -102,19 +102,6 @@ export class GenericACPProcess extends BaseAgentProcess {
 
   /** True while loadSession is replaying historical events. */
   private replayingHistory = false;
-  /** Live ACP requests are intentionally in-memory: a process restart cannot
-   * safely resume an old provider continuation. */
-  private pendingPermissions = new Map<
-    string,
-    {
-      toolName: string;
-      toolInput?: string;
-      allowOnceOptionId?: string;
-      allowAlwaysOptionId?: string;
-      denyOptionId?: string;
-      resolve: (response: ACPRequestPermissionResponse) => void;
-    }
-  >();
 
   constructor(options: ClaudeProcessOptions, manifest: ProviderManifest) {
     super(options);
@@ -158,38 +145,10 @@ export class GenericACPProcess extends BaseAgentProcess {
   // ── Overrides ──────────────────────────────────────────────────
 
   async kill(): Promise<void> {
-    for (const pending of this.pendingPermissions.values()) {
-      // A killed process cannot safely choose an option on the user's behalf.
-      // ACP explicitly requires a cancelled outcome for a cancelled turn.
-      pending.resolve({ outcome: { outcome: 'cancelled' } });
-    }
-    this.pendingPermissions.clear();
     await super.kill();
     if (this.childProcess && !this.childProcess.killed) {
       killProcessTree(this.childProcess);
     }
-  }
-
-  getPendingPermission(requestId: string): { toolName: string; toolInput?: string } | undefined {
-    const pending = this.pendingPermissions.get(requestId);
-    return pending ? { toolName: pending.toolName, toolInput: pending.toolInput } : undefined;
-  }
-
-  async respondToPermission(requestId: string, decision: PermissionDecision): Promise<boolean> {
-    const pending = this.pendingPermissions.get(requestId);
-    if (!pending) return false;
-
-    const optionId =
-      decision === 'allow_once'
-        ? pending.allowOnceOptionId
-        : decision === 'allow_always'
-          ? pending.allowAlwaysOptionId
-          : pending.denyOptionId;
-    if (!optionId) return false;
-
-    this.pendingPermissions.delete(requestId);
-    pending.resolve({ outcome: { outcome: 'selected', optionId } });
-    return true;
   }
 
   /** Multi-turn: re-prompt on the live ACP session. */
@@ -770,8 +729,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * `quirks.permissionModel` selects the behavior:
    *   - `auto-allow` (pi): approve every request without gating.
    *   - `gated` (default): autoEdit → allow; else consult persisted rules; else
-   *     surface an approval request. Codex ACP keeps an exact live resolver;
-   *     other ACP providers retain their established synthetic pause.
+   *     surface a synthetic pause until the run is restarted with approval.
    */
   private async handleRequestPermission(
     params: ACPRequestPermissionRequest,
@@ -783,7 +741,6 @@ export class GenericACPProcess extends BaseAgentProcess {
 
     const allowOnceOptionId =
       findOption(['allow_once']) ?? findOption(['allow_always']) ?? options[0]?.optionId ?? '';
-    const allowAlwaysOptionId = findOption(['allow_always']);
     const rejectOptionId = findOption(['reject_once']) ?? findOption(['reject_always']);
 
     // auto-allow providers (pi) never gate.
@@ -833,46 +790,10 @@ export class GenericACPProcess extends BaseAgentProcess {
       }
     }
 
-    // Generic ACP still provides the legacy synthetic pause for non-Codex
-    // providers. Only Codex ACP advertises the structured continuation in this
-    // rollout; changing the other providers' established recovery semantics is
-    // outside this change.
     const toolUseId = toolCall.toolCallId ?? randomUUID();
-    if (this.manifest.id !== 'codex') {
-      const denialText =
-        `${this.manifest.label} requested permissions to use ${toolName} but the user hasn't been granted approval. ` +
-        `Waiting for user approval.`;
-
-      this.emitMessage({
-        type: 'assistant',
-        message: {
-          id: randomUUID(),
-          content: [{ type: 'tool_use', id: toolUseId, name: toolName, input: toolInput }],
-        },
-      } as CLIMessage);
-      this.emitMessage({
-        type: 'user',
-        message: {
-          content: [{ type: 'tool_result', tool_use_id: toolUseId, content: denialText }],
-        },
-      } as CLIMessage);
-
-      return await new Promise<ACPRequestPermissionResponse>((resolve) => {
-        const onAbort = () =>
-          resolve({
-            outcome: {
-              outcome: 'selected',
-              optionId: rejectOptionId ?? allowOnceOptionId,
-            },
-          });
-        if (this.abortController.signal.aborted) onAbort();
-        else this.abortController.signal.addEventListener('abort', onAbort, { once: true });
-      });
-    }
-
-    // Codex ACP exposes a real live request. The tool-use remains visible in
-    // history, but there is no synthetic denial or abort/restart cycle.
-    const requestId = randomUUID();
+    const denialText =
+      `${this.manifest.label} requested permissions to use ${toolName} but the user hasn't been granted approval. ` +
+      `Waiting for user approval.`;
 
     this.emitMessage({
       type: 'assistant',
@@ -881,46 +802,23 @@ export class GenericACPProcess extends BaseAgentProcess {
         content: [{ type: 'tool_use', id: toolUseId, name: toolName, input: toolInput }],
       },
     } as CLIMessage);
+    this.emitMessage({
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: toolUseId, content: denialText }],
+      },
+    } as CLIMessage);
 
     return await new Promise<ACPRequestPermissionResponse>((resolve) => {
-      const cancelPending = () => {
-        if (!this.pendingPermissions.delete(requestId)) return;
-        resolve({ outcome: { outcome: 'cancelled' } });
-      };
-      this.pendingPermissions.set(requestId, {
-        toolName,
-        toolInput: serializeToolInputForRule(toolName, toolInput),
-        allowOnceOptionId,
-        allowAlwaysOptionId,
-        denyOptionId: rejectOptionId,
-        resolve,
-      });
-
-      // Register before publishing: the runtime can receive and route a
-      // browser response as soon as the event leaves this process.
-      this.emitMessage({
-        type: 'permission_request',
-        requestId,
-        toolCallId: toolUseId,
-        toolName,
-        toolInput: serializeToolInputForRule(toolName, toolInput),
-        canAlwaysAllow: !!allowAlwaysOptionId,
-        canDeny: !!rejectOptionId,
-        transport: 'codex-acp',
-      });
-
-      this.dlog.info('requestPermission PAUSING for user approval', {
-        toolName,
-        toolCallId: toolUseId,
-        requestId,
-      });
-      if (this.abortController.signal.aborted) {
-        cancelPending();
-      } else {
-        // An unexpected ACP child exit aborts the process without going
-        // through kill(). Release the awaited request in that path too.
-        this.abortController.signal.addEventListener('abort', cancelPending, { once: true });
-      }
+      const onAbort = () =>
+        resolve({
+          outcome: {
+            outcome: 'selected',
+            optionId: rejectOptionId ?? allowOnceOptionId,
+          },
+        });
+      if (this.abortController.signal.aborted) onAbort();
+      else this.abortController.signal.addEventListener('abort', onAbort, { once: true });
     });
   }
 

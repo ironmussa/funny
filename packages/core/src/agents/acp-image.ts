@@ -1,6 +1,6 @@
 /**
  * Helpers for forwarding image attachments through ACP-based adapters
- * (gemini-acp, codex-acp, deepagents, and Pi SDK).
+ * (gemini-acp, deepagents, and Pi SDK).
  *
  * funny stores image attachments in the Anthropic API shape internally
  * (`{ type:'image', source:{ type:'base64', media_type, data } }`) — see

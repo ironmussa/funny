@@ -5,11 +5,11 @@
  * picker). Adding an ACP provider whose behavior is covered by the existing
  * {@link QuirkFlags} menu = authoring one manifest here.
  *
- * This module OWNS the ACP model catalogs (codex/gemini static; pi/cursor/
+ * This module OWNS the ACP model catalogs (gemini static; cursor/
  * opencode dynamic sentinels). `models.ts` derives `MODEL_REGISTRY` and friends
  * FROM these (runtime import), so manifests must stay a leaf — hence the
- * type-only imports in `provider-manifest.ts`. The Claude SDK and DeepAgent
- * (non-ACP) catalogs remain in `models.ts`.
+ * type-only imports in `provider-manifest.ts`. The Claude SDK, Codex SDK, and
+ * DeepAgent catalogs remain in `models.ts`; Pi keeps its sentinel here.
  */
 
 import type { ProviderManifest } from './provider-manifest.js';
@@ -19,36 +19,6 @@ const KB = 1024;
 const MB = 1024 * 1024;
 
 // ─── ACP model catalogs (owned here; re-exported by models.ts) ───────────────
-
-export const codexModels = {
-  'gpt-5.6-sol': {
-    id: 'gpt-5.6-sol',
-    label: 'GPT-5.6 Sol',
-    contextWindow: 372_000,
-    i18nKey: 'gpt56sol',
-  },
-  'gpt-5.6-terra': {
-    id: 'gpt-5.6-terra',
-    label: 'GPT-5.6 Terra',
-    contextWindow: 372_000,
-    i18nKey: 'gpt56terra',
-  },
-  'gpt-5.6-luna': {
-    id: 'gpt-5.6-luna',
-    label: 'GPT-5.6 Luna',
-    contextWindow: 372_000,
-    i18nKey: 'gpt56luna',
-  },
-  'gpt-5.5': { id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 272_000, i18nKey: 'gpt55' },
-  'gpt-5.4': { id: 'gpt-5.4', label: 'GPT-5.4', contextWindow: 272_000, i18nKey: 'gpt54' },
-  'gpt-5.4-mini': {
-    id: 'gpt-5.4-mini',
-    label: 'GPT-5.4 Mini',
-    contextWindow: 272_000,
-    i18nKey: 'gpt54mini',
-  },
-  'gpt-5.2': { id: 'gpt-5.2', label: 'GPT-5.2', contextWindow: 272_000, i18nKey: 'gpt52' },
-} as const satisfies Record<string, ModelDefinition>;
 
 export const geminiModels = {
   'gemini-3.1-pro-preview': {
@@ -121,49 +91,6 @@ export const opencodeModels = {
 } as const satisfies Record<string, ModelDefinition>;
 
 // ─── Manifests ───────────────────────────────────────────────────────────────
-
-export const codexManifest: ProviderManifest = {
-  id: 'codex',
-  label: 'Codex',
-  kind: 'acp',
-  spawn: {
-    command: 'codex-acp',
-    args: [],
-    binEnvVars: ['CODEX_ACP_BINARY_PATH', 'ACP_CODEX_BIN', 'CODEX_BIN'],
-    npxSpec: { useEnvVar: 'CODEX_ACP_USE_NPX', pkg: ['-y', '@zed-industries/codex-acp'] },
-  },
-  models: { kind: 'static', entries: codexModels, defaultModel: 'gpt-5.6-sol' },
-  setModel: { method: 'unstable_setSessionModel' },
-  modelVia: 'acp-method',
-  modeVia: 'acp-setSessionMode',
-  // codex-acp modes (from probe): read-only | auto | full-access
-  modeMap: {
-    plan: 'read-only',
-    ask: 'auto',
-    confirmEdit: 'auto',
-    auto: 'auto',
-    autoEdit: 'full-access',
-  },
-  forkCapabilityPaths: ['sessions.fork'],
-  builtinTools: [
-    'read_file',
-    'write_file',
-    'apply_patch',
-    'list_directory',
-    'glob',
-    'grep',
-    'run_shell_command',
-    'web_fetch',
-  ],
-  attachmentLimits: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
-  auth: { mode: 'provider-key', providerKeyId: 'openai' },
-  quirks: {
-    bufferPreambleAsThink: true,
-    planRender: 'todoCard',
-    permissionModel: 'gated',
-    splitGluedAgentMessages: true,
-  },
-};
 
 export const geminiManifest: ProviderManifest = {
   id: 'gemini',
@@ -302,7 +229,6 @@ export const opencodeManifest: ProviderManifest = {
 
 /** All bundled ACP provider manifests, keyed by provider id. */
 export const ACP_MANIFESTS = {
-  codex: codexManifest,
   gemini: geminiManifest,
   cursor: cursorManifest,
   opencode: opencodeManifest,
@@ -315,10 +241,8 @@ export type KnownAcpProvider = keyof typeof ACP_MANIFESTS;
 export const KNOWN_ACP_PROVIDER_IDS = Object.keys(ACP_MANIFESTS) as KnownAcpProvider[];
 
 /** Bundled ACP providers that still launch through an ACP CLI and can be toggled off. */
-export type GateableAcpProvider = Exclude<KnownAcpProvider, 'codex'>;
-export const GATEABLE_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(
-  (id): id is GateableAcpProvider => id !== 'codex',
-);
+export type GateableAcpProvider = KnownAcpProvider;
+export const GATEABLE_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS;
 
 /** ACP providers whose catalog is discovered at runtime (`models.kind: 'dynamic'`). */
 export const DYNAMIC_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(

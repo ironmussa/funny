@@ -9,6 +9,7 @@ export type PermissionDecision = 'allow_once' | 'allow_always' | 'deny';
 /** Why an otherwise actionable request can no longer be resumed. */
 export type PermissionRecoveryReason = 'runner_lost';
 
+/** The codex-acp wire tag is retained for history and older remote runners. */
 export type PermissionApprovalCapability =
   | { kind: 'structured'; transport: 'codex-acp' }
   | { kind: 'unavailable'; reason: 'codex-sdk-no-interactive-approval' };

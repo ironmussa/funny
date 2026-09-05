@@ -16,6 +16,7 @@ import {
   getActiveBuiltinProviders,
   registerProvider,
   resolveActiveAcpProviders,
+  resolvePermissionApprovalCapability,
 } from '../agents/process-factory.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
 
@@ -63,12 +64,23 @@ describe('process-factory', () => {
     expect(process.constructor.name).toBe('SDKClaudeProcess');
   });
 
-  test('creates a codex process when provider is "codex"', () => {
+  test('Codex always uses the SDK, including with the retired ACP setting', () => {
+    const previous = process.env.FUNNY_CODEX_TRANSPORT;
     try {
-      const process = defaultProcessFactory.create({ ...baseOpts, provider: 'codex' });
-      expect(process.constructor.name).toBe('CodexSDKProcess');
-    } catch {
-      // Optional dependency — test passes if constructor resolves correctly
+      process.env.FUNNY_CODEX_TRANSPORT = 'acp';
+      const agent = defaultProcessFactory.create({
+        ...baseOpts,
+        provider: 'codex',
+        model: 'gpt-6-astra',
+      });
+      expect(agent.constructor.name).toBe('CodexSDKProcess');
+      expect(resolvePermissionApprovalCapability('codex')).toEqual({
+        kind: 'unavailable',
+        reason: 'codex-sdk-no-interactive-approval',
+      });
+    } finally {
+      if (previous === undefined) delete process.env.FUNNY_CODEX_TRANSPORT;
+      else process.env.FUNNY_CODEX_TRANSPORT = previous;
     }
   });
 

@@ -30,9 +30,10 @@ describe('providerManifestSchema — round-trips the built-ins', () => {
     });
   }
 
-  test('all four ACP built-ins are accepted', () => {
-    expect(Object.keys(ACP_MANIFESTS)).toHaveLength(4);
+  test('all three ACP built-ins are accepted', () => {
+    expect(Object.keys(ACP_MANIFESTS)).toHaveLength(3);
     expect(Object.keys(ACP_MANIFESTS)).not.toContain('pi');
+    expect(Object.keys(ACP_MANIFESTS)).not.toContain('codex');
   });
 });
 

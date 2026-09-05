@@ -52,6 +52,16 @@ describe('resolveModelId', () => {
   });
 
   describe('codex provider', () => {
+    test('exposes GPT-6 Astra through the registry and model selector', () => {
+      expect(resolveModelId('codex', 'gpt-6-astra')).toBe('gpt-6-astra');
+      expect(isModelForProvider('codex', 'gpt-6-astra')).toBe(true);
+      expect(getModelContextWindow('codex', 'gpt-6-astra')).toBe(1_050_000);
+      expect(getProviderModelsWithLabels('codex')).toContainEqual({
+        value: 'gpt-6-astra',
+        label: 'GPT-6 Astra',
+      });
+    });
+
     test('resolves gpt-5.6 variants', () => {
       expect(resolveModelId('codex', 'gpt-5.6-sol')).toBe('gpt-5.6-sol');
       expect(resolveModelId('codex', 'gpt-5.6-terra')).toBe('gpt-5.6-terra');
@@ -220,6 +230,7 @@ describe('getProviderModels', () => {
 
   test('returns all codex models', () => {
     const models = getProviderModels('codex');
+    expect(models).toContain('gpt-6-astra');
     expect(models).toContain('gpt-5.6-sol');
     expect(models).toContain('gpt-5.6-terra');
     expect(models).toContain('gpt-5.6-luna');
@@ -227,7 +238,7 @@ describe('getProviderModels', () => {
     expect(models).toContain('gpt-5.4');
     expect(models).toContain('gpt-5.4-mini');
     expect(models).toContain('gpt-5.2');
-    expect(models).toHaveLength(7);
+    expect(models).toHaveLength(8);
   });
 
   test('GPT-5.6 Codex variants use the local Codex metadata context window', () => {

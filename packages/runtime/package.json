@@ -63,7 +63,7 @@
     "@anthropic-ai/sdk": "^0.111.0",
     "@ff-labs/fff-node": "0.10.6",
     "@grpc/grpc-js": "1.14.0",
-    "@openai/codex-sdk": "0.151.0",
+    "@openai/codex-sdk": "0.153.4",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
     "assemblyai": "^4.35.0",

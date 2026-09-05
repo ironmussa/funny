@@ -191,7 +191,9 @@ function browserSessionPublication(
     logicalType: type,
     trafficClass: 'browserSession',
     delivery: { class: delivery, priority, coalescingKey },
-    legacyEvent: event,
+    // Evaluation results can contain nested bigint values. Both representations
+    // must normalize them before reaching their JSON encoders.
+    legacyEvent: type === 'browser-session:result' ? jsonObject(event) : event,
     browserV1Interactive: create(InteractiveEnvelopeSchema, {
       metadata: requestId ? create(RequestMetadataSchema, { requestId }) : undefined,
       delivery: create(DeliveryMetadataSchema, { deliveryClass, priority, coalescingKey }),
@@ -248,7 +250,12 @@ function terminalPublication(
     logicalType: type,
     trafficClass: 'terminal',
     delivery: { class: 'durable', priority: type === 'pty:data' ? 0 : 100 },
-    legacyEvent: event,
+    // Socket.IO's legacy JSON encoder cannot serialize the gRPC uint64 bigint.
+    // Keep the exact sequence in protobuf and use a decimal string for JSON.
+    legacyEvent:
+      typeof data.sequence === 'bigint'
+        ? { ...event, data: { ...data, sequence: data.sequence.toString() } }
+        : event,
     browserV1Interactive: create(InteractiveEnvelopeSchema, {
       delivery: create(DeliveryMetadataSchema, { deliveryClass: DeliveryClass.DURABLE }),
       payload: { case: 'terminal', value: { terminalId, payload } },

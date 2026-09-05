@@ -69,6 +69,44 @@ describe('browser-events Socket.IO delivery', () => {
     });
   });
 
+  test('serializes terminal output for legacy sockets without losing uint64 precision', () => {
+    const wire: string[] = [];
+    const socket = {
+      data: {},
+      emit: (type: string, event: unknown) => wire.push(JSON.stringify({ type, event })),
+    };
+    setIO({
+      of: () => ({
+        sockets: new Map([['socket-1', socket]]),
+        adapter: { rooms: new Map([['user:alice', new Set(['socket-1'])]]) },
+      }),
+    } as any);
+
+    const event = {
+      type: 'pty:data',
+      threadId: '',
+      data: { ptyId: 'pty-1', data: '$ ', sequence: 9007199254740993n },
+    };
+    expect(() => relayToUser('alice', event)).not.toThrow();
+    expect(wire).toEqual([
+      JSON.stringify({
+        type: 'pty:data',
+        event: { ...event, data: { ...event.data, sequence: '9007199254740993' } },
+      }),
+    ]);
+
+    const sink = new FakeBrowserEventSink();
+    setBrowserEventSink(sink);
+    relayToUser('alice', event);
+    expect(sink.publications[0]?.browserV1Interactive).toMatchObject({
+      payload: {
+        case: 'terminal',
+        value: { payload: { case: 'output', value: { sequence: 9007199254740993n } } },
+      },
+    });
+    expect(event.data.sequence).toBe(9007199254740993n);
+  });
+
   test('moves browser frames to bounded principal-scoped HTTP references', () => {
     const sink = new FakeBrowserEventSink();
     setBrowserEventSink(sink);

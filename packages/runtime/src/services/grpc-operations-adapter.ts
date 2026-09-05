@@ -88,9 +88,35 @@ export interface GrpcOperationSender {
   send(name: 'operations', message: RunnerGrpcWireMessage): boolean;
 }
 
+function normalizeProtobufString(value: string): string {
+  let normalized = '';
+  let unchangedStart = 0;
+  let changed = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const nextCodeUnit = value.charCodeAt(index + 1);
+      if (nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) {
+        index += 1;
+        continue;
+      }
+    } else if (codeUnit < 0xdc00 || codeUnit > 0xdfff) {
+      continue;
+    }
+
+    normalized += `${value.slice(unchangedStart, index)}\uFFFD`;
+    unchangedStart = index + 1;
+    changed = true;
+  }
+
+  return changed ? normalized + value.slice(unchangedStart) : value;
+}
+
 function normalizeProtobufJson(value: any): any {
   if (value === undefined) return undefined;
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return normalizeProtobufString(value);
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'bigint') return String(value);
   if (value instanceof Date) return value.toISOString();

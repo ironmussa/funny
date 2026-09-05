@@ -41,6 +41,18 @@ describe('GrpcOperationsAdapter mapping', () => {
     ).toEqual({ projectPath: '/repo', toolName: 'Bash', decision: 'allow' });
   });
 
+  test('replaces unpaired UTF-16 surrogates before protobuf encoding', () => {
+    expect(
+      normalizeRunnerOperationValue('updateToolCallOutput', {
+        toolCallId: 'tool-1',
+        output: `before\uD800-middle-\uDFFF-after-😀`,
+      }),
+    ).toEqual({
+      toolCallId: 'tool-1',
+      output: 'before�-middle-�-after-😀',
+    });
+  });
+
   test('maps all supported outcome envelopes back to facade results', () => {
     expect(
       mapRunnerOperationOutcome('getThread', {

@@ -480,8 +480,9 @@ log.info(`funny-server running on http://${HOST}:${PORT}`, {
 const RUNNER_STATUS_INTERVAL_MS = 30_000;
 let runnerStatusTimer: ReturnType<typeof setInterval> | null = null;
 let lastRunnerStateHash = '';
+const runnerStatusMonitorEnabled = process.env.FUNNY_RUNNER_STATUS_MONITOR === 'true';
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && runnerStatusMonitorEnabled) {
   runnerStatusTimer = setInterval(async () => {
     try {
       const browserEvents = await import('./services/browser-events.js');

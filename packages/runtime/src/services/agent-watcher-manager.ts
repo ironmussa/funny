@@ -12,7 +12,7 @@
  * (NOT one timer per watcher) polls the DB for due watchers — the same pattern
  * as `checkCompletedRuns` in automation-scheduler. The DB row is the source of
  * truth; this in-memory scanner holds no durable state, so a runner restart
- * just re-arms it (pending rows are picked up on the next scan).
+ * just re-arms it from the pending rows in the DB.
  *
  * Pure snooze: funny runs no check command. When a watcher fires we wake the
  * agent (via `sendMessage`, which starts the agent if idle or queues the
@@ -33,17 +33,20 @@ import { sendMessage } from './thread-service/messaging.js';
 import { wsBroker } from './ws-broker.js';
 
 // ── Tunables (see design.md open questions) ──────────────────────
-const HEARTBEAT_MS = 5_000;
 /** Sub-minute snoozes defeat the purpose and risk rapid wake loops. */
 const MIN_DELAY_MS = 60_000;
 /** Runaway backstop — the agent drives rescheduling, so this is rarely hit. */
 const DEFAULT_MAX_WAKES = 20;
 /** Hard lifetime ceiling so a never-concluded watcher can't poll forever. */
 const DEFAULT_DEADLINE_MS = 60 * 60_000;
+/** Retry only after repository failures; successful idle scans stay timer-free. */
+const SCAN_RETRY_MS = 5_000;
 
 const NS = 'agent-watcher';
 
-let scanner: ReturnType<typeof setInterval> | null = null;
+let scanner: ReturnType<typeof setTimeout> | null = null;
+let scannerDueAt: number | null = null;
+let started = false;
 /** Re-entrancy guard so a slow scan can't overlap the next heartbeat. */
 let scanning = false;
 
@@ -92,6 +95,7 @@ export async function createOrReschedule(args: CreateOrRescheduleArgs): Promise<
       status: 'pending',
     });
     const updated: Watcher = { ...existing, nextWakeAt, lastDelayMs: delayMs, status: 'pending' };
+    armScannerAt(nextWakeAt);
     emit(args.userId, 'watcher:rescheduled', updated);
     log.info('Watcher rescheduled', { namespace: NS, watcherId: existing.id, delayMs });
     return updated;
@@ -114,6 +118,7 @@ export async function createOrReschedule(args: CreateOrRescheduleArgs): Promise<
     updatedAt: iso,
   };
   await getServices().watchers.insertWatcher(watcher);
+  armScannerAt(nextWakeAt);
   emit(args.userId, 'watcher:created', watcher);
   log.info('Watcher created', { namespace: NS, watcherId: watcher.id, delayMs });
   return watcher;
@@ -140,6 +145,41 @@ async function scanOnce(): Promise<void> {
     log.error('Watcher scan failed', { namespace: NS, error: (err as Error).message });
   } finally {
     scanning = false;
+    void rearmScanner();
+  }
+}
+
+/** Keep a single one-shot timer for the earliest pending watcher. */
+function armScannerAt(dueAt: number): void {
+  if (!started || scanning) return;
+  if (scannerDueAt != null && scannerDueAt <= dueAt) return;
+  if (scanner) clearTimeout(scanner);
+
+  scannerDueAt = dueAt;
+  const delayMs = Math.min(Math.max(0, dueAt - Date.now()), 2_147_483_647);
+  scanner = setTimeout(() => {
+    scanner = null;
+    scannerDueAt = null;
+    void scanOnce();
+  }, delayMs);
+}
+
+async function rearmScanner(): Promise<void> {
+  if (!started || scanning) return;
+  try {
+    const pending = (await getServices().watchers.listPendingWatchers()) as Watcher[];
+    if (!started) return;
+    const nextWakeAt = pending.reduce(
+      (earliest, watcher) => Math.min(earliest, watcher.nextWakeAt),
+      Number.POSITIVE_INFINITY,
+    );
+    if (Number.isFinite(nextWakeAt)) armScannerAt(nextWakeAt);
+  } catch (err) {
+    log.error('Failed to re-arm watcher scanner', {
+      namespace: NS,
+      error: (err as Error).message,
+    });
+    armScannerAt(Date.now() + SCAN_RETRY_MS);
   }
 }
 
@@ -219,21 +259,23 @@ async function setStatus(watcher: Watcher, status: WatcherStatus): Promise<void>
 // ── Lifecycle ────────────────────────────────────────────────────
 
 /**
- * Start the heartbeat scanner. This IS the rehydration: pending watcher rows
- * already live in the DB, so starting the scanner resumes them — no in-memory
- * state to rebuild after a restart.
+ * Rehydrate a one-shot timer for the earliest pending watcher. With no pending
+ * rows there is no timer and no recurring DB query while the runtime is idle.
  */
 export function startAgentWatchers(): void {
-  if (scanner) return;
-  scanner = setInterval(() => void scanOnce(), HEARTBEAT_MS);
-  log.info('Agent watcher scanner started', { namespace: NS, heartbeatMs: HEARTBEAT_MS });
+  if (started) return;
+  started = true;
+  void rearmScanner();
+  log.info('Agent watcher scanner started', { namespace: NS, mode: 'on-demand' });
 }
 
 export function stopAgentWatchers(): void {
+  started = false;
   if (scanner) {
-    clearInterval(scanner);
+    clearTimeout(scanner);
     scanner = null;
   }
+  scannerDueAt = null;
 }
 
 shutdownManager.register(

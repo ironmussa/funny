@@ -2,7 +2,13 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+
+const { fakeJobs } = vi.hoisted(() => ({
+  fakeJobs: {
+    listRunningJobs: vi.fn<() => Promise<Array<{ pid: number; exitPath: string }>>>(async () => []),
+  },
+}));
 
 // Mock the heavy service deps so importing the manager is cheap; deriveStatus
 // itself only touches fs + process.kill, none of these.
@@ -11,7 +17,7 @@ vi.mock('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(async () => undefined),
 }));
 vi.mock('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
-vi.mock('../../services/service-registry.js', () => ({ getServices: () => ({ jobs: {} }) }));
+vi.mock('../../services/service-registry.js', () => ({ getServices: () => ({ jobs: fakeJobs }) }));
 vi.mock('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
 vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
 vi.mock('../../services/shutdown-manager.js', () => ({
@@ -19,7 +25,7 @@ vi.mock('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
 }));
 
-import { deriveStatus } from '../../services/agent-job-manager.js';
+import { deriveStatus, startAgentJobs, stopAgentJobs } from '../../services/agent-job-manager.js';
 
 let dir: string;
 beforeAll(() => {
@@ -27,6 +33,12 @@ beforeAll(() => {
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
+});
+afterEach(() => {
+  stopAgentJobs();
+  fakeJobs.listRunningJobs.mockReset();
+  fakeJobs.listRunningJobs.mockResolvedValue([]);
+  vi.useRealTimers();
 });
 
 describe('deriveStatus', () => {
@@ -63,5 +75,32 @@ describe('deriveStatus', () => {
       status: 'killed',
       exitCode: null,
     });
+  });
+});
+
+describe('job scanner lifecycle', () => {
+  test('does not keep polling the repository when there are no running jobs', async () => {
+    vi.useFakeTimers();
+
+    startAgentJobs();
+    await vi.runAllTicks();
+
+    expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(1);
+  });
+
+  test('continues polling while a job is running', async () => {
+    vi.useFakeTimers();
+    fakeJobs.listRunningJobs.mockResolvedValue([
+      { pid: process.pid, exitPath: join(dir, 'still-running') },
+    ]);
+
+    startAgentJobs();
+    await vi.runAllTicks();
+    expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(2);
   });
 });

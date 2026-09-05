@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ── Mock the manager's dependencies ──────────────────────────────
 // Shared mock state lives in vi.hoisted so the (hoisted) vi.mock factories
@@ -49,11 +49,22 @@ vi.mock('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
 }));
 
-import { createOrReschedule } from '../../services/agent-watcher-manager.js';
+import {
+  createOrReschedule,
+  startAgentWatchers,
+  stopAgentWatchers,
+} from '../../services/agent-watcher-manager.js';
 
 beforeEach(() => {
+  stopAgentWatchers();
   rows.clear();
   emitToUser.mockClear();
+});
+
+afterEach(() => {
+  stopAgentWatchers();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('createOrReschedule — idempotent by (threadId, key)', () => {
@@ -144,5 +155,41 @@ describe('createOrReschedule — idempotent by (threadId, key)', () => {
     });
     expect(w.maxWakes).toBe(20);
     expect(w.deadline).toBeGreaterThan(w.nextWakeAt); // 1h default > the wake
+  });
+});
+
+describe('watcher scanner lifecycle', () => {
+  test('does not keep polling the repository when there are no pending watchers', async () => {
+    vi.useFakeTimers();
+    const listPending = vi.spyOn(fakeWatchers, 'listPendingWatchers');
+    const listDue = vi.spyOn(fakeWatchers, 'listDueWatchers');
+
+    startAgentWatchers();
+    await vi.runAllTicks();
+
+    expect(listPending).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(listPending).toHaveBeenCalledTimes(1);
+    expect(listDue).not.toHaveBeenCalled();
+  });
+
+  test('arms a one-shot timer immediately when a watcher is created', async () => {
+    vi.useFakeTimers();
+    const listDue = vi.spyOn(fakeWatchers, 'listDueWatchers');
+
+    startAgentWatchers();
+    await vi.runAllTicks();
+    await createOrReschedule({
+      threadId: 't1',
+      userId: 'u',
+      key: 'build',
+      label: 'build',
+      delayMs: 60_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(listDue).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(listDue).toHaveBeenCalledTimes(1);
   });
 });

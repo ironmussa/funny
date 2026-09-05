@@ -49,8 +49,10 @@ const HEARTBEAT_MS = 5_000;
 const MAX_LOG_READ_BYTES = 128 * 1024;
 const NS = 'agent-job';
 
-let scanner: ReturnType<typeof setInterval> | null = null;
+let scanner: ReturnType<typeof setTimeout> | null = null;
+let started = false;
 let scanning = false;
+let scanRequested = false;
 
 function jobDir(id: string): string {
   return join(DATA_DIR, 'jobs', id);
@@ -115,6 +117,7 @@ export async function spawnJob(args: SpawnArgs): Promise<Job> {
     updatedAt: now,
   };
   await getServices().jobs.insertJob(job);
+  armScanner();
   emit(args.userId, 'job:created', job);
   log.info('Job spawned', { namespace: NS, jobId: id, pid, label: args.label });
 
@@ -162,11 +165,16 @@ export function deriveStatus(job: Pick<Job, 'pid' | 'exitPath'>): {
 async function scanOnce(): Promise<void> {
   if (scanning) return;
   scanning = true;
+  scanRequested = false;
+  let hasRunningJobs = false;
   try {
     const running = (await getServices().jobs.listRunningJobs()) as Job[];
     for (const job of running) {
       const { status, exitCode } = deriveStatus(job);
-      if (status === 'running') continue;
+      if (status === 'running') {
+        hasRunningJobs = true;
+        continue;
+      }
       await onTerminal(job, status, exitCode).catch((err) =>
         log.error('Job completion handling failed', {
           namespace: NS,
@@ -176,10 +184,26 @@ async function scanOnce(): Promise<void> {
       );
     }
   } catch (err) {
+    // A transient repository error must not permanently disable monitoring.
+    hasRunningJobs = true;
     log.error('Job scan failed', { namespace: NS, error: (err as Error).message });
   } finally {
     scanning = false;
+    if (hasRunningJobs || scanRequested) armScanner();
   }
+}
+
+function armScanner(): void {
+  if (!started) return;
+  if (scanning) {
+    scanRequested = true;
+    return;
+  }
+  if (scanner) return;
+  scanner = setTimeout(() => {
+    scanner = null;
+    void scanOnce();
+  }, HEARTBEAT_MS);
 }
 
 async function onTerminal(job: Job, status: JobStatus, exitCode: number | null): Promise<void> {
@@ -385,19 +409,21 @@ export async function removeThreadJobs(threadId: string): Promise<void> {
 // ── Lifecycle ────────────────────────────────────────────────────
 
 /**
- * Start the job poller. Like the watcher scanner, this IS the rehydration:
- * running jobs live in the DB and their status is re-derived from the
- * exitfile/pid on the next scan — no in-memory handle to rebuild after restart.
+ * Rehydrate running jobs once, then poll only while at least one job is active.
+ * With no running rows there is no timer and no recurring idle DB query.
  */
 export function startAgentJobs(): void {
-  if (scanner) return;
-  scanner = setInterval(() => void scanOnce(), HEARTBEAT_MS);
+  if (started) return;
+  started = true;
+  void scanOnce();
   log.info('Agent job scanner started', { namespace: NS, heartbeatMs: HEARTBEAT_MS });
 }
 
 export function stopAgentJobs(): void {
+  started = false;
+  scanRequested = false;
   if (scanner) {
-    clearInterval(scanner);
+    clearTimeout(scanner);
     scanner = null;
   }
 }

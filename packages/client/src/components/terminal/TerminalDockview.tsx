@@ -1,16 +1,9 @@
 import { PanelBottomClose, PictureInPicture2, Plus } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 import { isTauri } from '@/components/terminal/xterm-utils';
-import {
-  CommandTabContent,
-  JobLogTabContent,
-  TauriTerminalTabContent,
-  TerminalSearchOverlay,
-  WebTerminalTabContent,
-} from '@/components/TerminalPanel';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -33,6 +26,35 @@ import { useThreadWorktreePath } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { type BottomTabSpec } from '../DockviewLayout';
+
+// TerminalPanel carries drag/drop, xstate, ANSI rendering, and the terminal
+// adapters. None of it is needed to paint the first thread while the bottom
+// pane is closed, so keep the whole module behind the tab body boundary.
+const CommandTabContent = lazy(() =>
+  import('@/components/TerminalPanel').then((module) => ({
+    default: module.CommandTabContent,
+  })),
+);
+const JobLogTabContent = lazy(() =>
+  import('@/components/TerminalPanel').then((module) => ({
+    default: module.JobLogTabContent,
+  })),
+);
+const TauriTerminalTabContent = lazy(() =>
+  import('@/components/TerminalPanel').then((module) => ({
+    default: module.TauriTerminalTabContent,
+  })),
+);
+const TerminalSearchOverlay = lazy(() =>
+  import('@/components/TerminalPanel').then((module) => ({
+    default: module.TerminalSearchOverlay,
+  })),
+);
+const WebTerminalTabContent = lazy(() =>
+  import('@/components/TerminalPanel').then((module) => ({
+    default: module.WebTerminalTabContent,
+  })),
+);
 
 /** Render the appropriate body for a single terminal tab (Web PTY, Tauri PTY,
  *  command output, or an empty fallback). Always rendered as the dockview
@@ -72,39 +94,41 @@ function TerminalTabBody({
 
   return (
     <div className="bg-background relative h-full w-full">
-      {searchVisible && active && (
-        <TerminalSearchOverlay activeTabId={tab.id} onClose={() => setSearchVisible(false)} />
-      )}
-      {tab.type === 'pty' ? (
-        <WebTerminalTabContent
-          id={tab.id}
-          cwd={tab.cwd}
-          active={true}
-          panelVisible={panelVisible}
-          shell={tab.shell}
-          restored={tab.restored}
-          projectId={tab.projectId}
-          label={tab.label}
-          initialCommand={tab.initialCommand}
-          scratchThreadId={tab.scratchThreadId}
-          repaintKey={repaintKey}
-        />
-      ) : tab.type === 'job-log' && tab.jobId ? (
-        <JobLogTabContent tabId={tab.id} jobId={tab.jobId} active={true} />
-      ) : tab.commandId ? (
-        <CommandTabContent
-          commandId={tab.commandId}
-          projectId={tab.projectId}
-          active={true}
-          alive={tab.alive}
-        />
-      ) : isTauri ? (
-        <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={true} />
-      ) : (
-        <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
-          (unknown terminal type)
-        </div>
-      )}
+      <Suspense fallback={null}>
+        {searchVisible && active && (
+          <TerminalSearchOverlay activeTabId={tab.id} onClose={() => setSearchVisible(false)} />
+        )}
+        {tab.type === 'pty' ? (
+          <WebTerminalTabContent
+            id={tab.id}
+            cwd={tab.cwd}
+            active={true}
+            panelVisible={panelVisible}
+            shell={tab.shell}
+            restored={tab.restored}
+            projectId={tab.projectId}
+            label={tab.label}
+            initialCommand={tab.initialCommand}
+            scratchThreadId={tab.scratchThreadId}
+            repaintKey={repaintKey}
+          />
+        ) : tab.type === 'job-log' && tab.jobId ? (
+          <JobLogTabContent tabId={tab.id} jobId={tab.jobId} active={true} />
+        ) : tab.commandId ? (
+          <CommandTabContent
+            commandId={tab.commandId}
+            projectId={tab.projectId}
+            active={true}
+            alive={tab.alive}
+          />
+        ) : isTauri ? (
+          <TauriTerminalTabContent id={tab.id} cwd={tab.cwd} active={true} />
+        ) : (
+          <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
+            (unknown terminal type)
+          </div>
+        )}
+      </Suspense>
     </div>
   );
 }

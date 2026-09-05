@@ -1,8 +1,9 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadView } from '@/components/ThreadView';
 import { useAppStore } from '@/stores/app-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -134,6 +135,7 @@ vi.mock('remark-gfm', () => ({
 // ── Setup ───────────────────────────────────────────────────────
 
 beforeEach(() => {
+  useThreadStore.setState({ threadDataById: {} });
   useAppStore.setState({
     projects: [
       {
@@ -156,6 +158,32 @@ beforeEach(() => {
 // ── Tests ───────────────────────────────────────────────────────
 
 describe('ThreadView', () => {
+  test('does not mark a direct thread route ready until its payload is loaded', async () => {
+    const onReady = vi.fn();
+    renderWithProviders(<ThreadView onReady={onReady} />, {
+      route: '/projects/p1/threads/t1',
+      threadId: 't1',
+    });
+
+    expect(onReady).not.toHaveBeenCalled();
+
+    const thread = {
+      id: 't1',
+      projectId: 'p1',
+      title: 'Test Thread',
+      status: 'completed',
+      cost: 0,
+      messages: [],
+    } as any;
+    useThreadStore.setState({
+      selectedThreadId: 't1',
+      activeThread: thread,
+      threadDataById: { t1: thread },
+    });
+
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
+  });
+
   test('shows empty state when no thread or project selected', () => {
     useAppStore.setState({ selectedProjectId: null });
     renderWithProviders(<ThreadView />);

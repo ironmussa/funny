@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CenterDockview } from '@/components/CenterDockview';
@@ -27,6 +27,8 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { canDoGitOps } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
+import { preloadAllThreadsView } from '@/platform/shortcut-target-preloads';
+import { preloadThreadView } from '@/platform/thread-view-loader';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -47,10 +49,9 @@ registerBuiltinVisualizers();
 const AppSidebar = lazy(() =>
   import('@/components/Sidebar').then((m) => ({ default: m.AppSidebar })),
 );
-// Prefetch ThreadView immediately — it's the primary view users always see.
-// This fires the chunk download in parallel with auth bootstrap.
-const threadViewImport = import('@/components/ThreadView').then((m) => ({ default: m.ThreadView }));
-const ThreadView = lazy(() => threadViewImport);
+// Direct thread routes start this import in main.tsx, before App's larger
+// module graph evaluates. React.lazy reuses that same in-flight request.
+const ThreadView = lazy(preloadThreadView);
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
 const DEFAULT_SIDEBAR_WIDTH = 240;
@@ -69,9 +70,7 @@ function SidebarPlaceholder() {
 }
 
 // Lazy-load conditional views (bundle-conditional / bundle-dynamic-imports)
-const AllThreadsView = lazy(() =>
-  import('@/components/AllThreadsView').then((m) => ({ default: m.AllThreadsView })),
-);
+const AllThreadsView = lazy(preloadAllThreadsView);
 const reviewPaneImport = () =>
   import('@/components/ReviewPane').then((m) => ({ default: m.ReviewPane }));
 const ReviewPane = lazy(reviewPaneImport);
@@ -139,6 +138,9 @@ const BrowserPanel = lazy(() =>
 
 export function App() {
   useAppScrollLock();
+
+  const [primaryViewReady, setPrimaryViewReady] = useState(false);
+  const markPrimaryViewReady = useCallback(() => setPrimaryViewReady(true), []);
 
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const projectsInitialized = useProjectStore((s) => s.initialized);
@@ -281,46 +283,56 @@ export function App() {
         {
           id: 'changes',
           title: 'Changes',
-          content: (
+          content: primaryViewReady ? (
             <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
               <ChangesPanel />
             </Suspense>
+          ) : (
+            RIGHT_PANE_LOADING_FALLBACK
           ),
         },
         {
           id: 'graph',
           title: 'History',
-          content: (
+          content: primaryViewReady ? (
             <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
               <GraphPanel />
             </Suspense>
+          ) : (
+            RIGHT_PANE_LOADING_FALLBACK
           ),
         },
         {
           id: 'stash',
           title: 'Stash',
-          content: (
+          content: primaryViewReady ? (
             <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
               <StashPanel />
             </Suspense>
+          ) : (
+            RIGHT_PANE_LOADING_FALLBACK
           ),
         },
         {
           id: 'prs',
           title: 'PRs',
-          content: (
+          content: primaryViewReady ? (
             <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
               <PRsPanel />
             </Suspense>
+          ) : (
+            RIGHT_PANE_LOADING_FALLBACK
           ),
         },
         {
           id: 'issues',
           title: 'Issues',
-          content: (
+          content: primaryViewReady ? (
             <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
               <IssuesPanel />
             </Suspense>
+          ) : (
+            RIGHT_PANE_LOADING_FALLBACK
           ),
         },
       ]
@@ -330,21 +342,25 @@ export function App() {
     rightPaneVisible && !useReviewTabs ? (
       <div className="bg-sidebar h-full w-full overflow-hidden">
         <ErrorBoundary area="right-pane">
-          <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
-            {rightPaneTab === 'comments' ? (
-              // Comments work for any viewable thread (owner or sharee), with or
-              // without git — unlike files, they are not gated on git context.
-              <CommentsPane />
-            ) : rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
-              <ProjectFilesPane />
-            ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
-              // Compose mode (no thread) — activity has nothing to render, so
-              // show the branch-level review instead via tabs at next render.
-              <ReviewPane />
-            ) : (
-              <ActivityPane />
-            )}
-          </Suspense>
+          {primaryViewReady ? (
+            <Suspense fallback={<LoadingState testId="right-pane-loading" label="Loading…" />}>
+              {rightPaneTab === 'comments' ? (
+                // Comments work for any viewable thread (owner or sharee), with or
+                // without git — unlike files, they are not gated on git context.
+                <CommentsPane />
+              ) : rightPaneTab === 'files' && (activeThreadCanShowGit || hasSelectedProject) ? (
+                <ProjectFilesPane />
+              ) : rightPaneTab === 'activity' && !activeThreadCanShowGit && hasSelectedProject ? (
+                // Compose mode (no thread) — activity has nothing to render, so
+                // show the branch-level review instead via tabs at next render.
+                <ReviewPane />
+              ) : (
+                <ActivityPane />
+              )}
+            </Suspense>
+          ) : (
+            <LoadingState testId="right-pane-loading" label="Loading…" />
+          )}
         </ErrorBoundary>
       </div>
     ) : undefined;
@@ -393,7 +409,7 @@ export function App() {
           <Suspense>
             <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
               <ThreadProvider threadId={displayThreadId}>
-                <ThreadView />
+                <ThreadView onReady={markPrimaryViewReady} />
               </ThreadProvider>
             </div>
           </Suspense>
@@ -410,6 +426,7 @@ export function App() {
       generalSettingsOpen,
       isFullScreenView,
       liveColumnsOpen,
+      markPrimaryViewReady,
       schedulerOpen,
       settingsOpen,
       testRunnerOpen,

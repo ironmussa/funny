@@ -9,6 +9,7 @@ import { ProjectItem } from '@/components/sidebar/ProjectItem';
 import { resetExternalClaudeSessionsForTests } from '@/hooks/use-external-claude-sessions';
 import { api } from '@/lib/api';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -203,6 +204,37 @@ describe('ProjectItem external Claude sessions', () => {
     rerender(<ProjectItem {...props} isExpanded />);
 
     await waitFor(() => expect(ensureStatusForThreads).toHaveBeenCalledWith([thread]));
+  });
+
+  test('loads a restored expanded project when its startup bridge call was missed', async () => {
+    const originalLoadThreadsForProject = useThreadStore.getState().loadThreadsForProject;
+    const loadThreadsForProject = vi.fn().mockResolvedValue(undefined);
+    useThreadStore.setState({ loadThreadsForProject });
+
+    renderWithProviders(
+      <ProjectItem
+        project={project}
+        threads={[]}
+        threadsLoaded={false}
+        isExpanded
+        isSelected={false}
+        onToggle={vi.fn()}
+        onSelectProject={vi.fn()}
+        onNewThread={vi.fn()}
+        onRenameProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onSelectThread={vi.fn()}
+        onRenameThread={vi.fn()}
+        onArchiveThread={vi.fn()}
+        onPinThread={vi.fn()}
+        onDeleteThread={vi.fn()}
+        onShowAllThreads={vi.fn()}
+        onShowIssues={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(loadThreadsForProject).toHaveBeenCalledWith('project-1'));
+    useThreadStore.setState({ loadThreadsForProject: originalLoadThreadsForProject });
   });
 
   test('dismisses an external Claude shell before normal delete flow', async () => {

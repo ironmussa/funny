@@ -1,8 +1,8 @@
-import './wdyr'; // must be first — tracks unnecessary re-renders in dev
 import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
 
 import { clientComposition } from './platform/client-composition';
 import { prefetchInitialThread } from './platform/prefetch-initial-thread';
+import { preloadThreadView } from './platform/thread-view-loader';
 
 // Swallow benign "ResizeObserver loop completed with undelivered notifications"
 // errors before any other listener (Abbacchio, React) sees them. They surface
@@ -28,7 +28,6 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
-import { preloadPretext } from './hooks/use-pretext';
 import { profileApi } from './lib/api/profile';
 import { resolveClientLogLevel } from './lib/client-logger';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
@@ -48,22 +47,19 @@ import './i18n/config';
 // The platform is constructed and validated before React starts rendering.
 // Factories migrated into client-core receive capabilities from this value.
 void clientComposition;
-prefetchInitialThread(clientComposition.platform.navigation.current().pathname);
+const initialPathname = clientComposition.platform.navigation.current().pathname;
+const hasInitialThread = /\/projects\/[^/]+\/threads\/[^/]+/.test(initialPathname);
+prefetchInitialThread(initialPathname);
 
-// Load the thread text-layout engine after first paint. The import remains
-// lazy, so it does not delay startup, but is normally ready before a user
-// opens their first thread.
-const preloadThreadLayout = () => {
-  void preloadPretext().catch(() => {
-    // Pretext is an estimation enhancement; ResizeObserver still measures the
-    // real row height if the preload cannot complete.
-  });
-};
+// The initial thread payload is normally ready in a few hundred milliseconds,
+// so its view code—not the API—is the critical path. Start that chunk beside
+// the data prefetch instead of waiting for the lazy App graph to evaluate.
+if (hasInitialThread) void preloadThreadView();
 
-if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(preloadThreadLayout, { timeout: 1_500 });
-} else {
-  setTimeout(preloadThreadLayout, 0);
+// Why Did You Render adds substantial development-only startup work. Keep it
+// available for focused diagnostics without charging every normal reload.
+if (import.meta.env.DEV && import.meta.env.VITE_WDYR === 'true') {
+  void import('./wdyr');
 }
 
 // Cache the desktop App import so AuthGate can overlap the module graph with

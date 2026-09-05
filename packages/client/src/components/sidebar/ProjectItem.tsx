@@ -27,6 +27,7 @@ import {
   gitStatusForThreadFromState,
   gitStatusSidebarFingerprint,
 } from '@/stores/git-status-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -283,6 +284,16 @@ export const ProjectItem = memo(function ProjectItem({
       })
       .slice(0, 5);
   }, [threads]);
+
+  // Startup may restore an expanded project before project-store's bridge to
+  // thread-store has registered. In that race the eager request is a no-op and
+  // the skeleton would remain forever. A mounted visible row can address the
+  // thread store directly; its in-flight map deduplicates this with any request
+  // that already started successfully.
+  useEffect(() => {
+    if ((!isExpanded && !isSelected) || threadsLoaded) return;
+    void useThreadStore.getState().loadThreadsForProject(project.id);
+  }, [isExpanded, isSelected, project.id, threadsLoaded]);
 
   // Eagerly fetch git status for visible threads that don't have it yet.
   // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.

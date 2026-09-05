@@ -4,6 +4,12 @@ import { PipelineApprovalDialog } from '@/components/PipelineApprovalDialog';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { TOAST_DURATION } from '@/lib/utils';
+import {
+  preloadCommandPalette,
+  preloadFileSearchDialog,
+  preloadTextSearchDialog,
+  scheduleShortcutTargetPreloads,
+} from '@/platform/shortcut-target-preloads';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -11,15 +17,9 @@ import { useUIStore } from '@/stores/ui-store';
 // Keep global overlays out of startup. Starting these imports at module-eval
 // time made an ordinary thread reload fetch hundreds of modules that cannot be
 // used until the user opens a dialog, competing with the sidebar and chat.
-const CommandPalette = lazy(() =>
-  import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
-);
-const FileSearchDialog = lazy(() =>
-  import('@/components/FileSearchDialog').then((m) => ({ default: m.FileSearchDialog })),
-);
-const TextSearchDialog = lazy(() =>
-  import('@/components/TextSearchDialog').then((m) => ({ default: m.TextSearchDialog })),
-);
+const CommandPalette = lazy(preloadCommandPalette);
+const FileSearchDialog = lazy(preloadFileSearchDialog);
+const TextSearchDialog = lazy(preloadTextSearchDialog);
 const CircuitBreakerDialog = lazy(() =>
   import('@/components/CircuitBreakerDialog').then((m) => ({ default: m.CircuitBreakerDialog })),
 );
@@ -36,6 +36,8 @@ const MonacoEditorDialog = lazy(monacoEditorImport);
 const MediaPreviewDialog = lazy(() =>
   import('@/components/MediaPreviewDialog').then((m) => ({ default: m.MediaPreviewDialog })),
 );
+
+scheduleShortcutTargetPreloads();
 
 /**
  * Stack of global, lazy-loaded overlays rendered once at the root of App.tsx

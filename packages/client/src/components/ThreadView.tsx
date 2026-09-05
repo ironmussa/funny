@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,12 @@ import { WorktreeSetupProgress } from './WorktreeSetupProgress';
 export { MessageContent, CopyButton } from '@/components/thread/MessageContent';
 export { WaitingActions } from '@/components/thread/WaitingCards';
 
-export function ThreadView() {
+export interface ThreadViewProps {
+  /** Called once the primary route has enough data to paint its real view. */
+  onReady?: () => void;
+}
+
+export function ThreadView({ onReady }: ThreadViewProps = {}) {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const activeThread = useThreadCore();
@@ -33,6 +39,10 @@ export function ThreadView() {
   const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
   const hasProjects = useProjectStore((s) => s.projects.length > 0);
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
+
+  useEffect(() => {
+    if (!activeThreadId || activeThread) onReady?.();
+  }, [activeThread, activeThreadId, onReady]);
 
   // Scratch compose: no project / no header — just the prompt input.
   if (newThreadIsScratch && !activeThreadId) {

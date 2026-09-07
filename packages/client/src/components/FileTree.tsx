@@ -30,6 +30,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { FileName } from '@/components/ui/file-name';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { browseApi as api } from '@/lib/api/browse';
@@ -507,17 +508,12 @@ export function FileTree({
               className="text-muted-foreground/80 size-4 shrink-0"
             />
           )}
-          {searchQuery ? (
-            <HighlightText
-              text={fileName}
-              query={searchQuery}
-              className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}
-            />
-          ) : (
-            <span className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}>
-              {fileName}
-            </span>
-          )}
+          <FileName
+            name={fileName}
+            query={searchQuery}
+            preserveExtension={!isSubmodule}
+            className={cn('font-mono-explorer', fontSize)}
+          />
           {isSubmodule && (
             <Tooltip>
               <TooltipTrigger asChild>

@@ -40,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FileName } from '@/components/ui/file-name';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -612,10 +613,11 @@ export function ChangesFilesPanel({
                           className="icon-base text-muted-foreground/80 shrink-0"
                         />
                       )}
-                      <HighlightText
-                        text={f.path.split('/').pop() || f.path}
+                      <FileName
+                        name={f.path.split('/').pop() || f.path}
                         query={fileSearch}
-                        className="font-mono-explorer flex-1 truncate text-xs"
+                        preserveExtension={f.kind !== 'submodule'}
+                        className="font-mono-explorer text-xs"
                       />
                       {f.kind === 'submodule' && (
                         <Tooltip>

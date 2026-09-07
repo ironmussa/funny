@@ -265,10 +265,17 @@ export abstract class BaseAgentProcess extends EventEmitter {
   protected runOnePrompt?(prompt: string, images?: unknown[]): Promise<void>;
 
   /** Emit a system:init CLIMessage. */
-  protected emitInit(sessionId: string, tools: string[], model: string, cwd: string): void {
+  protected emitInit(
+    sessionId: string,
+    tools: string[],
+    model: string,
+    cwd: string,
+    slashCommands?: string[],
+  ): void {
     const msg: CLISystemMessage = {
       type: 'system',
       subtype: 'init',
+      ...(slashCommands ? { slashCommands } : {}),
       session_id: sessionId,
       tools,
       model,

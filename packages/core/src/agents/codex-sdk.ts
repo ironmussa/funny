@@ -1,17 +1,22 @@
+import { execFile } from 'child_process';
+import { randomUUID } from 'crypto';
 /**
  * CodexSDKProcess — Codex via the official @openai/codex-sdk.
  *
  * This replaces the Zed ACP adapter for the built-in Codex provider while
  * preserving funny's provider-agnostic IAgentProcess event contract.
  */
-
-import { execFile } from 'child_process';
-import { randomUUID } from 'crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { promisify } from 'util';
 
+import {
+  CODEX_COMMANDS,
+  CODEX_COMMAND_NAMES,
+  CODEX_UNSUPPORTED_COMMANDS,
+  parseCodexCommand,
+} from '@funny/shared/codex-commands';
 import {
   Codex,
   type Input,
@@ -21,10 +26,12 @@ import {
   type ThreadItem,
   type ThreadOptions,
 } from '@openai/codex-sdk';
+import { z } from 'zod';
 
 import { createDebugLogger } from '../debug.js';
 import { getFullContextFileDiff, gitRead } from '../git/index.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
+import { CodexAppServer, codexReviewTarget } from './codex-app-server.js';
 import type { CLIMessage } from './types.js';
 
 const dlog = createDebugLogger('codex-sdk');
@@ -97,7 +104,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
     } as Record<string, string>;
 
     this.codex = new Codex({
-      codexPathOverride: process.env.CODEX_BINARY_PATH || process.env.CODEX_BIN,
+      codexPathOverride: env.CODEX_BINARY_PATH || env.CODEX_BIN,
       apiKey: this.options.env?.OPENAI_API_KEY,
       env,
       config: {
@@ -159,17 +166,27 @@ export class CodexSDKProcess extends BaseAgentProcess {
     const cleanupDirs: string[] = [];
 
     try {
-      const input = await this.buildInput(prompt, images, cleanupDirs);
-      const { events } = await this.thread.runStreamed(input, { signal: turnAbort.signal });
+      const command = parseCodexCommand(prompt);
+      if (command && images?.length)
+        throw new Error('Send attachments separately from Codex commands.');
+      if (command && command.name !== 'init') {
+        resultText = await this.runCommand(command.name, command.args, turnAbort.signal);
+        await this.emitItemUpdate({ type: 'agent_message', id: 'command', text: resultText }, true);
+      } else {
+        if (command?.name === 'init')
+          prompt = `Inspect this repository and create or update AGENTS.md with concise, accurate guidance for coding agents. ${command.args}`;
+        const input = await this.buildInput(prompt, images, cleanupDirs);
+        const { events } = await this.thread.runStreamed(input, { signal: turnAbort.signal });
 
-      for await (const event of events) {
-        if (this.isAborted) break;
-        const maybeText = await this.handleEvent(event);
-        if (maybeText) resultText = maybeText;
-        if (event.type === 'turn.failed') {
-          subtype = 'error_during_execution';
-          errors.push(event.error.message);
-          this.emitErrorToolCall(event.error.message);
+        for await (const event of events) {
+          if (this.isAborted) break;
+          const maybeText = await this.handleEvent(event);
+          if (maybeText) resultText = maybeText;
+          if (event.type === 'turn.failed') {
+            subtype = 'error_during_execution';
+            errors.push(event.error.message);
+            this.emitErrorToolCall(event.error.message);
+          }
         }
       }
     } catch (err) {
@@ -197,6 +214,120 @@ export class CodexSDKProcess extends BaseAgentProcess {
       result: resultText || undefined,
       errors: errors.length ? errors : undefined,
     });
+  }
+
+  private async runCommand(name: string, args: string, signal: AbortSignal): Promise<string> {
+    if (!Object.hasOwn(CODEX_COMMANDS, name)) {
+      throw new Error(
+        CODEX_UNSUPPORTED_COMMANDS.has(name)
+          ? `/${name} is not supported in Funny. Use the Codex terminal for this operation.`
+          : `Unknown Codex command /${name}. Use /help to see available commands.`,
+      );
+    }
+    if (name !== 'review' && args) throw new Error(`/${name} does not accept arguments.`);
+    if (name === 'help')
+      return Object.entries(CODEX_COMMANDS)
+        .map(([key, description]) => `/${key} — ${description}`)
+        .join('\n');
+    if (name === 'status')
+      return `Session: ${this.activeSessionId ?? 'not started'}\nModel: ${this.options.model ?? 'default'}\nReasoning: ${this.options.effort ?? 'default'}\nPermissions: ${this.options.originalPermissionMode ?? this.options.permissionMode ?? 'default'}\nDirectory: ${this.options.cwd}`;
+    const methods: Record<string, string> = {
+      mcp: 'mcpServerStatus/list',
+      skills: 'skills/list',
+      apps: 'app/list',
+      plugins: 'plugin/list',
+    };
+    if (!methods[name] && name !== 'compact' && name !== 'review') {
+      throw new Error(`/${name} must be executed from the Funny composer.`);
+    }
+    if (name === 'compact' && !this.activeSessionId)
+      throw new Error('Send a message before compacting this conversation.');
+    const server = new CodexAppServer(
+      this.options.cwd,
+      { ...process.env, ...this.options.env },
+      signal,
+    );
+    try {
+      await server.initialize();
+      if (methods[name]) {
+        const pages: unknown[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = z
+            .object({ nextCursor: z.string().nullish() })
+            .passthrough()
+            .parse(
+              await server.request(methods[name], {
+                ...(['skills', 'plugins'].includes(name) ? { cwds: [this.options.cwd] } : {}),
+                ...(cursor ? { cursor } : {}),
+              }),
+            );
+          pages.push(page);
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
+        return JSON.stringify(pages.length === 1 ? pages[0] : pages, null, 2);
+      }
+      const sandbox = resolveCodexSandboxOptions(
+        this.options.originalPermissionMode ?? this.options.permissionMode,
+      );
+      const roots =
+        sandbox.sandboxMode === 'workspace-write'
+          ? await resolveCodexSandboxWritableDirectories(this.options.cwd)
+          : [];
+      const resumed = z.object({ thread: z.object({ id: z.string() }) }).parse(
+        await server.request(this.activeSessionId ? 'thread/resume' : 'thread/start', {
+          ...(this.activeSessionId ? { threadId: this.activeSessionId } : {}),
+          cwd: this.options.cwd,
+          model: this.options.model,
+          sandbox: sandbox.sandboxMode,
+          approvalPolicy: sandbox.approvalPolicy,
+          config: {
+            ...(this.options.effort
+              ? { model_reasoning_effort: normalizeEffort(this.options.effort) }
+              : {}),
+            ...(sandbox.sandboxMode === 'workspace-write'
+              ? {
+                  sandbox_workspace_write: {
+                    network_access: sandbox.networkAccessEnabled ?? false,
+                    writable_roots: roots,
+                  },
+                }
+              : {}),
+          },
+        }),
+      );
+      this.activeSessionId = resumed.thread.id;
+      this.emitInitOnce(resumed.thread.id);
+      const threadId = resumed.thread.id;
+      const output = await server.runTurn(
+        name === 'compact' ? 'thread/compact/start' : 'review/start',
+        {
+          threadId,
+          ...(name === 'review' ? { target: codexReviewTarget(args), delivery: 'inline' } : {}),
+        },
+      );
+      // A newly started review session must also be used by subsequent SDK turns.
+      this.thread = this.codex!.resumeThread(threadId, {
+        model: this.options.model,
+        workingDirectory: this.options.cwd,
+        skipGitRepoCheck: true,
+        modelReasoningEffort: normalizeEffort(this.options.effort),
+        ...sandbox,
+        ...(roots.length ? { additionalDirectories: roots } : {}),
+      });
+      if (name === 'compact') {
+        this.emit('message', {
+          type: 'compact_boundary',
+          trigger: 'manual',
+          preTokens: 0,
+          postTokens: 0,
+        });
+        return 'Conversation context compacted.';
+      }
+      return output || 'Review completed.';
+    } finally {
+      server.close();
+    }
   }
 
   private async handleEvent(event: ThreadEvent): Promise<string | null> {
@@ -240,7 +371,13 @@ export class CodexSDKProcess extends BaseAgentProcess {
   private emitInitOnce(sessionId: string): void {
     if (this.initEmitted) return;
     this.initEmitted = true;
-    this.emitInit(sessionId, CODEX_TOOLS, this.options.model ?? 'codex', this.options.cwd);
+    this.emitInit(
+      sessionId,
+      CODEX_TOOLS,
+      this.options.model ?? 'codex',
+      this.options.cwd,
+      CODEX_COMMAND_NAMES,
+    );
   }
 
   /**

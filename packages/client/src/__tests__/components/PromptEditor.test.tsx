@@ -196,6 +196,31 @@ describe('PromptEditor', () => {
 });
 
 describe('buildSlashSuggestionItems', () => {
+  test('offers native Codex commands before a session starts', () => {
+    const items = buildSlashSuggestionItems({
+      skills: [],
+      sdkCommands: [],
+      query: 'compact',
+      commandProvider: 'codex',
+    });
+    expect(items).toEqual([
+      {
+        id: 'compact',
+        label: 'compact',
+        description: 'Compact the current conversation context',
+        type: 'slash',
+      },
+    ]);
+    expect(
+      buildSlashSuggestionItems({
+        skills: [],
+        sdkCommands: [],
+        query: 'compact',
+        commandProvider: 'gemini',
+      }),
+    ).toEqual([]);
+  });
+
   test('returns SDK slash commands before skills have loaded', () => {
     const items = buildSlashSuggestionItems({
       skills: [],

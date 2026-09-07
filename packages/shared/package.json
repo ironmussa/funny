@@ -13,6 +13,7 @@
     },
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
+    "./codex-commands": "./src/codex-commands.ts",
     "./provider-manifest": "./src/provider-manifest.ts",
     "./provider-manifests": "./src/provider-manifests.ts",
     "./provider-manifest-schema": "./src/provider-manifest-schema.ts",

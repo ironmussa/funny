@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       'bun:test': 'vitest',
+      '@funny/shared/codex-commands': path.join(shared, 'codex-commands.ts'),
       '@funny/shared/errors': path.join(shared, 'errors.ts'),
       '@funny/shared/models': path.join(shared, 'models.ts'),
       '@funny/shared/provider-manifest': path.join(shared, 'provider-manifest.ts'),

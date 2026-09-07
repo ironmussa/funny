@@ -1,3 +1,4 @@
+import { CODEX_COMMANDS } from '@funny/shared/codex-commands';
 import Document from '@tiptap/extension-document';
 import HardBreak from '@tiptap/extension-hard-break';
 import History from '@tiptap/extension-history';
@@ -243,6 +244,10 @@ export function buildSlashSuggestionItems({
   const builtinDesc = (name: string): string | undefined =>
     isClaude ? BUILTIN_SLASH_DESCRIPTIONS[name] : undefined;
 
+  if (commandProvider === 'codex') {
+    for (const [name, description] of Object.entries(CODEX_COMMANDS))
+      add(name, description, 'slash');
+  }
   if (isClaude) {
     for (const name of sdkCommands) {
       if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name], 'slash');

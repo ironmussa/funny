@@ -3,6 +3,7 @@ import { chmod, mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, relative } from 'path';
 
+import { parseCodexCommand } from '@funny/shared/codex-commands';
 import { describe, expect, test } from 'vitest';
 
 import {
@@ -11,6 +12,7 @@ import {
   resolveCodexSandboxOptions,
   resolveCodexSandboxWritableDirectories,
 } from '../agents/codex-sdk.js';
+import type { CLIMessage } from '../agents/types.js';
 
 const options = {
   prompt: 'hello',
@@ -19,6 +21,50 @@ const options = {
 };
 
 describe('CodexSDKProcess', () => {
+  test('parses commands with arguments without treating file paths as commands', () => {
+    expect(parseCodexCommand(' /review --base develop ')).toEqual({
+      name: 'review',
+      args: '--base develop',
+    });
+    expect(parseCodexCommand('/tmp/file.ts')).toBeNull();
+    expect(parseCodexCommand('Explain /review')).toBeNull();
+  });
+
+  test.each([
+    ['/typo', 'Unknown Codex command /typo'],
+    ['/logout', '/logout is not supported in Funny'],
+    ['/compact', 'Send a message before compacting'],
+    ['/status extra', '/status does not accept arguments'],
+  ])('handles %s locally without invoking the model', async (prompt, error) => {
+    const agent = new CodexSDKProcess({
+      ...options,
+      prompt,
+      env: { CODEX_BINARY_PATH: '/nonexistent-codex-command-test' },
+    });
+    const messages: CLIMessage[] = [];
+    agent.on('message', (message) => messages.push(message));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Command timed out')), 5000);
+        agent.on('message', (message) => {
+          if (message.type !== 'result') return;
+          clearTimeout(timeout);
+          resolve();
+        });
+        agent.start();
+      });
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: 'result',
+          subtype: 'error_during_execution',
+          errors: [expect.stringContaining(error)],
+        }),
+      );
+    } finally {
+      await agent.kill();
+    }
+  });
+
   test.each(['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const)(
     'forwards supported reasoning effort %s without downgrading it',
     (effort) => {

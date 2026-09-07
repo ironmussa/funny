@@ -5,6 +5,7 @@ import type {
   QueuedMessage,
   Thread,
 } from '@funny/shared';
+import { parseCodexCommand } from '@funny/shared/codex-commands';
 import { getAttachmentLimits } from '@funny/shared/models';
 import {
   ArrowUp,
@@ -54,6 +55,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCodexCommands } from '@/hooks/use-codex-commands';
 import { threadsApi } from '@/lib/api/threads';
 import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
 import { getEffortLevels, parseUnifiedModel } from '@/lib/providers';
@@ -614,6 +616,21 @@ export const PromptInputUI = memo(function PromptInputUI({
     if (isDeepAgent && isNewThread && !templatesLoaded) loadTemplates();
   }, [isDeepAgent, isNewThread, templatesLoaded, loadTemplates]);
 
+  const executeCodexCommand = useCodexCommands({
+    threadId,
+    model,
+    mode,
+    effort,
+    running,
+    modelGroups,
+    modes,
+    onModelChange: onUnifiedModelChange,
+    onModeChange,
+    onEffortChange,
+    onStop,
+    onOpenReview,
+  });
+
   // ── Submit handler ──
   const handleSubmit = useCallback(async () => {
     if (loading) return;
@@ -629,6 +646,27 @@ export const PromptInputUI = memo(function PromptInputUI({
     const serialized = editorJSON
       ? serializeEditorContent(editorJSON)
       : { text: '', fileReferences: [], symbolReferences: [] };
+    if (provider === 'codex' && parseCodexCommand(serialized.text)) {
+      if (
+        images.length ||
+        attachedTextFiles.length ||
+        serialized.fileReferences.length ||
+        serialized.symbolReferences.length
+      ) {
+        toast.error('Send attachments in a separate message from Codex commands.');
+        return;
+      }
+      try {
+        if (await executeCodexCommand(serialized.text)) {
+          editorRef.current?.clear();
+          setEditorEmpty(true);
+          return;
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Codex command failed');
+        return;
+      }
+    }
     const leadingSlashCommand = getLeadingSlashCommand(serialized.text);
     const slashResources = leadingSlashCommand && loadSkills ? await loadSkills() : undefined;
     const commandThreadMode =
@@ -722,6 +760,7 @@ export const PromptInputUI = memo(function PromptInputUI({
     }
   }, [
     loading,
+    executeCodexCommand,
     isRecording,
     onStopRecording,
     images,

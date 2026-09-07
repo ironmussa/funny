@@ -91,8 +91,9 @@ export function shouldReserveLeadingStickySpace(
   return Boolean(
     leadingUserItem &&
     firstRow?.type === 'item' &&
-    firstRow.item.type === 'message' &&
-    firstRow.item.msg.role !== 'user',
+    // A loaded window can begin with tools or events as well as text.
+    // All need room for the prompt whose original row is outside the window.
+    !(firstRow.item.type === 'message' && firstRow.item.msg.role === 'user'),
   );
 }
 

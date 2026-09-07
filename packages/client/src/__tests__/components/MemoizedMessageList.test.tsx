@@ -535,6 +535,34 @@ describe('MemoizedMessageList virtualization', () => {
     ).not.toBe('translateY(0px)');
   });
 
+  test.each([1, 2])(
+    'reserves prompt space when a short loaded window starts with %i tool calls',
+    async (count) => {
+      virtualizerMockState.start = 0;
+      const messages = makeMessagesWithToolCalls(
+        Array.from({ length: count }, (_, i) => ({
+          id: `tool-${i}`,
+          name: 'Bash',
+          input: '{"command":"pwd"}',
+          output: '/project',
+        })),
+      );
+      const { getByTestId } = render(
+        <Harness
+          messages={messages.slice(1)}
+          leadingUserMessage={messages[0]}
+          viewportHeight={900}
+        />,
+      );
+
+      await waitFor(() => expect(getByTestId('sticky-section-card').dataset.docked).toBe('true'));
+      const firstRow = getByTestId('viewport').querySelector<HTMLElement>('[data-virtual-row-key]');
+      expect(firstRow).toBeTruthy();
+      const offset = Number(firstRow!.style.transform.match(/translateY\(([-\d.]+)px\)/)?.[1]);
+      expect(offset).toBeGreaterThan(0);
+    },
+  );
+
   test('captures and restores a visible virtual row anchor', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 3;

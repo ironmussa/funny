@@ -64,12 +64,10 @@ const mocks = vi.hoisted(() => ({
     async (_userId?: string, _keyId?: string): Promise<string | undefined> => undefined,
   ),
   getGitIdentity: vi.fn(async (): Promise<{ name: string; email: string } | null> => null),
-  resolveEffectiveProfile: vi.fn(
-    async (): Promise<ResolvedAgentExecutionProfileResponse> => ({
-      profile: null,
-      env: {},
-    }),
-  ),
+  resolveEffectiveProfile: vi.fn(async (): Promise<ResolvedAgentExecutionProfileResponse> => ({
+    profile: null,
+    env: {},
+  })),
   threadEventBusEmit: vi.fn(),
   threadEventBusOn: vi.fn(),
   remoteGetAgentTemplate: vi.fn(),
@@ -134,7 +132,7 @@ vi.mock('../../services/thread-event-bus.js', () => ({
   },
 }));
 
-vi.mock('../../services/team-client.js', () => ({
+vi.mock('../../services/remote-thread-data-client.js', () => ({
   remoteGetAgentTemplate: (...args: unknown[]) => mocks.remoteGetAgentTemplate(...args),
 }));
 

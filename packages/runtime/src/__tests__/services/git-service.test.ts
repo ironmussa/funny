@@ -39,7 +39,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
 });
 
 vi.mock('../../services/thread-event-bus.js', () => ({
-  threadEventBus: { emit: mocks.emit },
+  threadEventBus: { emit: mocks.emit, on: vi.fn() },
 }));
 
 import { resolveIdentity, validateFilePaths, stage } from '../../services/git-service.js';

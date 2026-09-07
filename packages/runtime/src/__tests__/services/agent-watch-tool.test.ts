@@ -24,7 +24,7 @@ const { getThread, createAndStartThread, remoteSearchThreads } = vi.hoisted(() =
 
 vi.mock('../../services/thread-manager.js', () => ({ getThread }));
 vi.mock('../../services/thread-service/create.js', () => ({ createAndStartThread }));
-vi.mock('../../services/team-client.js', () => ({ remoteSearchThreads }));
+vi.mock('../../services/remote-thread-data-client.js', () => ({ remoteSearchThreads }));
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

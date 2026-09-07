@@ -6,8 +6,8 @@
  * server covers the enrollment service/routes). These guards pin the glue that
  * is awkward to drive end-to-end but easy to regress:
  *
- *  1. team-client: register() reports auth rejection (401/403) and
- *     registerWithRetry falls back to device-link enrollment instead of looping
+ *  1. runner-enrollment-client: register() reports auth rejection (401/403) and
+ *     bootstrap falls back to device-link enrollment instead of looping
  *     on rejected credentials forever.
  *  2. init-runtime: a missing RUNNER_AUTH_SECRET is NOT a fatal error — the
  *     runtime proceeds to initTeamMode (device-link obtains the secret).
@@ -33,16 +33,16 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf-8');
 
 describe('runner connect resilience wiring', () => {
   test('register() flags 401/403 as auth failure', () => {
-    const src = read('packages/runtime/src/services/team-client.ts');
+    const src = read('packages/runtime/src/services/runner-enrollment-client.ts');
     expect(src).toMatch(/authFailed:\s*res\.status === 401 \|\| res\.status === 403/);
   });
 
-  test('registerWithRetry falls back to device-link enrollment on auth failure', () => {
-    const src = read('packages/runtime/src/services/team-client.ts');
+  test('bootstrap falls back to device-link enrollment on auth failure', () => {
+    const src = read('packages/runtime/src/services/runner-enrollment-client.ts');
     // The authFailed branch clears the rejected creds and enrolls, rather than
     // retrying the same credentials forever.
     expect(src).toMatch(
-      /if \(authFailed\)[\s\S]{0,600}clearRunnerCredentials\(\)[\s\S]{0,200}enrollAndPersist\(\)/,
+      /if \(registered\.authFailed\)[\s\S]{0,600}this\.dependencies\.clearCredentials\(\)[\s\S]{0,200}this\.enrollAndPersist\(\)/,
     );
   });
 

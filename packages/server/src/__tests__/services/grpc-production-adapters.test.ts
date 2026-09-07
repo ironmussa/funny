@@ -67,7 +67,9 @@ describe('production TypeScript runner gRPC adapters', () => {
     expect(capture.userRoomEmits).toContainEqual({
       room: 'user:user-1',
       event: 'pty:data',
-      payload: expect.objectContaining({ data: { ptyId: 'pty-1', data: 'terminal-ok' } }),
+      payload: expect.objectContaining({
+        data: { ptyId: 'pty-1', data: 'terminal-ok', sequence: 1n },
+      }),
     });
 
     await socket.trigger('browser-session:navigate', {
@@ -209,13 +211,13 @@ describe('production TypeScript runner gRPC adapters', () => {
       expect.objectContaining({
         room: 'user:user-a',
         payload: expect.objectContaining({
-          data: { ptyId: 'pty-user-a', data: 'runner-a-output' },
+          data: { ptyId: 'pty-user-a', data: 'runner-a-output', sequence: 1n },
         }),
       }),
       expect.objectContaining({
         room: 'user:user-b',
         payload: expect.objectContaining({
-          data: { ptyId: 'pty-user-b', data: 'runner-b-output' },
+          data: { ptyId: 'pty-user-b', data: 'runner-b-output', sequence: 1n },
         }),
       }),
     ]);
@@ -454,7 +456,7 @@ describe('production TypeScript runner gRPC adapters', () => {
     await waitFor(() => fixture!.terminalEvents.length === 1, 'terminal output was not relayed');
     expect(fixture.terminalEvents[0]).toMatchObject({
       type: 'pty:data',
-      data: { ptyId: 'pty-1', data: 'terminal-ok' },
+      data: { ptyId: 'pty-1', data: 'terminal-ok', sequence: 1n },
     });
   });
 

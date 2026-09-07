@@ -19,6 +19,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
+import { HtmlPreview } from '@/components/HtmlPreview';
 import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +42,7 @@ import {
   formatBlameLineRanges,
   type BlameHistoryEntry,
 } from '@/lib/editor-blame-history';
+import { isHtmlFile } from '@/lib/html-preview';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
@@ -82,11 +84,10 @@ export function MonacoEditorDialog({
   const ext = getFileExtension(filePath);
   const language = getMonacoLanguage(ext, filePath);
   const isMarkdown = isMarkdownFile(filePath);
-  // A visualizer registered for this file's extension (e.g. an installed CSV
-  // plugin) also enables preview. Built-ins claim no file extensions, so for
-  // them `canPreview` reduces to `isMarkdown` (no behavior change).
+  const isHtml = isHtmlFile(filePath);
+  // Installed visualizers can also enable preview for other file types.
   const fileVisualizer = getVisualizerForFileExt(ext);
-  const canPreview = isMarkdown || !!fileVisualizer;
+  const canPreview = isMarkdown || isHtml || !!fileVisualizer;
   // Raw-bytes URL for the current file — handed to binary visualizers (images,
   // Parquet, …) whose `source` text would be corrupt. Text visualizers ignore it.
   const rawFileSrc = `/api/files/raw?path=${encodeURIComponent(filePath)}`;
@@ -334,7 +335,7 @@ export function MonacoEditorDialog({
   // Ctrl+F → open the unified search bar (both code and markdown views).
   // Capture phase + preventDefault prevents Monaco's built-in find widget from opening.
   useEffect(() => {
-    if (!open) return;
+    if (!open || (showPreview && isHtml)) return;
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
@@ -348,7 +349,7 @@ export function MonacoEditorDialog({
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [open]);
+  }, [open, showPreview, isHtml]);
 
   // ── Markdown preview search ─────────────────────────────────────────────────
   // Collect <mark> elements produced by the rehype plugin so we can navigate.
@@ -631,7 +632,7 @@ export function MonacoEditorDialog({
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="relative min-w-0 flex-1 overflow-hidden">
-            {searchOpen && (
+            {searchOpen && !(showPreview && isHtml) && (
               <SearchBar
                 query={searchQuery}
                 onQueryChange={setSearchQuery}
@@ -654,7 +655,9 @@ export function MonacoEditorDialog({
                 className="border-border bg-popover absolute top-3 right-4 z-10 rounded-md border px-2 py-1 shadow-md"
               />
             )}
-            {showPreview && isMarkdown ? (
+            {showPreview && isHtml ? (
+              <HtmlPreview content={content} filePath={filePath} />
+            ) : showPreview && isMarkdown ? (
               <ScrollArea className="h-full">
                 <div ref={previewContainerRef} className={cn(markdownProseClassName, 'px-8 py-6')}>
                   {renderedMarkdown}
@@ -903,6 +906,7 @@ function getMonacoLanguage(ext: string, filePath?: string): string {
     toml: 'toml',
     xml: 'xml',
     html: 'html',
+    htm: 'html',
     css: 'css',
     scss: 'scss',
     less: 'less',

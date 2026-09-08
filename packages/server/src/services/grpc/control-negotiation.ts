@@ -184,12 +184,13 @@ function writeFailure(
   code: FailureCode,
   message: string,
   details?: Record<string, number>,
+  retryable = false,
 ): void {
   call.write({
     failure: {
       code,
       message,
-      retryable: false,
+      retryable,
       ...(details
         ? {
             details: {
@@ -307,6 +308,8 @@ export function createControlNegotiationHandler(
                 reason === 'session-replaced'
                   ? 'runner session was superseded by a newer connection'
                   : 'runner session is no longer active',
+                undefined,
+                reason !== 'session-replaced',
               );
             },
           },
@@ -360,7 +363,13 @@ export function createControlNegotiationHandler(
         if (sessionEpoch === null || !sessions.heartbeat(runnerId, sessionEpoch)) {
           options.observeHealth?.(false);
           state = 'closed';
-          writeFailure(call, FailureCode.UNAVAILABLE, 'runner session is no longer active');
+          writeFailure(
+            call,
+            FailureCode.UNAVAILABLE,
+            'runner session is no longer active',
+            undefined,
+            true,
+          );
           return;
         }
         options.observeHealth?.(true);

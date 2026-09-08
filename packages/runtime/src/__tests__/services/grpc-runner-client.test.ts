@@ -180,6 +180,31 @@ describe('RunnerGrpcClient', () => {
     client.shutdown();
   });
 
+  test('reconnects and reopens data streams after a retryable control failure', () => {
+    const transports = [new FakeTransport(), new FakeTransport()];
+    const factory = vi.fn(() => transports[factory.mock.calls.length - 1]!);
+    const client = createClient(factory, { reconnectMinimumMs: 100 });
+    client.start();
+    const control = transports[0]!.streams.get('control')!;
+    control.emit('data', { hello: { sessionEpoch: '1' } });
+    control.emit('data', {
+      failure: { code: 14, message: 'runner session is no longer active', retryable: true },
+    });
+    expect(client.isActive()).toBe(false);
+    vi.advanceTimersByTime(100);
+    expect(factory).toHaveBeenCalledTimes(2);
+    transports[1]!.streams.get('control')!.emit('data', { hello: { sessionEpoch: '2' } });
+    expect(client.isActive()).toBe(true);
+    expect(transports[1]!.opened).toEqual([
+      'control',
+      'operations',
+      'events',
+      'tunnel',
+      'terminal',
+    ]);
+    client.shutdown();
+  });
+
   test('does not reconnect after a non-retryable control failure', () => {
     const transport = new FakeTransport();
     const factory = vi.fn(() => transport);

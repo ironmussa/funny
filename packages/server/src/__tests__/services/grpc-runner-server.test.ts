@@ -557,6 +557,36 @@ describe('runner gRPC control negotiation', () => {
     expect(sessions.activeEpoch('runner-1')).toBeNull();
   });
 
+  test.each(['server-shutdown', 'heartbeat-expired'] as const)(
+    'allows reconnection after %s',
+    async (reason) => {
+      const sessions = new RunnerGrpcSessionRegistry({
+        heartbeatTimeoutMs: 100,
+      });
+      endpoint = await startRunnerGrpcEndpoint({
+        config: config(),
+        dependencies: {
+          authenticateRunner: async () => 'runner-1',
+          getRunnerUserId: async () => 'user-1',
+        },
+        sessionRegistry: sessions,
+      });
+      client = createClient(endpoint!.port);
+      const stream = client.control(metadata('good-token'));
+      const hello = nextMessage(stream);
+      stream.write({ hello: runnerHello() });
+      await hello;
+
+      const failure = nextMessage(stream);
+      if (reason === 'server-shutdown') {
+        sessions.closeAll();
+      }
+      expect(await failure).toMatchObject({
+        failure: { code: 'FAILURE_CODE_UNAVAILABLE', retryable: true },
+      });
+    },
+  );
+
   test('supersedes the old control stream without stale offline cleanup', async () => {
     const unavailableEpochs: bigint[] = [];
     const sessions = new RunnerGrpcSessionRegistry({
@@ -599,6 +629,7 @@ describe('runner gRPC control negotiation', () => {
       failure: {
         code: 'FAILURE_CODE_UNAVAILABLE',
         message: 'runner session was superseded by a newer connection',
+        retryable: false,
       },
     });
     await sessions.whenIdle('runner-1');

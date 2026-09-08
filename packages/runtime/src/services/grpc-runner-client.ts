@@ -1,6 +1,6 @@
 import {
   fromBinary,
-  fromJson,
+  fromJsonString,
   toBinary,
   toJson,
   type DescMessage,
@@ -63,11 +63,13 @@ function normalizeEndpoint(raw: string): { address: string; secure: boolean } {
   return { address: `${url.hostname}:${url.port}`, secure: url.protocol === 'https:' };
 }
 
-function grpcMethodDefinition(
+export function grpcMethodDefinition(
   method: DescMethodStreaming,
 ): grpc.MethodDefinition<RunnerGrpcWireMessage, RunnerGrpcWireMessage> {
   const encode = (schema: DescMessage, value: RunnerGrpcWireMessage): Buffer =>
-    Buffer.from(toBinary(schema, fromJson(schema, value)));
+    // Apply JSON semantics to optional fields before decoding protobuf Struct values.
+    // In-memory events may contain undefined, which protobuf JSON cannot represent.
+    Buffer.from(toBinary(schema, fromJsonString(schema, JSON.stringify(value))));
   const decode = (schema: DescMessage, value: Buffer): RunnerGrpcWireMessage =>
     toJson(schema, fromBinary(schema, value), { enumAsInteger: true }) as RunnerGrpcWireMessage;
   return {

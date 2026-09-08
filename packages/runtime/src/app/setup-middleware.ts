@@ -27,7 +27,8 @@ function buildSecureHeadersConfig() {
   return {
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      // Satteri compiles WebAssembly; JavaScript eval remains prohibited.
+      scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
       // Monaco editor workers are bundled via Vite's `?worker` imports and
       // served from same-origin in prod; dev builds may use blob: URLs.
       workerSrc: ["'self'", 'blob:'],
@@ -36,7 +37,7 @@ function buildSecureHeadersConfig() {
       // Mirrors the server's config so the runtime doesn't become the
       // weaker tier.
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://avatars.githubusercontent.com'],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
@@ -45,6 +46,9 @@ function buildSecureHeadersConfig() {
       formAction: ["'self'"],
       frameSrc: ["'none'"],
     },
+    // Match the server: Satteri's WASM workers require shared memory.
+    crossOriginOpenerPolicy: 'same-origin' as const,
+    crossOriginEmbedderPolicy: 'require-corp' as const,
     strictTransportSecurity: 'max-age=31536000; includeSubDomains',
     xContentTypeOptions: true,
   };

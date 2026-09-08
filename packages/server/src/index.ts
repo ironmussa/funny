@@ -135,7 +135,8 @@ app.use(
       // SHA-256 hash of its exact contents — keeping script-src otherwise strict
       // ('self' only, no 'unsafe-inline'). The hash derives from the same
       // constant the client injects, so the two can never drift.
-      scriptSrc: ["'self'", VISUALIZER_IMPORT_MAP_CSP_HASH],
+      // Satteri compiles WebAssembly; JavaScript eval remains prohibited.
+      scriptSrc: ["'self'", "'wasm-unsafe-eval'", VISUALIZER_IMPORT_MAP_CSP_HASH],
       // Monaco editor workers are bundled via Vite's `?worker` imports and
       // served from same-origin in prod; dev builds may use blob: URLs.
       workerSrc: ["'self'", 'blob:'],
@@ -153,7 +154,7 @@ app.use(
       // strict ('self' only) — inline-style XSS is significantly harder to
       // weaponize than inline-script XSS.
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://avatars.githubusercontent.com'],
       // Security HI-9: `'self'` already authorises same-origin `ws://` /
       // `wss://` upgrades; the prior wildcard `ws:` / `wss:` allowed any
       // host and was a convenient exfil channel for a compromised script
@@ -169,6 +170,9 @@ app.use(
       formAction: ["'self'"],
       frameSrc: ["'none'"],
     },
+    // Satteri's WASM workers share memory, requiring cross-origin isolation.
+    crossOriginOpenerPolicy: 'same-origin',
+    crossOriginEmbedderPolicy: 'require-corp',
     strictTransportSecurity: 'max-age=31536000; includeSubDomains',
     // Security L3: X-Content-Type-Options: nosniff — applied to every response
     // including the static client bundle served below, so a JS file uploaded

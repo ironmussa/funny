@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
@@ -114,4 +115,57 @@ describe('static-file security headers (L3)', () => {
       expect(res.headers.get('X-Powered-By')).toBeNull();
     });
   });
+});
+
+// Read the production policies so this regression covers both HTML entrypoints.
+describe('GitHub avatar image policy', () => {
+  for (const path of ['../index.ts', '../../../runtime/src/app/setup-middleware.ts']) {
+    it(`allows GitHub avatars with a restricted image policy in ${path}`, async () => {
+      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+      const directive = source.match(/imgSrc: \[([^\]]+)\]/)?.[1];
+      expect(directive).toBeDefined();
+      const imgSrc = Array.from(directive!.matchAll(/(['"])(.*?)\1/g), (match) => match[2]);
+      const app = new Hono();
+      app.use('*', secureHeaders({ contentSecurityPolicy: { imgSrc } }));
+      app.get('/', (c) => c.text('ok'));
+      const res = await app.request('/');
+      expect(res.headers.get('Content-Security-Policy')).toBe(
+        "img-src 'self' data: blob: https://avatars.githubusercontent.com",
+      );
+    });
+  }
+});
+
+// Guard the actual entrypoint declarations, rather than only a copied policy.
+describe('Markdown WebAssembly security policy', () => {
+  for (const path of ['../index.ts', '../../../runtime/src/app/setup-middleware.ts']) {
+    it(`enables isolated WASM without JavaScript eval in ${path}`, async () => {
+      const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+      const directive = source.match(/scriptSrc: \[([^\]]+)\]/)?.[1];
+      expect(directive).toBeDefined();
+      const scriptSrc = Array.from(directive!.matchAll(/(['"])(.*?)\1/g), (match) => match[2]);
+      const coop = source.match(/crossOriginOpenerPolicy: '([^']+)'/)?.[1];
+      const coep = source.match(/crossOriginEmbedderPolicy: '([^']+)'/)?.[1];
+      expect(coop).toBe('same-origin');
+      expect(coep).toBe('require-corp');
+
+      const app = new Hono();
+      app.use(
+        '*',
+        secureHeaders({
+          contentSecurityPolicy: { scriptSrc },
+          crossOriginOpenerPolicy: coop as 'same-origin',
+          crossOriginEmbedderPolicy: coep as 'require-corp',
+        }),
+      );
+      app.get('/', (c) => c.html('<!doctype html><title>Markdown</title>'));
+      const res = await app.request('/');
+      const csp = res.headers.get('Content-Security-Policy') ?? '';
+      expect(csp).toContain("'wasm-unsafe-eval'");
+      expect(csp).not.toContain("'unsafe-eval'");
+      expect(csp).not.toContain("'unsafe-inline'");
+      expect(res.headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
+      expect(res.headers.get('Cross-Origin-Embedder-Policy')).toBe('require-corp');
+    });
+  }
 });

@@ -5,12 +5,13 @@
   "//worker": "Outbound-only worker: with WS_TUNNEL_ONLY=true it dials the server and needs no inbound port — so there is intentionally NO healthcheck/domain. Railway keeps it up as long as the process runs.",
   "//variables": "Railway config-as-code can ONLY express build/deploy settings — NOT variables or volumes. Set in the template composer / service: (1) TEAM_SERVER_URL = the central server URL (the only required var; device-link delivers the bearer + forwarded-identity secret on approval, so NO RUNNER_AUTH_SECRET or invite token). (2) FUNNY_DATA_DIR = /data. (3) WS_TUNNEL_ONLY = true.",
   "//volume": "REQUIRED: attach a persistent volume mounted at /data (matching FUNNY_DATA_DIR). The runner stores its device-link credentials at $FUNNY_DATA_DIR/runner-credentials.json plus worktrees and scratch state; without a volume every redeploy wipes them and the runner must be re-enrolled (re-approved) each deploy.",
+  "//pty": "PTY process IDs and sockets belong to the previous container, even when the data volume persists. Remove only these transient files before starting the runtime to prevent stale PIDs from targeting unrelated processes after a redeploy.",
   "build": {
     "builder": "RAILPACK",
     "buildCommand": "bun run build"
   },
   "deploy": {
-    "startCommand": "cd packages/runtime && bun run start",
+    "startCommand": "sh scripts/start-railway-runner.sh",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

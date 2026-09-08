@@ -149,6 +149,13 @@ describe('validateProjectPathLexical', () => {
     }
   });
 
+  test('allows root-home repositories through host-independent lexical validation', () => {
+    expect(validateProjectPathLexical('/root/my-repo').isOk()).toBe(true);
+    for (const path of ['/root', '/root/.ssh', '/root/.aws/credentials']) {
+      expect(validateProjectPathLexical(path).isErr()).toBe(true);
+    }
+  });
+
   test('accepts a normal absolute path lexically', () => {
     expect(validateProjectPathLexical('/home/someone/code/proj').isOk()).toBe(true);
   });
@@ -162,6 +169,22 @@ describe('validateProjectRootContainment / validateProjectRootPath', () => {
   afterEach(() => {
     if (prevRoot !== undefined) process.env.FUNNY_PROJECT_ROOT = prevRoot;
     else delete process.env.FUNNY_PROJECT_ROOT;
+  });
+
+  test('allows root-home repositories only when root is the filesystem owner home', () => {
+    const previousHome = process.env.HOME;
+    try {
+      process.env.HOME = '/root';
+      expect(validateProjectRootPath('/root/my-repo').isOk()).toBe(true);
+      expect(validateProjectRootPath('/root/.ssh/repo').isErr()).toBe(true);
+      expect(validateProjectRootPath('/root').isErr()).toBe(true);
+      process.env.HOME = '/home/another-user';
+      process.env.FUNNY_PROJECT_ROOT = '/root';
+      expect(validateProjectRootPath('/root/my-repo').isErr()).toBe(true);
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+    }
   });
 
   test('accepts a path under the current $HOME', () => {

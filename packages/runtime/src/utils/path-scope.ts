@@ -183,6 +183,9 @@ export async function requirePickerPath(path: string): Promise<Response | null> 
   // in $HOME that resolve to /etc). Apply against the realpath since a
   // lexical /home/user/sneaky doesn't start with /etc.
   for (const p of BLOCKED_PREFIXES) {
+    // Containers may run as root. Its own home is a valid picker scope;
+    // containment and credential-directory checks above still apply.
+    if (p === '/root' && home === p && realHome === p) continue;
     if (
       lexicalTarget === p ||
       lexicalTarget.startsWith(p + '/') ||

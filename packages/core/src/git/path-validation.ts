@@ -88,7 +88,6 @@ const PROJECT_BLOCKED_PREFIXES = [
   '/dev',
   '/run',
   '/boot',
-  '/root',
   '/var',
   '/usr',
   '/lib',
@@ -98,6 +97,17 @@ const PROJECT_BLOCKED_PREFIXES = [
   '/srv',
   '/opt/funny', // app's own install dir; never register itself
 ];
+
+// Root-run containers may keep repositories under /root. The server can only
+// check the path lexically; ownership is checked on the runner below.
+function isRestrictedRootHome(path: string): boolean {
+  return (
+    path === '/root' ||
+    ['.ssh', '.aws', '.gnupg', '.kube', '.config/gcloud', '.docker'].some((dir) =>
+      isUnderPath(path, '/root/' + dir),
+    )
+  );
+}
 
 /** Windows-style system roots that must never become a project root. */
 const PROJECT_BLOCKED_WINDOWS_PREFIXES = [
@@ -166,6 +176,9 @@ export function validateProjectPathLexical(rawPath: string): Result<string, Doma
   }
 
   const lexical = resolve(rawPath);
+  if (isRestrictedRootHome(lexical)) {
+    return err(badRequest('Project path is in a restricted system directory: /root'));
+  }
 
   // Cross-platform: reject Unix system prefixes regardless of platform.
   for (const prefix of PROJECT_BLOCKED_PREFIXES) {
@@ -192,6 +205,12 @@ export function validateProjectPathLexical(rawPath: string): Result<string, Doma
  */
 export function validateProjectRootContainment(rawPath: string): Result<string, DomainError> {
   const real = projectPathRealpathOrAnchor(rawPath);
+  if (
+    isRestrictedRootHome(real) ||
+    (isUnderPath(real, '/root') && projectPathRealpathOrAnchor(homedir()) !== '/root')
+  ) {
+    return err(badRequest('Project path resolves to a restricted system directory: /root'));
+  }
 
   // Re-check prefixes against the realpath — a symlink at /home/user/sneaky
   // pointing to /etc would otherwise still slip through.

@@ -8,6 +8,7 @@
  * symlink onto a blocked target.
  */
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
 import { resolve } from 'path';
 
 import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -25,7 +26,7 @@ const { FAKE_HOME } = vi.hoisted(() => {
 
 vi.mock('os', async () => {
   const actual = await vi.importActual<typeof import('os')>('os');
-  return { ...actual, homedir: () => FAKE_HOME };
+  return { ...actual, homedir: vi.fn(() => FAKE_HOME) };
 });
 
 // Stub the service registry so requireProjectPath() can pretend the test
@@ -53,11 +54,29 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  vi.mocked(homedir).mockReturnValue(FAKE_HOME);
   mockListProjects.mockReset();
   mockListProjects.mockResolvedValue([{ path: resolve(FAKE_HOME, 'proj') }]);
 });
 
 describe('requirePickerPath — symlink escape (security HI-2)', () => {
+  test('allows the root user home and clone destinations in containers', async () => {
+    vi.mocked(homedir).mockReturnValue('/root');
+    expect(await requirePickerPath('/root')).toBeNull();
+    expect(await requirePickerPath('/root/projects/new-repo')).toBeNull();
+  });
+
+  test('keeps root credentials and system paths blocked in containers', async () => {
+    vi.mocked(homedir).mockReturnValue('/root');
+    for (const path of ['/root/.ssh', '/root/.aws/config', '/etc', '/var']) {
+      expect((await requirePickerPath(path))?.status).toBe(403);
+    }
+  });
+
+  test('denies root home for a different user', async () => {
+    expect((await requirePickerPath('/root'))?.status).toBe(403);
+  });
+
   test('rejects a $HOME symlink whose realpath is /etc', async () => {
     const res = await requirePickerPath(resolve(FAKE_HOME, 'sneaky-etc'));
     expect(res).not.toBeNull();

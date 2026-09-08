@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock claude-binary before importing provider-detection
 vi.mock('../../utils/claude-binary.js', () => ({
@@ -8,10 +8,11 @@ vi.mock('../../utils/claude-binary.js', () => ({
   },
 }));
 
-// Mock the SDK imports — return empty objects so dynamic import() succeeds
-// but the SDK check in provider-detection will still treat them as available
+const mocks = vi.hoisted(() => ({ codex: vi.fn() }));
+
+// SDK import and native CLI resolution are separate checks.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({}));
-vi.mock('@openai/codex-sdk', () => ({}));
+vi.mock('@openai/codex-sdk', () => ({ Codex: mocks.codex }));
 
 import {
   getAvailableProviders,
@@ -20,9 +21,47 @@ import {
   type ProviderSpawnRef,
 } from '../../utils/provider-detection.js';
 
+beforeEach(() => {
+  resetProviderCache();
+  mocks.codex.mockReset();
+  mocks.codex.mockImplementation(function () {});
+  vi.stubEnv('CODEX_BINARY_PATH', '');
+  vi.stubEnv('CODEX_BIN', '');
+});
+afterEach(() => vi.unstubAllEnvs());
+
 describe('provider-detection', () => {
-  beforeEach(() => {
-    resetProviderCache();
+  test('requires the native CLI even when the SDK imports successfully', async () => {
+    mocks.codex.mockImplementation(function () {
+      throw new Error('Unable to locate Codex CLI binaries');
+    });
+    expect((await getAvailableProviders()).get('codex')).toMatchObject({
+      available: false,
+      sdkAvailable: true,
+      cliAvailable: false,
+      error: expect.stringContaining('Codex CLI not found'),
+    });
+    expect(await resolveProviderAvailability([])).not.toContain('codex');
+  });
+
+  test('reports Codex available when its SDK resolves the CLI', async () => {
+    expect((await getAvailableProviders()).get('codex')).toMatchObject({
+      available: true,
+      sdkAvailable: true,
+      cliAvailable: true,
+    });
+  });
+
+  test('rejects a missing explicit CLI override', async () => {
+    vi.stubEnv('CODEX_BINARY_PATH', '/nonexistent/funny-test/codex');
+    expect((await getAvailableProviders()).get('codex')?.available).toBe(false);
+    expect(mocks.codex).not.toHaveBeenCalled();
+  });
+
+  test('passes an executable override to the SDK', async () => {
+    vi.stubEnv('CODEX_BINARY_PATH', process.execPath);
+    expect((await getAvailableProviders()).get('codex')?.available).toBe(true);
+    expect(mocks.codex).toHaveBeenCalledWith({ codexPathOverride: process.execPath });
   });
 
   test('getAvailableProviders returns a Map', async () => {
@@ -63,8 +102,7 @@ describe('resolveProviderAvailability (model-picker-availability §1)', () => {
   const ref = (id: string, command: string, extra: Partial<ProviderSpawnRef['spawn']> = {}) =>
     ({ id, spawn: { command, args: [], binEnvVars: [], ...extra } }) satisfies ProviderSpawnRef;
 
-  // claude/codex are available here (their SDK imports are mocked to {}
-  // → sdkAvailable), alongside the always-on non-ACP backends.
+  // The mocked SDK resolves Codex alongside the other available backends.
   const ALWAYS = ['claude', 'codex', 'pi', 'deepagent', 'llm-api'];
 
   test('only providers whose resolved command is on PATH are available', async () => {

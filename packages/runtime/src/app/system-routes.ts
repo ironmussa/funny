@@ -8,12 +8,19 @@ import {
   getProviderModels,
   getProviderModelsWithLabels,
   PROVIDER_LABELS,
+  PROVIDER_KEY_REGISTRY,
 } from '@funny/shared/models';
 import { getManifest } from '@funny/shared/provider-manifests';
 import type { Hono } from 'hono';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
+import {
+  isInstallableProvider,
+  providerSetupStatus,
+  startProviderInstall,
+} from '../services/provider-setup.js';
+import { getServices } from '../services/service-registry.js';
 import { wsBroker } from '../services/ws-broker.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
@@ -157,6 +164,32 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   // (opencode model discovery is served by the generic `/api/system/:provider/models`
   // route above — master's separate opencode route was dropped in the merge.)
+
+  app.get('/api/system/providers/:provider/setup', async (c) => {
+    if (!c.get('userId')) return c.json({ error: 'Unauthorized' }, 401);
+    const provider = c.req.param('provider');
+    const keys = PROVIDER_KEY_REGISTRY.filter(
+      (key) => key.envVar && key.requiredByProviders?.includes(provider),
+    );
+    const configured = (
+      await Promise.all(
+        keys.map((key) => getServices().profile.getProviderKey(c.get('userId'), key.id)),
+      )
+    ).some(Boolean);
+    return c.json(await providerSetupStatus(provider, configured));
+  });
+
+  app.post('/api/system/providers/:provider/setup', async (c) => {
+    if (!c.get('userId')) return c.json({ error: 'Unauthorized' }, 401);
+    const provider = c.req.param('provider');
+    if (!isInstallableProvider(provider)) {
+      return c.json({ error: 'This provider requires manual setup.' }, 400);
+    }
+    if (!startProviderInstall(provider)) {
+      return c.json({ error: 'Another provider installation is in progress. Retry shortly.' }, 409);
+    }
+    return c.json(await providerSetupStatus(provider), 202);
+  });
 
   // ── Provider extensions (runner-owned; provider-install-ui §2) ─────────────
   // Install / remove an ACP provider extension into THIS runner's extensions

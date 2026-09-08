@@ -1063,6 +1063,7 @@ export function usePromptInputState({
     activeThread,
     activeThreadGitStatus,
     effectiveProject,
+    effectiveProjectId,
     effectiveThreadId,
     contextPct,
     activeThreadContextTokens,

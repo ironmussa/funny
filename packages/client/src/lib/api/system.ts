@@ -134,7 +134,28 @@ export interface ExternalClaudeTranscript {
   messages: ExternalClaudeTranscriptMessage[];
 }
 
+export interface ProviderSetupStatus {
+  auth: 'connected' | 'required' | 'unknown' | 'configured';
+  loginCommand?: string;
+  loginShell?: string;
+  provider: string;
+  state: 'manual' | 'missing' | 'bundled' | 'installing' | 'installed' | 'failed';
+  installable: boolean;
+  login: string | null;
+  error?: string;
+}
+
 export const systemApi = {
+  providerSetupStatus: (provider: string, projectId?: string | null) =>
+    request<ProviderSetupStatus>(
+      `/system/providers/${encodeURIComponent(provider)}/setup${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`,
+    ),
+  installProviderTool: (provider: string, projectId?: string | null) =>
+    request<ProviderSetupStatus>(
+      `/system/providers/${encodeURIComponent(provider)}/setup${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`,
+      { method: 'POST' },
+    ),
+
   // Deployment mode — 'team' when served by the central server (no co-located
   // Claude CLI; runner-only onboarding steps are skipped), 'standalone' when
   // served directly by an all-in-one runtime.

@@ -120,3 +120,21 @@ export function openThreadTerminal({ thread, shell = 'default' }: OpenThreadTerm
   const cwd = thread.worktreePath ?? project?.path ?? '~';
   addTab(buildTab({ projectId: thread.projectId, cwd, shell }));
 }
+
+/** Run provider login on the same runner that supplied the setup command. */
+export function openProviderLoginTerminal(args: {
+  projectId: string;
+  command: string;
+  shell: TerminalShell;
+  label: string;
+}): void {
+  const project = useProjectStore.getState().projects.find((p) => p.id === args.projectId);
+  const tab = buildTab({
+    projectId: args.projectId,
+    cwd: project?.path ?? '~',
+    shell: args.shell,
+    label: args.label,
+    initialCommand: args.command,
+  });
+  useTerminalStore.getState().addTab({ ...tab, type: 'pty' });
+}

@@ -80,12 +80,26 @@ async function checkCodexSDK(): Promise<boolean> {
  */
 async function checkCodexAvailability(): Promise<ProviderAvailability> {
   const sdkAvailable = await checkCodexSDK();
+  let cliAvailable = false;
+  let error: string | undefined;
+  if (sdkAvailable) {
+    try {
+      const { Codex } = await import('@openai/codex-sdk');
+      const override = process.env.CODEX_BINARY_PATH || process.env.CODEX_BIN;
+      if (override && !commandOnPath(override)) throw new Error('Codex executable not found.');
+      // Construction resolves the native dependency without starting an agent.
+      new Codex({ codexPathOverride: override });
+      cliAvailable = true;
+    } catch {
+      error = 'Codex CLI not found. Install Codex on this runner to continue setup.';
+    }
+  }
   return {
-    available: sdkAvailable,
+    available: sdkAvailable && cliAvailable,
     sdkAvailable,
-    cliAvailable: sdkAvailable,
+    cliAvailable,
     cliPath: process.env.CODEX_BINARY_PATH ?? process.env.CODEX_BIN,
-    error: !sdkAvailable ? 'Codex SDK not found. Run: bun add @openai/codex-sdk' : undefined,
+    error: !sdkAvailable ? 'Codex SDK not found. Run: bun add @openai/codex-sdk' : error,
   };
 }
 

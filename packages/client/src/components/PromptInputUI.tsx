@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ProviderSetupDialog } from '@/components/ProviderSetupDialog';
 import { Button } from '@/components/ui/button';
 import { AttachmentChip } from '@/components/ui/chip';
 import {
@@ -56,6 +57,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCodexCommands } from '@/hooks/use-codex-commands';
+import { systemApi } from '@/lib/api/system';
 import { threadsApi } from '@/lib/api/threads';
 import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
 import { getEffortLevels, parseUnifiedModel } from '@/lib/providers';
@@ -122,13 +124,16 @@ export const ModelSelect = memo(function ModelSelect({
   onChange,
   onEffortChange,
   groups,
+  projectId,
 }: {
   value: string;
   effort?: string;
   onChange: (v: string) => void;
   onEffortChange?: (v: string) => void;
   groups: ModelSelectGroup[];
+  projectId?: string;
 }) {
+  const [setupProvider, setSetupProvider] = useState<ModelSelectGroup | null>(null);
   const selectedGroup = groups.find((g) => g.models.some((m) => m.value === value));
   const selected = selectedGroup?.models.find((m) => m.value === value);
   const { provider: selProvider, model: selModel } = parseUnifiedModel(value);
@@ -144,99 +149,117 @@ export const ModelSelect = memo(function ModelSelect({
   );
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        data-testid="prompt-model-select"
-        tabIndex={-1}
-        className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
-      >
-        <span className="text-muted-foreground shrink-0">
-          {selectedGroup?.providerLabel ?? selProvider}
-        </span>
-        <span className="text-muted-foreground shrink-0">·</span>
-        <span className="truncate">{selected?.label ?? selModel}</span>
-        {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
-        <ChevronDown className="icon-xs opacity-50" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        side="top"
-        align="start"
-        collisionPadding={8}
-        size="xs"
-        className="min-w-44"
-      >
-        {groups.map((group, idx) => (
-          <DropdownMenuGroup key={group.provider}>
-            {idx > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel
-              className={group.disabled ? 'text-muted-foreground/60' : undefined}
-              data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
-            >
-              {group.providerLabel}
-              {group.disabledReason === 'no-runner' && (
-                <span className="ml-1 font-normal italic">— connect a runner</span>
-              )}
-              {group.disabledReason === 'not-installed' && (
-                <span className="ml-1 font-normal italic">— not installed on runner</span>
-              )}
-            </DropdownMenuLabel>
-            {group.models.map((m) => {
-              const isSelected = m.value === value;
-              const { model: mModel } = parseUnifiedModel(m.value);
-              const efforts = m.disabled ? [] : getEffortLevels(mModel, group.provider);
-
-              if (efforts.length > 0 && onEffortChange) {
-                return (
-                  <DropdownMenuSub key={m.value}>
-                    <DropdownMenuSubTrigger
-                      size="xs"
-                      data-testid={`prompt-model-option-${m.value}`}
-                    >
-                      {lead(isSelected)}
-                      <span className="truncate">{m.label}</span>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent size="xs">
-                      {efforts.map((e) => (
-                        <DropdownMenuItem
-                          key={e.value}
-                          size="xs"
-                          data-testid={`prompt-effort-option-${m.value}-${e.value}`}
-                          onSelect={() => {
-                            onChange(m.value);
-                            onEffortChange(e.value);
-                          }}
-                        >
-                          {lead(isSelected && effort === e.value)}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>{e.label}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>{e.description}</TooltipContent>
-                          </Tooltip>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                );
-              }
-
-              return (
-                <DropdownMenuItem
-                  key={m.value}
-                  size="xs"
-                  disabled={m.disabled}
-                  data-testid={`prompt-model-option-${m.value}`}
-                  onSelect={() => onChange(m.value)}
-                >
-                  {lead(isSelected)}
-                  <span className="truncate">{m.label}</span>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          data-testid="prompt-model-select"
+          tabIndex={-1}
+          className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
+        >
+          <span className="text-muted-foreground shrink-0">
+            {selectedGroup?.providerLabel ?? selProvider}
+          </span>
+          <span className="text-muted-foreground shrink-0">·</span>
+          <span className="truncate">{selected?.label ?? selModel}</span>
+          {selEffortLabel && <span className="text-muted-foreground">· {selEffortLabel}</span>}
+          <ChevronDown className="icon-xs opacity-50" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="top"
+          align="start"
+          collisionPadding={8}
+          size="xs"
+          className="min-w-44"
+        >
+          {groups.map((group, idx) => (
+            <DropdownMenuGroup key={group.provider}>
+              {idx > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel
+                className={group.disabled ? 'text-muted-foreground/60' : undefined}
+                data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
+              >
+                {group.providerLabel}
+                {group.disabledReason === 'no-runner' && (
+                  <span className="ml-1 font-normal italic">— connect a runner</span>
+                )}
+                {group.disabledReason === 'not-installed' && (
+                  <span className="ml-1 font-normal italic">— not installed on runner</span>
+                )}
+              </DropdownMenuLabel>
+              {group.disabledReason !== 'no-runner' && (
+                <DropdownMenuItem size="xs" onSelect={() => setSetupProvider(group)}>
+                  {group.disabledReason === 'not-installed'
+                    ? 'Install / configure provider…'
+                    : 'Configure provider…'}
                 </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuGroup>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+              )}
+              {group.models.map((m) => {
+                const isSelected = m.value === value;
+                const { model: mModel } = parseUnifiedModel(m.value);
+                const efforts = m.disabled ? [] : getEffortLevels(mModel, group.provider);
+
+                if (efforts.length > 0 && onEffortChange) {
+                  return (
+                    <DropdownMenuSub key={m.value}>
+                      <DropdownMenuSubTrigger
+                        size="xs"
+                        data-testid={`prompt-model-option-${m.value}`}
+                      >
+                        {lead(isSelected)}
+                        <span className="truncate">{m.label}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent size="xs">
+                        {efforts.map((e) => (
+                          <DropdownMenuItem
+                            key={e.value}
+                            size="xs"
+                            data-testid={`prompt-effort-option-${m.value}-${e.value}`}
+                            onSelect={() => {
+                              onChange(m.value);
+                              onEffortChange(e.value);
+                            }}
+                          >
+                            {lead(isSelected && effort === e.value)}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>{e.label}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>{e.description}</TooltipContent>
+                            </Tooltip>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  );
+                }
+
+                return (
+                  <DropdownMenuItem
+                    key={m.value}
+                    size="xs"
+                    disabled={m.disabled}
+                    data-testid={`prompt-model-option-${m.value}`}
+                    onSelect={() => onChange(m.value)}
+                  >
+                    {lead(isSelected)}
+                    <span className="truncate">{m.label}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuGroup>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {setupProvider && (
+        <ProviderSetupDialog
+          key={`${setupProvider.provider}:${projectId}`}
+          provider={setupProvider.provider}
+          label={setupProvider.providerLabel}
+          projectId={projectId}
+          onClose={() => setSetupProvider(null)}
+        />
+      )}
+    </>
   );
 });
 
@@ -386,6 +409,7 @@ export interface PromptInputUIProps {
   newThreadContextBar?: React.ReactNode;
   /** Thread ID (set for follow-up messages). Required to upload files larger than the inline tier. */
   threadId?: string;
+  projectId?: string;
   createWorktree?: boolean;
   onCreateWorktreeChange?: (v: boolean) => void;
   runtime?: 'local' | 'remote';
@@ -501,6 +525,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   isScratch = false,
   newThreadContextBar,
   threadId,
+  projectId,
   createWorktree = false,
   onCreateWorktreeChange,
   runtime = 'local',
@@ -631,6 +656,9 @@ export const PromptInputUI = memo(function PromptInputUI({
     onOpenReview,
   });
 
+  const [needsProviderSetup, setNeedsProviderSetup] = useState(false);
+  const checkingProvider = useRef(false);
+
   // ── Submit handler ──
   const handleSubmit = useCallback(async () => {
     if (loading) return;
@@ -665,6 +693,29 @@ export const PromptInputUI = memo(function PromptInputUI({
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Codex command failed');
         return;
+      }
+    }
+    if (!running && !sendToBacklog && projectId) {
+      if (checkingProvider.current) return;
+      checkingProvider.current = true;
+      try {
+        const setup = await systemApi.providerSetupStatus(provider, projectId);
+        if (setup.isErr()) {
+          toast.error(setup.error.message);
+          return;
+        }
+        if (
+          ['missing', 'failed', 'installing'].includes(setup.value.state) ||
+          setup.value.auth === 'required' ||
+          (setup.value.state === 'bundled' &&
+            setup.value.auth !== 'configured' &&
+            provider === 'claude')
+        ) {
+          setNeedsProviderSetup(true);
+          return;
+        }
+      } finally {
+        checkingProvider.current = false;
       }
     }
     const leadingSlashCommand = getLeadingSlashCommand(serialized.text);
@@ -761,6 +812,8 @@ export const PromptInputUI = memo(function PromptInputUI({
   }, [
     loading,
     executeCodexCommand,
+    projectId,
+    running,
     isRecording,
     onStopRecording,
     images,
@@ -1339,10 +1392,11 @@ export const PromptInputUI = memo(function PromptInputUI({
         )}
 
         {/* Top context bar — project / repo / branch + worktree switch. Sits
-            visually OUTSIDE the bordered prompt box (new threads only). */}
+            visually OUTSIDE the bordered prompt box (new threads only).
+            Reserve the loaded controls' height while repo/branch data loads. */}
         {isNewThread && !isScratch && (
           <div
-            className="text-muted-foreground mb-3 flex items-center gap-2 px-1 text-sm"
+            className="text-muted-foreground mb-3 flex min-h-6 items-center gap-2 px-1 text-sm"
             data-testid="new-thread-context-bar"
           >
             <div className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto">
@@ -1515,6 +1569,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                 onChange={handleUnifiedModelChange}
                 onEffortChange={handleEffortChange}
                 groups={modelGroups}
+                projectId={projectId}
               />
               {isNewThread && isDeepAgent && templates.length > 0 && (
                 <TemplateSelect
@@ -1685,6 +1740,17 @@ export const PromptInputUI = memo(function PromptInputUI({
           </div>
         )}
       </div>
+      {needsProviderSetup && (
+        <ProviderSetupDialog
+          key={provider}
+          provider={provider}
+          label={
+            modelGroups.find((group) => group.provider === provider)?.providerLabel ?? provider
+          }
+          projectId={projectId}
+          onClose={() => setNeedsProviderSetup(false)}
+        />
+      )}
       <ConfirmDialog
         open={compactConfirmOpen}
         onOpenChange={setCompactConfirmOpen}

@@ -104,6 +104,7 @@ export const PromptInput = memo(function PromptInput({
         isScratch={isScratch}
         newThreadContextBar={newThreadContextBar}
         threadId={state.effectiveThreadId}
+        projectId={state.effectiveProjectId ?? undefined}
         createWorktree={state.createWorktree}
         onCreateWorktreeChange={state.setCreateWorktree}
         runtime={state.runtime}

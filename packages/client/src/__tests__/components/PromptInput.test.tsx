@@ -4,11 +4,20 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { PromptInput } from '@/components/PromptInput';
 import { api } from '@/lib/api';
+import { systemApi } from '@/lib/api/system';
 import { useAppStore } from '@/stores/app-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { renderWithProviders } from '../helpers/render';
+
+vi.mock('@/lib/api/system', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/system')>();
+  return {
+    ...actual,
+    systemApi: { ...actual.systemApi, providerSetupStatus: vi.fn(), installProviderTool: vi.fn() },
+  };
+});
 
 // ── Mocks ───────────────────────────────────────────────────────
 
@@ -142,6 +151,15 @@ vi.mock('@/components/prompt-editor/serialize', () => ({
 // ── Setup ───────────────────────────────────────────────────────
 
 beforeEach(() => {
+  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    okAsync({
+      provider: 'claude',
+      state: 'installed',
+      auth: 'connected',
+      installable: true,
+      login: null,
+    }),
+  );
   mockEditorContent = '';
   useAppStore.setState({
     projects: [
@@ -170,6 +188,30 @@ beforeEach(() => {
 // ── Tests ───────────────────────────────────────────────────────
 
 describe('PromptInput', () => {
+  test('reserves context bar height before and after new-thread context loads', () => {
+    const onSubmit = vi.fn();
+    const { rerender } = renderWithProviders(
+      <PromptInput onSubmit={onSubmit} isNewThread newThreadContextBar={<span>Test</span>} />,
+    );
+
+    // jsdom has no layout engine; guard the minimum height that accommodates
+    // the loaded repo/branch controls (20px line height + 4px padding).
+    expect(screen.getByTestId('new-thread-context-bar')).toHaveClass('min-h-6');
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+
+    rerender(
+      <PromptInput
+        onSubmit={onSubmit}
+        isNewThread
+        newThreadContextBar={<button className="py-0.5 text-sm">main</button>}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'main' })).toBeInTheDocument();
+    expect(screen.getByTestId('new-thread-context-bar')).toHaveClass('min-h-6');
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
   test('Enter key triggers onSubmit with prompt text', async () => {
     const onSubmit = vi.fn();
     renderWithProviders(<PromptInput onSubmit={onSubmit} />);
@@ -804,4 +846,58 @@ describe('PromptInput', () => {
 
     expect(screen.getByTestId('prompt-context-pct')).toHaveTextContent('10% de contexto');
   });
+});
+
+test('keeps the draft and attachments while the provider needs authentication', async () => {
+  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    okAsync({
+      provider: 'claude',
+      state: 'installed',
+      auth: 'required',
+      installable: true,
+      login: null,
+    }),
+  );
+  const onSubmit = vi.fn();
+  renderWithProviders(
+    <PromptInput
+      onSubmit={onSubmit}
+      projectId="p1"
+      initialImages={[
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/png', data: 'ZmFrZQ==' },
+        },
+      ]}
+    />,
+  );
+  const attachment = screen.getByRole('img', { name: 'Attachment 1' });
+  const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+  fireEvent.change(textarea, { target: { value: 'keep my task' } });
+  fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+  await screen.findByRole('dialog');
+  expect(textarea.value).toBe('keep my task');
+  expect(attachment).toBeInTheDocument();
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
+test('opens Pi setup before sending when the bundled SDK has no credentials', async () => {
+  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    okAsync({ provider: 'pi', state: 'bundled', auth: 'required', installable: true, login: 'pi' }),
+  );
+  const onSubmit = vi.fn();
+  renderWithProviders(
+    <PromptInput
+      onSubmit={onSubmit}
+      projectId="p1"
+      threadOverride={{ provider: 'pi', model: 'default' }}
+    />,
+  );
+  const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+  fireEvent.change(textarea, { target: { value: 'Pi task' } });
+  fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+  await screen.findByRole('dialog');
+  expect(systemApi.providerSetupStatus).toHaveBeenCalledWith('pi', 'p1');
+  expect(textarea.value).toBe('Pi task');
+  expect(onSubmit).not.toHaveBeenCalled();
 });

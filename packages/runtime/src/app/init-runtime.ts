@@ -8,6 +8,7 @@ import { startAgent } from '../services/agent-runner.js';
 import { rehydrateWatchers } from '../services/git-watcher-service.js';
 import { registerAllHandlers } from '../services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from '../services/handlers/types.js';
+import { activateProviderTools } from '../services/provider-setup.js';
 import * as ptyManager from '../services/pty-manager.js';
 import { getServices, setServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
@@ -75,6 +76,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   };
   registerAllHandlers(handlerCtx);
 
+  activateProviderTools();
   await logProviderStatus();
   await ptyManager.reattachSessions();
   getNativeGit();

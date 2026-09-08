@@ -34,6 +34,8 @@ const result = await Bun.build({
   // Bun.build() bundles by default — all workspace packages (@funny/shared,
   // @funny/core) and npm deps (hono, drizzle-orm, etc.) are inlined.
   external: [
+    // The SDK resolves its native CLI relative to its own package at runtime.
+    '@openai/codex-sdk',
     // Native binary — optional, dynamically imported in @funny/core
     'playwright',
     // node-pty is NOT imported by the server bundle directly.

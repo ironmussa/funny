@@ -199,10 +199,6 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
     };
   }, [search]);
 
-  // True while the user is typing ahead of the debounced query OR a fetch is
-  // in flight — used to show a spinner in the search input.
-  const searchPending = search !== debouncedSearch || loadingRepos;
-
   // Reset highlight when the debounced query changes (new result set).
   useEffect(() => {
     setHighlightedIndex(-1);
@@ -549,7 +545,6 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             placeholder={t('github.repos.searchPlaceholder')}
             totalMatches={repos.length}
             resultLabel={search ? `${repos.length}` : ''}
-            loading={searchPending}
             onClose={search ? () => setSearch('') : undefined}
             onInputKeyDown={handleSearchKeyDown}
             autoFocus={false}

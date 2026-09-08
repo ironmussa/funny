@@ -25,6 +25,7 @@ interface VirtualThreadListProps {
   onThreadClick?: (thread: Thread) => void;
   renderExtraBadges?: (thread: Thread) => ReactNode;
   renderActions?: (thread: Thread) => ReactNode;
+  renderItem?: (thread: Thread) => ReactNode;
   hideBranch?: boolean;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -42,6 +43,7 @@ export function VirtualThreadList({
   onThreadClick,
   renderExtraBadges,
   renderActions,
+  renderItem,
   hideBranch = false,
   hasMore = false,
   loadingMore = false,
@@ -137,6 +139,20 @@ export function VirtualThreadList({
           {virtualItems.map((v) => {
             const thread = threads[v.index];
             if (!thread) return null;
+            if (renderItem) {
+              return (
+                <div
+                  key={v.key}
+                  data-index={v.index}
+                  data-testid={`virtual-thread-item-${thread.id}`}
+                  ref={virtualizer.measureElement}
+                  className="border-border/50 absolute top-0 left-0 w-full border-b px-1 py-1"
+                  style={{ transform: `translateY(${v.start}px)` }}
+                >
+                  {renderItem(thread)}
+                </div>
+              );
+            }
             const Wrapper = onThreadClick ? 'button' : 'div';
             return (
               <Wrapper

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ProjectSettingsView } from '@/components/mobile/ProjectSettingsView';
@@ -38,13 +39,22 @@ beforeEach(() => {
 
 describe('ProjectSettingsView — list → detail → back', () => {
   test('points the project store at the project on mount', () => {
-    render(<ProjectSettingsView projectId="p1" onBack={() => {}} />);
+    render(
+      <MemoryRouter>
+        <ProjectSettingsView projectId="p1" onBack={() => {}} />
+      </MemoryRouter>,
+    );
     expect(useProjectStore.getState().selectedProjectId).toBe('p1');
   });
 
   test('lists project options and drills into a page, then back', () => {
     const onBack = vi.fn();
-    render(<ProjectSettingsView projectId="p1" onBack={onBack} />);
+    render(
+      <MemoryRouter initialEntries={['/acme/projects/p1?view=settings']}>
+        <ProjectSettingsView projectId="p1" onBack={onBack} />
+        <Location />
+      </MemoryRouter>,
+    );
 
     // The list shows multiple options (general, mcp-server, …). Archived
     // Threads is now a per-project view (scoped to the active project), so it
@@ -58,14 +68,33 @@ describe('ProjectSettingsView — list → detail → back', () => {
     const content = screen.getByTestId('settings-page-content');
     expect(content.getAttribute('data-page')).toBe('mcp-server');
 
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/acme/projects/p1/settings/mcp-server',
+    );
+
     // Back returns to the list — onBack (exit settings) is NOT called.
     fireEvent.click(screen.getByTestId('mobile-project-settings-page-back'));
     expect(screen.getByTestId('mobile-settings-nav-general')).toBeTruthy();
     expect(screen.queryByTestId('settings-page-content')).toBeNull();
     expect(onBack).not.toHaveBeenCalled();
+    expect(screen.getByTestId('location').textContent).toBe('/acme/projects/p1?view=settings');
 
     // Back from the list exits settings.
     fireEvent.click(screen.getByTestId('mobile-project-settings-back'));
     expect(onBack).toHaveBeenCalledOnce();
   });
+});
+
+function Location() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname + location.search}</div>;
+}
+
+test('opens a settings subsection directly from its URL', () => {
+  render(
+    <MemoryRouter initialEntries={['/projects/p1/settings/mcp-server']}>
+      <ProjectSettingsView projectId="p1" onBack={() => {}} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByTestId('settings-page-content')).toHaveAttribute('data-page', 'mcp-server');
 });

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, test, expect, vi } from 'vitest';
 
 import { MobilePage } from '@/components/MobilePage';
@@ -7,6 +8,8 @@ import { MobilePage } from '@/components/MobilePage';
 // pressing Back must return to the search screen (with the query intact), not
 // jump all the way back to the project's thread list. Previously ChatView's
 // onBack always went to the `threads` screen, dropping the user out of search.
+
+vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
 vi.mock('@/hooks/use-ws', () => ({ useWS: () => {} }));
 
@@ -64,7 +67,11 @@ vi.mock('@/components/mobile/ChatView', () => ({
 
 describe('MobilePage search → result → back', () => {
   test('Back from a chat opened via search returns to the search screen', async () => {
-    render(<MobilePage />);
+    render(
+      <MemoryRouter>
+        <MobilePage />
+      </MemoryRouter>,
+    );
 
     fireEvent.click(await screen.findByTestId('select-project'));
     fireEvent.click(screen.getByTestId('open-search'));
@@ -79,7 +86,11 @@ describe('MobilePage search → result → back', () => {
   });
 
   test('Back from a chat opened via the thread list returns to the thread list', async () => {
-    const { unmount } = render(<MobilePage />);
+    const { unmount } = render(
+      <MemoryRouter>
+        <MobilePage />
+      </MemoryRouter>,
+    );
 
     fireEvent.click(await screen.findByTestId('select-project'));
     await waitFor(() => expect(screen.getByTestId('screen-threads')).toBeTruthy());

@@ -8,30 +8,24 @@ import { SearchView } from '@/components/mobile/SearchView';
 import { ThreadListView } from '@/components/mobile/ThreadListView';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Toaster } from '@/components/ui/sonner';
-import { parseRoute } from '@/hooks/route-parser';
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { useMobileViewport } from '@/hooks/use-mobile-viewport';
 import { useWS } from '@/hooks/use-ws';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { ThreadProvider } from '@/stores/thread-context';
-import { setAppNavigate } from '@/stores/thread-store';
-
-type MobileView =
-  | { screen: 'projects' }
-  | { screen: 'threads'; projectId: string }
-  | { screen: 'search'; projectId: string }
-  | { screen: 'settings'; projectId: string }
-  | { screen: 'chat'; projectId: string; threadId: string; from: 'threads' | 'search' }
-  | { screen: 'newThread'; projectId: string };
 
 export function MobilePage() {
-  const [view, setView] = useState<MobileView>({ screen: 'projects' });
+  const viewportRef = useMobileViewport();
   const [ready, setReady] = useState(false);
-
-  // Search query/case state is lifted here so it survives navigating into a
-  // result's chat and back — re-mounting SearchView would otherwise reset it,
-  // dropping the user back into an empty search instead of their results.
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const {
+    view,
+    setView,
+    searchQuery,
+    setSearchQuery,
+    searchCaseSensitive,
+    setSearchCaseSensitive,
+  } = useMobileNavigation(ready);
 
   const loadProjects = useAppStore((s) => s.loadProjects);
   const projects = useAppStore((s) => s.projects);
@@ -42,43 +36,21 @@ export function MobilePage() {
     loadProjects().finally(() => setReady(true));
   }, [loadProjects]);
 
-  // Mobile navigates via local view state, not react-router. Register a
-  // navigate seam so store-driven navigation — e.g. the "View" action on the
-  // agent-result toast — switches the mobile view instead of silently no-oping.
-  useEffect(() => {
-    setAppNavigate((path: string) => {
-      const parsed = parseRoute(path);
-      if (parsed.projectId && parsed.threadId) {
-        setView({
-          screen: 'chat',
-          projectId: parsed.projectId,
-          threadId: parsed.threadId,
-          from: 'threads',
-        });
-      } else if (parsed.projectId) {
-        setView({ screen: 'threads', projectId: parsed.projectId });
-      }
-    });
-  }, []);
-
-  if (!ready) {
-    return (
-      <div className="bg-background text-foreground flex h-dvh">
-        <LoadingState testId="mobile-page-loading" />
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="bg-background text-foreground flex h-dvh flex-col overflow-hidden">
-        {view.screen === 'projects' && (
+      <div
+        ref={viewportRef}
+        data-testid="mobile-viewport"
+        className="bg-background text-foreground fixed inset-x-0 top-0 flex h-dvh min-h-0 flex-col overflow-hidden pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+      >
+        {!ready && <LoadingState testId="mobile-page-loading" />}
+        {ready && view.screen === 'projects' && (
           <ProjectListView
             projects={projects}
             onSelect={(projectId) => setView({ screen: 'threads', projectId })}
           />
         )}
-        {view.screen === 'threads' && (
+        {ready && view.screen === 'threads' && (
           <ThreadListView
             projectId={view.projectId}
             onBack={() => setView({ screen: 'projects' })}
@@ -88,20 +60,18 @@ export function MobilePage() {
             onNewThread={() => setView({ screen: 'newThread', projectId: view.projectId })}
             onSearch={() => {
               // Fresh search each time the icon is tapped from the thread list.
-              setSearchQuery('');
-              setSearchCaseSensitive(false);
               setView({ screen: 'search', projectId: view.projectId });
             }}
             onSettings={() => setView({ screen: 'settings', projectId: view.projectId })}
           />
         )}
-        {view.screen === 'settings' && (
+        {ready && view.screen === 'settings' && (
           <ProjectSettingsView
             projectId={view.projectId}
             onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
           />
         )}
-        {view.screen === 'search' && (
+        {ready && view.screen === 'search' && (
           <SearchView
             projectId={view.projectId}
             query={searchQuery}
@@ -114,27 +84,32 @@ export function MobilePage() {
             }
           />
         )}
-        {view.screen === 'newThread' && (
+        {ready && view.screen === 'newThread' && (
           <ThreadProvider threadId={null}>
             <NewThreadView
               projectId={view.projectId}
               onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
               onCreated={(threadId) =>
-                setView({ screen: 'chat', projectId: view.projectId, threadId, from: 'threads' })
+                setView(
+                  { screen: 'chat', projectId: view.projectId, threadId, from: 'threads' },
+                  true,
+                )
               }
             />
           </ThreadProvider>
         )}
-        {view.screen === 'chat' && (
+        {ready && view.screen === 'chat' && (
           <ThreadProvider threadId={view.threadId}>
             <ChatView
               projectId={view.projectId}
               threadId={view.threadId}
               onBack={() =>
                 setView(
-                  view.from === 'search'
-                    ? { screen: 'search', projectId: view.projectId }
-                    : { screen: 'threads', projectId: view.projectId },
+                  !view.projectId
+                    ? { screen: 'projects' }
+                    : view.from === 'search'
+                      ? { screen: 'search', projectId: view.projectId }
+                      : { screen: 'threads', projectId: view.projectId },
                 )
               }
             />

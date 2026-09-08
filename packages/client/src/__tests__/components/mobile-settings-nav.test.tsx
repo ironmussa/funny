@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, test, expect, vi } from 'vitest';
 
 import { MobilePage } from '@/components/MobilePage';
@@ -6,6 +7,8 @@ import { MobilePage } from '@/components/MobilePage';
 // On mobile, the project thread list must expose a way into the project's
 // settings, and Back from settings must return to the thread list. This locks
 // in the gear button → settings screen → back wiring in MobilePage.
+
+vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
 vi.mock('@/hooks/use-ws', () => ({ useWS: () => {} }));
 
@@ -51,7 +54,11 @@ vi.mock('@/components/mobile/ChatView', () => ({ ChatView: () => null }));
 
 describe('MobilePage threads → settings → back', () => {
   test('the gear opens project settings and Back returns to the thread list', async () => {
-    render(<MobilePage />);
+    render(
+      <MemoryRouter>
+        <MobilePage />
+      </MemoryRouter>,
+    );
 
     fireEvent.click(await screen.findByTestId('select-project'));
     fireEvent.click(await screen.findByTestId('open-settings'));

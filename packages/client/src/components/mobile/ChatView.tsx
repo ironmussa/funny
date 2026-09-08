@@ -160,31 +160,33 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
       {!activeThread ? (
         <LoadingState testId="mobile-chat-loading" />
       ) : (
-        <MessageStream
-          ref={streamRef}
-          threadId={activeThread.id}
-          status={activeThread.status}
-          messages={stableMessages ?? EMPTY_MESSAGES}
-          leadingUserMessage={activeThread.leadingUserMessage}
-          threadEvents={stableThreadEvents}
-          compactionEvents={stableCompactionEvents}
-          initInfo={activeThread.initInfo}
-          resultInfo={activeThread.resultInfo}
-          waitingReason={activeThread.waitingReason}
-          pendingPermission={activeThread.pendingPermission}
-          isExternal={isExternal}
-          model={activeThread.model}
-          permissionMode={activeThread.permissionMode}
-          onSend={handleSend}
-          onPermissionApproval={handlePermissionApproval}
-          onToolRespond={handleToolRespond}
-          pagination={{ hasMore, loadingMore, load: loadOlderMessages, total: totalMessages }}
-          createdAt={activeThread.createdAt}
-          snapshotMap={snapshotMap}
-          knownIds={knownIds}
-          onOpenLightbox={openLightbox}
-          prefersReducedMotion={prefersReducedMotion}
-          footer={
+        <>
+          <MessageStream
+            ref={streamRef}
+            threadId={activeThread.id}
+            status={activeThread.status}
+            messages={stableMessages ?? EMPTY_MESSAGES}
+            leadingUserMessage={activeThread.leadingUserMessage}
+            threadEvents={stableThreadEvents}
+            compactionEvents={stableCompactionEvents}
+            initInfo={activeThread.initInfo}
+            resultInfo={activeThread.resultInfo}
+            waitingReason={activeThread.waitingReason}
+            pendingPermission={activeThread.pendingPermission}
+            isExternal={isExternal}
+            model={activeThread.model}
+            permissionMode={activeThread.permissionMode}
+            onSend={handleSend}
+            onPermissionApproval={handlePermissionApproval}
+            onToolRespond={handleToolRespond}
+            pagination={{ hasMore, loadingMore, load: loadOlderMessages, total: totalMessages }}
+            createdAt={activeThread.createdAt}
+            snapshotMap={snapshotMap}
+            knownIds={knownIds}
+            onOpenLightbox={openLightbox}
+            prefersReducedMotion={prefersReducedMotion}
+          />
+          <div className="bg-background shrink-0" data-testid="mobile-chat-prompt">
             <PromptInput
               onSubmit={handleSend}
               onStop={handleStop}
@@ -192,8 +194,8 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
               running={isRunning && !isExternal}
               placeholder={t('thread.nextPrompt')}
             />
-          }
-        />
+          </div>
+        </>
       )}
     </>
   );

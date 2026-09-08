@@ -1,10 +1,14 @@
+import type { Project, Thread } from '@funny/shared';
 import { ArrowLeft, Plus, Search, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { useAppStore } from '@/stores/app-store';
+import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 interface Props {
   projectId: string;
@@ -85,10 +89,45 @@ export function ThreadListView({
           search=""
           emptyMessage={t('sidebar.noThreads', 'No threads yet. Create one to start.')}
           searchEmptyMessage={t('sidebar.noThreads', 'No threads yet. Create one to start.')}
-          hideBranch
           onThreadClick={(thread) => onSelectThread(thread.id)}
+          renderItem={(thread) => (
+            <MobileThreadItem thread={thread} project={project} onSelectThread={onSelectThread} />
+          )}
         />
       </div>
     </>
+  );
+}
+
+function MobileThreadItem({
+  thread,
+  project,
+  onSelectThread,
+}: {
+  thread: Thread;
+  project?: Project;
+  onSelectThread: (threadId: string) => void;
+}) {
+  const gitStatus = useGitStatusStore(
+    (s) => s.statusByBranch[statusBranchKeyForThread(thread, s.threadToBranchKey)],
+  );
+  const pinThread = useThreadStore((s) => s.pinThread);
+
+  useEffect(() => {
+    useGitStatusStore.getState().ensureStatusForThreads([thread]);
+  }, [thread]);
+
+  return (
+    <ThreadItem
+      thread={thread}
+      projectPath={project?.path ?? ''}
+      subtitle={project?.name}
+      projectColor={project?.color}
+      gitStatus={gitStatus}
+      isSelected={false}
+      hideActions
+      onSelect={() => onSelectThread(thread.id)}
+      onPin={() => pinThread(thread.id, thread.projectId, !thread.pinned)}
+    />
   );
 }

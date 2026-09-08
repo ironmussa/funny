@@ -1,6 +1,7 @@
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
   buildSettingsItems,
@@ -17,6 +18,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { parseRoute } from '@/hooks/route-parser';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -33,7 +35,7 @@ interface Props {
  * a single-column mobile shell instead of the desktop two-pane layout.
  *
  * The page panels read the active project from `useProjectStore.selectedProjectId`,
- * which mobile never sets (it navigates via local view state). We point the store
+ * which the settings panels need. We point the store
  * at this project on mount so the panels render the right project.
  */
 export function ProjectSettingsView({ projectId, onBack }: Props) {
@@ -41,7 +43,17 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
   const projects = useAppStore((s) => s.projects);
   const project = projects.find((p) => p.id === projectId);
   const authUser = useAuthStore((s) => s.user);
-  const [page, setPage] = useState<SettingsItemId | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const parsed = parseRoute(location.pathname);
+  const candidate = parsed.settingsPage;
+  const page =
+    candidate && Object.hasOwn(settingsLabelKeys, candidate) ? (candidate as SettingsItemId) : null;
+  const setPage = (next: SettingsItemId | null) => {
+    const prefix = parsed.orgSlug ? `/${parsed.orgSlug}` : '';
+    const base = `${prefix}/projects/${projectId}`;
+    navigate(next ? `${base}/settings/${next}` : `${base}?view=settings`);
+  };
 
   useEffect(() => {
     useProjectStore.setState({ selectedProjectId: projectId });

@@ -1,14 +1,13 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, test, expect, vi } from 'vitest';
 
 import { MobilePage } from '@/components/MobilePage';
 import { getNavigate } from '@/stores/thread-store-internals';
 
-// Regression: on mobile the UI navigates via local view state, not react-router.
-// The agent-result toast's "View" action calls the store navigate seam
-// (setAppNavigate / getNavigate). If MobilePage doesn't register a handler, that
-// navigate is a no-op and "View" never opens the thread. These tests lock in that
-// MobilePage registers a seam that switches the mobile view to the target thread.
+// Store-driven actions must update the mobile route and open the target thread.
+
+vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
 vi.mock('@/hooks/use-ws', () => ({ useWS: () => {} }));
 
@@ -42,7 +41,11 @@ vi.mock('@/components/mobile/ChatView', () => ({
 
 describe('MobilePage navigate seam', () => {
   test('store navigate to a thread route opens the chat view', async () => {
-    render(<MobilePage />);
+    render(
+      <MemoryRouter>
+        <MobilePage />
+      </MemoryRouter>,
+    );
     await waitFor(() => expect(screen.getByTestId('screen-projects')).toBeTruthy());
 
     act(() => {
@@ -53,7 +56,11 @@ describe('MobilePage navigate seam', () => {
   });
 
   test('org-prefixed thread route is parsed and opens the chat view', async () => {
-    render(<MobilePage />);
+    render(
+      <MemoryRouter>
+        <MobilePage />
+      </MemoryRouter>,
+    );
     await waitFor(() => expect(screen.getAllByTestId('screen-projects').length).toBeGreaterThan(0));
 
     act(() => {

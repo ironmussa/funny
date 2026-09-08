@@ -493,7 +493,7 @@ export const ThreadItem = memo(function ThreadItem({
 
         {/* Row 2: Powerline (project → branch) + Git status + Snippet + Time */}
         {(hasMetadataRow || hasSnippetRow) && (
-          <div className="flex min-h-[22px] min-w-0 items-center gap-1.5">
+          <div className="flex min-h-[22px] min-w-0 flex-col items-stretch gap-1.5 sm:flex-row sm:items-center">
             {(hasPowerline || hasPR) && (
               <ThreadPowerline
                 thread={thread}

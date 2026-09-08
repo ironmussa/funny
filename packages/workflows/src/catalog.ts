@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,6 +46,9 @@ export async function loadWorkflowCatalog(
 
 export function builtInWorkflowsDir(): string {
   const here = fileURLToPath(import.meta.url);
+  // Runtime bundles ship the YAML assets beside index.js in dist/defaults.
+  const bundledDefaults = path.join(path.dirname(here), 'defaults');
+  if (existsSync(bundledDefaults)) return bundledDefaults;
   return path.join(path.dirname(here), '..', 'defaults');
 }
 

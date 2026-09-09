@@ -42,3 +42,21 @@ export function commitMatchesQuery(commit: SearchableCommit, query: string): boo
   if (commit.refs?.some((r) => includesSearchText(r.name, q))) return true;
   return false;
 }
+
+export type CommitSyncFilter = 'all' | 'pull' | 'push';
+
+/** Sync status and text search are combined; pull uses the same markers as the graph. */
+export function commitMatchesFilters(
+  commit: SearchableCommit & { hash: string },
+  query: string,
+  syncFilter: CommitSyncFilter,
+  unpushed: ReadonlySet<string>,
+  unpulled: ReadonlySet<string>,
+  inferredUnpulled: ReadonlySet<string>,
+): boolean {
+  if (syncFilter === 'push' && !unpushed.has(commit.hash)) return false;
+  if (syncFilter === 'pull' && !unpulled.has(commit.hash) && !inferredUnpulled.has(commit.hash)) {
+    return false;
+  }
+  return commitMatchesQuery(commit, query);
+}

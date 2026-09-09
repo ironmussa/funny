@@ -51,7 +51,7 @@ import {
   renderedGraphLaneCount,
 } from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
-import { commitMatchesQuery } from '@/lib/git-history-search';
+import { commitMatchesFilters, type CommitSyncFilter } from '@/lib/git-history-search';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import {
   githubBrowseBaseUrl as resolveGithubBrowseBaseUrl,
@@ -211,6 +211,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // commitMatchesQuery).
   const [searchQuery, setSearchQuery] = useState('');
   const searchQueryRef = useRef('');
+  const [syncFilter, setSyncFilter] = useState<CommitSyncFilter>('all');
+  const syncFilterRef = useRef<CommitSyncFilter>('all');
 
   const loadingRef = useRef(false);
   const loadedRef = useRef(false);
@@ -297,7 +299,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     if (!hasMoreRef.current || loadingRef.current) return;
     let nextSkip = loadedLogSkipRef.current;
     while (
-      searchQueryRef.current.trim().length > 0 &&
+      (searchQueryRef.current.trim().length > 0 || syncFilterRef.current !== 'all') &&
       hasMoreRef.current &&
       nextSkip < FILTER_MAX_SCAN
     ) {
@@ -319,6 +321,17 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     },
     [loadFilteredHistory],
   );
+
+  const toggleSyncFilter = useCallback((filter: Exclude<CommitSyncFilter, 'all'>) => {
+    const next = syncFilterRef.current === filter ? 'all' : filter;
+    syncFilterRef.current = next;
+    setSyncFilter(next);
+  }, []);
+
+  // Resume filtering after initial loads, refreshes, and pages already in flight.
+  useEffect(() => {
+    if (visible && !logLoading && !logErrorMessage) void loadFilteredHistory();
+  }, [visible, logLoading, logErrorMessage, searchQuery, syncFilter, loadFilteredHistory]);
 
   const refreshLog = useCallback(() => {
     loadedRef.current = true;
@@ -344,6 +357,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     // Drop the filter query — it belongs to the old context.
     searchQueryRef.current = '';
     setSearchQuery('');
+    syncFilterRef.current = 'all';
+    setSyncFilter('all');
     if (visible && hasGitContext) {
       loadedRef.current = true;
       loadLog(0, false);
@@ -431,12 +446,24 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     };
   }, [ghProjectId, entries, githubAvatarBySha]);
 
-  const isFiltering = searchQuery.trim().length > 0;
-  const displayEntries = useMemo(
-    () => (isFiltering ? entries.filter((e) => commitMatchesQuery(e, searchQuery)) : entries),
-    [entries, searchQuery, isFiltering],
-  );
+  const isFiltering = searchQuery.trim().length > 0 || syncFilter !== 'all';
   const inferredUnpulled = useMemo(() => inferUnpulledHashesFromGraphEntries(entries), [entries]);
+  const displayEntries = useMemo(
+    () =>
+      isFiltering
+        ? entries.filter((entry) =>
+            commitMatchesFilters(
+              entry,
+              searchQuery,
+              syncFilter,
+              unpushed,
+              unpulled,
+              inferredUnpulled,
+            ),
+          )
+        : entries,
+    [entries, searchQuery, syncFilter, isFiltering, unpushed, unpulled, inferredUnpulled],
+  );
   const rebaseEventsByHash = useMemo(() => indexRebaseEventsByHash(rebaseEvents), [rebaseEvents]);
   const rebaseCopyLinks = useMemo(
     () => (isFiltering ? [] : inferRebaseCopyLinks(rebaseEvents, displayEntries)),
@@ -663,7 +690,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       <GraphToolbar
         logLoading={logLoading}
         allBranches={allBranches}
-        commitCount={entries.length}
+        commitCount={displayEntries.length}
+        syncFilter={syncFilter}
+        onToggleSyncFilter={toggleSyncFilter}
         onRefresh={refreshLog}
         onToggleAllBranches={() => setAllBranches((v) => !v)}
       />
@@ -674,7 +703,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           onQueryChange={updateSearchQuery}
           totalMatches={displayEntries.length}
           loading={isFiltering && logLoading}
-          onClose={isFiltering ? clearSearch : undefined}
+          onClose={searchQuery.trim() ? clearSearch : undefined}
           autoFocus={false}
           placeholder={t('graph.searchPlaceholder', 'Search branches & commits')}
           testIdPrefix="graph-search"
@@ -728,7 +757,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           isFiltering ? (
             <EmptyState
               icon={Search}
-              title={t('graph.noMatches', 'No commits match your search')}
+              title={t('graph.noFilterMatches', 'No commits match the filters')}
             />
           ) : (
             <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
@@ -820,6 +849,19 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           </div>
         )}
       </div>
+
+      {isFiltering && hasMore && !logErrorMessage && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={loadMore}
+          disabled={logLoading}
+          className="shrink-0"
+          data-testid="graph-filter-load-more"
+        >
+          {t('history.loadMore', 'Load more commits')}
+        </Button>
+      )}
 
       {graphMaxScrollLeft > 0 && (
         <GraphGutterHorizontalScroller
@@ -1034,23 +1076,27 @@ function useEmailAvatars(entries: GraphEntry[]): Map<string, string> {
   return avatarByEmail;
 }
 
-/** Toolbar: refresh, all-branches toggle, and a commit counter. */
+/** Toolbar: refresh, branch scope, sync filters, and a commit counter. */
 function GraphToolbar({
   logLoading,
   allBranches,
   commitCount,
+  syncFilter,
+  onToggleSyncFilter,
   onRefresh,
   onToggleAllBranches,
 }: {
   logLoading: boolean;
   allBranches: boolean;
   commitCount: number;
+  syncFilter: CommitSyncFilter;
+  onToggleSyncFilter: (filter: Exclude<CommitSyncFilter, 'all'>) => void;
   onRefresh: () => void;
   onToggleAllBranches: () => void;
 }) {
   const { t } = useTranslation();
   return (
-    <div className="border-sidebar-border bg-background flex items-center gap-1 border-b px-2 py-1">
+    <div className="border-sidebar-border bg-background flex flex-wrap items-center gap-1 border-b px-2 py-1">
       <Button
         variant="ghost"
         size="icon-sm"
@@ -1070,6 +1116,28 @@ function GraphToolbar({
       >
         <GitBranch className="icon-base" />
         {t('graph.allBranches', 'All branches')}
+      </Button>
+      <Button
+        variant={syncFilter === 'pull' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-8 gap-1 px-2 text-xs"
+        aria-pressed={syncFilter === 'pull'}
+        onClick={() => onToggleSyncFilter('pull')}
+        data-testid="graph-filter-pull"
+      >
+        <ArrowDownCircle className="icon-base" />
+        {t('graph.pendingPull', 'Pending pull')}
+      </Button>
+      <Button
+        variant={syncFilter === 'push' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-8 gap-1 px-2 text-xs"
+        aria-pressed={syncFilter === 'push'}
+        onClick={() => onToggleSyncFilter('push')}
+        data-testid="graph-filter-push"
+      >
+        <ArrowUpCircle className="icon-base" />
+        {t('graph.pendingPush', 'Pending push')}
       </Button>
       <span className="text-muted-foreground ml-auto text-[10px]">
         {t('graph.commitCount', {

@@ -495,6 +495,9 @@
     "viewOnGithub": "View on GitHub"
   },
   "graph": {
+    "pendingPull": "Pending pull",
+    "pendingPush": "Pending push",
+    "noFilterMatches": "No commits match the filters",
     "allBranches": "All branches",
     "commitCount_one": "{{count}} commit",
     "commitCount_other": "{{count}} commits",

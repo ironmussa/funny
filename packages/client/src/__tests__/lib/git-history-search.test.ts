@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
-import { commitMatchesQuery, type SearchableCommit } from '@/lib/git-history-search';
+import {
+  commitMatchesFilters,
+  commitMatchesQuery,
+  type SearchableCommit,
+} from '@/lib/git-history-search';
 
 const c = (over: Partial<SearchableCommit>): SearchableCommit => ({ message: '', ...over });
 
@@ -48,5 +52,44 @@ describe('commitMatchesQuery', () => {
   test('returns false when nothing matches', () => {
     const commit = c({ message: 'add tests', body: 'unit only', refs: [{ name: 'main' }] });
     expect(commitMatchesQuery(commit, 'zzz')).toBe(false);
+  });
+});
+
+describe('commitMatchesFilters', () => {
+  const unpushed = new Set(['local']);
+  const unpulled = new Set(['remote']);
+  const inferred = new Set(['inferred']);
+  const commits = ['local', 'remote', 'inferred', 'synced'].map((hash) => ({
+    hash,
+    message: hash === 'local' ? 'fix login' : 'update docs',
+  }));
+
+  test.each([
+    ['all', ['local', 'remote', 'inferred', 'synced']],
+    ['pull', ['remote', 'inferred']],
+    ['push', ['local']],
+  ] as const)('filters %s using the graph sync markers', (filter, expected) => {
+    expect(
+      commits
+        .filter((commit) => commitMatchesFilters(commit, '', filter, unpushed, unpulled, inferred))
+        .map((commit) => commit.hash),
+    ).toEqual(expected);
+  });
+
+  test('combines status with text search and handles no matches', () => {
+    expect(commitMatchesFilters(commits[0], 'login', 'push', unpushed, unpulled, inferred)).toBe(
+      true,
+    );
+    expect(commitMatchesFilters(commits[0], 'docs', 'push', unpushed, unpulled, inferred)).toBe(
+      false,
+    );
+    expect(commitMatchesFilters(commits[3], '', 'pull', unpushed, unpulled, inferred)).toBe(false);
+  });
+
+  test('recognizes pending commits appended by pagination', () => {
+    const later = { hash: 'later', message: 'older local commit' };
+    expect(
+      commitMatchesFilters(later, '', 'push', new Set([...unpushed, 'later']), unpulled, inferred),
+    ).toBe(true);
   });
 });

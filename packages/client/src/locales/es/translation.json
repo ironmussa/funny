@@ -493,6 +493,9 @@
     "viewOnGithub": "Ver en GitHub"
   },
   "graph": {
+    "pendingPull": "Pendientes de pull",
+    "pendingPush": "Pendientes de push",
+    "noFilterMatches": "Ningún commit coincide con los filtros",
     "allBranches": "Todas las ramas",
     "commitCount_one": "{{count}} commit",
     "commitCount_other": "{{count}} commits",

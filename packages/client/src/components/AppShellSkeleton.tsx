@@ -20,11 +20,12 @@ function getSidebarWidth(): number {
 export function AppShellSkeleton() {
   const sidebarWidth = getSidebarWidth();
   return (
-    <div className="bg-background flex h-screen overflow-hidden">
-      {/* Sidebar skeleton — matches persisted sidebar width from ui/sidebar.tsx */}
+    <div className="bg-background flex h-dvh overflow-hidden" data-testid="app-shell-skeleton">
+      {/* Sidebar skeleton — desktop only, matching the real layout and persisted width. */}
       <div
+        data-testid="app-shell-skeleton-sidebar"
         style={{ width: sidebarWidth }}
-        className="border-sidebar-border bg-sidebar flex shrink-0 flex-col border-r"
+        className="border-sidebar-border bg-sidebar hidden shrink-0 flex-col border-r md:flex"
       >
         {/* Header — logo + action buttons */}
         <div className="flex items-center justify-between px-4 py-3">
@@ -63,7 +64,10 @@ export function AppShellSkeleton() {
       </div>
 
       {/* Main content skeleton */}
-      <div className="bg-background flex flex-1 flex-col">
+      <div
+        data-testid="app-shell-skeleton-content"
+        className="bg-background flex min-w-0 flex-1 flex-col"
+      >
         {/* Thread header */}
         <div className="border-border flex items-center gap-3 border-b px-4 py-3">
           <Skeleton className="h-5 w-48" />

@@ -29,6 +29,7 @@ import {
   type FileRef,
   type SymbolRef,
 } from '../../utils/file-mentions.js';
+import { resolveAgentResources } from '../agent-resources/resolver.js';
 import {
   startAgent,
   stopAgent,
@@ -117,23 +118,6 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
-  // Guardrail: reject an unknown slash command up front instead of forwarding it
-  // to the model as literal text. The SDK only executes a recognized /command;
-  // a typo or non-existent command would otherwise silently turn into a prompt
-  // the model "describes" — the same class of bug as /compact not compacting.
-  // Only enforced when we actually captured the SDK's command list this process
-  // lifetime (`undefined` ⇒ can't validate ⇒ allow through).
-  if (isPureSlashCommand(params.content)) {
-    const known = getSupportedSlashCommands(params.threadId);
-    const name = extractSlashCommandName(params.content);
-    if (known && known.size > 0 && name && !known.has(name)) {
-      throw new ThreadServiceError(
-        `Unknown slash command "/${name}". It is not available in this session, so it was not sent.`,
-        400,
-      );
-    }
-  }
-
   log.info('sendMessage called', {
     namespace: 'thread-service',
     threadId: params.threadId,
@@ -166,6 +150,51 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
     thread.provider ||
     DEFAULT_PROVIDER) as AgentProvider;
   const effectiveModel = (params.model || thread.model || DEFAULT_MODEL) as AgentModel;
+  // Use the composer's provider-scoped catalog as well as live session commands.
+  // A previous provider's session list cannot validate a newly selected provider.
+  let agentContent = params.content;
+  if (isPureSlashCommand(params.content)) {
+    const name = extractSlashCommandName(params.content)!;
+    const known =
+      effectiveProvider === thread.provider
+        ? getSupportedSlashCommands(params.threadId)
+        : undefined;
+    if (!known?.has(name)) {
+      const profile =
+        effectiveProvider === 'claude' && thread.projectId
+          ? await getServices().agentProfiles.resolveEffectiveProfile(
+              thread.projectId,
+              params.userId,
+            )
+          : undefined;
+      const resolved = await resolveAgentResources({
+        provider: effectiveProvider,
+        model: effectiveModel,
+        phase: 'composer',
+        projectPath: cwd,
+        projectId: thread.projectId,
+        claudeConfigDir:
+          profile?.profile?.provider === 'claude' ? profile.env.CLAUDE_CONFIG_DIR : undefined,
+      });
+      if (resolved.isErr()) throw new ThreadServiceError(resolved.error.message, 500);
+      const resource = resolved.value.resources.find(
+        (r) => r.name === name && (r.kind === 'skill' || r.kind === 'slash-command'),
+      );
+      if (resource?.kind === 'skill' && effectiveProvider === 'codex') {
+        const args = params.content
+          .trimStart()
+          .slice(name.length + 1)
+          .trimStart();
+        agentContent = `Use the ${name} skill.${args ? `\n\n${args}` : ''}`;
+      } else if (!resource && known && known.size > 0) {
+        throw new ThreadServiceError(
+          `Unknown slash command "/${name}". It is not available in this session, so it was not sent.`,
+          400,
+        );
+      }
+    }
+  }
+
   let effectivePermission = (params.permissionMode ||
     thread.permissionMode ||
     'autoEdit') as PermissionMode;
@@ -224,6 +253,14 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   // What we persist in the messages table is the path-only metadata version,
   // so the UI shows file chips instead of inlining the entire source.
   const persistedContent = stripInlineReferencedContent(augmentedContent);
+  if (agentContent !== params.content) {
+    augmentedContent = await augmentPromptWithFiles(agentContent, params.fileReferences, cwd);
+    augmentedContent = await augmentPromptWithSymbols(
+      augmentedContent,
+      params.symbolReferences,
+      cwd,
+    );
+  }
 
   // Decide whether this send will be queued. When queued, we deliberately
   // skip persisting the user message to `messages` here — the message lives

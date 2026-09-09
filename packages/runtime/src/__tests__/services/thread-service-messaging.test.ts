@@ -10,6 +10,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  resolveAgentResources: vi.fn(),
   tm: {
     getThread: vi.fn(),
     updateThread: vi.fn(async () => undefined),
@@ -33,6 +34,10 @@ const mocks = vi.hoisted(() => ({
     cancel: vi.fn(async (): Promise<any> => undefined),
     update: vi.fn(async (): Promise<any> => undefined),
   },
+}));
+
+vi.mock('../../services/agent-resources/resolver.js', () => ({
+  resolveAgentResources: mocks.resolveAgentResources,
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -72,6 +77,7 @@ vi.mock('../../services/thread-manager.js', () => mocks.tm);
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: mocks.projects,
+    agentProfiles: { resolveEffectiveProfile: vi.fn(async () => ({})) },
     messageQueue: mocks.messageQueue,
   }),
 }));
@@ -206,6 +212,10 @@ describe('respondPermissionRequest', () => {
   });
 });
 
+beforeEach(() => {
+  mocks.resolveAgentResources.mockImplementation(() => Promise.resolve(ok({ resources: [] })));
+});
+
 describe('sendMessage — slash-command guardrail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -235,6 +245,52 @@ describe('sendMessage — slash-command guardrail', () => {
     expect(startAgent).not.toHaveBeenCalled();
   });
 
+  test.each(['', ' create a password reset flow\nKeep existing users unchanged.'])(
+    'invokes a Codex skill absent from native commands, preserving arguments: %s',
+    async (args) => {
+      mocks.tm.getThread.mockResolvedValue({
+        id: 't-cmd',
+        projectId: 'p-1',
+        provider: 'codex',
+        status: 'completed',
+        mode: 'worktree',
+        worktreePath: '/projects/worktree',
+      });
+      vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'skills']));
+      mocks.resolveAgentResources.mockResolvedValue(
+        ok({ resources: [{ name: 'openspec-propose', kind: 'skill', usable: true }] }),
+      );
+      const content = `/openspec-propose${args}`;
+      const result = await sendMessage({ threadId: 't-cmd', userId: 'u-1', content });
+      expect(result.isOk()).toBe(true);
+      expect(vi.mocked(startAgent).mock.calls[0][1]).toBe(
+        `Use the openspec-propose skill.${args ? `\n\n${args.trimStart()}` : ''}`,
+      );
+      expect(mocks.resolveAgentResources).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'codex',
+          phase: 'composer',
+          projectPath: '/projects/worktree',
+        }),
+      );
+      expect(mocks.tm.insertMessage).toHaveBeenCalledWith(expect.objectContaining({ content }));
+    },
+  );
+
+  test('accepts a discovered Claude custom command without rewriting it', async () => {
+    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+    mocks.resolveAgentResources.mockResolvedValue(
+      ok({ resources: [{ name: 'team:review', kind: 'slash-command', usable: true }] }),
+    );
+    const result = await sendMessage({
+      threadId: 't-cmd',
+      userId: 'u-1',
+      content: '/team:review changes',
+    });
+    expect(result.isOk()).toBe(true);
+    expect(vi.mocked(startAgent).mock.calls[0][1]).toBe('/team:review changes');
+  });
+
   test('allows a known slash command through to the agent', async () => {
     vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));
 
@@ -242,7 +298,39 @@ describe('sendMessage — slash-command guardrail', () => {
 
     expect(result.isOk()).toBe(true);
     expect(startAgent).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveAgentResources).not.toHaveBeenCalled();
   });
+
+  test.each([false, true])(
+    'resolves a Codex skill without a current session catalog (provider switch: %s)',
+    async (switchProvider) => {
+      mocks.tm.getThread.mockResolvedValue({
+        id: 't-cmd',
+        projectId: 'p-1',
+        provider: switchProvider ? 'claude' : 'codex',
+        status: 'completed',
+        worktreePath: '/projects/test',
+      });
+      vi.mocked(getSupportedSlashCommands).mockReturnValue(
+        switchProvider ? new Set(['openspec-propose']) : undefined,
+      );
+      mocks.resolveAgentResources.mockResolvedValue(
+        ok({ resources: [{ name: 'openspec-propose', kind: 'skill', usable: true }] }),
+      );
+
+      const result = await sendMessage({
+        threadId: 't-cmd',
+        userId: 'u-1',
+        provider: 'codex',
+        content: '/openspec-propose build a dashboard',
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(vi.mocked(startAgent).mock.calls[0][1]).toBe(
+        'Use the openspec-propose skill.\n\nbuild a dashboard',
+      );
+    },
+  );
 
   test('allows any slash command when no command list was captured (cannot validate)', async () => {
     vi.mocked(getSupportedSlashCommands).mockReturnValue(undefined);
@@ -553,6 +641,40 @@ describe('sendMessage — queue and interactive tool flows', () => {
     mocks.projects.resolveProjectPath.mockResolvedValue(ok('/projects/test'));
     mocks.projects.getProject.mockResolvedValue({ followUpMode: 'queue', path: '/projects/test' });
     vi.mocked(isAgentRunning).mockReturnValue(false);
+  });
+
+  test('queues the resolved Codex skill invocation with its arguments', async () => {
+    vi.mocked(isAgentRunning).mockReturnValue(true);
+    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-running',
+      projectId: 'p-1',
+      provider: 'codex',
+      status: 'running',
+      worktreePath: '/projects/test',
+    });
+    mocks.resolveAgentResources.mockResolvedValue(
+      ok({ resources: [{ name: 'openspec-propose', kind: 'skill', usable: true }] }),
+    );
+    mocks.messageQueue.enqueue.mockResolvedValue({ id: 'queued-skill' });
+    mocks.messageQueue.queueCount.mockResolvedValue(1);
+    mocks.messageQueue.peek.mockResolvedValue(undefined);
+
+    const result = await sendMessage({
+      threadId: 't-running',
+      userId: 'u-1',
+      content: '/openspec-propose build a dashboard',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.messageQueue.enqueue).toHaveBeenCalledWith(
+      't-running',
+      expect.objectContaining({
+        content: 'Use the openspec-propose skill.\n\nbuild a dashboard',
+        provider: 'codex',
+      }),
+    );
+    expect(startAgent).not.toHaveBeenCalled();
   });
 
   test('queues follow-up when agent is running and project uses queue mode', async () => {

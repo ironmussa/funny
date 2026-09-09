@@ -549,7 +549,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             onInputKeyDown={handleSearchKeyDown}
             autoFocus={false}
             testIdPrefix="clone-repo-search"
-            className="border-input bg-background rounded-md border px-2"
+            className="border-input bg-background h-8 rounded-md border px-3 [&_input]:h-full [&_input]:px-0 [&_input]:text-sm"
           />
         </div>
 

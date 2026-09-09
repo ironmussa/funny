@@ -37,6 +37,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -169,7 +170,7 @@ export const ModelSelect = memo(function ModelSelect({
           align="start"
           collisionPadding={8}
           size="xs"
-          className="min-w-44"
+          className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain"
         >
           {groups.map((group, idx) => (
             <DropdownMenuGroup key={group.provider}>
@@ -208,27 +209,33 @@ export const ModelSelect = memo(function ModelSelect({
                         {lead(isSelected)}
                         <span className="truncate">{m.label}</span>
                       </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent size="xs">
-                        {efforts.map((e) => (
-                          <DropdownMenuItem
-                            key={e.value}
-                            size="xs"
-                            data-testid={`prompt-effort-option-${m.value}-${e.value}`}
-                            onSelect={() => {
-                              onChange(m.value);
-                              onEffortChange(e.value);
-                            }}
-                          >
-                            {lead(isSelected && effort === e.value)}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{e.label}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>{e.description}</TooltipContent>
-                            </Tooltip>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent
+                          size="xs"
+                          collisionPadding={8}
+                          className="max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overscroll-contain"
+                        >
+                          {efforts.map((e) => (
+                            <DropdownMenuItem
+                              key={e.value}
+                              size="xs"
+                              data-testid={`prompt-effort-option-${m.value}-${e.value}`}
+                              onSelect={() => {
+                                onChange(m.value);
+                                onEffortChange(e.value);
+                              }}
+                            >
+                              {lead(isSelected && effort === e.value)}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>{e.label}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>{e.description}</TooltipContent>
+                              </Tooltip>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
                     </DropdownMenuSub>
                   );
                 }

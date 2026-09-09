@@ -290,6 +290,11 @@ describe('shortTimeAgo', () => {
 });
 
 describe('resolveModelLabel', () => {
+  test('resolves Fable 5.1 SDK model IDs to its translation key', () => {
+    expect(resolveModelLabel('claude-fable-5-1', t)).toContain('thread.model.fable51');
+    expect(resolveModelLabel('claude-fable-5-1[1m]', t)).toContain('thread.model.fable51');
+  });
+
   test('maps known model IDs to translation keys', () => {
     expect(resolveModelLabel('claude-sonnet-4-6', t)).toContain('thread.model.sonnet46');
     expect(resolveModelLabel('claude-haiku-4-5-20251001', t)).toContain('thread.model.haiku');

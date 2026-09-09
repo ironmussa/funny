@@ -38,6 +38,16 @@ describe('resolveModelId', () => {
       expect(resolveModelId('claude', 'fable-5')).toBe('claude-fable-5[1m]');
     });
 
+    test('exposes Fable 5.1 through the registry and model selector', () => {
+      expect(resolveModelId('claude', 'fable-5.1')).toBe('claude-fable-5-1');
+      expect(isModelForProvider('claude', 'fable-5.1')).toBe(true);
+      expect(getModelContextWindow('claude', 'fable-5.1')).toBe(1_000_000);
+      expect(getProviderModelsWithLabels('claude')).toContainEqual({
+        value: 'fable-5.1',
+        label: 'Fable 5.1',
+      });
+    });
+
     test('resolves haiku to its full model ID', () => {
       expect(resolveModelId('claude', 'haiku')).toBe('claude-haiku-4-5-20251001');
     });
@@ -224,8 +234,9 @@ describe('getProviderModels', () => {
     expect(models).toContain('opus-4.8');
     expect(models).toContain('opus-5');
     expect(models).toContain('fable-5');
+    expect(models).toContain('fable-5.1');
     expect(models).toContain('haiku');
-    expect(models).toHaveLength(8);
+    expect(models).toHaveLength(9);
   });
 
   test('returns all codex models', () => {

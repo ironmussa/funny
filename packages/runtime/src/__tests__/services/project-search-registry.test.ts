@@ -15,6 +15,7 @@ import {
   projectSearchRegistry,
   searchStatePaths,
 } from '../../services/project-search-registry.js';
+import { TgrepContentSearch } from '../../services/tgrep-content-search.js';
 import { threadEventBus } from '../../services/thread-event-bus.js';
 
 let root: string;
@@ -27,6 +28,8 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(registries.splice(0).map((registry) => registry.disposeAll()));
   rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 function fakeProvider(cwd: string): ProjectSearchProvider {
@@ -70,6 +73,24 @@ function deferredResult<T>() {
 }
 
 describe('ProjectSearchRegistry', () => {
+  test('uses tgrep lazily and disposes it after invalidated leases are released', async () => {
+    const result = { files: [], totalMatches: 0, truncated: false, durationMs: 42 };
+    const search = vi.spyOn(TgrepContentSearch.prototype, 'search').mockResolvedValue(result);
+    const dispose = vi
+      .spyOn(TgrepContentSearch.prototype, 'dispose')
+      .mockImplementation(() => undefined);
+    const cwd = join(root, 'project');
+    mkdirSync(cwd);
+    const registry = createRegistry();
+    const lease = (await registry.acquire(cwd))._unsafeUnwrap();
+    expect(search).not.toHaveBeenCalled();
+    expect((await lease.provider.searchText({ query: 'needle' }))._unsafeUnwrap()).toBe(result);
+    await registry.invalidate(cwd);
+    expect(dispose).not.toHaveBeenCalled();
+    lease.release();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   test('canonicalizes cwd and shares one concurrent initialization', async () => {
     const cwd = join(root, 'project');
     const alias = join(root, 'project-link');
@@ -179,8 +200,6 @@ describe('ProjectSearchRegistry', () => {
     expect(first.stateDir).not.toBe(secondScope.stateDir);
     expect(first.stateDir).not.toContain('runner-a');
     expect(first.stateDir).not.toContain('/repo/one');
-    expect(first.frecencyDbPath).toBe(join(first.stateDir, 'frecency.db'));
-    expect(first.historyDbPath).toBe(join(first.stateDir, 'history.db'));
   });
 
   test('refreshes Git status, rescans branch changes, and skips absent entries', async () => {
@@ -278,7 +297,7 @@ describe('ProjectSearchRegistry', () => {
     const factory = vi
       .fn()
       .mockImplementationOnce(() =>
-        errAsync(internal(`Search unavailable: FFF native binding unavailable at ${cwd}`)),
+        errAsync(internal(`Search unavailable: native binding unavailable at ${cwd}`)),
       )
       .mockImplementationOnce(() => ResultAsync.fromSafePromise(Promise.resolve(provider)));
     const registry = createRegistry({ providerFactory: factory });
@@ -292,7 +311,7 @@ describe('ProjectSearchRegistry', () => {
       residentEntries: 1,
       activeRequests: 1,
       initializingEntries: 0,
-      native: { available: expect.any(Boolean) },
+      backend: 'tgrep',
       entries: [
         {
           cwdId: expect.stringMatching(/^[a-f0-9]{16}$/),

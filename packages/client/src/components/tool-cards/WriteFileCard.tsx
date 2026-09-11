@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { ensureLanguage, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -50,12 +50,12 @@ export function WriteFileCard({
   const hljsLang = ext ? extToHljsLang(ext) : 'plaintext';
   const [highlighted, setHighlighted] = useState<string | null>(null);
   useEffect(() => {
-    if (content == null || !hljsLang || hljsLang === 'plaintext') {
+    if (content == null) {
       setHighlighted(null);
       return;
     }
     let cancelled = false;
-    ensureLanguage(hljsLang).then(() => {
+    ensureHighlight(content, hljsLang).then(() => {
       if (!cancelled) setHighlighted(highlightCode(content, hljsLang));
     });
     return () => {

@@ -1,5 +1,7 @@
 import hljs from 'highlight.js/lib/core';
 
+import { getGpuHighlight, prepareGpuHighlight } from '@/lib/gpu-highlight';
+
 /**
  * Skip syntax highlighting for content exceeding this many lines.
  * highlight.js is sync and fast, but we still avoid pathological inputs.
@@ -158,6 +160,12 @@ export async function ensureLanguage(lang: string): Promise<boolean> {
   pendingRegistrations.set(resolved, promise);
   await promise;
   return registeredLangs.has(resolved);
+}
+
+/** Prepare GPU tokens before rendering, loading a grammar only on fallback. */
+export async function ensureHighlight(code: string, lang: string): Promise<boolean> {
+  if (await prepareGpuHighlight(code)) return true;
+  return ensureLanguage(lang);
 }
 
 /**
@@ -546,6 +554,8 @@ function augmentShellHighlight(html: string): string {
  * Falls back to escaped plain text if the language isn't loaded.
  */
 export function highlightLine(line: string, lang: string): string {
+  const gpu = getGpuHighlight(line);
+  if (gpu !== undefined) return gpu;
   const resolved = resolveLang(lang);
   if (
     !resolved ||
@@ -568,6 +578,8 @@ export function highlightLine(line: string, lang: string): string {
  * Returns HTML string with hljs token classes.
  */
 export function highlightCode(code: string, lang: string): string {
+  const gpu = getGpuHighlight(code);
+  if (gpu !== undefined) return gpu;
   const resolved = resolveLang(lang);
   if (
     !resolved ||

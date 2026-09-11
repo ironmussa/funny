@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { cn } from '@/lib/utils';
 import { CODE_FONT_SIZE_PX, CODE_LINE_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
 
@@ -266,7 +266,7 @@ export function PermissionApprovalCard({
       return;
     }
     let cancelled = false;
-    ensureLanguage('bash').then(() => {
+    ensureHighlight(displayedInput, 'bash').then(() => {
       if (!cancelled) setHighlightedBash(highlightCode(displayedInput, 'bash'));
     });
     return () => {

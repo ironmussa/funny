@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 
@@ -89,7 +89,7 @@ export function BashCard({
   useEffect(() => {
     if (!expanded || !command) return;
     let cancelled = false;
-    ensureLanguage('bash').then((ok) => {
+    ensureHighlight(command, 'bash').then((ok) => {
       if (cancelled || !ok) return;
       setHighlightedCommand({ command, html: highlightCode(command, 'bash') });
     });
@@ -101,7 +101,7 @@ export function BashCard({
   useEffect(() => {
     if (!expanded || !output || !outputLang) return;
     let cancelled = false;
-    ensureLanguage(outputLang).then((ok) => {
+    ensureHighlight(output, outputLang).then((ok) => {
       if (cancelled || !ok) return;
       setHighlightedOutput({ output, lang: outputLang, html: highlightCode(output, outputLang) });
     });

@@ -14,6 +14,8 @@ message TerminalOpen {
   string user_id = 6;
   optional string project_id = 7;
   optional string label = 8;
+  // Runner validates scratch ownership and resolves the directory locally.
+  optional string scratch_thread_id = 9;
 }
 
 message TerminalResume {

@@ -942,6 +942,9 @@ pub struct TerminalOpen {
     pub project_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag="8")]
     pub label: ::core::option::Option<::prost::alloc::string::String>,
+    /// Runner validates scratch ownership and resolves the directory locally.
+    #[prost(string, optional, tag="9")]
+    pub scratch_thread_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TerminalResume {

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { createClientLogger } from '@/lib/client-logger';
+import { getNotificationWorker } from '@/lib/notification-worker';
 import { useSettingsStore } from '@/stores/settings-store';
 
 const log = createClientLogger('notifications');
@@ -66,16 +67,17 @@ export type NotificationResult =
       error?: string;
     };
 
-export function showAgentNotification(
+export async function showAgentNotification(
   title: string,
   body: string,
   opts: {
     tag?: string;
+    url?: string;
     onClick?: () => void;
     force?: boolean;
     skipIfViewingThreadId?: string;
   } = {},
-): NotificationResult {
+): Promise<NotificationResult> {
   if (!isNotificationsSupported()) {
     log.warn('notification skipped: unsupported');
     return { ok: false, reason: 'unsupported' };
@@ -94,6 +96,16 @@ export function showAgentNotification(
   }
 
   try {
+    const options: NotificationOptions = { body, tag: opts.tag, icon: '/notification-icon.png' };
+    if ('serviceWorker' in navigator) {
+      const registration = await getNotificationWorker();
+      await registration.showNotification(title, {
+        ...options,
+        data: { url: opts.url ?? window.location.href },
+      });
+      if (useSettingsStore.getState().notificationSoundEnabled) playNotificationSound();
+      return { ok: true };
+    }
     const notif = new Notification(title, {
       body,
       tag: opts.tag,

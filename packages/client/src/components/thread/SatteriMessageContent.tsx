@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
 import { MarkdownImage, markdownProseClassName } from '@/lib/markdown-components';
 import { getMarkdownFileLinkPath, resolveMarkdownFilePath } from '@/lib/markdown-file-links';
@@ -188,9 +188,9 @@ function highlightCodeBlocks(root: HTMLElement): void {
     if (!language) continue;
     code.dataset.satteriHighlighted = 'true';
     const source = code.textContent ?? '';
-    void ensureLanguage(language.slice('language-'.length)).then((available) => {
-      if (available && code.isConnected) {
-        // highlight.js returns escaped token markup for source read from textContent.
+    void ensureHighlight(source, language.slice('language-'.length)).then((available) => {
+      if (available && code.isConnected && code.textContent === source) {
+        // Both highlighters escape source before producing token markup.
         code.innerHTML = highlightCode(source, language.slice('language-'.length));
       }
     });

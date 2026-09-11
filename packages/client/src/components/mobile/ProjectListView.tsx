@@ -1,17 +1,21 @@
 import type { Project } from '@funny/shared';
-import { Folder } from 'lucide-react';
+import { Folder, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
+import { MobileNotifications } from './MobileNotifications';
+
 interface Props {
   projects: Project[];
+  onAddProject: () => void;
   onSelect: (id: string) => void;
 }
 
-export function ProjectListView({ projects, onSelect }: Props) {
+export function ProjectListView({ projects, onSelect, onAddProject }: Props) {
   const { t } = useTranslation();
 
   // Tap feedback: highlight the tapped row firmly, then navigate so the
@@ -31,12 +35,23 @@ export function ProjectListView({ projects, onSelect }: Props) {
           className="icon-lg shrink-0"
           data-testid="mobile-project-list-home-icon"
         />
-        <h1 className="text-base font-semibold">funny</h1>
+        <h1 className="flex-1 text-base font-semibold">funny</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onAddProject}
+          aria-label={t('sidebar.addProject')}
+          data-testid="mobile-add-project"
+        >
+          <Plus className="icon-lg" />
+        </Button>
       </header>
+      <MobileNotifications />
       <ScrollArea className="flex-1">
         {projects.length === 0 ? (
-          <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
-            {t('sidebar.noProjects', 'No projects yet. Add one from the desktop app.')}
+          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-4 text-sm">
+            {t('sidebar.noProjects')}
+            <Button onClick={onAddProject}>{t('sidebar.addProject')}</Button>
           </div>
         ) : (
           <div className="space-y-1 p-2">

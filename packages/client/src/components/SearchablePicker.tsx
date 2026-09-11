@@ -9,7 +9,10 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+
+import { PromptSelectionDrawer } from './PromptSelectionDrawer';
 
 export interface SearchablePickerItem {
   key: string;
@@ -18,11 +21,22 @@ export interface SearchablePickerItem {
   detail?: string;
   badge?: string;
   icon?: React.ReactNode;
+  /** Keep actions such as branch creation available while searching on mobile. */
+  alwaysVisibleOnMobile?: boolean;
 }
 
 const ITEM_HEIGHT = 32;
 
 export function SearchablePicker({
+  mobilePresentation,
+  ...props
+}: React.ComponentProps<typeof SearchablePickerContent> & { mobilePresentation?: 'drawer' }) {
+  const isMobile = useIsMobile();
+  const mobile = mobilePresentation === 'drawer' && isMobile;
+  return <SearchablePickerContent key={mobile ? 'mobile' : 'desktop'} {...props} mobile={mobile} />;
+}
+
+function SearchablePickerContent({
   items,
   label,
   displayValue,
@@ -40,6 +54,7 @@ export function SearchablePicker({
   align = 'start',
   icon,
   testId,
+  mobile = false,
 }: {
   items: SearchablePickerItem[];
   label: string;
@@ -58,6 +73,7 @@ export function SearchablePicker({
   align?: 'start' | 'end';
   icon?: React.ReactNode;
   testId?: string;
+  mobile?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -69,8 +85,14 @@ export function SearchablePicker({
     if (!search) return items;
     const q = normalizeSearchText(search);
     return items
-      .filter((item) => findTextSearchMatches(item.label, q).length > 0)
+      .filter(
+        (item) =>
+          (mobile && item.alwaysVisibleOnMobile) || findTextSearchMatches(item.label, q).length > 0,
+      )
       .sort((a, b) => {
+        if (mobile && a.alwaysVisibleOnMobile !== b.alwaysVisibleOnMobile) {
+          return a.alwaysVisibleOnMobile ? -1 : 1;
+        }
         const aLower = normalizeSearchText(a.label);
         const bLower = normalizeSearchText(b.label);
         const aStartsWith = aLower.startsWith(q) ? 0 : 1;
@@ -78,12 +100,12 @@ export function SearchablePicker({
         if (aStartsWith !== bStartsWith) return aStartsWith - bStartsWith;
         return aLower.length - bLower.length || aLower.localeCompare(bLower);
       });
-  }, [items, search]);
+  }, [items, search, mobile]);
 
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => listRef.current,
-    estimateSize: () => ITEM_HEIGHT,
+    estimateSize: () => (mobile ? 48 : ITEM_HEIGHT),
     overscan: 10,
   });
 
@@ -174,33 +196,175 @@ export function SearchablePicker({
     }
   };
 
+  const trigger = (
+    <button
+      type="button"
+      data-testid={testId}
+      className={cn(
+        triggerClassName ??
+          'text-muted-foreground hover:bg-muted hover:text-foreground flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs transition-colors focus-visible:outline-hidden',
+        mobile && 'min-h-[48px] min-w-0 max-w-full text-sm',
+      )}
+      tabIndex={mobile ? 0 : -1}
+    >
+      {icon ?? <GitBranch className="icon-xs shrink-0" />}
+      {triggerTitle ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="truncate font-mono">{displayValue}</span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+            {triggerTitle}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="truncate font-mono">{displayValue}</span>
+      )}
+      <ChevronDown className="icon-xs shrink-0 opacity-60" />
+    </button>
+  );
+  const content = (
+    <>
+      <div className="border-border border-b px-2 py-1.5">
+        <Input
+          ref={searchInputRef}
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder={searchPlaceholder}
+          aria-label={label}
+          autoComplete="off"
+          className={cn(
+            'h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0',
+            mobile && 'min-h-[48px] text-[16px]',
+          )}
+        />
+      </div>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+        ref={listRef}
+        style={{ maxHeight: mobile ? '60dvh' : 'min(60vh, 440px)' }}
+      >
+        {loading && items.length === 0 && loadingText && (
+          <p className="text-muted-foreground py-3 text-center text-sm">{loadingText}</p>
+        )}
+        {!loading && items.length === 0 && emptyText && (
+          <p className="text-muted-foreground py-3 text-center text-sm">{emptyText}</p>
+        )}
+        {!loading &&
+          items.length > 0 &&
+          (filtered.length === 0 ||
+            (mobile && search && filtered.every((item) => item.alwaysVisibleOnMobile))) && (
+            <p className="text-muted-foreground py-3 text-center text-sm">{noMatchText}</p>
+          )}
+        {filtered.length > 0 && (
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const item = filtered[virtualRow.index];
+              const i = virtualRow.index;
+              return (
+                <div
+                  key={item.key}
+                  className="group/item absolute top-0 left-0 w-full"
+                  style={{
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={mobile ? item.isSelected : undefined}
+                    onClick={() => {
+                      onSelect(item.key);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                    onKeyDown={(e) => handleItemKeyDown(e, i)}
+                    onFocus={() => setHighlightIndex(i)}
+                    onMouseEnter={() => {
+                      setHighlightIndex(i);
+                    }}
+                    className={cn(
+                      'w-full h-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-hidden',
+                      onCopy ? (mobile ? 'pr-14' : 'pr-7') : 'pr-2',
+                      mobile && 'text-base',
+                      i === highlightIndex
+                        ? 'bg-accent text-foreground'
+                        : item.isSelected
+                          ? 'bg-accent/50 text-foreground'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {item.icon && <span className="shrink-0">{item.icon}</span>}
+                        <HighlightText
+                          text={item.label}
+                          query={search}
+                          className="truncate font-mono font-medium"
+                        />
+                        {item.badge && (
+                          <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[9px] leading-none">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                      {item.detail && (
+                        <span className="text-muted-foreground/70 block truncate font-mono text-xs">
+                          {item.detail}
+                        </span>
+                      )}
+                    </div>
+                    {item.isSelected && <Check className="icon-xs text-status-info shrink-0" />}
+                  </button>
+                  {onCopy && (
+                    <button
+                      type="button"
+                      aria-label={`Copy ${item.label}`}
+                      className={cn(
+                        'text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/item:opacity-100',
+                        mobile &&
+                          'right-0 flex size-[48px] items-center justify-center opacity-100',
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCopy(item.label);
+                      }}
+                      tabIndex={mobile ? 0 : -1}
+                    >
+                      <Copy className="icon-xs" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+  if (mobile) {
+    return (
+      <PromptSelectionDrawer
+        title={label}
+        trigger={trigger}
+        open={open}
+        onOpenChange={handleOpenChange}
+      >
+        {content}
+      </PromptSelectionDrawer>
+    );
+  }
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <button
-          data-testid={testId}
-          className={
-            triggerClassName ??
-            'text-muted-foreground hover:bg-muted hover:text-foreground flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs transition-colors focus-visible:outline-hidden'
-          }
-          tabIndex={-1}
-        >
-          {icon ?? <GitBranch className="icon-xs shrink-0" />}
-          {triggerTitle ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="truncate font-mono">{displayValue}</span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-                {triggerTitle}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <span className="truncate font-mono">{displayValue}</span>
-          )}
-          <ChevronDown className="icon-xs shrink-0 opacity-60" />
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         side={side}
         align={align}
@@ -211,116 +375,7 @@ export function SearchablePicker({
           searchInputRef.current?.focus();
         }}
       >
-        <div className="border-border border-b px-2 py-1.5">
-          <Input
-            ref={searchInputRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder={searchPlaceholder}
-            aria-label={label}
-            autoComplete="off"
-            className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-          />
-        </div>
-        <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
-          ref={listRef}
-          style={{ maxHeight: 'min(60vh, 440px)' }}
-        >
-          {loading && items.length === 0 && loadingText && (
-            <p className="text-muted-foreground py-3 text-center text-sm">{loadingText}</p>
-          )}
-          {!loading && items.length === 0 && emptyText && (
-            <p className="text-muted-foreground py-3 text-center text-sm">{emptyText}</p>
-          )}
-          {!loading && items.length > 0 && filtered.length === 0 && (
-            <p className="text-muted-foreground py-3 text-center text-sm">{noMatchText}</p>
-          )}
-          {filtered.length > 0 && (
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                width: '100%',
-                position: 'relative',
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const item = filtered[virtualRow.index];
-                const i = virtualRow.index;
-                return (
-                  <div
-                    key={item.key}
-                    className="group/item absolute top-0 left-0 w-full"
-                    style={{
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    <button
-                      onClick={() => {
-                        onSelect(item.key);
-                        setOpen(false);
-                        setSearch('');
-                      }}
-                      onKeyDown={(e) => handleItemKeyDown(e, i)}
-                      onFocus={() => setHighlightIndex(i)}
-                      onMouseEnter={() => {
-                        setHighlightIndex(i);
-                      }}
-                      className={cn(
-                        'w-full h-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-hidden',
-                        onCopy ? 'pr-7' : 'pr-2',
-                        i === highlightIndex
-                          ? 'bg-accent text-foreground'
-                          : item.isSelected
-                            ? 'bg-accent/50 text-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          {item.icon && <span className="shrink-0">{item.icon}</span>}
-                          <HighlightText
-                            text={item.label}
-                            query={search}
-                            className="truncate font-mono font-medium"
-                          />
-                          {item.badge && (
-                            <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[9px] leading-none">
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                        {item.detail && (
-                          <span className="text-muted-foreground/70 block truncate font-mono text-xs">
-                            {item.detail}
-                          </span>
-                        )}
-                      </div>
-                      {item.isSelected && <Check className="icon-xs text-status-info shrink-0" />}
-                    </button>
-                    {onCopy && (
-                      <button
-                        type="button"
-                        aria-label={`Copy ${item.label}`}
-                        className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/item:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCopy(item.label);
-                        }}
-                        tabIndex={-1}
-                      >
-                        <Copy className="icon-xs" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {content}
       </PopoverContent>
     </Popover>
   );
@@ -344,6 +399,7 @@ export function BranchPicker({
   placeholder,
   showCreateNew = false,
   testId,
+  mobilePresentation,
 }: {
   branches: string[];
   remoteBranches?: string[];
@@ -359,8 +415,11 @@ export function BranchPicker({
   placeholder?: string;
   showCreateNew?: boolean;
   testId?: string;
+  mobilePresentation?: 'drawer';
 }) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
+  const mobile = mobilePresentation === 'drawer' && isMobile;
   const [creatingNew, setCreatingNew] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
   const newBranchInputRef = useRef<HTMLInputElement>(null);
@@ -439,6 +498,7 @@ export function BranchPicker({
             key: CREATE_NEW_BRANCH_KEY,
             label: t('newThread.createNewBranch', 'Create new branch'),
             isSelected: false,
+            alwaysVisibleOnMobile: true,
             icon: <Plus className="icon-xs text-muted-foreground" />,
           }
         : undefined,
@@ -479,7 +539,10 @@ export function BranchPicker({
           }}
           placeholder={t('newThread.newBranchPlaceholder', 'new-branch-name')}
           data-testid={testId ? `${testId}-new-input` : undefined}
-          className="text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs shadow-none focus-visible:ring-0"
+          className={cn(
+            'text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs shadow-none focus-visible:ring-0',
+            mobile && 'min-h-[48px] text-[16px]',
+          )}
         />
         <button
           type="button"
@@ -487,7 +550,10 @@ export function BranchPicker({
           onClick={handleConfirmNewBranch}
           disabled={!newBranchName.trim()}
           data-testid={testId ? `${testId}-new-confirm` : undefined}
-          className="text-muted-foreground hover:bg-muted hover:text-foreground rounded px-1.5 py-0.5 text-xs transition-colors disabled:opacity-40"
+          className={cn(
+            'text-muted-foreground hover:bg-muted hover:text-foreground rounded px-1.5 py-0.5 text-xs transition-colors disabled:opacity-40',
+            mobile && 'flex size-[48px] items-center justify-center',
+          )}
         >
           <Check className="icon-xs" />
         </button>
@@ -497,6 +563,7 @@ export function BranchPicker({
 
   return (
     <SearchablePicker
+      mobilePresentation={mobilePresentation}
       items={allItems}
       label={t('newThread.baseBranch', 'Base branch')}
       displayValue={selected || placeholder || t('newThread.selectBranch')}

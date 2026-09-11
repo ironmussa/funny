@@ -55,7 +55,7 @@ const fileSelectionBodySchema = z.object({
   relativePath: z.string().min(1),
 });
 
-/** Content-free diagnostics for the resident FFF search backend. */
+/** Content-free diagnostics for the resident search backend. */
 app.get('/health', (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
@@ -128,7 +128,7 @@ app.get('/files', async (c) => {
   }
 });
 
-/** Record a confirmed file-search selection for FFF ranking history. */
+/** Record a confirmed file-search selection for search providers. */
 app.post('/files/selection', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);

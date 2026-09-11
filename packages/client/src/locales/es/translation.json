@@ -536,7 +536,9 @@
     "useInternalEditorDesc": "Permitir editar archivos directamente en el navegador",
     "language": "Idioma",
     "languageDesc": "Elige el idioma de la interfaz",
-    "notifications": "Notificaciones del escritorio",
+    "notifications": "Notificaciones del sistema",
+    "notificationsMobileDesc": "Avisa al terminar un hilo mientras la página siga conectada en segundo plano. No funciona con el navegador cerrado.",
+    "notificationsMobileUnsupported": "Usa HTTPS y un navegador compatible. En iPhone, agrega funny a la pantalla de inicio y abre la app desde ahí.",
     "notificationsDesc": "Mostrar una notificación del sistema cuando un agente termina o falla (solo si esta pestaña está en segundo plano).",
     "notificationsDenied": "El navegador no concedió el permiso.",
     "notificationsBlocked": "Las notificaciones están bloqueadas en este navegador. Habilítalas desde la configuración del sitio.",
@@ -1074,6 +1076,22 @@
     "providerManaged": "Administrado por el proveedor"
   },
   "prompt": {
+    "mobileSelectors": {
+      "mode": "Modo",
+      "model": "Modelo",
+      "effort": "Esfuerzo de razonamiento",
+      "template": "Plantilla",
+      "noTemplate": "Sin plantilla",
+      "myTemplates": "Mis plantillas",
+      "shared": "Compartidas",
+      "builtIn": "Integradas",
+      "back": "Volver",
+      "close": "Cerrar",
+      "connectRunner": "Conecta un runner",
+      "notInstalled": "No instalado en el runner",
+      "installProvider": "Instalar / configurar proveedor…",
+      "configureProvider": "Configurar proveedor…"
+    },
     "plan": "Modo Plan",
     "auto": "Modo Auto",
     "autoEdit": "Edición Automática",

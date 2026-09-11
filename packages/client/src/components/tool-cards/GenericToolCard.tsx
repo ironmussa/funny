@@ -7,7 +7,7 @@ import { TodoList } from '@/components/tool-cards/TodoList';
 import { getEditorLabel, openFileInEditor, toEditorUri } from '@/components/tool-cards/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter, stripAnsi } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, type Editor } from '@/stores/settings-store';
@@ -240,7 +240,7 @@ function ToolValue({ value }: { value: unknown }) {
     if (!isJson) return;
 
     let cancelled = false;
-    ensureLanguage('json').then((ok) => {
+    ensureHighlight(text, 'json').then((ok) => {
       if (cancelled || !ok) return;
       setHighlighted({ text, html: highlightCode(text, 'json') });
     });

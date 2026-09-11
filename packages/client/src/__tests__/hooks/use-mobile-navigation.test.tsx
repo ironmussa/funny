@@ -90,4 +90,16 @@ describe('mobile URL navigation', () => {
     await act(() => result.current.navigate(-1));
     expect(result.current.view.screen).toBe('threads');
   });
+  test('opens add project and preserves organization through browser history', async () => {
+    const { result } = setup('/acme/');
+    act(() => result.current.setView({ screen: 'addProject' }));
+    expect(result.current.location.pathname).toBe('/acme/new');
+    expect(result.current.view.screen).toBe('addProject');
+    await act(() => result.current.navigate(-1));
+    expect(result.current.view.screen).toBe('projects');
+  });
+
+  test('restores the add-project screen on reload', () => {
+    expect(setup('/new').result.current.view.screen).toBe('addProject');
+  });
 });

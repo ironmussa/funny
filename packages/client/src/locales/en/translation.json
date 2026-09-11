@@ -538,7 +538,9 @@
     "useInternalEditorDesc": "Allow editing files directly in the browser",
     "language": "Language",
     "languageDesc": "Choose the display language for the interface",
-    "notifications": "Desktop notifications",
+    "notifications": "System notifications",
+    "notificationsMobileDesc": "Get notified when a thread finishes while the page stays connected in the background. Does not work with the browser closed.",
+    "notificationsMobileUnsupported": "Use HTTPS and a supported browser. On iPhone, add funny to your Home Screen and open it there.",
     "notificationsDesc": "Show a system notification when an agent finishes or fails (only when this tab is in the background).",
     "notificationsDenied": "Browser permission was not granted.",
     "notificationsBlocked": "Notifications are blocked in this browser. Enable them from the site settings.",
@@ -1079,6 +1081,22 @@
     "providerManaged": "Managed by provider"
   },
   "prompt": {
+    "mobileSelectors": {
+      "mode": "Mode",
+      "model": "Model",
+      "effort": "Thinking effort",
+      "template": "Template",
+      "noTemplate": "No template",
+      "myTemplates": "My templates",
+      "shared": "Shared",
+      "builtIn": "Built-in",
+      "back": "Back",
+      "close": "Close",
+      "connectRunner": "Connect a runner",
+      "notInstalled": "Not installed on runner",
+      "installProvider": "Install / configure provider…",
+      "configureProvider": "Configure provider…"
+    },
     "plan": "Plan Mode",
     "auto": "Auto Mode",
     "autoEdit": "Auto Edit",

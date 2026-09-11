@@ -15,17 +15,16 @@ import { err, ok, ResultAsync, type Result } from 'neverthrow';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
-import {
-  createFffProjectSearchProvider,
-  getFffNativeHealth,
-  type FffProviderOptions,
-} from './fff-project-search-provider.js';
 import type {
   ProjectSearchFailureReason,
   ProjectSearchHealth,
   ProjectSearchProvider,
 } from './project-search-provider.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+import {
+  createTgrepProjectSearchProvider,
+  type TgrepProviderOptions,
+} from './tgrep-project-search-provider.js';
 import { threadEventBus } from './thread-event-bus.js';
 
 const DEFAULT_IDLE_TTL_MS = 10 * 60_000;
@@ -33,7 +32,7 @@ const DEFAULT_MAX_ENTRIES = 8;
 
 type ProviderFactory = (
   cwd: string,
-  options: FffProviderOptions,
+  options: TgrepProviderOptions,
 ) => ResultAsync<ProjectSearchProvider, DomainError>;
 
 interface RegistryEntry {
@@ -73,7 +72,7 @@ export interface ProjectSearchDiagnosticEntry extends ProjectSearchHealth {
 }
 
 export interface ProjectSearchRegistryDiagnostics extends ProjectSearchRegistryStats {
-  native: ReturnType<typeof getFffNativeHealth>;
+  backend: 'tgrep';
   entries: ProjectSearchDiagnosticEntry[];
   lastInitializationFailure?: {
     cwdId: string;
@@ -99,7 +98,7 @@ export class ProjectSearchRegistry {
     this.scopeKey = options.scopeKey ?? process.env.FUNNY_RUNNER_ID ?? process.env.USER ?? 'local';
     this.idleTtlMs = options.idleTtlMs ?? DEFAULT_IDLE_TTL_MS;
     this.maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
-    this.providerFactory = options.providerFactory ?? createFffProjectSearchProvider;
+    this.providerFactory = options.providerFactory ?? createTgrepProjectSearchProvider;
     this.now = options.now ?? Date.now;
 
     const sweepIntervalMs =
@@ -169,10 +168,7 @@ export class ProjectSearchRegistry {
     paths: ReturnType<typeof searchStatePaths>,
   ): Promise<Result<ProjectSearchProvider, DomainError>> {
     try {
-      return await this.providerFactory(canonicalCwd, {
-        frecencyDbPath: paths.frecencyDbPath,
-        historyDbPath: paths.historyDbPath,
-      });
+      return await this.providerFactory(canonicalCwd, { stateDir: paths.stateDir });
     } catch (cause) {
       return err(internal(`Search registry failed: ${safeReason(cause)}`));
     }
@@ -260,7 +256,7 @@ export class ProjectSearchRegistry {
     });
     return {
       ...stats,
-      native: getFffNativeHealth(),
+      backend: 'tgrep',
       entries,
       ...(this.lastInitializationFailure
         ? { lastInitializationFailure: this.lastInitializationFailure }
@@ -319,8 +315,6 @@ export function searchStatePaths(dataDir: string, scopeKey: string, canonicalCwd
   const stateDir = join(dataDir, 'search', scopeHash, cwdHash);
   return {
     stateDir,
-    frecencyDbPath: join(stateDir, 'frecency.db'),
-    historyDbPath: join(stateDir, 'history.db'),
   };
 }
 
@@ -354,8 +348,8 @@ function refreshFromEvent(cwd: string, mode: 'git-status' | 'rescan'): void {
   void projectSearchRegistry.refreshExisting(cwd, mode).match(
     () => undefined,
     (error) =>
-      log.warn('FFF registry refresh failed', {
-        namespace: 'fff-search',
+      log.warn('Search registry refresh failed', {
+        namespace: 'tgrep-search',
         mode,
         reason: error.message,
       }),

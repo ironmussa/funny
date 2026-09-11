@@ -317,7 +317,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
       toast.error(t('settings.notificationsDenied'));
       return;
     }
-    const result = showAgentNotification(
+    const result = await showAgentNotification(
       t('settings.notificationsTestTitle'),
       t('settings.notificationsTestBody'),
       { force: true },

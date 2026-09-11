@@ -7,6 +7,7 @@ import { setAppNavigate, setUrlThreadId } from '@/stores/thread-store';
 
 export type MobileView =
   | { screen: 'projects' }
+  | { screen: 'addProject' }
   | { screen: 'threads' | 'search' | 'settings' | 'newThread'; projectId: string }
   | { screen: 'chat'; projectId: string; threadId: string; from: 'threads' | 'search' };
 
@@ -18,7 +19,9 @@ export function useMobileNavigation(ready: boolean) {
   const params = new URLSearchParams(location.search);
   const projectId = parsed.projectId;
   let view: MobileView = { screen: 'projects' };
-  if (parsed.threadId) {
+  if (parsed.addProject) {
+    view = { screen: 'addProject' };
+  } else if (parsed.threadId) {
     view = {
       screen: 'chat',
       projectId: projectId ?? '',
@@ -47,7 +50,9 @@ export function useMobileNavigation(ready: boolean) {
     const prefix = parsed.orgSlug ? `/${parsed.orgSlug}` : '';
     let path = '/';
     const query = new URLSearchParams();
-    if (next.screen !== 'projects') {
+    if (next.screen === 'addProject') {
+      path = '/new';
+    } else if (next.screen !== 'projects') {
       path = `/projects/${next.projectId}`;
       if (next.screen === 'chat') {
         path = next.projectId ? `${path}/threads/${next.threadId}` : `/scratch/${next.threadId}`;

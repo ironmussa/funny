@@ -121,7 +121,7 @@ export function MessageStreamShell({
       <div
         ref={contentStackRef}
         className={cn(
-          'mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-4',
+          'mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 pt-1 pb-4 md:pt-4',
           compact && 'space-y-2 px-2 py-2',
         )}
       >

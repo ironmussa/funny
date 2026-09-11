@@ -72,6 +72,7 @@ export class RunnerTerminalAdapter {
           shell: message.open.shell,
           projectId: message.open.projectId,
           label: message.open.label,
+          scratchThreadId: message.open.scratchThreadId,
         },
       };
     } else {

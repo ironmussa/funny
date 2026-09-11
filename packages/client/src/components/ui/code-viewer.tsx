@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { cn } from '@/lib/utils';
 
 interface CodeViewerProps {
@@ -23,7 +23,7 @@ export function CodeViewer({
   useEffect(() => {
     if (!code) return;
     let cancelled = false;
-    ensureLanguage(language).then(() => {
+    ensureHighlight(code, language).then(() => {
       if (!cancelled) {
         setHtml(highlightCode(code, language));
       }

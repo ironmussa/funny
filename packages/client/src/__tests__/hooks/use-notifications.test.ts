@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@/stores/settings-store', () => ({
   useSettingsStore: {
@@ -12,26 +12,28 @@ vi.mock('@/stores/settings-store', () => ({
 import { isNotificationsSupported, showAgentNotification } from '@/hooks/use-notifications';
 
 describe('use-notifications', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  test('isNotificationsSupported reflects Notification API presence', () => {
+  test('isNotificationsSupported reflects Notification API presence', async () => {
     expect(typeof isNotificationsSupported()).toBe('boolean');
   });
 
-  test('showAgentNotification returns not-granted when permission is default', () => {
+  test('showAgentNotification returns not-granted when permission is default', async () => {
     Object.defineProperty(window, 'Notification', {
       configurable: true,
       value: Object.assign(function NotificationMock() {}, { permission: 'default' }),
     });
 
-    const result = showAgentNotification('funny', 'Agent finished', { force: true });
+    const result = await showAgentNotification('funny', 'Agent finished', { force: true });
 
     expect(result).toEqual({ ok: false, reason: 'not-granted' });
   });
 
-  test('showAgentNotification shows when granted and tab is hidden', () => {
+  test('showAgentNotification shows when granted and tab is hidden', async () => {
     const instances: Array<{ title: string; body: string; onclick: (() => void) | null }> = [];
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     Object.defineProperty(window, 'Notification', {
@@ -51,7 +53,7 @@ describe('use-notifications', () => {
     });
 
     const onClick = vi.fn();
-    const result = showAgentNotification('funny — feat', 'Agent finished', {
+    const result = await showAgentNotification('funny — feat', 'Agent finished', {
       tag: 'agent-result-t1',
       onClick,
       force: true,
@@ -63,15 +65,49 @@ describe('use-notifications', () => {
     expect(onClick).toHaveBeenCalled();
   });
 
-  test('showAgentNotification skips when tab is visible and not forced', () => {
+  test('showAgentNotification skips when tab is visible and not forced', async () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: false });
     Object.defineProperty(window, 'Notification', {
       configurable: true,
       value: Object.assign(function NotificationMock() {}, { permission: 'granted' }),
     });
 
-    const result = showAgentNotification('funny', 'Agent finished');
+    const result = await showAgentNotification('funny', 'Agent finished');
 
     expect(result).toEqual({ ok: false, reason: 'viewing-thread' });
+  });
+  test('uses the service worker on phones and includes the target thread URL', async () => {
+    const showNotification = vi.fn().mockResolvedValue(undefined);
+    const register = vi.fn().mockResolvedValue({ active: {}, showNotification });
+    vi.stubGlobal('navigator', { serviceWorker: { register } });
+    vi.stubGlobal(
+      'Notification',
+      Object.assign(
+        vi.fn(() => {
+          throw new Error('Illegal constructor');
+        }),
+        { permission: 'granted' },
+      ),
+    );
+    expect(
+      await showAgentNotification('Finished', 'Agent finished', {
+        force: true,
+        url: '/projects/p1/threads/t1',
+      }),
+    ).toEqual({ ok: true });
+    expect(showNotification).toHaveBeenCalledWith(
+      'Finished',
+      expect.objectContaining({ data: { url: '/projects/p1/threads/t1' } }),
+    );
+  });
+
+  test('reports service worker delivery failures', async () => {
+    vi.stubGlobal('navigator', {
+      serviceWorker: { register: vi.fn().mockRejectedValue(new Error('Registration failed')) },
+    });
+    vi.stubGlobal('Notification', { permission: 'granted' });
+    expect(
+      await showAgentNotification('Finished', 'Agent finished', { force: true }),
+    ).toMatchObject({ ok: false, reason: 'error' });
   });
 });

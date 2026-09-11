@@ -21,6 +21,8 @@ It ships as a Bun workspaces monorepo with **20 packages** under `packages/*`, a
 | [operations/client-memory-diagnostics.md](./operations/client-memory-diagnostics.md)   | Development-only browser memory profiler, controlled experiments, JSONL export, and heap-vs-native-memory interpretation                             |
 | [workflows/development.md](./workflows/development.md)                                 | Dev commands, TypeScript/lint/format tooling, fitness/architecture guardrails, testing, CI                                                           |
 
+For Railway setup and installing tools inside remote terminals, see [Railway deployment and runner tools](operations/railway.md).
+
 ## Fastest path to running it
 
 ```bash

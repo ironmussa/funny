@@ -117,6 +117,7 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
           ...(event.data.shell ? { shell: event.data.shell } : {}),
           ...(event.data.projectId ? { projectId: event.data.projectId } : {}),
           ...(event.data.label ? { label: event.data.label } : {}),
+          ...(event.data.scratchThreadId ? { scratchThreadId: event.data.scratchThreadId } : {}),
         },
       });
       return;

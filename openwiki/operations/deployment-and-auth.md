@@ -1,5 +1,7 @@
 # Deployment, authentication, and trust boundaries
 
+For Railway service configuration, persistent runner storage, and installing npm tools without root, see [Railway deployment and runner tools](railway.md).
+
 ## Local vs. team mode
 
 funny has two deployment shapes (see [README.md](../../README.md) "Usage" and [INSTALL.md](../../INSTALL.md)):
@@ -24,12 +26,12 @@ Each member's git operations and agent providers run **on their own machine** �
 
 The app always uses [Better Auth](https://www.better-auth.com/) with cookie-based sessions (`packages/runtime/src/lib/auth.ts`, initialized by the server at startup).
 
-**The in-repo `CLAUDE.md` says:** *"On first startup, a default admin account is created automatically: Username: `admin`, Password: `admin`."*
+**The in-repo `CLAUDE.md` says:** _"On first startup, a default admin account is created automatically: Username: `admin`, Password: `admin`."_
 
 **That is now stale.** Current behavior, confirmed in `packages/server/src/index.ts` (around the `PORT`/`HOST` setup) and matching [README.md](../../README.md) / [INSTALL.md](../../INSTALL.md):
 
 - On first startup, funny still creates a `admin` user, but the password is **auto-generated per install** and written to `~/.funny/admin-password.txt` (file mode `0600`) — not the static string `admin`.
-- The code comment explains why (labeled "Security CR-7"): the auto-generated credentials file is written *after* the server starts listening, so if the server bound to all interfaces by default, there would be a window where a guessable stock `admin`/`admin` password would be reachable from the LAN/internet. The server now defaults to binding `127.0.0.1` (`resolveHost()` in `packages/server/src/lib/host-default.ts`); operators who want remote exposure must set `HOST=0.0.0.0` explicitly.
+- The code comment explains why (labeled "Security CR-7"): the auto-generated credentials file is written _after_ the server starts listening, so if the server bound to all interfaces by default, there would be a window where a guessable stock `admin`/`admin` password would be reachable from the LAN/internet. The server now defaults to binding `127.0.0.1` (`resolveHost()` in `packages/server/src/lib/host-default.ts`); operators who want remote exposure must set `HOST=0.0.0.0` explicitly.
 - Operators can pick the initial password themselves by setting `ADMIN_PASSWORD` before first startup; it's validated by `packages/server/src/lib/password-policy.ts` (at least 10 characters, with uppercase, lowercase, and numeric characters).
 
 **Takeaway for anyone reading `CLAUDE.md`:** don't assume `admin`/`admin` works out of the box — check `~/.funny/admin-password.txt` (or your `ADMIN_PASSWORD` env var) after first startup. This is worth fixing in `CLAUDE.md` itself next time someone touches that file.

@@ -18,7 +18,7 @@ import { SplitRow } from '@/components/virtual-diff/SplitRow';
 import { ThreePaneRow } from '@/components/virtual-diff/ThreePaneRow';
 import { UnifiedRow } from '@/components/virtual-diff/UnifiedRow';
 import { useHorizontalScroll } from '@/components/virtual-diff/use-horizontal-scroll';
-import { ensureLanguage, filePathToHljsLang, HIGHLIGHT_MAX_LINES } from '@/hooks/use-highlight';
+import { ensureHighlight, filePathToHljsLang, HIGHLIGHT_MAX_LINES } from '@/hooks/use-highlight';
 import {
   getCachedPrepared,
   isPretextReady,
@@ -27,7 +27,7 @@ import {
   ensurePretextLoaded,
   makeMonoFont,
 } from '@/hooks/use-pretext';
-import { countTextMatches } from '@/lib/diff/highlight';
+import { countTextMatches, highlightCache } from '@/lib/diff/highlight';
 import {
   buildSections,
   buildSplitPairs,
@@ -95,18 +95,22 @@ export const VirtualDiff = memo(function VirtualDiff({
   const lang = useMemo(() => (filePath ? filePathToHljsLang(filePath) : 'plaintext'), [filePath]);
 
   useEffect(() => {
-    if (lang === 'plaintext' || lang === 'text') {
+    if (parsed.lines.length > HIGHLIGHT_MAX_LINES) {
       setLangReady(true);
       return;
     }
     let cancelled = false;
-    ensureLanguage(lang).then(() => {
-      if (!cancelled) setLangReady(true);
+    setLangReady(false);
+    ensureHighlight(parsed.lines.map((line) => line.text).join('\n'), lang).then(() => {
+      if (!cancelled) {
+        highlightCache.clear();
+        setLangReady(true);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [lang]);
+  }, [lang, parsed]);
 
   // ── Container width tracking for pretext word-wrap measurement ──
   useEffect(() => {

@@ -699,7 +699,7 @@ export const MemoizedMessageList = memo(
             <div
               ref={stickySectionContentRef}
               data-testid="sticky-section-content"
-              className="relative z-50 pt-3 pb-3 will-change-transform"
+              className="relative z-50 pt-1 pb-3 will-change-transform md:pt-3"
             >
               <div
                 data-testid="sticky-section-card"

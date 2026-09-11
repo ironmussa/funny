@@ -95,7 +95,7 @@ export function AddProjectView() {
   };
 
   return (
-    <ScrollArea className="flex flex-1 justify-center pt-[10vh]">
+    <ScrollArea className="flex flex-1 justify-center pt-4 md:pt-[10vh]">
       <div className="mx-auto w-full max-w-md space-y-6 px-4 pb-8">
         {!isCloning && (
           <div className="space-y-2 text-center">

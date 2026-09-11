@@ -82,3 +82,46 @@ All of these are baseline-diff style (compare against `.fitness/*-baseline.txt`)
 ## UI conventions (packages/client only)
 
 All UI work must use shadcn/ui + Tailwind (Radix primitives) — never hand-roll buttons/dialogs/dropdowns that shadcn already provides, and never pull in another component library. Compose classes with the `cn()` helper (`@/lib/utils`), never raw string concatenation. Text sizing must scale with the user's Settings > Appearance font-size setting via the `*_FONT_SIZE_PX` maps in `@/stores/settings-store` (diffs/editor share one scale, prose/chat and inline code use denser scales) — never hardcode pixel font sizes. Components must use theme CSS variables (`hsl(var(--foreground))`, `bg-card`, etc.), never hardcoded colors, so light/dark both work. See the in-repo `CLAUDE.md` "UI Rules" section for the full list of installed shadcn components and the `data-testid` naming convention.
+
+## Project search
+
+Content search uses **tgrep 1.0.5**. Install the pinned executable at
+`~/.local/bin/tgrep`, or set `FUNNY_TGREP_BINARY=/absolute/path/to/tgrep`, and
+restart the runtime. The runtime checks the version and never downloads a binary.
+Other machines must install it separately.
+
+File search uses Git's tracked and untracked, nonignored paths and Funny's shared
+smart-case fuzzy path ranking. Scratch directories use a directory walk that
+excludes heavy dependency/build directories. File lists refresh every two seconds
+and after Git operations; selection history no longer changes ranking.
+
+The first content query starts an isolated server for the resident worktree.
+Results default to 1,000 rows and are capped at 10,000, with truncation metadata.
+Startup or request failure returns an explicit error; the next query retries with
+a new client. File search remains usable. FFF, its native dependency, comparison
+mode and rollback switches have been removed.
+
+Rescan discards the content index and rejects pending results. Provider eviction,
+invalidation after lease release, and shutdown stop the owned process and remove
+its temporary state. Startup is bounded to approximately 30 seconds after version
+validation, with 10-second RPC deadlines and an 8 MiB reply limit.
+
+Known tgrep 1.0.5 limitations include omitted hidden paths, different long-line
+results, and missing accented-uppercase folding in literal searches (`éclair`
+does not match `Éclair`). The local server has no application authentication;
+it is intended for local operators, not mutually untrusted accounts on a shared host.
+
+Run the opt-in smoke test from `packages/runtime`:
+
+```bash
+FUNNY_TGREP_TEST_BINARY=/absolute/path/to/tgrep bunx vitest run \
+  src/__tests__/services/tgrep-content-search.test.ts \
+  src/__tests__/services/tgrep-rpc.test.ts \
+  src/__tests__/services/tgrep-project-search-provider.test.ts \
+  src/__tests__/services/project-search-registry.test.ts \
+  src/__tests__/routes/text-search.test.ts
+```
+
+Without `FUNNY_TGREP_TEST_BINARY`, the real-binary smoke test is skipped.
+It covers worktree isolation, query options, UTF-8 ranges, limits, rescan,
+and process/state cleanup.

@@ -738,6 +738,13 @@ function maybeNotifyAgentResult(threadId: string, data: any): void {
     showAgentNotification(title, 'Agent finished', {
       tag: `agent-result-${threadId}`,
       skipIfViewingThreadId: threadId,
+      url: buildPath(
+        getThreadRoute({
+          id: threadId,
+          projectId: info.projectId ?? '',
+          isScratch: info.isScratch,
+        }),
+      ),
       onClick,
     });
   } else if (status === 'failed' || status === 'error') {
@@ -745,6 +752,13 @@ function maybeNotifyAgentResult(threadId: string, data: any): void {
     showAgentNotification(title, `Agent failed${reason}`, {
       tag: `agent-result-${threadId}`,
       skipIfViewingThreadId: threadId,
+      url: buildPath(
+        getThreadRoute({
+          id: threadId,
+          projectId: info.projectId ?? '',
+          isScratch: info.isScratch,
+        }),
+      ),
       onClick,
     });
   }

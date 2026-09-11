@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { ChatView } from '@/components/mobile/ChatView';
 import { NewThreadView } from '@/components/mobile/NewThreadView';
@@ -14,6 +14,10 @@ import { useWS } from '@/hooks/use-ws';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { ThreadProvider } from '@/stores/thread-context';
+
+const AddProjectView = lazy(() =>
+  import('@/components/AddProjectView').then((m) => ({ default: m.AddProjectView })),
+);
 
 export function MobilePage() {
   const viewportRef = useMobileViewport();
@@ -47,8 +51,14 @@ export function MobilePage() {
         {ready && view.screen === 'projects' && (
           <ProjectListView
             projects={projects}
+            onAddProject={() => setView({ screen: 'addProject' })}
             onSelect={(projectId) => setView({ screen: 'threads', projectId })}
           />
+        )}
+        {ready && view.screen === 'addProject' && (
+          <Suspense fallback={<LoadingState />}>
+            <AddProjectView />
+          </Suspense>
         )}
         {ready && view.screen === 'threads' && (
           <ThreadListView

@@ -168,7 +168,7 @@ describe('text search routes', () => {
     await expect(res.json()).resolves.toEqual({ ok: true });
   });
 
-  test('rejects a denied selection scope before tracking or initializing FFF', async () => {
+  test('rejects a denied selection scope before tracking or initializing search', async () => {
     mocks.requireProjectPath.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Access denied' }), { status: 403 }),
     );

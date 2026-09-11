@@ -251,12 +251,14 @@ In the funny UI you're already logged into, open **Settings ▸ Runners**, click
 
 **Classic flow (advanced).** You may instead supply the shared secret and a single-use invite token yourself — see the `--secret` / `--token` options below. `RUNNER_AUTH_SECRET` must match the central server's value, or every proxied request fails.
 
-**Deploy a runner on Railway (one-click).** Because device-link needs no secrets, a runner can be deployed to Railway/Fly/Render with **`TEAM_SERVER_URL` as the only variable**. The runner's service config lives in [`railway.runner.json`](./railway.runner.json) (start command `bun run start`, healthcheck `/api/health`). To offer the in-app **"Deploy on Railway"** button (Settings ▸ Runners), publish that config once as a Railway template:
+**Deploy a runner on Railway (one-click).** Device-link supplies credentials after approval. The runner's service config lives in [`railway.runner.json`](./railway.runner.json) (start command `sh scripts/start-railway-runner.sh`, no HTTP healthcheck). See [Railway deployment and runner tools](openwiki/operations/railway.md) for service layout, persistent storage, and npm/OpenSpec installation. To offer the in-app **"Deploy on Railway"** button (Settings ▸ Runners), publish that config once as a Railway template:
 
-1. In Railway's template composer, add a service sourced from this GitHub repo and set the start command to `bun run start`.
+1. In Railway's template composer, add a service sourced from this GitHub repo and set its Railway Config File to `/railway.runner.json`.
 2. **Attach a persistent volume** to the service mounted at `/data`, and set these variables:
    - `TEAM_SERVER_URL` = the central server URL (the only auth-related variable — device-link delivers the bearer + forwarded-identity secret on approval, so **no** `RUNNER_AUTH_SECRET` or invite token).
    - `FUNNY_DATA_DIR` = `/data` (so credentials, worktrees, and scratch state live on the volume).
+   - `WS_TUNNEL_ONLY` = `true`.
+   - `RUNNER_GRPC_ENDPOINT` = the server's dedicated gRPC endpoint, with TLS settings matching the ingress. Enable the server listener and configure connectivity as described in the [gRPC runbook](openwiki/operations/runner-grpc-runbook.md); the browser HTTP URL alone is insufficient.
 3. Publish the template and copy its code.
 4. Paste the code into `RAILWAY_RUNNER_TEMPLATE_CODE` in `packages/client/src/components/ConnectRunnerCard.tsx`. The button then appears and prefills `TEAM_SERVER_URL` with the server's origin.
 

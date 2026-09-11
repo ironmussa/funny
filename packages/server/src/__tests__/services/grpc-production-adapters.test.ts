@@ -30,6 +30,27 @@ afterEach(async () => {
 });
 
 describe('production TypeScript runner gRPC adapters', () => {
+  test('preserves scratch thread identity through the terminal gRPC transport', async () => {
+    const commands: Array<Record<string, any>> = [];
+    fixture = await createProductionGrpcFixture({
+      handleTerminal: (command) => {
+        commands.push(command);
+      },
+    });
+
+    fixture.dispatchTerminal('user-1', {
+      type: 'pty:spawn',
+      data: { id: 'pty-scratch', cwd: '', cols: 80, rows: 24, scratchThreadId: 'scratch-1' },
+    });
+
+    await waitFor(() => commands.length === 1, 'scratch terminal command was not delivered');
+    expect(commands[0]).toMatchObject({
+      type: 'pty:spawn',
+      userId: 'user-1',
+      data: { id: 'pty-scratch', scratchThreadId: 'scratch-1', cols: 80, rows: 24 },
+    });
+  });
+
   test('carries browser Socket.IO PTY and browser-session commands through real gRPC adapters', async () => {
     process.env.RUNNER_AUTH_SECRET = 'vertical-secret';
     const { io, capture } = createMockIo();

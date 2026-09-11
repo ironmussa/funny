@@ -17,17 +17,16 @@ export function useThreadSearchState(
   threadId?: string,
 ) {
   const [searchOpen, setSearchOpen] = useState(false);
-  const highlightedMsgRef = useRef<string | null>(null);
   const highlightedQueryRef = useRef<string>('');
   // Monotonic token so a slow page-load for occurrence N is abandoned when
   // the user has already navigated to occurrence N+1.
   const navTokenRef = useRef(0);
+  const stopObservingRef = useRef<(() => void) | null>(null);
   const threadIdRef = useRef(threadId);
-  useLayoutEffect(() => {
-    threadIdRef.current = threadId;
-  }, [threadId]);
 
   const clearSearchHighlights = useCallback(() => {
+    stopObservingRef.current?.();
+    stopObservingRef.current = null;
     const viewport = streamRef.current?.scrollViewport;
     if (!viewport) return;
     viewport.querySelectorAll('mark[data-search-hl]').forEach((mark) => {
@@ -85,28 +84,34 @@ export function useThreadSearchState(
       reportMarkCount?: (messageId: string, count: number) => void,
     ): Promise<void> | void => {
       const navToken = ++navTokenRef.current;
-      const needsRehighlight =
-        highlightedMsgRef.current !== messageId || highlightedQueryRef.current !== query;
-      if (needsRehighlight) {
+      stopObservingRef.current?.();
+      stopObservingRef.current = null;
+      if (highlightedQueryRef.current !== query) {
         clearSearchHighlights();
-        highlightedMsgRef.current = messageId;
         highlightedQueryRef.current = query;
       }
       streamRef.current?.expandToItem(messageId);
 
-      const focusOccurrence = () => {
+      const focusOccurrence = (scroll = true) => {
         const el = streamRef.current?.scrollViewport?.querySelector(
           `[data-item-key="${CSS.escape(messageId)}"]`,
         );
+        // Keep every mounted message highlighted, including newly rendered content.
+        const viewport = streamRef.current?.scrollViewport;
+        viewport?.querySelectorAll('[data-item-key]').forEach((item) => {
+          highlightTextInElement(item, query);
+        });
+        viewport?.querySelectorAll<HTMLElement>('mark[data-search-current]').forEach((mark) => {
+          mark.removeAttribute('data-search-current');
+          mark.style.backgroundColor = '#FFE500';
+        });
+
         if (!el) return false;
-
-        if (needsRehighlight) highlightTextInElement(el, query);
-
         const marks = el.querySelectorAll('mark[data-search-hl]');
         reportMarkCount?.(messageId, marks.length);
 
         if (marks.length === 0) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return true;
         }
 
@@ -120,9 +125,31 @@ export function useThreadSearchState(
         if (target) {
           target.setAttribute('data-search-current', '');
           target.style.backgroundColor = '#FF8A00';
-          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (scroll) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         return true;
+      };
+
+      const observeContent = () => {
+        const viewport = streamRef.current?.scrollViewport;
+        if (!viewport) return;
+        let frame: number | undefined;
+        const observer = new MutationObserver(() => {
+          if (frame !== undefined) return;
+          frame = requestAnimationFrame(() => {
+            frame = undefined;
+            if (navTokenRef.current !== navToken) return;
+            // Ignore our own DOM edits; only React/stream/syntax updates trigger a refresh.
+            observer.disconnect();
+            focusOccurrence(false);
+            observer.observe(viewport, { childList: true, characterData: true, subtree: true });
+          });
+        });
+        observer.observe(viewport, { childList: true, characterData: true, subtree: true });
+        stopObservingRef.current = () => {
+          observer.disconnect();
+          if (frame !== undefined) cancelAnimationFrame(frame);
+        };
       };
 
       // Retry over a few frames — React may still be committing the
@@ -148,6 +175,7 @@ export function useThreadSearchState(
       // Re-check for ~2s and re-center on drift; a manual user scroll
       // (wheel/touch) cancels the corrections.
       const keepTargetCentered = () => {
+        observeContent();
         const viewport = streamRef.current?.scrollViewport;
         if (!viewport) return;
         let cancelled = false;
@@ -215,16 +243,21 @@ export function useThreadSearchState(
 
   const handleSearchClose = useCallback(() => {
     setSearchOpen(false);
+    ++navTokenRef.current;
     clearSearchHighlights();
-    highlightedMsgRef.current = null;
     highlightedQueryRef.current = '';
   }, [clearSearchHighlights]);
 
   const handleSearchClear = useCallback(() => {
+    ++navTokenRef.current;
     clearSearchHighlights();
-    highlightedMsgRef.current = null;
     highlightedQueryRef.current = '';
   }, [clearSearchHighlights]);
+
+  useLayoutEffect(() => {
+    threadIdRef.current = threadId;
+    return handleSearchClear;
+  }, [threadId, handleSearchClear]);
 
   return { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose, handleSearchClear };
 }

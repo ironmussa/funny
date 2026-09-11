@@ -143,6 +143,7 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
             </span>
           ) : (
             <BranchPicker
+              mobilePresentation="drawer"
               branches={branches}
               remoteBranches={remoteBranches}
               defaultBranch={defaultBranch}

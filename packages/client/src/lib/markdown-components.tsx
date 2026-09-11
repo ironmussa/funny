@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { MarkdownImageCard } from '@/components/MarkdownImageCard';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import { ensureLanguage, getFileExtension, highlightCode } from '@/hooks/use-highlight';
+import { ensureHighlight, getFileExtension, highlightCode } from '@/hooks/use-highlight';
 import { isExternalUrl } from '@/lib/raw-file-src';
 import { useResolvedMediaSrc } from '@/lib/use-direct-media';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
@@ -102,7 +102,7 @@ function HighlightedCode({ code, language }: { code: string; language: string })
   useEffect(() => {
     if (!code) return;
     let cancelled = false;
-    ensureLanguage(language).then(() => {
+    ensureHighlight(code, language).then(() => {
       if (!cancelled) {
         setHtml(highlightCode(code, language));
       }

@@ -188,6 +188,35 @@ beforeEach(() => {
 // ── Tests ───────────────────────────────────────────────────────
 
 describe('PromptInput', () => {
+  test('mobile drawer header clicks do not refocus the prompt editor', async () => {
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: () => false,
+    }));
+    const view = renderWithProviders(<PromptInput onSubmit={vi.fn()} />);
+    try {
+      const editor = screen.getByRole('textbox');
+      fireEvent.click(screen.getByTestId('prompt-mode-select'));
+      const title = await screen.findByRole('heading', { name: 'Mode' });
+      fireEvent.click(title);
+      expect(editor).not.toHaveFocus();
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      await waitFor(() =>
+        expect(screen.queryByTestId('prompt-selection-drawer')).not.toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('prompt-mode-select')).toHaveFocus();
+    } finally {
+      view.unmount();
+      matchMedia.mockRestore();
+    }
+  });
+
   test('reserves context bar height before and after new-thread context loads', () => {
     const onSubmit = vi.fn();
     const { rerender } = renderWithProviders(

@@ -8,12 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
-import {
-  detectLanguageFromContent,
-  ensureLanguage,
-  filePathToHljsLang,
-  highlightLine,
-} from '@/hooks/use-highlight';
+import { ensureHighlight, filePathToHljsLang, highlightLine } from '@/hooks/use-highlight';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -58,7 +53,7 @@ function stripLinePrefix(raw: string): string {
 
 function HighlightedFileContent({ content, filePath }: { content: string; filePath?: string }) {
   // With a path the extension picks the language; without one (e.g. Cursor's
-  // ACP reads omit the path) fall back to detecting it from the content.
+  // ACP reads omit the path), GPU inference works without a language hint.
   const [lang, setLang] = useState<string>(() =>
     filePath ? filePathToHljsLang(filePath) : 'plaintext',
   );
@@ -69,11 +64,16 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
     setLangReady(false);
     const resolveLangFor = filePath
       ? Promise.resolve(filePathToHljsLang(filePath))
-      : detectLanguageFromContent(content);
+      : Promise.resolve('plaintext');
     resolveLangFor.then(async (detected) => {
       if (cancelled) return;
       setLang(detected);
-      const ok = await ensureLanguage(detected);
+      const ok = await ensureHighlight(
+        parseLines(content)
+          .map((line) => line.content)
+          .join('\n'),
+        detected,
+      );
       if (!cancelled) setLangReady(ok);
     });
     return () => {

@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureHighlight, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
@@ -13,6 +12,7 @@ import { isMarkdownFile } from '@/lib/markdown-file';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
+import { ToolContentArea } from './MobileContentPreview';
 import {
   toEditorUri,
   openFileInEditor,
@@ -121,7 +121,7 @@ export function WriteFileCard({
         )}
       </div>
       {expanded && content != null && (
-        <ScrollArea
+        <ToolContentArea
           className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
@@ -177,7 +177,7 @@ export function WriteFileCard({
               </pre>
             )}
           </div>
-        </ScrollArea>
+        </ToolContentArea>
       )}
     </div>
   );

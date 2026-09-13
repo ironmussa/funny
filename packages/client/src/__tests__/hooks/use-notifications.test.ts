@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+const pushMocks = vi.hoisted(() => ({ hasPushSubscription: vi.fn(), testWebPush: vi.fn() }));
+vi.mock('@/lib/web-push', () => pushMocks);
+
 vi.mock('@/stores/settings-store', () => ({
   useSettingsStore: {
     getState: () => ({
@@ -16,6 +19,7 @@ describe('use-notifications', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    pushMocks.hasPushSubscription.mockResolvedValue(false);
   });
 
   test('isNotificationsSupported reflects Notification API presence', async () => {
@@ -110,4 +114,15 @@ describe('use-notifications', () => {
       await showAgentNotification('Finished', 'Agent finished', { force: true }),
     ).toMatchObject({ ok: false, reason: 'error' });
   });
+});
+
+test('suppresses local delivery when the browser already subscribes to push', async () => {
+  Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+  vi.stubGlobal('Notification', Object.assign(vi.fn(), { permission: 'granted' }));
+  pushMocks.hasPushSubscription.mockResolvedValue(true);
+  expect(await showAgentNotification('funny', 'Finished')).toEqual({
+    ok: false,
+    reason: 'push-enabled',
+  });
+  vi.unstubAllGlobals();
 });

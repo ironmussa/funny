@@ -15,6 +15,7 @@ import { DIFF_ROW_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
 import { useThreadId } from '@/stores/thread-context';
 
 import { ExpandedDiffDialog } from './ExpandedDiffDialog';
+import { MobileContentPreview } from './MobileContentPreview';
 import {
   toEditorUri,
   openFileInEditor,
@@ -550,31 +551,36 @@ export function EditFileCard({
         )}
       </div>
       {expanded && hasDiff && (
-        <div
-          ref={diffSlotRef}
-          className="border-border/40 max-h-[50vh] overflow-hidden border-t"
-          style={{ height: inlineDiffSlotHeight }}
+        <MobileContentPreview
+          onExpand={() => setShowExpandedDiff(true)}
+          label={t('tools.viewFullDiff')}
         >
-          {diffMounted ? (
-            <VirtualDiff
-              unifiedDiff={unifiedDiff}
-              splitView={false}
-              filePath={filePath}
-              codeFolding={true}
-              contextLines={INLINE_DIFF_CONTEXT_LINES}
-              className="h-full max-h-[50vh]"
-              data-testid="edit-file-inline-diff"
-            />
-          ) : (
-            <div
-              className="text-muted-foreground flex h-16 items-center gap-2 px-3 text-xs"
-              data-testid="edit-file-inline-diff-placeholder"
-            >
-              <Loader2 className="icon-xs animate-spin" />
-              <span>{t('tools.loadingDiff', 'Loading diff…')}</span>
-            </div>
-          )}
-        </div>
+          <div
+            ref={diffSlotRef}
+            className="border-border/40 max-h-[50vh] overflow-hidden border-t"
+            style={{ height: inlineDiffSlotHeight }}
+          >
+            {diffMounted ? (
+              <VirtualDiff
+                unifiedDiff={unifiedDiff}
+                splitView={false}
+                filePath={filePath}
+                codeFolding={true}
+                contextLines={INLINE_DIFF_CONTEXT_LINES}
+                className="h-full max-h-[50vh]"
+                data-testid="edit-file-inline-diff"
+              />
+            ) : (
+              <div
+                className="text-muted-foreground flex h-16 items-center gap-2 px-3 text-xs"
+                data-testid="edit-file-inline-diff-placeholder"
+              >
+                <Loader2 className="icon-xs animate-spin" />
+                <span>{t('tools.loadingDiff', 'Loading diff…')}</span>
+              </div>
+            )}
+          </div>
+        </MobileContentPreview>
       )}
       {expanded && !hasDiff && isDiffLoading && (
         <div

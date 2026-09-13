@@ -163,3 +163,24 @@ monitoring, retention, cleanup, and binary rollback procedures.
 | `*`    | `/api/*`          | Catch-all proxy to assigned runner             |
 | `WS`   | `/ws`             | Browser WebSocket                              |
 | `gRPC` | dedicated listener | Authenticated native runner transport          |
+
+### Browser Web Push
+
+Configure `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT`
+(`mailto:your-contact@example.com` or your public HTTPS URL) on the central server.
+Generate one persistent VAPID key pair with `bunx web-push generate-vapid-keys --json`;
+keep the private key in your secret configuration. Replacing the keys requires
+subscribing devices again. The server applies the subscription table migration at startup.
+
+Open the mobile notification control, grant permission, and activate it. The test
+button sends through the server and push provider. Verify on a phone by closing
+the page and completing a thread from another device, then tapping the notification.
+Use HTTPS; on iPhone, launch the installed Home Screen web app. Disable the switch
+to remove that device's subscription. Existing local notification preferences do
+not automatically register devices for push: turn the mobile switch off and on.
+
+Delivery is best effort with a one-hour expiry and no durable retry queue. Provider
+404/410 responses remove expired subscriptions. Failed transient deliveries are
+retained for subsequent notifications. Payloads contain a generic completion status
+and thread link, without message contents. Supported providers are Apple, Google,
+Mozilla, and Windows Push.

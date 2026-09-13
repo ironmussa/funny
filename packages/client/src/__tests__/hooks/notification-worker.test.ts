@@ -42,3 +42,35 @@ describe('notification click', () => {
     expect(event.waitUntil).not.toHaveBeenCalled();
   });
 });
+
+describe('push delivery', () => {
+  test.each([true, false])(
+    'displays a system notification without an open page (valid payload: %s)',
+    async (valid) => {
+      const handlers = new Map<string, (event: any) => void>();
+      const showNotification = vi.fn().mockResolvedValue(undefined);
+      runInNewContext(source, {
+        self: {
+          registration: { showNotification },
+          addEventListener: (name: string, handler: (event: any) => void) =>
+            handlers.set(name, handler),
+        },
+      });
+      const event = {
+        data: {
+          json: () => {
+            if (!valid) throw new Error('bad JSON');
+            return { title: 'Finished', body: 'Done', url: '/scratch/t1', tag: 't1' };
+          },
+        },
+        waitUntil: vi.fn(),
+      };
+      handlers.get('push')!(event);
+      await event.waitUntil.mock.calls[0][0];
+      expect(showNotification).toHaveBeenCalledWith(
+        valid ? 'Finished' : 'funny',
+        expect.objectContaining({ data: { url: valid ? '/scratch/t1' : '/' } }),
+      );
+    },
+  );
+});

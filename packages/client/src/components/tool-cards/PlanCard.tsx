@@ -2,9 +2,10 @@ import { Check, Copy, FileCode2 } from 'lucide-react';
 import { Suspense, lazy, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { remarkPlugins } from '@/lib/markdown-components';
+
+import { ToolContentArea } from './MobileContentPreview';
 
 const LazyMarkdown = lazy(() =>
   import('react-markdown').then(({ default: ReactMarkdown }) => ({
@@ -69,7 +70,7 @@ export function PlanCard({
       )}
 
       {/* Plan content */}
-      <ScrollArea
+      <ToolContentArea
         className="border-border/40 border-t"
         viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
       >
@@ -86,7 +87,7 @@ export function PlanCard({
             </Suspense>
           </div>
         </div>
-      </ScrollArea>
+      </ToolContentArea>
     </div>
   );
 }

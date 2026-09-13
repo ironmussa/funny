@@ -68,19 +68,20 @@ export function ThreadListView({
           <Search className="icon-sm" />
         </button>
         <button
+          onClick={onNewThread}
+          aria-label={t('sidebar.newThread', 'New thread')}
+          className="hover:bg-accent rounded p-1.5"
+          data-testid="mobile-thread-new"
+        >
+          <Plus className="icon-sm" />
+        </button>
+        <button
           onClick={onSettings}
           aria-label={t('settings.title', 'Settings')}
           className="hover:bg-accent rounded p-1.5"
           data-testid="mobile-thread-settings"
         >
           <Settings className="icon-sm" />
-        </button>
-        <button
-          onClick={onNewThread}
-          className="bg-primary text-primary-foreground active:bg-primary/80 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium"
-        >
-          <Plus className="icon-sm" />
-          {t('sidebar.newThread', 'New')}
         </button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col px-3 py-2">

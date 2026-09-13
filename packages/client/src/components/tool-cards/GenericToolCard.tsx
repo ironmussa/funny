@@ -5,12 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { TodoList } from '@/components/tool-cards/TodoList';
 import { getEditorLabel, openFileInEditor, toEditorUri } from '@/components/tool-cards/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter, stripAnsi } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, type Editor } from '@/stores/settings-store';
+
+import { ToolContentArea } from './MobileContentPreview';
 
 interface Props {
   name: string;
@@ -141,7 +142,7 @@ export function GenericToolCard({
         )}
       </div>
       {expanded && (
-        <ScrollArea
+        <ToolContentArea
           className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
@@ -208,7 +209,7 @@ export function GenericToolCard({
               )}
             </div>
           )}
-        </ScrollArea>
+        </ToolContentArea>
       )}
     </div>
   );

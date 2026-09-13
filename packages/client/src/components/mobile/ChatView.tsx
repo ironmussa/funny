@@ -140,6 +140,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
         >
           <ArrowLeft className="icon-lg" />
         </button>
+        {activeThread && <StatusBadge status={activeThread.status} variant="icon" />}
         <div className="min-w-0 flex-1">
           <h1 className="text-base font-semibold">
             {activeThread ? (
@@ -154,7 +155,6 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
             )}
           </h1>
         </div>
-        {activeThread && <StatusBadge status={activeThread.status} />}
       </header>
 
       {!activeThread ? (

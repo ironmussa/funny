@@ -1627,6 +1627,18 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '077_push_subscriptions',
+    up: async () => {
+      await ctx().exec(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+        endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL,
+        p256dh TEXT NOT NULL, auth TEXT NOT NULL
+      )`);
+      await ctx().exec(
+        sql`CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id)`,
+      );
+    },
+  },
 ];
 
 /**

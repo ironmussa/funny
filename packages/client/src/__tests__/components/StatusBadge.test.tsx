@@ -41,6 +41,19 @@ describe('StatusBadge', () => {
     expect(container.querySelector('.animate-spin')).not.toBeNull();
   });
 
+  test.each(statuses)('renders an accessible icon without visible text for "%s"', (status) => {
+    renderWithProviders(<StatusBadge status={status} variant="icon" />);
+    const icon = screen.getByRole('img');
+    expect(icon).toHaveAccessibleName();
+    expect(icon.textContent).toBe('');
+    expect(icon.querySelector('svg')).not.toBeNull();
+  });
+
+  test('preserves the running animation in the icon variant', () => {
+    renderWithProviders(<StatusBadge status="running" variant="icon" />);
+    expect(screen.getByRole('img').querySelector('.animate-spin')).not.toBeNull();
+  });
+
   test('does not animate the waiting status', () => {
     const { container } = renderWithProviders(<StatusBadge status="waiting" />);
     expect(container.querySelector('.animate-spin')).toBeNull();

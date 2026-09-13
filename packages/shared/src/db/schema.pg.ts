@@ -816,3 +816,11 @@ export const invitation = pgTable('invitation', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 });
+
+/** Browser push subscriptions, isolated by authenticated user. */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  userId: text('user_id').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+});

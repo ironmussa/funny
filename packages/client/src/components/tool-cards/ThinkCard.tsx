@@ -2,8 +2,9 @@ import { Brain } from 'lucide-react';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins, markdownProseClassName } from '@/lib/markdown-components';
+
+import { ToolContentArea } from './MobileContentPreview';
 // Security ME-9: rehypeSanitize is mandatory on every ReactMarkdown sink
 // (see MessageContent.tsx). Lazy-loaded alongside react-markdown.
 const LazyMarkdown = lazy(() =>
@@ -51,7 +52,7 @@ export function ThinkCard({
           </span>
         )}
       </div>
-      <ScrollArea
+      <ToolContentArea
         className="border-border/40 border-t"
         viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
       >
@@ -68,7 +69,7 @@ export function ThinkCard({
             </Suspense>
           </div>
         </div>
-      </ScrollArea>
+      </ToolContentArea>
     </div>
   );
 }

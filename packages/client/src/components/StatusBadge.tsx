@@ -5,7 +5,13 @@ import { getDisplayThreadStatus, getStatusLabels, statusConfig } from '@/lib/thr
 import { cn } from '@/lib/utils';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 
-export function StatusBadge({ status }: { status: ThreadStatus }) {
+export function StatusBadge({
+  status,
+  variant = 'badge',
+}: {
+  status: ThreadStatus;
+  variant?: 'badge' | 'icon';
+}) {
   const { t } = useTranslation();
   const runnerStatus = useRunnerStatusStore((s) => s.status);
   // Mirror desktop: a running thread on a dead runner shows as runner_offline,
@@ -20,6 +26,19 @@ export function StatusBadge({ status }: { status: ThreadStatus }) {
     .filter((c) => c !== 'animate-spin')
     .join(' ');
   const statusLabels = { ...getStatusLabels(t), completed: t('thread.status.done') };
+
+  if (variant === 'icon') {
+    return (
+      <span
+        role="img"
+        aria-label={statusLabels[displayStatus]}
+        title={statusLabels[displayStatus]}
+        className="inline-flex shrink-0 items-center"
+      >
+        <Icon aria-hidden="true" className={cn('size-3.5 shrink-0', cfg.className)} />
+      </span>
+    );
+  }
 
   return (
     <span

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 
 import { createClientLogger } from '@/lib/client-logger';
 import { getNotificationWorker } from '@/lib/notification-worker';
+import { hasPushSubscription, testWebPush } from '@/lib/web-push';
 import { useSettingsStore } from '@/stores/settings-store';
 
 const log = createClientLogger('notifications');
@@ -63,7 +64,13 @@ export type NotificationResult =
   | { ok: true }
   | {
       ok: false;
-      reason: 'unsupported' | 'not-granted' | 'disabled' | 'viewing-thread' | 'error';
+      reason:
+        | 'unsupported'
+        | 'not-granted'
+        | 'disabled'
+        | 'viewing-thread'
+        | 'push-enabled'
+        | 'error';
       error?: string;
     };
 
@@ -96,6 +103,13 @@ export async function showAgentNotification(
   }
 
   try {
+    if (await hasPushSubscription()) {
+      if (opts.force) {
+        await testWebPush();
+        return { ok: true };
+      }
+      return { ok: false, reason: 'push-enabled' };
+    }
     const options: NotificationOptions = { body, tag: opts.tag, icon: '/notification-icon.png' };
     if ('serviceWorker' in navigator) {
       const registration = await getNotificationWorker();

@@ -537,7 +537,7 @@
     "language": "Idioma",
     "languageDesc": "Elige el idioma de la interfaz",
     "notifications": "Notificaciones del sistema",
-    "notificationsMobileDesc": "Avisa al terminar un hilo mientras la página siga conectada en segundo plano. No funciona con el navegador cerrado.",
+    "notificationsMobileDesc": "Recibe avisos al terminar un agente, incluso con la página cerrada. En iPhone, abre funny desde la pantalla de inicio.",
     "notificationsMobileUnsupported": "Usa HTTPS y un navegador compatible. En iPhone, agrega funny a la pantalla de inicio y abre la app desde ahí.",
     "notificationsDesc": "Mostrar una notificación del sistema cuando un agente termina o falla (solo si esta pestaña está en segundo plano).",
     "notificationsDenied": "El navegador no concedió el permiso.",
@@ -707,6 +707,9 @@
     }
   },
   "tools": {
+    "closeViewer": "Cerrar",
+    "viewFullContent": "Ver contenido completo",
+    "viewFullDiff": "Ver diff completo",
     "readFile": "Leer Archivo",
     "writeFile": "Escribir Archivo",
     "editFile": "Editar Archivo",

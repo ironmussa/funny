@@ -34,6 +34,7 @@ export {
   agentExecutionProfiles,
   projectAgentProfileBindings,
   // Server-only tables
+  pushSubscriptions,
   runners,
   runnerProjectAssignments,
   runnerTasks,

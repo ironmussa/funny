@@ -40,6 +40,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { isOneSidedDiff } from '@/lib/diff-math';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { parseRawDiff, getChangeableIndices } from '@/lib/patch-builder';
@@ -309,6 +310,8 @@ export function ExpandedDiffDialog({
   onRequestFullDiff,
 }: ExpandedDiffDialogProps) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const [userViewMode, setUserViewMode] = useState<DiffViewMode>('three-pane');
   const [wordWrap, setWordWrap] = useState(false);
   const [showFullFile, setShowFullFile] = useState(false);
@@ -472,7 +475,7 @@ export function ExpandedDiffDialog({
     oldValue: effectiveOldValue,
     newValue: effectiveNewValue,
   });
-  const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
+  const viewMode: DiffViewMode = isMobile || isOneSided ? 'unified' : userViewMode;
   const isDeletedFile = effectiveNewValue === '' && effectiveOldValue !== '';
   const canPreviewMarkdown = isMarkdownFile(filePath) && !isDeletedFile && !!onRequestFullDiff;
   const showMarkdownPreview = canPreviewMarkdown && markdownPreviewPath === filePath;
@@ -486,8 +489,16 @@ export function ExpandedDiffDialog({
       }}
     >
       <DialogContent
-        className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col gap-0 p-0"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="flex h-dvh w-screen max-w-none flex-col gap-0 rounded-none p-0 md:h-[85vh] md:w-[90vw] md:max-w-[90vw] md:rounded-lg"
+        onOpenAutoFocus={(e) => {
+          returnFocusRef.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          e.preventDefault();
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          returnFocusRef.current?.focus({ preventScroll: true });
+        }}
         onEscapeKeyDown={(e) => {
           if (showSearch) e.preventDefault();
         }}

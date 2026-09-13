@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { showAgentNotification, useNotifications } from '@/hooks/use-notifications';
+import { useNotifications } from '@/hooks/use-notifications';
+import { disableWebPush, enableWebPush, supportsWebPush, testWebPush } from '@/lib/web-push';
 import { useSettingsStore } from '@/stores/settings-store';
 
 export function MobileNotifications() {
@@ -22,9 +23,11 @@ export function MobileNotifications() {
         setEnabled(false);
         return;
       }
+      if (checked) await enableWebPush();
+      else await disableWebPush();
       setEnabled(checked);
-    } catch {
-      toast.error(t('settings.notificationsDenied'));
+    } catch (error) {
+      toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
     } finally {
       setBusy(false);
     }
@@ -33,13 +36,10 @@ export function MobileNotifications() {
   async function testNotification() {
     setBusy(true);
     try {
-      const result = await showAgentNotification(
-        t('settings.notificationsTestTitle'),
-        t('settings.notificationsTestBody'),
-        { force: true },
-      );
-      if (result.ok) toast.success(t('settings.notificationsTestSent'));
-      else toast.error(t('settings.notificationsTestFailed', { reason: result.reason }));
+      await testWebPush();
+      toast.success(t('settings.notificationsTestSent'));
+    } catch (error) {
+      toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
     } finally {
       setBusy(false);
     }
@@ -54,7 +54,7 @@ export function MobileNotifications() {
         <Switch
           id="mobile-notifications"
           checked={enabled && permission === 'granted'}
-          disabled={busy || !supported || permission === 'denied'}
+          disabled={busy || !supported || !supportsWebPush() || permission === 'denied'}
           onCheckedChange={toggle}
         />
         {enabled && permission === 'granted' && (

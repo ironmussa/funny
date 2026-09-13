@@ -5,10 +5,17 @@ import { ExpandedDiffDialog, ExpandedDiffView } from '@/components/tool-cards/Ex
 
 import { renderWithProviders } from '../helpers/render';
 
+const viewport = vi.hoisted(() => ({ mobile: false }));
+vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
+
 vi.mock('@/components/VirtualDiff', () => ({
-  VirtualDiff: ({ 'data-testid': testId }: { 'data-testid'?: string }) => (
-    <div data-testid={testId ?? 'virtual-diff'} />
-  ),
+  VirtualDiff: ({
+    'data-testid': testId,
+    viewMode,
+  }: {
+    'data-testid'?: string;
+    viewMode?: string;
+  }) => <div data-testid={testId ?? 'virtual-diff'} data-view-mode={viewMode} />,
 }));
 
 vi.mock('@/components/thread/MessageContent', () => ({
@@ -21,6 +28,7 @@ const writeText = vi.fn();
 
 describe('ExpandedDiffDialog markdown preview', () => {
   beforeEach(() => {
+    viewport.mobile = false;
     writeText.mockClear();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -153,4 +161,20 @@ describe('ExpandedDiffView markdown preview', () => {
 
     expect(screen.queryByTestId('diff-view-toggle-markdown-preview')).not.toBeInTheDocument();
   });
+});
+
+test('mobile diffs use a full-screen unified viewer', () => {
+  viewport.mobile = true;
+  renderWithProviders(
+    <ExpandedDiffDialog
+      open
+      onOpenChange={vi.fn()}
+      filePath="file.ts"
+      oldValue="old"
+      newValue="new"
+    />,
+  );
+  expect(screen.getByRole('dialog')).toHaveClass('h-dvh', 'w-screen');
+  expect(screen.getByTestId('expanded-diff-viewer')).toHaveAttribute('data-view-mode', 'unified');
+  viewport.mobile = false;
 });

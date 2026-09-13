@@ -539,7 +539,7 @@
     "language": "Language",
     "languageDesc": "Choose the display language for the interface",
     "notifications": "System notifications",
-    "notificationsMobileDesc": "Get notified when a thread finishes while the page stays connected in the background. Does not work with the browser closed.",
+    "notificationsMobileDesc": "Receive notifications when an agent finishes, even with the page closed. On iPhone, open funny from the Home Screen.",
     "notificationsMobileUnsupported": "Use HTTPS and a supported browser. On iPhone, add funny to your Home Screen and open it there.",
     "notificationsDesc": "Show a system notification when an agent finishes or fails (only when this tab is in the background).",
     "notificationsDenied": "Browser permission was not granted.",
@@ -709,6 +709,9 @@
     }
   },
   "tools": {
+    "closeViewer": "Close",
+    "viewFullContent": "View full content",
+    "viewFullDiff": "View full diff",
     "readFile": "Read File",
     "writeFile": "Write File",
     "editFile": "Edit File",

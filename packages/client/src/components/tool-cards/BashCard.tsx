@@ -2,10 +2,11 @@ import { ChevronRight, Terminal } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
+
+import { ToolContentArea } from './MobileContentPreview';
 
 // eslint-disable-next-line no-control-regex -- ESC is the literal ANSI CSI marker we're detecting
 const ANSI_ESC_RE = /\x1b\[/;
@@ -139,7 +140,7 @@ export function BashCard({
         )}
       </button>
       {expanded && command && (
-        <ScrollArea
+        <ToolContentArea
           className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
@@ -195,7 +196,7 @@ export function BashCard({
               )}
             </div>
           </div>
-        </ScrollArea>
+        </ToolContentArea>
       )}
     </div>
   );

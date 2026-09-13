@@ -37,6 +37,7 @@ import {
 } from '@/hooks/use-notifications';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { disableWebPush } from '@/lib/web-push';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   editorLabels,
@@ -295,6 +296,14 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         if (result !== 'granted') {
           toast.error(t('settings.notificationsDenied'));
           setNotificationsEnabled(false);
+          return;
+        }
+      }
+      if (!checked) {
+        try {
+          await disableWebPush();
+        } catch (error) {
+          toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
           return;
         }
       }

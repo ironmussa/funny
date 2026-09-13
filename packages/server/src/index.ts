@@ -297,6 +297,8 @@ app.route('/api/runners', runnerRoutes);
 app.route('/api/media', mediaRoutes);
 app.route('/api/browser-v1/resources', browserV1ResourceRoutes);
 app.route('/api/profile', profileRoutes);
+const { pushRoutes } = await import('./routes/push.js');
+app.route('/api/push', pushRoutes);
 // Share routes mounted BEFORE threadRoutes so `/api/threads/shared-with-me` and
 // `/:id/shares` are matched before the generic `/:id` pattern.
 app.route('/api/threads', shareRoutes);

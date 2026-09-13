@@ -21,6 +21,7 @@ import {
 import { InteractiveEnvelopeSchema } from '@funny/shared/browser-v1/interactive';
 import type { Server as SocketIOServer } from 'socket.io';
 
+import { log } from '../lib/logger.js';
 import type { BrowserEventSink } from './runner-ports.js';
 import {
   SocketIoBrowserEventSink,
@@ -28,6 +29,7 @@ import {
   threadStreamRoom,
 } from './socketio/browser-event-sink.js';
 import { browserV1ResourceStore } from './socketio/browser-v1-resource-store.js';
+import { pushAgentResult } from './web-push.js';
 
 export { threadPresenceRoom, threadStreamRoom };
 
@@ -55,6 +57,9 @@ export function setBrowserEventSink(sink: BrowserEventSink | null): void {
  * Uses Socket.IO rooms for delivery.
  */
 export function relayToUser(userId: string, event: Record<string, unknown>): void {
+  if (event.type === 'agent:result') {
+    void pushAgentResult(userId, event).catch(() => log.warn('Web Push result delivery failed'));
+  }
   const terminal = terminalPublication(userId, event);
   if (terminal) {
     browserEvents?.publish(terminal);

@@ -697,6 +697,9 @@
     }
   },
   "tools": {
+    "closeViewer": "Fechar",
+    "viewFullContent": "Ver conteúdo completo",
+    "viewFullDiff": "Ver diff completo",
     "readFile": "Ler Arquivo",
     "writeFile": "Escrever Arquivo",
     "editFile": "Editar Arquivo",

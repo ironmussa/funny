@@ -2,7 +2,6 @@ import { ChevronRight, Bot, Loader2 } from 'lucide-react';
 import { Suspense, lazy, useState, useMemo, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   remarkPlugins,
   baseMarkdownComponents,
@@ -10,6 +9,8 @@ import {
 } from '@/lib/markdown-components';
 import { groupConsecutiveToolCalls, type ToolItem } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
+
+import { ToolContentArea } from './MobileContentPreview';
 
 const LazyMarkdown = lazy(() =>
   import('react-markdown').then(({ default: ReactMarkdown }) => ({
@@ -121,7 +122,7 @@ export const TaskCard = memo(function TaskCard({
       </button>
 
       {expanded && (
-        <ScrollArea
+        <ToolContentArea
           className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[60vh]' }}
         >
@@ -163,7 +164,7 @@ export const TaskCard = memo(function TaskCard({
               {t('tools.waitingForOutput')}
             </div>
           )}
-        </ScrollArea>
+        </ToolContentArea>
       )}
     </div>
   );

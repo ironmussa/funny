@@ -832,3 +832,11 @@ export const invitation = sqliteTable('invitation', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
 });
+
+/** Browser push subscriptions, isolated by authenticated user. */
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  userId: text('user_id').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+});

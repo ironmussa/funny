@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@abbacchio/browser-transport": "^0.3.0",
-    "@atlaskit/pragmatic-drag-and-drop": "^2.0.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
     "@bruits/satteri-wasm32-wasi": "file:vendor/satteri-wasm32-wasi",

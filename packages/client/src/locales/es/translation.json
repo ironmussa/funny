@@ -493,6 +493,12 @@
     "viewOnGithub": "Ver en GitHub"
   },
   "graph": {
+    "loadMoreAuthors": "Cargar más autores",
+    "currentBranchScope": "Rama actual",
+    "allCommits": "Todos los commits",
+    "noAuthors": "No se encontraron autores",
+    "author": "Autor",
+    "authorPlaceholder": "Nombre o correo",
     "pendingPull": "Pendientes de pull",
     "pendingPush": "Pendientes de push",
     "noFilterMatches": "Ningún commit coincide con los filtros",

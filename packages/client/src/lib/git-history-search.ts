@@ -25,6 +25,8 @@ export interface SearchableCommit {
   shortHash?: string;
   /** Commit subject / title. */
   message: string;
+  author?: string;
+  authorEmail?: string;
   /** Commit body / description (optional — empty when none). */
   body?: string;
   /** Branch / tag refs decorating this commit. */
@@ -53,10 +55,36 @@ export function commitMatchesFilters(
   unpushed: ReadonlySet<string>,
   unpulled: ReadonlySet<string>,
   inferredUnpulled: ReadonlySet<string>,
+  authors: readonly string[] = [],
 ): boolean {
+  if (authors.length > 0 && !authors.includes(commitAuthorIdentity(commit))) return false;
   if (syncFilter === 'push' && !unpushed.has(commit.hash)) return false;
   if (syncFilter === 'pull' && !unpulled.has(commit.hash) && !inferredUnpulled.has(commit.hash)) {
     return false;
   }
   return commitMatchesQuery(commit, query);
+}
+
+/** Email distinguishes namesakes; name is the fallback for commits without email. */
+export function commitAuthorIdentity(
+  commit: Pick<SearchableCommit, 'author' | 'authorEmail'>,
+): string {
+  return commit.authorEmail?.trim().toLowerCase() || commit.author?.trim() || '';
+}
+
+export function collectCommitAuthors(
+  commits: SearchableCommit[],
+): { value: string; label: string }[] {
+  const authors = new Map<string, { value: string; label: string }>();
+  for (const commit of commits) {
+    const value = commitAuthorIdentity(commit);
+    if (!value || authors.has(value)) continue;
+    const name = commit.author?.trim();
+    const email = commit.authorEmail?.trim();
+    authors.set(value, {
+      value,
+      label: name && email ? `${name} <${email}>` : name || email || value,
+    });
+  }
+  return [...authors.values()].sort((a, b) => a.label.localeCompare(b.label));
 }

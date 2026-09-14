@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
-  GitBranch,
   GitCommit,
   RefreshCw,
   Search,
@@ -25,6 +24,7 @@ import { toast } from 'sonner';
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
+import { HistoryFilters } from '@/components/commit-graph/HistoryFilters';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
@@ -51,7 +51,11 @@ import {
   renderedGraphLaneCount,
 } from '@/lib/commit-graph-layout';
 import { computeGraphRows, type GraphRow } from '@/lib/git-graph-lanes';
-import { commitMatchesFilters, type CommitSyncFilter } from '@/lib/git-history-search';
+import {
+  collectCommitAuthors,
+  commitMatchesFilters,
+  type CommitSyncFilter,
+} from '@/lib/git-history-search';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import {
   githubBrowseBaseUrl as resolveGithubBrowseBaseUrl,
@@ -213,6 +217,14 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const searchQueryRef = useRef('');
   const [syncFilter, setSyncFilter] = useState<CommitSyncFilter>('all');
   const syncFilterRef = useRef<CommitSyncFilter>('all');
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [authorOptionsOpen, setAuthorOptionsOpen] = useState(false);
+  const authorOptionsOpenRef = useRef(false);
+  const authorsRef = useRef<string[]>([]);
+  const updateAuthors = useCallback((next: string[]) => {
+    authorsRef.current = next;
+    setAuthors(next);
+  }, []);
 
   const loadingRef = useRef(false);
   const loadedRef = useRef(false);
@@ -299,7 +311,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     if (!hasMoreRef.current || loadingRef.current) return;
     let nextSkip = loadedLogSkipRef.current;
     while (
-      (searchQueryRef.current.trim().length > 0 || syncFilterRef.current !== 'all') &&
+      (searchQueryRef.current.trim().length > 0 ||
+        syncFilterRef.current !== 'all' ||
+        authorsRef.current.length > 0 ||
+        authorOptionsOpenRef.current) &&
       hasMoreRef.current &&
       nextSkip < FILTER_MAX_SCAN
     ) {
@@ -331,7 +346,16 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // Resume filtering after initial loads, refreshes, and pages already in flight.
   useEffect(() => {
     if (visible && !logLoading && !logErrorMessage) void loadFilteredHistory();
-  }, [visible, logLoading, logErrorMessage, searchQuery, syncFilter, loadFilteredHistory]);
+  }, [
+    visible,
+    logLoading,
+    logErrorMessage,
+    searchQuery,
+    syncFilter,
+    authors,
+    authorOptionsOpen,
+    loadFilteredHistory,
+  ]);
 
   const refreshLog = useCallback(() => {
     loadedRef.current = true;
@@ -359,6 +383,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     setSearchQuery('');
     syncFilterRef.current = 'all';
     setSyncFilter('all');
+    authorsRef.current = [];
+    setAuthors([]);
     if (visible && hasGitContext) {
       loadedRef.current = true;
       loadLog(0, false);
@@ -446,7 +472,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     };
   }, [ghProjectId, entries, githubAvatarBySha]);
 
-  const isFiltering = searchQuery.trim().length > 0 || syncFilter !== 'all';
+  const isFiltering = searchQuery.trim().length > 0 || syncFilter !== 'all' || authors.length > 0;
+  const authorOptions = useMemo(() => collectCommitAuthors(entries), [entries]);
   const inferredUnpulled = useMemo(() => inferUnpulledHashesFromGraphEntries(entries), [entries]);
   const displayEntries = useMemo(
     () =>
@@ -459,10 +486,11 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
               unpushed,
               unpulled,
               inferredUnpulled,
+              authors,
             ),
           )
         : entries,
-    [entries, searchQuery, syncFilter, isFiltering, unpushed, unpulled, inferredUnpulled],
+    [entries, searchQuery, syncFilter, authors, isFiltering, unpushed, unpulled, inferredUnpulled],
   );
   const rebaseEventsByHash = useMemo(() => indexRebaseEventsByHash(rebaseEvents), [rebaseEvents]);
   const rebaseCopyLinks = useMemo(
@@ -692,6 +720,15 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         allBranches={allBranches}
         commitCount={displayEntries.length}
         syncFilter={syncFilter}
+        authors={authors}
+        hasMoreAuthors={hasMore}
+        onLoadMoreAuthors={loadMore}
+        authorOptions={authorOptions}
+        onAuthorsChange={updateAuthors}
+        onAuthorOpenChange={(open) => {
+          authorOptionsOpenRef.current = open;
+          setAuthorOptionsOpen(open);
+        }}
         onToggleSyncFilter={toggleSyncFilter}
         onRefresh={refreshLog}
         onToggleAllBranches={() => setAllBranches((v) => !v)}
@@ -1083,6 +1120,12 @@ function GraphToolbar({
   commitCount,
   syncFilter,
   onToggleSyncFilter,
+  authors,
+  authorOptions,
+  onAuthorsChange,
+  onAuthorOpenChange,
+  hasMoreAuthors,
+  onLoadMoreAuthors,
   onRefresh,
   onToggleAllBranches,
 }: {
@@ -1090,6 +1133,12 @@ function GraphToolbar({
   allBranches: boolean;
   commitCount: number;
   syncFilter: CommitSyncFilter;
+  authors: string[];
+  authorOptions: { value: string; label: string }[];
+  onAuthorsChange: (authors: string[]) => void;
+  onAuthorOpenChange: (open: boolean) => void;
+  hasMoreAuthors: boolean;
+  onLoadMoreAuthors: () => void;
   onToggleSyncFilter: (filter: Exclude<CommitSyncFilter, 'all'>) => void;
   onRefresh: () => void;
   onToggleAllBranches: () => void;
@@ -1107,38 +1156,19 @@ function GraphToolbar({
       >
         <RefreshCw className={cn('icon-base', logLoading && 'animate-spin')} />
       </Button>
-      <Button
-        variant={allBranches ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-8 gap-1 px-2 text-xs"
-        onClick={onToggleAllBranches}
-        data-testid="graph-toggle-all-branches"
-      >
-        <GitBranch className="icon-base" />
-        {t('graph.allBranches', 'All branches')}
-      </Button>
-      <Button
-        variant={syncFilter === 'pull' ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-8 gap-1 px-2 text-xs"
-        aria-pressed={syncFilter === 'pull'}
-        onClick={() => onToggleSyncFilter('pull')}
-        data-testid="graph-filter-pull"
-      >
-        <ArrowDownCircle className="icon-base" />
-        {t('graph.pendingPull', 'Pending pull')}
-      </Button>
-      <Button
-        variant={syncFilter === 'push' ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-8 gap-1 px-2 text-xs"
-        aria-pressed={syncFilter === 'push'}
-        onClick={() => onToggleSyncFilter('push')}
-        data-testid="graph-filter-push"
-      >
-        <ArrowUpCircle className="icon-base" />
-        {t('graph.pendingPush', 'Pending push')}
-      </Button>
+      <HistoryFilters
+        allBranches={allBranches}
+        onToggleAllBranches={onToggleAllBranches}
+        syncFilter={syncFilter}
+        onToggleSyncFilter={onToggleSyncFilter}
+        authors={authors}
+        authorOptions={authorOptions}
+        onAuthorsChange={onAuthorsChange}
+        onAuthorOpenChange={onAuthorOpenChange}
+        authorsLoading={logLoading}
+        hasMoreAuthors={hasMoreAuthors}
+        onLoadMoreAuthors={onLoadMoreAuthors}
+      />
       <span className="text-muted-foreground ml-auto text-[10px]">
         {t('graph.commitCount', {
           count: commitCount,

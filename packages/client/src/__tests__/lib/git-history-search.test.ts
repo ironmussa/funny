@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  collectCommitAuthors,
   commitMatchesFilters,
   commitMatchesQuery,
   type SearchableCommit,
@@ -91,5 +92,49 @@ describe('commitMatchesFilters', () => {
     expect(
       commitMatchesFilters(later, '', 'push', new Set([...unpushed, 'later']), unpulled, inferred),
     ).toBe(true);
+  });
+});
+
+describe('author filtering', () => {
+  const commit = {
+    hash: 'local',
+    message: 'fix login',
+    author: 'Alice',
+    authorEmail: 'ALICE@example.com',
+  };
+  const pending = new Set(['local']);
+  const empty = new Set<string>();
+  const matches = (authors: string[], query = '', sync: 'all' | 'pull' | 'push' = 'all') =>
+    commitMatchesFilters(commit, query, sync, pending, empty, empty, authors);
+
+  test('matches selected identities exactly and supports multiple authors', () => {
+    expect(matches(['alice@example.com'])).toBe(true);
+    expect(matches(['bob@example.com', 'alice@example.com'])).toBe(true);
+    expect(matches(['Alice'])).toBe(false);
+    expect(matches(['alice@other.com'])).toBe(false);
+    expect(matches([])).toBe(true);
+  });
+
+  test('combines author, text, and sync filters', () => {
+    expect(matches(['alice@example.com'], 'login', 'push')).toBe(true);
+    expect(matches(['alice@example.com'], 'docs', 'push')).toBe(false);
+    expect(matches(['alice@example.com'], 'login', 'pull')).toBe(false);
+  });
+
+  test('deduplicates emails, distinguishes namesakes and includes later pages', () => {
+    const first = [commit, { ...commit, authorEmail: 'alice@example.com' }];
+    expect(collectCommitAuthors(first)).toHaveLength(1);
+    const later = [
+      ...first,
+      { ...commit, authorEmail: 'alice@other.com' },
+      { hash: 'older', message: 'older', author: 'Bob' },
+      { hash: 'unknown', message: 'unknown' },
+    ];
+    expect(collectCommitAuthors(later)).toEqual([
+      { value: 'alice@example.com', label: 'Alice <ALICE@example.com>' },
+      { value: 'alice@other.com', label: 'Alice <alice@other.com>' },
+      { value: 'Bob', label: 'Bob' },
+    ]);
+    expect(commitMatchesFilters(later[3], '', 'all', empty, empty, empty, ['Bob'])).toBe(true);
   });
 });

@@ -19,6 +19,7 @@ const CLAUDE_ALIASES: Record<string, string> = {
   'claude-opus-4.8': 'claude-opus-4-8',
   'claude-opus-5': 'claude-opus-5',
   'claude-opus-5.0': 'claude-opus-5',
+  'claude-opus-5.5': 'claude-opus-5-5',
   'claude-haiku': 'claude-haiku-4-5-20251001',
   'claude-haiku-4.5': 'claude-haiku-4-5-20251001',
 };
@@ -75,6 +76,7 @@ export function getAdvertisedModels(): Array<{ id: string; owned_by: string }> {
     { id: 'claude-opus-4-7', owned_by: 'anthropic' },
     { id: 'claude-opus-4-8', owned_by: 'anthropic' },
     { id: 'claude-opus-5', owned_by: 'anthropic' },
+    { id: 'claude-opus-5-5', owned_by: 'anthropic' },
     { id: 'claude-haiku-4-5-20251001', owned_by: 'anthropic' },
     // Aliases
     { id: 'claude-sonnet', owned_by: 'anthropic' },

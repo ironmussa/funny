@@ -93,6 +93,12 @@ const claudeModels = {
     contextWindow: 1_000_000,
     i18nKey: 'opus5',
   },
+  'opus-5.5': {
+    id: 'claude-opus-5-5',
+    label: 'Opus 5.5',
+    contextWindow: 1_000_000,
+    i18nKey: 'opus55',
+  },
   'fable-5.1': {
     id: 'claude-fable-5-1',
     label: 'Fable 5.1',

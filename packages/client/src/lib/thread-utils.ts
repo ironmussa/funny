@@ -134,6 +134,7 @@ const MODEL_ID_TO_KEY: Record<string, string> = {
   'claude-opus-4-8': 'opus48',
   'claude-opus-4-8[1m]': 'opus48',
   'claude-opus-5': 'opus5',
+  'claude-opus-5-5': 'opus55',
   'claude-fable-5-1': 'fable51',
   'claude-fable-5-1[1m]': 'fable51',
   'claude-fable-5': 'fable5',

@@ -18,6 +18,11 @@ const STATUS_MAP: Record<DomainErrorType, number> = {
   INTERNAL: 500,
 };
 
+/** HTTP status for a domain error. */
+export function errorStatus(error: DomainError): number {
+  return STATUS_MAP[error.type];
+}
+
 /** Convert a Result<T, DomainError> into a Hono JSON response */
 export function resultToResponse<T>(
   c: Context,

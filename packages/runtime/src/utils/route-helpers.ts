@@ -12,11 +12,14 @@
  * shared projects via the team_projects join table.
  */
 
-import { notFound, forbidden, type DomainError } from '@funny/shared/errors';
+import { mkdirSync } from 'node:fs';
+
+import { badRequest, notFound, forbidden, type DomainError } from '@funny/shared/errors';
 import { ok, err, type Result } from 'neverthrow';
 
 import type { IProjectRepository } from '../services/server-interfaces.js';
 import { getServices } from '../services/service-registry.js';
+import { hasLazyCwd, resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 
 /** Check that a thread belongs to the requesting user */
@@ -153,9 +156,49 @@ export async function requireProject(
 }
 
 /**
- * Resolve the working directory for a thread or return Err(NOT_FOUND).
- * Returns worktreePath if set, otherwise the project path.
- * Verifies ownership.
+ * Resolve the working directory of an already-authorized thread, creating it
+ * when the runner owns it (scratch). Scratch → its scratch directory; a thread
+ * with a worktree → the worktree; otherwise the project path as seen by
+ * `pathUserId` (a collaborator's own checkout, else the project's path).
+ */
+export async function ensureThreadCwd(
+  thread: NonNullable<Awaited<ReturnType<typeof tm.getThread>>>,
+  pathUserId?: string,
+): Promise<Result<string, DomainError>> {
+  if (thread.worktreePath) return ok(thread.worktreePath);
+
+  let project: { path: string } | null = null;
+  if (thread.projectId) {
+    const resolved = pathUserId
+      ? await getServices().projects.resolveProjectPath(thread.projectId, pathUserId)
+      : null;
+    if (resolved?.isOk()) {
+      project = { path: resolved.value };
+    } else {
+      const found = await getServices().projects.getProject(thread.projectId);
+      if (!found) return err(notFound('Project not found'));
+      project = { path: found.path };
+    }
+  }
+
+  const cwd = resolveThreadCwd(
+    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
+    project,
+  );
+  if (cwd.isErr()) return err(badRequest(cwd.error.message));
+  if (hasLazyCwd(thread as { isScratch?: boolean })) {
+    try {
+      mkdirSync(cwd.value, { recursive: true });
+    } catch {
+      // Callers surface a missing directory as an empty result / clear error.
+    }
+  }
+  return ok(cwd.value);
+}
+
+/**
+ * Resolve the working directory for a thread the caller may access (see
+ * `ensureThreadCwd`). Verifies ownership / steer grant.
  */
 export async function requireThreadCwd(
   threadId: string,
@@ -166,16 +209,9 @@ export async function requireThreadCwd(
   const threadResult = await requireThread(threadId, userId, organizationId, steer);
   if (threadResult.isErr()) return err(threadResult.error);
   const thread = threadResult.value;
-  if (thread.worktreePath) return ok(thread.worktreePath);
   // For a steer sharee the thread lives on the OWNER's machine — resolve the
   // working directory by the thread owner, never by the sharee (who has no
   // checkout on this runner). Owners/collaborators resolve by their own id.
   const pathUserId = isSteerGrantFor(threadId, steer) ? thread.userId : userId;
-  if (pathUserId) {
-    const resolved = await getServices().projects.resolveProjectPath(thread.projectId, pathUserId);
-    if (resolved.isOk()) return ok(resolved.value);
-  }
-  const project = await getServices().projects.getProject(thread.projectId);
-  if (!project) return err(notFound('Project not found'));
-  return ok(project.path);
+  return ensureThreadCwd(thread, pathUserId);
 }

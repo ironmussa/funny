@@ -1,5 +1,9 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { ok, err } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
@@ -7,6 +11,13 @@ const mocks = vi.hoisted(() => ({
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
   resolveProjectPath: vi.fn(),
+  home: '',
+}));
+
+// Scratch directories live under the home dir — point it at a temp dir.
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:os')>()),
+  homedir: () => mocks.home,
 }));
 
 vi.mock('../../services/thread-manager.js', () => ({
@@ -30,6 +41,7 @@ import {
   requireProject,
   requireThreadCwd,
   isSteerGrantFor,
+  ensureThreadCwd,
 } from '../../utils/route-helpers.js';
 
 describe('route-helpers', () => {
@@ -311,5 +323,70 @@ describe('route-helpers', () => {
     if (result.isErr()) {
       expect(result.error.type).toBe('NOT_FOUND');
     }
+  });
+});
+
+describe('thread working directory', () => {
+  mocks.home = mkdtempSync(join(tmpdir(), 'funny-home-'));
+  afterAll(() => rmSync(mocks.home, { recursive: true, force: true }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveProjectPath.mockResolvedValue(err({ type: 'BAD_REQUEST', message: 'no path' }));
+  });
+
+  // Regression: requireThreadCwd ignored scratch threads and looked up the
+  // project '' — so uploads (and anything else using it) failed on scratch
+  // threads with "Project not found".
+  test('a scratch thread resolves to its scratch directory, created on demand', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't-scratch',
+      userId: 'u-1',
+      projectId: '',
+      isScratch: true,
+      mode: 'local',
+      worktreePath: null,
+    });
+
+    const result = await requireThreadCwd('t-scratch', 'u-1');
+
+    const expected = join(mocks.home, '.funny', 'scratch', 'u-1', 't-scratch');
+    expect(result._unsafeUnwrap()).toBe(expected);
+    expect(existsSync(expected)).toBe(true);
+    expect(mocks.getProject).not.toHaveBeenCalled();
+  });
+
+  test('a collaborator gets their own checkout, not the owner’s path', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1', mode: 'local' } as any;
+    mocks.resolveProjectPath.mockResolvedValue(ok('/home/collab/repo'));
+
+    expect((await ensureThreadCwd(thread, 'collab'))._unsafeUnwrap()).toBe('/home/collab/repo');
+  });
+
+  test('falls back to the project path, and never creates it', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1', mode: 'local' } as any;
+    mocks.getProject.mockResolvedValue({ id: 'p-1', userId: 'owner', path: '/does/not/exist' });
+
+    expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrap()).toBe('/does/not/exist');
+    expect(existsSync('/does/not/exist')).toBe(false);
+  });
+
+  test('a worktree thread uses its worktree', async () => {
+    const thread = {
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-1',
+      mode: 'worktree',
+      worktreePath: '/wt',
+    } as any;
+
+    expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrap()).toBe('/wt');
+  });
+
+  test('a project thread whose project is gone → NOT_FOUND', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-gone', mode: 'local' } as any;
+    mocks.getProject.mockResolvedValue(undefined);
+
+    expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrapErr().type).toBe('NOT_FOUND');
   });
 });

@@ -13,13 +13,12 @@ import { getRemoteUrl, extractRepoName, initRepo } from '@funny/core/git';
 import { Hono } from 'hono';
 
 import { openDirectoryOnHost } from '../services/directory-opener.js';
-import { getServices } from '../services/service-registry.js';
-import { resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resolveGitFiles } from '../utils/git-files.js';
 import { requirePickerPath, requireProjectPath } from '../utils/path-scope.js';
-import { resultToResponse } from '../utils/result-response.js';
+import { errorStatus, resultToResponse } from '../utils/result-response.js';
+import { ensureThreadCwd } from '../utils/route-helpers.js';
 
 const app = new Hono<HonoEnv>();
 
@@ -216,28 +215,14 @@ async function resolveBodyPath(
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
+    const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
       return new Response(JSON.stringify({ error: cwdResult.error.message }), {
-        status: 400,
+        status: errorStatus(cwdResult.error),
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const cwd = cwdResult.value;
-    if (thread.isScratch) {
-      try {
-        mkdirSync(cwd, { recursive: true });
-      } catch {
-        // Will fall through to the existsSync check in the caller.
-      }
-    }
-    return cwd;
+    return cwdResult.value;
   }
   if (!body.path) {
     return new Response(JSON.stringify({ error: 'path or threadId is required' }), {

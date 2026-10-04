@@ -74,7 +74,7 @@ const mocks = vi.hoisted(() => ({
   findPermissionRule: vi.fn(),
   runSensitivePathBypass: vi.fn(),
   syncClaudeProjectAssets: vi.fn(),
-  captureCodexCheckpoint: vi.fn(async () => undefined),
+  captureCodexCheckpoint: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('../../lib/logger.js', () => ({

@@ -1,12 +1,10 @@
 import { useEffect, type RefObject } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { settingsItems } from '@/components/settings/items';
+import { routableSettingsIds } from '@/components/settings/items';
 import { useUIStore } from '@/stores/ui-store';
 
 import type { ParsedRoute } from './route-parser';
-
-const validSettingsIds = new Set([...settingsItems.map((i) => i.id), 'collaborators']);
 
 function saveSettingsReturnPath(prevPath: string | null, search: string) {
   const ui = useUIStore.getState();
@@ -71,7 +69,7 @@ export function useViewRouteSync(
   useEffect(() => {
     if (!initialized) return;
     const ui = useUIStore.getState();
-    const valid = parsed.settingsPage && validSettingsIds.has(parsed.settingsPage);
+    const valid = parsed.settingsPage && routableSettingsIds.has(parsed.settingsPage);
     if (valid) {
       if (!ui.settingsOpen) {
         saveSettingsReturnPath(prevNonSettingsPathRef.current, location.search);

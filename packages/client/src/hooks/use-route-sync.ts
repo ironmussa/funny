@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { settingsItems } from '@/components/settings/items';
+import { routableSettingsIds } from '@/components/settings/items';
 import { useProjectStore } from '@/stores/project-store';
 import { setUrlThreadId } from '@/stores/thread-store';
 
@@ -11,8 +11,6 @@ import { useThreadProjectSync } from './use-thread-project-sync';
 import { useViewRouteSync } from './use-view-route-sync';
 
 const LAST_ROUTE_KEY = 'funny_last_route';
-
-const validSettingsIds = new Set([...settingsItems.map((i) => i.id), 'collaborators']);
 
 function isAnyRouteActive(parsed: ParsedRoute): boolean {
   return Boolean(
@@ -81,7 +79,7 @@ export function useRouteSync() {
   // Track the last non-settings path so the back-arrow can return to it
   useEffect(() => {
     if (parsed.preferencesPage) return;
-    if (parsed.settingsPage && validSettingsIds.has(parsed.settingsPage)) return;
+    if (parsed.settingsPage && routableSettingsIds.has(parsed.settingsPage)) return;
     prevNonSettingsPathRef.current = location.pathname;
   }, [parsed.preferencesPage, parsed.settingsPage, location.pathname]);
 

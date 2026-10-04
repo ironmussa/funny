@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ADMIN_ONLY_PREFERENCES, PREFERENCES_NAV_ITEMS } from '@/components/PreferencesPanel';
-import { buildSettingsItems } from '@/components/settings/items';
+import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';
 
 /**
  * funny has exactly two settings surfaces: General (instance-wide, in the
@@ -31,5 +31,17 @@ describe('Settings surfaces — admin-global pages live in Preferences', () => {
     const projectAdmin = buildSettingsItems({ selectedProjectId: 'p1', isProjectAdmin: true });
     expect(projectAdmin.map((i) => i.id)).toContain('collaborators');
     expect(projectAdmin.map((i) => i.id)).toContain('archived-threads');
+  });
+
+  it('every settings tab buildSettingsItems can show is a routable page (else it bounces to threads)', () => {
+    const ownerAdmin = buildSettingsItems({
+      selectedProjectId: 'p1',
+      isProjectAdmin: true,
+      isProjectOwner: true,
+    });
+    expect(ownerAdmin.map((i) => i.id)).toContain('runner');
+    for (const item of ownerAdmin) {
+      expect(routableSettingsIds.has(item.id), `${item.id} routable`).toBe(true);
+    }
   });
 });

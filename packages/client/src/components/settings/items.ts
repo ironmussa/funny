@@ -32,6 +32,18 @@ const baseSettingsItems = [
 ] as const;
 
 export const settingsItems = baseSettingsItems;
+
+/**
+ * Every routable project-settings page id — the base items plus the ones
+ * `buildSettingsItems` adds conditionally. Route sync uses this to decide
+ * whether `/settings/:page` is valid; a missing id silently bounces the user
+ * back to the thread view, so keep it in sync with `buildSettingsItems`.
+ */
+export const routableSettingsIds: ReadonlySet<string> = new Set<string>([
+  ...baseSettingsItems.map((i) => i.id),
+  'collaborators',
+  'runner',
+]);
 export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'collaborators' | 'runner';
 
 export interface SettingsNavItem {

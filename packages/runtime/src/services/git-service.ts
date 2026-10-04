@@ -48,11 +48,23 @@ import { wsBroker } from './ws-broker.js';
 /**
  * Resolve per-user git identity from the user's profile.
  */
-export async function resolveIdentity(userId: string): Promise<GitIdentityOptions | undefined> {
+export async function resolveIdentity(
+  userId: string,
+  projectId?: string,
+): Promise<GitIdentityOptions | undefined> {
   const author = (await getServices().profile.getGitIdentity(userId)) ?? undefined;
-  const githubToken = (await getServices().profile.getGithubToken(userId)) ?? undefined;
+  const githubToken =
+    (await getServices().profile.getGithubToken(userId, projectId || undefined)) ?? undefined;
   if (!author && !githubToken) return undefined;
   return { author, githubToken };
+}
+
+/** Identity for a thread's git operation — uses the project's own GitHub token if set. */
+export async function resolveThreadIdentity(
+  userId: string,
+  threadId: string,
+): Promise<GitIdentityOptions | undefined> {
+  return resolveIdentity(userId, await getProjectId(threadId));
 }
 
 /** Validate that all file paths stay within the working directory. */
@@ -139,7 +151,7 @@ export function commitChanges(
   noVerify?: boolean,
   workflowId?: string,
 ): ResultAsync<{ output: string; sha?: string }, DomainError> {
-  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+  return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen((identity) =>
     gitCommit(cwd, message, identity, amend, noVerify).andThen((output) => {
       // Capture the SHA of the newly created commit (non-critical)
       return ResultAsync.fromSafePromise(
@@ -170,7 +182,7 @@ export function pushChanges(
   cwd: string,
   workflowId?: string,
 ): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+  return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen((identity) =>
     gitPush(cwd, identity).map(async (output) => {
       threadEventBus.emit('git:pushed', {
         threadId,
@@ -191,7 +203,7 @@ export function pullChanges(
   cwd: string,
   strategy: PullStrategy = 'ff-only',
 ): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+  return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen((identity) =>
     gitPull(cwd, strategy, identity).map(async (output) => {
       threadEventBus.emit('git:pulled', {
         threadId,
@@ -324,21 +336,23 @@ export function revertCommit(
   cwd: string,
   hash: string,
 ): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) => {
-    const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-    return git(['revert', hash, '--no-edit'], cwd, env).map(async (output) => {
-      threadEventBus.emit('git:revert', {
-        threadId,
-        userId,
-        projectId: await getProjectId(threadId),
-        cwd,
-        hash,
-        output,
+  return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen(
+    (identity) => {
+      const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+      return git(['revert', hash, '--no-edit'], cwd, env).map(async (output) => {
+        threadEventBus.emit('git:revert', {
+          threadId,
+          userId,
+          projectId: await getProjectId(threadId),
+          cwd,
+          hash,
+          output,
+        });
+        invalidateStatusCache(cwd);
+        return output;
       });
-      invalidateStatusCache(cwd);
-      return output;
-    });
-  });
+    },
+  );
 }
 
 export function resetHard(
@@ -375,13 +389,15 @@ export function cherryPickCommit(
   cwd: string,
   hash: string,
 ): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) => {
-    const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-    return git(['cherry-pick', '--no-edit', hash], cwd, env).map((output) => {
-      invalidateStatusCache(cwd);
-      return output;
-    });
-  });
+  return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen(
+    (identity) => {
+      const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+      return git(['cherry-pick', '--no-edit', hash], cwd, env).map((output) => {
+        invalidateStatusCache(cwd);
+        return output;
+      });
+    },
+  );
 }
 
 export function rebaseCurrentBranchOnto(
@@ -431,21 +447,22 @@ export function mergeCurrentBranchInto(
       return errAsync(badRequest(`Already on ${targetBranch}`));
     }
 
-    return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
-      gitMerge(cwd, currentBranch, targetBranch, identity).map(async (output) => {
-        if (options?.emitEvent !== false) {
-          threadEventBus.emit('git:merged', {
-            threadId,
-            userId,
-            projectId: options?.projectId ?? (await getProjectId(threadId)),
-            sourceBranch: currentBranch,
-            targetBranch,
-            output,
-          });
-        }
-        invalidateStatusCache(cwd);
-        return output;
-      }),
+    return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen(
+      (identity) =>
+        gitMerge(cwd, currentBranch, targetBranch, identity).map(async (output) => {
+          if (options?.emitEvent !== false) {
+            threadEventBus.emit('git:merged', {
+              threadId,
+              userId,
+              projectId: options?.projectId ?? (await getProjectId(threadId)),
+              sourceBranch: currentBranch,
+              targetBranch,
+              output,
+            });
+          }
+          invalidateStatusCache(cwd);
+          return output;
+        }),
     );
   });
 }
@@ -480,7 +497,7 @@ export function pushBranchToOrigin(
   cwd: string,
   branch: string,
 ): ResultAsync<string, DomainError> {
-  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+  return ResultAsync.fromSafePromise(resolveThreadIdentity(userId, threadId)).andThen((identity) =>
     gitPushBranch(cwd, branch, identity).map(async (output) => {
       threadEventBus.emit('git:pushed', {
         threadId,
@@ -529,7 +546,7 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
         return errAsync(badRequest('No target branch specified and no baseBranch set on thread'));
       }
 
-      return ResultAsync.fromPromise(resolveIdentity(params.userId), (e) =>
+      return ResultAsync.fromPromise(resolveThreadIdentity(params.userId, params.threadId), (e) =>
         internal(String(e)),
       ).andThen((identity) =>
         gitMerge(
@@ -663,36 +680,37 @@ export function createPullRequest(params: CreatePRParams): ResultAsync<string, D
   return ResultAsync.fromPromise(Promise.resolve(tm.getThread(params.threadId)), (e) =>
     internal(String(e)),
   ).andThen((thread) =>
-    ResultAsync.fromSafePromise(resolveIdentity(params.userId)).andThen((identity) =>
-      gitCreatePR(
-        params.cwd,
-        params.title,
-        params.body,
-        thread?.baseBranch ?? undefined,
-        identity,
-      ).andThen((prUrl) => {
-        const prData = { title: params.title, url: prUrl };
-        return ResultAsync.fromSafePromise(
-          getServices()
-            .threadEvents.saveThreadEvent(params.threadId, 'git:pr_created', prData)
-            .then(() => {
-              wsBroker.emitToUser(params.userId, {
-                type: 'thread:event',
-                threadId: params.threadId,
-                data: {
-                  event: {
-                    id: crypto.randomUUID(),
-                    threadId: params.threadId,
-                    type: 'git:pr_created',
-                    data: JSON.stringify(prData),
-                    createdAt: new Date().toISOString(),
+    ResultAsync.fromSafePromise(resolveThreadIdentity(params.userId, params.threadId)).andThen(
+      (identity) =>
+        gitCreatePR(
+          params.cwd,
+          params.title,
+          params.body,
+          thread?.baseBranch ?? undefined,
+          identity,
+        ).andThen((prUrl) => {
+          const prData = { title: params.title, url: prUrl };
+          return ResultAsync.fromSafePromise(
+            getServices()
+              .threadEvents.saveThreadEvent(params.threadId, 'git:pr_created', prData)
+              .then(() => {
+                wsBroker.emitToUser(params.userId, {
+                  type: 'thread:event',
+                  threadId: params.threadId,
+                  data: {
+                    event: {
+                      id: crypto.randomUUID(),
+                      threadId: params.threadId,
+                      type: 'git:pr_created',
+                      data: JSON.stringify(prData),
+                      createdAt: new Date().toISOString(),
+                    },
                   },
-                },
-              });
-              return prUrl;
-            }),
-        );
-      }),
+                });
+                return prUrl;
+              }),
+          );
+        }),
     ),
   );
 }

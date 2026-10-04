@@ -310,7 +310,7 @@ export function mapRunnerOperation(
     case 'data:get_provider_key':
       return { kind: 'getProviderKey', value: { provider: input.provider } };
     case 'data:get_github_token':
-      return { kind: 'getGithubToken', value: {} };
+      return { kind: 'getGithubToken', value: { projectId: input.projectId ?? '' } };
     case 'data:get_minimax_api_key':
       return { kind: 'getMinimaxApiKey', value: {} };
     case 'data:update_profile':

@@ -318,7 +318,8 @@ export interface IPipelineRepository {
 export interface IProfileService {
   getProfile(userId: string): Promise<UserProfile | null>;
   getProviderKey(userId: string, provider: string): Promise<string | null>;
-  getGithubToken(userId: string): Promise<string | null>;
+  /** `projectId` lets a project-level token override the user's (project-runner-binding). */
+  getGithubToken(userId: string, projectId?: string): Promise<string | null>;
   getAssemblyaiApiKey(userId: string): Promise<string | null>;
   getMinimaxApiKey(userId: string): Promise<string | null>;
   getGitIdentity(userId: string): Promise<{ name: string; email: string } | null>;

@@ -41,7 +41,7 @@ commitRoutes.post('/project/:projectId/commit', async (c) => {
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(commitSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   const result = await commit(
     cwd,
     parsed.value.message,

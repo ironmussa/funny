@@ -24,6 +24,7 @@ import {
   pushBranchToOrigin as gitServicePushBranch,
   pullChanges as gitServicePull,
   resolveIdentity,
+  resolveThreadIdentity,
 } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
@@ -46,7 +47,7 @@ remoteRoutes.post('/project/:projectId/push', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   const result = await push(cwdResult.value, identity);
   if (result.isErr()) return resultToResponse(c, result);
   // Invalidate BOTH caches: the bulk per-project HTTP cache AND the core
@@ -124,7 +125,7 @@ remoteRoutes.get('/project/:projectId/gh-orgs', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   if (!identity?.githubToken) {
     return c.json({ orgs: [] });
   }
@@ -142,7 +143,7 @@ remoteRoutes.post('/project/:projectId/publish', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   if (!identity?.githubToken) {
     return c.json({ error: 'GitHub token required. Set one in Settings > Profile.' }, 400);
   }
@@ -170,7 +171,7 @@ remoteRoutes.post('/project/:projectId/pull', async (c) => {
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(pullSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   const result = await pull(cwdResult.value, parsed.value.strategy, identity);
   if (result.isErr()) return resultToResponse(c, result);
   // Pull advanced HEAD and the origin ref — drop the stale cwd-keyed summary so
@@ -187,7 +188,7 @@ remoteRoutes.post('/project/:projectId/fetch', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   const result = await gitRuntimeService.fetchProject(projectId, {
     cwd: cwdResult.value,
     identity,
@@ -257,7 +258,7 @@ remoteRoutes.post('/:threadId/fetch', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveThreadIdentity(userId, threadId);
   const result = await gitRuntimeService.fetchThread(threadId, {
     cwd: cwdResult.value,
     identity,

@@ -24,7 +24,7 @@ import { err, type Result, type ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
-import { resolveIdentity } from '../../services/git-service.js';
+import { resolveIdentity, resolveThreadIdentity } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
@@ -263,7 +263,7 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
   const { limit, skip } = parseLogPaging(c);
   const all = c.req.query('all') !== 'false';
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { projectId }, () =>
@@ -401,7 +401,7 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const { limit, skip } = parseLogPaging(c);
   // Graph view defaults to all refs so divergent branches show; opt out with all=false.
   const all = c.req.query('all') !== 'false';
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveThreadIdentity(userId, threadId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { threadId }, () =>

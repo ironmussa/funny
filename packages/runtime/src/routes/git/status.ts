@@ -80,7 +80,7 @@ statusRoutes.get('/status', async (c) => {
   );
 
   // Resolve GH_TOKEN for PR detection (runs once per request)
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
 
   // Background fetch: update remote tracking refs so unpulledCommitCount is
@@ -414,7 +414,7 @@ statusRoutes.get('/project/:projectId/status', async (c) => {
   // completion, hint the client to re-fetch the project status (the project-mode
   // slice uses `fetchProjectStatus`, not the WS `git:status` path) so incoming
   // commits surface without a second manual refresh.
-  const identity = await resolveIdentity(userId);
+  const identity = await resolveIdentity(userId, projectId);
   scheduleBackgroundFetch(projectId, cwd, identity ?? undefined, undefined, () => {
     wsBroker.emitToUser(userId, {
       type: 'git:refs-updated',

@@ -56,8 +56,12 @@ export class RemoteProjectIdentityClient {
   async getProviderKey(userId: string, provider: string): Promise<string | null> {
     return (await this.request('data:get_provider_key', { userId, provider }))?.key ?? null;
   }
-  getGithubToken(userId: string): Promise<string | null> {
-    return this.getProviderKey(userId, 'github');
+  /** Project token override when `projectId` has one, else the user's PAT. */
+  async getGithubToken(userId: string, projectId?: string): Promise<string | null> {
+    return (
+      (await this.request('data:get_github_token', { userId, ...(projectId ? { projectId } : {}) }))
+        ?.token ?? null
+    );
   }
   getMinimaxApiKey(userId: string): Promise<string | null> {
     return this.getProviderKey(userId, 'minimax');

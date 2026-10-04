@@ -30,7 +30,7 @@ projectGitRoutes.get('/:id/branches', async (c) => {
   const project = projectResult.value;
   // Fire-and-forget: fetch remote refs in the background so the response is
   // instant (uses locally cached branch data).
-  const identity = userId ? await resolveIdentity(userId) : undefined;
+  const identity = userId ? await resolveIdentity(userId, project.id) : undefined;
   gitRuntimeService.scheduleBackgroundFetch({
     projectId: project.id,
     projectPath: project.path,

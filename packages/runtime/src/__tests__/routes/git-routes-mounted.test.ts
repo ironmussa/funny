@@ -123,6 +123,7 @@ vi.mock('../../services/git-workflow-service.js', () => ({
 
 vi.mock('../../services/git-service.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/git-service.js')>();
+  const resolveIdentity = vi.fn(async (_userId: string, _projectId?: string) => undefined);
   return {
     ...actual,
     stage: mocks.gitServiceStage,
@@ -135,7 +136,10 @@ vi.mock('../../services/git-service.js', async (importOriginal) => {
     stashChanges: mocks.gitServiceStash,
     popStash: mocks.gitServicePopStash,
     dropStash: mocks.gitServiceDropStash,
-    resolveIdentity: vi.fn(async () => undefined),
+    resolveIdentity,
+    // Thread routes resolve identity via the thread's project; delegate so
+    // tests that stub resolveIdentity cover both paths.
+    resolveThreadIdentity: vi.fn((userId: string) => resolveIdentity(userId)),
   };
 });
 

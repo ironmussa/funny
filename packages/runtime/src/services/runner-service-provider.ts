@@ -266,9 +266,9 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');
         return remoteGetProviderKey(userId, provider);
       },
-      async getGithubToken(userId) {
-        const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');
-        return remoteGetProviderKey(userId, 'github');
+      async getGithubToken(userId, projectId) {
+        const { remoteGetGithubToken } = await import('./remote-project-identity-client.js');
+        return remoteGetGithubToken(userId, projectId);
       },
       async getAssemblyaiApiKey(userId) {
         const { remoteGetProviderKey } = await import('./remote-project-identity-client.js');

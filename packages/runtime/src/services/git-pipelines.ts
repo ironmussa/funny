@@ -342,7 +342,7 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
         throw new Error(errorMsg);
       }
     } else {
-      const identity = await resolveIdentity(ctx.userId);
+      const identity = await resolveIdentity(ctx.userId, ctx.projectId);
       const result = await gitCommit(ctx.cwd, ctx.message!, identity, isAmend, noVerify);
       if (result.isErr()) {
         const e = result.error;
@@ -837,7 +837,7 @@ async function pushNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
         throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
       }
     } else {
-      const identity = await resolveIdentity(ctx.userId);
+      const identity = await resolveIdentity(ctx.userId, ctx.projectId);
       const result = await gitPush(ctx.cwd, identity);
       if (result.isErr()) {
         const e = result.error;

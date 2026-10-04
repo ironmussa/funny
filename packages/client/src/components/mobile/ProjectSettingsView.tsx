@@ -67,6 +67,7 @@ export function ProjectSettingsView({ projectId, onBack }: Props) {
   const items = buildSettingsItems({
     selectedProjectId: projectId,
     isProjectAdmin,
+    isProjectOwner: !!project && project.userId === authUser?.id,
   });
 
   const settingsLabel = t('settings.title', 'Settings');

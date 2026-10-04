@@ -11,6 +11,7 @@ import { githubApi } from './api/github';
 import { mcpApi } from './api/mcp';
 import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
+import { projectRunnersApi } from './api/project-runners';
 import { projectsApi } from './api/projects';
 import { schedulerApi } from './api/scheduler';
 import { skillsApi } from './api/skills';
@@ -39,6 +40,7 @@ export const api = {
   ...pipelinesApi, // Pipelines
   ...schedulerApi, // Scheduler queue
   ...agentExecutionProfilesApi, // Agent execution profiles
+  ...projectRunnersApi, // Project ↔ runner binding (project-runner-binding)
   ...agentTemplatesApi, // Agent Templates (per-user, Deep Agent only)
   ...browseApi, // Browse (filesystem)
   ...githubApi, // GitHub (status, OAuth, repos, issues, PRs, comments)

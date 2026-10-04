@@ -42,6 +42,7 @@ export function SettingsPanelBody() {
   const items = buildSettingsItems({
     selectedProjectId,
     isProjectAdmin,
+    isProjectOwner: !!selectedProject && selectedProject.userId === authUser?.id,
   });
 
   const settingsPath = (pageId: string) =>

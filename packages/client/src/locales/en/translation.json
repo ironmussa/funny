@@ -1436,5 +1436,30 @@
     "subtitle": "Skills, slash commands, and MCP servers scoped to each provider.",
     "empty": "No resources available for this provider.",
     "incompatible": "Incompatible (shown for audit only)"
+  },
+  "projectRunner": {
+    "title": "Runner",
+    "loadError": "Failed to load runner settings",
+    "saveError": "Failed to save runner settings",
+    "saved": "Runner settings saved",
+    "runnerTitle": "Runner for this project",
+    "runnerDesc": "A dedicated runner serves only this project. If it is offline, requests fail instead of falling back to another runner.",
+    "useGeneral": "Use my general runner",
+    "dedicatedOffline": "This project's runner is offline. Agents for this project will not run until it reconnects.",
+    "grantsTitle": "Other runners with access",
+    "grantsDesc": "Only runners enabled here may serve this project besides its dedicated runner.",
+    "generalTitle": "Your general runner",
+    "generalDesc": "Applies to all your projects: it serves scratch threads, folder browsing and every project without a dedicated runner.",
+    "anyGeneral": "Any of my general runners",
+    "gitTitle": "Git credentials",
+    "tokenSet": "This project uses its own GitHub token.",
+    "tokenInherited": "This project uses your personal GitHub token from your profile.",
+    "personalTokenWarning": "The dedicated runner uses your personal GitHub token, which can reach all your repositories. Consider a fine-grained token limited to this repository.",
+    "tokenPlaceholder": "github_pat_…",
+    "tokenSaved": "Project GitHub token saved",
+    "tokenCleared": "Project GitHub token removed",
+    "useProfileToken": "Use my personal token",
+    "roleDedicated": "dedicated",
+    "roleGeneral": "general"
   }
 }

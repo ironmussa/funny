@@ -12,6 +12,7 @@ import {
   Archive,
   Workflow,
   UserPlus,
+  Cpu,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,7 +32,7 @@ const baseSettingsItems = [
 ] as const;
 
 export const settingsItems = baseSettingsItems;
-export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'collaborators';
+export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'collaborators' | 'runner';
 
 export interface SettingsNavItem {
   id: SettingsItemId;
@@ -58,8 +59,10 @@ const PROJECT_ADMIN_ONLY_TABS: ReadonlySet<string> = new Set(['general', 'startu
 export function buildSettingsItems(opts: {
   selectedProjectId: string | null;
   isProjectAdmin: boolean;
+  /** Which runner serves the project is an OWNER decision (project-runner-binding). */
+  isProjectOwner?: boolean;
 }): SettingsNavItem[] {
-  const { selectedProjectId, isProjectAdmin } = opts;
+  const { selectedProjectId, isProjectAdmin, isProjectOwner } = opts;
 
   let items: SettingsNavItem[] = [...baseSettingsItems];
 
@@ -73,6 +76,7 @@ export function buildSettingsItems(opts: {
       // Managing who can access THIS project is a project-admin action.
       items.push({ id: 'collaborators', label: 'Collaborators', icon: UserPlus });
     }
+    if (isProjectOwner) items.push({ id: 'runner', label: 'Runner', icon: Cpu });
   }
 
   return items;
@@ -92,4 +96,5 @@ export const settingsLabelKeys: Record<string, string> = {
   pipelines: 'settings.pipelines',
   'archived-threads': 'settings.archivedThreads',
   collaborators: 'Collaborators',
+  runner: 'projectRunner.title',
 };

@@ -11,6 +11,7 @@ import { ProjectConfigSettings } from '@/components/ProjectConfigSettings';
 import { ProjectAgentExecutionProfileSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { type SettingsItemId } from '@/components/settings/items';
 import { ProjectCollaborators } from '@/components/settings/ProjectCollaborators';
+import { ProjectRunnerSettings } from '@/components/settings/ProjectRunnerSettings';
 import { SkillsSettings } from '@/components/SkillsSettings';
 import { StartupCommandsSettings } from '@/components/StartupCommandsSettings';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -65,6 +66,8 @@ export function SettingsPageContent({ page, label }: Props) {
       return <ArchivedThreadsSettings />;
     case 'collaborators':
       return <ProjectCollaborators />;
+    case 'runner':
+      return <ProjectRunnerSettings />;
     default:
       return <p className="text-muted-foreground text-sm">{t('settings.comingSoon', { label })}</p>;
   }

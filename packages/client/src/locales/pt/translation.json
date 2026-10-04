@@ -1399,5 +1399,30 @@
     "subtitle": "Skills, comandos e servidores MCP por provedor.",
     "empty": "Nenhum recurso para este provedor.",
     "incompatible": "Incompatíveis (apenas auditoria)"
+  },
+  "projectRunner": {
+    "title": "Runner",
+    "loadError": "Falha ao carregar as configurações do runner",
+    "saveError": "Falha ao salvar as configurações do runner",
+    "saved": "Configurações do runner salvas",
+    "runnerTitle": "Runner deste projeto",
+    "runnerDesc": "Um runner dedicado atende apenas este projeto. Se estiver offline, as solicitações falham em vez de usar outro runner.",
+    "useGeneral": "Usar meu runner geral",
+    "dedicatedOffline": "O runner deste projeto está offline. Os agentes deste projeto não serão executados até que ele se reconecte.",
+    "grantsTitle": "Outros runners com acesso",
+    "grantsDesc": "Somente os runners habilitados aqui podem atender este projeto, além do runner dedicado.",
+    "generalTitle": "Seu runner geral",
+    "generalDesc": "Vale para todos os seus projetos: atende threads scratch, navegação de pastas e todo projeto sem runner dedicado.",
+    "anyGeneral": "Qualquer um dos meus runners gerais",
+    "gitTitle": "Credenciais do Git",
+    "tokenSet": "Este projeto usa seu próprio token do GitHub.",
+    "tokenInherited": "Este projeto usa seu token pessoal do GitHub do seu perfil.",
+    "personalTokenWarning": "O runner dedicado usa seu token pessoal do GitHub, que acessa todos os seus repositórios. Considere um token fine-grained limitado a este repositório.",
+    "tokenPlaceholder": "github_pat_…",
+    "tokenSaved": "Token do GitHub do projeto salvo",
+    "tokenCleared": "Token do GitHub do projeto removido",
+    "useProfileToken": "Usar meu token pessoal",
+    "roleDedicated": "dedicado",
+    "roleGeneral": "geral"
   }
 }

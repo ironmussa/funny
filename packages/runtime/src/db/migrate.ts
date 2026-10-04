@@ -16,6 +16,7 @@ import {
   type Migration,
   createMigrationContext,
   runMigrations,
+  migrateThreadSessions,
   sql,
 } from '@funny/shared/db/migrate';
 
@@ -1035,6 +1036,12 @@ const migrations: Migration[] = [
     name: '064_projects_default_effort',
     async up() {
       await addColumn('projects', 'default_effort', 'TEXT');
+    },
+  },
+  {
+    name: '065_thread_sessions',
+    async up() {
+      await migrateThreadSessions(exec);
     },
   },
 ];

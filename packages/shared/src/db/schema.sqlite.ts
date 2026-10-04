@@ -14,6 +14,7 @@ import {
   primaryKey,
   customType,
   uniqueIndex,
+  index,
 } from 'drizzle-orm/sqlite-core';
 
 /**
@@ -129,6 +130,21 @@ export const threads = sqliteTable('threads', {
   updatedAt: text('updated_at').notNull(),
   completedAt: text('completed_at'),
 });
+
+/** Every session associated with a thread, including sessions replaced on recovery. */
+export const threadSessions = sqliteTable(
+  'thread_sessions',
+  {
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.threadId, table.sessionId] }),
+    index('idx_thread_sessions_session').on(table.sessionId),
+  ],
+);
 
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),

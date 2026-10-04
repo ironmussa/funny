@@ -18,6 +18,7 @@ import {
   primaryKey,
   customType,
   uniqueIndex,
+  index,
 } from 'drizzle-orm/pg-core';
 
 import {
@@ -133,6 +134,21 @@ export const threads = pgTable('threads', {
   updatedAt: text('updated_at').notNull(),
   completedAt: text('completed_at'),
 });
+
+/** Every session associated with a thread, including sessions replaced on recovery. */
+export const threadSessions = pgTable(
+  'thread_sessions',
+  {
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.threadId, table.sessionId] }),
+    index('idx_thread_sessions_session').on(table.sessionId),
+  ],
+);
 
 export const messages = pgTable('messages', {
   id: text('id').primaryKey(),

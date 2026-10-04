@@ -257,22 +257,22 @@ export async function importExternalClaudeSession(
   }
 
   const services = getServices();
-  const externalRequestId = `claude:${sessionId}`;
-  const existingByExternalId =
-    await services.threads.getThreadByExternalRequestId(externalRequestId);
-  if (existingByExternalId) {
+  const existingBySessionId = await services.threads.getThreadBySessionId(sessionId);
+  if (existingBySessionId) {
     return hydrateExternalClaudeThread({
-      thread: existingByExternalId,
+      thread: existingBySessionId,
       sessionId,
       userId,
       homeDir: options.homeDir,
     });
   }
 
-  const existingBySessionId = await services.threads.getThreadBySessionId(sessionId);
-  if (existingBySessionId) {
+  const externalRequestId = `claude:${sessionId}`;
+  const existingByExternalId =
+    await services.threads.getThreadByExternalRequestId(externalRequestId);
+  if (existingByExternalId) {
     return hydrateExternalClaudeThread({
-      thread: existingBySessionId,
+      thread: existingByExternalId,
       sessionId,
       userId,
       homeDir: options.homeDir,
@@ -354,13 +354,13 @@ async function ensureExternalClaudeThreadShell(params: {
   if (!session.sessionId) return null;
 
   const services = getServices();
+  const existingBySessionId = await services.threads.getThreadBySessionId(session.sessionId);
+  if (existingBySessionId) return existingBySessionId;
+
   const externalRequestId = `claude:${session.sessionId}`;
   const existingByExternalId =
     await services.threads.getThreadByExternalRequestId(externalRequestId);
   if (existingByExternalId) return existingByExternalId;
-
-  const existingBySessionId = await services.threads.getThreadBySessionId(session.sessionId);
-  if (existingBySessionId) return existingBySessionId;
 
   const project =
     (params.projectId ? projects.find((candidate) => candidate.id === params.projectId) : null) ??

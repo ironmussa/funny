@@ -7,6 +7,7 @@
 export {
   projects,
   threads,
+  threadSessions,
   messages,
   startupCommands,
   toolCalls,

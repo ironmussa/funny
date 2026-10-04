@@ -14,6 +14,7 @@ import {
   type Migration,
   createMigrationContext,
   runMigrations,
+  migrateThreadSessions,
   sql,
 } from '@funny/shared/db/migrate';
 
@@ -1637,6 +1638,12 @@ const migrations: Migration[] = [
       await ctx().exec(
         sql`CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id)`,
       );
+    },
+  },
+  {
+    name: '078_thread_sessions',
+    async up() {
+      await migrateThreadSessions(ctx().exec);
     },
   },
 ];

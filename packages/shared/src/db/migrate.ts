@@ -173,3 +173,22 @@ export async function runMigrations(
 
 // Re-export sql for use in migration definitions
 export { sql };
+
+/** Preserve current session ownership before future provider/model switches. */
+export async function migrateThreadSessions(exec: MigrationContext['exec']): Promise<void> {
+  await exec(sql`
+    CREATE TABLE IF NOT EXISTS thread_sessions (
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL,
+      PRIMARY KEY (thread_id, session_id)
+    )
+  `);
+  await exec(sql`
+    CREATE INDEX IF NOT EXISTS idx_thread_sessions_session ON thread_sessions (session_id)
+  `);
+  await exec(sql`
+    INSERT INTO thread_sessions (thread_id, session_id)
+    SELECT id, session_id FROM threads WHERE session_id IS NOT NULL AND session_id <> ''
+    ON CONFLICT DO NOTHING
+  `);
+}

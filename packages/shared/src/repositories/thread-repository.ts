@@ -10,7 +10,18 @@
  * DB-agnostic thread repository. Accepts db + schema via dependency injection.
  */
 
-import { eq, and, or, ne, like, desc, inArray, count as drizzleCount, sql } from 'drizzle-orm';
+import {
+  eq,
+  and,
+  or,
+  ne,
+  like,
+  desc,
+  inArray,
+  count as drizzleCount,
+  sql,
+  isNotNull,
+} from 'drizzle-orm';
 
 import type {
   AppDatabase,
@@ -254,9 +265,31 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     );
   }
 
-  /** Get a thread by its sessionId (used by ingest mapper) */
+  /** Resolve active and historical sessions, preferring the original Funny thread. */
   async function getThreadBySessionId(sessionId: string) {
-    return dbGet(db.select().from(schema.threads).where(eq(schema.threads.sessionId, sessionId)));
+    return dbGet(
+      db
+        .select()
+        .from(schema.threads)
+        .where(
+          or(
+            eq(schema.threads.sessionId, sessionId),
+            inArray(
+              schema.threads.id,
+              db
+                .select({ threadId: schema.threadSessions.threadId })
+                .from(schema.threadSessions)
+                .where(eq(schema.threadSessions.sessionId, sessionId)),
+            ),
+          ),
+        )
+        .orderBy(
+          sql`CASE WHEN ${schema.threads.createdBy} = 'external' THEN 1 ELSE 0 END`,
+          schema.threads.createdAt,
+          schema.threads.id,
+        )
+        .limit(1),
+    );
   }
 
   /** Insert a new thread (atomic: thread insert + initial stage history) */
@@ -294,6 +327,45 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       contextRecoveryReason: string | null;
     }>,
   ) {
+    if (updates.sessionId !== undefined) {
+      // Persist ownership before replacing/clearing the active session. INSERT SELECT
+      // avoids a read/write gap and also works for pre-migration threads.
+      await dbRun(
+        db
+          .insert(schema.threadSessions)
+          .select(
+            db
+              .select({ threadId: schema.threads.id, sessionId: schema.threads.sessionId })
+              .from(schema.threads)
+              .where(
+                and(
+                  eq(schema.threads.id, id),
+                  isNotNull(schema.threads.sessionId),
+                  ne(schema.threads.sessionId, ''),
+                ),
+              ),
+          )
+          .onConflictDoNothing(),
+      );
+      if (updates.sessionId) {
+        // Claim the incoming ID too, so concurrent replacements cannot lose it.
+        await dbRun(
+          db
+            .insert(schema.threadSessions)
+            .select(
+              db
+                .select({
+                  threadId: schema.threads.id,
+                  sessionId: sql<string>`${updates.sessionId}`.as('session_id'),
+                })
+                .from(schema.threads)
+                .where(eq(schema.threads.id, id)),
+            )
+            .onConflictDoNothing(),
+        );
+      }
+    }
+
     const needsStageCheck = updates.stage !== undefined || updates.archived !== undefined;
 
     if (!needsStageCheck) {

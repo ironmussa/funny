@@ -113,6 +113,14 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS thread_sessions (
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL,
+      PRIMARY KEY (thread_id, session_id)
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
       thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,

@@ -9,6 +9,7 @@ export {
   projects,
   designs,
   threads,
+  threadSessions,
   messages,
   startupCommands,
   toolCalls,

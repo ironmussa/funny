@@ -256,6 +256,42 @@ describe('external Claude sessions', () => {
     expect(createThread).not.toHaveBeenCalled();
   });
 
+  test('reuses historical ownership on repeated sync and import despite an external duplicate', async () => {
+    const homeDir = makeHome();
+    const cwd = '/work/funny';
+    const sessionId = 'historical-session';
+    writeClaudeLog(homeDir, cwd, sessionId);
+    const original = { id: 'original', userId: 'user-1', sessionId: 'codex-current' };
+    const createThread = vi.fn();
+    const insertMessage = vi.fn();
+    const getThreadByExternalRequestId = vi.fn(async () => ({ id: 'duplicate' }));
+    setServices({
+      projects: { listProjects: vi.fn(async () => [{ id: 'project-1', path: cwd }]) },
+      threads: {
+        getThreadBySessionId: vi.fn(async () => original),
+        getThreadByExternalRequestId,
+        getThreadWithMessages: vi.fn(async () => ({ messages: [{ content: 'existing' }] })),
+        createThread,
+        insertMessage,
+      },
+      wsBroker: { emitToUser: vi.fn() },
+    } as any);
+    for (let i = 0; i < 2; i++) {
+      expect(
+        await syncExternalClaudeSessionThreads(
+          { userId: 'user-1' },
+          { homeDir, currentPid: 999, psOutput: '' },
+        ),
+      ).toEqual({ threadIds: ['original'] });
+      expect(
+        await importExternalClaudeSession({ sessionId, userId: 'user-1' }, { homeDir }),
+      ).toEqual({ ok: true, imported: false, thread: original });
+    }
+    expect(getThreadByExternalRequestId).not.toHaveBeenCalled();
+    expect(createThread).not.toHaveBeenCalled();
+    expect(insertMessage).not.toHaveBeenCalled();
+  });
+
   test('hydrates an existing external Claude shell without creating a second thread', async () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';

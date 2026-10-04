@@ -196,6 +196,12 @@ const deepagentModels = {
 
 // Codex uses the official SDK and owns its catalog independently of ACP.
 export const codexModels = {
+  'gpt-6.1-sol': {
+    id: 'gpt-6.1-sol',
+    label: 'GPT-6.1 Sol',
+    contextWindow: 1_050_000,
+    i18nKey: 'gpt61sol',
+  },
   'gpt-6-astra': {
     id: 'gpt-6-astra',
     label: 'GPT-6 Astra',

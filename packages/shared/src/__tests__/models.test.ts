@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import {
+  DEFAULT_FOLLOW_UP_MODE,
   resolveModelId,
   getDefaultModel,
   getProviderModels,
@@ -13,6 +14,10 @@ import {
   isModelForProvider,
   getAttachmentLimits,
 } from '../models.js';
+
+test('exports the default follow-up mode used by database schemas', () => {
+  expect(DEFAULT_FOLLOW_UP_MODE).toBe('queue');
+});
 
 // ── resolveModelId ──────────────────────────────────────────────
 
@@ -66,6 +71,16 @@ describe('resolveModelId', () => {
   });
 
   describe('codex provider', () => {
+    test('exposes GPT-6.1 Sol through the registry and model selector', () => {
+      expect(resolveModelId('codex', 'gpt-6.1-sol')).toBe('gpt-6.1-sol');
+      expect(isModelForProvider('codex', 'gpt-6.1-sol')).toBe(true);
+      expect(getModelContextWindow('codex', 'gpt-6.1-sol')).toBe(1_050_000);
+      expect(getProviderModelsWithLabels('codex')).toContainEqual({
+        value: 'gpt-6.1-sol',
+        label: 'GPT-6.1 Sol',
+      });
+    });
+
     test('exposes GPT-6 Astra through the registry and model selector', () => {
       expect(resolveModelId('codex', 'gpt-6-astra')).toBe('gpt-6-astra');
       expect(isModelForProvider('codex', 'gpt-6-astra')).toBe(true);
@@ -246,6 +261,7 @@ describe('getProviderModels', () => {
 
   test('returns all codex models', () => {
     const models = getProviderModels('codex');
+    expect(models).toContain('gpt-6.1-sol');
     expect(models).toContain('gpt-6-astra');
     expect(models).toContain('gpt-5.6-sol');
     expect(models).toContain('gpt-5.6-terra');
@@ -254,7 +270,7 @@ describe('getProviderModels', () => {
     expect(models).toContain('gpt-5.4');
     expect(models).toContain('gpt-5.4-mini');
     expect(models).toContain('gpt-5.2');
-    expect(models).toHaveLength(8);
+    expect(models).toHaveLength(9);
   });
 
   test('GPT-5.6 Codex variants use the local Codex metadata context window', () => {

@@ -182,7 +182,14 @@ describe('isPromptModelConfigurable', () => {
 // ── getEffortLevels ─────────────────────────────────────────────
 
 describe('getEffortLevels', () => {
-  test('exposes max for GPT-5.6 Codex models only', () => {
+  test('exposes max for supported Codex models', () => {
+    expect(getEffortLevels('gpt-6.1-sol', 'codex').map((e) => e.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
     expect(getEffortLevels('gpt-6-astra', 'codex').map((e) => e.value)).toEqual([
       'low',
       'medium',

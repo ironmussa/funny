@@ -269,6 +269,7 @@ app.use('/api/*', rateLimit({ windowMs: 60_000, max: 1200, perUser: true }));
 // ── Server-managed data routes ───────────────────────────
 const { authRoutes } = await import('./routes/auth.js');
 const { projectRoutes } = await import('./routes/projects.js');
+const { projectRunnerSettingsRoutes } = await import('./routes/project-runner-settings.js');
 const { runnerRoutes } = await import('./routes/runners.js');
 const { profileRoutes } = await import('./routes/profile.js');
 const { threadRoutes, requireThreadOwner, requireThreadSteer } =
@@ -291,6 +292,7 @@ const { mediaRoutes } = await import('./routes/media.js');
 const { browserV1ResourceRoutes } = await import('./routes/browser-v1-resources.js');
 
 app.route('/api/auth', authRoutes);
+app.route('/api/projects', projectRunnerSettingsRoutes);
 app.route('/api/projects', projectRoutes);
 app.route('/api/users', userRoutes);
 app.route('/api/runners', runnerRoutes);

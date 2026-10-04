@@ -104,6 +104,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   // 5. Mount real route modules
   const { projectRoutes } = await import('../../routes/projects.js');
+  const { projectRunnerSettingsRoutes } = await import('../../routes/project-runner-settings.js');
   const { runnerRoutes } = await import('../../routes/runners.js');
   const { threadRoutes } = await import('../../routes/threads.js');
   const { shareRoutes } = await import('../../routes/thread-shares.js');
@@ -119,6 +120,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { schedulerSystemRoutes } = await import('../../routes/scheduler-system.js');
   const { userRoutes } = await import('../../routes/users.js');
 
+  app.route('/api/projects', projectRunnerSettingsRoutes);
   app.route('/api/projects', projectRoutes);
   app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
@@ -140,6 +142,8 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const cleanup = () => {
     // Truncate all tables in reverse dependency order
     const tables = [
+      'project_runner_grants',
+      'project_runner_settings',
       'tool_calls',
       'messages',
       'thread_comments',

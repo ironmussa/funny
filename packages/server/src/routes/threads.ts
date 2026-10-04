@@ -203,7 +203,7 @@ async function fetchFromRunner(
   };
 }
 
-function buildForwardHeaders(
+export function buildForwardHeaders(
   userId: string,
   orgId?: string,
   role?: string,

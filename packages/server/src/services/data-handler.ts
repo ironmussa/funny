@@ -26,6 +26,7 @@ import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
 import { assertRunnerDataScope, filterDataResponse } from './data-scope.js';
 import * as messageQueueRepo from './message-queue-repository.js';
@@ -508,6 +509,14 @@ function notifyTerminalStatusPersisted(
   const status = (updates as { status?: unknown } | null)?.status;
   if (!runnerUserId || typeof threadId !== 'string') return;
   if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
+  // A thread started by an automation completes its run here (durable signal).
+  void onAutomationThreadTerminal(threadId, status).catch((error) =>
+    log.error('Failed to complete automation run', {
+      namespace: 'automation',
+      threadId,
+      error: (error as Error).message,
+    }),
+  );
   const event = { type: 'thread:updated', threadId, data: { status } };
   relayToUser(runnerUserId, event);
   relayToThreadStream(threadId, event);

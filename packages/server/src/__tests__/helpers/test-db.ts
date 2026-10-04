@@ -197,6 +197,7 @@ export function createTestDb() {
       runner_invite_token TEXT,
       runner_invite_token_expires_at TEXT,
       runner_invite_token_used_at TEXT,
+      general_runner_id TEXT,
       setup_completed INTEGER NOT NULL DEFAULT 0,
       default_editor TEXT,
       use_internal_editor INTEGER,
@@ -262,6 +263,7 @@ export function createTestDb() {
       workspace TEXT,
       http_url TEXT,
       public_media_url TEXT,
+      role TEXT NOT NULL DEFAULT 'general',
       active_thread_ids TEXT NOT NULL DEFAULT '[]',
       registered_at TEXT NOT NULL,
       last_heartbeat_at TEXT NOT NULL
@@ -275,6 +277,25 @@ export function createTestDb() {
       local_path TEXT NOT NULL,
       assigned_at TEXT NOT NULL,
       PRIMARY KEY (runner_id, project_id)
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_runner_settings (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+      dedicated_runner_id TEXT,
+      github_token TEXT,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_runner_grants (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      runner_id TEXT NOT NULL REFERENCES runners(id) ON DELETE CASCADE,
+      granted_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, runner_id)
     )
   `);
 

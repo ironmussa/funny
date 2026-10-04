@@ -1646,6 +1646,34 @@ const migrations: Migration[] = [
       await migrateThreadSessions(ctx().exec);
     },
   },
+  {
+    name: '079_project_runner_binding',
+    async up() {
+      await ctx().addColumn('runners', 'role', 'TEXT NOT NULL', "'general'");
+      await ctx().addColumn('user_profiles', 'general_runner_id', 'TEXT');
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_runner_settings (
+          project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+          dedicated_runner_id TEXT,
+          github_token TEXT,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_runner_grants (
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          runner_id TEXT NOT NULL REFERENCES runners(id) ON DELETE CASCADE,
+          granted_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, runner_id)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_project_runner_grants_runner
+        ON project_runner_grants (runner_id)
+      `);
+    },
+  },
 ];
 
 /**

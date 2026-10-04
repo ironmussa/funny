@@ -38,6 +38,8 @@ export {
   pushSubscriptions,
   runners,
   runnerProjectAssignments,
+  projectRunnerSettings,
+  projectRunnerGrants,
   runnerTasks,
   runnerEnrollments,
   runnerOperationIdempotency,

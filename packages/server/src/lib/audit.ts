@@ -38,6 +38,10 @@ export type AuditAction =
   | 'auth.scheduler_rejected'
   /** Runner-scoped resource access refused because runner.userId ≠ requester/owner. */
   | 'authz.cross_tenant_refused'
+  /** A runner asked for data of a project outside its scope (project-runner-binding). */
+  | 'runner.scope_denied'
+  /** A project's dedicated runner was set or cleared (project-runner-binding). */
+  | 'project.runner_binding_changed'
   /** A `steer` sharee's allow-listed request was routed to the thread OWNER's
    *  runner — the single intentional exception to runner isolation
    *  (thread-sharing-steer). */

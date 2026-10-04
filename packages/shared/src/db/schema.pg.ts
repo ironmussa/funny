@@ -318,6 +318,8 @@ export const userProfiles = pgTable('user_profiles', {
   runnerInviteTokenExpiresAt: text('runner_invite_token_expires_at'),
   /** ISO timestamp when the invite token was first consumed; null = unused */
   runnerInviteTokenUsedAt: text('runner_invite_token_used_at'),
+  /** Runner designated as this user's general runner (project-runner-binding). */
+  generalRunnerId: text('general_runner_id'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -568,6 +570,8 @@ export const runners = pgTable('runners', {
   workspace: text('workspace'),
   httpUrl: text('http_url'),
   publicMediaUrl: text('public_media_url'),
+  /** 'general' serves projectless + non-overridden work; 'dedicated' only its projects. */
+  role: text('role').notNull().default('general'),
   activeThreadIds: text('active_thread_ids').notNull().default('[]'),
   registeredAt: text('registered_at').notNull(),
   lastHeartbeatAt: text('last_heartbeat_at').notNull(),
@@ -586,6 +590,41 @@ export const runnerProjectAssignments = pgTable(
     assignedAt: text('assigned_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.runnerId, t.projectId] })],
+);
+
+/**
+ * Per-project runner policy (project-runner-binding). A row with a
+ * `dedicatedRunnerId` overrides the owner's general runner: the project then
+ * runs ONLY on that runner plus explicit grants. `githubToken` is an optional
+ * encrypted per-project git credential overriding the owner's PAT.
+ */
+export const projectRunnerSettings = pgTable('project_runner_settings', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  dedicatedRunnerId: text('dedicated_runner_id'),
+  githubToken: text('github_token'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * Explicit, user-configured access grants of a runner to a project. Unlike
+ * `runner_project_assignments` (a location record runners write themselves),
+ * a grant is an authorization decision made from the project's settings.
+ */
+export const projectRunnerGrants = pgTable(
+  'project_runner_grants',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    runnerId: text('runner_id')
+      .notNull()
+      .references(() => runners.id, { onDelete: 'cascade' }),
+    grantedBy: text('granted_by').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.runnerId] })],
 );
 
 export const runnerTasks = pgTable('runner_tasks', {

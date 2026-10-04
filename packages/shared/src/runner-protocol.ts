@@ -72,6 +72,25 @@ export function isTextualContentType(contentType: string | undefined | null): bo
 
 export type RunnerStatus = 'online' | 'busy' | 'offline';
 
+/** GET/PUT /api/projects/:id/runner-settings (project-runner-binding). */
+export interface ProjectRunnerSettingsResponse {
+  projectId: string;
+  /** Pinned runner; null = the owner's general runner serves the project. */
+  dedicatedRunnerId: string | null;
+  /** Extra runners explicitly allowed to serve the project. */
+  grantedRunnerIds: string[];
+  /** Whether the project has its own GitHub token (the value is never returned). */
+  hasGithubToken: boolean;
+  generalRunnerId?: string | null;
+  runners?: RunnerInfo[];
+}
+
+export interface UpdateProjectRunnerSettingsRequest {
+  dedicatedRunnerId?: string | null;
+  /** Plaintext token to store encrypted; null clears it; omitted keeps it. */
+  githubToken?: string | null;
+}
+
 export interface RunnerInfo {
   runnerId: string;
   name: string;
@@ -85,6 +104,8 @@ export interface RunnerInfo {
    *  Absent ⇒ media falls back to the proxied `/api/files/raw` gRPC tunnel. */
   publicMediaUrl?: string;
   status: RunnerStatus;
+  /** 'general' serves projectless + non-pinned projects; 'dedicated' only its projects. */
+  role?: 'general' | 'dedicated';
   activeThreadCount: number;
   /** Project IDs assigned to this runner by the admin */
   assignedProjectIds: string[];

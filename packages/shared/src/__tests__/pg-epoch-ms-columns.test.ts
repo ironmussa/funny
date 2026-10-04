@@ -11,7 +11,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import { getTableColumns } from 'drizzle-orm';
+import { types } from 'pg';
 
+import { pgTypeParsers } from '../db/adapters/pg.js';
 import { schedulerRuns as pgSchedulerRuns, watchers as pgWatchers } from '../db/schema.pg.js';
 import {
   schedulerRuns as sqliteSchedulerRuns,
@@ -47,5 +49,22 @@ describe('epoch-ms columns are bigint on Postgres', () => {
     const o = getTableColumns(sqliteSchedulerRuns);
     expect(o.lastEventAtMs.getSQLType()).toBe('integer');
     expect(o.claimedAtMs.getSQLType()).toBe('integer');
+  });
+});
+
+describe('the Postgres pool parses int8 as numbers', () => {
+  // Raw SQL and COUNT(*) bypass Drizzle's bigint mapping; without this parser
+  // `nextWakeAt` (and counts) read back as strings on Postgres but numbers on
+  // SQLite.
+  test('an epoch-ms int8 value parses to the same number', () => {
+    const parse = pgTypeParsers(types).getTypeParser(types.builtins.INT8, 'text');
+    const value = parse('1767225600123');
+    expect(typeof value).toBe('number');
+    expect(value).toBe(1767225600123);
+  });
+
+  test('other types keep the driver default', () => {
+    const parse = pgTypeParsers(types).getTypeParser(types.builtins.NUMERIC, 'text');
+    expect(parse('1.50')).toBe('1.50');
   });
 });

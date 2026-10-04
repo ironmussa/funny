@@ -19,7 +19,7 @@ function read(rel: string): string {
   return readFileSync(join(ROOT, rel), 'utf-8');
 }
 
-const SOURCES = ['routes/threads.ts', 'services/socketio/browser-pty.ts'] as const;
+const SOURCES = ['services/runner-thread-launcher.ts', 'services/socketio/browser-pty.ts'] as const;
 
 describe('runner isolation — project→runner routing', () => {
   for (const rel of SOURCES) {

@@ -33,8 +33,8 @@ import {
   setProjectDedicatedRunner,
   setProjectGithubToken,
 } from '../services/runner-scope.js';
+import { buildForwardHeaders } from '../services/runner-thread-launcher.js';
 import { parseJsonBody } from '../validation/request.js';
-import { buildForwardHeaders } from './threads.js';
 
 export const projectRunnerSettingsRoutes = new Hono<ServerEnv>();
 

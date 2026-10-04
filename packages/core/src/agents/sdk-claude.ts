@@ -56,15 +56,23 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
   private stderrBuffer: string[] = [];
 
-  // ── Steering (live multi-turn) input channel ──────────────────
-  // Only used when `options.steerable` is set (followUpMode === 'steer').
-  // The query then runs in persistent streaming-input mode so we can
-  // interrupt() the in-flight turn and push a new user message on the same
-  // session, without respawning the process. Non-steerable threads keep the
-  // original one-shot behavior (query ends after the turn → process exits).
+  // ── Input channel (stdin to the CLI) ──────────────────────────
+  // Every query runs in streaming-input mode fed by this channel. The SDK
+  // closes the CLI's stdin as soon as the channel ends (after the first
+  // `result`), and with stdin closed the CLI can no longer reach our
+  // PreToolUse hook or in-process MCP servers — so any tool call made after
+  // that point (e.g. by a background subagent still running once the main
+  // turn has finished) falls back to the CLI's own permission check and is
+  // auto-denied. Hence the channel lifetime:
+  //  - steerable threads (followUpMode === 'steer'): open until kill(), so we
+  //    can interrupt() the in-flight turn and push follow-ups live.
+  //  - everything else: one-shot, but closed only once the session is truly
+  //    over — a `result` with no background tasks still running, or the CLI's
+  //    `session_state_changed: idle` signal (see trackInputLifetime).
   private inputQueue: Array<Record<string, unknown>> = [];
   private inputWaiters: Array<() => void> = [];
   private inputClosed = false;
+  private backgroundTaskIds = new Set<string>();
 
   constructor(options: ClaudeProcessOptions) {
     super(options);
@@ -182,6 +190,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       CLAUDECODE: undefined,
       CLAUDE_CODE_ENTRY_POINT: undefined,
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS ?? '14400000',
+      // Emit `session_state_changed` so trackInputLifetime() sees the
+      // authoritative idle signal once background work is done.
+      CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: '1',
     };
 
     dlog.info('runProcess options check', {
@@ -362,6 +373,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           type: sdkMsg.type,
           subtype: (sdkMsg as any).subtype,
         });
+        this.trackInputLifetime(sdkMsg);
 
         // Synthetic assistant messages (model: "<synthetic>") carry provider
         // errors like "API Error: 529 {...}" as plain text. Render them as a
@@ -429,36 +441,50 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
   // ── Prompt building ─────────────────────────────────────────────
 
-  private buildPromptInput(): string | AsyncIterable<any> {
-    // Steerable threads always use the persistent input channel so the query
-    // stays in streaming-input mode (required for interrupt()/live follow-ups).
-    // Seed the first turn, then keep the channel open until kill().
-    if (this.steerable) {
-      this.pushInput(this.options.prompt, this.options.images);
-      return this.consumeInput();
-    }
-    // In-process MCP servers (createSdkMcpServer) require streaming input mode
-    const needsStreaming = !!this.options.images?.length || !!this.options.mcpServers;
-    if (!needsStreaming) {
-      return this.options.prompt;
-    }
-    return this.createStreamingPrompt();
+  private buildPromptInput(): AsyncIterable<any> {
+    // Always streaming-input mode: a plain string prompt makes the SDK treat
+    // the query as single-turn and close stdin at the first `result`, cutting
+    // off background subagents (see the input-channel comment above).
+    this.pushInput(this.options.prompt, this.options.images);
+    return this.consumeInput();
   }
 
-  private async *createStreamingPrompt(): AsyncGenerator<any, void, unknown> {
-    const content: any[] = [{ type: 'text', text: this.options.prompt }];
-    if (this.options.images?.length) {
-      content.push(...this.options.images);
+  /**
+   * Decide when a non-steerable query's input channel may close. Background
+   * tasks (subagents / Bash launched with run_in_background) keep running
+   * after the main turn's `result` and still need the hook + MCP round-trip,
+   * so we only close once no background task is pending.
+   */
+  private trackInputLifetime(sdkMsg: SDKMessage): void {
+    if (this.steerable || this.inputClosed) return;
+    const msg = sdkMsg as any;
+    if (msg.type === 'result') {
+      if (this.backgroundTaskIds.size === 0) this.closeInput();
+      return;
     }
-    yield {
-      type: 'user',
-      session_id: '',
-      message: {
-        role: 'user',
-        content,
-      },
-      parent_tool_use_id: null,
-    };
+    if (msg.type !== 'system') return;
+    switch (msg.subtype) {
+      case 'task_started':
+        // Ambient tasks (live-update watchers) never end on their own.
+        if (msg.is_backgrounded && !msg.ambient) this.backgroundTaskIds.add(msg.task_id);
+        break;
+      case 'task_updated': {
+        const { status, is_backgrounded } = msg.patch ?? {};
+        if (status && status !== 'pending' && status !== 'running' && status !== 'paused') {
+          this.backgroundTaskIds.delete(msg.task_id);
+        } else if (is_backgrounded) {
+          this.backgroundTaskIds.add(msg.task_id);
+        }
+        break;
+      }
+      case 'task_notification':
+        this.backgroundTaskIds.delete(msg.task_id);
+        break;
+      case 'session_state_changed':
+        // Authoritative "turn and background work are over" signal.
+        if (msg.state === 'idle') this.closeInput();
+        break;
+    }
   }
 
   // ── PreToolUse hook ─────────────────────────────────────────────

@@ -656,6 +656,7 @@ describe('runner gRPC events stream', () => {
       },
       events: {
         receipts,
+        authorizeThread: async () => true,
         applyEvent: async (_context, event) => {
           applied.push(event.sequence);
         },
@@ -752,6 +753,55 @@ describe('runner gRPC events stream', () => {
     });
     expect(resynchronized).toEqual([{ requestedSequence: 6n, earliestAvailableSequence: 7n }]);
     expect(applied).toEqual([5n, 7n]);
+
+    events.cancel();
+    control.cancel();
+  });
+
+  test('refuses events for a thread the runner may not act on (owner + project scope)', async () => {
+    const applied: bigint[] = [];
+    const published: string[] = [];
+    endpoint = await startRunnerGrpcEndpoint({
+      config: config(),
+      dependencies: {
+        authenticateRunner: async () => 'runner-1',
+        getRunnerUserId: async () => 'user-1',
+      },
+      events: {
+        receipts: new MemoryEventReceiptStore({}),
+        authorizeThread: async (_context, threadId) => threadId === 'own-thread',
+        applyEvent: async (_context, event) => {
+          applied.push(event.sequence);
+        },
+        publishEvent: (_context, event) => {
+          published.push(event.scope.threadId);
+        },
+      },
+    });
+    client = createClient(endpoint!.port);
+
+    const control = client.control(metadata('good-token'));
+    const hello = nextMessage(control);
+    control.write({ hello: runnerHello() });
+    await hello;
+
+    const events = client.events(metadata('good-token'));
+    const denied = nextMessage(events);
+    events.write({
+      session: { sessionEpoch: '1' },
+      scope: { threadId: 'other-project-thread', executionId: 'execution-x' },
+      sequence: '1',
+      event: {
+        eventType: 'agent:chunk',
+        data: { fields: { text: { stringValue: 'leak' } } },
+        durability: 'EVENT_DURABILITY_DURABLE',
+      },
+    });
+    expect(await denied).toMatchObject({
+      failure: { message: 'event scope is not authorized' },
+    });
+    expect(applied).toEqual([]);
+    expect(published).toEqual([]);
 
     events.cancel();
     control.cancel();

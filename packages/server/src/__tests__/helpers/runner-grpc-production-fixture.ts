@@ -237,6 +237,9 @@ export async function createProductionGrpcFixture(
     },
     events: {
       receipts: eventReceipts,
+      // Transport fixture: threads are not seeded in a DB. Thread ownership +
+      // project scope is covered by data-scope / grpc-runner-server tests.
+      authorizeThread: async () => true,
       applyEvent: async (_context, event) => {
         events.push(event);
       },

@@ -8,8 +8,10 @@ import { eq } from 'drizzle-orm';
 
 import { setIO } from '../../services/browser-events.js';
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
+import { __resetDataScopeCache } from '../../services/data-scope.js';
 import { SqlOperationIdempotencyStore } from '../../services/grpc/operation-idempotency.js';
 import { upsertProfile } from '../../services/profile-service.js';
+import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import { createMockIo } from '../helpers/socketio-test-mocks.js';
 import {
   seedProject,
@@ -63,6 +65,10 @@ describe('data-handler handleDataMessageWithAck', () => {
         // ignore
       }
     }
+    __resetRunnerScopeCache();
+    __resetDataScopeCache();
+    // The authenticated runner sending every request below (a general runner).
+    seedRunner(db as any, { id: 'runner-1', userId: 'user-1', token: 'token-runner-1' });
     seedProject(db as any, { id: 'p1', userId: 'user-1', path: '/tmp/repo' });
     seedThread(db as any, {
       id: 't1',
@@ -96,12 +102,6 @@ describe('data-handler handleDataMessageWithAck', () => {
     // that row on the same round-trip — relying only on the runner's separate
     // runner:assign_project message orphaned projects whenever it was lost,
     // which surfaced as "No runner available to handle terminal request".
-    seedRunner(db as any, {
-      id: 'runner-1',
-      userId: 'user-1',
-      token: 'tok-cp',
-    });
-
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:create_project',
       name: 'My New Project',
@@ -425,11 +425,6 @@ describe('data-handler handleDataMessageWithAck', () => {
 
   test('mark_and_list_stale_threads marks running threads interrupted', async () => {
     seedRunner(db as any, {
-      id: 'runner-1',
-      userId: 'user-1',
-      token: 'token-runner-1',
-    });
-    seedRunner(db as any, {
       id: 'runner-2',
       userId: 'user-2',
       token: 'token-runner-2',
@@ -488,12 +483,12 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(external?.status).toBe('running');
   });
 
-  test('unknown type returns undefined', async () => {
+  test('unknown type is refused (no project-scope rule → fail closed)', async () => {
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:totally_unknown',
     });
 
-    expect(res).toBeUndefined();
+    expect(res).toEqual({ type: 'data:ack', success: false, error: 'Forbidden' });
   });
 
   test('insert_tool_call persists and returns toolCallId', async () => {

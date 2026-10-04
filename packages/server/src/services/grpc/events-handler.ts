@@ -4,7 +4,7 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 import { db } from '../../db/index.js';
 import { threadEvents } from '../../db/schema.js';
 import { relayToThreadStream, relayToUser } from '../browser-events.js';
-import { threadBelongsToUser } from '../thread-registry.js';
+import { canRunnerActOnThread } from '../data-scope.js';
 import {
   SqlEventReceiptStore,
   type EventReceiptStore,
@@ -56,6 +56,12 @@ export interface EventsHandlerOptions {
   applyEvent?: (context: RunnerGrpcCallContext, event: AcceptedAgentEvent) => Promise<void>;
   resynchronizeThread?: (context: RunnerGrpcCallContext, gap: EventGapNotice) => Promise<void>;
   publishEvent?: (context: RunnerGrpcCallContext, event: AcceptedAgentEvent) => void;
+  /** May this runner emit events for `threadId`? (owner + project scope) */
+  authorizeThread?: (context: RunnerGrpcCallContext, threadId: string) => Promise<boolean>;
+}
+
+function defaultAuthorizeThread(context: RunnerGrpcCallContext, threadId: string) {
+  return canRunnerActOnThread(context.principal.runnerId, context.principal.userId, threadId);
 }
 
 function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgentEvent): void {
@@ -144,10 +150,7 @@ async function defaultResynchronizeThread(
   context: RunnerGrpcCallContext,
   gap: EventGapNotice,
 ): Promise<void> {
-  if (
-    !context.principal.userId ||
-    !(await threadBelongsToUser(gap.scope.threadId, context.principal.userId))
-  ) {
+  if (!(await defaultAuthorizeThread(context, gap.scope.threadId))) {
     throw new ThreadResynchronizationDenied();
   }
   const event = {
@@ -167,6 +170,7 @@ export function createEventsHandler(
   const applyEvent = options.applyEvent ?? defaultApplyEvent;
   const resynchronizeThread = options.resynchronizeThread ?? defaultResynchronizeThread;
   const publishEvent = options.publishEvent ?? defaultPublishEvent;
+  const authorizeThread = options.authorizeThread ?? defaultAuthorizeThread;
 
   return (call: RunnerGrpcCall, context: RunnerGrpcCallContext) => {
     let closed = false;
@@ -265,6 +269,14 @@ export function createEventsHandler(
         }
         if (kind !== 'event' || !request.event?.eventType) {
           sendFailure(FailureCode.INVALID_ARGUMENT, 'an agent event or replay gap is required');
+          return;
+        }
+
+        // Never persist or relay an event for a thread the runner may not act
+        // on: another user's thread, or a project outside its scope
+        // (project-runner-binding).
+        if (!(await authorizeThread(context, scope.threadId))) {
+          sendFailure(FailureCode.PERMISSION_DENIED, 'event scope is not authorized');
           return;
         }
 

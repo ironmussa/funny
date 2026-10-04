@@ -341,7 +341,11 @@ function toLegacyRequest(
     case 'getProviderKey':
       return { type: 'data:get_provider_key', userId: principalUserId, provider: value.provider };
     case 'getGithubToken':
-      return { type: 'data:get_github_token', userId: principalUserId };
+      return {
+        type: 'data:get_github_token',
+        userId: principalUserId,
+        ...(value.projectId ? { projectId: value.projectId } : {}),
+      };
     case 'getMinimaxApiKey':
       return { type: 'data:get_minimax_api_key', userId: principalUserId };
     case 'updateProfile':

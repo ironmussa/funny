@@ -546,8 +546,12 @@ pub struct GetProviderKey {
     #[prost(string, tag="1")]
     pub provider: ::prost::alloc::string::String,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+/// project_id (optional, "" = none): when set and the runner may access the project,
+/// the project's own GitHub token (project-runner-binding) wins over the user's.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetGithubToken {
+    #[prost(string, tag="1")]
+    pub project_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetMinimaxApiKey {

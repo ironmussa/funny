@@ -145,7 +145,9 @@ message CancelQueuedMessage { string message_id = 1; }
 message UpdateQueuedMessage { string message_id = 1; string content = 2; }
 message GetProfile {}
 message GetProviderKey { string provider = 1; }
-message GetGithubToken {}
+// project_id (optional, "" = none): when set and the runner may access the project,
+// the project's own GitHub token (project-runner-binding) wins over the user's.
+message GetGithubToken { string project_id = 1; }
 message GetMinimaxApiKey {}
 message UpdateProfile { google.protobuf.Struct updates = 1; }
 message ResolveAgentExecutionProfile { string project_id = 1; }

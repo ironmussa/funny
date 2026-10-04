@@ -27,6 +27,7 @@ import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
+import { assertRunnerDataScope, filterDataResponse } from './data-scope.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
@@ -161,7 +162,12 @@ function getThreadRepo() {
 
 function getCommentRepo() {
   if (!commentRepository) {
-    commentRepository = createCommentRepository({ db, schema: schema as any, dbAll, dbRun });
+    commentRepository = createCommentRepository({
+      db,
+      schema: schema as any,
+      dbAll,
+      dbRun,
+    });
   }
   return commentRepository;
 }
@@ -543,6 +549,50 @@ export async function handleDataMessageWithAck(
       return { type: 'data:ack', success: false, error: 'Forbidden' };
     }
 
+    // Project scope (project-runner-binding): a runner may only touch the
+    // projects it is bound to, even within its own user's data.
+    const scope = await assertRunnerDataScope(runnerId, data);
+    if (!scope.ok) {
+      log.warn('Rejected out-of-scope data request from runner', {
+        namespace: 'data-handler',
+        runnerId,
+        runnerUserId,
+        type: data?.type,
+        reason: scope.reason,
+      });
+      audit({
+        action: 'runner.scope_denied',
+        actorId: runnerUserId,
+        detail: `runner data request outside project scope: ${data?.type}`,
+        meta: {
+          source: 'data-handler',
+          runnerId,
+          type: data?.type,
+          reason: scope.reason,
+        },
+      });
+      return { type: 'data:ack', success: false, error: 'Forbidden' };
+    }
+
+    const response = await executeDataMessage(runnerId, runnerUserId, data);
+    return await filterDataResponse(runnerId, data.type, response);
+  } catch (err) {
+    log.error('Failed to handle data message from runner', {
+      namespace: 'data-handler',
+      runnerId,
+      type: data?.type,
+      error: (err as Error).message,
+    });
+    return { type: 'data:ack', success: false, error: (err as Error).message };
+  }
+}
+
+async function executeDataMessage(
+  runnerId: string,
+  runnerUserId: string | null,
+  data: any,
+): Promise<any> {
+  {
     switch (data.type) {
       case 'data:insert_message': {
         const messageRepo = getMessageRepo();
@@ -920,8 +970,14 @@ export async function handleDataMessageWithAck(
         return { type: 'data:get_provider_key_response', key: key ?? null };
       }
       case 'data:get_github_token': {
+        // Project override first (project-runner-binding), then the user's PAT.
+        const { resolveProjectGithubToken } = await import('./runner-scope.js');
         const { getProviderKey } = await import('./profile-service.js');
-        const token = await getProviderKey(data.userId, 'github');
+        const token =
+          (await resolveProjectGithubToken(
+            runnerId,
+            typeof data.projectId === 'string' ? data.projectId : null,
+          )) ?? (await getProviderKey(data.userId, 'github'));
         return { type: 'data:get_github_token_response', token: token ?? null };
       }
       case 'data:get_minimax_api_key': {
@@ -1052,21 +1108,39 @@ export async function handleDataMessageWithAck(
       // ── Durable permission rules ────────────────────────────────
       case 'data:create_permission_rule': {
         const { createRule } = await import('./permission-rules-service.js');
-        const result = await createRule({ ...data.payload, userId: runnerUserId! });
+        const result = await createRule({
+          ...data.payload,
+          userId: runnerUserId!,
+        });
         if (result.isErr()) throw result.error;
-        return { type: 'data:create_permission_rule_response', rule: result.value };
+        return {
+          type: 'data:create_permission_rule_response',
+          rule: result.value,
+        };
       }
       case 'data:find_permission_rule': {
         const { findMatch } = await import('./permission-rules-service.js');
-        const result = await findMatch({ ...data.payload, userId: runnerUserId! });
+        const result = await findMatch({
+          ...data.payload,
+          userId: runnerUserId!,
+        });
         if (result.isErr()) throw result.error;
-        return { type: 'data:find_permission_rule_response', rule: result.value };
+        return {
+          type: 'data:find_permission_rule_response',
+          rule: result.value,
+        };
       }
       case 'data:list_permission_rules': {
         const { listRules } = await import('./permission-rules-service.js');
-        const result = await listRules({ ...data.payload, userId: runnerUserId! });
+        const result = await listRules({
+          ...data.payload,
+          userId: runnerUserId!,
+        });
         if (result.isErr()) throw result.error;
-        return { type: 'data:list_permission_rules_response', rules: result.value };
+        return {
+          type: 'data:list_permission_rules_response',
+          rules: result.value,
+        };
       }
 
       default:
@@ -1077,13 +1151,5 @@ export async function handleDataMessageWithAck(
         });
         return undefined;
     }
-  } catch (err) {
-    log.error('Failed to handle data message from runner', {
-      namespace: 'data-handler',
-      runnerId,
-      type: data.type,
-      error: (err as Error).message,
-    });
-    return { type: 'data:ack', success: false, error: (err as Error).message };
   }
 }

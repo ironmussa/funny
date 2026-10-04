@@ -48,8 +48,7 @@ import './i18n/config';
 // Factories migrated into client-core receive capabilities from this value.
 void clientComposition;
 const initialPathname = clientComposition.platform.navigation.current().pathname;
-const hasInitialThread = /\/projects\/[^/]+\/threads\/[^/]+/.test(initialPathname);
-prefetchInitialThread(initialPathname);
+const hasInitialThread = prefetchInitialThread(initialPathname);
 
 // The initial thread payload is normally ready in a few hundred milliseconds,
 // so its view code—not the API—is the critical path. Start that chunk beside

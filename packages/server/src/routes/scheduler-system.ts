@@ -29,6 +29,7 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import { resolveRunner } from '../services/runner-resolver.js';
+import { buildForwardHeaders } from '../services/runner-thread-launcher.js';
 import { getSchedulerEventBuffer } from '../services/scheduler-event-buffer.js';
 import { createDefaultThreadQuery } from '../services/scheduler-thread-query.js';
 import { parseQuery } from '../validation/request.js';
@@ -344,12 +345,9 @@ schedulerSystemRoutes.post('/dispatch', async (c) => {
     );
   }
 
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    'X-Forwarded-User': body.userId,
-  };
-  const runnerSecret = process.env.RUNNER_AUTH_SECRET;
-  if (runnerSecret) headers['X-Runner-Auth'] = runnerSecret;
+  // Signed like every server → runner call: the runtime rejects a forwarded
+  // identity without a valid HMAC signature.
+  const headers = buildForwardHeaders(body.userId);
 
   const payload: Record<string, unknown> = { threadId: body.threadId };
   if (typeof body.prompt === 'string') payload.prompt = body.prompt;
@@ -432,12 +430,9 @@ schedulerSystemRoutes.post('/cancel/:pipelineRunId', async (c) => {
     : await findAnyRunnerForUser(body.userId);
   if (!runnerId) return c.json({ ok: true, found: false });
 
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    'X-Forwarded-User': body.userId,
-  };
-  const runnerSecret = process.env.RUNNER_AUTH_SECRET;
-  if (runnerSecret) headers['X-Runner-Auth'] = runnerSecret;
+  // Signed like every server → runner call: the runtime rejects a forwarded
+  // identity without a valid HMAC signature.
+  const headers = buildForwardHeaders(body.userId);
 
   try {
     await c.env.runnerRequests!.request(runnerId, {

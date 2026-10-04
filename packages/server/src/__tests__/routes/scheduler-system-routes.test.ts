@@ -25,9 +25,26 @@ let tunnelFetchImpl: (
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
+import {
+  NONCE_HEADER,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  verifyForwardedIdentity,
+} from '@funny/shared/auth/forwarded-identity';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
+
+/** True when the headers carry a valid signed forwarded identity for `userId`. */
+function signedFor(userId: string, headers: Record<string, string>): boolean {
+  return verifyForwardedIdentity(
+    { userId, role: 'user', orgId: null, orgName: null },
+    'test-secret',
+    headers[SIGNATURE_HEADER],
+    headers[TIMESTAMP_HEADER],
+    headers[NONCE_HEADER],
+  );
+}
 import { authMiddleware } from '../../middleware/auth.js';
 import { schedulerSystemRoutes } from '../../routes/scheduler-system.js';
 import type { BrowserEventSink } from '../../services/runner-ports.js';
@@ -167,6 +184,9 @@ describe('Scheduler System Routes (Integration)', () => {
       tunnelFetchImpl = async (_runnerId, req) => {
         expect(req.path).toBe('/api/scheduler/dispatch');
         expect(req.headers['X-Forwarded-User']).toBe('user-1');
+        // Regression: the identity was forwarded unsigned, which the runtime
+        // rejects with 401 — so every scheduler dispatch failed.
+        expect(signedFor('user-1', req.headers)).toBe(true);
         expect(JSON.parse(req.body ?? '{}')).toEqual({
           threadId: 't1',
           prompt: 'go',
@@ -517,6 +537,7 @@ describe('Scheduler System Routes (Integration)', () => {
 
       tunnelFetchImpl = async (_runnerId, req) => {
         expect(req.path).toBe('/api/scheduler/cancel/pr-cancel-1');
+        expect(signedFor('user-1', req.headers)).toBe(true);
         return { status: 200, body: null };
       };
 

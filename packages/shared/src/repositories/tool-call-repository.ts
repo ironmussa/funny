@@ -12,21 +12,9 @@
 import { eq, and, isNull, inArray, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import type {
-  AppDatabase,
-  dbAll as dbAllFn,
-  dbGet as dbGetFn,
-  dbRun as dbRunFn,
-} from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
+import type { RepoDeps } from './deps.js';
 
-export interface ToolCallRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbGet: typeof dbGetFn;
-  dbRun: typeof dbRunFn;
-}
+export type ToolCallRepositoryDeps = RepoDeps;
 
 export function createToolCallRepository(deps: ToolCallRepositoryDeps) {
   const { db, schema, dbAll, dbGet, dbRun } = deps;

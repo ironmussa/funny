@@ -11,15 +11,9 @@
 import { eq, asc, inArray, count as drizzleCount } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import type { AppDatabase, dbAll as dbAllFn, dbRun as dbRunFn } from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
+import type { RepoDeps } from './deps.js';
 
-export interface CommentRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbRun: typeof dbRunFn;
-}
+export type CommentRepositoryDeps = Pick<RepoDeps, 'db' | 'schema' | 'dbAll' | 'dbRun'>;
 
 export function createCommentRepository(deps: CommentRepositoryDeps) {
   const { db, schema, dbAll, dbRun } = deps;

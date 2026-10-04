@@ -1,25 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 
 import type {
-  AppDatabase,
-  dbAll as dbAllFn,
-  dbGet as dbGetFn,
-  dbRun as dbRunFn,
-} from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
-import type {
   PendingPermissionRequest,
   PermissionDecision,
   PermissionRequestRecord,
 } from '../types.js';
+import type { RepoDeps } from './deps.js';
 
-export interface PendingPermissionRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbGet: typeof dbGetFn;
-  dbRun: typeof dbRunFn;
-}
+export type PendingPermissionRepositoryDeps = RepoDeps;
 
 export interface CreatePendingPermissionRequest extends PendingPermissionRequest {}
 

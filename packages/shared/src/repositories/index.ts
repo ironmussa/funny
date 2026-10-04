@@ -48,3 +48,4 @@ export {
   type JobRow,
   type JobPatch,
 } from './job-repository.js';
+export type { RepoDeps } from './deps.js';

@@ -16,22 +16,10 @@
 
 import { and, eq, inArray, lte } from 'drizzle-orm';
 
-import type {
-  AppDatabase,
-  dbAll as dbAllFn,
-  dbGet as dbGetFn,
-  dbRun as dbRunFn,
-} from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
 import type { WatcherStatus } from '../types.js';
+import type { RepoDeps } from './deps.js';
 
-export interface WatcherRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbGet: typeof dbGetFn;
-  dbRun: typeof dbRunFn;
-}
+export type WatcherRepositoryDeps = RepoDeps;
 
 export interface WatcherRow {
   id: string;

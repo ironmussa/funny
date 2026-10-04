@@ -21,7 +21,6 @@ export default defineConfig({
       '@funny/shared/prompts': path.join(shared, 'prompts/index.ts'),
       '@funny/shared/db/schema-sqlite': path.join(shared, 'db/schema.sqlite.ts'),
       '@funny/shared/db/schema-pg': path.join(shared, 'db/schema.pg.ts'),
-      '@funny/shared/db/columns': path.join(shared, 'db/columns.ts'),
       '@funny/shared/db/connection': path.join(shared, 'db/connection.ts'),
       '@funny/shared/db/db-mode': path.join(shared, 'db/db-mode.ts'),
       '@funny/shared/db/migrate': path.join(shared, 'db/migrate.ts'),

@@ -10,14 +10,10 @@
 
 import { nanoid } from 'nanoid';
 
-import type { AppDatabase, dbRun as dbRunFn } from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
+import type { AppDatabase } from '../db/connection.js';
+import type { RepoDeps } from './deps.js';
 
-export interface StageHistoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbRun: typeof dbRunFn;
-}
+export type StageHistoryDeps = Pick<RepoDeps, 'db' | 'schema' | 'dbRun'>;
 
 export function createStageHistoryRepository(deps: StageHistoryDeps) {
   const { db, schema, dbRun } = deps;

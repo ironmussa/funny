@@ -34,7 +34,6 @@
     "./auth/forwarded-identity": "./src/auth/forwarded-identity.ts",
     "./auth/media-url-signature": "./src/auth/media-url-signature.ts",
     "./dom/extract": "./src/dom/extract.ts",
-    "./db/columns": "./src/db/columns.ts",
     "./db/provider": "./src/db/provider.ts",
     "./db/schema": "./src/db/schema.ts",
     "./db/schema-sqlite": "./src/db/schema.sqlite.ts",

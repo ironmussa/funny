@@ -3,6 +3,7 @@ import type { GitHubIssue, PRReactionSummary } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
+import { requireProject } from '../../utils/route-helpers.js';
 import {
   cacheKey,
   cooldownRemainingSec,
@@ -226,15 +227,32 @@ export function mapReactions(raw: any): PRReactionSummary {
   };
 }
 
+/**
+ * Load a project the caller may access — owner, collaborator (with their own
+ * checkout path), or org member; the same rule the git routes apply through
+ * `requireProject`. Every failure yields `null` so callers answer 404 and a
+ * foreign project id is indistinguishable from a missing one.
+ */
+export async function requireAccessibleProject(
+  projectId: string,
+  userId: string | undefined,
+  organizationId?: string | null,
+) {
+  if (!userId) return null;
+  const result = await requireProject(projectId, userId, organizationId);
+  return result.isOk() ? result.value : null;
+}
+
 /** Resolve a GitHub project context: parse remote, token, owner/repo. */
 export async function resolveGithubProjectContext(
   projectId: string,
   userId: string,
+  organizationId: string | null,
 ): Promise<
   | { ok: true; owner: string; repo: string; token: string }
   | { ok: false; status: number; error: string }
 > {
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, organizationId);
   if (!project) return { ok: false, status: 404, error: 'Project not found' };
   const remoteResult = await getRemoteUrl(project.path);
   if (remoteResult.isErr() || !remoteResult.value) {

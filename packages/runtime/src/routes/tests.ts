@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 
-import { getServices } from '../services/service-registry.js';
 import {
   discoverTestFiles,
   discoverTestsInFile,
@@ -8,6 +7,7 @@ import {
   stopTest,
 } from '../services/test-runner.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { requireAccessibleProject } from './github/helpers.js';
 
 export const testRoutes = new Hono<HonoEnv>();
 
@@ -16,14 +16,9 @@ testRoutes.get('/:projectId/files', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId');
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
-  }
-
-  // Ownership check
-  if (project.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
   }
 
   const files = await discoverTestFiles(project.path);
@@ -40,13 +35,9 @@ testRoutes.get('/:projectId/specs', async (c) => {
     return c.json({ error: 'Missing file query param' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
-  }
-
-  if (project.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
   }
 
   const result = await discoverTestsInFile(project.path, file);
@@ -61,13 +52,9 @@ testRoutes.post('/:projectId/run', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId');
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
-  }
-
-  if (project.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
   }
 
   const body = await c.req.json<{ file: string; line?: number; projects?: string[] }>();
@@ -96,13 +83,9 @@ testRoutes.post('/:projectId/stop', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId');
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
-  }
-
-  if (project.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
   }
 
   await stopTest(projectId, userId);

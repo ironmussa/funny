@@ -2,12 +2,12 @@ import { getRemoteUrl, listBranches } from '@funny/core/git';
 import type { GitHubPR, EnrichedGitHubIssue } from '@funny/shared';
 import { Hono } from 'hono';
 
-import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import {
   fetchRepoIssues,
   githubApiFetch,
   parseGithubOwnerRepo,
+  requireAccessibleProject,
   resolveGithubToken,
 } from './helpers.js';
 
@@ -22,7 +22,7 @@ issueRoutes.get('/issues', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
   }
@@ -87,7 +87,7 @@ issueRoutes.get('/issues-enriched', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
   }

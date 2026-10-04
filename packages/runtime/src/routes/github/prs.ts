@@ -13,13 +13,13 @@ import type {
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
 import {
   GITHUB_API,
   githubApiFetch,
   parseGithubOwnerRepo,
+  requireAccessibleProject,
   resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
@@ -149,7 +149,7 @@ prRoutes.get('/prs', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
   }
@@ -226,7 +226,7 @@ prRoutes.get('/prs-search', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
   }
@@ -304,7 +304,7 @@ prRoutes.get('/pr-filter-options', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
   }
@@ -369,7 +369,7 @@ prRoutes.get('/pr-detail', async (c) => {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);
@@ -528,7 +528,7 @@ prRoutes.post('/pr-merge', async (c) => {
     return c.json({ error: 'Invalid merge method' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 

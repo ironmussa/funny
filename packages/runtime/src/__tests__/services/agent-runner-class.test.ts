@@ -251,7 +251,6 @@ function createMockServiceProvider(
     },
     wsBroker: ws,
     // Remaining services stubbed as empty objects — not used by startAgent
-    automations: {} as any,
     pipelines: {} as any,
     analytics: {} as any,
     search: {} as any,

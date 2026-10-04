@@ -83,9 +83,6 @@ vi.mock('../../services/service-registry.js', () => ({
     projects: {
       getProject: serviceMocks.getProject,
     },
-    automations: {
-      getAutomation: vi.fn(),
-    },
   }),
 }));
 vi.mock('../../services/pipeline-adapter.js', () => {

@@ -9,10 +9,9 @@
  *
  * An agent registers a watcher via the `funny_watch` tool: "wake this thread
  * in N ms". The watcher outlives the agent's turn. A single heartbeat scanner
- * (NOT one timer per watcher) polls the DB for due watchers — the same pattern
- * as `checkCompletedRuns` in automation-scheduler. The DB row is the source of
- * truth; this in-memory scanner holds no durable state, so a runner restart
- * just re-arms it from the pending rows in the DB.
+ * (NOT one timer per watcher) polls the DB for due watchers. The DB row is
+ * the source of truth; this in-memory scanner holds no durable state, so a
+ * runner restart just re-arms it from the pending rows in the DB.
  *
  * Pure snooze: funny runs no check command. When a watcher fires we wake the
  * agent (via `sendMessage`, which starts the agent if idle or queues the

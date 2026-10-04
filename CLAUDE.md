@@ -73,13 +73,13 @@ bun run db:studio
 - `ws-broker.ts` — Singleton pub/sub that broadcasts WebSocket events to all connected clients. Single multiplexed stream (not per-thread).
 - `pipeline-manager.ts` — Manages multi-step agent pipelines.
 - `pty-manager.ts` — Terminal/PTY session management with multiple backends (headless-xterm, bun-native, node-pty).
-- `automation-manager.ts` — Scheduled and event-driven automation execution.
 
 **Key services (server):**
 
 - `project-manager.ts` — CRUD for projects. Validates that the path is a git repo before creating.
 - `runner-manager.ts` — Manages remote runner instances (registration, heartbeat, project assignments).
 - `project-repository.ts`, `thread-event-repository.ts`, etc. — Database repositories for persistent state.
+- `automation-scheduler.ts` — Owns the automation cron; each run starts a read-only thread on the automation owner's runner via `runner-thread-launcher.ts` (`startThreadOnRunner`, the same path as `POST /api/threads`). Runs complete in `automation-runs.ts` from the persisted terminal thread status. Assumes a single server instance.
 
 **Core modules (`packages/core/src/`):**
 

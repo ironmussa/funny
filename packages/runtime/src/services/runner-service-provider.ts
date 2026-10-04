@@ -196,40 +196,6 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     },
 
     // ── Server-only concerns — handled by server routes directly ──
-    automations: {
-      async listAutomations() {
-        return [];
-      },
-      async getAutomation() {
-        return undefined;
-      },
-      async insertAutomation() {},
-      async createAutomation() {
-        notAvailable('createAutomation');
-      },
-      async updateAutomationRow() {},
-      async updateAutomation() {},
-      async deleteAutomationRow() {},
-      async deleteAutomation() {},
-      async createRun() {},
-      async updateRun() {},
-      async listRuns() {
-        return [];
-      },
-      async listRunningRuns() {
-        return [];
-      },
-      async getRunByThreadId() {
-        return undefined;
-      },
-      async listPendingReviewRuns() {
-        return [];
-      },
-      async listInboxRuns() {
-        return [];
-      },
-    },
-
     pipelines: {
       async getPipelineForProject() {
         return null;

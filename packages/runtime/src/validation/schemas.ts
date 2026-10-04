@@ -492,57 +492,6 @@ export const setRemoteSchema = z.object({
     ),
 });
 
-// ── Automations ─────────────────────────────────────────────────
-
-export const automationScheduleSchema = z
-  .string()
-  .min(1, 'schedule is required')
-  .refine(
-    (val) => {
-      try {
-        // Validate cron expression using croner
-        const { Cron } = require('croner');
-        new Cron(val); // throws if invalid
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    {
-      message:
-        'Invalid cron expression. Examples: "*/30 * * * *" (every 30 min), "0 9 * * *" (daily at 9am), "0 */6 * * *" (every 6 hours)',
-    },
-  );
-
-export const automationModeSchema = z.enum(['default']);
-
-export const createAutomationSchema = z.object({
-  projectId: z.string().min(1),
-  name: z.string().min(1, 'name is required').max(200),
-  prompt: z.string().min(1, 'prompt is required').max(500_000),
-  schedule: automationScheduleSchema,
-  provider: agentProviderSchema.default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
-  model: agentModelSchema.default(DEFAULT_MODEL),
-  permissionMode: permissionModeSchema.default(DEFAULT_PERMISSION_MODE),
-  mode: automationModeSchema.default('default'),
-});
-
-export const updateAutomationSchema = z.object({
-  name: z.string().min(1).optional(),
-  prompt: z.string().min(1).optional(),
-  schedule: automationScheduleSchema.optional(),
-  provider: agentProviderSchema.optional(),
-  model: agentModelSchema.optional(),
-  permissionMode: permissionModeSchema.optional(),
-  enabled: z.boolean().optional(),
-  maxRunHistory: z.number().int().min(1).max(100).optional(),
-  mode: automationModeSchema.optional(),
-});
-
-export const updateRunTriageSchema = z.object({
-  triageStatus: z.enum(['pending', 'reviewed', 'dismissed']),
-});
-
 // ── GitHub ──────────────────────────────────────────────────────
 
 /** Allowed git hosting domains for clone operations. */

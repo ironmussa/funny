@@ -19,7 +19,7 @@ flowchart LR
         T["GrpcTeamTransport\ncontrol · operations · events\ntunnel · terminal adapters"]
         R["runtime domain services\nagents · worktrees · PTY"]
     end
-    Sch["packages/scheduler\n(@funny/thread-scheduler)\nautomation dispatch"]
+    Sch["packages/scheduler\n(@funny/thread-scheduler)\nthread dispatch"]
     Core["packages/core\n(@funny/core)\ngit ops · agent process factory\nno HTTP/DB"]
     Shared["packages/shared\n(@funny/shared)\ntypes · db schema · repositories\nrunner-protocol · thread-machine"]
 

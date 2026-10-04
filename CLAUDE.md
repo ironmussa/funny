@@ -173,6 +173,8 @@ The server and runner are **always separate processes** — the runner is never 
 
 Data flow: `Client → Server → Runner (via WS tunnel or direct HTTP)`
 
+**Deploying to Railway (production):** the prod stack runs on Railway as two services (`funny-server`, `funny-runner`) plus Postgres. See [docs/guides/railway-deploy.md](docs/guides/railway-deploy.md) for the connect + deploy runbook — how to load the project token (`source` `.env.railway-token.local`, never `cat` it), `railway up --service …`, verifying builds, and the rule that a new Claude model needs **both** a server deploy (model registry) and a runner deploy (bundled Claude Code CLI version).
+
 Configuration:
 
 - `TEAM_SERVER_URL` — **Required** on the runner to connect it to the server

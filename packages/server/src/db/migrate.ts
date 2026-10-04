@@ -1674,6 +1674,18 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // automation-execution: automations are run by the server again after
+    // months of not running at all. Disable every one that was enabled so none
+    // starts launching agents until its owner deliberately turns it back on.
+    name: '080_disable_automations_for_relaunch',
+    async up() {
+      const now = new Date().toISOString();
+      await ctx().exec(
+        sql`UPDATE automations SET enabled = 0, updated_at = ${now} WHERE enabled = 1`,
+      );
+    },
+  },
 ];
 
 /**

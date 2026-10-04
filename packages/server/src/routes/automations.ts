@@ -1,8 +1,9 @@
 /**
  * Automation CRUD routes for the central server.
  *
- * Handles automation data directly using the server's DB.
- * Automation triggering still requires a runner (proxied).
+ * Handles automation data directly using the server's DB. Every write keeps
+ * the server-owned scheduler in sync (services/automation-scheduler.ts), and
+ * manual triggers dispatch through it to the owner's runner.
  */
 
 import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
@@ -13,8 +14,13 @@ import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import { automations, automationRuns, threads } from '../db/schema.js';
+import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
-import { proxyToRunner } from '../middleware/proxy.js';
+import {
+  rescheduleAutomation,
+  runAutomation,
+  unscheduleAutomation,
+} from '../services/automation-scheduler.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const automationRoutes = new Hono<ServerEnv>();
@@ -131,6 +137,12 @@ automationRoutes.post('/', async (c) => {
   const body = parsed.value;
   const userId = c.get('userId') as string;
 
+  // The run will act on this project with the creator's identity — require
+  // that they can see it (same 404 as a missing project).
+  if (!(await authorizer.authorize(userId, 'project', body.projectId, 'view'))) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
   const id = nanoid();
   const now = new Date().toISOString();
 
@@ -151,6 +163,7 @@ automationRoutes.post('/', async (c) => {
     updatedAt: now,
   });
 
+  await rescheduleAutomation(id);
   const rows = await db.select().from(automations).where(eq(automations.id, id));
   return c.json(rows[0], 201);
 });
@@ -185,6 +198,7 @@ automationRoutes.patch('/:id', async (c) => {
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = new Date().toISOString();
     await db.update(automations).set(updates).where(eq(automations.id, id));
+    await rescheduleAutomation(id);
   }
 
   const updated = await db.select().from(automations).where(eq(automations.id, id));
@@ -203,12 +217,26 @@ automationRoutes.delete('/:id', async (c) => {
     .where(and(eq(automations.id, id), eq(automations.userId, userId)));
   if (!rows[0]) return c.json({ error: 'Not found' }, 404);
 
+  unscheduleAutomation(id);
   await db.delete(automations).where(eq(automations.id, id));
   return c.json({ ok: true });
 });
 
-// POST /api/automations/:id/trigger — proxy to runner (needs agent execution)
-automationRoutes.post('/:id/trigger', proxyToRunner);
+// POST /api/automations/:id/trigger — run now on the owner's runner
+automationRoutes.post('/:id/trigger', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
+  const rows = await db
+    .select()
+    .from(automations)
+    .where(and(eq(automations.id, c.req.param('id')), eq(automations.userId, userId)));
+  if (!rows[0]) return c.json({ error: 'Not found' }, 404);
+
+  const result = await runAutomation(rows[0]);
+  if (result.isErr()) return c.json({ error: result.error.message }, result.error.status as any);
+  return c.json({ ok: true, ...result.value });
+});
 
 // ── Runs ─────────────────────────────────────────────────────────
 

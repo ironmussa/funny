@@ -138,12 +138,11 @@ threadRoutes.post('/:id/message', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
   // Steer-share delegation (thread-sharing-steer): a verified `steer` grant on
   // this thread authorizes a non-owner sharee to send follow-ups. The cwd/agent
   // still resolve off the thread (owner's machine); the sharee only steers.
   const steer = steerFromContext(c);
-  const threadResult = await requireThread(id, userId, orgId, steer);
+  const threadResult = await requireThread(id, userId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
@@ -171,7 +170,7 @@ threadRoutes.post('/:id/upload', async (c) => {
 
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const result = await uploadFile({
@@ -189,8 +188,7 @@ threadRoutes.post('/:id/upload', async (c) => {
 threadRoutes.post('/:id/stop', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const result = await stopThread(id);
@@ -202,8 +200,7 @@ threadRoutes.post('/:id/stop', async (c) => {
 threadRoutes.post('/:id/fork', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -235,8 +232,7 @@ threadRoutes.post('/:id/fork', async (c) => {
 threadRoutes.post('/:id/rewind', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -266,8 +262,7 @@ threadRoutes.post('/:id/rewind', async (c) => {
 threadRoutes.post('/:id/fork-and-rewind', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -298,8 +293,7 @@ threadRoutes.post('/:id/fork-and-rewind', async (c) => {
 threadRoutes.post('/:id/convert-to-worktree', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -315,12 +309,11 @@ threadRoutes.post('/:id/convert-to-worktree', async (c) => {
 threadRoutes.post('/:id/approve-tool', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
   const raw = await c.req.json();
   const parsed = validate(approveToolSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -363,9 +356,8 @@ threadRoutes.patch('/:id/tool-calls/:toolCallId', async (c) => {
   const id = c.req.param('id');
   const toolCallId = c.req.param('toolCallId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
 
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json();
@@ -386,8 +378,7 @@ threadRoutes.patch('/:id/tool-calls/:toolCallId', async (c) => {
 threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const events = await getServices().threadEvents.getThreadEvents(id);
@@ -400,8 +391,7 @@ threadRoutes.get('/:id/events', async (c) => {
 threadRoutes.get('/:id/queue', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   return c.json(await getServices().messageQueue.listQueue(id));
 });
@@ -411,8 +401,7 @@ threadRoutes.delete('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? undefined;
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const cancelResult = await cancelQueuedMessage(id, messageId);
@@ -425,12 +414,11 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(updateQueuedMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = await requireThread(id, userId, orgId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const updateResult = await updateQueuedMessageService(id, messageId, parsed.value.content);

@@ -42,8 +42,7 @@ async function readRequiredTargetBranch(c: {
 workflowRoutes.post('/:threadId/pr', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -70,8 +69,7 @@ workflowRoutes.post('/:threadId/pr', async (c) => {
 workflowRoutes.post('/:threadId/merge', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -102,10 +100,9 @@ workflowRoutes.post('/:threadId/merge', async (c) => {
 workflowRoutes.post('/:threadId/merge-current-into', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const target = await readRequiredTargetBranch(c);
@@ -135,10 +132,9 @@ workflowRoutes.post('/:threadId/merge-current-into', async (c) => {
 workflowRoutes.post('/:threadId/rebase-current-onto', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const target = await readRequiredTargetBranch(c);
@@ -168,12 +164,11 @@ workflowRoutes.post('/:threadId/rebase-current-onto', async (c) => {
 workflowRoutes.post('/:threadId/workflow', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));

@@ -67,7 +67,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'other-user', 'org-1');
+    const result = await requireThread('t-1', 'other-user');
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -75,17 +75,16 @@ describe('route-helpers', () => {
     }
   });
 
-  test('requireThread allows team org access to shared project threads', async () => {
-    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1' };
-    mocks.getThread.mockResolvedValue(thread);
+  // Threads are private: org membership never admits a teammate (the route-level
+  // regression lives in thread-routes-mounted.test.ts).
+  test('requireThread denies an org teammate on a shared project thread', async () => {
+    mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(true);
 
-    const result = await requireThread('t-1', 'teammate', 'org-1');
+    const result = await requireThread('t-1', 'teammate');
 
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value).toEqual(thread);
-    }
+    expect(result._unsafeUnwrapErr().type).toBe('FORBIDDEN');
+    expect(mocks.isProjectInOrg).not.toHaveBeenCalled();
   });
 
   test('requireThreadWithMessages returns thread detail for owner', async () => {
@@ -145,15 +144,14 @@ describe('route-helpers', () => {
     }
   });
 
-  test('requireThreadWithMessages allows org teammate access', async () => {
+  test('requireThreadWithMessages denies an org teammate', async () => {
     const detail = { id: 't-1', userId: 'owner', projectId: 'p-1', messages: [] };
     mocks.getThreadWithMessages.mockResolvedValue(detail);
     mocks.isProjectInOrg.mockResolvedValue(true);
 
-    const result = await requireThreadWithMessages('t-1', 'teammate', 'org-1');
+    const result = await requireThreadWithMessages('t-1', 'teammate');
 
-    expect(result.isOk()).toBe(true);
-    expect(mocks.isProjectInOrg).toHaveBeenCalledWith('p-1', 'org-1');
+    expect(result._unsafeUnwrapErr().type).toBe('FORBIDDEN');
   });
 
   test('requireProject rejects non-owner without org access', async () => {
@@ -231,7 +229,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue(thread);
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'sharee', null, {
+    const result = await requireThread('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-1',
     });
@@ -246,7 +244,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'sharee', null, {
+    const result = await requireThread('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-2',
     });
@@ -259,7 +257,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'sharee', null, {
+    const result = await requireThread('t-1', 'sharee', {
       shareLevel: 'view',
       onBehalfOfThread: 't-1',
     });
@@ -281,7 +279,7 @@ describe('route-helpers', () => {
       uid === 'owner' ? ok('/home/owner/repo') : err({ type: 'BAD_REQUEST', message: 'no path' }),
     );
 
-    const result = await requireThreadCwd('t-1', 'sharee', null, {
+    const result = await requireThreadCwd('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-1',
     });
@@ -299,7 +297,7 @@ describe('route-helpers', () => {
       worktreePath: '/wt/owner-feature',
     });
 
-    const result = await requireThreadCwd('t-1', 'sharee', null, {
+    const result = await requireThreadCwd('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-1',
     });

@@ -134,8 +134,7 @@ stashRoutes.post('/project/:projectId/stash/drop/:stashIndex', async (c) => {
 stashRoutes.post('/:threadId/stash', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const body = await c.req.json().catch(() => ({}));
@@ -153,8 +152,7 @@ stashRoutes.post('/:threadId/stash', async (c) => {
 stashRoutes.post('/:threadId/stash/pop', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await gitServicePopStash(threadId, userId, cwdResult.value);
@@ -167,8 +165,7 @@ stashRoutes.post('/:threadId/stash/pop', async (c) => {
 stashRoutes.post('/:threadId/stash/drop/:stashIndex', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const stashIndex = parseInt(c.req.param('stashIndex'), 10);
@@ -184,8 +181,7 @@ stashRoutes.post('/:threadId/stash/drop/:stashIndex', async (c) => {
 // GET /api/git/:threadId/stash/list
 stashRoutes.get('/:threadId/stash/list', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const span = requestSpan(c, 'git.stash_list', { threadId: c.req.param('threadId') });
@@ -198,8 +194,7 @@ stashRoutes.get('/:threadId/stash/list', async (c) => {
 // GET /api/git/:threadId/stash/show/:stashIndex
 stashRoutes.get('/:threadId/stash/show/:stashIndex', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const stashRef = `stash@{${c.req.param('stashIndex')}}`;
   const span = requestSpan(c, 'git.stash_show', {
@@ -215,8 +210,7 @@ stashRoutes.get('/:threadId/stash/show/:stashIndex', async (c) => {
 // GET /api/git/:threadId/stash/:stashIndex/diff?path=...
 stashRoutes.get('/:threadId/stash/:stashIndex/diff', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const filePath = c.req.query('path');
   if (!filePath) {

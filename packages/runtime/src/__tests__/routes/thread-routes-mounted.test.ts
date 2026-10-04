@@ -368,15 +368,17 @@ describe('threadRoutes (mounted)', () => {
     expect(mocks.stopThread).not.toHaveBeenCalled();
   });
 
-  test('allows org member when project is shared with organization', async () => {
+  // Regression: an org member could stop another user's thread just because
+  // its project was shared with the org. Threads are private.
+  test('rejects an org member on a thread of a project shared with the org', async () => {
     mocks.getThread.mockResolvedValue({ ...baseThread, userId: 'user-2' });
     mocks.isProjectInOrg.mockResolvedValue(true);
 
     const res = await makeApp('user-1', 'org-1').request('/api/threads/t1/stop', {
       method: 'POST',
     });
-    expect(res.status).toBe(200);
-    expect(mocks.stopThread).toHaveBeenCalledWith('t1');
+    expect(res.status).toBe(403);
+    expect(mocks.stopThread).not.toHaveBeenCalled();
   });
 
   test('returns 404 when thread does not exist', async () => {

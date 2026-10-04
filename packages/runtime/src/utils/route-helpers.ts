@@ -7,9 +7,9 @@
 /**
  * Route helper utilities — return Result<T, DomainError> for common lookups.
  *
- * All thread-access helpers accept a userId parameter to enforce ownership
- * checks. An optional organizationId parameter allows team members to access
- * shared projects via the team_projects join table.
+ * Thread-access helpers admit only the thread's owner (or a verified steer
+ * grant). `requireProject` also admits collaborators and members of an org the
+ * project is shared with.
  */
 
 import { mkdirSync } from 'node:fs';
@@ -66,7 +66,6 @@ export function steerFromContext(c: {
 export async function requireThread(
   id: string,
   userId?: string,
-  organizationId?: string | null,
   steer?: SteerGrant,
 ): Promise<Result<Awaited<ReturnType<typeof tm.getThread>> & {}, DomainError>> {
   const thread = await tm.getThread(id);
@@ -77,15 +76,9 @@ export async function requireThread(
       // Steer-share delegation: a verified `steer` grant on THIS thread
       // authorizes the sharee (thread-sharing-steer). The server already gated
       // the route + signed the claim; here we just honor it.
+      // Nothing else admits a non-owner: threads are private, and org
+      // membership never exposes another user's thread (shared/auth/authorizer.ts).
       if (isSteerGrantFor(id, steer)) return ok(thread);
-      // Ownership failed — check if the thread's project is shared with the org
-      if (organizationId) {
-        const isTeam = await getServices().projects.isProjectInOrg(
-          thread.projectId,
-          organizationId,
-        );
-        if (isTeam) return ok(thread);
-      }
       return err(ownerCheck.error);
     }
   }
@@ -96,22 +89,12 @@ export async function requireThread(
 export async function requireThreadWithMessages(
   id: string,
   userId?: string,
-  organizationId?: string | null,
 ): Promise<Result<NonNullable<Awaited<ReturnType<typeof tm.getThreadWithMessages>>>, DomainError>> {
   const result = await tm.getThreadWithMessages(id);
   if (!result) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(result, userId);
-    if (ownerCheck.isErr()) {
-      if (organizationId) {
-        const isTeam = await getServices().projects.isProjectInOrg(
-          result.projectId,
-          organizationId,
-        );
-        if (isTeam) return ok(result);
-      }
-      return err(ownerCheck.error);
-    }
+    if (ownerCheck.isErr()) return err(ownerCheck.error);
   }
   return ok(result);
 }
@@ -203,10 +186,9 @@ export async function ensureThreadCwd(
 export async function requireThreadCwd(
   threadId: string,
   userId?: string,
-  organizationId?: string | null,
   steer?: SteerGrant,
 ): Promise<Result<string, DomainError>> {
-  const threadResult = await requireThread(threadId, userId, organizationId, steer);
+  const threadResult = await requireThread(threadId, userId, steer);
   if (threadResult.isErr()) return err(threadResult.error);
   const thread = threadResult.value;
   // For a steer sharee the thread lives on the OWNER's machine — resolve the

@@ -139,11 +139,7 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
 
   let cwd = project.path;
   if (threadId) {
-    const threadResult = await requireThread(
-      threadId,
-      c.get('userId'),
-      c.get('organizationId') ?? undefined,
-    );
+    const threadResult = await requireThread(threadId, c.get('userId'));
     if (threadResult.isErr()) return resultToResponse(c, threadResult);
     const thread = threadResult.value;
     if (thread.projectId !== projectId) {

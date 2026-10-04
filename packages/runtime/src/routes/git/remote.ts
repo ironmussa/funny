@@ -201,8 +201,7 @@ remoteRoutes.post('/project/:projectId/fetch', async (c) => {
 remoteRoutes.post('/:threadId/push', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const span = requestSpan(c, 'git.push', { threadId });
@@ -221,8 +220,7 @@ remoteRoutes.post('/:threadId/push', async (c) => {
 remoteRoutes.post('/:threadId/push-branch', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const parsed = validate(pushBranchSchema, await c.req.json().catch(() => ({})));
   if (parsed.isErr()) return resultToResponse(c, parsed);
@@ -237,8 +235,7 @@ remoteRoutes.post('/:threadId/push-branch', async (c) => {
 remoteRoutes.post('/:threadId/pull', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(pullSchema, raw);
@@ -255,8 +252,7 @@ remoteRoutes.post('/:threadId/pull', async (c) => {
 remoteRoutes.post('/:threadId/fetch', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveThreadIdentity(userId, threadId);
   const result = await gitRuntimeService.fetchThread(threadId, {

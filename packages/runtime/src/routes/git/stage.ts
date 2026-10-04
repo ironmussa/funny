@@ -286,8 +286,7 @@ stageRoutes.post('/project/:projectId/reset-soft', async (c) => {
 stageRoutes.post('/:threadId/stage', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -309,8 +308,7 @@ stageRoutes.post('/:threadId/stage', async (c) => {
 stageRoutes.post('/:threadId/unstage', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -332,8 +330,7 @@ stageRoutes.post('/:threadId/unstage', async (c) => {
 stageRoutes.post('/:threadId/stage-patch', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -352,8 +349,7 @@ stageRoutes.post('/:threadId/stage-patch', async (c) => {
 stageRoutes.post('/:threadId/unstage-patch', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -372,8 +368,7 @@ stageRoutes.post('/:threadId/unstage-patch', async (c) => {
 stageRoutes.post('/:threadId/revert', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -395,8 +390,7 @@ stageRoutes.post('/:threadId/revert', async (c) => {
 stageRoutes.post('/:threadId/conflict/resolve', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -423,8 +417,7 @@ stageRoutes.post('/:threadId/conflict/resolve', async (c) => {
 stageRoutes.post('/:threadId/reset-soft', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await gitServiceSoftReset(threadId, userId, cwdResult.value);
@@ -437,8 +430,7 @@ stageRoutes.post('/:threadId/reset-soft', async (c) => {
 stageRoutes.post('/:threadId/checkout-commit', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   // Security ME-3: see project-scoped route above for context.
@@ -456,8 +448,7 @@ stageRoutes.post('/:threadId/checkout-commit', async (c) => {
 stageRoutes.post('/:threadId/revert-commit', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -474,8 +465,7 @@ stageRoutes.post('/:threadId/revert-commit', async (c) => {
 stageRoutes.post('/:threadId/reset-hard', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -492,8 +482,7 @@ stageRoutes.post('/:threadId/reset-hard', async (c) => {
 stageRoutes.post('/:threadId/cherry-pick', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const parsed = validate(cherryPickSchema, await c.req.json().catch(() => ({})));
@@ -509,8 +498,7 @@ stageRoutes.post('/:threadId/cherry-pick', async (c) => {
 stageRoutes.post('/:threadId/create-branch', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const parsed = validate(createBranchSchema, await c.req.json().catch(() => ({})));

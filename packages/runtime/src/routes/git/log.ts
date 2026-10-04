@@ -359,14 +359,13 @@ logRoutes.get('/project/:projectId/commit/:hash/body', async (c) => {
 // GET /api/git/:threadId/log
 logRoutes.get('/:threadId/log', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
   const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, orgId, steer);
+  const threadResult = await requireThread(threadId, userId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
+  const cwdResult = await requireThreadCwd(threadId, userId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const workTreeResult = await requireGitWorkingTree(cwd);
@@ -386,13 +385,12 @@ logRoutes.get('/:threadId/log', async (c) => {
 // GET /api/git/:threadId/graph-log — topology-aware log (parents + refs)
 logRoutes.get('/:threadId/graph-log', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
   const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, orgId, steer);
+  const threadResult = await requireThread(threadId, userId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
+  const cwdResult = await requireThreadCwd(threadId, userId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const workTreeResult = await requireGitWorkingTree(cwd);
@@ -425,13 +423,12 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
 // GET /api/git/:threadId/reflog-events — local rebase operation markers
 logRoutes.get('/:threadId/reflog-events', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
   const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, orgId, steer);
+  const threadResult = await requireThread(threadId, userId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId, steer);
+  const cwdResult = await requireThreadCwd(threadId, userId, steer);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(c, 'git.reflog_events', { threadId }, () =>
     getRebaseReflogEvents(cwdResult.value),
@@ -443,13 +440,7 @@ logRoutes.get('/:threadId/reflog-events', async (c) => {
 // GET /api/git/:threadId/commit/:hash/files
 logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(
     c,
@@ -464,13 +455,7 @@ logRoutes.get('/:threadId/commit/:hash/files', async (c) => {
 // GET /api/git/:threadId/commit/:hash/diff
 logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const filePath = c.req.query('path');
   if (!filePath) {
@@ -493,13 +478,7 @@ logRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
 // GET /api/git/:threadId/commit/:hash/body
 logRoutes.get('/:threadId/commit/:hash/body', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await fetchLogSpanned(
     c,

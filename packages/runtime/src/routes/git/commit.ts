@@ -226,8 +226,7 @@ commitRoutes.post('/project/:projectId/gitignore', async (c) => {
 commitRoutes.post('/:threadId/commit', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -259,7 +258,7 @@ commitRoutes.post('/:threadId/run-hook-command', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -288,13 +287,12 @@ commitRoutes.post('/:threadId/run-hook-command', async (c) => {
 // POST /api/git/:threadId/generate-commit-message
 commitRoutes.post('/:threadId/generate-commit-message', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
-  const threadResult = await requireThread(threadId, userId, orgId);
+  const threadResult = await requireThread(threadId, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -418,8 +416,7 @@ commitRoutes.post('/:threadId/generate-commit-message', async (c) => {
 // POST /api/git/:threadId/gitignore
 commitRoutes.post('/:threadId/gitignore', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 

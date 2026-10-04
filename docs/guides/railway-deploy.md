@@ -83,6 +83,16 @@ railway up --service funny-server --detach
     picks up a new CLI** — bumping `package.json` alone does nothing until the
     runner process restarts on the freshly-built image.
 
+### Deploy order for project-runner-binding
+
+The project ↔ runner binding (dedicated runners, per-project GitHub token)
+ships migration `079_project_runner_binding`, applied automatically on server
+boot (verified on PostgreSQL 16). Deploy the **server first**: it owns routing,
+the data-channel scope checks and the new tables. The runner change is only the
+optional `project_id` on `GetGithubToken` — an additive protobuf field, so an
+old runner keeps working against a new server (it just gets the user's
+personal token instead of a project's own token until it is redeployed).
+
 ## Verify a deploy
 
 Watch build status until both reach `SUCCESS`:

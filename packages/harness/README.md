@@ -8,7 +8,7 @@ The package is intentionally a facade:
 - Agent execution delegates to a `HarnessRuntime`.
 - Workflows run on `@funny/pipelines`.
 - Local process execution uses `@funny/core`.
-- Runner-level cloud sandbox lifecycle stays in `cloud-sandbox-runners`.
+- Runner-level cloud sandbox lifecycle stays in `provision-railway-runners`.
 
 ## Direct agent prompt
 
@@ -105,7 +105,7 @@ process
 
 runner
   sandboxes the entire funny runner
-  maps to cloud-sandbox-runners / RunnerProvisioner when available
+  maps to provision-railway-runners / RunnerInfraProvider when available
 ```
 
 ```ts
@@ -116,9 +116,9 @@ const processSandbox = sandbox.process({ isolation: 'podman' });
 const runnerSandbox = sandbox.runner({ provider: 'default' });
 ```
 
-`@funny/harness` does not import E2B, Modal, or provider SDKs. Provider
+`@funny/harness` does not import infrastructure provider SDKs or APIs (e.g. Railway). Provider
 selection, provider keys, pause/resume, snapshot, restore, idle lifecycle, and
-billing behavior belong to the `cloud-sandbox-runners` provisioner layer.
+billing behavior belong to the `provision-railway-runners` provisioner layer.
 
 ## Runnable fake-runtime example
 

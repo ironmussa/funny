@@ -31,9 +31,13 @@ import type { ServerEnv } from '../../lib/types.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { schedulerSystemRoutes } from '../../routes/scheduler-system.js';
 import type { BrowserEventSink } from '../../services/runner-ports.js';
+import { uncacheThread } from '../../services/runner-resolver.js';
+import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedSchedulerRun,
+  seedPipeline,
+  seedPipelineRun,
   seedProject,
   seedRunner,
   seedThread,
@@ -63,6 +67,8 @@ function systemApp() {
           isAvailable: () => true,
           request: (runnerId, request) => tunnelFetchImpl(runnerId, request as any) as any,
         },
+        // Dispatch routes through the resolver, which only picks connected runners.
+        runnerPresence: { isAvailable: () => true } as any,
       },
     )) as typeof app.request;
   app.use('*', authMiddleware);
@@ -88,6 +94,7 @@ describe('Scheduler System Routes (Integration)', () => {
 
   beforeEach(async () => {
     t.cleanup();
+    uncacheThread('t1');
     relayCalls.length = 0;
     tunnelFetchImpl = () => Promise.reject(new Error('tunnel not configured'));
     await resetAuthMiddlewareCache();
@@ -520,6 +527,53 @@ describe('Scheduler System Routes (Integration)', () => {
       });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true, found: true });
+    });
+
+    test("routes cancel to the run's project dedicated runner, not the general one", async () => {
+      seedProject(t.db as any, { id: 'p-pinned', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't-pinned', projectId: 'p-pinned', userId: 'user-1' });
+      seedPipeline(t.db as any, { id: 'pl-1', projectId: 'p-pinned', userId: 'user-1' });
+      seedPipelineRun(t.db as any, { id: 'pr-pinned', pipelineId: 'pl-1', threadId: 't-pinned' });
+      seedRunner(t.db as any, { id: 'laptop', userId: 'user-1', token: 'tl', hostname: 'l' });
+      seedRunner(t.db as any, {
+        id: 'rx',
+        userId: 'user-1',
+        token: 'tx',
+        hostname: 'rx',
+        role: 'dedicated',
+      });
+      __resetRunnerScopeCache();
+      await setProjectDedicatedRunner('p-pinned', 'user-1', 'rx');
+
+      const targets: string[] = [];
+      tunnelFetchImpl = async (runnerId) => {
+        targets.push(runnerId);
+        return { status: 200, body: null };
+      };
+      const res = await app.request('/api/scheduler/system/cancel/pr-pinned', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      expect(await res.json()).toEqual({ ok: true, found: true });
+      expect(targets).toEqual(['rx']);
+    });
+
+    test("does not cancel another user's run", async () => {
+      seedProject(t.db as any, { id: 'p-bob', userId: 'bob' });
+      seedThread(t.db as any, { id: 't-bob', projectId: 'p-bob', userId: 'bob' });
+      seedPipeline(t.db as any, { id: 'pl-bob', projectId: 'p-bob', userId: 'bob' });
+      seedPipelineRun(t.db as any, { id: 'pr-bob', pipelineId: 'pl-bob', threadId: 't-bob' });
+      seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tr', hostname: 'r' });
+      tunnelFetchImpl = async () => {
+        throw new Error('must not reach a runner');
+      };
+      const res = await app.request('/api/scheduler/system/cancel/pr-bob', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      expect(await res.json()).toEqual({ ok: true, found: false });
     });
   });
 });

@@ -134,7 +134,10 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       userId,
       path,
     });
-    return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
+    const reason = isOAuthCallback
+      ? 'general-runner-offline'
+      : await runnerResolver.explainUnresolved(path, query, resolveUserId);
+    return c.json(runnerResolver.describeResolutionFailure(reason), 502);
   }
 
   const { runnerId } = resolved;

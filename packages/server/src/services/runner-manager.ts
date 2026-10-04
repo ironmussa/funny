@@ -22,6 +22,7 @@ import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { runners, runnerTasks, runnerProjectAssignments } from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { canRunnerAccessProject, pinnedRunnerIdsForProject } from './runner-scope.js';
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
 
@@ -113,6 +114,7 @@ function toRunnerInfo(
     workspace: r.workspace ?? undefined,
     publicMediaUrl: r.publicMediaUrl ?? undefined,
     status,
+    role: r.role === 'dedicated' ? 'dedicated' : 'general',
     activeThreadCount: (JSON.parse(r.activeThreadIds) as string[]).length,
     assignedProjectIds,
     registeredAt: r.registeredAt,
@@ -329,7 +331,12 @@ export async function assignProject(
     localPath: req.localPath,
   });
 
-  return { runnerId, projectId: req.projectId, localPath: req.localPath, assignedAt: now };
+  return {
+    runnerId,
+    projectId: req.projectId,
+    localPath: req.localPath,
+    assignedAt: now,
+  };
 }
 
 export async function unassignProject(
@@ -363,14 +370,19 @@ export async function listAssignments(runnerId: string): Promise<RunnerProjectAs
 // ── Task Dispatch ───────────────────────────────────────
 
 /**
- * Return the runnerId of any online runner owned by `userId`.
+ * Return the runnerId of any online GENERAL runner owned by `userId`.
  *
  * Used by no-projectId fallbacks (e.g. `pty:list`) that still must not
  * cross tenant boundaries. Returns `null` when the user has no connected
  * runner — callers must NOT fall back to another user's runner.
  */
 export async function findAnyRunnerForUser(userId: string): Promise<string | null> {
-  const rows = await db.select({ id: runners.id }).from(runners).where(eq(runners.userId, userId));
+  // Projectless work only ever lands on a GENERAL runner — a dedicated runner
+  // serves nothing but its own projects (project-runner-binding).
+  const rows = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(and(eq(runners.userId, userId), eq(runners.role, 'general')));
   if (rows.length === 0) return null;
 
   const allRunners = await listRunners();
@@ -409,30 +421,34 @@ export async function findRunnerForProject(
     .select()
     .from(runnerProjectAssignments)
     .where(eq(runnerProjectAssignments.projectId, projectId));
+  const localPathByRunner = new Map(assignments.map((a) => [a.runnerId, a.localPath]));
 
-  if (assignments.length === 0) {
-    // Orphaned project: no `runner_project_assignments` row. This happens for
-    // projects created after the runner advertised its project list (the
-    // runner→server `runner:assign_project` round-trip is the only thing that
-    // writes the row, and when it is lost the project stays orphaned until the
-    // next runner restart re-runs assignLocalProjects). Without a fallback,
-    // project-scoped routing fails — most visibly the terminal, which dies
-    // with "No runner available to handle terminal request" even though the
-    // user's runner is online.
-    //
-    // Fall back to the owning user's online runner, using the project's stored
-    // path as the local cwd. Safe under runner isolation: we resolve ONLY the
-    // project owner's own runner (project.userId === userId + the per-user
-    // findAnyRunnerForUser lookup), never another tenant's.
-    if (!userId) return null;
-    const projectRepo = await import('./project-repository.js');
-    const project = await projectRepo.getProject(projectId);
-    if (!project || project.userId !== userId || !project.path) return null;
-    const fallbackRunnerId = await findAnyRunnerForUser(userId);
-    if (!fallbackRunnerId) return null;
-    const fallbackRunner = (await listRunners()).find((r) => r.runnerId === fallbackRunnerId);
-    if (!fallbackRunner) return null;
-    return { runner: fallbackRunner, localPath: project.path };
+  const projectRepo = await import('./project-repository.js');
+  const project = await projectRepo.getProject(projectId);
+
+  // Pinned project (project-runner-binding): only its dedicated runner/grants,
+  // never a fallback. A freshly provisioned runner may not have reported its
+  // checkout yet — use the project's stored path until it does.
+  const pinned = userId ? await pinnedRunnerIdsForProject(projectId, userId) : null;
+
+  let candidateIds: string[];
+  if (pinned) {
+    candidateIds = pinned;
+  } else {
+    candidateIds = assignments.map((a) => a.runnerId);
+    if (candidateIds.length === 0) {
+      // Orphaned project: no `runner_project_assignments` row. This happens for
+      // projects created after the runner advertised its project list (the
+      // runner→server `runner:assign_project` round-trip is the only thing that
+      // writes the row, and when it is lost the project stays orphaned until the
+      // next runner restart re-runs assignLocalProjects). Fall back to the
+      // owning user's general runner, using the project's stored path as cwd.
+      // Safe under runner isolation: only the project owner's own runner.
+      if (!userId || !project || project.userId !== userId || !project.path) return null;
+      const fallbackRunnerId = await findAnyRunnerForUser(userId);
+      if (!fallbackRunnerId) return null;
+      candidateIds = [fallbackRunnerId];
+    }
   }
 
   let allowedRunnerIds: Set<string> | null = null;
@@ -448,25 +464,29 @@ export async function findRunnerForProject(
   const allRunners = await listRunners();
   const runnerMap = new Map(allRunners.map((r) => [r.runnerId, r]));
 
-  const candidates = assignments
-    .map((a) => ({ assignment: a, runner: runnerMap.get(a.runnerId) }))
-    .filter(
-      (c): c is { assignment: (typeof assignments)[0]; runner: RunnerInfo } =>
-        c.runner != null &&
-        c.runner.status !== 'offline' &&
-        (allowedRunnerIds == null || allowedRunnerIds.has(c.runner.runnerId)),
-    );
+  const candidates: { runner: RunnerInfo; localPath: string }[] = [];
+  for (const runnerId of new Set(candidateIds)) {
+    const runner = runnerMap.get(runnerId);
+    if (!runner || runner.status === 'offline') continue;
+    if (allowedRunnerIds && !allowedRunnerIds.has(runnerId)) continue;
+    if (!(await canRunnerAccessProject(runnerId, projectId))) continue;
+    const localPath = localPathByRunner.get(runnerId) ?? project?.path;
+    if (!localPath) continue;
+    candidates.push({ runner, localPath });
+  }
 
   if (candidates.length === 0) return null;
 
-  candidates.sort((a, b) => {
-    if (a.runner.status === 'online' && b.runner.status !== 'online') return -1;
-    if (b.runner.status === 'online' && a.runner.status !== 'online') return 1;
-    return a.runner.activeThreadCount - b.runner.activeThreadCount;
-  });
+  // Pinned order is the user's preference; otherwise prefer online + least busy.
+  if (!pinned) {
+    candidates.sort((a, b) => {
+      if (a.runner.status === 'online' && b.runner.status !== 'online') return -1;
+      if (b.runner.status === 'online' && a.runner.status !== 'online') return 1;
+      return a.runner.activeThreadCount - b.runner.activeThreadCount;
+    });
+  }
 
-  const best = candidates[0];
-  return { runner: best.runner, localPath: best.assignment.localPath };
+  return candidates[0];
 }
 
 export async function createRunnerTask(
@@ -554,7 +574,9 @@ export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number>
   await db.delete(runners).where(inArray(runners.id, staleIds));
 
   if (stale.length > 0) {
-    log.info(`Purged ${stale.length} stale offline runner(s)`, { namespace: 'runner' });
+    log.info(`Purged ${stale.length} stale offline runner(s)`, {
+      namespace: 'runner',
+    });
   }
   return stale.length;
 }
@@ -580,7 +602,10 @@ export async function purgeAllRunners(): Promise<void> {
  */
 export async function markRunnerOffline(runnerId: string): Promise<void> {
   await db.update(runners).set({ status: 'offline' }).where(eq(runners.id, runnerId));
-  log.info('Runner marked offline (transport disconnected)', { namespace: 'runner', runnerId });
+  log.info('Runner marked offline (transport disconnected)', {
+    namespace: 'runner',
+    runnerId,
+  });
 }
 
 /** Mark an authenticated transport session online and refresh its presence. */
@@ -598,7 +623,9 @@ export async function markRunnerOnline(runnerId: string): Promise<void> {
  */
 export async function markAllRunnersOffline(): Promise<void> {
   await db.update(runners).set({ status: 'offline', lastHeartbeatAt: new Date().toISOString() });
-  log.info('Marked all runners offline (server restart)', { namespace: 'runner' });
+  log.info('Marked all runners offline (server restart)', {
+    namespace: 'runner',
+  });
 }
 
 /**
@@ -619,7 +646,9 @@ export async function purgeStaleRunners(): Promise<void> {
     .delete(runnerProjectAssignments)
     .where(inArray(runnerProjectAssignments.runnerId, staleIds));
   await db.delete(runners).where(inArray(runners.id, staleIds));
-  log.info(`Purged ${staleIds.length} stale runner(s)`, { namespace: 'runner' });
+  log.info(`Purged ${staleIds.length} stale runner(s)`, {
+    namespace: 'runner',
+  });
 }
 
 /** List only the runners owned by a specific user. */
@@ -654,6 +683,10 @@ export async function removeRunnerForUser(runnerId: string, userId: string): Pro
   if (!rows[0]) return false;
 
   await db.delete(runners).where(eq(runners.id, runnerId));
-  log.info('Runner removed by owner', { namespace: 'runner', runnerId, userId });
+  log.info('Runner removed by owner', {
+    namespace: 'runner',
+    runnerId,
+    userId,
+  });
   return true;
 }

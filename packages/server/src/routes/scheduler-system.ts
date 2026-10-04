@@ -19,6 +19,7 @@
 import { dbAll, dbGet, dbRun } from '@funny/shared/db/connection';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { createSchedulerRunRepository } from '@funny/shared/repositories';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -27,6 +28,7 @@ import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { findAnyRunnerForUser } from '../services/runner-manager.js';
+import { resolveRunner } from '../services/runner-resolver.js';
 import { getSchedulerEventBuffer } from '../services/scheduler-event-buffer.js';
 import { createDefaultThreadQuery } from '../services/scheduler-thread-query.js';
 import { parseQuery } from '../validation/request.js';
@@ -326,7 +328,15 @@ schedulerSystemRoutes.post('/dispatch', async (c) => {
   }
   const body = validated.data;
 
-  const runnerId = await findAnyRunnerForUser(body.userId);
+  // Route by thread so a pinned project's work only reaches its dedicated
+  // runner (project-runner-binding) — never "any runner of the user".
+  const resolved = await resolveRunner(
+    `/api/threads/${body.threadId}`,
+    {},
+    body.userId,
+    c.env?.runnerPresence,
+  );
+  const runnerId = resolved?.runnerId ?? null;
   if (!runnerId) {
     return c.json(
       { ok: false, error: { message: `no runner connected for user ${body.userId}` } },
@@ -399,7 +409,27 @@ schedulerSystemRoutes.post('/cancel/:pipelineRunId', async (c) => {
   }
   const body = parsed.data;
 
-  const runnerId = await findAnyRunnerForUser(body.userId);
+  // The run lives on its thread's runner — which may be a project's dedicated
+  // runner (project-runner-binding). Fall back to the user's general runner
+  // only when the run is unknown to the server.
+  const runRow = (await dbGet(
+    db
+      .select({ threadId: schema.pipelineRuns.threadId, userId: schema.threads.userId })
+      .from(schema.pipelineRuns)
+      .innerJoin(schema.threads, eq(schema.threads.id, schema.pipelineRuns.threadId))
+      .where(eq(schema.pipelineRuns.id, pipelineRunId)),
+  )) as { threadId: string; userId: string } | undefined;
+  if (runRow && runRow.userId !== body.userId) return c.json({ ok: true, found: false });
+  const runnerId = runRow
+    ? ((
+        await resolveRunner(
+          `/api/threads/${runRow.threadId}`,
+          {},
+          body.userId,
+          c.env?.runnerPresence,
+        )
+      )?.runnerId ?? null)
+    : await findAnyRunnerForUser(body.userId);
   if (!runnerId) return c.json({ ok: true, found: false });
 
   const headers: Record<string, string> = {

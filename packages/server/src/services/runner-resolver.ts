@@ -6,26 +6,39 @@
  * user's runner. No cross-user fallbacks. If the user has no runner
  * reachable, return null → 502.
  *
- * A runner is considered reachable only while it has an active gRPC session.
+ * PROJECT ISOLATION (project-runner-binding, see runner-scope.ts):
+ *   - A project pinned to a dedicated runner routes ONLY to that runner (plus
+ *     explicit grants). If none is reachable → null, never a fallback.
+ *   - Any other project routes to one of the user's GENERAL runners that the
+ *     scope rule allows (thread's runner → runner holding the checkout →
+ *     designated general runner → other general runners).
+ *   - Projectless work (scratch threads, browse, settings, system) routes ONLY
+ *     to the user's general runners.
  *
- * Resolution strategies:
- * 1. Thread cache (in-memory)
- * 2. Project assignment (DB, scoped to userId)
- * 3. Thread registry (DB, scoped to userId)
- * 4. User's runner (any runner belonging to this user)
+ * A runner is considered reachable only while it has an active gRPC session.
  */
 
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
-import { runnerProjectAssignments, runners } from '../db/schema.js';
+import { runnerProjectAssignments, runners, threads } from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { RunnerPresencePort } from './runner-ports.js';
+import {
+  canRunnerAccessProject,
+  canRunnerServeProjectless,
+  generalRunnerIdsForUser,
+  onRunnerScopeChange,
+  pinnedRunnerIdsForProject,
+} from './runner-scope.js';
 import { getRunnerForThread } from './thread-registry.js';
 
 export interface ResolvedRunner {
   runnerId: string;
 }
+
+/** Why a request could not be routed (drives the 502 message). */
+export type RunnerResolutionFailure = 'project-runner-offline' | 'general-runner-offline';
 
 type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
 
@@ -34,20 +47,45 @@ type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
 // checks for speed.
 const threadRunnerCache = new Map<string, CachedThreadRunner>();
 
+// Any change to runner roles / project pins / grants can invalidate a cached
+// route — drop them all (cheap: the cache only saves one DB round-trip).
+onRunnerScopeChange(() => threadRunnerCache.clear());
+
 function threadCacheKey(userId: string, threadId: string): string {
   return `${userId}:${threadId}`;
 }
 
-function isReachable(presence: RunnerPresencePort, runnerId: string): boolean {
-  return presence.isAvailable(runnerId);
+function isReachable(presence: RunnerPresencePort | undefined, runnerId: string): boolean {
+  return !!presence?.isAvailable(runnerId);
+}
+
+/** Where a request points: a project, or projectless work. */
+type RouteTarget = { kind: 'project'; projectId: string } | { kind: 'projectless' };
+
+async function resolveTarget(
+  projectId: string | null,
+  threadId: string | null,
+): Promise<RouteTarget> {
+  if (projectId) return { kind: 'project', projectId };
+  if (threadId) {
+    const [row] = await db
+      .select({ projectId: threads.projectId })
+      .from(threads)
+      .where(eq(threads.id, threadId));
+    if (row?.projectId) return { kind: 'project', projectId: row.projectId };
+  }
+  return { kind: 'projectless' };
+}
+
+async function isAllowed(runnerId: string, target: RouteTarget): Promise<boolean> {
+  return target.kind === 'project'
+    ? canRunnerAccessProject(runnerId, target.projectId)
+    : canRunnerServeProjectless(runnerId);
 }
 
 /**
  * Resolve which runner should handle a request.
  * Returns the runner identity or null if no runner is reachable for this user.
- *
- * All resolution paths are scoped to the requesting user's runners.
- * Runners must have an active gRPC session.
  */
 export async function resolveRunner(
   path: string,
@@ -55,68 +93,136 @@ export async function resolveRunner(
   userId?: string,
   presence?: RunnerPresencePort,
 ): Promise<ResolvedRunner | null> {
-  const projectId = extractProjectId(path, query);
-  const threadId = extractThreadId(path);
+  const resolved = await resolveRunnerDetailed(path, query, userId, presence);
+  return resolved.ok ? { runnerId: resolved.runnerId } : null;
+}
 
-  // Strategy 1: Thread cache (verify runner is still reachable)
-  if (threadId && userId) {
+export async function resolveRunnerDetailed(
+  path: string,
+  query: Record<string, string>,
+  userId?: string,
+  presence?: RunnerPresencePort,
+): Promise<
+  | { ok: true; runnerId: string }
+  | { ok: false; reason: RunnerResolutionFailure; projectId?: string }
+> {
+  const threadId = extractThreadId(path);
+  if (!userId) return { ok: false, reason: 'general-runner-offline' };
+
+  // Thread cache (entries are dropped on any scope change; verify reachability)
+  if (threadId) {
     const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
     if (cached) {
-      if (presence?.isAvailable(cached.runnerId)) {
-        return { runnerId: cached.runnerId };
-      }
-      // Stale cache entry — runner unreachable, evict it
+      if (isReachable(presence, cached.runnerId)) return { ok: true, runnerId: cached.runnerId };
       threadRunnerCache.delete(threadCacheKey(userId, threadId));
     }
   }
 
-  // Strategy 2: Project assignment (scoped to userId)
-  if (projectId && userId) {
-    const resolved = presence ? await resolveByProject(projectId, userId, presence) : null;
-    if (resolved) return resolved;
-  }
+  const target = await resolveTarget(extractProjectId(path, query), threadId);
+  const remember = (runnerId: string) => {
+    if (threadId) {
+      threadRunnerCache.set(threadCacheKey(userId, threadId), {
+        runnerId,
+        threadId,
+        userId,
+      });
+    }
+    return { ok: true as const, runnerId };
+  };
 
-  // Strategy 3: Thread registry DB lookup (scoped to userId)
-  if (threadId && userId) {
-    const fromDb = await getRunnerForThread(threadId, userId);
-    if (fromDb) {
-      if (presence?.isAvailable(fromDb.runnerId)) {
-        const resolved: ResolvedRunner = { runnerId: fromDb.runnerId };
-        threadRunnerCache.set(threadCacheKey(userId, threadId), { ...resolved, threadId, userId });
-        return resolved;
-      }
+  // Pinned project: its dedicated runner (+ grants) or nothing.
+  if (target.kind === 'project') {
+    const pinned = await pinnedRunnerIdsForProject(target.projectId, userId);
+    if (pinned) {
+      const runnerId = pinned.find((id) => isReachable(presence, id));
+      if (runnerId) return remember(runnerId);
+      log.warn('Project runner offline — not falling back', {
+        namespace: 'proxy',
+        userId,
+        projectId: target.projectId,
+        path,
+      });
+      return {
+        ok: false,
+        reason: 'project-runner-offline',
+        projectId: target.projectId,
+      };
     }
   }
 
-  // Strategy 4: User's runner (last resort, still user-scoped)
-  if (userId) {
-    const resolved = presence ? await resolveUserRunner(userId, presence) : null;
-    if (resolved) return resolved;
+  // Ordered candidates, all owned by the user; filtered by reachability + scope.
+  const candidates: string[] = [];
+  if (threadId) {
+    const fromDb = await getRunnerForThread(threadId, userId);
+    if (fromDb) candidates.push(fromDb.runnerId);
+  }
+  if (target.kind === 'project') {
+    candidates.push(...(await assignedRunnerIds(target.projectId, userId)));
+  }
+  candidates.push(...(await generalRunnerIdsForUser(userId)));
+
+  for (const runnerId of new Set(candidates)) {
+    if (!isReachable(presence, runnerId)) continue;
+    if (!(await isAllowed(runnerId, target))) continue;
+    return remember(runnerId);
   }
 
-  // Diagnostic: log all runners in DB to identify userId mismatches
-  const allRunners = await db.select({ id: runners.id, userId: runners.userId }).from(runners);
   log.warn('No reachable runner found', {
     namespace: 'proxy',
-    requestUserId: userId ?? 'none',
+    requestUserId: userId,
     threadId: threadId ?? 'none',
-    projectId: projectId ?? 'none',
+    projectId: target.kind === 'project' ? target.projectId : 'none',
     path,
-    runnersInDb: allRunners.map((r) => ({
-      id: r.id,
-      userId: r.userId ?? 'null',
-      connected: presence?.isAvailable(r.id) ?? false,
-    })),
   });
+  return {
+    ok: false,
+    reason: 'general-runner-offline',
+    projectId: target.kind === 'project' ? target.projectId : undefined,
+  };
+}
 
-  return null;
+/**
+ * Explain why `resolveRunner` returned null for a request (failure path only):
+ * a pinned project whose runner is offline gets its own actionable message.
+ */
+export async function explainUnresolved(
+  path: string,
+  query: Record<string, string>,
+  userId?: string,
+): Promise<RunnerResolutionFailure> {
+  if (!userId) return 'general-runner-offline';
+  const target = await resolveTarget(extractProjectId(path, query), extractThreadId(path));
+  if (target.kind === 'project' && (await pinnedRunnerIdsForProject(target.projectId, userId))) {
+    return 'project-runner-offline';
+  }
+  return 'general-runner-offline';
+}
+
+/** User-facing 502 message for a routing failure. */
+export function describeResolutionFailure(reason: RunnerResolutionFailure): {
+  error: string;
+  code: RunnerResolutionFailure;
+} {
+  return reason === 'project-runner-offline'
+    ? {
+        error: "This project's runner is offline. Start or redeploy it from Project Settings.",
+        code: reason,
+      }
+    : {
+        error: 'No runner connected. Check that your runner is online.',
+        code: reason,
+      };
 }
 
 /**
  * Cache a thread → runner mapping (called when threads are created).
  */
 export function cacheThreadRunner(threadId: string, userId: string, runnerId: string): void {
-  threadRunnerCache.set(threadCacheKey(userId, threadId), { threadId, userId, runnerId });
+  threadRunnerCache.set(threadCacheKey(userId, threadId), {
+    threadId,
+    userId,
+    runnerId,
+  });
 }
 
 /**
@@ -171,14 +277,19 @@ function extractThreadId(path: string): string | null {
 }
 
 /**
- * Find any reachable runner, regardless of user.
+ * Find any reachable GENERAL runner, regardless of user.
  * Used for unauthenticated callbacks (e.g., MCP OAuth redirect from external provider).
  * The runtime itself validates the request (e.g., via state parameter).
+ * Dedicated runners are never eligible: they must only ever see their own
+ * project's traffic (project-runner-binding).
  */
 export async function resolveAnyRunner(
   presence?: RunnerPresencePort,
 ): Promise<ResolvedRunner | null> {
-  const allRunners = await db.select({ id: runners.id }).from(runners);
+  const allRunners = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(eq(runners.role, 'general'));
 
   for (const r of allRunners) {
     if (presence?.isAvailable(r.id)) {
@@ -189,49 +300,14 @@ export async function resolveAnyRunner(
 }
 
 /**
- * Find a reachable runner belonging to this user.
- * Requires an active gRPC session.
+ * The user's runners holding a checkout of the project (location records).
+ * Preference only — access is still decided by runner-scope.
  */
-async function resolveUserRunner(
-  userId: string,
-  presence: RunnerPresencePort,
-): Promise<ResolvedRunner | null> {
-  const userRunners = await db
-    .select({ id: runners.id })
-    .from(runners)
-    .where(eq(runners.userId, userId));
-
-  for (const r of userRunners) {
-    if (isReachable(presence, r.id)) {
-      return { runnerId: r.id };
-    }
-  }
-
-  return null;
-}
-
-/**
- * Resolve runner for a project, scoped to the requesting user.
- * Only returns runners with active gRPC sessions.
- */
-async function resolveByProject(
-  projectId: string,
-  userId: string,
-  presence: RunnerPresencePort,
-): Promise<ResolvedRunner | null> {
-  const assignments = await db
-    .select({
-      runnerId: runnerProjectAssignments.runnerId,
-    })
+async function assignedRunnerIds(projectId: string, userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ runnerId: runnerProjectAssignments.runnerId })
     .from(runnerProjectAssignments)
     .innerJoin(runners, eq(runners.id, runnerProjectAssignments.runnerId))
     .where(and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId)));
-
-  for (const a of assignments) {
-    if (a.runnerId && isReachable(presence, a.runnerId)) {
-      return { runnerId: a.runnerId };
-    }
-  }
-
-  return null;
+  return rows.map((r) => r.runnerId);
 }

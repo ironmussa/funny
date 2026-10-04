@@ -4,7 +4,9 @@ import { homedir } from 'os';
 import { delimiter, dirname, join } from 'path';
 
 import { DATA_DIR } from '../lib/data-dir.js';
+import type { ClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
+import { claudeProfileEnv } from '../utils/claude-profile-paths.js';
 import { bundledCodexBinary } from '../utils/codex-binary.js';
 import { getAvailableProviders, resetProviderCache } from '../utils/provider-detection.js';
 
@@ -82,7 +84,7 @@ function quoteShell(value: string): string {
 
 // Only emit a fixed login operation, with runner-owned paths safely quoted.
 // Restore PATH after login-shell profiles have run, including on an existing daemon.
-function loginCommand(id: ProviderId, binary: string): string {
+function loginCommand(id: ProviderId, binary: string, profileEnv?: Record<string, string>): string {
   const args = PROVIDER_INSTALLS[id].login.split(' ').slice(1).map(quoteShell).join(' ');
   const command = `${quoteShell(binary)} ${args}`;
   const instructions = quoteShell(
@@ -95,15 +97,23 @@ function loginCommand(id: ProviderId, binary: string): string {
         : `printf '%s\\n' ${instructions}; `
       : '';
   const path = quoteShell(process.env.PATH ?? '');
+  const profilePrelude = Object.entries(profileEnv ?? {})
+    .map(([key, value]) =>
+      process.platform === 'win32'
+        ? `$env:${key}=${quoteShell(value)}; `
+        : `export ${key}=${quoteShell(value)}; `,
+    )
+    .join('');
   return process.platform === 'win32'
-    ? `$env:PATH=${path}; ${prelude}& ${command}`
-    : `export PATH=${path}; ${prelude}NO_BROWSER=1 NO_OPEN_BROWSER=1 ${command}`;
+    ? `$env:PATH=${path}; ${profilePrelude}${prelude}& ${command}`
+    : `export PATH=${path}; ${profilePrelude}${prelude}NO_BROWSER=1 NO_OPEN_BROWSER=1 ${command}`;
 }
 
 export async function checkProviderAuth(
   id: ProviderId,
   binary: string | null,
   configured = false,
+  profileEnv?: Record<string, string>,
 ): Promise<ProviderAuthState> {
   const envKeys: Partial<Record<ProviderId, string[]>> = {
     claude: ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN'],
@@ -129,7 +139,12 @@ export async function checkProviderAuth(
   if (!args) return 'unknown';
   return new Promise((resolve) => {
     try {
-      const child = spawn(binary, args, { stdio: 'ignore', shell: false, timeout: 10_000 });
+      const child = spawn(binary, args, {
+        stdio: 'ignore',
+        shell: false,
+        timeout: 10_000,
+        env: { ...process.env, ...profileEnv },
+      });
       child.once('error', () => resolve('unknown'));
       child.once('close', (code) =>
         resolve(code === 0 ? 'connected' : code === 1 ? 'required' : 'unknown'),
@@ -143,6 +158,7 @@ export async function checkProviderAuth(
 export async function providerSetupStatus(
   id: string,
   configured = false,
+  options: ClaudeProfileRouteOptions = {},
 ): Promise<ProviderSetupStatus> {
   if (!isInstallableProvider(id)) {
     return { provider: id, state: 'manual', installable: false, login: null, auth: 'unknown' };
@@ -154,14 +170,15 @@ export async function providerSetupStatus(
   const available = await getAvailableProviders();
   const bundled = id === 'pi' || (id !== 'codex' && available.get(id)?.sdkAvailable === true);
   const binary = providerBinary(id);
+  const profileEnv = id === 'claude' ? claudeProfileEnv(options.claudeConfigDir) : undefined;
   return {
     provider: id,
     state: binary ? 'installed' : bundled ? 'bundled' : 'missing',
     installable: id !== 'cursor' || process.platform !== 'win32',
     login: PROVIDER_INSTALLS[id].login,
-    loginCommand: binary ? loginCommand(id, binary) : undefined,
+    loginCommand: binary ? loginCommand(id, binary, profileEnv) : undefined,
     loginShell: process.platform === 'win32' ? 'powershell' : 'bash',
-    auth: await checkProviderAuth(id, binary, configured),
+    auth: await checkProviderAuth(id, binary, configured, profileEnv),
   };
 }
 

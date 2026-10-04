@@ -23,6 +23,7 @@ import {
 import { getServices } from '../services/service-registry.js';
 import { wsBroker } from '../services/ws-broker.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resolveClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
 import { getAvailableProviders, resetProviderCache } from '../utils/provider-detection.js';
 
@@ -176,7 +177,12 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
         keys.map((key) => getServices().profile.getProviderKey(c.get('userId'), key.id)),
       )
     ).some(Boolean);
-    return c.json(await providerSetupStatus(provider, configured));
+    const profileOptions = await resolveClaudeProfileRouteOptions({
+      provider,
+      projectId: c.req.query('projectId'),
+      userId: c.get('userId'),
+    });
+    return c.json(await providerSetupStatus(provider, configured, profileOptions));
   });
 
   app.post('/api/system/providers/:provider/setup', async (c) => {
@@ -185,10 +191,15 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     if (!isInstallableProvider(provider)) {
       return c.json({ error: 'This provider requires manual setup.' }, 400);
     }
+    const profileOptions = await resolveClaudeProfileRouteOptions({
+      provider,
+      projectId: c.req.query('projectId'),
+      userId: c.get('userId'),
+    });
     if (!startProviderInstall(provider)) {
       return c.json({ error: 'Another provider installation is in progress. Retry shortly.' }, 409);
     }
-    return c.json(await providerSetupStatus(provider), 202);
+    return c.json(await providerSetupStatus(provider, false, profileOptions), 202);
   });
 
   // ── Provider extensions (runner-owned; provider-install-ui §2) ─────────────

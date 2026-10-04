@@ -1,4 +1,6 @@
 import { EventEmitter } from 'events';
+import { homedir } from 'os';
+import { join } from 'path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,6 +71,71 @@ describe('provider setup', () => {
     vi.stubEnv('CODEX_BINARY_PATH', '/custom/codex');
     activateProviderTools();
     expect(process.env.CODEX_BINARY_PATH).toBe('/custom/codex');
+  });
+
+  it('checks and logs in to the selected Claude profile instead of the inherited profile', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/default/claude');
+    mocks.which.mockReturnValue('/tools/claude');
+    mocks.spawn.mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('close', 1));
+      return child;
+    });
+    const { providerSetupStatus } = await import('../../services/provider-setup.js');
+    const status = await providerSetupStatus('claude', false, {
+      claudeConfigDir: '~/.claude-goliiive',
+    });
+    const configDir = join(homedir(), '.claude-goliiive');
+    expect(status.auth).toBe('required');
+    expect(mocks.spawn).toHaveBeenCalledWith(
+      '/tools/claude',
+      ['auth', 'status'],
+      expect.objectContaining({
+        env: expect.objectContaining({ CLAUDE_CONFIG_DIR: configDir }),
+      }),
+    );
+    expect(status.loginCommand).toContain(`CLAUDE_CONFIG_DIR='${configDir}'`);
+    expect(status.loginCommand).toContain("'/tools/claude' 'auth' 'login'");
+    expect(process.env.CLAUDE_CONFIG_DIR).toBe('/default/claude');
+  });
+
+  it('quotes profile paths in the login shell command', async () => {
+    mocks.which.mockReturnValue('/tools/claude');
+    const { providerSetupStatus } = await import('../../services/provider-setup.js');
+    const status = await providerSetupStatus('claude', true, {
+      claudeConfigDir: "/profiles/team's $(touch unwanted)",
+    });
+    const escaped = process.platform === 'win32' ? "''" : "'\"'\"'";
+    expect(status.loginCommand).toContain(
+      `CLAUDE_CONFIG_DIR='/profiles/team${escaped}s $(touch unwanted)'`,
+    );
+  });
+
+  it('preserves default auth and does not apply Claude profiles to other providers', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/default/claude');
+    mocks.which.mockReturnValue('/tools/provider');
+    mocks.spawn.mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('close', 0));
+      return child;
+    });
+    const { providerSetupStatus } = await import('../../services/provider-setup.js');
+    for (const provider of ['claude', 'codex']) {
+      const status = await providerSetupStatus(
+        provider,
+        false,
+        provider === 'codex' ? { claudeConfigDir: '/other/profile' } : {},
+      );
+      expect(status.auth).toBe('connected');
+      expect(status.loginCommand).not.toContain('CLAUDE_CONFIG_DIR');
+      expect(mocks.spawn).toHaveBeenLastCalledWith(
+        '/tools/provider',
+        provider === 'claude' ? ['auth', 'status'] : ['login', 'status'],
+        expect.objectContaining({
+          env: expect.objectContaining({ CLAUDE_CONFIG_DIR: '/default/claude' }),
+        }),
+      );
+    }
   });
 
   it('prefers a persistent Codex installation over the bundled CLI', async () => {

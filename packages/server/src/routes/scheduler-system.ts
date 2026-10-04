@@ -16,14 +16,14 @@
  * fetch translation.
  */
 
-import { dbAll, dbGet, dbRun } from '@funny/shared/db/connection';
+import { dbGet } from '@funny/shared/db/connection';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { createSchedulerRunRepository } from '@funny/shared/repositories';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { db } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
@@ -38,13 +38,7 @@ export const schedulerSystemRoutes = new Hono<ServerEnv>();
 
 const NS = 'scheduler-system-routes';
 
-const runRepo = createSchedulerRunRepository({
-  db,
-  schema: schema as unknown as Parameters<typeof createSchedulerRunRepository>[0]['schema'],
-  dbAll,
-  dbGet,
-  dbRun,
-});
+const runRepo = repos.schedulerRuns();
 
 const threadQuery = createDefaultThreadQuery();
 

@@ -5,10 +5,10 @@
 
 import { projectRoleToRole } from '@funny/shared/auth/roles';
 import { user } from '@funny/shared/db/schema-sqlite';
-import { createGrantRepository } from '@funny/shared/repositories';
 import { eq, and, inArray } from 'drizzle-orm';
 
-import { db, dbAll, dbRun, schema } from '../db/index.js';
+import { db } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import { projectMembers } from '../db/schema.js';
 import { log } from '../lib/logger.js';
 
@@ -16,7 +16,7 @@ import { log } from '../lib/logger.js';
 // (project rows) alongside `project_members`, so new memberships populate the
 // unified table immediately. Reads stay on `project_members` (still
 // authoritative for role + localPath shape) — cutover happens after backfill.
-const grants = createGrantRepository({ db, schema, dbAll, dbRun });
+const grants = repos.grants();
 
 // ── Types ────────────────────────────────────────────────
 

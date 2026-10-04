@@ -21,13 +21,13 @@ import {
   type OrgRole,
   type Role,
 } from '@funny/shared/auth/roles';
-import { createGrantRepository } from '@funny/shared/repositories';
 import { and, eq } from 'drizzle-orm';
 
-import { db, dbAll, dbRun, schema } from '../db/index.js';
+import { db, dbAll, schema } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import { createProjectAccessMiddleware } from '../middleware/project-access.js';
 
-const grants = createGrantRepository({ db, schema, dbAll, dbRun });
+const grants = repos.grants();
 
 /**
  * Collaborator role on a project. `project_members` stays authoritative for

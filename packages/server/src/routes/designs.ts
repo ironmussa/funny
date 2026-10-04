@@ -10,16 +10,14 @@
  */
 
 import type { DesignFidelity, DesignType } from '@funny/shared';
-import { createDesignRepository } from '@funny/shared/repositories';
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 
-import { db, dbAll, dbGet, dbRun } from '../db/index.js';
-import * as schema from '../db/schema.js';
+import { repos } from '../db/repos.js';
 import { requireProjectAccess } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 
-const designRepo = createDesignRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
+const designRepo = repos.designs();
 
 const VALID_TYPES: DesignType[] = ['prototype', 'slides', 'template', 'other'];
 const VALID_FIDELITIES: DesignFidelity[] = ['wireframe', 'high'];

@@ -12,7 +12,6 @@
 import { create } from '@bufbuild/protobuf';
 import { DeliveryClass, DeliveryMetadataSchema } from '@funny/shared/browser-v1/common';
 import { ApplicationEventSchema } from '@funny/shared/browser-v1/events';
-import { createThreadShareRepository } from '@funny/shared/repositories';
 import {
   THREAD_SHARE_GRANTED_EVENT,
   THREAD_SHARE_REVOKED_EVENT,
@@ -21,14 +20,15 @@ import { inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { db, dbAll, dbRun } from '../db/index.js';
+import { db, dbAll } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
 import { isProjectMember } from '../services/project-manager.js';
 import { parseJsonBody } from '../validation/request.js';
 import { requireThreadOwner } from './threads.js';
 
-const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
+const shareRepo = repos.threadShares();
 
 export const shareRoutes = new Hono<ServerEnv>();
 

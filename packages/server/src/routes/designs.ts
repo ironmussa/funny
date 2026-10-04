@@ -16,8 +16,8 @@ import { nanoid } from 'nanoid';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
+import { requireProjectAccess } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
-import * as projectRepo from '../services/project-repository.js';
 
 const designRepo = createDesignRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
 
@@ -29,36 +29,18 @@ const VALID_FIDELITIES: DesignFidelity[] = ['wireframe', 'high'];
 export const designProjectRoutes = new Hono<ServerEnv>();
 
 // GET /api/projects/:id/designs — list designs for a project
-designProjectRoutes.get('/:id/designs', async (c) => {
+designProjectRoutes.get('/:id/designs', requireProjectAccess('view'), async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-
-  const project = await projectRepo.getProject(projectId);
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (project.userId !== userId) {
-    if (!orgId || !(await projectRepo.isProjectInOrg(projectId, orgId))) {
-      return c.json({ error: 'Access denied' }, 403);
-    }
-  }
 
   const designs = await designRepo.listDesigns(projectId, userId);
   return c.json(designs);
 });
 
 // POST /api/projects/:id/designs — create a new design row
-designProjectRoutes.post('/:id/designs', async (c) => {
+designProjectRoutes.post('/:id/designs', requireProjectAccess('view'), async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-
-  const project = await projectRepo.getProject(projectId);
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (project.userId !== userId) {
-    if (!orgId || !(await projectRepo.isProjectInOrg(projectId, orgId))) {
-      return c.json({ error: 'Access denied' }, 403);
-    }
-  }
 
   const body = await c.req.json<{
     name: string;

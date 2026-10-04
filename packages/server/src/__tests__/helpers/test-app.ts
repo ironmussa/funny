@@ -109,6 +109,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { threadRoutes } = await import('../../routes/threads.js');
   const { shareRoutes } = await import('../../routes/thread-shares.js');
   const { settingsRoutes } = await import('../../routes/settings.js');
+  const { designProjectRoutes } = await import('../../routes/designs.js');
   const { profileRoutes } = await import('../../routes/profile.js');
   const { schedulerRoutes } = await import('../../routes/scheduler.js');
   const { teamSettingsRoutes } = await import('../../routes/team-settings.js');
@@ -122,6 +123,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   app.route('/api/projects', projectRunnerSettingsRoutes);
   app.route('/api/projects', projectRoutes);
+  app.route('/api/projects', designProjectRoutes);
   app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
   app.route('/api/threads', shareRoutes);
@@ -164,6 +166,8 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
       'agent_execution_profiles',
       'threads',
       'team_projects',
+      'member',
+      'organization',
       'project_members',
       'projects',
       'runners',

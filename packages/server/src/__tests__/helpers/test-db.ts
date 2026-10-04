@@ -541,6 +541,45 @@ export function seedProjectMember(
   return member;
 }
 
+/**
+ * Seed a Better Auth org membership (`member` row), creating the user and org
+ * rows its foreign keys need when missing.
+ */
+export function seedOrgMember(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: { organizationId?: string; userId?: string; role?: string } = {},
+) {
+  const organizationId = overrides.organizationId ?? 'org-1';
+  const userId = overrides.userId ?? 'user-1';
+  const now = new Date().toISOString();
+  db.insert(schema.organization)
+    .values({ id: organizationId, name: organizationId, createdAt: now } as any)
+    .onConflictDoNothing()
+    .run();
+  db.insert(schema.user)
+    .values({
+      id: userId,
+      name: userId,
+      email: `${userId}@local.host`,
+      emailVerified: 0,
+      createdAt: now,
+      updatedAt: now,
+    } as any)
+    .onConflictDoNothing()
+    .run();
+  const row = {
+    id: `m-${organizationId}-${userId}`,
+    organizationId,
+    userId,
+    role: overrides.role ?? 'member',
+    createdAt: now,
+  };
+  db.insert(schema.member)
+    .values(row as any)
+    .run();
+  return row;
+}
+
 export function seedResourceGrant(
   db: ReturnType<typeof createTestDb>['db'],
   overrides: {

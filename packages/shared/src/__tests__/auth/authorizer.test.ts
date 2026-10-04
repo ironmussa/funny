@@ -1,9 +1,10 @@
 /**
  * Authorizer tests (unified-rbac-grants). Pure — fakes, no DB.
  *
- * ACCESS IS EXPLICIT: no cross-resource inheritance. A role on a thread/project
- * comes only from ownership or an explicit grant on THAT resource. Org/project
- * membership grants nothing on a thread. Plus the runner-crossing security gate.
+ * Threads are explicit: a role comes only from ownership or an explicit grant on
+ * THAT thread; org/project membership grants nothing on a thread. Projects also
+ * admit members of an org the project is shared with, as `viewer` only. Plus
+ * the runner-crossing security gate.
  */
 import { beforeEach, describe, expect, test } from 'bun:test';
 
@@ -15,6 +16,7 @@ interface World {
   orgRoles: Map<string, Role>; // `${subject}|${orgId}` → org role (member adapter)
   threads: Map<string, ThreadMeta>;
   projects: Map<string, ProjectMeta>;
+  projectOrgs: Map<string, string[]>; // projectId → orgs it is shared with
 }
 
 function build(world: World) {
@@ -24,13 +26,20 @@ function build(world: World) {
     getOrgRole: async (subject, orgId) => world.orgRoles.get(`${subject}|${orgId}`) ?? null,
     loadThreadMeta: async (id) => world.threads.get(id) ?? null,
     loadProjectMeta: async (id) => world.projects.get(id) ?? null,
+    listProjectOrgIds: async (id) => world.projectOrgs.get(id) ?? [],
   });
 }
 
 describe('authorizer — explicit access, NO inheritance', () => {
   let world: World;
   beforeEach(() => {
-    world = { grants: new Map(), orgRoles: new Map(), threads: new Map(), projects: new Map() };
+    world = {
+      grants: new Map(),
+      orgRoles: new Map(),
+      threads: new Map(),
+      projects: new Map(),
+      projectOrgs: new Map(),
+    };
   });
 
   test('a project grant does NOT grant any role on the project’s threads', async () => {
@@ -46,7 +55,7 @@ describe('authorizer — explicit access, NO inheritance', () => {
     expect(await a.effectiveRole('U', 'project', 'P')).toBe('admin');
   });
 
-  test('an org role does NOT grant any role on the org’s projects', async () => {
+  test('an org role grants nothing on a project NOT shared with that org', async () => {
     world.orgRoles.set('U|O', 'admin');
     world.projects.set('P', { ownerId: 'someone-else' });
     const a = build(world);
@@ -95,7 +104,13 @@ describe('authorizer — explicit access, NO inheritance', () => {
 describe('authorizer — runner-crossing security gate', () => {
   let world: World;
   beforeEach(() => {
-    world = { grants: new Map(), orgRoles: new Map(), threads: new Map(), projects: new Map() };
+    world = {
+      grants: new Map(),
+      orgRoles: new Map(),
+      threads: new Map(),
+      projects: new Map(),
+      projectOrgs: new Map(),
+    };
   });
 
   test('a project admin (no thread grant) cannot cross to the owner runner', async () => {
@@ -128,5 +143,58 @@ describe('authorizer — runner-crossing security gate', () => {
     world.threads.set('T', { ownerId: 'OWNER' });
     const a = build(world);
     expect(await a.canCrossToOwnerRunner('OWNER', 'T')).toBe(true);
+  });
+});
+
+describe('authorizer — projects shared with an org', () => {
+  let world: World;
+  beforeEach(() => {
+    world = {
+      grants: new Map(),
+      orgRoles: new Map(),
+      threads: new Map(),
+      projects: new Map([['P', { ownerId: 'owner' }]]),
+      projectOrgs: new Map([['P', ['O']]]),
+    };
+  });
+
+  test('any member of the org can view the project, but not manage it', async () => {
+    world.orgRoles.set('U|O', 'admin'); // even an org admin
+    const a = build(world);
+
+    expect(await a.effectiveRole('U', 'project', 'P')).toBe('viewer');
+    expect(await a.authorize('U', 'project', 'P', 'view')).toBe(true);
+    expect(await a.authorize('U', 'project', 'P', 'manage')).toBe(false);
+  });
+
+  test('membership in an unrelated org grants nothing', async () => {
+    world.orgRoles.set('U|other-org', 'owner');
+    const a = build(world);
+
+    expect(await a.effectiveRole('U', 'project', 'P')).toBeNull();
+  });
+
+  test('an explicit collaborator grant wins over the org viewer role', async () => {
+    world.orgRoles.set('U|O', 'contributor');
+    world.grants.set('U|project|P', 'admin');
+    const a = build(world);
+
+    expect(await a.authorize('U', 'project', 'P', 'manage')).toBe(true);
+  });
+
+  test('org sharing never reaches the project’s threads', async () => {
+    world.orgRoles.set('U|O', 'admin');
+    world.threads.set('T', { ownerId: 'owner' });
+    const a = build(world);
+
+    expect(await a.authorize('U', 'thread', 'T', 'view')).toBe(false);
+  });
+
+  test('a deleted project yields no role even for org members', async () => {
+    world.orgRoles.set('U|O', 'admin');
+    world.projects.delete('P');
+    const a = build(world);
+
+    expect(await a.effectiveRole('U', 'project', 'P')).toBeNull();
   });
 });

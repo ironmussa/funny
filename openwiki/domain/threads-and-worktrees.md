@@ -38,6 +38,19 @@ UI label:       "Viewer"      "Commenter"         "Editor"
 - **`comment`** — read + post comments.
 - **`steer`** — read + comment + send follow-up messages to the agent (displayed to end users as **Editor**). Git write actions (commit, push, PR creation, stage, destructive ops) always stay owner-only, regardless of share level.
 
+### Project access
+
+Threads are private; projects are shared workspaces. The unified authorizer (`packages/shared/src/auth/authorizer.ts`) gives a user a role on a project when they are:
+
+| Who | Role | Can |
+|---|---|---|
+| The creator | `owner` | everything, including delete |
+| A collaborator (`project_members`, role `admin`) | `admin` | view + `manage` (members, startup commands, project settings) |
+| A collaborator (role `member`) | `contributor` | view |
+| A member of an org the project is shared with (`team_projects`) | `viewer` | view |
+
+Org sharing never reaches the project's threads — those still need an explicit thread grant. Server routes declare the capability they need with `requireProjectAccess(capability)` (`packages/server/src/middleware/project-access.ts`, wired in `lib/server-authorizer.ts`); runtime routes use `requireProject` / `requireAccessibleProject` (`packages/runtime/src/utils/route-helpers.ts`, `routes/github/helpers.ts`). A caller with no role gets the same `404 Project not found` as for a missing id, so foreign projects stay invisible; a caller who can see the project but lacks the capability gets `403`. Runner settings (`project-runner-settings.ts`) stay owner-only, since they pin the owner's own runners.
+
 ### Runner isolation, and the one exception
 
 **Requests are only ever routed to the runner belonging to the requesting user.** A user's runner is never substituted with another user's runner, even if that other runner is online — this is a hard tenant boundary, because a runner has access to that user's filesystem, git credentials, and environment. If a user's own runner is unavailable, the server returns `502`; it does not fail over to a different runner.

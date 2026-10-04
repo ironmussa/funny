@@ -16,7 +16,12 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 import { user } from '@funny/shared/db/schema-sqlite';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember } from '../helpers/test-db.js';
+import {
+  seedOrgMember,
+  seedProject,
+  seedProjectMember,
+  seedTeamProject,
+} from '../helpers/test-db.js';
 
 describe('project collaborators', () => {
   let t: TestApp;
@@ -39,10 +44,16 @@ describe('project collaborators', () => {
       expect(await pm.isProjectMember('p1', 'alice')).toBe(true);
     });
 
-    test('a non-owner, non-admin cannot add members → 403', async () => {
+    test('a user without access cannot add members, and cannot tell the project exists → 404', async () => {
       const res = await t
         .requestAs('stranger')
         .post('/api/projects/p1/members', { userId: 'alice' });
+      expect(res.status).toBe(404);
+    });
+
+    test('a plain member cannot add members → 403', async () => {
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
+      const res = await t.requestAs('bob').post('/api/projects/p1/members', { userId: 'alice' });
       expect(res.status).toBe(403);
     });
 
@@ -207,10 +218,58 @@ describe('project collaborators', () => {
     });
 
     test('rejects a non-absolute path → 400', async () => {
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
       const res = await t
         .requestAs('alice')
         .post('/api/projects/p1/local-path', { localPath: 'relative/path' });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('local path cannot be used to join a project', () => {
+    // Regression: setMemberLocalPath lazily inserts a `project_members` row, and
+    // the route had no access check — so any user could make themselves a
+    // collaborator of any project by posting a local path for it.
+    test('a user without access gets 404 and no member row is created', async () => {
+      const res = await t
+        .requestAs('stranger')
+        .post('/api/projects/p1/local-path', { localPath: '/home/stranger/p1' });
+      expect(res.status).toBe(404);
+
+      const pm = await import('../../services/project-manager.js');
+      expect(await pm.isProjectMember('p1', 'stranger')).toBe(false);
+    });
+  });
+
+  describe('projects shared with an org', () => {
+    beforeEach(() => {
+      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'p1' });
+      seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'carla', role: 'admin' });
+    });
+
+    test('an org member can read the project’s commands and designs', async () => {
+      expect((await t.requestAs('carla').get('/api/projects/p1/commands')).status).toBe(200);
+      expect((await t.requestAs('carla').get('/api/projects/p1/designs')).status).toBe(200);
+    });
+
+    test('an org member can read their agent-profile binding for the project', async () => {
+      const res = await t.requestAs('carla').get('/api/settings/agent-profiles/projects/p1');
+      expect(res.status).toBe(200);
+    });
+
+    test('an org member cannot change the project or its commands → 403', async () => {
+      expect((await t.requestAs('carla').patch('/api/projects/p1', { name: 'x' })).status).toBe(
+        403,
+      );
+      const res = await t
+        .requestAs('carla')
+        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
+      expect(res.status).toBe(403);
+    });
+
+    test('a member of another org gets 404', async () => {
+      seedOrgMember(t.db as any, { organizationId: 'org-2', userId: 'daniel' });
+      expect((await t.requestAs('daniel').get('/api/projects/p1/commands')).status).toBe(404);
     });
   });
 

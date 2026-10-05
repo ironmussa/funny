@@ -1686,6 +1686,20 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    // Columns no code has read for a long time (memory feature, old automation
+    // link, per-user GitHub token / AssemblyAI key superseded elsewhere). Drop
+    // them — including any secrets still sitting in them.
+    name: '081_drop_retired_columns',
+    async up() {
+      await ctx().dropColumn('agent_templates', 'memory_override');
+      await ctx().dropColumn('agent_templates', 'custom_memory_paths');
+      await ctx().dropColumn('projects', 'memory_enabled');
+      await ctx().dropColumn('threads', 'automation_id');
+      await ctx().dropColumn('user_profiles', 'github_token');
+      await ctx().dropColumn('user_profiles', 'assemblyai_api_key');
+    },
+  },
 ];
 
 /**

@@ -25,6 +25,8 @@ export interface MigrationContext {
   ) => Promise<T | undefined>;
   /** Safely add a column (idempotent) */
   addColumn: (table: string, column: string, type: string, dflt?: string) => Promise<void>;
+  /** Drop a column if it exists (idempotent). Destroys its data. */
+  dropColumn: (table: string, column: string) => Promise<void>;
   /** The active dialect — migrations can use this to emit dialect-specific SQL. */
   dialect: DbDialect;
 }
@@ -85,7 +87,14 @@ function createSqliteMigrationContext(db: any): MigrationContext {
     }
   }
 
-  return { exec, queryOne, addColumn, dialect: 'sqlite' };
+  async function dropColumn(table: string, column: string) {
+    // SQLite (3.35+) has DROP COLUMN but no `IF EXISTS` — check first.
+    const columns = db.all(sql.raw(`PRAGMA table_info(${table})`)) as { name: string }[];
+    if (!columns.some((c) => c.name === column)) return;
+    await exec(sql.raw(`ALTER TABLE ${table} DROP COLUMN ${column}`));
+  }
+
+  return { exec, queryOne, addColumn, dropColumn, dialect: 'sqlite' };
 }
 
 function createPgMigrationContext(db: any): MigrationContext {
@@ -110,7 +119,11 @@ function createPgMigrationContext(db: any): MigrationContext {
     );
   }
 
-  return { exec, queryOne, addColumn, dialect: 'pg' };
+  async function dropColumn(table: string, column: string) {
+    await exec(sql.raw(`ALTER TABLE ${table} DROP COLUMN IF EXISTS ${column}`));
+  }
+
+  return { exec, queryOne, addColumn, dropColumn, dialect: 'pg' };
 }
 
 // ── Migration runner ─────────────────────────────────────────────

@@ -22,20 +22,6 @@ import { getTableConfig as pgConfig, PgTable } from 'drizzle-orm/pg-core';
 import { getTableConfig as sqliteConfig, SQLiteTable } from 'drizzle-orm/sqlite-core';
 
 /**
- * Columns the migrations still create but no code reads any more. Dropping
- * them would destroy user data, so they are tolerated explicitly — any OTHER
- * column present in a migrated DB but missing from the definition fails.
- */
-const RETIRED_COLUMNS = new Set([
-  'agent_templates.memory_override',
-  'agent_templates.custom_memory_paths',
-  'projects.memory_enabled',
-  'threads.automation_id',
-  'user_profiles.github_token',
-  'user_profiles.assemblyai_api_key',
-]);
-
-/**
  * Better Auth stores its booleans as integers on SQLite and as native booleans
  * on Postgres; `lib/auth.ts` and migration 061 handle the difference.
  */
@@ -113,7 +99,7 @@ function liveDrift(definition: SchemaShape, live: Record<string, Set<string>>): 
     }
     for (const column of liveColumns) {
       const key = `${table}.${column}`;
-      if (!columns[column] && !RETIRED_COLUMNS.has(key)) {
+      if (!columns[column]) {
         problems.push(`${key} exists in migrated DB but not in the definition`);
       }
     }

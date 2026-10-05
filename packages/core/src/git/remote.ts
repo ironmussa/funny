@@ -200,30 +200,3 @@ export function mergeBranch(
     toDomainError,
   );
 }
-
-/**
- * Clone a remote repository.
- *
- * Credentials are the caller's responsibility — pass a pre-authenticated URL
- * or inject env vars (e.g. `GIT_ASKPASS`) through `options.env`.
- */
-export function cloneRepo(
-  repoUrl: string,
-  destination: string,
-  options?: { branch?: string; depth?: number; env?: Record<string, string> },
-): ResultAsync<string, DomainError> {
-  const args = ['clone'];
-  if (options?.branch) args.push('--branch', options.branch);
-  if (options?.depth) args.push('--depth', String(options.depth));
-  args.push('--', repoUrl, destination);
-
-  return ResultAsync.fromPromise(
-    execute('git', args, { env: options?.env, skipPool: true }),
-    (error) => {
-      if (error instanceof ProcessExecutionError) {
-        return processError(error.message, error.exitCode, error.stderr);
-      }
-      return internal(String(error));
-    },
-  ).map((result) => result.stdout.trim());
-}

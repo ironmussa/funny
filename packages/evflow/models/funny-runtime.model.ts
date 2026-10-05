@@ -13,7 +13,7 @@
  * packages/runtime/src/services/thread-event-bus.ts and handler-registry.ts.
  */
 
-import { EventModel } from '@funny/evflow';
+import { EventModel } from '../src/index.js';
 
 export function createRuntimeModel(): EventModel {
   const system = new EventModel('FunnyRuntime');

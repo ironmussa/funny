@@ -482,6 +482,7 @@
       },
       "devDependencies": {
         "@funny/core": "workspace:*",
+        "@funny/evflow": "workspace:*",
         "@funny/pipelines": "workspace:*",
         "@funny/shared": "workspace:*",
         "@funny/thread-scheduler": "workspace:*",
@@ -577,7 +578,6 @@
       "version": "0.1.0",
       "dependencies": {
         "@bufbuild/protobuf": "2.14.0",
-        "@funny/evflow": "workspace:*",
         "drizzle-orm": "^0.45.1",
         "nanoid": "^5.1.5",
         "pg": "^8.20.0",

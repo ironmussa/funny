@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./generators": "./src/generators/index.ts",
-    "./plugin": "./plugin/index.cjs"
+    "./plugin": "./plugin/index.cjs",
+    "./funny-runtime-model": "./models/funny-runtime.model.ts"
   },
   "scripts": {
     "test": "bun test",

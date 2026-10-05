@@ -45,7 +45,10 @@ export default defineConfig({
       '@funny/shared/socket-events': path.join(shared, 'socket-events.ts'),
       '@funny/shared/auth/forwarded-identity': path.join(shared, 'auth/forwarded-identity.ts'),
       '@funny/shared/auth/media-url-signature': path.join(shared, 'auth/media-url-signature.ts'),
-      '@funny/shared/evflow-model': path.join(shared, 'evflow.model.ts'),
+      '@funny/evflow/funny-runtime-model': path.resolve(
+        __dirname,
+        '../evflow/models/funny-runtime.model.ts',
+      ),
       '@funny/shared/lib/crypto': path.join(shared, 'lib/crypto.ts'),
       '@funny/shared/lib/canonical-json': path.join(shared, 'lib/canonical-json.ts'),
       '@funny/shared/lib/file-search': path.join(shared, 'lib/file-search.ts'),

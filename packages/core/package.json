@@ -12,7 +12,6 @@
     "./git": "./src/git/index.ts",
     "./git/path-validation": "./src/git/path-validation.ts",
     "./chrome": "./src/chrome/index.ts",
-    "./containers": "./src/containers/index.ts",
     "./scheduler": "./src/scheduler/index.ts",
     "./ports": "./src/ports/index.ts",
     "./symbols": "./src/symbols/index.ts"

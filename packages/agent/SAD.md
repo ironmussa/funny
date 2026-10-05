@@ -1397,7 +1397,7 @@ The pipeline integrates a **Step 0 for infrastructure** that has two layers: a *
 └──────────────────────────────┘
 ```
 
-- **`@funny/core/containers`** — Reusable library. Contains `SandboxManager`, `ContainerService`, and `createCdpMcpServer`.
+- **`@funny/core/containers`** — Reusable library. Contains `SandboxManager`, `ContainerService`, and `createCdpMcpServer`. *(Removed in the codebase-simplification change: nothing imported it. Restore it from git history if the sandboxed pipeline is built.)*
 - **`ContainerManager`** — Pipeline-specific orchestration. Lives in `packages/agent/src/infrastructure/`.
 
 #### Step 0 Flow

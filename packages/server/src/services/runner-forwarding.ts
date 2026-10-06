@@ -1,7 +1,8 @@
 /**
- * Runner forwarding helpers shared by thread routes and the threads module's
- * infrastructure adapters: user-scoped project→runner resolution, signed
- * identity headers, the request wrapper, and runner error-message extraction.
+ * Server → runner request helpers: user-scoped project→runner resolution,
+ * signed identity headers, the request wrapper, and runner error-message
+ * extraction. Shared by thread routes, `runner-thread-launcher`, and the
+ * `modules/threads` infrastructure adapters.
  */
 
 import {
@@ -21,8 +22,8 @@ import type { ResolvedRunner } from './runner-resolver.js';
 const runnerErrorBodySchema = z.object({ error: z.string().optional() }).passthrough();
 
 // Read at call time, not module load — the test harness sets this in a
-// per-file top-of-module assignment, but this module may have already
-// been imported by an earlier test file via the shared test-app helper, so
+// per-file top-of-module assignment, but this module may have already been
+// imported by an earlier test file via the shared test-app helper, so
 // capturing it as a top-level constant freezes whatever value `process.env`
 // happened to hold at first load (commonly undefined → crypto signing throws).
 function getRunnerAuthSecret(): string {

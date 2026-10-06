@@ -28,7 +28,12 @@ Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workfl
 ## 2. Workflows and scheduled automation
 
 - **`packages/workflows` (`@funny/workflows`)** defines YAML-based workflow catalogs (graph builder + Zod schema + serialize/parse). Consumed by `packages/runtime/src/pipelines/yaml-compiler.ts` / `yaml-loader.ts`, surfaced in the UI at `packages/client/src/components/WorkflowsSettings.tsx`, and used by `packages/scheduler/src/dispatcher.ts`.
-- **`packages/runtime/src/services/automation-manager.ts`** and **`automation-scheduler.ts`** drive scheduled/triggered automations inside the runner, which can invoke the pipeline layer above for multi-step work.
+- **Automations** (user-defined prompt + cron schedule, `automations` / `automation_runs` tables) are run by the **server**, not the runner:
+  - `packages/server/src/services/automation-scheduler.ts` keeps one croner job per enabled automation. The automation routes reschedule on create/update/delete. There is no catch-up after downtime.
+  - On each tick, or on `POST /api/automations/:id/trigger`, it starts a read-only `source: 'automation'` thread on the **owner's** runner via `startThreadOnRunner` (`services/runner-thread-launcher.ts`), which delegates to the `modules/threads` creation use case that interactive threads use. Runner isolation and the project ↔ runner binding therefore apply unchanged.
+  - The run is recorded in `automation_runs`. If the owner's runner is unreachable, the run is recorded as failed and is not retried on another runner.
+  - `services/automation-runs.ts` completes the run when the runner persists the thread's terminal status (`data-handler.ts` → `notifyTerminalStatusPersisted`), with no polling, and archives runs beyond `maxRunHistory`.
+  - The scheduler assumes a **single server instance**: replicas would each fire every automation.
 - **`packages/scheduler` (`@funny/thread-scheduler`)** is the poll/reconcile "brain" for scheduled/automated thread dispatch. Its own code comment describes it as transport-agnostic: with in-process adapters it can run inside the server; with HTTP adapters (the current default — `packages/scheduler/src/adapters/http-*.ts`) it runs as its own process hitting `/api/scheduler/system/*` on the server. It's built on pure logic exported from `@funny/core/scheduler` (`planDispatch`, retry/backoff). Root `package.json`'s `dev:scheduler` script runs it alongside server/runner/client in development.
 
 ## Optional durable-workflow infra (not part of the above)

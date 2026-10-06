@@ -23,14 +23,8 @@ import {
   isNotNull,
 } from 'drizzle-orm';
 
-import type {
-  AppDatabase,
-  dbAll as dbAllFn,
-  dbGet as dbGetFn,
-  dbRun as dbRunFn,
-} from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
 import type { createCommentRepository } from './comment-repository.js';
+import type { RepoDeps } from './deps.js';
 import { createGrantRepository } from './grant-repository.js';
 import type { createStageHistoryRepository } from './stage-history.js';
 
@@ -42,19 +36,14 @@ function escapeLike(value: string): string {
   return value.replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-export interface ThreadRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbGet: typeof dbGetFn;
-  dbRun: typeof dbRunFn;
+export type ThreadRepositoryDeps = RepoDeps & {
   /** Optional logger for info messages */
   log?: { info: (msg: string, meta?: any) => void };
   /** Comment repository instance (for getCommentCounts) */
   commentRepo: ReturnType<typeof createCommentRepository>;
   /** Stage history repository instance (for recordStageChange) */
   stageHistoryRepo: ReturnType<typeof createStageHistoryRepository>;
-}
+};
 
 export function createThreadRepository(deps: ThreadRepositoryDeps) {
   const { db, schema, dbAll, dbGet, dbRun, log, commentRepo, stageHistoryRepo } = deps;

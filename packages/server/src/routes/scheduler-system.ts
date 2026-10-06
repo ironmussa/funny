@@ -16,17 +16,18 @@
  * fetch translation.
  */
 
-import { dbAll, dbGet, dbRun } from '@funny/shared/db/connection';
+import { dbGet } from '@funny/shared/db/connection';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { createSchedulerRunRepository } from '@funny/shared/repositories';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { db } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { buildForwardHeaders } from '../services/runner-forwarding.js';
 import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import { resolveRunner } from '../services/runner-resolver.js';
 import { getSchedulerEventBuffer } from '../services/scheduler-event-buffer.js';
@@ -37,13 +38,7 @@ export const schedulerSystemRoutes = new Hono<ServerEnv>();
 
 const NS = 'scheduler-system-routes';
 
-const runRepo = createSchedulerRunRepository({
-  db,
-  schema: schema as unknown as Parameters<typeof createSchedulerRunRepository>[0]['schema'],
-  dbAll,
-  dbGet,
-  dbRun,
-});
+const runRepo = repos.schedulerRuns();
 
 const threadQuery = createDefaultThreadQuery();
 
@@ -344,12 +339,9 @@ schedulerSystemRoutes.post('/dispatch', async (c) => {
     );
   }
 
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    'X-Forwarded-User': body.userId,
-  };
-  const runnerSecret = process.env.RUNNER_AUTH_SECRET;
-  if (runnerSecret) headers['X-Runner-Auth'] = runnerSecret;
+  // Signed like every server → runner call: the runtime rejects a forwarded
+  // identity without a valid HMAC signature.
+  const headers = buildForwardHeaders(body.userId);
 
   const payload: Record<string, unknown> = { threadId: body.threadId };
   if (typeof body.prompt === 'string') payload.prompt = body.prompt;
@@ -432,12 +424,9 @@ schedulerSystemRoutes.post('/cancel/:pipelineRunId', async (c) => {
     : await findAnyRunnerForUser(body.userId);
   if (!runnerId) return c.json({ ok: true, found: false });
 
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    'X-Forwarded-User': body.userId,
-  };
-  const runnerSecret = process.env.RUNNER_AUTH_SECRET;
-  if (runnerSecret) headers['X-Runner-Auth'] = runnerSecret;
+  // Signed like every server → runner call: the runtime rejects a forwarded
+  // identity without a valid HMAC signature.
+  const headers = buildForwardHeaders(body.userId);
 
   try {
     await c.env.runnerRequests!.request(runnerId, {

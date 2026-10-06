@@ -71,7 +71,7 @@ export function uploadFile(params: UploadFileParams): ResultAsync<UploadFileResu
 async function uploadFileImpl(
   params: UploadFileParams,
 ): Promise<Result<UploadFileResult, DomainError>> {
-  const cwdResult = await requireThreadCwd(params.threadId, params.userId, params.organizationId);
+  const cwdResult = await requireThreadCwd(params.threadId, params.userId);
   if (cwdResult.isErr()) return err(cwdResult.error);
   const cwd = cwdResult.value;
 

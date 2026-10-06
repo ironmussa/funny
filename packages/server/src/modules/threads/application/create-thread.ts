@@ -20,7 +20,7 @@ import {
   targetProjectId,
   type CreationRejection,
 } from '../domain/creation-target.js';
-import { createdThreadId } from '../domain/ids.js';
+import { createdThreadId, type RunnerId, type ThreadId } from '../domain/ids.js';
 import type { CreateThreadCommand, CreateThreadPorts, ThreadRegistration } from './ports.js';
 
 /** Legacy local runner id. Threads on it are not registered or cached. */
@@ -35,6 +35,10 @@ export type CreateThreadFailure =
 export interface CreateThreadSuccess {
   /** The runner's response body, forwarded to the client unchanged. */
   readonly thread: unknown;
+  /** Id the runner returned (top-level or nested), if any. */
+  readonly threadId?: ThreadId;
+  /** The actor's runner the thread was created on. */
+  readonly runnerId: RunnerId;
 }
 
 export type CreateThread = (
@@ -82,7 +86,11 @@ export function makeCreateThread(ports: CreateThreadPorts): CreateThread {
         ports.routingCache.remember(id, actor.userId, runnerId);
       }
 
-      return ok({ thread: response.thread });
+      return ok({
+        thread: response.thread,
+        threadId: threadId ? createdThreadId(threadId) : undefined,
+        runnerId,
+      });
     } catch (cause) {
       return err({ kind: 'creation-failed', cause });
     }

@@ -601,3 +601,14 @@ export function isModelForProvider(provider: AgentProvider, model: AgentModel): 
 
 // Suppress unused-type warning on ModelsOf for consumers that only want the value map.
 export type _ModelsOf<P extends keyof typeof MODEL_REGISTRY> = ModelsOf<P>;
+
+/**
+ * Tools an automation run's agent may never use — automations are read-only
+ * (they report findings; they don't change the repository or run commands).
+ */
+export const AUTOMATION_DISALLOWED_TOOLS: readonly string[] = [
+  'Edit',
+  'Write',
+  'Bash',
+  'NotebookEdit',
+];

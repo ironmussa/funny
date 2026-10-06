@@ -17,21 +17,9 @@
 
 import { and, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 
-import type {
-  AppDatabase,
-  dbAll as dbAllFn,
-  dbGet as dbGetFn,
-  dbRun as dbRunFn,
-} from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
+import type { RepoDeps } from './deps.js';
 
-export interface SchedulerRunRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbGet: typeof dbGetFn;
-  dbRun: typeof dbRunFn;
-}
+export type SchedulerRunRepositoryDeps = RepoDeps;
 
 export interface SchedulerRunRow {
   threadId: string;

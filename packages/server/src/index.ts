@@ -451,6 +451,15 @@ setupBrowserNamespace({
 // longer hosts the brain in-process — see README "Running the scheduler
 // standalone" for the migration path.
 
+// Automations: the server owns the cron and dispatches each run to the
+// automation owner's runner (services/automation-scheduler.ts).
+const automationScheduler = await import('./services/automation-scheduler.js');
+if (runnerTransport) {
+  await automationScheduler.startAutomationScheduler({
+    ports: { requests: runnerTransport.requests, presence: runnerTransport.presence },
+  });
+}
+
 const server = Bun.serve({
   // Spread Bun engine handler FIRST — provides the `websocket` property
   // for native Bun WebSocket lifecycle (open/message/close).
@@ -552,6 +561,9 @@ async function shutdown() {
     log.warn('Force exit after timeout', { namespace: 'server' });
     process.exit(1);
   }, 5000);
+
+  // Stop firing automations before the runner transport goes away
+  automationScheduler.stopAutomationScheduler();
 
   // Close Socket.IO connections
   await closeSocketIO();

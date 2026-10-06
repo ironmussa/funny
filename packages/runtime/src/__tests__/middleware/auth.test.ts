@@ -41,10 +41,14 @@ function createApp() {
   return app;
 }
 
-/** Build a Hono app with authMiddleware + requireAdmin chained. */
-function createAdminApp() {
+/** Build a Hono app where `user` is already authenticated, guarded by requireAdmin. */
+function createAdminApp(user: { id: string; role?: string }) {
   const app = new Hono<HonoEnv>();
-  app.use('*', authMiddleware);
+  app.use('*', async (c, next) => {
+    c.set('userId', user.id);
+    c.set('userRole', user.role as any);
+    await next();
+  });
   app.use('/api/admin/*', requireAdmin);
   app.get('/api/admin/users', (c) => c.json({ userId: c.get('userId'), role: c.get('userRole') }));
   return app;
@@ -101,73 +105,34 @@ describe('authMiddleware', () => {
   // Auth route bypass
   // -----------------------------------------------------------------------
 
-  describe('auth routes bypass auth', () => {
-    test('/api/auth/* paths bypass auth', async () => {
-      const app = createApp();
-      const res = await app.request('/api/auth/login');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toEqual({ login: true });
-    });
-
-    test('/api/auth/some-other also bypasses auth', async () => {
-      const app = createApp();
-      const res = await app.request('/api/auth/some-other');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toEqual({ auth: true });
-    });
-
-    test('/api/mcp/oauth/callback bypasses auth', async () => {
-      const app = createApp();
-      const res = await app.request('/api/mcp/oauth/callback');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toEqual({ callback: true });
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Better Auth session (Priority 3)
-  // -----------------------------------------------------------------------
-
-  describe('Better Auth session', () => {
-    test('returns 401 when no session exists', async () => {
-      mockGetSession.mockResolvedValue(null);
-
-      const app = createApp();
-      const res = await app.request('/api/projects');
-      expect(res.status).toBe(401);
-      const body = await res.json();
-      expect(body).toEqual({ error: 'Unauthorized' });
-    });
-
-    test('valid session sets userId and userRole', async () => {
+  describe('no local session fallback', () => {
+    // Regression: the runner used to fall back to a local Better Auth instance
+    // (its own legacy DB) and let every `/api/auth/*` path through without
+    // credentials. The runner has no auth DB — anything not forwarded by the
+    // server or validated against it must be 401, without touching Better Auth.
+    test('a request local Better Auth would accept is still 401', async () => {
       mockGetSession.mockResolvedValue({
         user: { id: 'user-42', role: 'admin' },
         session: { activeOrganizationId: null },
       });
 
-      const app = createApp();
-      const res = await app.request('/api/projects');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.userId).toBe('user-42');
-      expect(body.role).toBe('admin');
+      const res = await createApp().request('/api/projects');
+
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: 'Unauthorized' });
+      expect(mockGetSession).not.toHaveBeenCalled();
     });
 
-    test('session user without role defaults to "user"', async () => {
-      mockGetSession.mockResolvedValue({
-        user: { id: 'user-99' },
-        session: { activeOrganizationId: null },
-      });
-
+    test('/api/auth/* paths other than /api/auth/mode require credentials', async () => {
       const app = createApp();
-      const res = await app.request('/api/projects');
+      expect((await app.request('/api/auth/login')).status).toBe(401);
+      expect((await app.request('/api/auth/some-other')).status).toBe(401);
+    });
+
+    test('/api/mcp/oauth/callback bypasses auth', async () => {
+      const res = await createApp().request('/api/mcp/oauth/callback');
       expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.userId).toBe('user-99');
-      expect(body.role).toBe('user');
+      expect(await res.json()).toEqual({ callback: true });
     });
   });
 });
@@ -177,17 +142,8 @@ describe('authMiddleware', () => {
 // ---------------------------------------------------------------------------
 
 describe('requireAdmin', () => {
-  beforeEach(() => {
-    mockGetSession.mockReset();
-  });
-
   test('returns 403 for non-admin user', async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: 'user-regular', role: 'user' },
-      session: { activeOrganizationId: null },
-    });
-
-    const app = createAdminApp();
+    const app = createAdminApp({ id: 'user-regular', role: 'user' });
     const res = await app.request('/api/admin/users');
     expect(res.status).toBe(403);
     const body = await res.json();
@@ -195,12 +151,7 @@ describe('requireAdmin', () => {
   });
 
   test('allows admin user', async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: 'user-admin', role: 'admin' },
-      session: { activeOrganizationId: null },
-    });
-
-    const app = createAdminApp();
+    const app = createAdminApp({ id: 'user-admin', role: 'admin' });
     const res = await app.request('/api/admin/users');
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -209,12 +160,7 @@ describe('requireAdmin', () => {
   });
 
   test('returns 403 when role is undefined (no role set)', async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: 'user-norole' },
-      session: { activeOrganizationId: null },
-    });
-
-    const app = createAdminApp();
+    const app = createAdminApp({ id: 'user-norole' });
     const res = await app.request('/api/admin/users');
     expect(res.status).toBe(403);
     const body = await res.json();

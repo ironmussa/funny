@@ -16,10 +16,27 @@ export interface CreatePgOptions {
 const noop = { info: () => {}, warn: () => {} };
 
 /**
+ * Type parsers for this pool. `pg` returns int8 (bigint, and every COUNT(*))
+ * as a string to avoid precision loss above 2^53. funny's int8 values are
+ * epoch-millisecond timestamps and counts, far below that, and SQLite returns
+ * them as numbers — so parse them as numbers here too, for raw SQL as well as
+ * Drizzle's typed selects.
+ */
+export function pgTypeParsers(types: typeof import('pg').types) {
+  return {
+    getTypeParser(oid: number, format?: 'text' | 'binary') {
+      if (oid === types.builtins.INT8 && format !== 'binary')
+        return (value: string) => Number(value);
+      return types.getTypeParser(oid, format as any);
+    },
+  };
+}
+
+/**
  * Create a PostgreSQL DatabaseProvider backed by a pg Pool.
  */
 export function createPgProvider(options: CreatePgOptions): DatabaseProvider {
-  const { Pool } = require('pg') as typeof import('pg');
+  const { Pool, types } = require('pg') as typeof import('pg');
   const { drizzle } =
     require('drizzle-orm/node-postgres') as typeof import('drizzle-orm/node-postgres');
   const pgSchema = require('../schema.pg.js');
@@ -29,6 +46,7 @@ export function createPgProvider(options: CreatePgOptions): DatabaseProvider {
   const pool = new Pool({
     connectionString: options.connectionString,
     max: 10,
+    types: pgTypeParsers(types),
   });
 
   pool.on('error', (err: Error) => {

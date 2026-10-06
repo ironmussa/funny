@@ -10,49 +10,19 @@
  * back the response (with generated IDs for inserts).
  */
 
-import {
-  createMessageRepository,
-  createToolCallRepository,
-  createThreadRepository,
-  createCommentRepository,
-  createStageHistoryRepository,
-  createWatcherRepository,
-  createJobRepository,
-  createPendingPermissionRepository,
-} from '@funny/shared/repositories';
 import { and, eq } from 'drizzle-orm';
 
-import { db, dbAll, dbGet, dbRun } from '../db/index.js';
+import { db, dbAll, dbGet } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
 import { assertRunnerDataScope, filterDataResponse } from './data-scope.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
-
-// Create shared repository instances (lazy-initialized)
-let _messageRepo: ReturnType<typeof createMessageRepository> | null = null;
-let _toolCallRepo: ReturnType<typeof createToolCallRepository> | null = null;
-let _threadRepo: ReturnType<typeof createThreadRepository> | null = null;
-let commentRepository: ReturnType<typeof createCommentRepository> | null = null;
-let _watcherRepo: ReturnType<typeof createWatcherRepository> | null = null;
-let _jobRepo: ReturnType<typeof createJobRepository> | null = null;
-let _pendingPermissionRepo: ReturnType<typeof createPendingPermissionRepository> | null = null;
-
-function getPendingPermissionRepo() {
-  if (!_pendingPermissionRepo) {
-    _pendingPermissionRepo = createPendingPermissionRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbGet,
-      dbRun,
-    });
-  }
-  return _pendingPermissionRepo;
-}
 
 /**
  * A disconnected runner loses every in-memory ACP continuation. Expire those
@@ -62,9 +32,9 @@ function getPendingPermissionRepo() {
 export async function expirePendingPermissionRequestsForRunner(
   runnerId: string,
 ): Promise<Array<{ requestId: string; threadId: string; userId: string }>> {
-  const expired = await getPendingPermissionRepo().expireForRunner(runnerId);
+  const expired = await repos.pendingPermissions().expireForRunner(runnerId);
   for (const request of expired) {
-    await getThreadRepo().updateThread(request.threadId, {
+    await repos.threads().updateThread(request.threadId, {
       status: 'waiting',
       contextRecoveryReason: 'permission-request-expired',
     });
@@ -85,91 +55,6 @@ export async function expirePendingPermissionRequestsForRunner(
     relayToThreadStream(request.threadId, event);
   }
   return expired;
-}
-
-function getWatcherRepo() {
-  if (!_watcherRepo) {
-    _watcherRepo = createWatcherRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbGet,
-      dbRun,
-    });
-  }
-  return _watcherRepo;
-}
-
-function getJobRepo() {
-  if (!_jobRepo) {
-    _jobRepo = createJobRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbGet,
-      dbRun,
-    });
-  }
-  return _jobRepo;
-}
-
-function getMessageRepo() {
-  if (!_messageRepo) {
-    _messageRepo = createMessageRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbGet,
-      dbRun,
-    });
-  }
-  return _messageRepo;
-}
-
-function getToolCallRepo() {
-  if (!_toolCallRepo) {
-    _toolCallRepo = createToolCallRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbGet,
-      dbRun,
-    });
-  }
-  return _toolCallRepo;
-}
-
-function getThreadRepo() {
-  if (!_threadRepo) {
-    const stageHistoryRepo = createStageHistoryRepository({
-      db,
-      schema: schema as any,
-      dbRun,
-    });
-    const commentRepo = getCommentRepo();
-    _threadRepo = createThreadRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbGet,
-      dbRun,
-      commentRepo,
-      stageHistoryRepo,
-    });
-  }
-  return _threadRepo;
-}
-
-function getCommentRepo() {
-  if (!commentRepository) {
-    commentRepository = createCommentRepository({
-      db,
-      schema: schema as any,
-      dbAll,
-      dbRun,
-    });
-  }
-  return commentRepository;
 }
 
 async function assertPendingPermissionOwnership(
@@ -508,6 +393,14 @@ function notifyTerminalStatusPersisted(
   const status = (updates as { status?: unknown } | null)?.status;
   if (!runnerUserId || typeof threadId !== 'string') return;
   if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
+  // A thread started by an automation completes its run here (durable signal).
+  void onAutomationThreadTerminal(threadId, status).catch((error) =>
+    log.error('Failed to complete automation run', {
+      namespace: 'automation',
+      threadId,
+      error: (error as Error).message,
+    }),
+  );
   const event = { type: 'thread:updated', threadId, data: { status } };
   relayToUser(runnerUserId, event);
   relayToThreadStream(threadId, event);
@@ -595,43 +488,42 @@ async function executeDataMessage(
   {
     switch (data.type) {
       case 'data:insert_message': {
-        const messageRepo = getMessageRepo();
+        const messageRepo = repos.messages();
         const messageId = await messageRepo.insertMessage(data.payload);
         return { type: 'data:insert_message_response', messageId };
       }
       case 'data:insert_tool_call': {
-        const toolCallRepo = getToolCallRepo();
+        const toolCallRepo = repos.toolCalls();
         const toolCallId = await toolCallRepo.insertToolCall(data.payload);
         return { type: 'data:insert_tool_call_response', toolCallId };
       }
       case 'data:update_thread': {
-        const threadRepo = getThreadRepo();
+        const threadRepo = repos.threads();
         await threadRepo.updateThread(data.payload.threadId, data.payload.updates);
         notifyTerminalStatusPersisted(runnerUserId, data.payload.threadId, data.payload.updates);
         return { type: 'data:update_thread_response', ok: true };
       }
       case 'data:create_pending_permission_request': {
-        await getPendingPermissionRepo().create(data.payload);
+        await repos.pendingPermissions().create(data.payload);
         return { type: 'data:ack', success: true };
       }
       case 'data:resolve_pending_permission_request': {
-        const resolved = await getPendingPermissionRepo().resolve(
-          data.payload.requestId,
-          data.payload.decision,
-        );
+        const resolved = await repos
+          .pendingPermissions()
+          .resolve(data.payload.requestId, data.payload.decision);
         return { type: 'data:ack', success: resolved };
       }
       case 'data:expire_pending_permission_request': {
-        await getPendingPermissionRepo().expire(data.payload.requestId);
+        await repos.pendingPermissions().expire(data.payload.requestId);
         return { type: 'data:ack', success: true };
       }
       case 'data:update_message': {
-        const messageRepo = getMessageRepo();
+        const messageRepo = repos.messages();
         await messageRepo.updateMessage(data.payload.messageId, data.payload.content);
         return { type: 'data:ack', success: true };
       }
       case 'data:delete_messages_after': {
-        const messageRepo = getMessageRepo();
+        const messageRepo = repos.messages();
         const deletedCount = await messageRepo.deleteMessagesAfter(
           data.payload.threadId,
           data.payload.anchorMessageId,
@@ -639,24 +531,24 @@ async function executeDataMessage(
         return { type: 'data:delete_messages_after_response', deletedCount };
       }
       case 'data:insert_comment': {
-        const inserted = await getCommentRepo().insertComment({
+        const inserted = await repos.comments().insertComment({
           ...data.payload,
           userId: runnerUserId,
         });
         return { type: 'data:insert_comment_response', commentId: inserted.id };
       }
       case 'data:update_tool_call_output': {
-        const toolCallRepo = getToolCallRepo();
+        const toolCallRepo = repos.toolCalls();
         await toolCallRepo.updateToolCallOutput(data.payload.toolCallId, data.payload.output);
         return { type: 'data:ack', success: true };
       }
       case 'data:get_thread': {
-        const threadRepo = getThreadRepo();
+        const threadRepo = repos.threads();
         const thread = await threadRepo.getThread(data.threadId);
         return { type: 'data:get_thread_response', thread: thread ?? null };
       }
       case 'data:get_thread_by_external_request_id': {
-        const threadRepo = getThreadRepo();
+        const threadRepo = repos.threads();
         const thread = await threadRepo.getThreadByExternalRequestId(data.externalRequestId);
         return {
           type: 'data:get_thread_by_external_request_id_response',
@@ -664,7 +556,7 @@ async function executeDataMessage(
         };
       }
       case 'data:get_thread_by_session_id': {
-        const threadRepo = getThreadRepo();
+        const threadRepo = repos.threads();
         const thread = await threadRepo.getThreadBySessionId(data.sessionId);
         return {
           type: 'data:get_thread_by_session_id_response',
@@ -672,7 +564,7 @@ async function executeDataMessage(
         };
       }
       case 'data:get_thread_with_messages': {
-        const messageRepo = getMessageRepo();
+        const messageRepo = repos.messages();
         const thread = await messageRepo.getThreadWithMessages(
           data.threadId,
           typeof data.messageLimit === 'number' ? data.messageLimit : undefined,
@@ -689,7 +581,7 @@ async function executeDataMessage(
         };
       }
       case 'data:get_thread_messages': {
-        const messageRepo = getMessageRepo();
+        const messageRepo = repos.messages();
         const result = await messageRepo.getThreadMessages({
           threadId: data.threadId,
           cursor: typeof data.cursor === 'string' ? data.cursor : undefined,
@@ -707,7 +599,7 @@ async function executeDataMessage(
         };
       }
       case 'data:get_tool_call': {
-        const toolCallRepo = getToolCallRepo();
+        const toolCallRepo = repos.toolCalls();
         const toolCall = await toolCallRepo.getToolCall(data.toolCallId);
         return {
           type: 'data:get_tool_call_response',
@@ -734,7 +626,7 @@ async function executeDataMessage(
         return { type: 'data:search_threads_response', results };
       }
       case 'data:find_tool_call': {
-        const toolCallRepo = getToolCallRepo();
+        const toolCallRepo = repos.toolCalls();
         const tc = await toolCallRepo.findToolCall(
           data.payload.messageId,
           data.payload.name,
@@ -743,7 +635,7 @@ async function executeDataMessage(
         return { type: 'data:find_tool_call_response', toolCall: tc ?? null };
       }
       case 'data:find_last_unanswered_interactive_tool_call': {
-        const toolCallRepo = getToolCallRepo();
+        const toolCallRepo = repos.toolCalls();
         const tc = await toolCallRepo.findLastUnansweredInteractiveToolCall(data.threadId);
         return {
           type: 'data:find_last_unanswered_interactive_tool_call_response',
@@ -897,12 +789,12 @@ async function executeDataMessage(
         }
       }
       case 'data:create_thread': {
-        const tRepo = getThreadRepo();
+        const tRepo = repos.threads();
         await tRepo.createThread(data.payload);
         return { type: 'data:ack', success: true };
       }
       case 'data:delete_thread': {
-        const tRepo = getThreadRepo();
+        const tRepo = repos.threads();
         await tRepo.deleteThread(data.threadId);
         return { type: 'data:ack', success: true };
       }
@@ -1027,7 +919,7 @@ async function executeDataMessage(
         return { type: 'data:ack', success: true };
       }
       case 'data:mark_and_list_stale_threads': {
-        const threadRepo = getThreadRepo();
+        const threadRepo = repos.threads();
         const staleThreads = await threadRepo.markAndListStaleThreads(runnerId);
         return {
           type: 'data:mark_and_list_stale_threads_response',
@@ -1037,18 +929,17 @@ async function executeDataMessage(
 
       // ── Agent watchers (deferred-wake "snooze") ──────────────────
       case 'data:watcher_insert': {
-        await getWatcherRepo().insert(data.payload.row);
+        await repos.watchers().insert(data.payload.row);
         return { type: 'data:watcher_insert_response', ok: true };
       }
       case 'data:watcher_get': {
-        const watcher = await getWatcherRepo().getById(data.payload.id);
+        const watcher = await repos.watchers().getById(data.payload.id);
         return { type: 'data:watcher_get_response', watcher: watcher ?? null };
       }
       case 'data:watcher_get_live_by_thread_key': {
-        const watcher = await getWatcherRepo().getLiveByThreadKey(
-          data.payload.threadId,
-          data.payload.key,
-        );
+        const watcher = await repos
+          .watchers()
+          .getLiveByThreadKey(data.payload.threadId, data.payload.key);
         return {
           type: 'data:watcher_get_live_by_thread_key_response',
           watcher: watcher ?? null,
@@ -1056,52 +947,51 @@ async function executeDataMessage(
       }
       case 'data:watcher_list_pending': {
         // Scoped to the runner's user — never another tenant's watchers.
-        const watchers = await getWatcherRepo().listPending(runnerUserId ?? undefined);
+        const watchers = await repos.watchers().listPending(runnerUserId ?? undefined);
         return { type: 'data:watcher_list_pending_response', watchers };
       }
       case 'data:watcher_list_due': {
-        const watchers = await getWatcherRepo().listDue(
-          data.payload.now,
-          runnerUserId ?? undefined,
-        );
+        const watchers = await repos
+          .watchers()
+          .listDue(data.payload.now, runnerUserId ?? undefined);
         return { type: 'data:watcher_list_due_response', watchers };
       }
       case 'data:watcher_list_by_user': {
-        const watchers = await getWatcherRepo().listByUser(runnerUserId ?? data.payload.userId);
+        const watchers = await repos.watchers().listByUser(runnerUserId ?? data.payload.userId);
         return { type: 'data:watcher_list_by_user_response', watchers };
       }
       case 'data:watcher_update': {
-        await getWatcherRepo().update(data.payload.id, data.payload.patch);
+        await repos.watchers().update(data.payload.id, data.payload.patch);
         return { type: 'data:watcher_update_response', ok: true };
       }
       case 'data:watcher_delete_by_thread': {
-        await getWatcherRepo().deleteByThread(data.payload.threadId);
+        await repos.watchers().deleteByThread(data.payload.threadId);
         return { type: 'data:watcher_delete_by_thread_response', ok: true };
       }
 
       // ── Agent jobs ───────────────────────────────────────────────
       case 'data:job_insert': {
-        await getJobRepo().insert(data.payload.row);
+        await repos.jobs().insert(data.payload.row);
         return { type: 'data:job_insert_response', ok: true };
       }
       case 'data:job_get': {
-        const job = await getJobRepo().getById(data.payload.id);
+        const job = await repos.jobs().getById(data.payload.id);
         return { type: 'data:job_get_response', job: job ?? null };
       }
       case 'data:job_list_running': {
-        const jobs = await getJobRepo().listRunning(runnerUserId ?? undefined);
+        const jobs = await repos.jobs().listRunning(runnerUserId ?? undefined);
         return { type: 'data:job_list_running_response', jobs };
       }
       case 'data:job_list_by_user': {
-        const jobs = await getJobRepo().listByUser(runnerUserId ?? data.payload.userId);
+        const jobs = await repos.jobs().listByUser(runnerUserId ?? data.payload.userId);
         return { type: 'data:job_list_by_user_response', jobs };
       }
       case 'data:job_update': {
-        await getJobRepo().update(data.payload.id, data.payload.patch);
+        await repos.jobs().update(data.payload.id, data.payload.patch);
         return { type: 'data:job_update_response', ok: true };
       }
       case 'data:job_delete_by_thread': {
-        await getJobRepo().deleteByThread(data.payload.threadId);
+        await repos.jobs().deleteByThread(data.payload.threadId);
         return { type: 'data:job_delete_by_thread_response', ok: true };
       }
 

@@ -465,7 +465,6 @@
         "@xterm/headless": "^6.0.0",
         "assemblyai": "^4.35.0",
         "better-auth": "^1.6.19",
-        "croner": "^10.0.1",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.12.25",
         "nanoid": "^5.0.9",
@@ -483,6 +482,7 @@
       },
       "devDependencies": {
         "@funny/core": "workspace:*",
+        "@funny/evflow": "workspace:*",
         "@funny/pipelines": "workspace:*",
         "@funny/shared": "workspace:*",
         "@funny/thread-scheduler": "workspace:*",
@@ -550,6 +550,7 @@
         "@ironmussa/funny-runtime": "workspace:*",
         "@socket.io/bun-engine": "^0.1.0",
         "better-auth": "^1.6.19",
+        "croner": "^10.0.1",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.12.25",
         "kysely": "^0.29.2",
@@ -577,7 +578,6 @@
       "version": "0.1.0",
       "dependencies": {
         "@bufbuild/protobuf": "2.14.0",
-        "@funny/evflow": "workspace:*",
         "drizzle-orm": "^0.45.1",
         "nanoid": "^5.1.5",
         "pg": "^8.20.0",

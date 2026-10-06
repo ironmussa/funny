@@ -76,7 +76,11 @@ describe('createThread use case', () => {
   test.each(['normal', 'idle'] as const)('%s intent runs the full sequence', async (intent) => {
     const f = fakes();
     const result = await makeCreateThread(f.ports)({ actor, intent, payload: { projectId: 'p1' } });
-    expect(result._unsafeUnwrap()).toEqual({ thread: { id: 't1', branch: 'rt/b' } });
+    expect(result._unsafeUnwrap()).toEqual({
+      thread: { id: 't1', branch: 'rt/b' },
+      threadId: 't1',
+      runnerId: 'runner-1',
+    } as any);
     expect(f.effects).toEqual(['resolve', 'remote', 'register', 'cache']);
     expect(f.resolveCalls[0].intent).toBe(intent);
     expect(f.remoteCalls[0].intent).toBe(intent);

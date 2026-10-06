@@ -19,8 +19,6 @@ function read(rel: string): string {
   return readFileSync(join(ROOT, rel), 'utf-8');
 }
 
-// `resolveRunnerForProject` (used by thread creation, fork, fork-and-rewind)
-// lives in services/runner-forwarding.ts.
 const SOURCES = ['services/runner-forwarding.ts', 'services/socketio/browser-pty.ts'] as const;
 
 describe('runner isolation — project→runner routing', () => {

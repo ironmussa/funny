@@ -1,4 +1,4 @@
-import { createRuntimeModel } from '@funny/shared/evflow-model';
+import { createRuntimeModel } from '@funny/evflow/funny-runtime-model';
 import { describe, test, expect } from 'vitest';
 
 import type { ThreadEventMap } from '../../services/thread-event-bus.js';

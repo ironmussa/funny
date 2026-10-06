@@ -5,12 +5,18 @@
  * (design D5). Pure logic over injected loaders — no DB, no Better Auth — so it
  * unit-tests with fakes (mirrors `createThreadAccessMiddleware`).
  *
- * ACCESS IS EXPLICIT — there is NO cross-resource inheritance. A role on a
- * thread/project comes ONLY from being its creator (owner) or holding an
- * explicit grant on THAT resource. Being a member of the owning org, or of the
- * owning project, grants NOTHING on a thread by itself — threads are private and
- * must be shared one by one (viewer / commenter / editor). This is a deliberate
- * privacy choice: org membership must never auto-expose other users' threads.
+ * THREADS ARE EXPLICIT — a role on a thread comes ONLY from being its creator
+ * (owner) or holding an explicit grant on THAT thread. Being a member of the
+ * owning org, or of the owning project, grants NOTHING on a thread by itself —
+ * threads are private and must be shared one by one (viewer / commenter /
+ * editor). This is a deliberate privacy choice: org membership must never
+ * auto-expose other users' threads.
+ *
+ * PROJECTS ARE SHARED WORKSPACES — a role on a project comes from being its
+ * creator (owner), an explicit grant (collaborators are dual-written as project
+ * grants: admin → admin, member → contributor), OR membership in an org the
+ * project is shared with, which yields `viewer` only. Org members can read the
+ * project and its sub-resources; changing them takes `manage` (admin+).
  *
  * `canCrossToOwnerRunner` is the even-narrower gate for runner-bound actions:
  * owner OR an explicit thread grant that can steer (editor+). Phase 5 wires the
@@ -47,6 +53,8 @@ export interface AuthorizerDeps {
   loadThreadMeta: (threadId: string) => Promise<ThreadMeta | null>;
   /** Load a project's owner, or null if it doesn't exist. */
   loadProjectMeta: (projectId: string) => Promise<ProjectMeta | null>;
+  /** Orgs the project is shared with. Members of any of them get `viewer`. */
+  listProjectOrgIds?: (projectId: string) => Promise<string[]>;
 }
 
 /** Highest-rank non-null role among the candidates, or null if all null. */
@@ -58,14 +66,24 @@ function combine(...roles: Array<Role | null>): Role | null {
 }
 
 export function createAuthorizer(deps: AuthorizerDeps) {
-  const { getGrantRole, getOrgRole, loadThreadMeta, loadProjectMeta } = deps;
+  const { getGrantRole, getOrgRole, loadThreadMeta, loadProjectMeta, listProjectOrgIds } = deps;
+
+  /** `viewer` when the subject belongs to any org the project is shared with. */
+  async function projectOrgRole(userId: string, projectId: string): Promise<Role | null> {
+    if (!listProjectOrgIds) return null;
+    for (const orgId of await listProjectOrgIds(projectId)) {
+      if ((await getOrgRole(userId, orgId)) !== null) return 'viewer';
+    }
+    return null;
+  }
 
   async function effectiveProjectRole(userId: string, projectId: string): Promise<Role | null> {
     const meta = await loadProjectMeta(projectId);
     if (!meta) return null;
+    if (meta.ownerId === userId) return 'owner';
+    // Org sharing only ever yields `viewer`, so any explicit grant already covers it.
     const explicit = await getGrantRole(userId, 'project', projectId);
-    const ownerShortcut: Role | null = meta.ownerId === userId ? 'owner' : null;
-    return combine(explicit, ownerShortcut);
+    return explicit ?? projectOrgRole(userId, projectId);
   }
 
   async function effectiveThreadRole(userId: string, threadId: string): Promise<Role | null> {

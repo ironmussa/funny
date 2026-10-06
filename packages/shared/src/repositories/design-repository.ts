@@ -11,22 +11,10 @@
 import { eq, and, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import type {
-  AppDatabase,
-  dbAll as dbAllFn,
-  dbGet as dbGetFn,
-  dbRun as dbRunFn,
-} from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
 import type { Design, DesignType, DesignFidelity } from '../types.js';
+import type { RepoDeps } from './deps.js';
 
-export interface DesignRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbGet: typeof dbGetFn;
-  dbRun: typeof dbRunFn;
-}
+export type DesignRepositoryDeps = RepoDeps;
 
 interface DesignRow {
   id: string;

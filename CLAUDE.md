@@ -56,7 +56,7 @@ bun run db:studio
 ### Monorepo Structure (Bun workspaces)
 
 - **`packages/shared`** — Cross-package kernel. Hosts (a) types and error definitions (`src/types.ts`, `src/types/*.ts`, `src/errors.ts`, `src/models.ts`), (b) the shared DB layer used by `server` + `scheduler` (`src/db/schema.ts`, `src/db/schema.{sqlite,pg}.ts`, `src/db/adapters/{sqlite,pg}.ts`, `src/db/migrate.ts`, `src/db/connection.ts`), (c) factory-pattern repositories (`src/repositories/*.ts` — `createMessageRepository(db)`, `createThreadRepository(db)`, etc.) consumed by server + scheduler with a caller-supplied DB connection, (d) the runner↔server protocol (`src/runner-protocol.ts`), (e) auth signing helpers (`src/auth/forwarded-identity.ts`), and (f) the thread state machine (`src/thread-machine.ts`). `runtime` does NOT import the repositories — it proxies all persistence to the server via `RuntimeServiceProvider` (see Server Architecture). `client` only imports types from this package, never runtime code.
-- **`packages/core`** — Pure logic shared across server and runtime. Contains git operations (`git/`), agent process management (`agents/`), container/sandbox support (`containers/`), and port allocation (`ports/`). No HTTP or database code.
+- **`packages/core`** — Pure logic shared across server and runtime. Contains git operations (`git/`), agent process management (`agents/`), and port allocation (`ports/`). No HTTP or database code.
 - **`packages/runtime`** — Hono HTTP routes and services for agent execution. Manages agent runners, PTY sessions, worktrees, pipelines, and WebSocket broadcasting. Acts as the "runner" in the server+runner architecture.
 - **`packages/server`** — Entry point for the application. Handles authentication (Better Auth), database (Drizzle + SQLite/PostgreSQL), user management, and proxies requests to remote runners. Owns all persistent state.
 - **`packages/client`** — React 19 + Vite SPA. Runs on port 5173 with a proxy to the server at `/api`.
@@ -73,13 +73,13 @@ bun run db:studio
 - `ws-broker.ts` — Singleton pub/sub that broadcasts WebSocket events to all connected clients. Single multiplexed stream (not per-thread).
 - `pipeline-manager.ts` — Manages multi-step agent pipelines.
 - `pty-manager.ts` — Terminal/PTY session management with multiple backends (headless-xterm, bun-native, node-pty).
-- `automation-manager.ts` — Scheduled and event-driven automation execution.
 
 **Key services (server):**
 
 - `project-manager.ts` — CRUD for projects. Validates that the path is a git repo before creating.
 - `runner-manager.ts` — Manages remote runner instances (registration, heartbeat, project assignments).
 - `project-repository.ts`, `thread-event-repository.ts`, etc. — Database repositories for persistent state.
+- `automation-scheduler.ts` — Owns the automation cron; each run starts a read-only thread on the automation owner's runner via `runner-thread-launcher.ts` (`startThreadOnRunner`, which delegates to the `modules/threads` creation use case — the same code as `POST /api/threads`). Runs complete in `automation-runs.ts` from the persisted terminal thread status. Assumes a single server instance.
 
 **Core modules (`packages/core/src/`):**
 

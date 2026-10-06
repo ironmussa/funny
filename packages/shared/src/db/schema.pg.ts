@@ -30,6 +30,23 @@ import {
 } from '../models.js';
 
 /**
+ * 0/1 INTEGER column read and written as a boolean — the Postgres twin of
+ * SQLite's `integer(..., { mode: 'boolean' })`, for columns the migrations
+ * create as INTEGER on both dialects.
+ */
+const intBoolean = customType<{ data: boolean; driverData: number }>({
+  dataType() {
+    return 'integer';
+  },
+  toDriver(value) {
+    return value ? 1 : 0;
+  },
+  fromDriver(value) {
+    return Boolean(value);
+  },
+});
+
+/**
  * Timestamp column stored as ISO-8601 text (VARCHAR) for compatibility with
  * the SQLite schema where all dates are TEXT. Also accepts Date objects
  * (serializes them to ISO strings) for Better Auth compatibility.
@@ -70,6 +87,7 @@ export const projects = pgTable('projects', {
   // NULL = personal project. Replaces the `team_projects` join table.
   organizationId: text('organization_id'),
   sortOrder: integer('sort_order').notNull().default(0),
+  closed: integer('closed').notNull().default(0),
   createdAt: text('created_at').notNull(),
 });
 
@@ -852,7 +870,7 @@ export const agentTemplates = pgTable('agent_templates', {
   builtinSkillsDisabled: text('builtin_skills_disabled'), // JSON array
   customSkillPaths: text('custom_skill_paths'), // JSON array
   agentName: text('agent_name'),
-  shared: integer('shared').notNull().default(0),
+  shared: intBoolean('shared').notNull().default(false), // visible to all users
   variables: text('variables'), // JSON array
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),

@@ -14,8 +14,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 
 import { threadLevelToRole } from '../auth/roles.js';
-import type { AppDatabase, dbAll as dbAllFn, dbRun as dbRunFn } from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
+import type { RepoDeps } from './deps.js';
 import { createGrantRepository } from './grant-repository.js';
 
 /**
@@ -25,12 +24,7 @@ import { createGrantRepository } from './grant-repository.js';
  */
 export type ShareLevel = 'view' | 'comment' | 'steer';
 
-export interface ThreadShareRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbRun: typeof dbRunFn;
-}
+export type ThreadShareRepositoryDeps = Pick<RepoDeps, 'db' | 'schema' | 'dbAll' | 'dbRun'>;
 
 /**
  * Backs the `thread-sharing` feature. As of unified-rbac-grants (Phase 4) this

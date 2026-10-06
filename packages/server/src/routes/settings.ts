@@ -10,16 +10,16 @@ import {
   updateAgentExecutionProfileSchema,
   updateProjectAgentProfileBindingSchema,
 } from '@funny/shared';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
-import { db, dbGet } from '../db/index.js';
-import { instanceSettings, projectMembers } from '../db/schema.js';
+import { db } from '../db/index.js';
+import { instanceSettings } from '../db/schema.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
+import { requireProjectAccess } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { requireAdmin } from '../middleware/auth.js';
 import * as agentProfileRepo from '../services/agent-execution-profile-repository.js';
-import * as projectRepo from '../services/project-repository.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const settingsRoutes = new Hono<ServerEnv>();
@@ -45,19 +45,6 @@ async function setSetting(key: string, value: string): Promise<void> {
   } else {
     await db.insert(instanceSettings).values({ key, value, updatedAt: now });
   }
-}
-
-async function userCanAccessProject(projectId: string, userId: string): Promise<boolean> {
-  const project = await projectRepo.getProject(projectId);
-  if (!project) return false;
-  if (project.userId === userId) return true;
-  const member = await dbGet(
-    db
-      .select({ userId: projectMembers.userId })
-      .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
-  );
-  return !!member;
 }
 
 // ── Agent execution profiles ────────────────────────────────────
@@ -98,35 +85,37 @@ settingsRoutes.delete('/agent-profiles/:id', async (c) => {
 });
 
 // GET /api/settings/agent-profiles/projects/:projectId — read current user's project binding
-settingsRoutes.get('/agent-profiles/projects/:projectId', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('projectId');
-  if (!(await userCanAccessProject(projectId, userId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
+settingsRoutes.get(
+  '/agent-profiles/projects/:projectId',
+  requireProjectAccess('view', { param: 'projectId' }),
+  async (c) => {
+    const userId = c.get('userId') as string;
+    const projectId = c.req.param('projectId');
 
-  return c.json(await agentProfileRepo.getProjectBinding(projectId, userId));
-});
+    return c.json(await agentProfileRepo.getProjectBinding(projectId, userId));
+  },
+);
 
 // PUT /api/settings/agent-profiles/projects/:projectId — set/clear current user's binding
-settingsRoutes.put('/agent-profiles/projects/:projectId', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('projectId');
-  if (!(await userCanAccessProject(projectId, userId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
+settingsRoutes.put(
+  '/agent-profiles/projects/:projectId',
+  requireProjectAccess('view', { param: 'projectId' }),
+  async (c) => {
+    const userId = c.get('userId') as string;
+    const projectId = c.req.param('projectId');
 
-  const parsed = await parseJsonBody(c, updateProjectAgentProfileBindingSchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+    const parsed = await parseJsonBody(c, updateProjectAgentProfileBindingSchema);
+    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
 
-  const binding = await agentProfileRepo.setProjectBinding(
-    projectId,
-    userId,
-    parsed.value.profileId,
-  );
-  if (!binding) return c.json({ error: 'Agent execution profile not found' }, 404);
-  return c.json(binding);
-});
+    const binding = await agentProfileRepo.setProjectBinding(
+      projectId,
+      userId,
+      parsed.value.profileId,
+    );
+    if (!binding) return c.json({ error: 'Agent execution profile not found' }, 404);
+    return c.json(binding);
+  },
+);
 
 // ── SMTP settings ────────────────────────────────────────────────
 

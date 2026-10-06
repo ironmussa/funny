@@ -14,7 +14,6 @@
 import type {
   IProjectRepository,
   IThreadRepository,
-  IAutomationRepository,
   IPipelineRepository,
   IProfileService,
   IAgentExecutionProfileService,
@@ -35,8 +34,6 @@ export interface RuntimeServiceProvider {
   projects: IProjectRepository;
   /** Thread CRUD, messages, tool calls, comments, search */
   threads: IThreadRepository;
-  /** Automation CRUD + run tracking */
-  automations: IAutomationRepository;
   /** Pipeline CRUD + run tracking */
   pipelines: IPipelineRepository;
   /** User profile, git identity, GitHub tokens */

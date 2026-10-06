@@ -15,6 +15,7 @@ import { validateProjectPathLexical } from '@funny/core/git/path-validation';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
+import { authorizer, requireProjectAccess } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import * as pm from '../services/project-manager.js';
@@ -201,19 +202,8 @@ projectRoutes.post('/', async (c) => {
 });
 
 /** PATCH /api/projects/:id — update a project */
-projectRoutes.patch('/:id', async (c) => {
+projectRoutes.patch('/:id', requireProjectAccess('manage'), async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-
-  // Ownership check
-  const project = await projectRepo.getProject(id);
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (project.userId !== userId) {
-    if (!orgId || !(await projectRepo.isProjectInOrg(id, orgId))) {
-      return c.json({ error: 'Access denied' }, 403);
-    }
-  }
 
   const parsed = await parseJsonBody(c, updateProjectBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
@@ -236,15 +226,8 @@ projectRoutes.patch('/:id', async (c) => {
 });
 
 /** DELETE /api/projects/:id — delete a project (owner only) */
-projectRoutes.delete('/:id', async (c) => {
+projectRoutes.delete('/:id', requireProjectAccess('delete'), async (c) => {
   const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const project = await projectRepo.getProject(id);
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (project.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
 
   await projectRepo.deleteProject(id);
   return c.json({ ok: true });
@@ -267,64 +250,47 @@ projectRoutes.put('/reorder', async (c) => {
 // ── Membership ───────────────────────────────────────────
 
 /**
- * True when the caller is a project admin: either the project owner
- * (`projects.userId`) or a member with the `admin` role. Owners created before
- * the member-seeding change may have no member row, so the ownership check is
- * authoritative on its own — this is what unblocks adding the *first*
- * collaborator (previously impossible: an empty member list 403'd everyone).
- *
- * Gates everything that mutates *shared* project config (members, startup
- * commands, …). Plain `member` collaborators can read but not edit.
+ * True when the caller may change *shared* project config (members, startup
+ * commands, …): the owner or a collaborator with the `admin` role. Plain
+ * collaborators and org members can read but not edit.
  */
-async function isProjectAdmin(projectId: string, userId: string): Promise<boolean> {
-  const project = await projectRepo.getProject(projectId);
-  if (project?.userId === userId) return true;
-  const members = await pm.listMembers(projectId);
-  const self = members.find((m) => m.userId === userId);
-  return self?.role === 'admin';
+function isProjectAdmin(projectId: string, userId: string): Promise<boolean> {
+  return authorizer.authorize(userId, 'project', projectId, 'manage');
 }
 
 /** List members of a project */
-projectRoutes.get('/:id/members', async (c) => {
-  const userId = c.get('userId') as string;
+projectRoutes.get('/:id/members', requireProjectAccess('view'), async (c) => {
   const projectId = c.req.param('id');
-
-  const project = await projectRepo.getProject(projectId);
-  const isOwner = project?.userId === userId;
-  if (!isOwner && !(await pm.isProjectMember(projectId, userId))) {
-    return c.json({ error: 'Not a member of this project' }, 403);
-  }
 
   const members = await pm.listMembersWithUsers(projectId);
   return c.json({ members });
 });
 
 /** Add a member to a project */
-projectRoutes.post('/:id/members', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
+projectRoutes.post(
+  '/:id/members',
+  requireProjectAccess('manage', { forbidden: 'Only project admins can add members' }),
+  async (c) => {
+    const projectId = c.req.param('id');
 
-  if (!(await isProjectAdmin(projectId, userId))) {
-    return c.json({ error: 'Only project admins can add members' }, 403);
-  }
+    const parsed = await parseJsonBody(c, addProjectMemberBodySchema);
+    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+    const body = parsed.value;
 
-  const parsed = await parseJsonBody(c, addProjectMemberBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
+    // Validate the role against the project-assignable set (unified-rbac-grants).
+    // `owner` is the creator and is never assigned here.
+    const role = body.role ?? 'member';
+    if (!ASSIGNABLE_PROJECT_ROLES.has(role)) {
+      return c.json({ error: `Invalid role: ${role}`, code: 'invalid-project-role' }, 400);
+    }
 
-  // Validate the role against the project-assignable set (unified-rbac-grants).
-  // `owner` is the creator and is never assigned here.
-  const role = body.role ?? 'member';
-  if (!ASSIGNABLE_PROJECT_ROLES.has(role)) {
-    return c.json({ error: `Invalid role: ${role}`, code: 'invalid-project-role' }, 400);
-  }
-
-  const member = await pm.addMember(projectId, body.userId, role);
-  return c.json(member, 201);
-});
+    const member = await pm.addMember(projectId, body.userId, role);
+    return c.json(member, 201);
+  },
+);
 
 /** Remove a member from a project */
-projectRoutes.delete('/:id/members/:userId', async (c) => {
+projectRoutes.delete('/:id/members/:userId', requireProjectAccess('view'), async (c) => {
   const reqUserId = c.get('userId') as string;
   const projectId = c.req.param('id');
   const targetUserId = c.req.param('userId');
@@ -339,7 +305,7 @@ projectRoutes.delete('/:id/members/:userId', async (c) => {
 });
 
 /** Set local working directory for a shared project (with validation + upsert) */
-projectRoutes.post('/:id/local-path', async (c) => {
+projectRoutes.post('/:id/local-path', requireProjectAccess('view'), async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.param('id');
 
@@ -364,90 +330,56 @@ projectRoutes.post('/:id/local-path', async (c) => {
 
 // ── Startup Commands CRUD (DB-backed, handled by server) ──
 //
-// Security CR-6: each route below verifies that the caller can access the
-// parent project (owner or org member). Mutations also scope the command-id
-// lookup to the parent projectId so a guessed id from another project
-// cannot be modified or deleted.
+const COMMANDS_FORBIDDEN = 'Only project admins can edit startup commands';
 
-/** Returns true when the user owns the project or is a member of an org that owns it. */
-async function userCanAccessProject(
-  projectId: string,
-  userId: string,
-  orgId: string | null,
-): Promise<boolean> {
-  const project = await projectRepo.getProject(projectId);
-  if (!project) return false;
-  if (project.userId === userId) return true;
-  // Collaborator model: a direct project member can access the project's
-  // sub-resources (commands, hooks, …) even without an org.
-  if (await pm.isProjectMember(projectId, userId)) return true;
-  if (orgId && (await projectRepo.isProjectInOrg(projectId, orgId))) return true;
-  return false;
-}
+// Security CR-6: reads need view access to the parent project, mutations need
+// `manage`. Mutations also scope the command-id lookup to the parent projectId
+// so a guessed id from another project cannot be modified or deleted.
 
 /** GET /api/projects/:id/commands — list commands for a project */
-projectRoutes.get('/:id/commands', async (c) => {
+projectRoutes.get('/:id/commands', requireProjectAccess('view'), async (c) => {
   const projectId = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? null;
-  if (!(await userCanAccessProject(projectId, userId, orgId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
   const commands = await cmdRepo.listCommands(projectId);
   return c.json(commands);
 });
 
 /** POST /api/projects/:id/commands — create a new command (project admins only) */
-projectRoutes.post('/:id/commands', async (c) => {
-  const projectId = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? null;
-  // Hide existence from callers with no access to the project (IDOR: a
-  // cross-tenant user must not be able to tell the project even exists).
-  if (!(await userCanAccessProject(projectId, userId, orgId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  if (!(await isProjectAdmin(projectId, userId))) {
-    return c.json({ error: 'Only project admins can edit startup commands' }, 403);
-  }
-  const parsed = await parseJsonBody(c, projectCommandBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const { label, command } = parsed.value;
-  const entry = await cmdRepo.createCommand({ projectId, label, command });
-  return c.json(entry, 201);
-});
+projectRoutes.post(
+  '/:id/commands',
+  requireProjectAccess('manage', { forbidden: COMMANDS_FORBIDDEN }),
+  async (c) => {
+    const projectId = c.req.param('id');
+    const parsed = await parseJsonBody(c, projectCommandBodySchema);
+    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+    const { label, command } = parsed.value;
+    const entry = await cmdRepo.createCommand({ projectId, label, command });
+    return c.json(entry, 201);
+  },
+);
 
 /** PUT /api/projects/:id/commands/:cmdId — update a command (project admins only) */
-projectRoutes.put('/:id/commands/:cmdId', async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? null;
-  if (!(await userCanAccessProject(projectId, userId, orgId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  if (!(await isProjectAdmin(projectId, userId))) {
-    return c.json({ error: 'Only project admins can edit startup commands' }, 403);
-  }
-  const parsed = await parseJsonBody(c, projectCommandBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const { label, command, port, portEnvVar } = parsed.value;
-  await cmdRepo.updateCommand(cmdId, projectId, { label, command, port, portEnvVar });
-  return c.json({ ok: true });
-});
+projectRoutes.put(
+  '/:id/commands/:cmdId',
+  requireProjectAccess('manage', { forbidden: COMMANDS_FORBIDDEN }),
+  async (c) => {
+    const projectId = c.req.param('id');
+    const cmdId = c.req.param('cmdId');
+    const parsed = await parseJsonBody(c, projectCommandBodySchema);
+    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+    const { label, command, port, portEnvVar } = parsed.value;
+    await cmdRepo.updateCommand(cmdId, projectId, { label, command, port, portEnvVar });
+    return c.json({ ok: true });
+  },
+);
 
 /** DELETE /api/projects/:id/commands/:cmdId — delete a command (project admins only) */
-projectRoutes.delete('/:id/commands/:cmdId', async (c) => {
-  const projectId = c.req.param('id');
-  const cmdId = c.req.param('cmdId');
-  const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId') ?? null;
-  if (!(await userCanAccessProject(projectId, userId, orgId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  if (!(await isProjectAdmin(projectId, userId))) {
-    return c.json({ error: 'Only project admins can edit startup commands' }, 403);
-  }
-  await cmdRepo.deleteCommand(cmdId, projectId);
-  return c.json({ ok: true });
-});
+projectRoutes.delete(
+  '/:id/commands/:cmdId',
+  requireProjectAccess('manage', { forbidden: COMMANDS_FORBIDDEN }),
+  async (c) => {
+    const projectId = c.req.param('id');
+    const cmdId = c.req.param('cmdId');
+    await cmdRepo.deleteCommand(cmdId, projectId);
+    return c.json({ ok: true });
+  },
+);

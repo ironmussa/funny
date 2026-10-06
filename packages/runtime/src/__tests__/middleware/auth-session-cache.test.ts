@@ -139,8 +139,7 @@ describe('runtime session cache — read-only methods only (security ME-7)', () 
       }),
     );
     const res = await app.request('/api/resource', { method: 'POST', headers: { Cookie: COOKIE } });
-    // Mutating verb re-validates → no user.id in payload → falls through and
-    // ends at Better Auth (mocked to null) → 401.
+    // Mutating verb re-validates → no user.id in payload → 401.
     expect(res.status).toBe(401);
   });
 });

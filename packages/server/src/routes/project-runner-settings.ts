@@ -22,6 +22,7 @@ import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as projectRepo from '../services/project-repository.js';
+import { buildForwardHeaders } from '../services/runner-forwarding.js';
 import { listRunnersByUser } from '../services/runner-manager.js';
 import type { RunnerRequestPort } from '../services/runner-ports.js';
 import {
@@ -34,7 +35,6 @@ import {
   setProjectGithubToken,
 } from '../services/runner-scope.js';
 import { parseJsonBody } from '../validation/request.js';
-import { buildForwardHeaders } from './threads.js';
 
 export const projectRunnerSettingsRoutes = new Hono<ServerEnv>();
 

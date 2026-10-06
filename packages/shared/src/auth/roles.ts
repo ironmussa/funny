@@ -110,6 +110,12 @@ export function orgRoleToRole(orgRole: OrgRole): Role {
   return orgRole === 'member' ? 'contributor' : orgRole;
 }
 
+/** Legacy `project_members.role` string → canonical lattice role. */
+export function projectRoleToRole(role: string): Role {
+  if (role === 'admin' || role === 'owner' || role === 'viewer') return role;
+  return 'contributor'; // 'member' and any legacy/default value
+}
+
 export function roleToOrgRole(role: Role): OrgRole {
   switch (role) {
     case 'owner':

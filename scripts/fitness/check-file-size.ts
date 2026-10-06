@@ -23,7 +23,7 @@ const WAIVERS: Record<string, { current: number; target: number; note: string }>
     target: 800,
     note: 'Decompose into DiffList/DiffPanel/StagingBar/CommitBox/PRActions.',
   },
-  'packages/shared/src/evflow.model.ts': {
+  'packages/evflow/models/funny-runtime.model.ts': {
     current: 1500,
     target: 1500,
     note: 'Generated-ish DSL shape; keep but do not grow.',

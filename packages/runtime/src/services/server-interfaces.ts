@@ -217,62 +217,6 @@ export interface IThreadRepository extends IThreadQuery, IMessageRepository, ITo
   findLastUnansweredInteractiveToolCall(threadId: string): Promise<any | undefined>;
 }
 
-// ── Automation repository ───────────────────────────────────────
-
-export interface IAutomationRepository {
-  listAutomations(projectId?: string, userId?: string): Promise<any[]>;
-  getAutomation(id: string): Promise<any | undefined>;
-  /** Raw DB insert — no scheduler hooks. Use createAutomation for full flow. */
-  insertAutomation(data: {
-    id: string;
-    projectId: string;
-    userId: string;
-    name: string;
-    prompt: string;
-    schedule: string;
-    model: string;
-    mode: string;
-    permissionMode: string;
-    enabled: number;
-    maxRunHistory: number;
-    source?: string;
-    createdAt: string;
-    updatedAt: string;
-  }): Promise<void>;
-  /** Full create with scheduler notification (implemented by runtime). */
-  createAutomation(data: {
-    projectId: string;
-    name: string;
-    prompt: string;
-    schedule: string;
-    model?: string;
-    permissionMode?: string;
-    userId?: string;
-  }): Promise<any>;
-  /** Raw DB update — no scheduler hooks. */
-  updateAutomationRow(id: string, updates: Record<string, any>): Promise<void>;
-  /** Full update with scheduler notification (implemented by runtime). */
-  updateAutomation(id: string, updates: Record<string, any>): Promise<void>;
-  /** Raw DB delete — no scheduler hooks. */
-  deleteAutomationRow(id: string): Promise<void>;
-  /** Full delete with scheduler notification (implemented by runtime). */
-  deleteAutomation(id: string): Promise<void>;
-  createRun(data: {
-    id: string;
-    automationId: string;
-    threadId: string;
-    status: string;
-    triageStatus: string;
-    startedAt: string;
-  }): Promise<void>;
-  updateRun(id: string, updates: Record<string, any>): Promise<void>;
-  listRuns(automationId: string): Promise<any[]>;
-  listRunningRuns(): Promise<any[]>;
-  getRunByThreadId(threadId: string): Promise<any | undefined>;
-  listPendingReviewRuns(projectId?: string): Promise<any[]>;
-  listInboxRuns(options?: { projectId?: string; triageStatus?: string }): Promise<any[]>;
-}
-
 // ── Pipeline repository ─────────────────────────────────────────
 
 export interface IPipelineRepository {

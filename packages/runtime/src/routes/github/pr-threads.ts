@@ -11,7 +11,6 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
-import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
 import {
@@ -19,6 +18,7 @@ import {
   githubGraphQL,
   mapReactions,
   parseGithubOwnerRepo,
+  requireAccessibleProject,
   resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
@@ -91,7 +91,7 @@ prThreadRoutes.get('/pr-threads', async (c) => {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);
@@ -234,7 +234,7 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(projectId, userId);
+  const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 
@@ -295,7 +295,7 @@ prThreadRoutes.post('/pr-comment', async (c) => {
     return c.json({ error: 'projectId, prNumber and body are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 
@@ -342,7 +342,7 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
     return c.json({ error: 'projectId, prNumber, commentId and body are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 
@@ -387,7 +387,7 @@ prThreadRoutes.post('/pr-thread-resolve', async (c) => {
     return c.json({ error: 'projectId, threadNodeId and resolve are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { token } = ctx;
 
@@ -421,7 +421,7 @@ prThreadRoutes.post('/pr-reaction', async (c) => {
     return c.json({ error: 'projectId, kind, commentId and content are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 
@@ -458,7 +458,7 @@ prThreadRoutes.patch('/pr-comment', async (c) => {
     return c.json({ error: 'projectId, kind, commentId and body are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId);
+  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 
@@ -500,7 +500,7 @@ prThreadRoutes.delete('/pr-comment', async (c) => {
     return c.json({ error: 'projectId, kind and commentId are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(projectId, userId);
+  const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
   const { owner, repo, token } = ctx;
 

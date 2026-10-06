@@ -449,7 +449,7 @@ statusRoutes.get('/:threadId/status', async (c) => {
   // SHAREE (`userId`) — a sharee has no token, so PR detection simply degrades;
   // the sharee never borrows the owner's GitHub credentials.
   const steer = steerFromContext(c);
-  const threadResult = await requireThread(threadId, userId, orgId, steer);
+  const threadResult = await requireThread(threadId, userId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
   const pathUserId = isSteerGrantFor(threadId, steer) ? thread.userId : userId;

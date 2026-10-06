@@ -7,16 +7,19 @@
 /**
  * Route helper utilities — return Result<T, DomainError> for common lookups.
  *
- * All thread-access helpers accept a userId parameter to enforce ownership
- * checks. An optional organizationId parameter allows team members to access
- * shared projects via the team_projects join table.
+ * Thread-access helpers admit only the thread's owner (or a verified steer
+ * grant). `requireProject` also admits collaborators and members of an org the
+ * project is shared with.
  */
 
-import { notFound, forbidden, type DomainError } from '@funny/shared/errors';
+import { mkdirSync } from 'node:fs';
+
+import { badRequest, notFound, forbidden, type DomainError } from '@funny/shared/errors';
 import { ok, err, type Result } from 'neverthrow';
 
 import type { IProjectRepository } from '../services/server-interfaces.js';
 import { getServices } from '../services/service-registry.js';
+import { hasLazyCwd, resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 
 /** Check that a thread belongs to the requesting user */
@@ -63,7 +66,6 @@ export function steerFromContext(c: {
 export async function requireThread(
   id: string,
   userId?: string,
-  organizationId?: string | null,
   steer?: SteerGrant,
 ): Promise<Result<Awaited<ReturnType<typeof tm.getThread>> & {}, DomainError>> {
   const thread = await tm.getThread(id);
@@ -74,15 +76,9 @@ export async function requireThread(
       // Steer-share delegation: a verified `steer` grant on THIS thread
       // authorizes the sharee (thread-sharing-steer). The server already gated
       // the route + signed the claim; here we just honor it.
+      // Nothing else admits a non-owner: threads are private, and org
+      // membership never exposes another user's thread (shared/auth/authorizer.ts).
       if (isSteerGrantFor(id, steer)) return ok(thread);
-      // Ownership failed — check if the thread's project is shared with the org
-      if (organizationId) {
-        const isTeam = await getServices().projects.isProjectInOrg(
-          thread.projectId,
-          organizationId,
-        );
-        if (isTeam) return ok(thread);
-      }
       return err(ownerCheck.error);
     }
   }
@@ -93,22 +89,12 @@ export async function requireThread(
 export async function requireThreadWithMessages(
   id: string,
   userId?: string,
-  organizationId?: string | null,
 ): Promise<Result<NonNullable<Awaited<ReturnType<typeof tm.getThreadWithMessages>>>, DomainError>> {
   const result = await tm.getThreadWithMessages(id);
   if (!result) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(result, userId);
-    if (ownerCheck.isErr()) {
-      if (organizationId) {
-        const isTeam = await getServices().projects.isProjectInOrg(
-          result.projectId,
-          organizationId,
-        );
-        if (isTeam) return ok(result);
-      }
-      return err(ownerCheck.error);
-    }
+    if (ownerCheck.isErr()) return err(ownerCheck.error);
   }
   return ok(result);
 }
@@ -153,29 +139,61 @@ export async function requireProject(
 }
 
 /**
- * Resolve the working directory for a thread or return Err(NOT_FOUND).
- * Returns worktreePath if set, otherwise the project path.
- * Verifies ownership.
+ * Resolve the working directory of an already-authorized thread, creating it
+ * when the runner owns it (scratch). Scratch → its scratch directory; a thread
+ * with a worktree → the worktree; otherwise the project path as seen by
+ * `pathUserId` (a collaborator's own checkout, else the project's path).
+ */
+export async function ensureThreadCwd(
+  thread: NonNullable<Awaited<ReturnType<typeof tm.getThread>>>,
+  pathUserId?: string,
+): Promise<Result<string, DomainError>> {
+  if (thread.worktreePath) return ok(thread.worktreePath);
+
+  let project: { path: string } | null = null;
+  if (thread.projectId) {
+    const resolved = pathUserId
+      ? await getServices().projects.resolveProjectPath(thread.projectId, pathUserId)
+      : null;
+    if (resolved?.isOk()) {
+      project = { path: resolved.value };
+    } else {
+      const found = await getServices().projects.getProject(thread.projectId);
+      if (!found) return err(notFound('Project not found'));
+      project = { path: found.path };
+    }
+  }
+
+  const cwd = resolveThreadCwd(
+    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
+    project,
+  );
+  if (cwd.isErr()) return err(badRequest(cwd.error.message));
+  if (hasLazyCwd(thread as { isScratch?: boolean })) {
+    try {
+      mkdirSync(cwd.value, { recursive: true });
+    } catch {
+      // Callers surface a missing directory as an empty result / clear error.
+    }
+  }
+  return ok(cwd.value);
+}
+
+/**
+ * Resolve the working directory for a thread the caller may access (see
+ * `ensureThreadCwd`). Verifies ownership / steer grant.
  */
 export async function requireThreadCwd(
   threadId: string,
   userId?: string,
-  organizationId?: string | null,
   steer?: SteerGrant,
 ): Promise<Result<string, DomainError>> {
-  const threadResult = await requireThread(threadId, userId, organizationId, steer);
+  const threadResult = await requireThread(threadId, userId, steer);
   if (threadResult.isErr()) return err(threadResult.error);
   const thread = threadResult.value;
-  if (thread.worktreePath) return ok(thread.worktreePath);
   // For a steer sharee the thread lives on the OWNER's machine — resolve the
   // working directory by the thread owner, never by the sharee (who has no
   // checkout on this runner). Owners/collaborators resolve by their own id.
   const pathUserId = isSteerGrantFor(threadId, steer) ? thread.userId : userId;
-  if (pathUserId) {
-    const resolved = await getServices().projects.resolveProjectPath(thread.projectId, pathUserId);
-    if (resolved.isOk()) return ok(resolved.value);
-  }
-  const project = await getServices().projects.getProject(thread.projectId);
-  if (!project) return err(notFound('Project not found'));
-  return ok(project.path);
+  return ensureThreadCwd(thread, pathUserId);
 }

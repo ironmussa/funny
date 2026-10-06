@@ -3,10 +3,15 @@ import type { PRFile, PRCommit } from '@funny/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { getServices } from '../../services/service-registry.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
-import { GITHUB_API, githubApiFetch, parseGithubOwnerRepo, resolveGithubToken } from './helpers.js';
+import {
+  GITHUB_API,
+  githubApiFetch,
+  parseGithubOwnerRepo,
+  requireAccessibleProject,
+  resolveGithubToken,
+} from './helpers.js';
 
 export const prFileRoutes = new Hono<HonoEnv>();
 
@@ -29,7 +34,7 @@ prFileRoutes.get('/pr-files', async (c) => {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);
@@ -114,7 +119,7 @@ prFileRoutes.get('/pr-commits', async (c) => {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);
@@ -171,7 +176,7 @@ prFileRoutes.get('/commit-authors', async (c) => {
   const projectId = c.req.query('projectId');
   if (!projectId) return c.json({ error: 'projectId is required' }, 400);
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);
@@ -227,7 +232,7 @@ prFileRoutes.get('/pr-file-content', async (c) => {
     return c.json({ error: 'projectId, prNumber, and filePath are required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);
@@ -285,7 +290,7 @@ prFileRoutes.post('/pr-revert-file', async (c) => {
     return c.json({ error: 'projectId, prNumber, and filePath are required' }, 400);
   }
 
-  const project = await getServices().projects.getProject(projectId);
+  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const remoteResult = await getRemoteUrl(project.path);

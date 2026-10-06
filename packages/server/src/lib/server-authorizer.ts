@@ -15,17 +15,46 @@
  */
 
 import { createAuthorizer } from '@funny/shared/auth/authorizer';
-import { orgRoleToRole, type OrgRole } from '@funny/shared/auth/roles';
-import { createGrantRepository } from '@funny/shared/repositories';
+import {
+  orgRoleToRole,
+  projectRoleToRole,
+  type OrgRole,
+  type Role,
+} from '@funny/shared/auth/roles';
 import { and, eq } from 'drizzle-orm';
 
-import { db, dbAll, dbRun, schema } from '../db/index.js';
+import { db, dbAll, schema } from '../db/index.js';
+import { repos } from '../db/repos.js';
+import { createProjectAccessMiddleware } from '../middleware/project-access.js';
 
-const grants = createGrantRepository({ db, schema, dbAll, dbRun });
+const grants = repos.grants();
+
+/**
+ * Collaborator role on a project. `project_members` stays authoritative for
+ * project reads until the grants cutover (see `isProjectMember`): rows written
+ * before the dual-write — or lazily by `setMemberLocalPath` — have no grant.
+ */
+async function getProjectMemberRole(userId: string, projectId: string): Promise<Role | null> {
+  const rows = await dbAll(
+    db
+      .select({ role: schema.projectMembers.role })
+      .from(schema.projectMembers)
+      .where(
+        and(
+          eq(schema.projectMembers.projectId, projectId),
+          eq(schema.projectMembers.userId, userId),
+        ),
+      ),
+  );
+  const role = (rows[0] as { role?: string } | undefined)?.role;
+  return role ? projectRoleToRole(role) : null;
+}
 
 export const authorizer = createAuthorizer({
   getGrantRole: (subjectId, resourceType, resourceId) =>
-    grants.getGrantRole(subjectId, resourceType, resourceId),
+    resourceType === 'project'
+      ? getProjectMemberRole(subjectId, resourceId)
+      : grants.getGrantRole(subjectId, resourceType, resourceId),
 
   // Org role is canonical in Better Auth `member` (D1), mapped to the lattice.
   getOrgRole: async (subjectId, orgId) => {
@@ -60,4 +89,21 @@ export const authorizer = createAuthorizer({
     const r = rows[0] as { ownerId: string } | undefined;
     return r ? { ownerId: r.ownerId } : null;
   },
+
+  // `team_projects` is the live org↔project share edge (a project can be shared
+  // with several orgs; `projects.organization_id` only denormalizes one).
+  listProjectOrgIds: async (projectId) => {
+    const rows = await dbAll(
+      db
+        .select({ orgId: schema.teamProjects.teamId })
+        .from(schema.teamProjects)
+        .where(eq(schema.teamProjects.projectId, projectId)),
+    );
+    return (rows as { orgId: string }[]).map((r) => r.orgId);
+  },
 });
+
+/** Route guard for project-scoped routes — see `middleware/project-access.ts`. */
+export const requireProjectAccess = createProjectAccessMiddleware((userId, projectId) =>
+  authorizer.effectiveRole(userId, 'project', projectId),
+);

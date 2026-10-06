@@ -6,21 +6,13 @@
  */
 
 import type { CommentAuthor, ThreadComment } from '@funny/shared';
-import {
-  createThreadRepository,
-  createMessageRepository,
-  createCommentRepository,
-  createStageHistoryRepository,
-  createToolCallRepository,
-  createThreadShareRepository,
-  createPendingPermissionRepository,
-} from '@funny/shared/repositories';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
-import { db, dbAll, dbGet, dbRun } from '../db/index.js';
+import { db, dbAll } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import { authorizer } from '../lib/server-authorizer.js';
@@ -113,27 +105,13 @@ const threadDetailQuerySchema = z.object({
 
 // ── Shared repository instances ──────────────────────────────────
 
-const commentRepo = createCommentRepository({ db, schema: schema as any, dbAll, dbRun });
-const stageHistoryRepo = createStageHistoryRepository({ db, schema: schema as any, dbRun });
-const threadRepo = createThreadRepository({
-  db,
-  schema: schema as any,
-  dbAll,
-  dbGet,
-  dbRun,
-  commentRepo,
-  stageHistoryRepo,
-});
-const messageRepo = createMessageRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
-const toolCallRepo = createToolCallRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
-const shareRepo = createThreadShareRepository({ db, schema: schema as any, dbAll, dbRun });
-const pendingPermissionRepo = createPendingPermissionRepository({
-  db,
-  schema: schema as any,
-  dbAll,
-  dbGet,
-  dbRun,
-});
+const commentRepo = repos.comments();
+const stageHistoryRepo = repos.stageHistory();
+const threadRepo = repos.threads();
+const messageRepo = repos.messages();
+const toolCallRepo = repos.toolCalls();
+const shareRepo = repos.threadShares();
+const pendingPermissionRepo = repos.pendingPermissions();
 
 // Centralized per-thread authorization (see middleware/thread-access.ts).
 // `requireThreadView` guards read routes (owner OR active share grant);
@@ -152,9 +130,6 @@ export const { requireThreadView, requireThreadOwner, requireThreadSteer } =
     // cross runner isolation, so this stays `canSteerThread` (unchanged behavior).
     (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
   );
-
-// Compatibility re-export: `routes/project-runner-settings.ts` imports it from here.
-export { buildForwardHeaders };
 
 export const threadRoutes = new Hono<ServerEnv>();
 

@@ -5,24 +5,21 @@
  * @domain layer: infrastructure
  *
  * HTTP endpoint for VSCode-style text search across a thread's working
- * directory. Scope is resolved via {@link resolveThreadCwd} (worktree path
+ * directory. Scope is resolved via {@link ensureThreadCwd} (worktree path
  * for worktree threads, project path for local, scratch dir for scratch),
  * then the resident project search provider does the heavy lifting.
  */
-
-import { mkdirSync } from 'node:fs';
 
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { projectSearchRegistry } from '../services/project-search-registry.js';
-import { getServices } from '../services/service-registry.js';
-import { resolveThreadCwd } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { requireProjectPath } from '../utils/path-scope.js';
-import { resultToResponse } from '../utils/result-response.js';
+import { errorStatus, resultToResponse } from '../utils/result-response.js';
+import { ensureThreadCwd } from '../utils/route-helpers.js';
 import { parseJsonBody, parseQuery, queryBoolean } from '../validation/request.js';
 
 const NS = 'text-search-route';
@@ -90,25 +87,11 @@ app.get('/files', async (c) => {
       return c.json({ error: 'Thread not found' }, 404);
     }
 
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
+    const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, 400);
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
     }
     cwd = cwdResult.value;
-
-    if (thread.isScratch) {
-      try {
-        mkdirSync(cwd, { recursive: true });
-      } catch {
-        // An empty or unavailable scratch directory is handled by the provider.
-      }
-    }
   } else {
     const denied = await requireProjectPath(path!, userId);
     if (denied) return denied;
@@ -150,15 +133,9 @@ app.post('/files/selection', async (c) => {
       return c.json({ error: 'Thread not found' }, 404);
     }
 
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
+    const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, 400);
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
     }
     cwd = cwdResult.value;
   } else {
@@ -224,27 +201,11 @@ app.get('/text', async (c) => {
       return c.json({ error: 'Thread not found' }, 404);
     }
 
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
+    const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, 400);
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
     }
     cwd = cwdResult.value;
-
-    // Scratch dirs are created lazily on first agent run — make sure the dir
-    // exists so ripgrep doesn't fail on a missing path.
-    if (thread.isScratch) {
-      try {
-        mkdirSync(cwd, { recursive: true });
-      } catch {
-        // empty search will simply return zero results
-      }
-    }
   } else {
     const denied = await requireProjectPath(path!, userId);
     if (denied) return denied;

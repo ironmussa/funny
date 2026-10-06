@@ -1120,6 +1120,46 @@ describe('data-handler handleDataMessageWithAck', () => {
       expect(capture.userRoomEmits.some((e) => e.room === 'thread:t1:stream')).toBe(true);
     });
 
+    test('persisting a terminal status completes the automation run of that thread', async () => {
+      const now = new Date().toISOString();
+      db.insert(schema.automations)
+        .values({
+          id: 'auto-1',
+          projectId: 'p1',
+          userId: 'user-1',
+          name: 'Nightly',
+          prompt: 'look',
+          schedule: '0 9 * * *',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+      db.insert(schema.automationRuns)
+        .values({
+          id: 'run-1',
+          automationId: 'auto-1',
+          threadId: 't1',
+          status: 'running',
+          startedAt: now,
+        })
+        .run();
+
+      await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:update_thread',
+        threadId: 't1',
+        payload: { threadId: 't1', updates: { status: 'completed' } },
+      });
+      await Bun.sleep(20); // completion runs after the ack
+
+      const run = db
+        .select()
+        .from(schema.automationRuns)
+        .where(eq(schema.automationRuns.id, 'run-1'))
+        .get();
+      expect(run?.status).toBe('completed');
+      expect(capture.userRoomEmits.some((e) => e.event === 'automation:run_completed')).toBe(true);
+    });
+
     test('non-terminal status updates do not broadcast', async () => {
       // 'running' arrives via the live relay; 'waiting' must never be
       // re-broadcast from here because this payload lacks waitingReason/

@@ -18,7 +18,9 @@
  *    every signature unique so parallel requests in the same millisecond
  *    don't false-trip the replay cache.
  * 2. **Server session** — browser cookie validated against TEAM_SERVER_URL
- * 3. **Better Auth** — local session fallback
+ *
+ * Anything else is 401. The runner has no auth database of its own, so there
+ * is no local session fallback.
  */
 
 import { timingSafeEqual } from 'crypto';
@@ -66,13 +68,7 @@ const SESSION_CACHE_TTL = 15_000; // 15 seconds — balance between performance 
  */
 const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-/**
- * Direct auth middleware — validates sessions without relying on forwarded headers.
- *
- * Priority:
- * 1. Server session validation (browser → runtime with server cookie, when TEAM_SERVER_URL is set)
- * 2. Better Auth session (fallback for local sessions)
- */
+/** Runtime auth middleware — see the module comment for the accepted credentials. */
 export async function authMiddleware(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
 
@@ -178,22 +174,9 @@ export async function authMiddleware(c: Context, next: Next) {
         error: String(err),
       });
     }
-    // Fall through to local Better Auth
   }
 
-  // ── Better Auth session ────────────────────────────────────────
-  if (path.startsWith('/api/auth/')) return next();
-
-  const { auth } = await import('../lib/auth.js');
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session) return c.json({ error: 'Unauthorized' }, 401);
-
-  c.set('userId', session.user.id);
-  c.set('userRole', (session.user as any).role || 'user');
-  c.set('organizationId', (session.session as any).activeOrganizationId ?? null);
-  c.set('organizationName', null);
-
-  return next();
+  return c.json({ error: 'Unauthorized' }, 401);
 }
 
 /**
@@ -205,41 +188,4 @@ export async function requireAdmin(c: Context, next: Next) {
     return c.json({ error: 'Forbidden: admin required' }, 403);
   }
   return next();
-}
-
-/**
- * Middleware factory that checks if the user has a specific permission
- * in their active organization.
- */
-export function requirePermission(resource: string, action: string) {
-  return async (c: Context, next: Next) => {
-    const orgId = c.get('organizationId');
-    if (!orgId) return next();
-
-    const { auth } = await import('../lib/auth.js');
-    try {
-      const hasPermission = await auth.api.hasPermission({
-        headers: c.req.raw.headers,
-        body: {
-          permissions: {
-            [resource]: [action],
-          },
-        },
-      });
-
-      if (!hasPermission) {
-        return c.json({ error: `Forbidden: ${resource}:${action} permission required` }, 403);
-      }
-    } catch (err) {
-      log.warn('Permission check failed — denying access', {
-        namespace: 'auth',
-        resource,
-        action,
-        error: String(err),
-      });
-      return c.json({ error: 'Forbidden: permission check failed' }, 403);
-    }
-
-    return next();
-  };
 }

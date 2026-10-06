@@ -203,12 +203,20 @@ describe.serial('Project Routes (Integration)', () => {
       expect(res.status).toBe(404);
     });
 
-    test('returns 403 when non-owner tries to update', async () => {
+    test('returns 404 when a user without access tries to update', async () => {
       seedProject(t.db as any, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-2').patch('/api/projects/p1', {
         name: 'Hijacked',
       });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 403 when a plain collaborator tries to update', async () => {
+      seedProject(t.db as any, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-2', role: 'member' });
+
+      const res = await t.requestAs('user-2').patch('/api/projects/p1', { name: 'Hijacked' });
       expect(res.status).toBe(403);
     });
 
@@ -246,8 +254,16 @@ describe.serial('Project Routes (Integration)', () => {
       expect(res.status).toBe(404);
     });
 
-    test('returns 403 when non-owner tries to delete', async () => {
+    test('returns 404 when a user without access tries to delete', async () => {
       seedProject(t.db as any, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
+
+      const res = await t.requestAs('user-2').delete('/api/projects/p1');
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 403 when a project admin (not the owner) tries to delete', async () => {
+      seedProject(t.db as any, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-2', role: 'admin' });
 
       const res = await t.requestAs('user-2').delete('/api/projects/p1');
       expect(res.status).toBe(403);

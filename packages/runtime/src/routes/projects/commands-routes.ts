@@ -139,11 +139,7 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
 
   let cwd = project.path;
   if (threadId) {
-    const threadResult = await requireThread(
-      threadId,
-      c.get('userId'),
-      c.get('organizationId') ?? undefined,
-    );
+    const threadResult = await requireThread(threadId, c.get('userId'));
     if (threadResult.isErr()) return resultToResponse(c, threadResult);
     const thread = threadResult.value;
     if (thread.projectId !== projectId) {
@@ -270,7 +266,7 @@ projectCommandsRoutes.post('/:id/sync-processes', requireAdmin, async (c) => {
   return c.json({ synced, total: merged.size });
 });
 
-// POST /api/projects/:id/sync-config — sync both processes and automations from .funny.json
+// POST /api/projects/:id/sync-config — re-read the processes declared in .funny.json / Procfile
 projectCommandsRoutes.post('/:id/sync-config', requireAdmin, async (c) => {
   const projectId = requireRouteParam(c.req.param('id'), 'id');
   const userId = c.get('userId');
@@ -282,12 +278,9 @@ projectCommandsRoutes.post('/:id/sync-config', requireAdmin, async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  const { syncConfigAutomations } = await import('../../services/config-automation-sync.js');
-  const automationResult = await syncConfigAutomations(projectId, project.path, userId);
-
   const { readProjectConfig, readProcfile } = await import('@funny/core/ports');
   const config = readProjectConfig(project.path);
   const processCount = (config?.processes?.length ?? 0) + readProcfile(project.path).length;
 
-  return c.json({ automations: automationResult, processes: processCount });
+  return c.json({ processes: processCount });
 });

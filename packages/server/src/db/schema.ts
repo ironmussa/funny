@@ -1,64 +1,9 @@
 /**
- * Re-exports SQLite schema from shared package.
- * All table definitions live in @funny/shared/db/schema-sqlite.
+ * The server's Drizzle schema: the SQLite definitions from
+ * `@funny/shared/db/schema-sqlite` (the Postgres twin is kept identical by
+ * `__tests__/db/schema-drift.test.ts`).
  *
- * Existing imports like `from '../db/schema.js'` continue to work unchanged.
+ * Re-exported wholesale so this module satisfies `DatabaseConnection.schema`
+ * and repository factories accept it without casts.
  */
-export {
-  // Runtime tables
-  projects,
-  designs,
-  threads,
-  threadSessions,
-  messages,
-  startupCommands,
-  toolCalls,
-  automations,
-  automationRuns,
-  userProfiles,
-  stageHistory,
-  threadComments,
-  threadShares,
-  messageQueue,
-  mcpOauthTokens,
-  pipelines,
-  pipelineRuns,
-  schedulerRuns,
-  threadDependencies,
-  watchers,
-  jobs,
-  teamProjects,
-  threadEvents,
-  instanceSettings,
-  permissionRules,
-  pendingPermissionRequests,
-  agentExecutionProfiles,
-  projectAgentProfileBindings,
-  // Server-only tables
-  pushSubscriptions,
-  runners,
-  runnerProjectAssignments,
-  projectRunnerSettings,
-  projectRunnerGrants,
-  runnerTasks,
-  runnerEnrollments,
-  runnerOperationIdempotency,
-  runnerEventReceipts,
-  projectMembers,
-  projectMemberConfig,
-  resourceGrants,
-  inviteLinks,
-  agentTemplates,
-  // Better Auth identity tables. `user`/`member` are read directly by the
-  // share routes (org-membership validation + invited-user display). The full
-  // set is re-exported so this module satisfies `DatabaseConnection.schema`
-  // (typeof sqliteSchema) — partial re-export left a long-standing type error
-  // at the setConnection call sites.
-  user,
-  session,
-  account,
-  verification,
-  member,
-  organization,
-  invitation,
-} from '@funny/shared/db/schema-sqlite';
+export * from '@funny/shared/db/schema-sqlite';

@@ -155,13 +155,7 @@ diffRoutes.get('/project/:projectId/diff/file', async (c) => {
 // GET /api/git/:threadId/diff/summary
 diffRoutes.get('/:threadId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
@@ -190,13 +184,7 @@ diffRoutes.get('/:threadId/diff/summary', async (c) => {
 // scoped by the submodule's path relative to the thread cwd.
 diffRoutes.get('/:threadId/diff/submodule', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const relPath = c.req.query('path');
@@ -224,13 +212,7 @@ diffRoutes.get('/:threadId/diff/submodule', async (c) => {
 // Single-file diff scoped *inside* a submodule of the thread's worktree.
 diffRoutes.get('/:threadId/diff/submodule/file', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const submodulePath = c.req.query('submodule');
@@ -269,13 +251,7 @@ diffRoutes.get('/:threadId/diff/submodule/file', async (c) => {
 // GET /api/git/:threadId/diff/file
 diffRoutes.get('/:threadId/diff/file', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const filePath = c.req.query('path');
@@ -300,13 +276,7 @@ diffRoutes.get('/:threadId/diff/file', async (c) => {
 // GET /api/git/:threadId/diff
 diffRoutes.get('/:threadId/diff', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireThreadCwd(
-    c.req.param('threadId'),
-    userId,
-    orgId,
-    steerFromContext(c),
-  );
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {

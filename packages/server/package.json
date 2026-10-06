@@ -2,7 +2,7 @@
   "name": "@funny/server",
   "version": "0.1.0",
   "private": false,
-  "description": "Funny server for team coordination — manages users, projects, memberships, and runner dispatch.",
+  "description": "Funny server for team coordination \u2014 manages users, projects, memberships, and runner dispatch.",
   "license": "MIT",
   "bin": {
     "funny-server": "./bin/funny-server.js"
@@ -35,6 +35,7 @@
     "@ironmussa/funny-runtime": "workspace:*",
     "@socket.io/bun-engine": "^0.1.0",
     "better-auth": "^1.6.19",
+    "croner": "^10.0.1",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.25",
     "kysely": "^0.29.2",

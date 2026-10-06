@@ -16,6 +16,7 @@ export { createThreadRepository, type ThreadRepositoryDeps } from './thread-repo
 export { createCommentRepository, type CommentRepositoryDeps } from './comment-repository.js';
 export {
   createThreadShareRepository,
+  type ShareLevel,
   type ThreadShareRepositoryDeps,
 } from './thread-share-repository.js';
 export {
@@ -47,3 +48,4 @@ export {
   type JobRow,
   type JobPatch,
 } from './job-repository.js';
+export type { RepoDeps } from './deps.js';

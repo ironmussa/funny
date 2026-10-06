@@ -34,7 +34,6 @@
     "./auth/forwarded-identity": "./src/auth/forwarded-identity.ts",
     "./auth/media-url-signature": "./src/auth/media-url-signature.ts",
     "./dom/extract": "./src/dom/extract.ts",
-    "./db/columns": "./src/db/columns.ts",
     "./db/provider": "./src/db/provider.ts",
     "./db/schema": "./src/db/schema.ts",
     "./db/schema-sqlite": "./src/db/schema.sqlite.ts",
@@ -45,7 +44,6 @@
     "./db/adapters/pg": "./src/db/adapters/pg.ts",
     "./db/migrate": "./src/db/migrate.ts",
     "./repositories": "./src/repositories/index.ts",
-    "./evflow-model": "./src/evflow.model.ts",
     "./lib/crypto": "./src/lib/crypto.ts",
     "./lib/canonical-json": "./src/lib/canonical-json.ts",
     "./lib/file-search": "./src/lib/file-search.ts",
@@ -56,7 +54,6 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.14.0",
-    "@funny/evflow": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.5",
     "pg": "^8.20.0",

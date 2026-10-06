@@ -1,7 +1,6 @@
 import type { Hono } from 'hono';
 
 import { mutationRateLimit } from '../middleware/rate-limit.js';
-import { automationRoutes } from '../routes/automations.js';
 import browseRoutes from '../routes/browse.js';
 import { browserSessionRoutes } from '../routes/browser-session.js';
 import { designProjectRoutes } from '../routes/designs.js';
@@ -44,7 +43,6 @@ export function registerRoutes(app: Hono<HonoEnv>): void {
   app.route('/api/worktrees', worktreeRoutes);
   app.route('/api/github', githubRoutes);
   app.route('/api/tests', testRoutes);
-  app.route('/api/automations', automationRoutes);
   app.route('/api/jobs', jobRoutes);
   app.route('/api/pipelines', pipelineRuntimeRoutes);
   app.route('/api/scheduler', schedulerRuntimeRoutes);

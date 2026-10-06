@@ -71,6 +71,15 @@ export function canDoGitOps(thread: Pick<Thread, 'isScratch'>): boolean {
 }
 
 /**
+ * Returns true when the runner owns the thread's working directory and creates
+ * it on demand (scratch threads). Project and worktree directories must
+ * already exist — never mkdir them.
+ */
+export function hasLazyCwd(thread: Pick<Thread, 'isScratch'>): boolean {
+  return !!thread.isScratch;
+}
+
+/**
  * Derive (without persisting) the on-disk scratch directory for a thread.
  * The directory is created lazily on first agent spawn and removed on
  * thread delete — see `agent-lifecycle.ts` and `thread-service/update.ts`.

@@ -15,23 +15,14 @@
  * automatically every `SCHEDULER_POLL_MS`.
  */
 
-import { dbAll, dbGet, dbRun } from '@funny/shared/db/connection';
-import { createSchedulerRunRepository } from '@funny/shared/repositories';
 import { Hono } from 'hono';
 
-import { db } from '../db/index.js';
-import * as schema from '../db/schema.js';
+import { repos } from '../db/repos.js';
 import type { ServerEnv } from '../lib/types.js';
 
 export const schedulerRoutes = new Hono<ServerEnv>();
 
-const runRepo = createSchedulerRunRepository({
-  db,
-  schema: schema as unknown as Parameters<typeof createSchedulerRunRepository>[0]['schema'],
-  dbAll,
-  dbGet,
-  dbRun,
-});
+const runRepo = repos.schedulerRuns();
 
 /**
  * GET /api/scheduler/runs — list active runs owned by the caller.

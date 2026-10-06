@@ -1,5 +1,9 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { ok, err } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
@@ -7,6 +11,13 @@ const mocks = vi.hoisted(() => ({
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
   resolveProjectPath: vi.fn(),
+  home: '',
+}));
+
+// Scratch directories live under the home dir — point it at a temp dir.
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:os')>()),
+  homedir: () => mocks.home,
 }));
 
 vi.mock('../../services/thread-manager.js', () => ({
@@ -30,6 +41,7 @@ import {
   requireProject,
   requireThreadCwd,
   isSteerGrantFor,
+  ensureThreadCwd,
 } from '../../utils/route-helpers.js';
 
 describe('route-helpers', () => {
@@ -55,7 +67,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'other-user', 'org-1');
+    const result = await requireThread('t-1', 'other-user');
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -63,17 +75,16 @@ describe('route-helpers', () => {
     }
   });
 
-  test('requireThread allows team org access to shared project threads', async () => {
-    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1' };
-    mocks.getThread.mockResolvedValue(thread);
+  // Threads are private: org membership never admits a teammate (the route-level
+  // regression lives in thread-routes-mounted.test.ts).
+  test('requireThread denies an org teammate on a shared project thread', async () => {
+    mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(true);
 
-    const result = await requireThread('t-1', 'teammate', 'org-1');
+    const result = await requireThread('t-1', 'teammate');
 
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value).toEqual(thread);
-    }
+    expect(result._unsafeUnwrapErr().type).toBe('FORBIDDEN');
+    expect(mocks.isProjectInOrg).not.toHaveBeenCalled();
   });
 
   test('requireThreadWithMessages returns thread detail for owner', async () => {
@@ -133,15 +144,14 @@ describe('route-helpers', () => {
     }
   });
 
-  test('requireThreadWithMessages allows org teammate access', async () => {
+  test('requireThreadWithMessages denies an org teammate', async () => {
     const detail = { id: 't-1', userId: 'owner', projectId: 'p-1', messages: [] };
     mocks.getThreadWithMessages.mockResolvedValue(detail);
     mocks.isProjectInOrg.mockResolvedValue(true);
 
-    const result = await requireThreadWithMessages('t-1', 'teammate', 'org-1');
+    const result = await requireThreadWithMessages('t-1', 'teammate');
 
-    expect(result.isOk()).toBe(true);
-    expect(mocks.isProjectInOrg).toHaveBeenCalledWith('p-1', 'org-1');
+    expect(result._unsafeUnwrapErr().type).toBe('FORBIDDEN');
   });
 
   test('requireProject rejects non-owner without org access', async () => {
@@ -219,7 +229,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue(thread);
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'sharee', null, {
+    const result = await requireThread('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-1',
     });
@@ -234,7 +244,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'sharee', null, {
+    const result = await requireThread('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-2',
     });
@@ -247,7 +257,7 @@ describe('route-helpers', () => {
     mocks.getThread.mockResolvedValue({ id: 't-1', userId: 'owner', projectId: 'p-1' });
     mocks.isProjectInOrg.mockResolvedValue(false);
 
-    const result = await requireThread('t-1', 'sharee', null, {
+    const result = await requireThread('t-1', 'sharee', {
       shareLevel: 'view',
       onBehalfOfThread: 't-1',
     });
@@ -269,7 +279,7 @@ describe('route-helpers', () => {
       uid === 'owner' ? ok('/home/owner/repo') : err({ type: 'BAD_REQUEST', message: 'no path' }),
     );
 
-    const result = await requireThreadCwd('t-1', 'sharee', null, {
+    const result = await requireThreadCwd('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-1',
     });
@@ -287,7 +297,7 @@ describe('route-helpers', () => {
       worktreePath: '/wt/owner-feature',
     });
 
-    const result = await requireThreadCwd('t-1', 'sharee', null, {
+    const result = await requireThreadCwd('t-1', 'sharee', {
       shareLevel: 'steer',
       onBehalfOfThread: 't-1',
     });
@@ -311,5 +321,70 @@ describe('route-helpers', () => {
     if (result.isErr()) {
       expect(result.error.type).toBe('NOT_FOUND');
     }
+  });
+});
+
+describe('thread working directory', () => {
+  mocks.home = mkdtempSync(join(tmpdir(), 'funny-home-'));
+  afterAll(() => rmSync(mocks.home, { recursive: true, force: true }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveProjectPath.mockResolvedValue(err({ type: 'BAD_REQUEST', message: 'no path' }));
+  });
+
+  // Regression: requireThreadCwd ignored scratch threads and looked up the
+  // project '' — so uploads (and anything else using it) failed on scratch
+  // threads with "Project not found".
+  test('a scratch thread resolves to its scratch directory, created on demand', async () => {
+    mocks.getThread.mockResolvedValue({
+      id: 't-scratch',
+      userId: 'u-1',
+      projectId: '',
+      isScratch: true,
+      mode: 'local',
+      worktreePath: null,
+    });
+
+    const result = await requireThreadCwd('t-scratch', 'u-1');
+
+    const expected = join(mocks.home, '.funny', 'scratch', 'u-1', 't-scratch');
+    expect(result._unsafeUnwrap()).toBe(expected);
+    expect(existsSync(expected)).toBe(true);
+    expect(mocks.getProject).not.toHaveBeenCalled();
+  });
+
+  test('a collaborator gets their own checkout, not the owner’s path', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1', mode: 'local' } as any;
+    mocks.resolveProjectPath.mockResolvedValue(ok('/home/collab/repo'));
+
+    expect((await ensureThreadCwd(thread, 'collab'))._unsafeUnwrap()).toBe('/home/collab/repo');
+  });
+
+  test('falls back to the project path, and never creates it', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1', mode: 'local' } as any;
+    mocks.getProject.mockResolvedValue({ id: 'p-1', userId: 'owner', path: '/does/not/exist' });
+
+    expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrap()).toBe('/does/not/exist');
+    expect(existsSync('/does/not/exist')).toBe(false);
+  });
+
+  test('a worktree thread uses its worktree', async () => {
+    const thread = {
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-1',
+      mode: 'worktree',
+      worktreePath: '/wt',
+    } as any;
+
+    expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrap()).toBe('/wt');
+  });
+
+  test('a project thread whose project is gone → NOT_FOUND', async () => {
+    const thread = { id: 't-1', userId: 'owner', projectId: 'p-gone', mode: 'local' } as any;
+    mocks.getProject.mockResolvedValue(undefined);
+
+    expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrapErr().type).toBe('NOT_FOUND');
   });
 });

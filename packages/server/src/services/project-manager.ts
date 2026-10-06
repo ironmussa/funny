@@ -3,12 +3,12 @@
  * Source of truth for team projects and memberships.
  */
 
-import type { Role } from '@funny/shared/auth/roles';
+import { projectRoleToRole } from '@funny/shared/auth/roles';
 import { user } from '@funny/shared/db/schema-sqlite';
-import { createGrantRepository } from '@funny/shared/repositories';
 import { eq, and, inArray } from 'drizzle-orm';
 
-import { db, dbAll, dbRun, schema } from '../db/index.js';
+import { db } from '../db/index.js';
+import { repos } from '../db/repos.js';
 import { projectMembers } from '../db/schema.js';
 import { log } from '../lib/logger.js';
 
@@ -16,15 +16,7 @@ import { log } from '../lib/logger.js';
 // (project rows) alongside `project_members`, so new memberships populate the
 // unified table immediately. Reads stay on `project_members` (still
 // authoritative for role + localPath shape) — cutover happens after backfill.
-const grants = createGrantRepository({ db, schema, dbAll, dbRun });
-
-/** Legacy project role string → canonical lattice role. */
-function projectRoleToCanonical(role: string): Role {
-  if (role === 'admin') return 'admin';
-  if (role === 'owner') return 'owner';
-  if (role === 'viewer') return 'viewer';
-  return 'contributor'; // 'member' and any legacy/default value
-}
+const grants = repos.grants();
 
 // ── Types ────────────────────────────────────────────────
 
@@ -64,7 +56,7 @@ export async function addMember(
     subjectId: userId,
     resourceType: 'project',
     resourceId: projectId,
-    role: projectRoleToCanonical(role),
+    role: projectRoleToRole(role),
     grantedBy: userId, // best-effort; route-level actor wiring lands in Phase 7
   });
 

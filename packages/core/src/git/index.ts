@@ -63,7 +63,7 @@ export {
 
 export { commit, runHookCommand } from './commit.js';
 
-export { push, pushBranch, pull, createPR, mergeBranch, cloneRepo, setOrigin } from './remote.js';
+export { push, pushBranch, pull, createPR, mergeBranch, setOrigin } from './remote.js';
 export type { PullStrategy } from './remote.js';
 
 export {
@@ -140,17 +140,10 @@ export {
 export { getWeaveStatus, ensureWeaveConfigured } from './weave.js';
 
 export {
-  fetchPRReviews,
-  checkPRApprovalStatus,
-  mergePR,
   getPRInfo,
   getPRDiff,
   postPRReview,
   getPRForBranch,
-  type PRReview,
-  type PRReviewComment,
-  type ReviewDecision,
-  type PRReviewData,
   type PRInfo,
   type ReviewEvent,
   type BranchPRInfo,

@@ -22,8 +22,7 @@ import { and, asc, eq } from 'drizzle-orm';
 
 import type { Role, ResourceType } from '../auth/roles.js';
 import { isRole } from '../auth/roles.js';
-import type { AppDatabase, dbAll as dbAllFn, dbRun as dbRunFn } from '../db/connection.js';
-import type * as sqliteSchema from '../db/schema.sqlite.js';
+import type { RepoDeps } from './deps.js';
 
 export interface ResourceGrant {
   subjectId: string;
@@ -34,12 +33,7 @@ export interface ResourceGrant {
   createdAt: string;
 }
 
-export interface GrantRepositoryDeps {
-  db: AppDatabase;
-  schema: typeof sqliteSchema;
-  dbAll: typeof dbAllFn;
-  dbRun: typeof dbRunFn;
-}
+export type GrantRepositoryDeps = Pick<RepoDeps, 'db' | 'schema' | 'dbAll' | 'dbRun'>;
 
 function normalize(row: any): ResourceGrant {
   return {

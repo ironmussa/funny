@@ -41,6 +41,19 @@ This is the same shape `CLAUDE.md` describes ("Client → Server → Runner", se
 
 `packages/scheduler` runs as **its own process** by default (`root package.json` `dev:scheduler` script, `concurrently -n server,runner,client,sched`) rather than living inside the server; it talks to the server over HTTP (`packages/scheduler/src/adapters/http-*.ts`) against `/api/scheduler/system/*` routes (`packages/server/src/routes/scheduler-system.ts`).
 
+### Server feature module pilot: `modules/threads`
+
+Thread creation (`POST /api/threads` and `POST /api/threads/idle`) is the first server flow organized as a feature module with ports and adapters. The two route handlers in `packages/server/src/routes/threads.ts` only parse the body and map results to HTTP. Orchestration lives in `packages/server/src/modules/threads/`:
+
+```text
+route (HTTP parse/map) → composeCreateThread(env) → makeCreateThread(ports)
+                                                   ├─ domain/creation-target.ts  (pure scratch/project normalization)
+                                                   └─ ports: runner resolution · remote creation · registry · routing cache
+                                                           ↑ infrastructure/ adapters over runner-forwarding, runner-resolver, thread-registry
+```
+
+`scripts/fitness/check-module-boundaries.ts` (part of `bun run lint`) enforces the layering. `domain/` and `application/` must not import Hono, Drizzle, gRPC, the DB, server services, or `infrastructure/`. Code outside the module imports only `index.ts` or `composition.ts`. This is a scoped pilot. Other routes, list/detail queries, and the runtime are unchanged. It is not a CQRS or repository-wide folder migration. See [threads domain](../domain/threads-and-worktrees.md#thread-creation-flow).
+
 ## Full package map
 
 | Package                     | npm name                         | Role                                                                                                                                                                                               | Wired into the live app?                                                                                                                                                                                                                                                                         |

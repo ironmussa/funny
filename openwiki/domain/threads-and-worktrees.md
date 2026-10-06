@@ -24,6 +24,15 @@ A **scratch thread** is a lightweight, projectless thread for throwaway work ("b
 
 When you find a new axis of divergence between scratch and normal threads, add a predicate to one of these two modules — not a call-site `if (thread.isScratch)`.
 
+## Thread creation flow
+
+Creating a thread spans the server and the runtime.
+
+- **Server** (`packages/server/src/modules/threads/`) normalizes the request and enforces scratch invariants before any I/O. Errors are checked in this order: `scratch-thread-cannot-have-project`, then `scratch-thread-must-be-local`, then `projectId is required`. The server then resolves **the authenticated user's own** runner. There is never a fallback to another user's runner. It forwards the payload with a signed identity (unknown fields pass through unchanged), registers the returned thread in the central DB, and caches the thread→runner route. The runtime's branch value wins over the request's branch. The legacy `__default__` runner skips registration and caching.
+- **Runtime** (`packages/runtime/src/services/thread-service/`) does the actual creation: DB row via the data channel, worktree/branch, and agent start.
+
+Remote creation and registration are not atomic. If the registry write fails after the runner succeeds, the request returns `502 Thread creation failed` and is not retried. The use case is `makeCreateThread` (public API in `modules/threads/index.ts`). Production wiring is `composeCreateThread` in `modules/threads/composition.ts`. See the [architecture overview](../architecture/overview.md#server-feature-module-pilot-modulesthreads).
+
 ## Team sharing: roles, capabilities, and the "steer" exception
 
 funny has two deployment shapes: **local** (everything on one machine) and **team** (a central server coordinates multiple users, each with their own runner). In team mode, thread owners can share a thread with project members. `packages/shared/src/auth/roles.ts` defines the canonical model:
@@ -45,7 +54,7 @@ UI label:       "Viewer"      "Commenter"         "Editor"
 The **one intentional exception** is steer-share delegation: a thread shared at the `steer` level lets a non-owner sharee send follow-ups (`POST /:id/message`) and read git (`status`/`diff`/`log`) — on the **owner's** runner. This is allowed only because every one of these conditions holds simultaneously (confirmed in `packages/server/src/middleware/proxy.ts` and `packages/shared/src/auth/roles.ts`):
 
 1. The crossing is gated by a **fixed allow-list** of routes — a steer sharee reaches nothing else (no stop/approve/upload/rewind/convert/fork/tool-calls, no git write, never the owner's GitHub token).
-2. The crossing happens in `middleware/proxy.ts` only *after* thread-share authorization has already loaded and checked the grant, then resolves the runner by `thread.userId` (the owner) — never a blind fallback.
+2. The crossing happens in `middleware/proxy.ts` only _after_ thread-share authorization has already loaded and checked the grant, then resolves the runner by `thread.userId` (the owner) — never a blind fallback.
 3. Every crossing emits an audit record (`share.steer_delegation`, per `packages/server/src/lib/audit.ts`).
 4. The runtime re-authorizes the request via a **signed** `shareLevel` / `onBehalfOfThread` claim in the forwarded identity, because the runtime itself has no database to look up the grant (`packages/shared/src/auth/forwarded-identity.ts`).
 

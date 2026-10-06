@@ -7,13 +7,6 @@
 
 import type { CommentAuthor, ThreadComment } from '@funny/shared';
 import {
-  NONCE_HEADER,
-  SIGNATURE_HEADER,
-  TIMESTAMP_HEADER,
-  signForwardedIdentity,
-} from '@funny/shared/auth/forwarded-identity';
-import { parseStoredJson } from '@funny/shared/json-validation';
-import {
   createThreadRepository,
   createMessageRepository,
   createCommentRepository,
@@ -24,7 +17,7 @@ import {
 } from '@funny/shared/repositories';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
@@ -35,9 +28,15 @@ import { startSpan } from '../lib/telemetry.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
+import { composeCreateThread, runnerPathFor } from '../modules/threads/composition.js';
+import { authenticatedUserId, type CreationIntent } from '../modules/threads/index.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
-import { findRunnerForProject } from '../services/runner-manager.js';
-import type { RunnerPresencePort, RunnerRequestPort } from '../services/runner-ports.js';
+import {
+  buildForwardHeaders,
+  fetchFromRunner,
+  resolveRunnerForProject,
+  runnerErrorMessage,
+} from '../services/runner-forwarding.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import type { ResolvedRunner } from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
@@ -105,22 +104,12 @@ const schedulerWorkflowEventBodySchema = z
     data: z.unknown().optional(),
   })
   .passthrough();
-const runnerErrorBodySchema = z.object({ error: z.string().optional() }).passthrough();
 
 const threadDetailQuerySchema = z.object({
   messageLimit: z.coerce.number().int().min(1).max(200).optional(),
   messageProgress: z.coerce.number().min(0).max(1).optional(),
   messageAnchorId: z.string().min(1).optional(),
 });
-
-// Read at call time, not module load — the test harness sets this in a
-// per-file top-of-module assignment, but `routes/threads.ts` may have already
-// been imported by an earlier test file via the shared test-app helper, so
-// capturing it as a top-level constant freezes whatever value `process.env`
-// happened to hold at first load (commonly undefined → crypto signing throws).
-function getRunnerAuthSecret(): string {
-  return process.env.RUNNER_AUTH_SECRET ?? '';
-}
 
 // ── Shared repository instances ──────────────────────────────────
 
@@ -164,78 +153,8 @@ export const { requireThreadView, requireThreadOwner, requireThreadSteer } =
     (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
   );
 
-// ── Runner communication helpers ─────────────────────────────────
-
-async function resolveRunnerForProject(
-  projectId: string,
-  userId?: string,
-  presence?: RunnerPresencePort,
-): Promise<ResolvedRunner | null> {
-  // CRITICAL (runner isolation): scope the project→runner lookup to the
-  // requesting user. Without userId, findRunnerForProject returns ANY runner
-  // assigned to the project — including another user's runner — which then gets
-  // cached as the thread's runner and routes every request cross-tenant (the
-  // server's data-handler correctly refuses, breaking the thread). A
-  // collaborator must run on THEIR OWN runner.
-  const runnerResult = await findRunnerForProject(projectId, userId);
-  if (runnerResult && presence?.isAvailable(runnerResult.runner.runnerId)) {
-    return { runnerId: runnerResult.runner.runnerId };
-  }
-  return await runnerResolver.resolveRunner('/api/threads', { projectId }, userId, presence);
-}
-
-async function fetchFromRunner(
-  requests: RunnerRequestPort,
-  resolved: ResolvedRunner,
-  path: string,
-  opts: { method: string; headers: Record<string, string>; body?: string },
-): Promise<{ ok: boolean; status: number; body: string }> {
-  const resp = await requests.request(resolved.runnerId, {
-    method: opts.method,
-    path,
-    headers: opts.headers,
-    body: opts.body ?? null,
-  });
-  return {
-    ok: resp.status >= 200 && resp.status < 400,
-    status: resp.status,
-    body: resp.body ?? '',
-  };
-}
-
-export function buildForwardHeaders(
-  userId: string,
-  orgId?: string,
-  role?: string,
-  orgName?: string,
-): Record<string, string> {
-  // Default role to 'user' so the signed payload matches what the runtime
-  // verifies (runtime defaults a missing X-Forwarded-Role to 'user' too).
-  const effectiveRole = role ?? 'user';
-  const runnerAuthSecret = getRunnerAuthSecret();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Forwarded-User': userId,
-    'X-Runner-Auth': runnerAuthSecret,
-    'X-Forwarded-Role': effectiveRole,
-  };
-  if (orgId) headers['X-Forwarded-Org'] = orgId;
-  if (orgName) headers['X-Forwarded-Org-Name'] = orgName;
-  const { signature, timestamp, nonce } = signForwardedIdentity(
-    { userId, role: effectiveRole, orgId: orgId ?? null, orgName: orgName ?? null },
-    runnerAuthSecret,
-  );
-  headers[SIGNATURE_HEADER] = signature;
-  headers[TIMESTAMP_HEADER] = String(timestamp);
-  headers[NONCE_HEADER] = nonce;
-  return headers;
-}
-
-function runnerErrorMessage(body: string): string {
-  const parsed = parseStoredJson(runnerErrorBodySchema, body, 'runner error response');
-  if (parsed.ok && parsed.value.error?.trim()) return parsed.value.error;
-  return body.trim() || 'Runner request failed';
-}
+// Compatibility re-export: `routes/project-runner-settings.ts` imports it from here.
+export { buildForwardHeaders };
 
 export const threadRoutes = new Hono<ServerEnv>();
 
@@ -781,114 +700,64 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
 
 // ── Thread creation (proxied to runner, then registered locally) ─
 
-/** Shared handler for creating threads on a runner and registering them locally. */
-async function createThreadOnRunner(c: any, runnerPath: string) {
-  const userId = c.get('userId') as string;
+/**
+ * Shared HTTP adapter for both creation endpoints. It parses the body, runs the
+ * `modules/threads` creation use case, and maps its result to the existing
+ * HTTP contract.
+ */
+async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent) {
   const parsed = await parseJsonBody(c, threadCreateBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const rawBody = parsed.value;
-  const isScratch = rawBody.isScratch === true;
 
-  // Validate scratch invariants before any I/O.
-  if (isScratch && rawBody.projectId != null) {
-    return c.json(
-      {
-        error: 'Scratch threads cannot have a project',
-        code: 'scratch-thread-cannot-have-project',
-      },
-      400,
-    );
-  }
-  if (isScratch && rawBody.mode && rawBody.mode !== 'local') {
-    return c.json(
-      { error: 'Scratch threads must use mode = local', code: 'scratch-thread-must-be-local' },
-      400,
-    );
-  }
+  const createThread = composeCreateThread(c.env);
+  const result = await createThread({
+    actor: {
+      userId: authenticatedUserId(c.get('userId') as string),
+      organizationId: c.get('organizationId') as string | undefined,
+      role: c.get('userRole') as string | undefined,
+      organizationName: c.get('organizationName') as string | undefined,
+    },
+    intent,
+    payload: parsed.value,
+  });
+  if (result.isOk()) return c.json(result.value.thread as any, 201);
 
-  // Normalize scratch body so the runtime sees a consistent shape.
-  const body = isScratch
-    ? { ...rawBody, projectId: null, mode: 'local' as const, isScratch: true }
-    : rawBody;
-  const projectId = body.projectId as string | null;
-
-  if (!isScratch && !projectId) {
-    return c.json({ error: 'projectId is required' }, 400);
-  }
-
-  // Resolve the runner. Scratch threads have no project, so we ask
-  // resolveRunner for any reachable runner that belongs to this user.
-  const resolved = isScratch
-    ? await runnerResolver.resolveRunner(runnerPath, {}, userId, c.env?.runnerPresence)
-    : await resolveRunnerForProject(projectId!, userId, c.env?.runnerPresence);
-  if (!resolved) {
-    return c.json(
-      {
-        error: isScratch
-          ? 'No online runner found for this user'
-          : 'No online runner found for this project',
-      },
-      502,
-    );
-  }
-
-  try {
-    const headers = buildForwardHeaders(
-      userId,
-      c.get('organizationId') as string | undefined,
-      c.get('userRole') as string | undefined,
-      c.get('organizationName') as string | undefined,
-    );
-    const result = await fetchFromRunner(c.env.runnerRequests!, resolved, runnerPath, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    if (!result.ok) return c.json({ error: runnerErrorMessage(result.body) }, result.status as any);
-
-    const threadData = JSON.parse(result.body);
-
-    const threadId = threadData.id || threadData.thread?.id;
-    if (threadId && resolved.runnerId !== '__default__') {
-      await threadRegistry.registerThread({
-        id: threadId,
-        projectId,
-        runnerId: resolved.runnerId,
-        userId,
-        title: typeof body.title === 'string' && body.title ? body.title : threadData.title,
-        model: typeof body.model === 'string' ? body.model : undefined,
-        mode: typeof body.mode === 'string' ? body.mode : undefined,
-        // Use runtime response data — the runtime generates the worktree
-        // branch name, so body.branch is typically undefined for new threads.
-        branch:
-          threadData.branch ??
-          (typeof body.branch === 'string' && body.branch ? body.branch : undefined),
-        isScratch,
+  const failure = result.error;
+  switch (failure.kind) {
+    case 'rejected':
+      return failure.code === 'project-required'
+        ? c.json({ error: failure.message }, 400)
+        : c.json({ error: failure.message, code: failure.code }, 400);
+    case 'no-runner':
+      return c.json(
+        {
+          error:
+            failure.scope === 'user'
+              ? 'No online runner found for this user'
+              : 'No online runner found for this project',
+        },
+        502,
+      );
+    case 'remote-error':
+      return c.json({ error: failure.message }, failure.status as any);
+    case 'creation-failed': {
+      const cause = failure.cause as Error;
+      log.error('Failed to create thread on runner', {
+        namespace: 'threads',
+        error: cause?.message ?? String(cause),
+        stack: cause?.stack,
+        path: runnerPathFor(intent),
       });
-
-      runnerResolver.cacheThreadRunner(threadId, userId, resolved.runnerId);
+      return c.json({ error: 'Thread creation failed' }, 502);
     }
-
-    return c.json(threadData, 201);
-  } catch (err) {
-    const message = (err as Error).message ?? String(err);
-    const stack = (err as Error).stack;
-    log.error('Failed to create thread on runner', {
-      namespace: 'threads',
-      error: message,
-      stack,
-      path: runnerPath,
-    });
-    return c.json({ error: 'Thread creation failed' }, 502);
   }
 }
 
 // POST /api/threads — Create a new thread
-threadRoutes.post('/', (c) => createThreadOnRunner(c, '/api/threads'));
+threadRoutes.post('/', (c) => handleCreateThread(c, 'normal'));
 
 // POST /api/threads/idle — Create an idle thread
-threadRoutes.post('/idle', (c) => createThreadOnRunner(c, '/api/threads/idle'));
+threadRoutes.post('/idle', (c) => handleCreateThread(c, 'idle'));
 
 // ── Agent operations (proxied to runner) ─────────────────────────
 

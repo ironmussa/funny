@@ -69,6 +69,24 @@ A runner pointed at a remote `TEAM_SERVER_URL` effectively grants that server sh
 
 See the "Machine B — Runner" section of [INSTALL.md](../../INSTALL.md) for the full walkthrough.
 
+### Server → runner requests are proof-gated
+
+Runner isolation is enforced where the server actually sends to a runner. Every
+proxied HTTP request, thread creation/fork/delete cleanup, browser-session command,
+terminal message, scheduler dispatch/cancel and stop-sessions call goes through
+`packages/server/src/services/runner-access/` with a `RunnerFor` proof that the
+runner belongs to, and is in scope for, the identity signed into the request; the
+authorized sink signs that identity itself (HMAC, fresh nonce) and drops any
+identity header a caller supplied. The wire format the runtime verifies is
+unchanged. Two deliberate exceptions stay explicit: steer-share delegation
+(`sendDelegated`, allowed only from `middleware/proxy.ts`, signs the sharee with a
+`steer` claim while the runner is certified for the thread owner) and the
+unauthenticated MCP OAuth callback (`OAuthCallbackRunner` → `sendOAuthCallback`,
+shared secret only, no identity). The scheduler's `/dispatch` and `/cancel` sign
+the thread owner read from the DB and refuse a mismatching `userId`. See the
+[development workflow](../workflows/development.md#runner-request-isolation-proof-checks)
+for the lint, type-test and fitness checks that keep this closed.
+
 ## Desktop packaging
 
 `src-tauri/` wraps the built client (`frontendDist: ../packages/client/dist`) in a Tauri v2 desktop shell and bundles a standalone server binary as an `externalBin` sidecar (`scripts/build-sidecar.ts` compiles `@funny/server` into a per-platform Bun binary at `src-tauri/binaries/funny-server-<triple>`), so the desktop app runs the server as a subprocess rather than requiring a separately-installed Bun/Node runtime. Build with `bun run tauri:build`; the Rust side additionally provides native PTY support (`src-tauri/src/pty.rs`) and permission scoping (`src-tauri/capabilities/`).

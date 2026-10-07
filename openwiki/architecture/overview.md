@@ -43,16 +43,20 @@ This is the same shape `CLAUDE.md` describes ("Client → Server → Runner", se
 
 ### Server feature module pilot: `modules/threads`
 
-Thread creation (`POST /api/threads` and `POST /api/threads/idle`) is the first server flow organized as a feature module with ports and adapters. The two route handlers in `packages/server/src/routes/threads.ts` only parse the body and map results to HTTP. Orchestration lives in `packages/server/src/modules/threads/`:
+Thread creation (`POST /api/threads`, `POST /api/threads/idle`) and thread forking (`POST /api/threads/:id/fork`, `POST /api/threads/:id/fork-and-rewind`) are the first server flows organized as a feature module with ports and adapters. The route handlers in `packages/server/src/routes/threads.ts` only parse or read the body and map results to HTTP. Orchestration lives in `packages/server/src/modules/threads/`:
 
 ```text
 route (HTTP parse/map) → composeCreateThread(env) → makeCreateThread(ports)
                                                    ├─ domain/creation-target.ts  (pure scratch/project normalization)
                                                    └─ ports: runner resolution · remote creation · registry · routing cache
+route (HTTP read/map)  → composeForkThread(env)   → makeForkThread(ports)   [variant: fork | fork-and-rewind]
+                                                   └─ ports: source runner resolution · remote fork · registry · routing cache
                                                            ↑ infrastructure/ adapters over runner-forwarding, runner-resolver, thread-registry
 ```
 
-`scripts/fitness/check-module-boundaries.ts` (part of `bun run lint`) enforces the layering. `domain/` and `application/` must not import Hono, Drizzle, gRPC, the DB, server services, or `infrastructure/`. Code outside the module imports only `index.ts` or `composition.ts`. This is a scoped pilot. Other routes, list/detail queries, and the runtime are unchanged. It is not a CQRS or repository-wide folder migration. See [threads domain](../domain/threads-and-worktrees.md#thread-creation-flow).
+Both use cases share the registry and routing-cache ports, the `__default__` bypass, and the actor-scoped runner resolution. The fork use case takes a `variant`; the only variant-specific step inside it is where the runner's response carries the new thread (top-level for `fork`, nested under `thread` for `fork-and-rewind`). The runner path and the two error-message formats are transport details in `infrastructure/runner-adapters.ts`, and the HTTP failure strings stay in the route.
+
+`scripts/fitness/check-module-boundaries.ts` (part of `bun run lint`) enforces the layering. `domain/` and `application/` must not import Hono, Drizzle, gRPC, the DB, server services, or `infrastructure/`. Code outside the module imports only `index.ts` or `composition.ts`. This is a scoped pilot. Other routes (`rewind`, delete cleanup, the proxied endpoints), list/detail queries, and the runtime are unchanged. It is not a CQRS or repository-wide folder migration. See [threads domain](../domain/threads-and-worktrees.md#thread-creation-flow) and [thread fork flow](../domain/threads-and-worktrees.md#thread-fork-flow).
 
 ## Full package map
 

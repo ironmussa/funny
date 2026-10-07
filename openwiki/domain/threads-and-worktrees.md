@@ -33,6 +33,19 @@ Creating a thread spans the server and the runtime.
 
 Remote creation and registration are not atomic. If the registry write fails after the runner succeeds, the request returns `502 Thread creation failed` and is not retried. The use case is `makeCreateThread` (public API in `modules/threads/index.ts`). Production wiring is `composeCreateThread` in `modules/threads/composition.ts`. See the [architecture overview](../architecture/overview.md#server-feature-module-pilot-modulesthreads).
 
+## Thread fork flow
+
+`POST /api/threads/:id/fork` and `POST /api/threads/:id/fork-and-rewind` run the same server sequence as creation, as the `makeForkThread` use case in `packages/server/src/modules/threads/` (wired by `composeForkThread`):
+
+1. `requireThreadOwner` loads the source thread for the authenticated owner. Another user's thread is a `404`; nothing reaches a runner.
+2. The server resolves **the owner's own** runner through the source's project. There is never a fallback to another user's runner. No online runner is `502 No online runner found for this project`.
+3. The request body is forwarded to the runner **byte-for-byte**, with a signed identity. The server does not parse or validate it; the runtime's `forkThreadSchema` / `forkAndRewindSchema` do.
+4. A non-OK runner response is returned with the runner's status. The two variants format the error differently and the client depends on both: `fork` returns `{ error: <runner error message> }`; `fork-and-rewind` returns `{ error: "Runner error: <raw body>" }`.
+5. The new thread is read from the runner's response — top-level for `fork`, under `thread` for `fork-and-rewind` — and, when it has an id and the runner is not `__default__`, registered in the central DB and cached for routing. Registration fields (`title`, `model`, `mode`, `branch`) come from the response, `projectId` from the source, and `isScratch` is always `false` (preserved legacy behavior; see the open question in `openspec/changes/modularize-thread-fork/design.md`).
+6. The runner's full body is returned with `201`. A `null` body is returned as `201 null` and nothing is registered.
+
+Remote fork and registration are not atomic. Any failure after the runner call (malformed JSON, registry, cache) is `502 Thread fork failed` or `502 Thread fork-and-rewind failed` and is not retried. The route tests in `packages/server/src/__tests__/routes/threads-runner-proxy.test.ts` pin this contract per variant.
+
 ## Team sharing: roles, capabilities, and the "steer" exception
 
 funny has two deployment shapes: **local** (everything on one machine) and **team** (a central server coordinates multiple users, each with their own runner). In team mode, thread owners can share a thread with project members. `packages/shared/src/auth/roles.ts` defines the canonical model:
@@ -72,3 +85,19 @@ The **one intentional exception** is steer-share delegation: a thread shared at 
 4. The runtime re-authorizes the request via a **signed** `shareLevel` / `onBehalfOfThread` claim in the forwarded identity, because the runtime itself has no database to look up the grant (`packages/shared/src/auth/forwarded-identity.ts`).
 
 Do not widen this allow-list or relax any of the four conditions without treating it as a security-sensitive change.
+
+### Fork ownership evidence
+
+Both fork variants retain owner middleware and reuse its loaded thread. The shared
+handler copies and freezes the authenticated actor and authoritative source, names
+them inside `withForkInputs`, and obtains `ThreadOwnedBy` from the pure checker.
+The fork command requires evidence for those exact named values. Failed issuance
+returns `404 Thread not found` before runner resolution or other effects, with no
+additional thread fetch. View and steer grants do not grant fork ownership.
+
+The use case unwraps checked values only when invoking its trusted adapters.
+Evidence never enters request bodies, signed identity, HTTP/gRPC messages,
+registration or routing caches. The proof protects typed application callers;
+runtime authentication, signed-identity verification and remote validation remain
+necessary. Request-local snapshots do not solve ownership races or remote fork /
+registration atomicity.

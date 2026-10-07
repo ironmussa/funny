@@ -125,3 +125,68 @@ FUNNY_TGREP_TEST_BINARY=/absolute/path/to/tgrep bunx vitest run \
 Without `FUNNY_TGREP_TEST_BINARY`, the real-binary smoke test is skipped.
 It covers worktree isolation, query options, UTF-8 ranges, limits, rescan,
 and process/state cleanup.
+
+## Fork ownership proof checks
+
+Fork uses `@gdp-ts/core` to bind ownership evidence to named, immutable actor and
+source snapshots. Only `packages/server/src/modules/threads/domain/proofs/thread-owned-by.ts`
+is trusted to mint evidence; its prover stays private. Consumers import the checker
+and proof interface from the threads module entry point. Never assert a proof or
+use `any` to satisfy one. Keep the operation inside `withForkInputs`.
+
+`oxlint.config.ts` composes the existing rules with GDP's basic rules globally,
+recognizes proof imports through the public threads barrel, and enforces no assertions
+or `any` in the fork use case and snapshot helper. `bun run lint:proofs` checks
+expected failures using a temporary mirror of production paths and the real config.
+It runs as part of `bun run lint`.
+
+`bun run typecheck:proofs` checks `packages/server/type-tests/fork-ownership.ts`
+without emitting code or accepting baseline diagnostics, including missing/mismatched
+proofs and scope escapes. It runs as part of `bun run typecheck`. These examples
+never run as runtime tests. Add an `@ts-expect-error` example for each new misuse.
+
+## Runner-request isolation proof checks
+
+Every server → runner request and terminal message carries a `RunnerFor<A, R>`
+proof (gdp-ts) that the target runner `R` is owned by, and in scope for, the
+actor `A` whose identity is signed into it. The only prover is
+`packages/server/src/services/runner-access/runner-for.ts`:
+`withRunnerFor(actor, target, presence, (actor, runner, proof) => …)` lets the
+resolvers choose a runner, re-verifies ownership (`runners.user_id` or presence)
+and scope (`runner-scope`) itself, and refuses + audits anything else
+(`authz.cross_tenant_refused` / `runner.scope_denied`). The only sinks are
+`AuthorizedRunnerRequests` (`send`; `sendDelegated` for steer-share delegation,
+allowed from `middleware/proxy.ts` only; `sendOAuthCallback` for the identity-free
+MCP OAuth callback) and `AuthorizedRunnerTerminal`, both in
+`services/runner-access/authorized-runner-requests.ts`. The sink signs the
+forwarded identity from the certified actor with a fresh nonce per send and drops
+every caller-supplied identity header, so handlers never build `X-Forwarded-*`
+headers. `userId` is required in `findRunnerForProject`, `resolveRunner` and
+`resolveRunnerDetailed`; `resolveAnyRunner` feeds only the `OAuthCallbackRunner`
+proof. System routes derive the signed identity from the thread or project owner
+in the DB and refuse a mismatching body `userId`.
+
+Checks:
+
+- `bun run fitness:runner-request-sinks` (part of `bun run lint`) fails on a raw
+  `.request(` / `.dispatch(` / `.listSessions(` outside `services/runner-access/`
+  and `services/grpc/`, on `sendDelegated(` outside `middleware/proxy.ts`, and on
+  `createRunnerAccess(` (test-only dependency injection) outside
+  `services/runner-access/`. Its allow-list of unmigrated files is empty and must
+  stay empty; `--self-test` checks the fixtures.
+- `bun run lint:proofs` includes fixtures for a forged `RunnerFor` /
+  `OAuthCallbackRunner` cast, minting in the sink file or a route, and an exported
+  prover in `runner-for.ts`.
+- `bun run typecheck:proofs` checks `packages/server/type-tests/runner-isolation.ts`:
+  a missing proof, a proof about another actor or runner, reversed names, an OAuth
+  proof passed to `send`, a user proof passed to `sendOAuthCallback`, and a proof or
+  named runner escaping its callback.
+- `packages/server/src/__tests__/services/runner-access.test.ts` runs the prover
+  against the real resolvers, `runners` table and scope rules (owner's runner,
+  another user's runner, dedicated runner out of scope, pinned-offline reason,
+  ownership-only cleanup) and verifies signed requests with `verifyForwardedIdentity`.
+
+In tests, inject `fakeRunnerAccess(...)` from
+`packages/server/src/__tests__/helpers/runner-access-fakes.ts` (selection and
+ownership without a database) through the handler or proxy dependencies instead of
+mocking resolvers.

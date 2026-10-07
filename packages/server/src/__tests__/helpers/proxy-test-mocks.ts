@@ -2,6 +2,9 @@
  * Shared deterministic collaborators for proxy middleware tests.
  */
 
+import type { RunnerAccess } from '../../services/runner-access/index.js';
+import { fakeRunnerAccess } from './runner-access-fakes.js';
+
 export class MockTunnelTimeoutError extends Error {
   readonly runnerId: string;
   readonly timeoutMs: number;
@@ -14,9 +17,18 @@ export class MockTunnelTimeoutError extends Error {
   }
 }
 
-export function createRunnerResolverMock() {
-  return {
-    resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: null }),
-    resolveAnyRunner: async () => ({ runnerId: 'runner-1', httpUrl: null }),
-  };
+/**
+ * Runner access that always certifies `runner-1` for `user-1` (the proxy
+ * tests' default identity) and for the identity-free OAuth callback.
+ */
+export function createRunnerAccessMock(
+  opts: { runnerId?: string; ownerId?: string; onSelect?: (userId: string) => void } = {},
+): RunnerAccess {
+  const runnerId = opts.runnerId ?? 'runner-1';
+  return fakeRunnerAccess({
+    runnerFor: () => runnerId,
+    owners: { [runnerId]: opts.ownerId ?? 'user-1' },
+    oauthRunner: runnerId,
+    onSelect: (userId) => opts.onSelect?.(userId),
+  });
 }

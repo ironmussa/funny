@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io';
 
 import { log } from '../../lib/logger.js';
+import type { RunnerAccess } from '../runner-access/index.js';
 import type { RunnerPresencePort, RunnerRequestPort, RunnerTerminalPort } from '../runner-ports.js';
 import { clearSocketRate } from '../socketio-rate-limit.js';
 import { setupBrowserPtyListRpc } from './browser-pty-list.js';
@@ -24,6 +25,10 @@ export interface BrowserNamespaceDependencies extends Omit<BrowserPtyDependencie
   presence?: RunnerPresencePort;
   requests?: RunnerRequestPort;
   terminals?: RunnerTerminalPort;
+  /** Runner selection + certification (runner-request-isolation). Production: `runnerAccess`. */
+  runnerAccess?: RunnerAccess;
+  /** Ownership of runner resources named in browser.v1 operation requests. */
+  getRunnerUserId(runnerId: string): Promise<string | null>;
   browserV1Rollout?: BrowserV1RolloutPolicy;
 }
 

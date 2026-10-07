@@ -16,6 +16,7 @@ import { log } from '../lib/logger.js';
 import { composeCreateThread, runnerPathFor } from '../modules/threads/composition.js';
 import { authenticatedUserId, type CreationIntent } from '../modules/threads/index.js';
 import type { RunnerPresencePort, RunnerRequestPort } from './runner-ports.js';
+import { describeResolutionFailure } from './runner-resolver.js';
 
 export interface RunnerPorts {
   requests: RunnerRequestPort;
@@ -84,10 +85,7 @@ export async function startThreadOnRunner(
       return err({
         kind: 'runner-unavailable',
         status: 502,
-        message:
-          failure.scope === 'user'
-            ? 'No online runner found for this user'
-            : 'No online runner found for this project',
+        message: describeResolutionFailure(failure.reason).error,
       });
     case 'remote-error':
       return err({ kind: 'runner-error', status: failure.status, message: failure.message });

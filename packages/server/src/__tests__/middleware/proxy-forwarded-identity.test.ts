@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 
 import type { ServerEnv, UserRole } from '../../lib/types.js';
 import { createProxyToRunner, type ProxyTransport } from '../../middleware/proxy.js';
+import { createRunnerAccessMock } from '../helpers/proxy-test-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
@@ -20,8 +21,7 @@ describe('gRPC proxy forwarded identity', () => {
   function setup(role?: UserRole) {
     const captured: Array<Record<string, string>> = [];
     const transport: ProxyTransport = {
-      resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: null }),
-      resolveAnyRunner: async () => ({ runnerId: 'runner-1', httpUrl: null }),
+      runnerAccess: createRunnerAccessMock(),
       requests: {
         isAvailable: () => true,
         request: async (_runnerId, request) => {

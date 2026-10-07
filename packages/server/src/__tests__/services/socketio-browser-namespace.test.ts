@@ -14,8 +14,6 @@ describe('setupBrowserNamespace', () => {
 
   const dependencies = () => ({
     presence,
-    findAnyRunnerForUser: async () => null,
-    findRunnerForProject: async () => null,
     getRunnerUserId: async () => null,
     getProjectOwnerId: async () => null,
   });

@@ -13,6 +13,7 @@ import { RunnerRequestTimeoutError } from '../../services/runner-ports.js';
 import { SocketIoBrowserEventSink } from '../../services/socketio/browser-event-sink.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
+import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import {
   createProductionGrpcFixture,
   MemoryOperationIdempotency,
@@ -71,9 +72,10 @@ describe('production TypeScript runner gRPC adapters', () => {
     const dependencies = {
       terminals: fixture.endpoint.terminals,
       requests: fixture.endpoint.requests,
-      findAnyRunnerForUser: async () => 'runner-1',
-      findRunnerForProject: async () => 'runner-1',
-      getRunnerUserId: async () => 'user-1',
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => 'runner-1',
+        owners: { 'runner-1': 'user-1' },
+      }),
       getProjectOwnerId: async () => 'user-1',
     };
     setupBrowserPtyHandlers(socket, 'user-1', dependencies);
@@ -192,9 +194,10 @@ describe('production TypeScript runner gRPC adapters', () => {
       const dependencies = {
         terminals: fixture.endpoint.terminals,
         requests: fixture.endpoint.requests,
-        findAnyRunnerForUser: async () => runnerId,
-        findRunnerForProject: async () => runnerId,
-        getRunnerUserId: async () => userId,
+        runnerAccess: fakeRunnerAccess({
+          runnerFor: () => runnerId,
+          owners: { [runnerId]: userId },
+        }),
         getProjectOwnerId: async () => userId,
       };
       setupBrowserPtyHandlers(socket, userId, dependencies);

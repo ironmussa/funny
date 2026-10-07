@@ -71,7 +71,7 @@
     "security:secrets": "npx secretlint \"**/*\"",
     "security:audit": "bun audit --audit-level=moderate",
     "security:snyk": "npx snyk test --all-projects",
-    "lint": "oxlint . && bun run fitness:layering && bun run fitness:module-boundaries && bun run fitness:runner-transport && bun run fitness:boundary-validation && bun run fitness:query-validation && bun run fitness:socket-validation && bun run fitness:json-validation && bun run --cwd packages/remote-connector lint",
+    "lint": "oxlint . && bun run fitness:layering && bun run fitness:module-boundaries && bun run fitness:runner-request-sinks && bun run fitness:runner-transport && bun run fitness:boundary-validation && bun run fitness:query-validation && bun run fitness:socket-validation && bun run fitness:json-validation && bun run --cwd packages/remote-connector lint && bun run lint:proofs",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
@@ -95,6 +95,8 @@
     "fitness:layering:test": "bun scripts/fitness/check-layering.ts --self-test",
     "fitness:module-boundaries": "bun scripts/fitness/check-module-boundaries.ts",
     "fitness:module-boundaries:test": "bun scripts/fitness/check-module-boundaries.ts --self-test",
+    "fitness:runner-request-sinks": "bun scripts/fitness/check-runner-request-sinks.ts",
+    "fitness:runner-request-sinks:test": "bun scripts/fitness/check-runner-request-sinks.ts --self-test",
     "fitness:runner-transport": "bun scripts/fitness/check-runner-transport.ts",
     "fitness:runner-transport:test": "bun scripts/fitness/check-runner-transport.ts --self-test",
     "fitness:circular": "bun scripts/fitness/check-circular.ts",
@@ -112,9 +114,11 @@
     "fitness:json-validation": "bun scripts/fitness/check-json-boundary-validation.ts",
     "fitness:json-validation:refresh": "bun scripts/fitness/check-json-boundary-validation.ts --refresh",
     "fitness:json-validation:test": "bun scripts/fitness/check-json-boundary-validation.ts --self-test",
-    "typecheck": "bun scripts/fitness/check-typecheck.ts && bun run --cwd packages/remote-connector typecheck",
+    "typecheck": "bun scripts/fitness/check-typecheck.ts && bun run --cwd packages/remote-connector typecheck && bun run typecheck:proofs",
     "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh",
-    "doctor": "npx react-doctor@latest"
+    "doctor": "npx react-doctor@latest",
+    "lint:proofs": "bun scripts/fitness/check-proof-lint.ts",
+    "typecheck:proofs": "tsc --noEmit -p packages/server/tsconfig.proofs.json --ignoreDeprecations 6.0"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.2.1",
@@ -135,6 +139,7 @@
   "devDependencies": {
     "@bufbuild/buf": "1.72.0",
     "@bufbuild/protobuf": "2.14.0",
+    "@gdp-ts/core": "0.1.0",
     "@playwright/test": "^1.61.1",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@tauri-apps/api": "^2.11.1",
@@ -145,7 +150,7 @@
     "eslint-plugin-zod": "4.7.1",
     "husky": "^9.1.7",
     "oxfmt": "^0.66.0",
-    "oxlint": "1.81.0",
+    "oxlint": "1.86.0",
     "react-doctor": "^0.7.2",
     "secretlint": "^13.0.2",
     "tailwindcss-animate": "^1.0.7",

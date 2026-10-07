@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
 import { createProxyToRunner, type ProxyTransport } from '../../middleware/proxy.js';
-import { MockTunnelTimeoutError } from '../helpers/proxy-test-mocks.js';
+import { MockTunnelTimeoutError, createRunnerAccessMock } from '../helpers/proxy-test-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET ??= 'test-secret';
 
@@ -18,10 +18,7 @@ function appWith(transport: ProxyTransport) {
   return app;
 }
 
-const resolver = {
-  resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://legacy.invalid' }),
-  resolveAnyRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://legacy.invalid' }),
-};
+const resolver = { runnerAccess: createRunnerAccessMock() };
 
 describe('gRPC-only runner proxy', () => {
   test('returns 502 without an active gRPC session even when legacy httpUrl exists', async () => {

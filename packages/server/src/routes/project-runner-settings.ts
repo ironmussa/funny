@@ -22,9 +22,13 @@ import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as projectRepo from '../services/project-repository.js';
-import { buildForwardHeaders } from '../services/runner-forwarding.js';
+import {
+  authorizedRunnerRequests,
+  runnerActor,
+  withRunnerFor,
+} from '../services/runner-access/index.js';
 import { listRunnersByUser } from '../services/runner-manager.js';
-import type { RunnerRequestPort } from '../services/runner-ports.js';
+import type { RunnerPresencePort, RunnerRequestPort } from '../services/runner-ports.js';
 import {
   getGeneralRunnerId,
   getProjectRunnerSettings,
@@ -40,14 +44,25 @@ export const projectRunnerSettingsRoutes = new Hono<ServerEnv>();
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending'];
 
-/** Stop the project's active agents on runners that just lost access. */
+/**
+ * Stop the project's active agents on runners that just lost access.
+ *
+ * The identity signed into each stop is the PROJECT OWNER's, read from the
+ * project row (never from the request). Each runner is certified for
+ * ownership only (`owned-runner`): it has just lost project scope, so a
+ * project-scoped certification would refuse the very cleanup we need. A
+ * runner that is not the owner's is skipped and audited by `runner-access`.
+ */
 export async function stopProjectSessionsOnRunners(
-  requests: RunnerRequestPort | undefined,
-  ownerId: string,
+  ports: { requests?: RunnerRequestPort; presence?: RunnerPresencePort },
   projectId: string,
   runnerIds: string[],
 ): Promise<void> {
-  if (!requests || runnerIds.length === 0) return;
+  if (!ports.requests || runnerIds.length === 0) return;
+  const project = await projectRepo.getProject(projectId);
+  if (!project) return;
+  const owner = runnerActor({ userId: project.userId });
+  const sink = authorizedRunnerRequests(ports.requests);
   const active = await db
     .select({ id: threads.id, runnerId: threads.runnerId })
     .from(threads)
@@ -59,21 +74,37 @@ export async function stopProjectSessionsOnRunners(
       ),
     );
   for (const t of active) {
-    if (!t.runnerId || !requests.isAvailable(t.runnerId)) continue;
-    try {
-      await requests.request(t.runnerId, {
-        method: 'POST',
-        path: `/api/threads/${t.id}/stop`,
-        headers: buildForwardHeaders(ownerId),
-        body: null,
-      });
-    } catch (e) {
-      log.warn('Failed to stop thread on revoked runner', {
+    if (!t.runnerId) continue;
+    const result = await withRunnerFor(
+      owner,
+      { kind: 'owned-runner', runnerId: t.runnerId },
+      ports.presence,
+      async (actor, runner, proof) => {
+        if (!sink.isAvailable(runner)) return;
+        try {
+          await sink.send(actor, runner, proof, {
+            method: 'POST',
+            path: `/api/threads/${t.id}/stop`,
+            headers: { 'Content-Type': 'application/json' },
+            body: null,
+          });
+        } catch (e) {
+          log.warn('Failed to stop thread on revoked runner', {
+            namespace: 'project-runner-settings',
+            projectId,
+            runnerId: runner.value,
+            threadId: t.id,
+            error: (e as Error).message,
+          });
+        }
+      },
+    );
+    if (result.isErr()) {
+      log.warn('Skipped stopping thread on a runner the project owner does not own', {
         namespace: 'project-runner-settings',
         projectId,
         runnerId: t.runnerId,
         threadId: t.id,
-        error: (e as Error).message,
       });
     }
   }
@@ -137,8 +168,7 @@ projectRunnerSettingsRoutes.put('/:id/runner-settings', async (c) => {
       },
     });
     await stopProjectSessionsOnRunners(
-      c.env?.runnerRequests,
-      userId,
+      { requests: c.env?.runnerRequests, presence: c.env?.runnerPresence },
       projectId,
       result.revokedRunnerIds,
     );
@@ -171,7 +201,11 @@ projectRunnerSettingsRoutes.delete('/:id/runner-grants/:runnerId', async (c) => 
   const result = await revokeProjectRunner(projectId, userId, runnerId);
   if (!result.ok) return c.json({ error: 'Project not found' }, 404);
   if (result.lostAccess) {
-    await stopProjectSessionsOnRunners(c.env?.runnerRequests, userId, projectId, [runnerId]);
+    await stopProjectSessionsOnRunners(
+      { requests: c.env?.runnerRequests, presence: c.env?.runnerPresence },
+      projectId,
+      [runnerId],
+    );
   }
   return c.json(await getProjectRunnerSettings(projectId));
 });

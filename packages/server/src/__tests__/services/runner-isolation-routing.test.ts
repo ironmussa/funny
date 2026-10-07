@@ -19,7 +19,9 @@ function read(rel: string): string {
   return readFileSync(join(ROOT, rel), 'utf-8');
 }
 
-const SOURCES = ['services/runner-forwarding.ts', 'services/socketio/browser-pty.ts'] as const;
+// Every project→runner lookup now runs inside the single prover
+// (runner-request-isolation); the browser handlers no longer pick runners.
+const SOURCES = ['services/runner-access/runner-for.ts'] as const;
 
 describe('runner isolation — project→runner routing', () => {
   for (const rel of SOURCES) {

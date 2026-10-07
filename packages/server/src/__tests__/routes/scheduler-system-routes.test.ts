@@ -173,7 +173,14 @@ describe('Scheduler System Routes (Integration)', () => {
   });
 
   describe('POST /api/scheduler/system/dispatch', () => {
-    test('proxies to the user runner and returns pipelineRunId', async () => {
+    /** The thread the scheduler dispatches, owned by `user-1`. */
+    function seedOwnedThread() {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+    }
+
+    test('proxies to the thread owner runner and returns pipelineRunId', async () => {
+      seedOwnedThread();
       seedRunner(t.db as any, {
         id: 'runner-1',
         userId: 'user-1',
@@ -218,7 +225,8 @@ describe('Scheduler System Routes (Integration)', () => {
       expect(await res.json()).toEqual({ ok: true, pipelineRunId: 'pr-dispatch-1' });
     });
 
-    test('returns 503 when no runner is connected for the user', async () => {
+    test('returns 503 when no runner is connected for the thread owner', async () => {
+      seedOwnedThread();
       const res = await app.request('/api/scheduler/system/dispatch', {
         method: 'POST',
         headers: {
@@ -242,6 +250,31 @@ describe('Scheduler System Routes (Integration)', () => {
         body: JSON.stringify({ threadId: 't1' }),
       });
       expect(res.status).toBe(400);
+    });
+
+    test('refuses a userId that does not own the thread, without contacting any runner', async () => {
+      seedOwnedThread();
+      seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tr1', hostname: 'r1' });
+      seedRunner(t.db as any, { id: 'runner-2', userId: 'user-2', token: 'tr2', hostname: 'r2' });
+      tunnelFetchImpl = async () => {
+        throw new Error('must not reach a runner');
+      };
+      const res = await app.request('/api/scheduler/system/dispatch', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ threadId: 't1', userId: 'user-2' }),
+      });
+      expect(res.status).toBe(403);
+      expect((await res.json()).ok).toBe(false);
+    });
+
+    test('returns 404 for an unknown thread', async () => {
+      const res = await app.request('/api/scheduler/system/dispatch', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ threadId: 'ghost', userId: 'user-1' }),
+      });
+      expect(res.status).toBe(404);
     });
   });
 

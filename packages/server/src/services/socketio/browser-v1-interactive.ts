@@ -15,9 +15,15 @@ import {
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 import type { Socket } from 'socket.io';
 
+import {
+  authorizedRunnerRequests,
+  authorizedRunnerTerminal,
+  runnerAccess,
+  runnerActor,
+  type RunnerTarget,
+} from '../runner-access/index.js';
 import type { RunnerRequestPort } from '../runner-ports.js';
 import type { BrowserPtyDependencies } from './browser-pty.js';
-import { signedRunnerHeaders } from './browser-session.js';
 import { observeBrowserV1 } from './browser-v1-observability.js';
 import { encodeSocketIoCarrier } from './browser-v1-wire.js';
 import { registerSocketHandlersWithSchema } from './router.js';
@@ -207,6 +213,10 @@ export function setupBrowserV1Interactive(
   },
 ): void {
   const inputOrdinals = dependencies.inputOrdinals ?? browserV1InputOrdinals;
+  const access = dependencies.runnerAccess ?? runnerAccess;
+  const actor = runnerActor({ userId: principalUserId });
+  const targetFor = (projectId: string | null | undefined): RunnerTarget =>
+    projectId ? { kind: 'project-checkout', projectId } : { kind: 'projectless' };
   registerSocketHandlersWithSchema(socket, {
     events: [BROWSER_V1_CARRIER_EVENTS.interactive],
     payloadSchema: browserCarrierPayloadSchema,
@@ -264,14 +274,26 @@ export function setupBrowserV1Interactive(
           );
           return;
         }
-        const runnerId = projectId
-          ? await dependencies.findRunnerForProject(projectId, principalUserId)
-          : await dependencies.findAnyRunnerForUser(principalUserId);
-        if (
-          !runnerId ||
-          (await dependencies.getRunnerUserId(runnerId)) !== principalUserId ||
-          !dependencies.requests?.isAvailable(runnerId)
-        ) {
+        // The runner is one of the principal's own, holding the project
+        // checkout when one is named, certified by `withRunnerFor`. The sink
+        // signs the principal's identity itself.
+        const sink = authorizedRunnerRequests(dependencies.requests);
+        const sent = await access.withRunnerFor(
+          actor,
+          targetFor(projectId),
+          dependencies.presence,
+          async (a, runner, proof) => {
+            if (!sink.isAvailable(runner)) return false;
+            await sink.send(a, runner, proof, {
+              method: 'POST',
+              path: '/api/browser-session/command',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(event),
+            });
+            return true;
+          },
+        );
+        if (sent.isErr() || !sent.value) {
           socket.emit(
             BROWSER_V1_CARRIER_EVENTS.interactive,
             browserSessionError(
@@ -280,14 +302,7 @@ export function setupBrowserV1Interactive(
               'Browser session runner is unavailable',
             ),
           );
-          return;
         }
-        await dependencies.requests.request(runnerId, {
-          method: 'POST',
-          path: '/api/browser-session/command',
-          headers: signedRunnerHeaders(principalUserId),
-          body: JSON.stringify(event),
-        });
         return;
       }
       if (message.payload.case !== 'terminal') return;
@@ -319,14 +334,18 @@ export function setupBrowserV1Interactive(
         );
         return;
       }
-      const runnerId = projectId
-        ? await dependencies.findRunnerForProject(projectId, principalUserId)
-        : await dependencies.findAnyRunnerForUser(principalUserId);
-      if (
-        !runnerId ||
-        (await dependencies.getRunnerUserId(runnerId)) !== principalUserId ||
-        !dependencies.terminals?.isAvailable(runnerId)
-      ) {
+      const terminalSink = authorizedRunnerTerminal(dependencies.terminals);
+      const dispatched = await access.withRunnerFor(
+        actor,
+        targetFor(projectId),
+        dependencies.presence,
+        async (a, runner, proof) => {
+          if (!terminalSink.isAvailable(runner)) return false;
+          terminalSink.dispatch(a, runner, proof, event);
+          return true;
+        },
+      );
+      if (dispatched.isErr() || !dispatched.value) {
         socket.emit(
           BROWSER_V1_CARRIER_EVENTS.interactive,
           terminalError(
@@ -335,9 +354,7 @@ export function setupBrowserV1Interactive(
             'Terminal runner is unavailable',
           ),
         );
-        return;
       }
-      dependencies.terminals.dispatch(runnerId, principalUserId, event);
     },
   });
 }

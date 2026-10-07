@@ -21,7 +21,13 @@ import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 import type { Socket } from 'socket.io';
 
 import { authorizer } from '../../lib/server-authorizer.js';
-import type { RunnerTerminalPort } from '../runner-ports.js';
+import {
+  authorizedRunnerTerminal,
+  runnerAccess,
+  runnerActor,
+  type RunnerAccess,
+} from '../runner-access/index.js';
+import type { RunnerPresencePort, RunnerTerminalPort } from '../runner-ports.js';
 import { canUserViewThread } from '../thread-access-check.js';
 import {
   browserV1IdempotencyStore,
@@ -45,7 +51,10 @@ interface BrowserOperationState {
 
 export interface BrowserV1OperationDependencies {
   terminals?: RunnerTerminalPort;
-  findAnyRunnerForUser(userId: string): Promise<string | null>;
+  presence?: RunnerPresencePort;
+  /** Production: `runnerAccess`. Tests inject fakes. */
+  runnerAccess?: RunnerAccess;
+  /** Ownership of runner RESOURCES named in operation requests (not a send). */
   getRunnerUserId(runnerId: string): Promise<string | null>;
   idempotency?: BrowserV1IdempotencyPort;
 }
@@ -117,21 +126,49 @@ async function executePtyList(
   const requestId = request.metadata?.requestId ?? '';
   const requestedRunnerId =
     request.operation.case === 'ptyList' ? request.operation.value.runnerId : undefined;
-  let runnerId = requestedRunnerId ?? null;
-  if (runnerId) {
-    const ownerId = await dependencies.getRunnerUserId(runnerId);
-    if (ownerId !== principalUserId) {
-      return operationStatus(requestId, StatusCode.NOT_FOUND, 'Runner is unavailable');
-    }
-  } else {
-    runnerId = await dependencies.findAnyRunnerForUser(principalUserId);
-  }
   if (signal.aborted) {
     return signal.reason === 'deadline'
       ? operationStatus(requestId, StatusCode.DEADLINE_EXCEEDED, 'Operation deadline elapsed')
       : operationStatus(requestId, StatusCode.CANCELLED, 'Operation cancelled');
   }
-  if (!runnerId || !dependencies.terminals?.isAvailable(runnerId)) {
+  // A named runner must be the principal's own (ownership only: listing is
+  // not project-scoped). Otherwise one of the principal's general runners.
+  const access = dependencies.runnerAccess ?? runnerAccess;
+  const terminalSink = authorizedRunnerTerminal(dependencies.terminals);
+  type Listed =
+    | { kind: 'aborted' }
+    | { kind: 'unavailable' }
+    | { kind: 'ok'; sessions: Array<Record<string, unknown>> };
+  const listed = await access.withRunnerFor(
+    runnerActor({ userId: principalUserId }),
+    requestedRunnerId
+      ? { kind: 'owned-runner', runnerId: requestedRunnerId }
+      : { kind: 'projectless' },
+    dependencies.presence,
+    async (actor, runner, proof): Promise<Listed> => {
+      // The lookup may have taken a while; honour a cancel or deadline that
+      // arrived meanwhile before touching the terminal port.
+      if (signal.aborted) return { kind: 'aborted' };
+      if (!terminalSink.isAvailable(runner)) return { kind: 'unavailable' };
+      return { kind: 'ok', sessions: terminalSink.listSessions(actor, runner, proof) };
+    },
+  );
+  if (listed.isErr()) {
+    return requestedRunnerId
+      ? operationStatus(requestId, StatusCode.NOT_FOUND, 'Runner is unavailable')
+      : operationStatus(
+          requestId,
+          StatusCode.UNAVAILABLE,
+          'No compatible runner is available',
+          true,
+        );
+  }
+  if (listed.value.kind === 'aborted') {
+    return signal.reason === 'deadline'
+      ? operationStatus(requestId, StatusCode.DEADLINE_EXCEEDED, 'Operation deadline elapsed')
+      : operationStatus(requestId, StatusCode.CANCELLED, 'Operation cancelled');
+  }
+  if (listed.value.kind === 'unavailable') {
     return operationStatus(
       requestId,
       StatusCode.UNAVAILABLE,
@@ -140,21 +177,19 @@ async function executePtyList(
     );
   }
 
-  const terminals = dependencies.terminals
-    .listSessions(runnerId, principalUserId)
-    .flatMap((session) => {
-      if (typeof session.ptyId !== 'string' || typeof session.cwd !== 'string') return [];
-      return [
-        {
-          ptyId: session.ptyId,
-          cwd: session.cwd,
-          projectId: typeof session.projectId === 'string' ? session.projectId : undefined,
-          label: typeof session.label === 'string' ? session.label : undefined,
-          shell: typeof session.shell === 'string' ? session.shell : undefined,
-          connected: true,
-        },
-      ];
-    });
+  const terminals = listed.value.sessions.flatMap((session) => {
+    if (typeof session.ptyId !== 'string' || typeof session.cwd !== 'string') return [];
+    return [
+      {
+        ptyId: session.ptyId,
+        cwd: session.cwd,
+        projectId: typeof session.projectId === 'string' ? session.projectId : undefined,
+        label: typeof session.label === 'string' ? session.label : undefined,
+        shell: typeof session.shell === 'string' ? session.shell : undefined,
+        connected: true,
+      },
+    ];
+  });
   return create(OperationOutcomeSchema, {
     requestId,
     outcome: {

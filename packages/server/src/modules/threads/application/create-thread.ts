@@ -21,14 +21,23 @@ import {
   type CreationRejection,
 } from '../domain/creation-target.js';
 import { createdThreadId, type RunnerId, type ThreadId } from '../domain/ids.js';
-import type { CreateThreadCommand, CreateThreadPorts, ThreadRegistration } from './ports.js';
+import type {
+  CreateThreadCommand,
+  CreateThreadPorts,
+  RunnerUnavailableReason,
+  ThreadRegistration,
+} from './ports.js';
 
 /** Legacy local runner id. Threads on it are not registered or cached. */
 export const DEFAULT_RUNNER_ID = '__default__';
 
 export type CreateThreadFailure =
   | ({ readonly kind: 'rejected' } & CreationRejection)
-  | { readonly kind: 'no-runner'; readonly scope: 'project' | 'user' }
+  | {
+      readonly kind: 'no-runner';
+      readonly scope: 'project' | 'user';
+      readonly reason: RunnerUnavailableReason;
+    }
   | { readonly kind: 'remote-error'; readonly status: number; readonly message: string }
   | { readonly kind: 'creation-failed'; readonly cause: unknown };
 
@@ -51,10 +60,15 @@ export function makeCreateThread(ports: CreateThreadPorts): CreateThread {
     if (normalized.isErr()) return err({ kind: 'rejected', ...normalized.error });
     const { target, payload } = normalized.value;
 
-    const runnerId = await ports.runners.resolve(actor, target, intent);
-    if (!runnerId) {
-      return err({ kind: 'no-runner', scope: target.kind === 'scratch' ? 'user' : 'project' });
+    const resolution = await ports.runners.resolve(actor, target, intent);
+    if (!resolution.ok) {
+      return err({
+        kind: 'no-runner',
+        scope: target.kind === 'scratch' ? 'user' : 'project',
+        reason: resolution.reason,
+      });
     }
+    const { runnerId } = resolution;
 
     try {
       const response = await ports.remote.create(runnerId, actor, intent, payload);

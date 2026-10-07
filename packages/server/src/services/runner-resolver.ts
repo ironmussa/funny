@@ -4,7 +4,10 @@
  *
  * STRICT ISOLATION: Every request is routed exclusively to the requesting
  * user's runner. No cross-user fallbacks. If the user has no runner
- * reachable, return null → 502.
+ * reachable, return null → 502. The user id is REQUIRED: there is no
+ * resolution path for a request without an authenticated user, except the
+ * explicit `resolveAnyRunner` used by the unauthenticated OAuth callback
+ * (see `services/runner-access`).
  *
  * PROJECT ISOLATION (project-runner-binding, see runner-scope.ts):
  *   - A project pinned to a dedicated runner routes ONLY to that runner (plus
@@ -60,7 +63,19 @@ function isReachable(presence: RunnerPresencePort | undefined, runnerId: string)
 }
 
 /** Where a request points: a project, or projectless work. */
-type RouteTarget = { kind: 'project'; projectId: string } | { kind: 'projectless' };
+export type RouteTarget = { kind: 'project'; projectId: string } | { kind: 'projectless' };
+
+/**
+ * The route target of a proxied request, as `resolveRunnerDetailed` sees it.
+ * Exported so `services/runner-access` can certify a resolved runner against
+ * the same target the resolver used.
+ */
+export function resolveRouteTarget(
+  path: string,
+  query: Record<string, string>,
+): Promise<RouteTarget> {
+  return resolveTarget(extractProjectId(path, query), extractThreadId(path));
+}
 
 async function resolveTarget(
   projectId: string | null,
@@ -90,7 +105,7 @@ async function isAllowed(runnerId: string, target: RouteTarget): Promise<boolean
 export async function resolveRunner(
   path: string,
   query: Record<string, string>,
-  userId?: string,
+  userId: string,
   presence?: RunnerPresencePort,
 ): Promise<ResolvedRunner | null> {
   const resolved = await resolveRunnerDetailed(path, query, userId, presence);
@@ -100,14 +115,13 @@ export async function resolveRunner(
 export async function resolveRunnerDetailed(
   path: string,
   query: Record<string, string>,
-  userId?: string,
+  userId: string,
   presence?: RunnerPresencePort,
 ): Promise<
   | { ok: true; runnerId: string }
   | { ok: false; reason: RunnerResolutionFailure; projectId?: string }
 > {
   const threadId = extractThreadId(path);
-  if (!userId) return { ok: false, reason: 'general-runner-offline' };
 
   // Thread cache (entries are dropped on any scope change; verify reachability)
   if (threadId) {
@@ -188,9 +202,8 @@ export async function resolveRunnerDetailed(
 export async function explainUnresolved(
   path: string,
   query: Record<string, string>,
-  userId?: string,
+  userId: string,
 ): Promise<RunnerResolutionFailure> {
-  if (!userId) return 'general-runner-offline';
   const target = await resolveTarget(extractProjectId(path, query), extractThreadId(path));
   if (target.kind === 'project' && (await pinnedRunnerIdsForProject(target.projectId, userId))) {
     return 'project-runner-offline';

@@ -20,6 +20,7 @@ import {
   BrowserV1RolloutPolicy,
   type BrowserV1RolloutMode,
 } from '../../services/socketio/browser-v1-rollout.js';
+import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { FakeRunnerTerminalPort } from '../helpers/runner-port-fakes.js';
 
 const origin = 'http://127.0.0.1:5173';
@@ -96,8 +97,10 @@ describe('browser.v1 carrier transport compatibility', () => {
     }
     setupBrowserNamespace({
       terminals,
-      findAnyRunnerForUser: async () => 'runner-1',
-      findRunnerForProject: async () => null,
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => 'runner-1',
+        owners: { 'runner-1': 'user-1' },
+      }),
       getRunnerUserId: async () => 'user-1',
       getProjectOwnerId: async () => null,
       browserV1Rollout: new BrowserV1RolloutPolicy({

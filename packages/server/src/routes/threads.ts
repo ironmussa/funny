@@ -20,17 +20,26 @@ import { startSpan } from '../lib/telemetry.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
-import { composeCreateThread, runnerPathFor } from '../modules/threads/composition.js';
-import { authenticatedUserId, type CreationIntent } from '../modules/threads/index.js';
+import {
+  composeCreateThread,
+  composeForkThread,
+  runnerPathFor,
+} from '../modules/threads/composition.js';
+import {
+  authenticatedUserId,
+  authorizedThreadId,
+  withForkInputs,
+  threadOwnedBy,
+  type CreationIntent,
+  type ForkVariant,
+} from '../modules/threads/index.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
 import {
-  buildForwardHeaders,
-  fetchFromRunner,
-  resolveRunnerForProject,
-  runnerErrorMessage,
-} from '../services/runner-forwarding.js';
+  authorizedRunnerRequests,
+  runnerActor,
+  withRunnerFor,
+} from '../services/runner-access/index.js';
 import * as runnerResolver from '../services/runner-resolver.js';
-import type { ResolvedRunner } from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { parseJsonBody, parseQuery } from '../validation/request.js';
@@ -704,15 +713,7 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
         ? c.json({ error: failure.message }, 400)
         : c.json({ error: failure.message, code: failure.code }, 400);
     case 'no-runner':
-      return c.json(
-        {
-          error:
-            failure.scope === 'user'
-              ? 'No online runner found for this user'
-              : 'No online runner found for this project',
-        },
-        502,
-      );
+      return c.json(runnerResolver.describeResolutionFailure(failure.reason), 502);
     case 'remote-error':
       return c.json({ error: failure.message }, failure.status as any);
     case 'creation-failed': {
@@ -793,128 +794,84 @@ threadRoutes.post('/:id/permission-requests/:requestId/respond', requireThreadOw
 // Owner-only git operation.
 threadRoutes.post('/:id/convert-to-worktree', requireThreadOwner, proxyToRunner);
 
-// POST /api/threads/:id/fork — fork conversation at a user message
-threadRoutes.post('/:id/fork', requireThreadOwner, async (c) => {
-  const sourceThreadId = c.req.param('id');
-  const userId = c.get('userId') as string;
+// ── Thread fork (proxied to runner, then registered locally) ─────
 
+/** HTTP strings per fork variant. Everything else is shared. */
+const FORK_FAILURE: Record<ForkVariant, { readonly message: string; readonly log: string }> = {
+  fork: { message: 'Thread fork failed', log: 'Failed to fork thread on runner' },
+  'fork-and-rewind': {
+    message: 'Thread fork-and-rewind failed',
+    log: 'Failed to fork-and-rewind thread on runner',
+  },
+};
+
+/**
+ * Shared HTTP adapter for `/:id/fork` and `/:id/fork-and-rewind`. It reads the
+ * raw body, builds the actor from the session, runs the `modules/threads` fork
+ * use case against the source thread `requireThreadOwner` loaded, and maps the
+ * failure union to the existing HTTP contract of each variant.
+ */
+async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
+  const sourceThreadId = c.req.param('id');
   const source = c.get('thread');
 
-  const resolved = await resolveRunnerForProject(source.projectId, userId, c.env?.runnerPresence);
-  if (!resolved) {
-    return c.json({ error: 'No online runner found for this project' }, 502);
-  }
-
-  try {
-    const headers = buildForwardHeaders(
-      userId,
-      c.get('organizationId') as string | undefined,
-      c.get('userRole') as string | undefined,
-      c.get('organizationName') as string | undefined,
-    );
-    const body = await c.req.text();
-    const result = await fetchFromRunner(
-      c.env.runnerRequests!,
-      resolved,
-      `/api/threads/${sourceThreadId}/fork`,
-      {
-        method: 'POST',
-        headers,
-        body,
-      },
-    );
-
-    if (!result.ok) return c.json({ error: runnerErrorMessage(result.body) }, result.status as any);
-
-    const newThread = JSON.parse(result.body);
-    const newThreadId = newThread?.id;
-    if (newThreadId && resolved.runnerId !== '__default__') {
-      await threadRegistry.registerThread({
-        id: newThreadId,
-        projectId: source.projectId,
-        runnerId: resolved.runnerId,
-        userId,
-        title: newThread.title,
-        model: newThread.model,
-        mode: newThread.mode,
-        branch: newThread.branch ?? undefined,
-      });
-      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId);
-    }
-
-    return c.json(newThread, 201);
-  } catch (err) {
-    log.error('Failed to fork thread on runner', {
+  const failed = (cause: unknown) => {
+    log.error(FORK_FAILURE[variant].log, {
       namespace: 'threads',
       sourceThreadId,
-      error: (err as Error).message,
+      error: (cause as Error)?.message,
     });
-    return c.json({ error: 'Thread fork failed' }, 502);
+    return c.json({ error: FORK_FAILURE[variant].message }, 502);
+  };
+
+  // The body is forwarded to the runner unparsed. Reading it is a transport
+  // concern, so it happens here (before resolution) rather than in the command.
+  let body: string;
+  try {
+    body = await c.req.text();
+  } catch (cause) {
+    return failed(cause);
   }
-});
+
+  const forkThread = composeForkThread(c.env);
+  return withForkInputs(
+    {
+      userId: authenticatedUserId(c.get('userId') as string),
+      organizationId: c.get('organizationId') as string | undefined,
+      role: c.get('userRole') as string | undefined,
+      organizationName: c.get('organizationName') as string | undefined,
+    },
+    { id: authorizedThreadId(source.id), projectId: source.projectId, ownerId: source.userId },
+    async (actor, namedSource) => {
+      const ownership = threadOwnedBy(actor, namedSource);
+      if (!ownership) return c.json({ error: 'Thread not found' }, 404);
+      const result = await forkThread({ actor, source: namedSource, ownership, variant, body });
+      if (result.isOk()) return c.json(result.value.thread as any, 201);
+
+      const failure = result.error;
+      switch (failure.kind) {
+        case 'no-runner':
+          return c.json(runnerResolver.describeResolutionFailure(failure.reason), 502);
+        case 'remote-error':
+          return c.json({ error: failure.message }, failure.status as any);
+        case 'fork-failed':
+          return failed(failure.cause);
+      }
+    },
+  );
+}
+
+// POST /api/threads/:id/fork — fork conversation at a user message
+threadRoutes.post('/:id/fork', requireThreadOwner, (c) => handleForkThread(c, 'fork'));
 
 // POST /api/threads/:id/rewind — proxy to runner. Owner-only: mutates the
 // owner's worktree. Not part of the steer allow-list.
 threadRoutes.post('/:id/rewind', requireThreadOwner, proxyToRunner);
 
 // POST /api/threads/:id/fork-and-rewind — fork conversation, then rewind code
-threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, async (c) => {
-  const sourceThreadId = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const source = c.get('thread');
-
-  const resolved = await resolveRunnerForProject(source.projectId, userId, c.env?.runnerPresence);
-  if (!resolved) {
-    return c.json({ error: 'No online runner found for this project' }, 502);
-  }
-
-  try {
-    const headers = buildForwardHeaders(
-      userId,
-      c.get('organizationId') as string | undefined,
-      c.get('userRole') as string | undefined,
-      c.get('organizationName') as string | undefined,
-    );
-    const body = await c.req.text();
-    const result = await fetchFromRunner(
-      c.env.runnerRequests!,
-      resolved,
-      `/api/threads/${sourceThreadId}/fork-and-rewind`,
-      { method: 'POST', headers, body },
-    );
-
-    if (!result.ok) {
-      return c.json({ error: `Runner error: ${result.body}` }, result.status as any);
-    }
-
-    const parsed = JSON.parse(result.body);
-    const newThread = parsed?.thread ?? null;
-    const newThreadId = newThread?.id;
-    if (newThreadId && resolved.runnerId !== '__default__') {
-      await threadRegistry.registerThread({
-        id: newThreadId,
-        projectId: source.projectId,
-        runnerId: resolved.runnerId,
-        userId,
-        title: newThread.title,
-        model: newThread.model,
-        mode: newThread.mode,
-        branch: newThread.branch ?? undefined,
-      });
-      runnerResolver.cacheThreadRunner(newThreadId, userId, resolved.runnerId);
-    }
-
-    return c.json(parsed, 201);
-  } catch (err) {
-    log.error('Failed to fork-and-rewind thread on runner', {
-      namespace: 'threads',
-      sourceThreadId,
-      error: (err as Error).message,
-    });
-    return c.json({ error: 'Thread fork-and-rewind failed' }, 502);
-  }
-});
+threadRoutes.post('/:id/fork-and-rewind', requireThreadOwner, (c) =>
+  handleForkThread(c, 'fork-and-rewind'),
+);
 
 // PATCH /api/threads/:id/tool-calls/:toolCallId — update tool call output.
 // Owner-only: mutates agent execution state. Not part of the steer allow-list.
@@ -1018,23 +975,30 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
   await threadRegistry.unregisterThread(threadId);
   runnerResolver.uncacheThread(threadId);
 
-  // Proxy the delete to the runner
+  // Proxy the delete to the runner. The runner may have lost access to the
+  // thread's project since (binding change), so this certifies ownership only.
+  // A refused or offline runner is fine: the central DB is already clean.
   if (runnerInfo) {
-    const resolved: ResolvedRunner = { runnerId: runnerInfo.runnerId };
-    try {
-      const headers = buildForwardHeaders(
+    const thread = c.get('thread');
+    await withRunnerFor(
+      runnerActor({
         userId,
-        c.get('organizationId') as string | undefined,
-        c.get('userRole') as string | undefined,
-        c.get('organizationName') as string | undefined,
-      );
-      await fetchFromRunner(c.env.runnerRequests!, resolved, `/api/threads/${threadId}`, {
-        method: 'DELETE',
-        headers,
-      });
-    } catch {
-      // Runner may be offline — that's ok, we already cleaned up the central DB
-    }
+        role: c.get('userRole') as string | undefined,
+        orgId: c.get('organizationId') as string | undefined,
+        orgName: c.get('organizationName') as string | undefined,
+      }),
+      { kind: 'owned-runner', runnerId: runnerInfo.runnerId },
+      c.env?.runnerPresence,
+      (actor, runner, proof) =>
+        authorizedRunnerRequests(c.env?.runnerRequests)
+          .send(actor, runner, proof, {
+            method: 'DELETE',
+            path: `/api/threads/${threadId}`,
+            headers: { 'Content-Type': 'application/json' },
+          })
+          .catch(() => undefined),
+    ).catch(() => undefined);
+    void thread;
   }
 
   return c.json({ ok: true });

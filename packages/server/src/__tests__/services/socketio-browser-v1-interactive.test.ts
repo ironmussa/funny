@@ -15,6 +15,7 @@ import {
   BrowserV1AtMostOnceInputStore,
   setupBrowserV1Interactive,
 } from '../../services/socketio/browser-v1-interactive.js';
+import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { FakeRunnerRequestPort, FakeRunnerTerminalPort } from '../helpers/runner-port-fakes.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
@@ -55,9 +56,10 @@ function fixture(projectOwner = 'user-1', inputOrdinals = new BrowserV1AtMostOnc
   setupBrowserV1Interactive(socket, 'user-1', {
     terminals,
     requests,
-    findAnyRunnerForUser: async () => 'runner-1',
-    findRunnerForProject: async () => 'runner-1',
-    getRunnerUserId: async () => 'user-1',
+    runnerAccess: fakeRunnerAccess({
+      runnerFor: () => 'runner-1',
+      owners: { 'runner-1': 'user-1' },
+    }),
     getProjectOwnerId: async () => projectOwner,
     inputOrdinals,
   });

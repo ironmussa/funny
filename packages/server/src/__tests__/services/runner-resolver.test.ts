@@ -25,7 +25,7 @@ const RUNNER_IDS = ['r-a', 'r-b', 'r-other'] as const;
 let testDb: ReturnType<typeof createTestDb>;
 let presence: RunnerGrpcSessionRegistry;
 
-const resolveRunner = (path: string, query: Record<string, string>, userId?: string) =>
+const resolveRunner = (path: string, query: Record<string, string>, userId: string) =>
   resolveRunnerWithPresence(path, query, userId, presence);
 const resolveAnyRunner = () => resolveAnyRunnerWithPresence(presence);
 

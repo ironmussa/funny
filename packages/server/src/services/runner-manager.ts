@@ -406,16 +406,15 @@ export async function findAnyRunnerForUser(userId: string): Promise<string | nul
 /**
  * Resolve a runner for a project while enforcing tenant isolation.
  *
- * When `userId` is provided, only returns a runner whose `runners.userId`
- * matches — preventing browser sockets from routing PTY/agent traffic to
- * another user's runner (which has access to a different local $HOME, git
- * credentials, etc). Callers that already validated the project ownership
- * upstream may omit `userId`, but every browser-originated path should pass
- * it.
+ * Only returns a runner whose `runners.userId` matches `userId` — preventing
+ * browser sockets from routing PTY/agent traffic to another user's runner
+ * (which has access to a different local $HOME, git credentials, etc). The
+ * user id is required: there is no "any runner of the project" resolution
+ * (runner-request-isolation).
  */
 export async function findRunnerForProject(
   projectId: string,
-  userId?: string,
+  userId: string,
 ): Promise<{ runner: RunnerInfo; localPath: string } | null> {
   const assignments = await db
     .select()
@@ -429,7 +428,7 @@ export async function findRunnerForProject(
   // Pinned project (project-runner-binding): only its dedicated runner/grants,
   // never a fallback. A freshly provisioned runner may not have reported its
   // checkout yet — use the project's stored path until it does.
-  const pinned = userId ? await pinnedRunnerIdsForProject(projectId, userId) : null;
+  const pinned = await pinnedRunnerIdsForProject(projectId, userId);
 
   let candidateIds: string[];
   if (pinned) {
@@ -444,22 +443,20 @@ export async function findRunnerForProject(
       // next runner restart re-runs assignLocalProjects). Fall back to the
       // owning user's general runner, using the project's stored path as cwd.
       // Safe under runner isolation: only the project owner's own runner.
-      if (!userId || !project || project.userId !== userId || !project.path) return null;
+      if (!project || project.userId !== userId || !project.path) return null;
       const fallbackRunnerId = await findAnyRunnerForUser(userId);
       if (!fallbackRunnerId) return null;
       candidateIds = [fallbackRunnerId];
     }
   }
 
-  let allowedRunnerIds: Set<string> | null = null;
-  if (userId) {
-    const ownedRows = await db
-      .select({ id: runners.id })
-      .from(runners)
-      .where(eq(runners.userId, userId));
-    allowedRunnerIds = new Set(ownedRows.map((r) => r.id));
-    if (allowedRunnerIds.size === 0) return null;
-  }
+  // Runner isolation: only runners owned by the requesting user are eligible.
+  const ownedRows = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(eq(runners.userId, userId));
+  const allowedRunnerIds = new Set(ownedRows.map((r) => r.id));
+  if (allowedRunnerIds.size === 0) return null;
 
   const allRunners = await listRunners();
   const runnerMap = new Map(allRunners.map((r) => [r.runnerId, r]));
@@ -468,7 +465,7 @@ export async function findRunnerForProject(
   for (const runnerId of new Set(candidateIds)) {
     const runner = runnerMap.get(runnerId);
     if (!runner || runner.status === 'offline') continue;
-    if (allowedRunnerIds && !allowedRunnerIds.has(runnerId)) continue;
+    if (!allowedRunnerIds.has(runnerId)) continue;
     if (!(await canRunnerAccessProject(runnerId, projectId))) continue;
     const localPath = localPathByRunner.get(runnerId) ?? project?.path;
     if (!localPath) continue;

@@ -4,67 +4,59 @@
  * Any /api/* route not handled by native server routes gets forwarded
  * to the appropriate runner through its runner-initiated gRPC tunnel.
  *
- * STRICT ISOLATION: The resolver guarantees the runner belongs to the
- * requesting user. If no runner is found, we return 502 immediately.
+ * STRICT ISOLATION (runner-request-isolation): the runner is selected AND
+ * certified for the requesting user by `services/runner-access`
+ * (`withRunnerFor`), and the request is sent through the authorized sink,
+ * which signs the forwarded identity itself from the certified actor. If no
+ * runner of the user is reachable, we return 502 immediately.
  *
- * Headers added to proxied requests:
- * - X-Forwarded-User: userId from the authenticated session
- * - X-Forwarded-Org: organizationId (if present)
+ * Headers added to proxied requests (by the authorized sink):
+ * - X-Forwarded-User / -Role / -Org / -Org-Name: the authenticated identity
  * - X-Runner-Auth: shared secret so the runner trusts the server
- * - X-Forwarded-Signature / X-Forwarded-Timestamp: HMAC-SHA256 over the
- *   forwarded identity, proving the sender HOLDS the shared secret (so a
- *   caller WITHOUT it — e.g. a browser hitting a runner directly — cannot
- *   forge the headers). It does not distinguish the server from a runner that
- *   holds the same secret; see the trust-boundary note in
+ * - X-Forwarded-Signature / X-Forwarded-Timestamp / X-Forwarded-Nonce:
+ *   HMAC-SHA256 over the forwarded identity, proving the sender HOLDS the
+ *   shared secret (so a caller WITHOUT it — e.g. a browser hitting a runner
+ *   directly — cannot forge the headers). It does not distinguish the server
+ *   from a runner that holds the same secret; see the trust-boundary note in
  *   `@funny/shared/auth/forwarded-identity`.
  */
 
-import {
-  NONCE_HEADER,
-  ON_BEHALF_OF_THREAD_HEADER,
-  SHARE_LEVEL_HEADER,
-  SIGNATURE_HEADER,
-  TIMESTAMP_HEADER,
-  signForwardedIdentity,
-} from '@funny/shared/auth/forwarded-identity';
 import type { Context } from 'hono';
 
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import {
+  authorizedRunnerRequests,
+  runnerAccess,
+  runnerActor,
+  type AuthorizedRunnerRequests,
+  type RunnerAccess,
+  type UnsignedRunnerRequest,
+} from '../services/runner-access/index.js';
+import {
   RunnerRequestTimeoutError,
   type RunnerPresencePort,
   type RunnerRequestPort,
+  type RunnerResponse,
 } from '../services/runner-ports.js';
-import * as runnerResolver from '../services/runner-resolver.js';
+import { describeResolutionFailure } from '../services/runner-resolver.js';
 
 /**
  * Transport dependencies the proxy uses to reach a runner. Injectable so tests
  * can supply deterministic fakes directly, without Bun's process-global
  * `mock.module` (which leaks across test files and makes the tunnel-timeout
- * assertions flaky). Production uses `defaultTransport`, whose members delegate
- * to the real service singletons at call time.
+ * assertions flaky). Production uses `defaultTransport`: the real runner
+ * access (resolvers + certification) and the per-request Hono bindings.
  */
 export interface ProxyTransport {
-  resolveRunner: typeof runnerResolver.resolveRunner;
-  resolveAnyRunner: typeof runnerResolver.resolveAnyRunner;
+  /** Runner selection + certification. Default: `services/runner-access`. */
+  runnerAccess?: RunnerAccess;
   requests?: RunnerRequestPort;
   presence?: RunnerPresencePort;
 }
 
-const defaultTransport: ProxyTransport = {
-  resolveRunner: (...args) => runnerResolver.resolveRunner(...args),
-  resolveAnyRunner: (...args) => runnerResolver.resolveAnyRunner(...args),
-};
-
-function getRunnerAuthSecret(): string {
-  const secret = process.env.RUNNER_AUTH_SECRET;
-  if (!secret) {
-    throw new Error('RUNNER_AUTH_SECRET is not set');
-  }
-  return secret;
-}
+const defaultTransport: ProxyTransport = {};
 
 /**
  * Build a Hono proxy handler bound to the given transport. Pass fake deps in
@@ -79,7 +71,6 @@ export const proxyToRunner = createProxyToRunner();
 
 /**
  * Hono handler that proxies the request to the appropriate runner.
- * Picks the best transport based on runner connectivity state.
  */
 async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): Promise<Response> {
   const userId = c.get('userId') as string | undefined;
@@ -89,71 +80,24 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
 
   // MCP OAuth callback: the external provider redirects the browser here without
   // any session cookie. The runtime validates the state parameter to ensure only
-  // the correct flow is completed. Resolve any connected runner (no user scoping).
+  // the correct flow is completed. Resolve any connected general runner (no user
+  // scoping) through the identity-free `OAuthCallbackRunner` proof.
   const isOAuthCallback = path === '/api/mcp/oauth/callback';
 
   if (!userId && !isOAuthCallback) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  // ── Steer-share delegation (thread-sharing-steer) ──────────────────────
-  // The runner-isolation invariant routes a request ONLY to the requester's
-  // own runner. The single intentional exception: when an ALLOW-LISTED route
-  // (`POST /:id/message`, read-only git GETs) has already authorized a `steer`
-  // sharee, the upstream middleware (`requireThreadSteer`) loaded the thread
-  // into context. The thread lives on its OWNER's runner, so we resolve by the
-  // owner's id — never a blind fallback. Reaching here as a non-owner means the
-  // gate passed; we resolve by owner and AUDIT the crossing. Routes NOT guarded
-  // by a thread-access middleware never set `thread`, so they can never trigger
-  // this path. See CLAUDE.md "Runner Isolation (CRITICAL)".
-  const thread = c.get('thread') as ServerEnv['Variables']['thread'] | undefined;
-  let resolveUserId = userId;
-  if (thread && userId && thread.userId && thread.userId !== userId) {
-    resolveUserId = thread.userId;
-    audit({
-      action: 'share.steer_delegation',
-      actorId: userId,
-      detail: `sharee routed to owner runner for ${c.req.method} ${path}`,
-      meta: { threadId: thread.id, ownerId: thread.userId, method: c.req.method, path },
-    });
-  }
-
-  // Resolve which runner should handle this request.
-  // OAuth callbacks are unauthenticated (external redirect) — find any runner.
-  // All other requests are scoped to the requesting user (or, for an authorized
-  // steer sharee, the thread owner — see delegation above).
-  const query = Object.fromEntries(url.searchParams.entries());
+  const access = deps.runnerAccess ?? runnerAccess;
   const presence = deps.presence ?? c.env?.runnerPresence;
-  const resolved = isOAuthCallback
-    ? await deps.resolveAnyRunner(presence)
-    : await deps.resolveRunner(path, query, resolveUserId, presence);
+  const sink = authorizedRunnerRequests(deps.requests ?? c.env?.runnerRequests);
+  const query = Object.fromEntries(url.searchParams.entries());
 
-  if (!resolved) {
-    log.warn('No reachable runner for proxy request', {
-      namespace: 'proxy',
-      userId,
-      path,
-    });
-    const reason = isOAuthCallback
-      ? 'general-runner-offline'
-      : await runnerResolver.explainUnresolved(path, query, resolveUserId);
-    return c.json(runnerResolver.describeResolutionFailure(reason), 502);
-  }
-
-  const { runnerId } = resolved;
-  const requests = deps.requests ?? c.env?.runnerRequests;
-  if (!requests?.isAvailable(runnerId)) {
-    return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
-  }
-
-  // Build forwarded headers
+  // Non-identity headers forwarded to the runner. Identity headers are set by
+  // the authorized sink and anything the client sent for them is dropped.
   const forwardedHeaders: Record<string, string> = {
-    'X-Runner-Auth': getRunnerAuthSecret(),
     'content-type': c.req.header('content-type') || 'application/json',
   };
-  if (userId) {
-    forwardedHeaders['X-Forwarded-User'] = userId;
-  }
 
   // Forward the original host so the runtime can reconstruct public-facing URLs
   // (e.g., OAuth callback redirects). Prefer an existing X-Forwarded-Host (set by
@@ -178,65 +122,6 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     forwardedHeaders['range'] = rangeHeader;
   }
 
-  const orgId = c.get('organizationId') as string | undefined;
-  if (orgId) {
-    forwardedHeaders['X-Forwarded-Org'] = orgId;
-  }
-
-  const orgName = c.get('organizationName') as string | undefined;
-  if (orgName) {
-    forwardedHeaders['X-Forwarded-Org-Name'] = orgName;
-  }
-
-  // Always forward a role (default 'user') so the signed payload matches what
-  // the runtime verifies — the runtime defaults a missing X-Forwarded-Role to
-  // 'user', and any divergence between signer and verifier breaks the HMAC.
-  const userRole = (c.get('userRole') as string | undefined) || 'user';
-  forwardedHeaders['X-Forwarded-Role'] = userRole;
-
-  // When this request was delegated to the owner's runner for a steer sharee
-  // (see above), bind a signed `steer` claim for the thread. The runtime has no
-  // DB to look up the grant — it trusts this signed claim (the server set it
-  // only after requireThreadSteer verified the grant) to authorize the sharee.
-  const isSteerDelegation = !!thread && resolveUserId !== userId;
-  const shareLevel = isSteerDelegation ? 'steer' : null;
-  const onBehalfOfThread = isSteerDelegation ? thread!.id : null;
-  if (isSteerDelegation) {
-    forwardedHeaders[SHARE_LEVEL_HEADER] = 'steer';
-    forwardedHeaders[ON_BEHALF_OF_THREAD_HEADER] = thread!.id;
-  }
-
-  // HMAC-sign the forwarded identity so the runtime can distinguish a real
-  // server-proxied request from a spoofed one carrying the shared secret.
-  //
-  // The signature carries a single-use nonce that the runtime records in a
-  // replay cache once the HMAC verifies. Mint it immediately before the one
-  // physical gRPC tunnel send.
-  const signedIdentity = userId
-    ? {
-        userId,
-        role: userRole,
-        orgId: orgId ?? null,
-        orgName: orgName ?? null,
-        shareLevel,
-        onBehalfOfThread,
-      }
-    : null;
-  /** Clone the forwarded headers with a freshly-signed identity (new nonce). */
-  const withFreshSignature = (): Record<string, string> => {
-    if (!signedIdentity) return { ...forwardedHeaders };
-    const { signature, timestamp, nonce } = signForwardedIdentity(
-      signedIdentity,
-      getRunnerAuthSecret(),
-    );
-    return {
-      ...forwardedHeaders,
-      [SIGNATURE_HEADER]: signature,
-      [TIMESTAMP_HEADER]: String(timestamp),
-      [NONCE_HEADER]: nonce,
-    };
-  };
-
   // Read body for non-GET/HEAD requests
   let bodyBytes: Uint8Array | null = null;
   if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
@@ -246,58 +131,145 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       bodyBytes = null;
     }
   }
-  const tunnelPath = `${path}${url.search}`;
-  try {
-    const tunnelResp = await requests.request(runnerId, {
-      method: c.req.method,
-      path: tunnelPath,
-      headers: withFreshSignature(),
-      body: bodyBytes,
-      signal: c.req.raw.signal,
-    });
+  const request: UnsignedRunnerRequest = {
+    method: c.req.method,
+    path: `${path}${url.search}`,
+    headers: forwardedHeaders,
+    body: bodyBytes,
+    signal: c.req.raw.signal,
+  };
 
-    // A binary response (image, video, PDF…) arrives base64-encoded so its
-    // bytes survive the JSON ack — decode it back to raw bytes here. A text
-    // response (the common JSON API payload) is passed through verbatim.
-    const tunnelBody =
-      tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
-        ? Buffer.from(tunnelResp.body, 'base64')
-        : tunnelResp.body;
+  /** One physical tunnel send, mapped to the proxy's HTTP outcomes. */
+  const relay = async (
+    send: () => Promise<RunnerResponse>,
+    runnerId: string,
+  ): Promise<Response> => {
+    try {
+      const tunnelResp = await send();
 
-    // Security M5: filter runner response headers on the tunnel path too —
-    // Leaving it unfiltered would let a malicious runner
-    // set `Set-Cookie` / `Access-Control-*` / security-policy headers on the
-    // central server's origin for the requesting user's browser.
-    return new Response(tunnelBody, {
-      status: tunnelResp.status,
-      headers: filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
-    });
-  } catch (tunnelErr) {
-    if (
-      tunnelErr instanceof RunnerRequestTimeoutError ||
-      (typeof tunnelErr === 'object' &&
-        tunnelErr !== null &&
-        (tunnelErr as Error).name === 'TunnelTimeoutError')
-    ) {
-      log.warn('gRPC tunnel request timed out', {
+      // A binary response (image, video, PDF…) arrives base64-encoded so its
+      // bytes survive the JSON ack — decode it back to raw bytes here. A text
+      // response (the common JSON API payload) is passed through verbatim.
+      const tunnelBody =
+        tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
+          ? Buffer.from(tunnelResp.body, 'base64')
+          : tunnelResp.body;
+
+      // Security M5: filter runner response headers on the tunnel path too —
+      // Leaving it unfiltered would let a malicious runner
+      // set `Set-Cookie` / `Access-Control-*` / security-policy headers on the
+      // central server's origin for the requesting user's browser.
+      return new Response(tunnelBody, {
+        status: tunnelResp.status,
+        headers: filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
+      });
+    } catch (tunnelErr) {
+      if (
+        tunnelErr instanceof RunnerRequestTimeoutError ||
+        (typeof tunnelErr === 'object' &&
+          tunnelErr !== null &&
+          (tunnelErr as Error).name === 'TunnelTimeoutError')
+      ) {
+        log.warn('gRPC tunnel request timed out', {
+          namespace: 'proxy',
+          runnerId,
+          path,
+          method: c.req.method,
+          timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
+        });
+        return c.json(
+          { error: 'Runner did not respond in time. The request may still be processing.' },
+          504,
+        );
+      }
+      log.warn('gRPC tunnel request failed', {
         namespace: 'proxy',
         runnerId,
-        path,
-        method: c.req.method,
-        timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
+        error: (tunnelErr as Error).message,
       });
-      return c.json(
-        { error: 'Runner did not respond in time. The request may still be processing.' },
-        504,
-      );
+      return c.json({ error: 'Runner tunnel unavailable.' }, 502);
     }
-    log.warn('gRPC tunnel request failed', {
-      namespace: 'proxy',
-      runnerId,
-      error: (tunnelErr as Error).message,
-    });
-    return c.json({ error: 'Runner tunnel unavailable.' }, 502);
+  };
+
+  const notConnected = () =>
+    c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
+
+  if (isOAuthCallback) {
+    const sent = await access.withOAuthCallbackRunner(presence, async (runner, proof) =>
+      sink.isAvailable(runner)
+        ? relay(() => sink.sendOAuthCallback(runner, proof, request), runner.value)
+        : notConnected(),
+    );
+    if (sent.isErr()) {
+      log.warn('No reachable runner for proxy request', { namespace: 'proxy', userId, path });
+      return c.json(describeResolutionFailure('general-runner-offline'), 502);
+    }
+    return sent.value;
   }
+
+  const requester = runnerActor({
+    userId: userId!,
+    role: c.get('userRole') as string | undefined,
+    orgId: c.get('organizationId') as string | undefined,
+    orgName: c.get('organizationName') as string | undefined,
+  });
+
+  // ── Steer-share delegation (thread-sharing-steer) ──────────────────────
+  // The runner-isolation invariant routes a request ONLY to the requester's
+  // own runner. The single intentional exception: when an ALLOW-LISTED route
+  // (`POST /:id/message`, read-only git GETs) has already authorized a `steer`
+  // sharee, the upstream middleware (`requireThreadSteer`) loaded the thread
+  // into context. The thread lives on its OWNER's runner, so we certify a
+  // runner for the OWNER (`RunnerFor<Owner, R>`) — never a blind fallback —
+  // and send through `sendDelegated`, which signs the SHAREE with a `steer`
+  // claim for the thread (the runtime has no DB to look up the grant). Routes
+  // NOT guarded by a thread-access middleware never set `thread`, so they can
+  // never trigger this path. See CLAUDE.md "Runner Isolation (CRITICAL)".
+  const thread = c.get('thread') as ServerEnv['Variables']['thread'] | undefined;
+  const delegation =
+    thread && thread.userId && thread.userId !== userId
+      ? { ownerId: thread.userId, threadId: thread.id }
+      : null;
+  if (delegation) {
+    audit({
+      action: 'share.steer_delegation',
+      actorId: userId!,
+      detail: `sharee routed to owner runner for ${c.req.method} ${path}`,
+      meta: {
+        threadId: delegation.threadId,
+        ownerId: delegation.ownerId,
+        method: c.req.method,
+        path,
+      },
+    });
+  }
+
+  const sent = await access.withRunnerFor(
+    delegation ? runnerActor({ userId: delegation.ownerId }) : requester,
+    { kind: 'request', path, query },
+    presence,
+    async (actor, runner, proof) => {
+      if (!sink.isAvailable(runner)) return notConnected();
+      return relay(
+        () =>
+          delegation
+            ? sink.sendDelegated(
+                actor,
+                runner,
+                proof,
+                { sharee: requester, threadId: delegation.threadId },
+                request,
+              )
+            : sink.send(actor, runner, proof, request),
+        runner.value,
+      );
+    },
+  );
+  if (sent.isErr()) {
+    log.warn('No reachable runner for proxy request', { namespace: 'proxy', userId, path });
+    return c.json(describeResolutionFailure(sent.error.reason), 502);
+  }
+  return sent.value;
 }
 
 /**
@@ -333,3 +305,5 @@ function filterSafeRunnerResponseHeaders(source: Headers): Headers {
   });
   return out;
 }
+
+export type { AuthorizedRunnerRequests };

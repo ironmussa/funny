@@ -12,6 +12,7 @@ import { OperationRequestSchema } from '@funny/shared/browser-v1/operations';
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 
 import { setupBrowserV1Operations } from '../../services/socketio/browser-v1-operations.js';
+import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { FakeRunnerTerminalPort } from '../helpers/runner-port-fakes.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
@@ -94,7 +95,10 @@ describe('browser.v1 operations carrier', () => {
     const socket = activeSocket();
     setupBrowserV1Operations(socket, 'user-1', {
       terminals,
-      findAnyRunnerForUser: async () => 'runner-1',
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => 'runner-1',
+        owners: { 'runner-1': 'user-1' },
+      }),
       getRunnerUserId: async () => 'user-1',
     });
 
@@ -135,7 +139,7 @@ describe('browser.v1 operations carrier', () => {
     const socket = activeSocket();
     setupBrowserV1Operations(socket, 'user-1', {
       terminals: new FakeRunnerTerminalPort(),
-      findAnyRunnerForUser: async () => null,
+      runnerAccess: fakeRunnerAccess({ runnerFor: () => null, owners: {} }),
       getRunnerUserId: async () => null,
     });
     let response: Uint8Array | undefined;
@@ -160,7 +164,11 @@ describe('browser.v1 operations carrier', () => {
     const ownerLookup = mock(async () => 'user-2');
     const dependencies = {
       terminals,
-      findAnyRunnerForUser: async () => null,
+      // `runner-other` belongs to user-2: naming it must read as "not found".
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => null,
+        owners: { 'runner-other': 'user-2' },
+      }),
       getRunnerUserId: ownerLookup,
     };
     setupBrowserV1Operations(unnegotiated, 'user-1', dependencies);
@@ -191,14 +199,16 @@ describe('browser.v1 operations carrier', () => {
       case: 'status',
       value: { code: StatusCode.NOT_FOUND, message: 'Runner is unavailable' },
     });
-    expect(ownerLookup).toHaveBeenCalledWith('runner-other');
+    // Ownership of the named runner is certified by `runner-access` (the
+    // runner belongs to user-2), never disclosed, and nothing is listed.
+    expect(terminals.events).toEqual([]);
   });
 
   test('rejects cross-user resource references before dispatch without disclosing ownership', async () => {
     const findRunner = mock(async () => 'runner-1');
     const socket = activeSocket();
     setupBrowserV1Operations(socket, 'user-1', {
-      findAnyRunnerForUser: findRunner,
+      runnerAccess: fakeRunnerAccess({ runnerFor: findRunner, owners: { 'runner-1': 'user-1' } }),
       getRunnerUserId: async (runnerId) => (runnerId === 'runner-other' ? 'user-2' : 'user-1'),
     });
     let response: Uint8Array | undefined;
@@ -223,7 +233,7 @@ describe('browser.v1 operations carrier', () => {
     const findRunner = mock(async () => 'runner-1');
     const socket = activeSocket();
     setupBrowserV1Operations(socket, 'user-1', {
-      findAnyRunnerForUser: findRunner,
+      runnerAccess: fakeRunnerAccess({ runnerFor: findRunner, owners: { 'runner-1': 'user-1' } }),
       getRunnerUserId: async () => 'user-1',
     });
     let response: Uint8Array | undefined;
@@ -248,7 +258,10 @@ describe('browser.v1 operations carrier', () => {
     });
     const socket = activeSocket();
     setupBrowserV1Operations(socket, 'user-1', {
-      findAnyRunnerForUser: async () => pendingRunner,
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => pendingRunner,
+        owners: { 'runner-1': 'user-1' },
+      }),
       getRunnerUserId: async () => 'user-1',
     });
     let response: Uint8Array | undefined;
@@ -277,7 +290,10 @@ describe('browser.v1 operations carrier', () => {
     });
     const socket = activeSocket();
     setupBrowserV1Operations(socket, 'user-1', {
-      findAnyRunnerForUser: async () => pendingRunner,
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => pendingRunner,
+        owners: { 'runner-1': 'user-1' },
+      }),
       getRunnerUserId: async () => 'user-1',
     });
     let response: Uint8Array | undefined;
@@ -302,7 +318,10 @@ describe('browser.v1 operations carrier', () => {
     });
     const socket = activeSocket(1);
     setupBrowserV1Operations(socket, 'user-1', {
-      findAnyRunnerForUser: async () => pendingRunner,
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => pendingRunner,
+        owners: { 'runner-1': 'user-1' },
+      }),
       getRunnerUserId: async () => 'user-1',
     });
     const first = socket.triggerRpc<Uint8Array>(

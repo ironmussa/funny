@@ -71,7 +71,6 @@ function socketFixture(idempotency?: BrowserV1IdempotencyStore) {
     to: () => ({ emit: () => {} }),
   } as any);
   setupBrowserV1Operations(socket, 'user-1', {
-    findAnyRunnerForUser: async () => null,
     getRunnerUserId: async () => null,
     idempotency,
   });

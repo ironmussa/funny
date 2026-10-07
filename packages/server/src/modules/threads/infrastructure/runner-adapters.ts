@@ -1,25 +1,38 @@
 /**
  * Runner-facing adapters: user-scoped runner resolution and remote thread
- * creation over the existing runner services and signed identity forwarding.
+ * creation / forking over `services/runner-access` (runner-request-isolation).
+ *
+ * Resolution adapters select AND certify the actor's runner through
+ * `withRunnerFor` and hand the use case a plain runner id. The remote adapters
+ * certify that id again for the request's project (`{ kind: 'runner' }`) and
+ * send through `AuthorizedRunnerRequests`, which signs the actor itself. A
+ * proof never leaves the callback it was issued in.
  */
 
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import {
-  buildForwardHeaders,
-  fetchFromRunner,
-  resolveRunnerForProject,
-  runnerErrorMessage,
-} from '../../../services/runner-forwarding.js';
+  authorizedRunnerRequests,
+  runnerActor,
+  type RunnerAccess,
+  type RunnerActor,
+  type RunnerTarget,
+} from '../../../services/runner-access/index.js';
+import { runnerErrorMessage } from '../../../services/runner-forwarding.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../../../services/runner-ports.js';
-import * as runnerResolver from '../../../services/runner-resolver.js';
 import type {
+  ActorContext,
   CreationIntent,
+  ForkVariant,
+  RemoteCreationResponse,
   RemoteThreadCreationPort,
+  RemoteThreadForkPort,
+  RunnerResolution,
   RunnerResolutionPort,
+  SourceRunnerResolutionPort,
 } from '../application/ports.js';
-import { resolvedRunnerId } from '../domain/ids.js';
+import { resolvedRunnerId, type ThreadId } from '../domain/ids.js';
 
 const RUNNER_PATHS: Record<CreationIntent, string> = {
   normal: '/api/threads',
@@ -29,23 +42,134 @@ const RUNNER_PATHS: Record<CreationIntent, string> = {
 export const runnerPathFor = (intent: CreationIntent): string => RUNNER_PATHS[intent];
 
 /**
- * Scratch targets resolve to any online runner owned by the actor. Project
- * targets use the actor-scoped project lookup and then fall back to the
- * actor-scoped resolver. Both paths take the authenticated user id, so another
- * user's runner is never selected.
+ * Per-variant transport details for forking. The use case never sees these:
+ * it only learns the runner's status and an already-formatted message.
  */
-export function createRunnerResolutionAdapter(
+const FORK_VARIANTS: Record<
+  ForkVariant,
+  { path: (sourceId: ThreadId) => string; errorMessage: (rawBody: string) => string }
+> = {
+  fork: {
+    path: (sourceId) => `/api/threads/${sourceId}/fork`,
+    errorMessage: runnerErrorMessage,
+  },
+  'fork-and-rewind': {
+    path: (sourceId) => `/api/threads/${sourceId}/fork-and-rewind`,
+    errorMessage: (rawBody) => `Runner error: ${rawBody}`,
+  },
+};
+
+export const forkRunnerPathFor = (variant: ForkVariant, sourceId: ThreadId): string =>
+  FORK_VARIANTS[variant].path(sourceId);
+
+/** The identity signed into runner requests, from the authenticated actor. */
+function actorFor(actor: ActorContext): RunnerActor {
+  return runnerActor({
+    userId: actor.userId,
+    role: actor.role,
+    orgId: actor.organizationId,
+    orgName: actor.organizationName,
+  });
+}
+
+/** Scratch work resolves through the resolver's projectless route (legacy behavior). */
+function scratchTarget(path: string): RunnerTarget {
+  return { kind: 'request', path, query: {} };
+}
+
+export interface RunnerAdapterDeps {
+  presence: RunnerPresencePort | undefined;
+  requests?: RunnerRequestPort;
+  access: RunnerAccess;
+}
+
+async function resolveWith(
+  access: RunnerAccess,
+  actor: ActorContext,
+  target: RunnerTarget,
   presence: RunnerPresencePort | undefined,
-): RunnerResolutionPort {
+): Promise<RunnerResolution> {
+  const result = await access.withRunnerFor(actorFor(actor), target, presence, async (_a, runner) =>
+    resolvedRunnerId(runner.value),
+  );
+  return result.isOk()
+    ? { ok: true, runnerId: result.value }
+    : { ok: false, reason: result.error.reason };
+}
+
+/**
+ * Scratch targets resolve to one of the actor's general runners through the
+ * resolver. Project targets use the actor-scoped checkout lookup and then the
+ * resolver's scoped candidates. Both certify ownership and scope before a
+ * runner id is returned, so another user's runner is never selected.
+ */
+export function createRunnerResolutionAdapter(deps: RunnerAdapterDeps): RunnerResolutionPort {
   return {
-    async resolve(actor, target, intent) {
-      const resolved =
+    resolve(actor, target, intent) {
+      const runnerTarget: RunnerTarget =
         target.kind === 'scratch'
-          ? await runnerResolver.resolveRunner(runnerPathFor(intent), {}, actor.userId, presence)
-          : await resolveRunnerForProject(target.projectId, actor.userId, presence);
-      return resolved ? resolvedRunnerId(resolved.runnerId) : null;
+          ? scratchTarget(runnerPathFor(intent))
+          : { kind: 'project', projectId: target.projectId };
+      return resolveWith(deps.access, actor, runnerTarget, deps.presence);
     },
   };
+}
+
+/**
+ * Forks resolve through the actor-scoped project lookup, exactly as before.
+ * A scratch source (no project) resolves through the projectless route.
+ */
+export function createSourceRunnerResolutionAdapter(
+  deps: RunnerAdapterDeps,
+): SourceRunnerResolutionPort {
+  return {
+    resolve(actor, projectId) {
+      const target: RunnerTarget = projectId
+        ? { kind: 'project', projectId }
+        : scratchTarget('/api/threads');
+      return resolveWith(deps.access, actor, target, deps.presence);
+    },
+  };
+}
+
+/**
+ * Certify `runnerId` for `projectId` (null = projectless) and POST through the
+ * authorized sink. A refused certification throws, which the use case maps to
+ * its `*-failed` outcome: the runner was selected a moment ago by the same
+ * rules, so this only fires on a race or a bug.
+ */
+async function sendCertified(
+  deps: RunnerAdapterDeps,
+  actor: ActorContext,
+  runnerId: string,
+  projectId: string | null,
+  path: string,
+  body: string,
+  errorMessage: (rawBody: string) => string,
+  parseLabel: string,
+): Promise<RemoteCreationResponse> {
+  const sent = await deps.access.withRunnerFor(
+    actorFor(actor),
+    { kind: 'runner', runnerId, projectId },
+    deps.presence,
+    (a, runner, proof) =>
+      authorizedRunnerRequests(deps.requests).send(a, runner, proof, {
+        method: 'POST',
+        path,
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }),
+  );
+  if (sent.isErr()) {
+    throw new Error(`runner ${runnerId} failed isolation certification (${sent.error.reason})`);
+  }
+  const response = sent.value;
+  if (response.status < 200 || response.status >= 400) {
+    return { ok: false, status: response.status, message: errorMessage(response.body ?? '') };
+  }
+  const parsed = parseStoredJson(z.unknown(), response.body ?? '', parseLabel);
+  if (!parsed.ok) throw new Error(parsed.error);
+  return { ok: true, thread: parsed.value };
 }
 
 /**
@@ -53,30 +177,47 @@ export function createRunnerResolutionAdapter(
  * back to the client verbatim. Malformed JSON throws, which the use case maps
  * to `creation-failed`.
  */
-export function createRemoteCreationAdapter(
-  requests: RunnerRequestPort | undefined,
-): RemoteThreadCreationPort {
+export function createRemoteCreationAdapter(deps: RunnerAdapterDeps): RemoteThreadCreationPort {
   return {
-    async create(runnerId, actor, intent, payload) {
-      const headers = buildForwardHeaders(
-        actor.userId,
-        actor.organizationId,
-        actor.role,
-        actor.organizationName,
+    create(runnerId, actor, intent, payload) {
+      const projectId =
+        payload.isScratch === true
+          ? null
+          : typeof payload.projectId === 'string'
+            ? payload.projectId
+            : null;
+      return sendCertified(
+        deps,
+        actor,
+        runnerId,
+        projectId,
+        runnerPathFor(intent),
+        JSON.stringify(payload),
+        runnerErrorMessage,
+        'runner thread creation response',
       );
-      // A missing transport throws here (inside the use case's failure
-      // boundary), the same as the legacy `c.env.runnerRequests!` access.
-      const result = await fetchFromRunner(requests!, { runnerId }, runnerPathFor(intent), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-      if (!result.ok) {
-        return { ok: false, status: result.status, message: runnerErrorMessage(result.body) };
-      }
-      const parsed = parseStoredJson(z.unknown(), result.body, 'runner thread creation response');
-      if (!parsed.ok) throw new Error(parsed.error);
-      return { ok: true, thread: parsed.value };
+    },
+  };
+}
+
+/**
+ * The raw request text is forwarded byte-for-byte. The success body is parsed
+ * but not validated and goes back to the client verbatim. Malformed JSON
+ * throws, which the use case maps to `fork-failed`.
+ */
+export function createRemoteForkAdapter(deps: RunnerAdapterDeps): RemoteThreadForkPort {
+  return {
+    fork(runnerId, actor, variant, sourceId, body, projectId) {
+      return sendCertified(
+        deps,
+        actor,
+        runnerId,
+        projectId,
+        forkRunnerPathFor(variant, sourceId),
+        body,
+        FORK_VARIANTS[variant].errorMessage,
+        'runner thread fork response',
+      );
     },
   };
 }

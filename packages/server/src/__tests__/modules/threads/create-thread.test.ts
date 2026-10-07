@@ -41,7 +41,9 @@ function fakes(opts: FakeOptions = {}) {
         resolveCalls.push({ actor, target, intent });
         if (opts.resolveError) throw opts.resolveError;
         const id = opts.runnerId === undefined ? 'runner-1' : opts.runnerId;
-        return id ? resolvedRunnerId(id) : null;
+        return id
+          ? { ok: true, runnerId: resolvedRunnerId(id) }
+          : { ok: false, reason: 'general-runner-offline' };
       },
     },
     remote: {
@@ -120,7 +122,7 @@ describe('createThread use case', () => {
           payload: { projectId: 'p' },
         })
       )._unsafeUnwrapErr(),
-    ).toEqual({ kind: 'no-runner', scope: 'project' });
+    ).toEqual({ kind: 'no-runner', scope: 'project', reason: 'general-runner-offline' });
     expect(project.effects).toEqual(['resolve']);
 
     const scratch = fakes({ runnerId: null });
@@ -132,7 +134,7 @@ describe('createThread use case', () => {
           payload: { isScratch: true },
         })
       )._unsafeUnwrapErr(),
-    ).toEqual({ kind: 'no-runner', scope: 'user' });
+    ).toEqual({ kind: 'no-runner', scope: 'user', reason: 'general-runner-offline' });
   });
 
   test('resolver exceptions propagate instead of becoming creation-failed', async () => {

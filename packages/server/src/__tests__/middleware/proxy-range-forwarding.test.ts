@@ -10,7 +10,7 @@
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-import { createRunnerResolverMock } from '../helpers/proxy-test-mocks.js';
+import { createRunnerAccessMock } from '../helpers/proxy-test-mocks.js';
 
 let capturedHeaders: Record<string, string> = {};
 
@@ -48,7 +48,7 @@ function makeApp() {
     c.set('userRole', 'admin');
     return next();
   });
-  app.all('/api/*', createProxyToRunner({ ...createRunnerResolverMock(), requests }));
+  app.all('/api/*', createProxyToRunner({ runnerAccess: createRunnerAccessMock(), requests }));
   return app;
 }
 

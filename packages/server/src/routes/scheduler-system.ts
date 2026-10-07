@@ -25,11 +25,15 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
+import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { buildForwardHeaders } from '../services/runner-forwarding.js';
-import { findAnyRunnerForUser } from '../services/runner-manager.js';
-import { resolveRunner } from '../services/runner-resolver.js';
+import {
+  authorizedRunnerRequests,
+  runnerActor,
+  withRunnerFor,
+  type RunnerTarget,
+} from '../services/runner-access/index.js';
 import { getSchedulerEventBuffer } from '../services/scheduler-event-buffer.js';
 import { createDefaultThreadQuery } from '../services/scheduler-thread-query.js';
 import { parseQuery } from '../validation/request.js';
@@ -323,49 +327,85 @@ schedulerSystemRoutes.post('/dispatch', async (c) => {
   }
   const body = validated.data;
 
-  // Route by thread so a pinned project's work only reaches its dedicated
-  // runner (project-runner-binding) — never "any runner of the user".
-  const resolved = await resolveRunner(
-    `/api/threads/${body.threadId}`,
-    {},
-    body.userId,
-    c.env?.runnerPresence,
-  );
-  const runnerId = resolved?.runnerId ?? null;
-  if (!runnerId) {
-    return c.json(
-      { ok: false, error: { message: `no runner connected for user ${body.userId}` } },
-      503,
-    );
+  // The identity signed into the dispatch is the THREAD OWNER's, read from
+  // the DB. The scheduler's `userId` must match it; a mismatch is refused
+  // before any runner is contacted (runner-request-isolation).
+  const thread = (await dbGet(
+    db
+      .select({ userId: schema.threads.userId })
+      .from(schema.threads)
+      .where(eq(schema.threads.id, body.threadId)),
+  )) as { userId: string } | undefined;
+  if (!thread) {
+    return c.json({ ok: false, error: { message: `thread ${body.threadId} not found` } }, 404);
   }
-
-  // Signed like every server → runner call: the runtime rejects a forwarded
-  // identity without a valid HMAC signature.
-  const headers = buildForwardHeaders(body.userId);
+  if (thread.userId !== body.userId) {
+    log.warn('Scheduler dispatch refused — userId does not own the thread', {
+      namespace: NS,
+      threadId: body.threadId,
+      requestedUserId: body.userId,
+      ownerId: thread.userId,
+    });
+    audit({
+      action: 'authz.cross_tenant_refused',
+      actorId: body.userId,
+      detail: 'Scheduler dispatch refused — userId does not own the thread',
+      meta: {
+        source: 'scheduler-system:dispatch',
+        threadId: body.threadId,
+        ownerId: thread.userId,
+      },
+    });
+    return c.json({ ok: false, error: { message: 'userId does not own the thread' } }, 403);
+  }
 
   const payload: Record<string, unknown> = { threadId: body.threadId };
   if (typeof body.prompt === 'string') payload.prompt = body.prompt;
   if (typeof body.pipelineName === 'string') payload.pipelineName = body.pipelineName;
   if (body.inputs) payload.inputs = body.inputs;
 
-  let response: { status: number; body: string | null };
-  try {
-    response = await c.env.runnerRequests!.request(runnerId, {
-      method: 'POST',
-      path: '/api/scheduler/dispatch',
-      headers,
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+  // Route by thread so a pinned project's work only reaches its dedicated
+  // runner (project-runner-binding) — never "any runner of the user".
+  const sink = authorizedRunnerRequests(c.env?.runnerRequests);
+  const sent = await withRunnerFor(
+    runnerActor({ userId: thread.userId }),
+    { kind: 'request', path: `/api/threads/${body.threadId}`, query: {} },
+    c.env?.runnerPresence,
+    async (actor, runner, proof) => {
+      try {
+        return {
+          ok: true as const,
+          runnerId: runner.value,
+          response: await sink.send(actor, runner, proof, {
+            method: 'POST',
+            path: '/api/scheduler/dispatch',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }),
+        };
+      } catch (err) {
+        return { ok: false as const, runnerId: runner.value, err };
+      }
+    },
+  );
+  if (sent.isErr()) {
+    return c.json(
+      { ok: false, error: { message: `no runner connected for user ${thread.userId}` } },
+      503,
+    );
+  }
+  if (!sent.value.ok) {
+    const message =
+      sent.value.err instanceof Error ? sent.value.err.message : String(sent.value.err);
     log.warn('Dispatch tunnel error', {
       namespace: NS,
       threadId: body.threadId,
-      runnerId,
+      runnerId: sent.value.runnerId,
       error: message,
     });
     return c.json({ ok: false, error: { message } }, 502);
   }
+  const response = sent.value.response;
 
   if (response.status < 200 || response.status >= 300) {
     const detail = response.body ? response.body.slice(0, 500) : '';
@@ -402,8 +442,9 @@ schedulerSystemRoutes.post('/cancel/:pipelineRunId', async (c) => {
   const body = parsed.data;
 
   // The run lives on its thread's runner — which may be a project's dedicated
-  // runner (project-runner-binding). Fall back to the user's general runner
-  // only when the run is unknown to the server.
+  // runner (project-runner-binding) — and is signed as the thread OWNER. Only
+  // when the run is unknown to the server do we fall back to the requested
+  // user's general runner.
   const runRow = (await dbGet(
     db
       .select({ threadId: schema.pipelineRuns.threadId, userId: schema.threads.userId })
@@ -412,35 +453,38 @@ schedulerSystemRoutes.post('/cancel/:pipelineRunId', async (c) => {
       .where(eq(schema.pipelineRuns.id, pipelineRunId)),
   )) as { threadId: string; userId: string } | undefined;
   if (runRow && runRow.userId !== body.userId) return c.json({ ok: true, found: false });
-  const runnerId = runRow
-    ? ((
-        await resolveRunner(
-          `/api/threads/${runRow.threadId}`,
-          {},
-          body.userId,
-          c.env?.runnerPresence,
-        )
-      )?.runnerId ?? null)
-    : await findAnyRunnerForUser(body.userId);
-  if (!runnerId) return c.json({ ok: true, found: false });
+  const ownerId = runRow?.userId ?? body.userId;
+  const target: RunnerTarget = runRow
+    ? { kind: 'request', path: `/api/threads/${runRow.threadId}`, query: {} }
+    : { kind: 'projectless' };
 
-  // Signed like every server → runner call: the runtime rejects a forwarded
-  // identity without a valid HMAC signature.
-  const headers = buildForwardHeaders(body.userId);
-
-  try {
-    await c.env.runnerRequests!.request(runnerId, {
-      method: 'POST',
-      path: `/api/scheduler/cancel/${pipelineRunId}`,
-      headers,
-      body: null,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+  const sink = authorizedRunnerRequests(c.env?.runnerRequests);
+  const sent = await withRunnerFor(
+    runnerActor({ userId: ownerId }),
+    target,
+    c.env?.runnerPresence,
+    async (actor, runner, proof) => {
+      try {
+        await sink.send(actor, runner, proof, {
+          method: 'POST',
+          path: `/api/scheduler/cancel/${pipelineRunId}`,
+          headers: { 'Content-Type': 'application/json' },
+          body: null,
+        });
+        return null;
+      } catch (err) {
+        return { runnerId: runner.value, err };
+      }
+    },
+  );
+  if (sent.isErr()) return c.json({ ok: true, found: false });
+  if (sent.value) {
+    const message =
+      sent.value.err instanceof Error ? sent.value.err.message : String(sent.value.err);
     log.warn('Cancel tunnel error', {
       namespace: NS,
       pipelineRunId,
-      runnerId,
+      runnerId: sent.value.runnerId,
       error: message,
     });
     return c.json({ ok: false, error: { message } }, 502);

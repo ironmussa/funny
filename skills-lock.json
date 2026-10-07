@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "gdp-ts": {
+      "source": "rauchg/gdp-ts",
+      "sourceType": "github",
+      "skillPath": "skills/gdp-ts/SKILL.md",
+      "computedHash": "77779b495dbb6291b953d87610e394319f85430fbb4b4b09c8c8a1e06d92e1e3"
+    }
+  }
+}

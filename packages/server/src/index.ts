@@ -438,9 +438,8 @@ setupBrowserNamespace({
   presence: runnerTransport?.presence,
   requests: runnerTransport?.requests,
   terminals: runnerTransport?.terminals,
-  findAnyRunnerForUser: browserRunnerManager.findAnyRunnerForUser,
-  findRunnerForProject: async (projectId, userId) =>
-    (await browserRunnerManager.findRunnerForProject(projectId, userId))?.runner.runnerId ?? null,
+  // Runner selection + certification default to `services/runner-access`
+  // (runner-request-isolation); the handlers never pick a runner themselves.
   getRunnerUserId: browserRunnerManager.getRunnerUserId,
   getProjectOwnerId: async (projectId) =>
     (await browserProjectRepository.getProject(projectId))?.userId ?? null,

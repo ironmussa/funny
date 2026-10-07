@@ -1,11 +1,13 @@
 /**
- * Public API of the server `threads` module (pilot: thread creation).
+ * Public API of the server `threads` module (pilot: thread creation and fork).
  *
  * Entry points:
  *  - `makeCreateThread(ports)`: the transport-independent creation use case.
+ *  - `makeForkThread(ports)`: the transport-independent fork use case, for
+ *    both the `fork` and `fork-and-rewind` variants.
  *  - `normalizeCreationRequest(payload)`: pure scratch/project normalization.
- *  - `composeCreateThread(env)` in `./composition.ts`: production wiring. Only
- *    bootstrap/route code imports it.
+ *  - `composeCreateThread(env)` / `composeForkThread(env)` in
+ *    `./composition.ts`: production wiring. Only bootstrap/route code imports them.
  *
  * Layering (enforced by `scripts/fitness/check-module-boundaries.ts`):
  *  - `domain/`: pure types and rules. No I/O and no framework imports.
@@ -23,6 +25,17 @@
  *  - The HTTP and runtime wire contracts are unchanged. The legacy permissive
  *    payload, including unknown fields, is forwarded as-is.
  *
+ * Fork invariants:
+ *  - The source thread is the one the owner middleware loaded for the actor;
+ *    its runner is resolved through the actor-scoped project lookup only.
+ *  - The fork request body is forwarded byte-for-byte, never parsed.
+ *  - Registration is derived from the runner's response, never from the
+ *    request, with `projectId` taken from the source and `isScratch`
+ *    explicitly `false` (preserved legacy behavior).
+ *  - The two variants differ only in where the new thread sits in the response
+ *    (top-level vs `thread`) and in transport details owned by the adapters
+ *    (runner path, error-message format).
+ *
  * This is a command-side use case only. Thread list/detail queries stay in
  * `routes/threads.ts` and do not depend on this module. This is not full CQRS.
  */
@@ -36,6 +49,7 @@ export {
 } from './domain/creation-target.js';
 export {
   authenticatedUserId,
+  authorizedThreadId,
   createdThreadId,
   resolvedRunnerId,
   type RunnerId,
@@ -49,15 +63,32 @@ export {
   type CreateThreadFailure,
   type CreateThreadSuccess,
 } from './application/create-thread.js';
+export {
+  makeForkThread,
+  type ForkThread,
+  type ForkThreadFailure,
+  type ForkThreadSuccess,
+} from './application/fork-thread.js';
 export type {
   ActorContext,
   CreateThreadCommand,
   CreateThreadPorts,
   CreationIntent,
+  ForkSource,
+  ForkThreadCommand,
+  ForkThreadPorts,
+  ForkVariant,
   RemoteCreationResponse,
   RemoteThreadCreationPort,
+  RemoteThreadForkPort,
+  RunnerResolution,
   RunnerResolutionPort,
+  RunnerUnavailableReason,
+  SourceRunnerResolutionPort,
   ThreadRegistration,
   ThreadRegistryPort,
   ThreadRoutingCachePort,
 } from './application/ports.js';
+
+export { withForkInputs, type OwnershipForkSource } from './domain/fork-input.js';
+export { threadOwnedBy, type ThreadOwnedBy } from './domain/proofs/thread-owned-by.js';

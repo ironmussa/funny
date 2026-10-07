@@ -30,13 +30,14 @@ describe('socketio pty:list RPC contract', () => {
     expect(noRunnerHits.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('lists sessions through the terminal port', () => {
-    expect(source).toMatch(/terminals\.listSessions\(runnerId, userId\)/);
+  test('lists sessions through the AUTHORIZED terminal sink (runner-request-isolation)', () => {
+    expect(source).toMatch(/terminal\.listSessions\(actor, runner, proof\)/);
+    expect(source).not.toMatch(/terminals\??\.listSessions\(/);
     expect(source).toMatch(/status:\s*['"]ok['"][\s\S]*?sessions/);
   });
 
   test('checks terminal availability before listing sessions', () => {
-    expect(source).toMatch(/terminals\?\.isAvailable\(runnerId\)/);
+    expect(source).toMatch(/terminal\.isAvailable\(runner\)/);
   });
 
   test('produces an error response on internal failure', () => {

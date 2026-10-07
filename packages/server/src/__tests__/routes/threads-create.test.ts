@@ -14,8 +14,10 @@ import { SIGNATURE_HEADER } from '@funny/shared/auth/forwarded-identity';
 import * as runnerManager from '../../services/runner-manager.js';
 import type { RunnerRequest, RunnerResponse } from '../../services/runner-ports.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
+import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedRunner } from '../helpers/test-db.js';
 
 const tunnelFetch = mock(
   async (_runnerId: string, _request: RunnerRequest): Promise<RunnerResponse> => ({
@@ -59,8 +61,14 @@ describe('Thread creation — characterization', () => {
 
   beforeEach(() => {
     t.cleanup();
+    __resetRunnerScopeCache();
     runnerAvailable = true;
     effects.length = 0;
+    // Resolution is mocked below, but the authorized sink still certifies the
+    // chosen runner against `runners` and `runner-scope`, so the rows must exist.
+    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
+    seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tok-1', hostname: 'r1' });
+    seedRunner(t.db as any, { id: '__default__', userId: 'user-1', token: 'tok-d', hostname: 'd' });
     tunnelFetch.mockReset();
     tunnelFetch.mockImplementation(async () => ({
       status: 201,
@@ -71,9 +79,9 @@ describe('Thread creation — characterization', () => {
       effects.push('resolve');
       return { runner: { runnerId: 'runner-1' } } as any;
     });
-    spyOn(runnerResolver, 'resolveRunner').mockImplementation(async () => {
+    spyOn(runnerResolver, 'resolveRunnerDetailed').mockImplementation(async () => {
       effects.push('resolve');
-      return { runnerId: 'runner-1' };
+      return { ok: true, runnerId: 'runner-1' };
     });
     spyOn(threadRegistry, 'registerThread').mockImplementation(async () => {
       effects.push('register');
@@ -165,7 +173,7 @@ describe('Thread creation — characterization', () => {
         projectId: null,
         mode: 'local',
       });
-      expect(runnerResolver.resolveRunner).toHaveBeenCalledWith(
+      expect(runnerResolver.resolveRunnerDetailed).toHaveBeenCalledWith(
         '/api/threads',
         {},
         'user-1',
@@ -180,7 +188,9 @@ describe('Thread creation — characterization', () => {
 
     test('scratch idle creation resolves with the idle path', async () => {
       await t.requestAs('user-1').post('/api/threads/idle', { isScratch: true });
-      expect((runnerResolver.resolveRunner as any).mock.calls[0][0]).toBe('/api/threads/idle');
+      expect((runnerResolver.resolveRunnerDetailed as any).mock.calls[0][0]).toBe(
+        '/api/threads/idle',
+      );
       expect(tunnelFetch.mock.calls[0][1].path).toBe('/api/threads/idle');
     });
 
@@ -261,7 +271,7 @@ describe('Thread creation — characterization', () => {
     test('unavailable project runner falls back to the user-scoped resolver', async () => {
       runnerAvailable = false;
       await t.requestAs('user-1').post('/api/threads/idle', { projectId: 'p1' });
-      expect(runnerResolver.resolveRunner).toHaveBeenCalledWith(
+      expect(runnerResolver.resolveRunnerDetailed).toHaveBeenCalledWith(
         '/api/threads',
         { projectId: 'p1' },
         'user-1',
@@ -271,18 +281,30 @@ describe('Thread creation — characterization', () => {
 
     test('no project runner → 502 with project message, no remote call', async () => {
       (runnerManager.findRunnerForProject as any).mockResolvedValueOnce(null);
-      (runnerResolver.resolveRunner as any).mockResolvedValueOnce(null);
+      (runnerResolver.resolveRunnerDetailed as any).mockResolvedValueOnce({
+        ok: false,
+        reason: 'general-runner-offline',
+      });
       const res = await t.requestAs('user-1').post('/api/threads', { projectId: 'p1' });
       expect(res.status).toBe(502);
-      expect(await res.json()).toEqual({ error: 'No online runner found for this project' });
+      expect(await res.json()).toEqual({
+        error: 'No runner connected. Check that your runner is online.',
+        code: 'general-runner-offline',
+      });
       expect(tunnelFetch).not.toHaveBeenCalled();
     });
 
     test('no scratch runner → 502 with user message', async () => {
-      (runnerResolver.resolveRunner as any).mockResolvedValueOnce(null);
+      (runnerResolver.resolveRunnerDetailed as any).mockResolvedValueOnce({
+        ok: false,
+        reason: 'general-runner-offline',
+      });
       const res = await t.requestAs('user-1').post('/api/threads', { isScratch: true });
       expect(res.status).toBe(502);
-      expect(await res.json()).toEqual({ error: 'No online runner found for this user' });
+      expect(await res.json()).toEqual({
+        error: 'No runner connected. Check that your runner is online.',
+        code: 'general-runner-offline',
+      });
     });
 
     test('resolver exception is not converted into a creation failure (500)', async () => {

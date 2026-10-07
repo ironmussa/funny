@@ -23,3 +23,6 @@ export const resolvedRunnerId = (value: string): RunnerId => value as RunnerId;
 
 /** Wrap a thread id returned by the runner that created the thread. */
 export const createdThreadId = (value: string): ThreadId => value as ThreadId;
+
+/** Wrap the id of a thread the access middleware loaded and authorized for the actor. */
+export const authorizedThreadId = (value: string): ThreadId => value as ThreadId;

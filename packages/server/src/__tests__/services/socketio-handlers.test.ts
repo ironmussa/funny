@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
+import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
 afterEach(() => {
@@ -11,9 +12,10 @@ afterEach(() => {
 
 function runnerDependencies(overrides: Record<string, unknown> = {}) {
   return {
-    findAnyRunnerForUser: async () => 'runner-1',
-    findRunnerForProject: async () => 'runner-1',
-    getRunnerUserId: async () => 'user-1',
+    runnerAccess: fakeRunnerAccess({
+      runnerFor: () => 'runner-1',
+      owners: { 'runner-1': 'user-1' },
+    }),
     getProjectOwnerId: async () => 'user-1',
     ...overrides,
   } as any;

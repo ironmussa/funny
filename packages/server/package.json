@@ -30,6 +30,7 @@
     "@funny/core": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/thread-scheduler": "workspace:*",
+    "@gdp-ts/core": "0.1.0",
     "@grpc/grpc-js": "1.14.0",
     "@grpc/proto-loader": "0.8.0",
     "@ironmussa/funny-runtime": "workspace:*",

@@ -175,7 +175,7 @@ export function ReadFileCard({
           disabled={!hasOutput}
           aria-expanded={hasOutput ? expanded : undefined}
           onClick={toggle}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+          className="flex shrink-0 items-center gap-2 text-left disabled:cursor-default"
         >
           {hasOutput ? (
             <ChevronRight
@@ -198,7 +198,7 @@ export function ReadFileCard({
                 <a
                   href={editorUri}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
+                  className="text-muted-foreground hover:text-primary min-w-0 flex-1 truncate font-mono text-xs hover:underline"
                   data-testid="read-file-open-link"
                 >
                   {displayPath}
@@ -207,7 +207,7 @@ export function ReadFileCard({
                 <button
                   type="button"
                   onClick={() => openFileInEditor(filePath, defaultEditor)}
-                  className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
+                  className="text-muted-foreground hover:text-primary min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                   data-testid="read-file-open-link"
                 >
                   {displayPath}

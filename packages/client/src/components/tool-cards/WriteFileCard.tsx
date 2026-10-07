@@ -70,7 +70,7 @@ export function WriteFileCard({
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex shrink-0 items-center gap-2 text-left"
         >
           <ChevronRight
             className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
@@ -96,7 +96,7 @@ export function WriteFileCard({
                     <a
                       href={editorUri}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-muted-foreground hover:text-primary min-w-0 truncate font-mono text-xs hover:underline"
+                      className="text-muted-foreground hover:text-primary min-w-0 flex-1 truncate font-mono text-xs hover:underline"
                     >
                       {displayPath}
                     </a>
@@ -104,7 +104,7 @@ export function WriteFileCard({
                     <button
                       type="button"
                       onClick={() => openFileInEditor(filePath, defaultEditor)}
-                      className="text-muted-foreground hover:text-primary min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline"
+                      className="text-muted-foreground hover:text-primary min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-xs hover:underline"
                     >
                       {displayPath}
                     </button>

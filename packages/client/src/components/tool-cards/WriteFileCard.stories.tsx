@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import '@/i18n/config';
+import { ThreadProvider } from '@/stores/thread-context';
 
 import { WriteFileCard } from './WriteFileCard';
 
@@ -9,6 +10,13 @@ const meta = {
   component: WriteFileCard,
   parameters: { layout: 'padded' },
   tags: ['autodocs'],
+  decorators: [
+    (Story) => (
+      <ThreadProvider threadId={null}>
+        <Story />
+      </ThreadProvider>
+    ),
+  ],
 } satisfies Meta<typeof WriteFileCard>;
 
 export default meta;
@@ -112,5 +120,36 @@ export const HiddenLabel: Story = {
       content: 'export const API_URL = "http://localhost:3001";',
     },
     hideLabel: true,
+  },
+};
+
+/** Long paths must truncate without overlapping the collapse control or timestamp. */
+export const CollapsedLongPath: Story = {
+  args: {
+    parsed: {
+      file_path:
+        '/home/user/project/packages/runtime/src/services/thread-service/very-long-file-name.ts',
+    },
+    displayTime: '12:34',
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ width: 320 }}>
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement, userEvent }) => {
+    const { expect, within } = await import('storybook/test');
+    const canvas = within(canvasElement);
+    const label = canvas.getByText('Write File');
+    await userEvent.click(canvas.getByRole('button', { name: 'Write File' }));
+    const path = canvas.getByText(/very-long-file-name.ts/);
+    const timestamp = canvas.getByText('12:34');
+
+    expect(path.getBoundingClientRect().left).toBeGreaterThan(label.getBoundingClientRect().right);
+    expect(path.getBoundingClientRect().right).toBeLessThan(timestamp.getBoundingClientRect().left);
+    expect(path.clientWidth).toBeGreaterThan(0);
+    expect(path.scrollWidth).toBeGreaterThan(path.clientWidth);
   },
 };

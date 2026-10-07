@@ -5,6 +5,7 @@ import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useThreadStore } from '@/stores/thread-store';
 
 const mockNavigate = vi.fn();
+const mockEnsureBranch = vi.fn().mockResolvedValue(false);
 const mockDeleteThread = vi.fn().mockResolvedValue(undefined);
 const mockDeleteScratchThread = vi.fn().mockResolvedValue(undefined);
 
@@ -25,7 +26,7 @@ vi.mock('@/hooks/use-stable-navigate', () => ({
 
 vi.mock('@/hooks/use-branch-switch', () => ({
   useBranchSwitch: () => ({
-    ensureBranch: vi.fn(),
+    ensureBranch: mockEnsureBranch,
     branchSwitchDialog: null,
   }),
 }));
@@ -226,13 +227,14 @@ describe('useSidebarActions — archive, pin, and select', () => {
     expect(mockPinThread).toHaveBeenCalledWith('t1', 'p1', true);
   });
 
-  test('handleSelectThread navigates to thread route', async () => {
+  test('opens a local thread even when its branch cannot be checked out', async () => {
     useThreadStore.setState({
       threadsById: {
         t1: {
           id: 't1',
           projectId: 'p1',
           title: 'Thread',
+          branch: 'deleted-branch',
           status: 'completed',
           mode: 'local',
         },
@@ -246,5 +248,7 @@ describe('useSidebarActions — archive, pin, and select', () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith('/projects/p1/threads/t1');
+    expect(useThreadStore.getState().selectThread).toHaveBeenCalledWith('t1');
+    expect(mockEnsureBranch).not.toHaveBeenCalled();
   });
 });

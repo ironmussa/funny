@@ -13,19 +13,13 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
-import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
-import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
-import {
-  resolveLocalThreadBranch,
-  resolveThreadBranch,
-  shouldCheckoutBranchForThreadSelect,
-} from '@/lib/utils';
+import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
@@ -36,7 +30,6 @@ import {
   gitStatusSidebarFingerprint,
 } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -171,9 +164,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
     useGitStatusStore.getState().ensureStatusForThreads(threads);
   }, [threads]);
 
-  const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
-
-  // Keep a ref to threads so the async handleSelect always reads the latest list.
+  // Keep a ref to threads so handleSelect always reads the latest list.
   const threadsRef = useRef(threads);
   useLayoutEffect(() => {
     threadsRef.current = threads;
@@ -184,32 +175,12 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   const handleSelect = useCallback(
     async (threadId: string, projectId: string) => {
       const thread = threadsRef.current.find((th) => th.id === threadId);
-      const scratch = isScratch(thread);
-
-      // Check if the thread requires a branch switch (local mode only).
-      // Scratch threads have no git working tree — never run the branch preflight.
-      const storeBeforeNav = useThreadStore.getState();
-      const activeThread =
-        storeBeforeNav.activeThread ??
-        (storeBeforeNav.selectedThreadId
-          ? storeBeforeNav.threadsById[storeBeforeNav.selectedThreadId]
-          : undefined);
-      if (!scratch && thread && shouldCheckoutBranchForThreadSelect(thread, activeThread)) {
-        const branch = resolveLocalThreadBranch(thread)!;
-        // Kick off thread data fetch in parallel with the branch preflight so
-        // the network roundtrips overlap instead of serializing. If the user
-        // cancels the branch dialog we just discard the prefetched data.
-        useThreadStore.getState().prefetchThread(threadId);
-        const canProceed = await ensureBranch(projectId, branch);
-        if (!canProceed) return;
-      }
-
       // Expand/select project, kick hydration, and navigate — all via the one
       // facade. Falls back to a non-scratch target when the row isn't in the
       // current list (e.g. cross-project deep action).
       goToThread(navigate, thread ?? { id: threadId, projectId, isScratch: false });
     },
-    [navigate, ensureBranch],
+    [navigate],
   );
 
   const handleRename = useCallback(
@@ -275,7 +246,6 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
           <ViewAllButton onClick={() => navigate(buildPath('/list?sort=updated'))} />
         )}
       </div>
-      {branchSwitchDialog}
     </>
   );
 }

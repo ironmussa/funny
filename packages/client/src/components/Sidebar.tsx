@@ -84,7 +84,6 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
     handleCloseProject,
     handleReopenProject,
     handleShowIssues,
-    branchSwitchDialog,
   } = actions;
 
   const projectsScrollRef = useRef<HTMLDivElement>(null);
@@ -211,8 +210,6 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
         setIssuesProjectId={setIssuesProjectId}
         actionLoading={actionLoading}
       />
-
-      {branchSwitchDialog}
     </Sidebar>
   );
 }

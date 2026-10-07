@@ -13,8 +13,8 @@
  * `selectThread` for the route boundary's `ensureLoaded` and derives selection
  * from `useParams()`; callers of `goToThread` stay unchanged across that move.
  *
- * Branch-checkout preflight (local worktree switches) stays at the call site
- * that owns the confirm dialog — call `goToThread` once the preflight resolves.
+ * Opening a conversation is independent of Git: callers must not gate
+ * navigation on branch checkout or working-directory availability.
  *
  * @internal `selectThread` is the legacy hydrator. Do not call it from
  * components; go through `goToThread` / `useGoToThread`.

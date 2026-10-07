@@ -198,7 +198,8 @@ describe('ThreadList', () => {
     expect(screen.getAllByTestId('thread-item-dupe-1')).toHaveLength(1);
   });
 
-  test('navigates to thread route on select', async () => {
+  test('opens a local conversation without requiring an available directory or branch', async () => {
+    mockEnsureBranch.mockResolvedValue(false);
     const thread = makeThread('t-nav', {
       status: 'running',
       branch: 'main',
@@ -215,7 +216,7 @@ describe('ThreadList', () => {
     fireEvent.click(screen.getByTestId('thread-item-t-nav'));
 
     await waitFor(() => {
-      expect(mockEnsureBranch).toHaveBeenCalledWith('p1', 'main');
+      expect(mockEnsureBranch).not.toHaveBeenCalled();
       expect(mockNavigate).toHaveBeenCalledWith('/projects/p1/threads/t-nav');
     });
   });

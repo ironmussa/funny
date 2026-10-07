@@ -1,7 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useActiveThreadBranchSync } from '@/hooks/use-active-thread-branch-sync';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
@@ -18,7 +17,6 @@ interface ShellState {
   designViewOpen: boolean;
   isFullScreenView: boolean;
   rightPaneVisible: boolean;
-  branchSyncDialog: ReactNode;
 
   // Forwarded to MainContentSwitcher
   generalSettingsOpen: boolean;
@@ -35,7 +33,7 @@ interface ShellState {
 /**
  * Bundles every UI/store hook + mount-side effect that the App shell needs:
  *   - WebSocket connection, focus refresh, URL ↔ store sync, history tracking
- *   - Global keyboard shortcuts and active-thread branch sync
+ *   - Global keyboard shortcuts
  *   - loadProjects / loadTemplates on mount
  *   - document.title sync to selected project + branch
  *   - Right-pane visibility / full-screen view derivation
@@ -86,7 +84,6 @@ export function useAppShell(): ShellState {
   useWS();
   useRefreshOnFocus();
   useRouteSync();
-  const branchSyncDialog = useActiveThreadBranchSync();
 
   useEffect(() => {
     loadProjects();
@@ -108,7 +105,6 @@ export function useAppShell(): ShellState {
     designViewOpen,
     isFullScreenView,
     rightPaneVisible,
-    branchSyncDialog,
     generalSettingsOpen,
     settingsOpen,
     analyticsOpen,

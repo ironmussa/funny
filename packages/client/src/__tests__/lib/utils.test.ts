@@ -6,7 +6,6 @@ import {
   resolveLocalThreadBranch,
   resolveThreadBranch,
   scrollSidebarItemIntoView,
-  shouldCheckoutBranchForThreadSelect,
   SIDEBAR_SCROLL_TOP_OFFSET,
   TOAST_DURATION,
 } from '@/lib/utils';
@@ -116,64 +115,5 @@ describe('scrollSidebarItemIntoView', () => {
       top: Math.max(0, root.scrollTop + (180 - 100) - SIDEBAR_SCROLL_TOP_OFFSET),
       behavior: 'smooth',
     });
-  });
-});
-
-describe('shouldCheckoutBranchForThreadSelect', () => {
-  const proj = 'proj-1';
-
-  test('returns false for worktree threads', () => {
-    expect(
-      shouldCheckoutBranchForThreadSelect(
-        { mode: 'worktree', projectId: proj, branch: 'feat/x' },
-        null,
-      ),
-    ).toBe(false);
-  });
-
-  test('returns false for scratch or projectless threads', () => {
-    expect(
-      shouldCheckoutBranchForThreadSelect(
-        { mode: 'local', isScratch: true, projectId: '', branch: 'main' },
-        null,
-      ),
-    ).toBe(false);
-
-    expect(shouldCheckoutBranchForThreadSelect({ mode: 'local', branch: 'main' }, null)).toBe(
-      false,
-    );
-  });
-
-  test('returns false when target and active share the same branch', () => {
-    expect(
-      shouldCheckoutBranchForThreadSelect(
-        { mode: 'local', projectId: proj, branch: 'main', baseBranch: 'main' },
-        { mode: 'local', projectId: proj, branch: 'main', baseBranch: 'develop' },
-      ),
-    ).toBe(false);
-  });
-
-  test('returns false when both threads only have matching baseBranch', () => {
-    expect(
-      shouldCheckoutBranchForThreadSelect(
-        { mode: 'local', projectId: proj, baseBranch: 'main' },
-        { mode: 'local', projectId: proj, baseBranch: 'main' },
-      ),
-    ).toBe(false);
-  });
-
-  test('returns true when branches differ', () => {
-    expect(
-      shouldCheckoutBranchForThreadSelect(
-        { mode: 'local', projectId: proj, branch: 'feat/b' },
-        { mode: 'local', projectId: proj, branch: 'feat/a' },
-      ),
-    ).toBe(true);
-  });
-
-  test('returns true when there is no active thread', () => {
-    expect(
-      shouldCheckoutBranchForThreadSelect({ mode: 'local', projectId: proj, branch: 'main' }, null),
-    ).toBe(true);
   });
 });

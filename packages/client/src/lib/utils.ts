@@ -58,32 +58,6 @@ export function resolveLocalThreadBranch(thread: {
   return resolveThreadBranch(thread) ?? thread.baseBranch ?? undefined;
 }
 
-type ThreadBranchIdentity = {
-  mode?: string;
-  isScratch?: boolean;
-  projectId?: string;
-  branch?: string | null;
-  baseBranch?: string | null;
-  worktreePath?: string | null;
-};
-
-/**
- * Whether selecting `target` should run a project-level branch checkout.
- * Skips when both threads are local, same project, and share the same branch
- * (switching threads is UI-only — no git branch change needed).
- */
-export function shouldCheckoutBranchForThreadSelect(
-  target: ThreadBranchIdentity,
-  active: ThreadBranchIdentity | null | undefined,
-): boolean {
-  if (target.isScratch || !target.projectId) return false;
-  if (target.mode !== 'local') return false;
-  const targetBranch = resolveLocalThreadBranch(target);
-  if (!targetBranch) return false;
-  if (!active || active.mode !== 'local' || active.projectId !== target.projectId) return true;
-  return resolveLocalThreadBranch(active) !== targetBranch;
-}
-
 /**
  * Top inset used when scrolling sidebar items into view, so the row doesn't
  * end up flush against the top of the scroll container. Includes a few pixels

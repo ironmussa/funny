@@ -8,12 +8,10 @@ import type {
   DeleteThreadConfirmState,
   RenameProjectState,
 } from '@/components/sidebar/SidebarDialogs';
-import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
-import { resolveLocalThreadBranch, shouldCheckoutBranchForThreadSelect } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -22,13 +20,11 @@ import { useThreadStore } from '@/stores/thread-store';
  * Owns the sidebar's destructive-action confirmation state and all the row
  * handlers (select/archive/delete/rename/pin) that ProjectItem and ThreadList
  * receive as props. Bundling them in a hook keeps Sidebar.tsx free of the
- * `toast`, `api`, `use-branch-switch`, and thread-branch helpers
- * (~3-4 fan-out edges).
+ * `toast` and `api` dependencies.
  */
 export function useSidebarActions() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
   const archiveThread = useThreadStore((s) => s.archiveThread);
   const renameThread = useThreadStore((s) => s.renameThread);
   const pinThread = useThreadStore((s) => s.pinThread);
@@ -143,18 +139,10 @@ export function useSidebarActions() {
     async (projectId: string, threadId: string) => {
       const store = useThreadStore.getState();
       const thread = store.threadsById[threadId];
-      const activeThread =
-        store.activeThread ??
-        (store.selectedThreadId ? store.threadsById[store.selectedThreadId] : undefined);
-      if (thread && shouldCheckoutBranchForThreadSelect(thread, activeThread)) {
-        const branch = resolveLocalThreadBranch(thread)!;
-        const canProceed = await ensureBranch(projectId, branch);
-        if (!canProceed) return;
-      }
-
+      // Reading a conversation must not depend on its directory or branch existing.
       goToThread(navigate, thread ?? { id: threadId, projectId, isScratch: false });
     },
-    [navigate, ensureBranch],
+    [navigate],
   );
 
   const handleArchiveThread = useCallback((projectId: string, threadId: string, title: string) => {
@@ -281,8 +269,5 @@ export function useSidebarActions() {
     handleCloseProject,
     handleReopenProject,
     handleShowIssues,
-
-    // branch switch dialog (rendered by parent)
-    branchSwitchDialog,
   };
 }

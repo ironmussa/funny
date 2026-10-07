@@ -333,7 +333,6 @@ function AllThreadsActionDialogs({ actions }: { actions: ReturnType<typeof useSi
         setIssuesProjectId={actions.setIssuesProjectId}
         actionLoading={actions.actionLoading}
       />
-      {actions.branchSwitchDialog}
     </>
   );
 }

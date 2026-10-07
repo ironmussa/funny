@@ -94,6 +94,46 @@ describe('MessageStreamStatusTail', () => {
     await waitFor(() => expect(screen.getByTestId('permission-approve-once')).not.toBeDisabled());
   });
 
+  test('shows provider errors even when a previous Codex run cannot approve interactively', () => {
+    const onSend = vi.fn();
+    render(
+      <MessageStreamStatusTail
+        {...baseProps}
+        status="waiting"
+        waitingReason="provider_error"
+        model="opus-5.5"
+        onSend={onSend}
+        permissionApprovalCapability={{
+          kind: 'unavailable',
+          reason: 'codex-sdk-no-interactive-approval',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('provider-error-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('codex-sdk-approval-unavailable')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('provider-error-retry'));
+    expect(onSend).toHaveBeenCalledWith('Continue', { model: 'opus-5.5', mode: 'default' });
+  });
+
+  test('still explains unavailable approvals for a Codex permission wait', () => {
+    render(
+      <MessageStreamStatusTail
+        {...baseProps}
+        status="waiting"
+        waitingReason="permission"
+        permissionApprovalCapability={{
+          kind: 'unavailable',
+          reason: 'codex-sdk-no-interactive-approval',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('codex-sdk-approval-unavailable')).toBeInTheDocument();
+    expect(screen.queryByTestId('provider-error-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permission-approve-once')).not.toBeInTheDocument();
+  });
+
   test('explains a lost ACP continuation without rendering an approval card', () => {
     render(
       <MessageStreamStatusTail
@@ -109,6 +149,7 @@ describe('MessageStreamStatusTail', () => {
     );
 
     expect(screen.getByTestId('permission-continuation-lost')).toBeInTheDocument();
+    expect(screen.queryByTestId('provider-error-card')).not.toBeInTheDocument();
     expect(screen.queryByTestId('permission-approve-once')).not.toBeInTheDocument();
     expect(screen.queryByTestId('codex-sdk-approval-unavailable')).not.toBeInTheDocument();
   });

@@ -621,10 +621,14 @@ export function handleWSStatus(
     const structuredPermReqChanged =
       data.pendingPermissionRequest !== undefined &&
       data.pendingPermissionRequest.requestId !== t.pendingPermissionRequest?.requestId;
+    // Capabilities belong to a run. Non-Codex providers omit this field,
+    // so starting another run must not inherit the previous Codex capability.
+    const permissionApprovalCapability =
+      data.permissionApprovalCapability ??
+      (newStatus === 'running' && statusChanged ? undefined : t.permissionApprovalCapability);
     const permissionCapabilityChanged =
-      data.permissionApprovalCapability !== undefined &&
-      JSON.stringify(data.permissionApprovalCapability) !==
-        JSON.stringify(t.permissionApprovalCapability);
+      JSON.stringify(permissionApprovalCapability) !==
+      JSON.stringify(t.permissionApprovalCapability);
     const permissionRecoveryChanged = data.permissionRecoveryReason !== t.permissionRecoveryReason;
     if (
       !(
@@ -656,9 +660,7 @@ export function handleWSStatus(
         // continuation. Clearing it for every other wait prevents a resolved
         // request from resurfacing after a later question/provider pause.
         pendingPermissionRequest: data.pendingPermissionRequest,
-        ...(data.permissionApprovalCapability
-          ? { permissionApprovalCapability: data.permissionApprovalCapability }
-          : {}),
+        permissionApprovalCapability,
         permissionRecoveryReason: data.permissionRecoveryReason,
         ...(data.stage ? { stage: data.stage as any } : {}),
         ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
@@ -672,9 +674,7 @@ export function handleWSStatus(
       pendingPermission: undefined,
       pendingPermissionRequest: undefined,
       permissionRecoveryReason: undefined,
-      ...(data.permissionApprovalCapability
-        ? { permissionApprovalCapability: data.permissionApprovalCapability }
-        : {}),
+      permissionApprovalCapability,
       ...(newStatus === 'stopped' || newStatus === 'interrupted' ? { resultInfo: undefined } : {}),
       ...(data.stage ? { stage: data.stage as any } : {}),
       ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),

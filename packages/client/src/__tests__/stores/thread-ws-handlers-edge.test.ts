@@ -149,6 +149,44 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     expect(state.threadDataById[THREAD_ID].pendingPermission?.toolName).toBe('Bash');
   });
 
+  test('clears a previous Codex capability when starting a run without one', () => {
+    const state = makeState();
+    state.threadDataById[THREAD_ID].status = 'completed';
+    state.threadDataById[THREAD_ID].permissionApprovalCapability = {
+      kind: 'unavailable',
+      reason: 'codex-sdk-no-interactive-approval',
+    };
+    const { get, set } = makeGetSet(state);
+
+    handleWSStatus(get, set, THREAD_ID, { status: 'running' });
+    handleWSStatus(get, set, THREAD_ID, {
+      status: 'waiting',
+      waitingReason: 'provider_error',
+    });
+
+    expect(state.threadDataById[THREAD_ID].permissionApprovalCapability).toBeUndefined();
+    expect(state.threadDataById[THREAD_ID].waitingReason).toBe('provider_error');
+  });
+
+  test('retains the current run capability through status updates and permission waits', () => {
+    const state = makeState();
+    state.threadDataById[THREAD_ID].status = 'completed';
+    const { get, set } = makeGetSet(state);
+    const capability = {
+      kind: 'unavailable' as const,
+      reason: 'codex-sdk-no-interactive-approval' as const,
+    };
+
+    handleWSStatus(get, set, THREAD_ID, {
+      status: 'running',
+      permissionApprovalCapability: capability,
+    });
+    handleWSStatus(get, set, THREAD_ID, { status: 'running', stage: 'in_progress' });
+    handleWSStatus(get, set, THREAD_ID, { status: 'waiting', waitingReason: 'permission' });
+
+    expect(state.threadDataById[THREAD_ID].permissionApprovalCapability).toEqual(capability);
+  });
+
   test('handleWSStatus no-ops when machine event is invalid', () => {
     mockWsEventToMachine.mockReturnValueOnce(null as any);
     const state = makeState();

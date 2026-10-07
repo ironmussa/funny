@@ -129,7 +129,7 @@ export function MessageStreamStatusTail({
       )}
 
       {status === 'waiting' &&
-        (waitingReason === 'permission' || waitingReason === 'provider_error') &&
+        waitingReason === 'permission' &&
         permissionRecoveryReason !== 'runner_lost' &&
         permissionApprovalCapability?.kind === 'unavailable' && (
           <StatusBlock>
@@ -155,7 +155,7 @@ export function MessageStreamStatusTail({
 
       {status === 'waiting' &&
         waitingReason === 'provider_error' &&
-        permissionApprovalCapability?.kind !== 'unavailable' && (
+        permissionRecoveryReason !== 'runner_lost' && (
           <StatusBlock>
             <ProviderErrorCard onSend={sendWithMode} />
           </StatusBlock>

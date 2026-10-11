@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useAuthStore } from '@/stores/auth-store';
@@ -70,6 +71,7 @@ interface InviteLink {
 
 export function TeamMembers() {
   const { t } = useTranslation();
+  const now = useMinuteTick();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [removeConfirm, setRemoveConfirm] = useState<Member | null>(null);
@@ -335,7 +337,7 @@ export function TeamMembers() {
           {inviteLinks.length > 0 && (
             <div className="mt-3 space-y-2">
               {inviteLinks.map((link) => {
-                const isExpired = link.expiresAt && new Date(link.expiresAt) < new Date();
+                const isExpired = link.expiresAt && new Date(link.expiresAt).getTime() < now;
                 const isMaxed = link.maxUses !== null && link.useCount >= link.maxUses;
                 const isActive = !isExpired && !isMaxed;
 

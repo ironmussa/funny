@@ -24,7 +24,7 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+    "typecheck": "bun check -p tsconfig.json"
   },
   "dependencies": {
     "@funny/shared": "workspace:*"

@@ -13,7 +13,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@funny/core": "workspace:*",

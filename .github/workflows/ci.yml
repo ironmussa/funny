@@ -29,7 +29,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           # Pinned for deterministic CI — bump deliberately, not via "latest".
-          bun-version: 1.4.0
+          bun-version: 1.4.3
 
       - name: Cache bun dependencies
         uses: actions/cache@v6
@@ -58,7 +58,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.3
 
       - name: Cache bun dependencies
         uses: actions/cache@v6
@@ -80,6 +80,9 @@ jobs:
 
       - name: Build native-git (for core parity tests)
         run: bun run build:native
+
+      - name: Test typecheck baseline runner
+        run: bun test scripts/fitness/check-typecheck.test.ts
 
       - name: Run tests (shared)
         run: bun run --cwd packages/shared test
@@ -120,7 +123,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.3
 
       - name: Cache bun dependencies
         uses: actions/cache@v6
@@ -151,7 +154,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.3
 
       - name: Install dependencies
         run: bun install
@@ -207,7 +210,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.3
 
       - name: Cache bun dependencies
         uses: actions/cache@v6

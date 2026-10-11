@@ -22,7 +22,7 @@
     "start": "bun src/main.ts",
     "start:release": "bun dist/main.js",
     "test": "bun test",
-    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+    "typecheck": "bun check -p tsconfig.json"
   },
   "dependencies": {
     "@funny/client-core": "workspace:*",

@@ -17,7 +17,7 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit -p tsconfig.json --ignoreDeprecations 6.0"
+    "typecheck": "bun check -p tsconfig.json"
   },
   "dependencies": {
     "zod": "^4.5.4"

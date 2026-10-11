@@ -28,13 +28,13 @@ Production start: `bun start` (runs `bin/funny.js` against built `dist/` output)
 
 ## TypeScript
 
-Bun ships its own TypeScript checker — don't install or invoke `tsc`/`typescript` directly. Root `tsc --noEmit` on this repo is a known false positive; the canonical check is:
+Bun 1.4.3 or newer provides `bun check`, the checker used by workspace typecheck scripts. Keep the `typescript` dependency for editor support, existing builds that emit files, and `typecheck:proofs`. The proof gate intentionally retains `tsc` 7.0.2: Bun 1.4.3 reports seven unused `@ts-expect-error` directives for cross-scope GDP names in `fork-ownership.ts` and `runner-isolation.ts`, while `tsc` rejects those invalid substitutions as expected. Do not remove those assertions to accommodate Bun. The canonical repository check is:
 
 ```bash
 bun run typecheck
 ```
 
-This runs `scripts/fitness/check-typecheck.ts`, a **baseline-diff** check: it compares current type errors against a committed baseline (`.fitness/typecheck-baseline.txt`) so pre-existing debt doesn't block CI while new violations do. Use `bun run typecheck:refresh` only when you've deliberately reduced (never increased) the baseline.
+This runs `scripts/fitness/check-typecheck.ts`, which invokes `bun check` for each configured project, followed by the remote connector’s Rust check and the server proof typecheck. The TypeScript fitness check is a **baseline-diff** check: it compares current type errors against a committed baseline (`.fitness/typecheck-baseline.txt`) so pre-existing debt doesn't block CI while new violations do. Use `bun run typecheck:refresh` only when you've deliberately reduced (never increased) the baseline.
 
 ## Lint, format, and architecture guardrails
 

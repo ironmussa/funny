@@ -8,7 +8,7 @@
     "test:sustained": "bun src/run-sustained.ts",
     "test:soak": "bun src/run-sustained.ts --soak",
     "test:ingress": "bun src/run-ingress.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@grpc/grpc-js": "1.14.0",

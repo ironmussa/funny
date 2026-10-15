@@ -236,6 +236,13 @@ bunx tsc --noEmit
 - WebSocket events carry a `threadId` field so the client can associate updates with the correct thread
 - The model selector maps friendly names (sonnet/opus/haiku) to full model IDs in `agent-runner.ts`
 
+### Asynchronous orchestration with Effect
+
+Prefer Effect for cancellation, retry waits, timeouts, bounded concurrency, and
+resource lifetimes, following `AGENTS.md`. Preserve `neverthrow` domain results and
+public service contracts; use explicit adapters at async boundaries. Simple pure
+functions and UI rendering do not need Effect wrappers.
+
 ### Error Handling with `neverthrow`
 
 Scoped mandate — the policy is narrow on purpose so it can actually be enforced:

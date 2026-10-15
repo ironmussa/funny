@@ -6,12 +6,18 @@
  * Nodes can be conditionally skipped via guards.
  * A single optional loop boundary allows review→fix cycles.
  *
- * Zero dependencies — works in both server and client.
+ * Effect coordinates cancellation, retry waits, and bounded DAG concurrency.
  */
+
+import { Cause, Effect, Exit, Result } from 'effect';
 
 // ── Types ────────────────────────────────────────────────────
 
-/** A node function: receives context and signal, returns updated context. */
+/**
+ * A node function: receives context and signal, returns updated context.
+ * Async implementations must honor the signal and release owned resources on abort.
+ * Effect can interrupt the wait, but cannot stop side effects in an uncooperative callback.
+ */
 export type NodeFn<T> = (ctx: T, signal: AbortSignal) => T | Promise<T>;
 
 /**
@@ -224,6 +230,13 @@ export function compose<T>(...groups: PipelineNode<T>[][]): PipelineNode<T>[] {
   return groups.flat();
 }
 
+// Capture synchronous throws as well as rejected promises at the callback boundary.
+const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
+  Effect.tryPromise({
+    try: async (abortSignal) => fn(abortSignal),
+    catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+  });
+
 // ── Runtime ──────────────────────────────────────────────────
 
 /**
@@ -284,6 +297,11 @@ export async function runPipeline<T>(
     const res = await runSingleNode(currentNode, ctx, { signal, emit, iteration });
     ctx = res.ctx;
 
+    if (res.status === 'cancelled') {
+      emit({ kind: 'terminal', nodeName: currentNode.name, ctx, iteration, outcome: 'cancelled' });
+      return { outcome: 'cancelled', ctx, iterations: iteration };
+    }
+
     if (res.status === 'skipped') {
       nodeIndex++;
       continue;
@@ -305,8 +323,34 @@ export async function runPipeline<T>(
 
     // Check for loop boundary — after the last node
     if (nodeIndex >= pipeline.nodes.length && pipeline.loop && loopFromIndex >= 0) {
-      const exit = await pipeline.loop.until(ctx);
-      if (!exit) {
+      const condition = await Effect.runPromiseExit(
+        invoke(() => pipeline.loop!.until(ctx)),
+        { signal },
+      );
+      if (signal?.aborted) {
+        emit({
+          kind: 'terminal',
+          nodeName: currentNode.name,
+          ctx,
+          iteration,
+          outcome: 'cancelled',
+        });
+        return { outcome: 'cancelled', ctx, iterations: iteration };
+      }
+      if (Exit.isFailure(condition)) {
+        const cause = Cause.squash(condition.cause);
+        const error = cause instanceof Error ? cause.message : String(cause);
+        emit({
+          kind: 'terminal',
+          nodeName: currentNode.name,
+          ctx,
+          iteration,
+          outcome: 'failed',
+          error,
+        });
+        return { outcome: 'failed', ctx, iterations: iteration, error };
+      }
+      if (!condition.value) {
         iteration++;
         if (iteration > maxIter) {
           const errorMsg = `Max iterations reached (${maxIter})`;
@@ -345,7 +389,7 @@ export async function runPipeline<T>(
 interface SingleNodeResult<T> {
   /** Context after the node ran (unchanged if skipped). */
   ctx: T;
-  status: 'completed' | 'skipped' | 'error';
+  status: 'completed' | 'skipped' | 'error' | 'cancelled';
   /** Set when status === 'error'. */
   error?: string;
 }
@@ -356,8 +400,8 @@ interface SingleNodeResult<T> {
  * `terminal` — that's the caller's job, since terminal outcome depends on
  * pipeline-level flow (sequential vs DAG level).
  *
- * Extracted verbatim from the original sequential loop so both execution
- * paths share identical retry / guard / emit semantics.
+ * Effect owns interruptible callback execution and retry waits. Both execution
+ * paths share the same retry / guard / emit semantics.
  */
 async function runSingleNode<T>(
   node: PipelineNode<T>,
@@ -366,76 +410,50 @@ async function runSingleNode<T>(
 ): Promise<SingleNodeResult<T>> {
   const { signal, emit, iteration } = params;
   let ctx = ctxIn;
+  if (signal?.aborted) return { ctx, status: 'cancelled' };
 
-  // Check guard (may be async — await the result).
-  if (node.when) {
-    const allow = await node.when(ctx);
-    if (!allow) {
-      emit({ kind: 'skipped', nodeName: node.name, ctx, iteration });
-      return { ctx, status: 'skipped' };
+  const execution = Effect.gen(function* () {
+    if (node.when && !(yield* invoke(() => node.when!(ctx)))) {
+      return 'skipped' as const;
     }
-  }
+    emit({ kind: 'entering', nodeName: node.name, ctx, iteration });
+    const retry = node.retry;
+    const maxAttempts = retry
+      ? Math.max(
+          1,
+          typeof retry.maxAttempts === 'function' ? retry.maxAttempts(ctx) : retry.maxAttempts,
+        )
+      : 1;
 
-  // Execute node — with retry support. When `retry` is undefined, the loop
-  // runs exactly once, preserving pre-retry semantics.
-  emit({ kind: 'entering', nodeName: node.name, ctx, iteration });
-
-  const retryCfg = node.retry;
-  const maxAttempts = retryCfg
-    ? Math.max(
-        1,
-        typeof retryCfg.maxAttempts === 'function'
-          ? retryCfg.maxAttempts(ctx)
-          : retryCfg.maxAttempts,
-      )
-    : 1;
-
-  let attempt = 0;
-  let lastError: Error | undefined;
-  while (attempt < maxAttempts) {
-    attempt++;
-    try {
-      ctx = await node.execute(ctx, signal ?? new AbortController().signal);
-      lastError = undefined;
-      break;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-
-      // Cancellation always short-circuits, even if more attempts remain.
-      if (signal?.aborted) break;
-
-      if (!retryCfg || attempt >= maxAttempts) break;
-      if (retryCfg.shouldRetry) {
-        const allowRetry = await retryCfg.shouldRetry(lastError, ctx, attempt);
-        if (!allowRetry) break;
+    for (let attempt = 1; ; attempt++) {
+      const result = yield* Effect.result(invoke((abortSignal) => node.execute(ctx, abortSignal)));
+      if (Result.isSuccess(result)) {
+        ctx = result.success;
+        return 'completed' as const;
       }
-
-      if (retryCfg.beforeRetry) {
-        try {
-          ctx = await retryCfg.beforeRetry(lastError, ctx, attempt);
-        } catch (hookErr) {
-          // beforeRetry threw — abort retry loop with the hook's error.
-          lastError = hookErr instanceof Error ? hookErr : new Error(String(hookErr));
-          break;
-        }
+      const error = result.failure;
+      if (!retry || attempt >= maxAttempts) return yield* Effect.fail(error);
+      if (retry.shouldRetry && !(yield* invoke(() => retry.shouldRetry!(error, ctx, attempt)))) {
+        return yield* Effect.fail(error);
       }
-
-      const delay =
-        typeof retryCfg.delayMs === 'function' ? retryCfg.delayMs(ctx) : (retryCfg.delayMs ?? 0);
-      if (delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+      if (retry.beforeRetry) {
+        ctx = yield* invoke(() => retry.beforeRetry!(error, ctx, attempt));
       }
+      const delay = typeof retry.delayMs === 'function' ? retry.delayMs(ctx) : (retry.delayMs ?? 0);
+      if (delay > 0) yield* Effect.sleep(delay);
     }
-  }
+  });
 
-  if (lastError) {
-    const errorMsg = lastError.message;
-    emit({ kind: 'error', nodeName: node.name, ctx, iteration, error: errorMsg });
-    return { ctx, status: 'error', error: errorMsg };
+  const exit = await Effect.runPromiseExit(execution, { signal });
+  if (signal?.aborted) return { ctx, status: 'cancelled' };
+  if (Exit.isFailure(exit)) {
+    const cause = Cause.squash(exit.cause);
+    const error = cause instanceof Error ? cause.message : String(cause);
+    emit({ kind: 'error', nodeName: node.name, ctx, iteration, error });
+    return { ctx, status: 'error', error };
   }
-
-  emit({ kind: 'completed', nodeName: node.name, ctx, iteration });
-  return { ctx, status: 'completed' };
+  emit({ kind: exit.value, nodeName: node.name, ctx, iteration });
+  return { ctx, status: exit.value };
 }
 
 // ── DAG execution (level-by-level parallel) ─────────────────
@@ -475,36 +493,6 @@ export function computeLevels<T>(nodes: PipelineNode<T>[]): PipelineNode<T>[][] 
   return levels;
 }
 
-/** Bounded-concurrency runner: at most `limit` tasks in flight at once. */
-function createPool(limit: number) {
-  let active = 0;
-  const queue: Array<() => void> = [];
-  const acquire = (): Promise<void> => {
-    if (active < limit) {
-      active++;
-      return Promise.resolve();
-    }
-    return new Promise<void>((resolve) => {
-      queue.push(() => {
-        active++;
-        resolve();
-      });
-    });
-  };
-  const release = () => {
-    active--;
-    queue.shift()?.();
-  };
-  return async function run<R>(fn: () => Promise<R>): Promise<R> {
-    await acquire();
-    try {
-      return await fn();
-    } finally {
-      release();
-    }
-  };
-}
-
 /**
  * Default level-merge: fold each result's `outputs` map over the base. Used
  * when a DAG pipeline doesn't supply its own `mergeContexts`. Matches the
@@ -541,7 +529,7 @@ async function runDag<T>(
   const { signal, onStateChange } = opts;
   const emit = (change: PipelineStateChange<T>) => onStateChange?.(change);
   const merge = pipeline.mergeContexts ?? defaultMerge;
-  const pool = createPool(Math.max(1, opts.maxConcurrency ?? 8));
+  const concurrency = Math.max(1, Math.floor(opts.maxConcurrency ?? 8));
 
   let ctx = initialCtx;
   if (onStateChange) {
@@ -577,14 +565,26 @@ async function runDag<T>(
     }
 
     const base = ctx;
-    const settled = await Promise.allSettled(
-      level.map((n) => pool(() => runSingleNode(n, base, { signal, emit, iteration: 1 }))),
+    // Each node owns its cancellation boundary. Collect all outcomes, preserving
+    // declaration order and partial outputs instead of failing the level early.
+    const settled = await Effect.runPromise(
+      Effect.forEach(
+        level,
+        (n) =>
+          Effect.exit(
+            Effect.tryPromise({
+              try: () => runSingleNode(n, base, { signal, emit, iteration: 1 }),
+              catch: (error) => error,
+            }),
+          ),
+        { concurrency },
+      ),
     );
 
     const completed: T[] = [];
     let firstError: { name: string; error: string } | undefined;
     settled.forEach((s, i) => {
-      if (s.status === 'fulfilled') {
+      if (Exit.isSuccess(s)) {
         const r = s.value;
         if (r.status === 'error') {
           if (!firstError) firstError = { name: level[i].name, error: r.error ?? 'node failed' };
@@ -593,7 +593,8 @@ async function runDag<T>(
         }
         // 'skipped' contributes no output.
       } else if (!firstError) {
-        const reason = s.reason instanceof Error ? s.reason.message : String(s.reason);
+        const cause = Cause.squash(s.cause);
+        const reason = cause instanceof Error ? cause.message : String(cause);
         firstError = { name: level[i].name, error: reason };
       }
     });
@@ -601,6 +602,11 @@ async function runDag<T>(
     // Fold whatever completed back in, even on failure, so the terminal
     // event carries partial outputs for debugging.
     ctx = merge(base, completed);
+
+    if (signal?.aborted) {
+      emit({ kind: 'terminal', nodeName: pipeline.name, ctx, iteration: 1, outcome: 'cancelled' });
+      return { outcome: 'cancelled', ctx, iterations: 1 };
+    }
 
     if (firstError) {
       emit({

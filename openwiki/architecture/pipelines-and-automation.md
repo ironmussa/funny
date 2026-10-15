@@ -21,6 +21,15 @@ flowchart LR
 
 This pipeline is implemented via `packages/runtime/src/services/pipeline-manager.ts` and the pipeline-specific code under `packages/runtime/src/pipelines/` (`runner.ts`, `yaml-compiler.ts`, `yaml-loader.ts`, `approval.ts`, `types.ts`). Its own docstring states these pipelines "use the generic `@funny/pipelines` engine but define domain concepts (agents, git, commands) via the `ActionProvider` interface" — i.e., the DAG-execution mechanics (JSONata expressions, Mustache templating) live in `packages/pipelines`, and `packages/runtime` supplies the agent/git/command actions and approval gates on top.
 
+The generic engine uses Effect internally for interruptible node/guard/retry-hook
+execution, retry backoff, loop-condition waits, and bounded DAG concurrency. Its
+public API remains Promise-based and existing `neverthrow` domain contracts are
+unchanged. Cancellation returns `outcome: 'cancelled'`, does not emit a node error,
+and prevents queued nodes or retries from starting. DAG results still merge in
+declaration order and preserve completed outputs on failure/cancellation. Node
+implementations must honor their `AbortSignal` to stop external operations and
+release resources; interrupting a wait alone cannot stop an arbitrary Promise.
+
 Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workflow-service.ts`, `scheduler-pipeline-adapters.ts`, `pipeline-approval-store.ts`, `pipeline-prompts.ts`.
 
 **This is distinct from `packages/reviewbot`.** `reviewbot` is a standalone webhook service that reviews already-opened GitHub PRs via the Anthropic API and posts a `gh pr review` — it is not referenced anywhere in `docs/architecture/pipeline.md` and nothing in the runtime pipeline imports it. See [integrations/extensions-and-services.md](../integrations/extensions-and-services.md).

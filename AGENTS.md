@@ -36,6 +36,20 @@ The local credentials file must have owner-only permissions (`chmod 600`) and
 contain `export RAILWAY_TOKEN='...'`. Keep it out of application runtime env files
 and Git; `.gitignore` already excludes `.env.*` except `.env.example`.
 
+## Effect for asynchronous workflows
+
+- Prefer Effect where it helps coordinate asynchronous workflows: cancellation,
+  retries/backoff, timeouts, bounded concurrency, and resource lifetimes.
+- Keep simple pure functions and UI rendering idiomatic; do not wrap every function
+  or Promise just to use Effect.
+- Preserve existing `neverthrow` domain results. Effect complements them for async
+  orchestration; adopting Effect does not require replacing `Result` / `ResultAsync`.
+- Keep Effect execution at explicit Promise/API boundaries. Connect interruption to
+  the underlying AbortSignal or provider cancellation, and register cleanup for owned
+  resources. Wrapping a Promise alone cannot stop external side effects.
+- Retry only operations whose retry policy is explicit and safe. Test cancellation
+  during execution and backoff, exhausted retries, and concurrency limits.
+
 ## Verification
 
 - Always run `bun run lint` and `bun run typecheck` before considering code changes complete.

@@ -73,6 +73,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private inputWaiters: Array<() => void> = [];
   private inputClosed = false;
   private backgroundTaskIds = new Set<string>();
+  private deferredResult: Extract<CLIMessage, { type: 'result' }> | null = null;
 
   constructor(options: ClaudeProcessOptions) {
     super(options);
@@ -456,10 +457,10 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    * so we only close once no background task is pending.
    */
   private trackInputLifetime(sdkMsg: SDKMessage): void {
-    if (this.steerable || this.inputClosed) return;
+    if (this.inputClosed) return;
     const msg = sdkMsg as any;
     if (msg.type === 'result') {
-      if (this.backgroundTaskIds.size === 0) this.closeInput();
+      if (!this.steerable && this.backgroundTaskIds.size === 0) this.closeInput();
       return;
     }
     if (msg.type !== 'system') return;
@@ -482,7 +483,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         break;
       case 'session_state_changed':
         // Authoritative "turn and background work are over" signal.
-        if (msg.state === 'idle') this.closeInput();
+        if (msg.state === 'idle' && !this.steerable) this.closeInput();
         break;
     }
   }
@@ -719,6 +720,15 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private translateMessage(sdkMsg: SDKMessage): CLIMessage | null {
     switch (sdkMsg.type) {
       case 'system':
+        if (
+          (sdkMsg as any).subtype === 'session_state_changed' &&
+          (sdkMsg as any).state === 'idle'
+        ) {
+          this.backgroundTaskIds.clear();
+          const result = this.deferredResult;
+          this.deferredResult = null;
+          return result;
+        }
         if ('subtype' in sdkMsg && sdkMsg.subtype === 'init') {
           return {
             type: 'system',
@@ -796,7 +806,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
       case 'result': {
         const r = sdkMsg as any;
-        return {
+        const result: Extract<CLIMessage, { type: 'result' }> = {
           type: 'result',
           subtype: r.subtype,
           is_error: r.is_error,
@@ -807,6 +817,15 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           session_id: r.session_id,
           errors: r.errors,
         };
+        // A turn result is not session completion while background agents
+        // still run. Publishing it would complete the thread and cause the
+        // runtime to discard the real final result as a duplicate.
+        if (r.subtype === 'success' && !r.is_error && this.backgroundTaskIds.size > 0) {
+          this.deferredResult = result;
+          return null;
+        }
+        this.deferredResult = null;
+        return result;
       }
 
       default:

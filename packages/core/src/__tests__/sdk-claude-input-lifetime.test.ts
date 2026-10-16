@@ -100,3 +100,76 @@ describe('SDKClaudeProcess input-channel lifetime', () => {
     expect(await ch.isClosed()).toBe(true);
   });
 });
+
+// Drive tracking and translation in the same order as the SDK query loop.
+// Only translated results reach the runtime and can mark the thread completed.
+function messageStream(opts: Partial<ClaudeProcessOptions> = {}) {
+  const proc = new SDKClaudeProcess({ ...baseOpts, ...opts }) as any;
+  return (msg: unknown) => {
+    proc.trackInputLifetime(msg);
+    return proc.translateMessage(msg);
+  };
+}
+
+describe('SDKClaudeProcess completion with background agents', () => {
+  test.each([false, true])(
+    'waits for all agents and the follow-up result (steerable=%s)',
+    (steerable) => {
+      const receive = messageStream({ steerable });
+      receive(sys('task_started', { task_id: 'a', is_backgrounded: true }));
+      receive(sys('task_updated', { task_id: 'b', patch: { is_backgrounded: true } }));
+      expect(receive({ ...result, total_cost_usd: 1 })).toBeNull();
+      expect(receive(sys('task_notification', { task_id: 'a', status: 'completed' }))).toBeNull();
+      expect(receive({ ...result, total_cost_usd: 2 })).toBeNull();
+      expect(
+        receive(sys('task_updated', { task_id: 'b', patch: { status: 'completed' } })),
+      ).toBeNull();
+      const final = {
+        ...result,
+        total_cost_usd: 3,
+        duration_ms: 100,
+        num_turns: 4,
+        session_id: 'session',
+      };
+      expect(receive(final)).toMatchObject(final);
+      expect(receive(sys('session_state_changed', { state: 'idle' }))).toBeNull();
+    },
+  );
+
+  test.each([false, true])(
+    'idle releases the latest deferred result once (steerable=%s)',
+    (steerable) => {
+      const receive = messageStream({ steerable });
+      receive(sys('task_started', { task_id: 'a', is_backgrounded: true }));
+      expect(receive({ ...result, total_cost_usd: 1 })).toBeNull();
+      expect(receive({ ...result, total_cost_usd: 2 })).toBeNull();
+      expect(receive(sys('session_state_changed', { state: 'idle' }))).toMatchObject({
+        ...result,
+        total_cost_usd: 2,
+      });
+      expect(receive(sys('session_state_changed', { state: 'idle' }))).toBeNull();
+      if (steerable) expect(receive(result)).toMatchObject(result);
+    },
+  );
+
+  test('errors supersede a deferred success even while an agent is running', () => {
+    const receive = messageStream();
+    receive(sys('task_started', { task_id: 'a', is_backgrounded: true }));
+    expect(receive(result)).toBeNull();
+    const failure = {
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      errors: ['failed'],
+    };
+    expect(receive(failure)).toMatchObject(failure);
+    expect(receive(sys('session_state_changed', { state: 'idle' }))).toBeNull();
+  });
+
+  test('foreground and ambient tasks do not defer completion', () => {
+    const receive = messageStream();
+    receive(sys('task_started', { task_id: 'fg', is_backgrounded: false }));
+    receive(sys('task_started', { task_id: 'ambient', is_backgrounded: true, ambient: true }));
+    expect(receive(result)).toMatchObject(result);
+  });
+});

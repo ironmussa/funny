@@ -427,7 +427,9 @@ async function sampleMetrics(): Promise<void> {
   // Emit metrics for all running commands
   for (const [_id, entry] of activeCommands) {
     if (entry.exited) continue;
-    void emitWS(
+    // Fire-and-forget per command, but a failed project lookup / emit must not
+    // become an unhandled rejection.
+    emitWS(
       'command:metrics',
       {
         commandId: entry.commandId,
@@ -437,6 +439,12 @@ async function sampleMetrics(): Promise<void> {
         memoryUsageKB: entry.memoryUsageKB,
       },
       entry.projectId,
+    ).catch((err) =>
+      log.warn('Command metrics emit failed', {
+        namespace: 'command-runner',
+        commandId: entry.commandId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
     );
   }
 }

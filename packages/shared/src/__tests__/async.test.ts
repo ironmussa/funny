@@ -187,7 +187,10 @@ describe('retryAsync', () => {
         if (attempt < 3) throw new Error(`fail ${attempt}`);
         return 'ok';
       },
-      { delayMs: (retry) => retry * 10, sleep: async (ms) => void delays.push(ms) },
+      {
+        delayMs: (retry) => retry * 10,
+        sleep: async (ms) => void delays.push(ms),
+      },
     );
     expect(value).toBe('ok');
     expect(attempts).toEqual([1, 2, 3]);
@@ -231,7 +234,10 @@ describe('retryAsync', () => {
       sleep: async (ms: number) => void waits.push(ms),
     };
     await expect(
-      retryAsync(() => Promise.reject(new Error('transient')), { ...common, times: 2 }),
+      retryAsync(() => Promise.reject(new Error('transient')), {
+        ...common,
+        times: 2,
+      }),
     ).rejects.toThrow('transient');
     expect(announced).toEqual([1, 2]);
     expect(waits).toEqual([1_000, 1_000]);
@@ -240,7 +246,10 @@ describe('retryAsync', () => {
     waits.length = 0;
     const fatal = new Error('fatal');
     await expect(
-      retryAsync(() => Promise.reject(fatal), { ...common, while: (e) => e !== fatal }),
+      retryAsync(() => Promise.reject(fatal), {
+        ...common,
+        while: (e) => e !== fatal,
+      }),
     ).rejects.toBe(fatal);
     expect(announced).toEqual([]);
     expect(waits).toEqual([]);
@@ -261,6 +270,14 @@ describe('retryAsync', () => {
     expect(Date.now() - started).toBeLessThan(1_000);
   });
 });
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error('condition not met in time');
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+}
 
 describe('scheduleRepeating', () => {
   test('never overlaps a slow run and keeps running after failures', async () => {
@@ -298,13 +315,58 @@ describe('scheduleRepeating', () => {
     expect(runs).toBe(0);
   });
 
+  test('first run waits a full interval, like setInterval', async () => {
+    let runs = 0;
+    const repeating = scheduleRepeating(() => void runs++, 200);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(runs).toBe(0);
+    await waitUntil(() => runs === 1);
+    repeating.stop();
+    await repeating.done;
+  });
+
+  test('stop during an in-flight run schedules nothing more and settles done', async () => {
+    let runs = 0;
+    let release!: () => void;
+    const repeating = scheduleRepeating(async () => {
+      runs++;
+      await new Promise<void>((resolve) => (release = resolve));
+    }, 5);
+    await waitUntil(() => runs === 1);
+    repeating.stop();
+    await repeating.done;
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(runs).toBe(1);
+  });
+
+  test('a synchronously throwing task is reported and the schedule continues', async () => {
+    const errors: unknown[] = [];
+    let runs = 0;
+    const repeating = scheduleRepeating(
+      () => {
+        runs++;
+        throw new Error(`sync ${runs}`);
+      },
+      5,
+      { onError: (error) => errors.push(error) },
+    );
+    await waitUntil(() => runs >= 2);
+    repeating.stop();
+    await repeating.done;
+    expect((errors[0] as Error).message).toBe('sync 1');
+    expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+
   test('unref lets the process exit while only the schedule is pending', async () => {
     const asyncModule = new URL('../async.ts', import.meta.url).pathname;
     const script = (unref: boolean) =>
       `import { scheduleRepeating } from ${JSON.stringify(asyncModule)};
        scheduleRepeating(() => {}, 60_000, { unref: ${unref} });`;
     const exitsWithin = async (unref: boolean, ms: number) => {
-      const proc = Bun.spawn([process.execPath, '-e', script(unref)], { stdout: 'ignore' });
+      const proc = Bun.spawn([process.execPath, '-e', script(unref)], {
+        stdout: 'ignore',
+      });
       const exited = await Promise.race([
         proc.exited.then(() => true),
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),

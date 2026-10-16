@@ -335,7 +335,7 @@ describe('Pipeline Engine', () => {
       expect(attempts).toBe(1);
     });
 
-    test('cancellation during retry sleep short-circuits the loop', async () => {
+    test('cancellation from a failing node is reported as cancelled', async () => {
       const controller = new AbortController();
       const pipeline = definePipeline<{ tag: string }>({
         name: 'test-retry-cancel',
@@ -352,7 +352,7 @@ describe('Pipeline Engine', () => {
       });
 
       const result = await runPipeline(pipeline, { tag: 'x' }, { signal: controller.signal });
-      expect(result.outcome).toBe('failed');
+      expect(result.outcome).toBe('cancelled');
     });
 
     test('maxAttempts can be a function of context', async () => {
@@ -573,3 +573,210 @@ describe('Pipeline Engine', () => {
     });
   });
 });
+
+describe('Effect pipeline cancellation', () => {
+  test('interrupts a long retry backoff without starting another attempt', async () => {
+    const controller = new AbortController();
+    const retrying = Promise.withResolvers<void>();
+    let attempts = 0;
+    const changes: string[] = [];
+    const pipeline = definePipeline({
+      name: 'backoff',
+      nodes: [
+        node(
+          'retry',
+          () => {
+            attempts++;
+            throw new Error('temporary');
+          },
+          {
+            retry: {
+              maxAttempts: 3,
+              delayMs: 60_000,
+              beforeRetry: (_error, ctx) => {
+                retrying.resolve();
+                return ctx;
+              },
+            },
+          },
+        ),
+      ],
+    });
+    const running = runPipeline(
+      pipeline,
+      {},
+      {
+        signal: controller.signal,
+        onStateChange: (event) => changes.push(event.kind),
+      },
+    );
+    await retrying.promise;
+    // Let the callback complete and the backoff begin.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+    expect((await running).outcome).toBe('cancelled');
+    expect(attempts).toBe(1);
+    expect(changes).toEqual(['entering', 'terminal']);
+  }, 1000);
+
+  test('forwards interruption to the running operation and emits one terminal event', async () => {
+    const controller = new AbortController();
+    const started = Promise.withResolvers<void>();
+    let released = false;
+    const outcomes: string[] = [];
+    const pipeline = definePipeline({
+      name: 'active',
+      nodes: [
+        node(
+          'waiting',
+          (_ctx, signal) =>
+            new Promise((_, reject) => {
+              signal.addEventListener(
+                'abort',
+                () => {
+                  released = true;
+                  reject(new Error('operation stopped'));
+                },
+                { once: true },
+              );
+              started.resolve();
+            }),
+        ),
+      ],
+    });
+    const running = runPipeline(
+      pipeline,
+      {},
+      {
+        signal: controller.signal,
+        onStateChange: (event) => {
+          if (event.outcome) outcomes.push(event.outcome);
+        },
+      },
+    );
+    await started.promise;
+    controller.abort();
+    expect((await running).outcome).toBe('cancelled');
+    expect(released).toBe(true);
+    expect(outcomes).toEqual(['cancelled']);
+  }, 1000);
+
+  test('cancellation during an async guard prevents execution', async () => {
+    const controller = new AbortController();
+    const started = Promise.withResolvers<void>();
+    const guard = Promise.withResolvers<boolean>();
+    const execute = vi.fn((ctx) => ctx);
+    const running = runPipeline(
+      definePipeline({
+        name: 'guard',
+        nodes: [
+          node('guarded', execute, {
+            when: () => {
+              started.resolve();
+              return guard.promise;
+            },
+          }),
+        ],
+      }),
+      {},
+      { signal: controller.signal },
+    );
+    await started.promise;
+    controller.abort();
+    expect((await running).outcome).toBe('cancelled');
+    guard.resolve(true);
+    await Promise.resolve();
+    expect(execute).not.toHaveBeenCalled();
+  }, 1000);
+
+  test('DAG cancellation does not launch queued nodes and preserves completed outputs', async () => {
+    const controller = new AbortController();
+    const started = Promise.withResolvers<void>();
+    const queued = vi.fn((ctx) => ctx);
+    const pipeline = definePipeline<{ outputs: Record<string, string> }>({
+      name: 'dag-cancel',
+      nodes: [
+        node('done', () => ({ outputs: { done: 'saved' } }), { dependsOn: [] }),
+        node(
+          'waiting',
+          (_ctx, signal) =>
+            new Promise((_, reject) => {
+              signal.addEventListener('abort', () => reject(new Error('stopped')), { once: true });
+              started.resolve();
+            }),
+          { dependsOn: [] },
+        ),
+        node('queued', queued, { dependsOn: [] }),
+      ],
+    });
+    const running = runPipeline(
+      pipeline,
+      { outputs: {} },
+      {
+        signal: controller.signal,
+        maxConcurrency: 1,
+      },
+    );
+    await started.promise;
+    controller.abort();
+    const result = await running;
+    expect(result.outcome).toBe('cancelled');
+    expect(result.ctx.outputs).toEqual({ done: 'saved' });
+    expect(queued).not.toHaveBeenCalled();
+  }, 1000);
+
+  test('a failing retry hook reports its error and prevents another attempt', async () => {
+    const execute = vi.fn(() => {
+      throw new Error('initial');
+    });
+    const result = await runPipeline(
+      definePipeline({
+        name: 'hook-error',
+        nodes: [
+          node('retry', execute, {
+            retry: {
+              maxAttempts: 3,
+              beforeRetry: () => {
+                throw new Error('hook failed');
+              },
+            },
+          }),
+        ],
+      }),
+      {},
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.error).toBe('hook failed');
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+});
+
+test('cancellation interrupts the async loop condition', async () => {
+  const controller = new AbortController();
+  const started = Promise.withResolvers<void>();
+  const condition = Promise.withResolvers<boolean>();
+  const execute = vi.fn((ctx: number) => ctx + 1);
+  const running = runPipeline(
+    definePipeline({
+      name: 'loop-wait',
+      nodes: [node('step', execute)],
+      loop: {
+        from: 'step',
+        until: () => {
+          started.resolve();
+          return condition.promise;
+        },
+      },
+    }),
+    0,
+    { signal: controller.signal },
+  );
+  await started.promise;
+  controller.abort();
+  const result = await running;
+  expect(result.outcome).toBe('cancelled');
+  expect(result.ctx).toBe(1);
+  condition.resolve(false);
+  await Promise.resolve();
+  expect(execute).toHaveBeenCalledTimes(1);
+}, 1000);

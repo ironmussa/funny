@@ -1,3 +1,6 @@
+import { scheduleTask } from '@funny/shared/async';
+
+import { log } from './logger.js';
 /**
  * @domain subdomain: Memory System (Paisley Park)
  * @domain subdomain-type: core
@@ -7,7 +10,6 @@
  * Temporal engine: bi-temporal tracking, decay scoring, conflict detection,
  * fact invalidation and evolution.
  */
-
 import type { ConflictResult, ConflictRelation, EmbeddingProvider, MemoryFact } from './types.js';
 import { DECAY_LAMBDAS, DEFAULT_DECAY_CLASS } from './types.js';
 
@@ -101,7 +103,7 @@ export function evolveFact(_fact: MemoryFact): Partial<MemoryFact> {
  */
 export class AccessTracker {
   private pending = new Map<string, { count: number; lastAccessed: string }>();
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private flushTimer: ReturnType<typeof scheduleTask> | null = null;
 
   constructor(
     private readonly flushCallback: (
@@ -124,7 +126,13 @@ export class AccessTracker {
     if (this.pending.size >= this.flushThreshold) {
       void this.flush();
     } else if (!this.flushTimer) {
-      this.flushTimer = setTimeout(() => void this.flush(), this.flushIntervalMs);
+      this.flushTimer = scheduleTask(async () => {
+        this.flushTimer = null;
+        await this.flush();
+      }, this.flushIntervalMs);
+      void this.flushTimer.done.catch((error) =>
+        log.error('Access tracker flush failed', { error: String(error) }),
+      );
     }
   }
 
@@ -132,7 +140,7 @@ export class AccessTracker {
     if (this.pending.size === 0) return;
 
     if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
+      this.flushTimer.cancel();
       this.flushTimer = null;
     }
 
@@ -143,7 +151,7 @@ export class AccessTracker {
 
   destroy() {
     if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
+      this.flushTimer.cancel();
       this.flushTimer = null;
     }
   }

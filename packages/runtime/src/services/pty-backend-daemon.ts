@@ -1,3 +1,4 @@
+import { sleep as effectSleep } from '@funny/shared/async';
 /**
  * @domain subdomain: Process Management
  * @domain subdomain-type: supporting
@@ -158,7 +159,7 @@ export class DaemonPtyBackend implements PtyBackend {
 
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      await new Promise((r) => setTimeout(r, 200));
+      await effectSleep(200);
       if (this.connected) return true;
     }
     return false;

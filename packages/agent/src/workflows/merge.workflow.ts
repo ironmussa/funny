@@ -1,3 +1,4 @@
+import { scheduleTask } from '@funny/shared/async';
 /**
  * MergeWorkflow — auto-merges PRs when CI passes and the PR is approved,
  * and detects stuck sessions.
@@ -32,7 +33,7 @@ export class MergeWorkflow implements IWorkflow {
   private config: PipelineServiceConfig;
   private handlers: MergeWorkflowDeps['handlers'];
   private unsubscribers: (() => void)[] = [];
-  private stuckTimers = new Map<string, NodeJS.Timeout>();
+  private stuckTimers = new Map<string, ReturnType<typeof scheduleTask>>();
 
   constructor(deps: MergeWorkflowDeps) {
     this.eventBus = deps.eventBus;
@@ -73,7 +74,7 @@ export class MergeWorkflow implements IWorkflow {
     for (const unsub of this.unsubscribers) unsub();
     this.unsubscribers = [];
 
-    for (const timer of this.stuckTimers.values()) clearTimeout(timer);
+    for (const timer of this.stuckTimers.values()) timer.cancel();
     this.stuckTimers.clear();
   }
 
@@ -104,7 +105,7 @@ export class MergeWorkflow implements IWorkflow {
     const afterMin = this.config.reactions.agent_stuck.after_min;
     if (afterMin <= 0) return;
 
-    const timer = setTimeout(async () => {
+    const timer = scheduleTask(async () => {
       const session = this.sessionStore.get(sessionId);
       if (!session || !session.isActive) return;
 
@@ -122,13 +123,16 @@ export class MergeWorkflow implements IWorkflow {
       }
     }, afterMin * 60_000);
 
+    void timer.done.catch((error) =>
+      logger.error({ sessionId, error }, 'Stuck-session reaction failed'),
+    );
     this.stuckTimers.set(sessionId, timer);
   }
 
   private clearStuckTimer(sessionId: string): void {
     const timer = this.stuckTimers.get(sessionId);
     if (timer) {
-      clearTimeout(timer);
+      timer.cancel();
       this.stuckTimers.delete(sessionId);
     }
   }

@@ -1,0 +1,385 @@
+import { describe, test, expect } from 'bun:test';
+
+import {
+  createConcurrencyLimiter,
+  createPermitPool,
+  retryAsync,
+  runAsync,
+  scheduleRepeating,
+  sleep,
+  waitFor,
+} from '../async';
+
+describe('Effect async boundaries', () => {
+  test('preserves original errors and does not start cancelled work', async () => {
+    const error = new Error('domain');
+    await expect(runAsync(() => Promise.reject(error))).rejects.toBe(error);
+    const controller = new AbortController();
+    controller.abort(error);
+    let called = false;
+    await expect(
+      runAsync(
+        async () => {
+          called = true;
+        },
+        { signal: controller.signal },
+      ),
+    ).rejects.toBe(error);
+    expect(called).toBe(false);
+  });
+
+  test('deadline aborts the underlying operation and preserves timeout identity', async () => {
+    const error = new Error('deadline');
+    let aborted = false;
+    await expect(
+      runAsync(
+        (signal) =>
+          new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => {
+              aborted = true;
+              reject(new Error('aborted'));
+            });
+          }),
+        { timeoutMs: 5, timeoutError: () => error },
+      ),
+    ).rejects.toBe(error);
+    expect(aborted).toBe(true);
+  });
+
+  test('subscription cleanup runs once on immediate success, error, timeout and interruption', async () => {
+    for (const outcome of ['success', 'error', 'timeout', 'abort']) {
+      let cleaned = 0;
+      const controller = new AbortController();
+      const pending = waitFor<number>(
+        (resolve, reject) => {
+          if (outcome === 'success') resolve(42);
+          if (outcome === 'error') reject(new Error('error'));
+          return () => {
+            cleaned++;
+          };
+        },
+        { signal: controller.signal, timeoutMs: 5 },
+      );
+      if (outcome === 'abort') controller.abort();
+      if (outcome === 'success') expect(await pending).toBe(42);
+      else await expect(pending).rejects.toBeDefined();
+      expect(cleaned).toBe(1);
+    }
+  });
+
+  test('backoff interrupts promptly', async () => {
+    const controller = new AbortController();
+    const pending = sleep(60_000, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toBeDefined();
+  }, 1000);
+
+  test('limits concurrency and releases permits after failure', async () => {
+    const limit = createConcurrencyLimiter(2);
+    let active = 0;
+    let peak = 0;
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, (_, index) =>
+        limit(async () => {
+          peak = Math.max(peak, ++active);
+          try {
+            await sleep(1);
+            if (index === 1) throw new Error('failed');
+            return index;
+          } finally {
+            active--;
+          }
+        }),
+      ),
+    );
+    expect(peak).toBe(2);
+    expect(active).toBe(0);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(7);
+    expect(await limit(async () => 42)).toBe(42);
+  });
+
+  test('expired and cancelled permit waiters do not consume permits', async () => {
+    const pool = createPermitPool(1);
+    const release = await pool.acquire();
+    await expect(pool.acquire({ timeoutMs: 5 })).rejects.toBeDefined();
+    const controller = new AbortController();
+    const cancelled = pool.acquire({ signal: controller.signal });
+    controller.abort();
+    await expect(cancelled).rejects.toBeDefined();
+    release();
+    release();
+    const next = await pool.acquire({ timeoutMs: 100 });
+    next();
+  });
+});
+
+test('agent stream preserves order and finalizes on early exit', async () => {
+  const { consumeAsync } = await import('../async');
+  let finalized = 0;
+  const seen: number[] = [];
+  async function* events() {
+    try {
+      yield 1;
+      yield 2;
+      yield 3;
+    } finally {
+      finalized++;
+    }
+  }
+  await consumeAsync(events(), async (value) => {
+    seen.push(value);
+    return value < 2;
+  });
+  expect(seen).toEqual([1, 2]);
+  expect(finalized).toBe(1);
+});
+
+test('agent stream cancellation interrupts a pending read and closes the iterator', async () => {
+  const { consumeAsync } = await import('../async');
+  const controller = new AbortController();
+  let finalized = 0;
+  const started = Promise.withResolvers<void>();
+  const source: AsyncIterable<number> = {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => {
+          started.resolve();
+          return new Promise(() => {});
+        },
+        return: async () => {
+          finalized++;
+          return { done: true, value: undefined };
+        },
+      };
+    },
+  };
+  const running = consumeAsync(source, () => {}, { signal: controller.signal });
+  await started.promise;
+  controller.abort();
+  await expect(running).rejects.toBeDefined();
+  expect(finalized).toBe(1);
+}, 1000);
+
+test('delayed tasks cancel without executing and expose task failures', async () => {
+  const { scheduleTask } = await import('../async');
+  let called = false;
+  const task = scheduleTask(() => {
+    called = true;
+  }, 60_000);
+  task.cancel();
+  await task.done;
+  expect(called).toBe(false);
+  const error = new Error('task failed');
+  await expect(
+    scheduleTask(() => {
+      throw error;
+    }, 1).done,
+  ).rejects.toBe(error);
+});
+
+describe('retryAsync', () => {
+  test('retryAsync retries with the computed delays and returns the success', async () => {
+    const delays: number[] = [];
+    const attempts: number[] = [];
+    const value = await retryAsync(
+      async (_signal, attempt) => {
+        attempts.push(attempt);
+        if (attempt < 3) throw new Error(`fail ${attempt}`);
+        return 'ok';
+      },
+      {
+        delayMs: (retry) => retry * 10,
+        sleep: async (ms) => void delays.push(ms),
+      },
+    );
+    expect(value).toBe('ok');
+    expect(attempts).toEqual([1, 2, 3]);
+    expect(delays).toEqual([10, 20]);
+  });
+
+  test('retryAsync stops after `times` and on non-retryable errors, preserving identity', async () => {
+    let calls = 0;
+    const last = new Error('last');
+    await expect(
+      retryAsync(
+        async () => {
+          calls++;
+          throw last;
+        },
+        { times: 2, delayMs: () => 0 },
+      ),
+    ).rejects.toBe(last);
+    expect(calls).toBe(3);
+
+    const fatal = new Error('fatal');
+    let fatalCalls = 0;
+    await expect(
+      retryAsync(
+        async () => {
+          fatalCalls++;
+          throw fatal;
+        },
+        { delayMs: () => 0, while: (error) => error !== fatal },
+      ),
+    ).rejects.toBe(fatal);
+    expect(fatalCalls).toBe(1);
+  });
+
+  test('retryAsync never announces or waits for a retry that will not happen', async () => {
+    const announced: number[] = [];
+    const waits: number[] = [];
+    const common = {
+      delayMs: () => 1_000,
+      onRetry: (_error: unknown, retry: number) => void announced.push(retry),
+      sleep: async (ms: number) => void waits.push(ms),
+    };
+    await expect(
+      retryAsync(() => Promise.reject(new Error('transient')), {
+        ...common,
+        times: 2,
+      }),
+    ).rejects.toThrow('transient');
+    expect(announced).toEqual([1, 2]);
+    expect(waits).toEqual([1_000, 1_000]);
+
+    announced.length = 0;
+    waits.length = 0;
+    const fatal = new Error('fatal');
+    await expect(
+      retryAsync(() => Promise.reject(fatal), {
+        ...common,
+        while: (e) => e !== fatal,
+      }),
+    ).rejects.toBe(fatal);
+    expect(announced).toEqual([]);
+    expect(waits).toEqual([]);
+  });
+
+  test('retryAsync backoff is interrupted by the abort signal', async () => {
+    const controller = new AbortController();
+    const reason = new Error('stop');
+    const started = Date.now();
+    const pending = retryAsync(
+      async () => {
+        throw new Error('transient');
+      },
+      { delayMs: () => 10_000, signal: controller.signal },
+    );
+    setTimeout(() => controller.abort(reason), 10);
+    await expect(pending).rejects.toBe(reason);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+});
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error('condition not met in time');
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+}
+
+describe('scheduleRepeating', () => {
+  test('never overlaps a slow run and keeps running after failures', async () => {
+    let running = 0;
+    let maxConcurrent = 0;
+    let runs = 0;
+    const errors: unknown[] = [];
+    const boom = new Error('boom');
+    const repeating = scheduleRepeating(
+      async () => {
+        runs++;
+        running++;
+        maxConcurrent = Math.max(maxConcurrent, running);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        running--;
+        if (runs === 1) throw boom;
+      },
+      5,
+      { onError: (error) => errors.push(error) },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    repeating.stop();
+    await repeating.done;
+    expect(maxConcurrent).toBe(1);
+    expect(runs).toBeGreaterThan(1);
+    expect(errors).toEqual([boom]);
+  });
+
+  test('stop prevents further runs', async () => {
+    let runs = 0;
+    const repeating = scheduleRepeating(() => void runs++, 5);
+    repeating.stop();
+    await repeating.done;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(runs).toBe(0);
+  });
+
+  test('first run waits a full interval, like setInterval', async () => {
+    let runs = 0;
+    const repeating = scheduleRepeating(() => void runs++, 200);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(runs).toBe(0);
+    await waitUntil(() => runs === 1);
+    repeating.stop();
+    await repeating.done;
+  });
+
+  test('stop during an in-flight run schedules nothing more and settles done', async () => {
+    let runs = 0;
+    let release!: () => void;
+    const repeating = scheduleRepeating(async () => {
+      runs++;
+      await new Promise<void>((resolve) => (release = resolve));
+    }, 5);
+    await waitUntil(() => runs === 1);
+    repeating.stop();
+    await repeating.done;
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(runs).toBe(1);
+  });
+
+  test('a synchronously throwing task is reported and the schedule continues', async () => {
+    const errors: unknown[] = [];
+    let runs = 0;
+    const repeating = scheduleRepeating(
+      () => {
+        runs++;
+        throw new Error(`sync ${runs}`);
+      },
+      5,
+      { onError: (error) => errors.push(error) },
+    );
+    await waitUntil(() => runs >= 2);
+    repeating.stop();
+    await repeating.done;
+    expect((errors[0] as Error).message).toBe('sync 1');
+    expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('unref lets the process exit while only the schedule is pending', async () => {
+    const asyncModule = new URL('../async.ts', import.meta.url).pathname;
+    const script = (unref: boolean) =>
+      `import { scheduleRepeating } from ${JSON.stringify(asyncModule)};
+       scheduleRepeating(() => {}, 60_000, { unref: ${unref} });`;
+    const exitsWithin = async (unref: boolean, ms: number) => {
+      const proc = Bun.spawn([process.execPath, '-e', script(unref)], {
+        stdout: 'ignore',
+      });
+      const exited = await Promise.race([
+        proc.exited.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
+      ]);
+      proc.kill();
+      return exited;
+    };
+    // Both run concurrently; the generous bound only matters on a slow machine.
+    const [unrefExits, refExits] = await Promise.all([
+      exitsWithin(true, 3_000),
+      exitsWithin(false, 750),
+    ]);
+    expect(unrefExits).toBe(true);
+    expect(refExits).toBe(false);
+  });
+});

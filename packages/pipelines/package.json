@@ -13,6 +13,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "effect": "4.0.4",
     "jsonata": "^2.1.0",
     "mustache": "^4.2.0"
   },

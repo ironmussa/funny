@@ -1,10 +1,10 @@
+import { sleep as effectSleep } from '@funny/shared/async';
 /**
  * Funny UI Annotator - Popup Script
  *
  * Providers and models are fetched dynamically from the Funny server
  * via GET /api/setup/status — nothing is hardcoded.
  */
-
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 
 interface ProviderInfo {
@@ -377,7 +377,7 @@ function sendToActiveTab(msg: any): Promise<any> {
         return reject(new Error('injection-failed'));
       }
 
-      await new Promise((r) => setTimeout(r, 200));
+      await effectSleep(200);
 
       chrome.tabs.sendMessage(tab.id!, msg, (response) => {
         if (chrome.runtime.lastError) {

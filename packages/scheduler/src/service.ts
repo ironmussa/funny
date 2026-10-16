@@ -1,3 +1,10 @@
+import {
+  isStalled,
+  nextRetryDelayMs,
+  planDispatch,
+  type RetryEntry,
+  type RunRef,
+} from '@funny/core/scheduler';
 /**
  * @domain subdomain: Orchestration
  * @domain subdomain-type: core
@@ -13,15 +20,8 @@
  * server; with HTTP adapters this runs inside the standalone scheduler
  * binary against `/api/scheduler/system/*`.
  */
-
-import {
-  isStalled,
-  nextRetryDelayMs,
-  planDispatch,
-  type RetryEntry,
-  type RunRef,
-} from '@funny/core/scheduler';
 import type { Thread } from '@funny/shared';
+import { sleep } from '@funny/shared/async';
 import type { SchedulerRunRepository } from '@funny/shared/repositories';
 import { nanoid } from 'nanoid';
 
@@ -121,8 +121,8 @@ export class SchedulerService {
 
   private readonly inFlight = new Map<string, DispatchHandle>();
   private running = false;
-  private pollTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopController: AbortController | null = null;
+  private loops: Promise<void>[] = [];
 
   constructor(deps: SchedulerServiceDeps) {
     this.runRepo = deps.runRepo;
@@ -141,8 +141,12 @@ export class SchedulerService {
     }
     if (this.running) return;
     this.running = true;
-    this.scheduleNextTick();
-    this.scheduleNextReconcile();
+    this.stopController = new AbortController();
+    const signal = this.stopController.signal;
+    this.loops = [
+      this.periodic(() => this.safeTick(), this.config.pollIntervalMs, signal),
+      this.periodic(() => this.safeReconcile(), this.config.reconcileIntervalMs, signal),
+    ];
     this.log.info('Scheduler started', {
       namespace: NS,
       pollIntervalMs: this.config.pollIntervalMs,
@@ -152,14 +156,10 @@ export class SchedulerService {
 
   async stop(): Promise<void> {
     this.running = false;
-    if (this.pollTimer) {
-      clearTimeout(this.pollTimer);
-      this.pollTimer = null;
-    }
-    if (this.reconcileTimer) {
-      clearTimeout(this.reconcileTimer);
-      this.reconcileTimer = null;
-    }
+    this.stopController?.abort();
+    await Promise.all(this.loops);
+    this.loops = [];
+    this.stopController = null;
     this.log.info('Scheduler stopped', { namespace: NS });
   }
 
@@ -169,18 +169,20 @@ export class SchedulerService {
 
   // ── Internal loop scaffolding ──────────────────────────────
 
-  private scheduleNextTick(): void {
-    if (!this.running) return;
-    this.pollTimer = setTimeout(() => {
-      void this.safeTick().finally(() => this.scheduleNextTick());
-    }, this.config.pollIntervalMs);
-  }
-
-  private scheduleNextReconcile(): void {
-    if (!this.running) return;
-    this.reconcileTimer = setTimeout(() => {
-      void this.safeReconcile().finally(() => this.scheduleNextReconcile());
-    }, this.config.reconcileIntervalMs);
+  private async periodic(
+    task: () => Promise<void>,
+    interval: number,
+    signal: AbortSignal,
+  ): Promise<void> {
+    try {
+      while (!signal.aborted) {
+        await sleep(interval, signal);
+        // Await an in-flight tick during shutdown; it may commit repository state.
+        if (!signal.aborted) await task();
+      }
+    } catch (error) {
+      if (!signal.aborted) throw error;
+    }
   }
 
   private async safeTick(): Promise<void> {

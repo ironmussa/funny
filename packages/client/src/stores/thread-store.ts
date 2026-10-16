@@ -1,3 +1,11 @@
+import type {
+  Thread,
+  MessageRole,
+  WaitingReason,
+  PendingPermissionRequest,
+  PermissionApprovalCapability,
+  PermissionRecoveryReason,
+} from '@funny/shared';
 /**
  * Thread store — Zustand store for thread state management.
  * Delegates WebSocket handling to thread-ws-handlers, state machine transitions
@@ -29,15 +37,7 @@
  *    `undefined` and a function, breaking `memo()`. Instead pass the
  *    handler always and a boolean `disabled` prop.
  */
-
-import type {
-  Thread,
-  MessageRole,
-  WaitingReason,
-  PendingPermissionRequest,
-  PermissionApprovalCapability,
-  PermissionRecoveryReason,
-} from '@funny/shared';
+import { sleep as effectSleep } from '@funny/shared/async';
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
@@ -1068,7 +1068,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         // Evicted mid-loop → abort. Not hydrated yet (navigation just landed
         // on the thread) → wait for the initial load instead of giving up.
         if (sawEntry) return false;
-        await new Promise((r) => setTimeout(r, 150));
+        await effectSleep(150);
         continue;
       }
       sawEntry = true;
@@ -1076,7 +1076,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       if (!entry.hasMore || entry.messages.length === 0) return false;
       if (entry.loadingMore) {
         // A scroll-triggered page load is in flight — wait and re-check.
-        await new Promise((r) => setTimeout(r, 100));
+        await effectSleep(100);
         continue;
       }
 

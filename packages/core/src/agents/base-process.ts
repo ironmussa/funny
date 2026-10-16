@@ -1,3 +1,4 @@
+import { spawn, type ChildProcess } from 'child_process';
 /**
  * BaseAgentProcess — abstract base class for all provider adapters.
  *
@@ -14,10 +15,10 @@
  * SDK-specific logic. Override `kill()` for provider-specific cleanup
  * (e.g., killing a child process).
  */
-
-import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
+
+import { waitFor } from '@funny/shared/async';
 
 import type {
   CLIMessage,
@@ -185,12 +186,12 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * loop alive across multiple prompts on the same session.
    */
   protected awaitShutdown(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      if (this.abortController.signal.aborted) {
-        resolve();
-        return;
-      }
-      this.abortController.signal.addEventListener('abort', () => resolve(), { once: true });
+    return waitFor<void>((resolve) => {
+      const signal = this.abortController.signal;
+      const done = () => resolve();
+      signal.addEventListener('abort', done, { once: true });
+      if (signal.aborted) done();
+      return () => signal.removeEventListener('abort', done);
     });
   }
 

@@ -12,6 +12,7 @@
  */
 
 import type { AgentOrchestrator, IdleReapPolicy } from '@funny/core/agents';
+import { scheduleRepeating } from '@funny/shared/async';
 
 import { log } from '../lib/logger.js';
 
@@ -31,7 +32,7 @@ function nonNegInt(raw: string | undefined, def: number): number {
  * Read reaper config from the environment.
  * - `FUNNY_AGENT_IDLE_REAP_MS` (default 600000) — non-claude idle window.
  * - `FUNNY_AGENT_IDLE_REAP_MS_CLAUDE` (default 0 = disabled) — claude window.
- * - `FUNNY_AGENT_IDLE_SWEEP_MS` (default 60000) — sweep interval.
+ * - `FUNNY_AGENT_IDLE_SWEEP_MS` (default 60000) — sweep interval; `0` disables the reaper.
  * A window of `0` disables reaping for that class.
  */
 export function loadIdleReaperConfig(env: NodeJS.ProcessEnv = process.env): IdleReaperConfig {
@@ -47,8 +48,10 @@ export function loadIdleReaperConfig(env: NodeJS.ProcessEnv = process.env): Idle
 /** Just the orchestrator surface the reaper needs (keeps tests trivial to fake). */
 type ReapableOrchestrator = Pick<AgentOrchestrator, 'getIdleCandidates' | 'reapIdleAgent'>;
 
+type SweepSchedule = ReturnType<typeof scheduleRepeating>;
+
 export class IdleReaper {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private schedule: SweepSchedule | null = null;
 
   constructor(
     private orchestrator: ReapableOrchestrator,
@@ -60,14 +63,25 @@ export class IdleReaper {
       log.info('Idle reaper disabled (both windows 0)', { namespace: 'agent' });
       return;
     }
-    // Dedupe across bun --watch reloads: a fresh module instance clears the
-    // previous one's ticker so we never run two sweeps in parallel.
-    const g = globalThis as { __funnyIdleReaperTimer?: ReturnType<typeof setInterval> };
-    if (g.__funnyIdleReaperTimer) clearInterval(g.__funnyIdleReaperTimer);
+    if (this.config.sweepMs <= 0) {
+      log.info('Idle reaper disabled (sweep interval 0)', { namespace: 'agent' });
+      return;
+    }
+    // Dedupe across bun --watch reloads: a fresh module instance stops the
+    // previous one's schedule so we never run two sweeps in parallel.
+    const g = globalThis as { __funnyIdleReaperSchedule?: SweepSchedule };
+    g.__funnyIdleReaperSchedule?.stop();
 
-    this.timer = setInterval(() => void this.sweep(), this.config.sweepMs);
-    this.timer.unref?.();
-    g.__funnyIdleReaperTimer = this.timer;
+    // Sequential schedule: a sweep slowed by a hanging kill never overlaps the next.
+    this.schedule = scheduleRepeating(() => this.sweep(), this.config.sweepMs, {
+      unref: true,
+      onError: (err) =>
+        log.error('Idle reaper sweep failed', {
+          namespace: 'agent',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+    });
+    g.__funnyIdleReaperSchedule = this.schedule;
 
     log.info('Idle reaper started', {
       namespace: 'agent',
@@ -78,11 +92,11 @@ export class IdleReaper {
   }
 
   stop(): void {
-    if (!this.timer) return;
-    clearInterval(this.timer);
-    const g = globalThis as { __funnyIdleReaperTimer?: ReturnType<typeof setInterval> };
-    if (g.__funnyIdleReaperTimer === this.timer) g.__funnyIdleReaperTimer = undefined;
-    this.timer = null;
+    if (!this.schedule) return;
+    this.schedule.stop();
+    const g = globalThis as { __funnyIdleReaperSchedule?: SweepSchedule };
+    if (g.__funnyIdleReaperSchedule === this.schedule) g.__funnyIdleReaperSchedule = undefined;
+    this.schedule = null;
   }
 
   /** Run a single sweep. Exposed for tests. */

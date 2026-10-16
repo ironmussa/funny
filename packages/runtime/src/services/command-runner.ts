@@ -10,7 +10,8 @@
  * Streams stdout/stderr to clients via WebSocket.
  * Supports auto-restart with exponential backoff for managed processes.
  */
-
+import { execute } from '@funny/core/git';
+import { runAsync, scheduleRepeating } from '@funny/shared/async';
 import { internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
@@ -78,7 +79,7 @@ interface RunningCommand {
 }
 
 const activeCommands = new Map<string, RunningCommand>();
-let metricsTimer: ReturnType<typeof setInterval> | null = null;
+let metricsSchedule: ReturnType<typeof scheduleRepeating> | null = null;
 
 async function emitWS(type: string, data: unknown, projectId?: string) {
   const event = { type, threadId: '', data } as any;
@@ -312,17 +313,14 @@ export async function stopCommand(commandId: string): Promise<void> {
   } else {
     killProcessTree(entry.proc); // SIGTERM
 
-    await Promise.race([
-      entry.proc.exited,
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          if (!entry.exited) {
-            killProcessTree(entry.proc, 9); // SIGKILL
-          }
-          resolve();
-        }, KILL_GRACE_MS),
-      ),
-    ]);
+    const timeout = new Error('Command shutdown grace period expired');
+    await runAsync(() => entry.proc.exited, {
+      timeoutMs: KILL_GRACE_MS,
+      timeoutError: () => timeout,
+    }).catch((error) => {
+      if (error !== timeout) throw error;
+      if (!entry.exited) killProcessTree(entry.proc, 9);
+    });
   }
 
   entry.exited = true;
@@ -387,24 +385,51 @@ export function getCommandMetricsForProject(
   };
 }
 
+/** Parse `ps -o pid=,rss=` output into pid → RSS (KB). */
+export function parseRssByPid(stdout: string): Map<number, number> {
+  const rssByPid = new Map<number, number>();
+  for (const line of stdout.split('\n')) {
+    const [pid, rss] = line
+      .trim()
+      .split(/\s+/)
+      .map((value) => parseInt(value, 10));
+    if (Number.isFinite(pid) && Number.isFinite(rss)) rssByPid.set(pid, rss);
+  }
+  return rssByPid;
+}
+
+/**
+ * One async `ps` for all pids so sampling never blocks the event loop.
+ * Missing pids (exited between check and call) are simply absent.
+ */
+export async function readRssByPid(pids: number[]): Promise<Map<number, number>> {
+  if (pids.length === 0) return new Map();
+  try {
+    const { stdout } = await execute('ps', ['-o', 'pid=,rss=', '-p', pids.join(',')], {
+      reject: false,
+      timeout: 5_000,
+    });
+    return parseRssByPid(stdout);
+  } catch {
+    // `ps` unavailable (e.g. Windows) — keep the previous samples.
+    return new Map();
+  }
+}
+
 async function sampleMetrics(): Promise<void> {
-  for (const [_id, entry] of activeCommands) {
-    if (entry.exited || !entry.proc.pid) continue;
-    try {
-      const result = Bun.spawnSync(['ps', '-o', 'rss=', '-p', String(entry.proc.pid)]);
-      const rss = parseInt(result.stdout.toString().trim(), 10);
-      if (!isNaN(rss)) {
-        entry.memoryUsageKB = rss;
-      }
-    } catch {
-      // Process may have exited between check and ps call
-    }
+  const sampled = [...activeCommands.values()].filter((entry) => !entry.exited && entry.proc.pid);
+  const rssByPid = await readRssByPid(sampled.map((entry) => entry.proc.pid!));
+  for (const entry of sampled) {
+    const rss = rssByPid.get(entry.proc.pid!);
+    if (rss !== undefined) entry.memoryUsageKB = rss;
   }
 
   // Emit metrics for all running commands
   for (const [_id, entry] of activeCommands) {
     if (entry.exited) continue;
-    void emitWS(
+    // Fire-and-forget per command, but a failed project lookup / emit must not
+    // become an unhandled rejection.
+    emitWS(
       'command:metrics',
       {
         commandId: entry.commandId,
@@ -414,20 +439,30 @@ async function sampleMetrics(): Promise<void> {
         memoryUsageKB: entry.memoryUsageKB,
       },
       entry.projectId,
+    ).catch((err) =>
+      log.warn('Command metrics emit failed', {
+        namespace: 'command-runner',
+        commandId: entry.commandId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
     );
   }
 }
 
 function ensureMetricsTimer(): void {
-  if (!metricsTimer) {
-    metricsTimer = setInterval(() => void sampleMetrics(), METRICS_INTERVAL_MS);
-  }
+  metricsSchedule ??= scheduleRepeating(sampleMetrics, METRICS_INTERVAL_MS, {
+    onError: (err) =>
+      log.warn('Command metrics sampling failed', {
+        namespace: 'command-runner',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+  });
 }
 
 function checkMetricsTimer(): void {
-  if (activeCommands.size === 0 && metricsTimer) {
-    clearInterval(metricsTimer);
-    metricsTimer = null;
+  if (activeCommands.size === 0 && metricsSchedule) {
+    metricsSchedule.stop();
+    metricsSchedule = null;
   }
 }
 
@@ -437,10 +472,8 @@ function checkMetricsTimer(): void {
 export async function stopAllCommands(): Promise<void> {
   const ids = [...activeCommands.keys()];
   if (ids.length === 0) return;
-  if (metricsTimer) {
-    clearInterval(metricsTimer);
-    metricsTimer = null;
-  }
+  metricsSchedule?.stop();
+  metricsSchedule = null;
   await Promise.allSettled(ids.map((id) => stopCommand(id)));
 }
 

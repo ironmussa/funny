@@ -3,7 +3,7 @@ import { join } from 'path';
 
 import { extractSymbols, isSupportedFile } from '@funny/core/symbols';
 import type { FileSymbols } from '@funny/core/symbols';
-import pLimit from 'p-limit';
+import { createConcurrencyLimiter } from '@funny/shared/async';
 
 import { log } from '../lib/logger.js';
 import { resolveGitFiles } from '../utils/git-files.js';
@@ -52,7 +52,7 @@ export async function indexProject(projectPath: string): Promise<void> {
     const allFiles = await resolveGitFiles(projectPath);
     const supportedFiles = allFiles.filter((f) => isSupportedFile(f));
 
-    const limit = pLimit(CONCURRENCY);
+    const limit = createConcurrencyLimiter(CONCURRENCY);
     const tasks = supportedFiles.map((relPath) =>
       limit(async () => {
         const fullPath = join(projectPath, relPath);

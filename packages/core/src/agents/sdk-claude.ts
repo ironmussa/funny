@@ -1,3 +1,4 @@
+import { query } from '@anthropic-ai/claude-agent-sdk';
 /**
  * SDKClaudeProcess — adapter that wraps @anthropic-ai/claude-agent-sdk query()
  * behind the IAgentProcess EventEmitter interface.
@@ -5,9 +6,8 @@
  * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
  * AgentRunner and AgentMessageHandler work unchanged.
  */
-
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent-sdk';
+import { consumeAsync } from '@funny/shared/async';
 
 import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
@@ -363,64 +363,68 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
     try {
       let msgCount = 0;
-      for await (const sdkMsg of gen) {
-        if (this.isAborted) {
-          dlog.debug('Loop aborted, breaking', { msgCount });
-          break;
-        }
+      await consumeAsync(
+        gen,
+        async (sdkMsg) => {
+          if (this.isAborted) {
+            dlog.debug('Loop aborted, breaking', { msgCount });
+            return false;
+          }
 
-        msgCount++;
-        dlog.debug(`SDK message #${msgCount}`, {
-          type: sdkMsg.type,
-          subtype: (sdkMsg as any).subtype,
-        });
-        this.trackInputLifetime(sdkMsg);
+          msgCount++;
+          dlog.debug(`SDK message #${msgCount}`, {
+            type: sdkMsg.type,
+            subtype: (sdkMsg as any).subtype,
+          });
+          this.trackInputLifetime(sdkMsg);
 
-        // Synthetic assistant messages (model: "<synthetic>") carry provider
-        // errors like "API Error: 529 {...}" as plain text. Render them as a
-        // collapsible ProviderError tool card instead of an opaque text bubble.
-        if (sdkMsg.type === 'assistant') {
-          const rawMsg = (sdkMsg as any).message;
-          if (rawMsg?.model === '<synthetic>') {
-            const errorText = (rawMsg.content ?? [])
-              .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
-              .map((b: any) => b.text)
-              .join('\n')
-              .trim();
-            if (errorText) {
-              dlog.info('Synthetic provider error', { preview: errorText.slice(0, 200) });
-              this.emitErrorToolCall(errorText);
-              // A poisoned thinking block makes the resumed session permanently
-              // unusable — signal the orchestrator to drop the sessionId so the
-              // next message recovers context from the DB instead of resuming.
-              if (isThinkingBlockError(errorText)) {
-                dlog.warn('Thinking-block 400 detected — invalidating session');
-                this.emit('session-invalidated');
+          // Synthetic assistant messages (model: "<synthetic>") carry provider
+          // errors like "API Error: 529 {...}" as plain text. Render them as a
+          // collapsible ProviderError tool card instead of an opaque text bubble.
+          if (sdkMsg.type === 'assistant') {
+            const rawMsg = (sdkMsg as any).message;
+            if (rawMsg?.model === '<synthetic>') {
+              const errorText = (rawMsg.content ?? [])
+                .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+                .map((b: any) => b.text)
+                .join('\n')
+                .trim();
+              if (errorText) {
+                dlog.info('Synthetic provider error', { preview: errorText.slice(0, 200) });
+                this.emitErrorToolCall(errorText);
+                // A poisoned thinking block makes the resumed session permanently
+                // unusable — signal the orchestrator to drop the sessionId so the
+                // next message recovers context from the DB instead of resuming.
+                if (isThinkingBlockError(errorText)) {
+                  dlog.warn('Thinking-block 400 detected — invalidating session');
+                  this.emit('session-invalidated');
+                }
+                return;
               }
-              continue;
             }
           }
-        }
 
-        const cliMsg = this.translateMessage(sdkMsg);
-        if (cliMsg) {
-          dlog.debug('Translated to CLIMessage', {
-            type: cliMsg.type,
-            ...(cliMsg.type === 'result'
-              ? { subtype: cliMsg.subtype, isError: cliMsg.is_error }
-              : {}),
-            ...(cliMsg.type === 'assistant'
-              ? {
-                  contentBlocks: cliMsg.message.content.length,
-                  toolUseBlocks: cliMsg.message.content
-                    .filter((b: any) => b.type === 'tool_use')
-                    .map((b: any) => b.name),
-                }
-              : {}),
-          });
-          this.emit('message', cliMsg);
-        }
-      }
+          const cliMsg = this.translateMessage(sdkMsg);
+          if (cliMsg) {
+            dlog.debug('Translated to CLIMessage', {
+              type: cliMsg.type,
+              ...(cliMsg.type === 'result'
+                ? { subtype: cliMsg.subtype, isError: cliMsg.is_error }
+                : {}),
+              ...(cliMsg.type === 'assistant'
+                ? {
+                    contentBlocks: cliMsg.message.content.length,
+                    toolUseBlocks: cliMsg.message.content
+                      .filter((b: any) => b.type === 'tool_use')
+                      .map((b: any) => b.name),
+                  }
+                : {}),
+            });
+            this.emit('message', cliMsg);
+          }
+        },
+        { signal: this.abortController.signal },
+      );
       dlog.info('SDK query loop finished', { msgCount, aborted: this.isAborted });
     } catch (err: any) {
       if (this.isAborted || err?.name === 'AbortError') {

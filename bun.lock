@@ -357,6 +357,7 @@
       "dependencies": {
         "@funny/core": "workspace:*",
         "@funny/pipelines": "workspace:*",
+        "@funny/shared": "workspace:*",
         "zod": "^4.5.4",
       },
       "devDependencies": {
@@ -370,6 +371,7 @@
       "name": "@funny/memory",
       "version": "1.0.0",
       "dependencies": {
+        "@funny/shared": "workspace:*",
         "@libsql/client": "^0.17.4",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "hono": "^4.12.25",
@@ -398,6 +400,7 @@
       "name": "@funny/pipelines",
       "version": "0.1.0",
       "dependencies": {
+        "effect": "4.0.4",
         "jsonata": "^2.1.0",
         "mustache": "^4.2.0",
       },
@@ -531,6 +534,9 @@
     "packages/sdk": {
       "name": "@funny/sdk",
       "version": "0.1.0",
+      "dependencies": {
+        "@funny/shared": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "^1.4.0",
       },
@@ -581,6 +587,7 @@
       "dependencies": {
         "@bufbuild/protobuf": "2.14.0",
         "drizzle-orm": "^0.45.1",
+        "effect": "4.0.4",
         "nanoid": "^5.1.5",
         "pg": "^8.20.0",
         "semver": "^7.7.3",
@@ -2613,6 +2620,8 @@
     "editions": ["editions@6.22.0", "", { "dependencies": { "version-range": "^4.15.0" } }, "sha512-UgGlf8IW75je7HZjNDpJdCv4cGJWIi6yumFdZ0R7A8/CIhQiWUjyGLCxdHpd8bmyD1gnkfUNK0oeOXqUS2cpfQ=="],
 
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
+
+    "effect": ["effect@4.0.4", "", {}, "sha512-Sr50OeVSC3M5UkoUYUhFf3EULryhGaZZUf6OzDHTvaznOw7HRlxOKdF3/4nvQXHL22StOyMG3Cvo8Bt7xUp+Ng=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.375", "", {}, "sha512-ZWP5eB4BVPW/ZYo9252hQZHZ5XavtsTgpbhcmMmRwymavC5AsLWQWBPaKMeNd2LW0KGby5HPXvj7+sr4ta5j/Q=="],
 

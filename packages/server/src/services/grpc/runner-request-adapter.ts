@@ -1,3 +1,4 @@
+import { retryAsync } from '@funny/shared/async';
 import { isTextualContentType } from '@funny/shared/runner-protocol';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
@@ -12,23 +13,50 @@ import { RunnerGrpcTunnelDispatcher, TunnelDispatchError } from './tunnel-handle
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_CAPACITY_RETRY_DELAY_MS = 50;
 
-function waitForCapacity(delayMs: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) {
-    return Promise.reject(
-      new TunnelDispatchError('tunnel request cancelled', FailureCode.CANCELLED),
+const FIRST_CAPACITY_RETRY_DELAY_MS = 5;
+
+function isCapacityError(error: unknown): boolean {
+  return (
+    error instanceof TunnelDispatchError &&
+    error.code === FailureCode.RESOURCE_EXHAUSTED &&
+    error.retryable
+  );
+}
+
+/** Exponential backoff while the tunnel is out of capacity, bounded by the request deadline. */
+function dispatchWithCapacityRetry<T>(
+  dispatch: () => T,
+  firstError: unknown,
+  deadlineAt: number,
+  signal?: AbortSignal,
+): Promise<T> {
+  const deadlineExceeded = () =>
+    new TunnelDispatchError(
+      'tunnel deadline exceeded while waiting for capacity',
+      FailureCode.DEADLINE_EXCEEDED,
+      true,
     );
-  }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, delayMs);
-    const onAbort = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
-      reject(new TunnelDispatchError('tunnel request cancelled', FailureCode.CANCELLED));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
+  return retryAsync(
+    async (_signal, attempt) => {
+      // Attempt 1 is the synchronous fast-path failure the caller already observed.
+      if (attempt === 1) throw firstError;
+      if (deadlineAt - Date.now() <= 0) throw deadlineExceeded();
+      return dispatch();
+    },
+    {
+      signal,
+      while: isCapacityError,
+      delayMs: (retry) =>
+        Math.min(
+          FIRST_CAPACITY_RETRY_DELAY_MS * 2 ** (retry - 1),
+          MAX_CAPACITY_RETRY_DELAY_MS,
+          Math.max(0, deadlineAt - Date.now()),
+        ),
+    },
+  ).catch((error) => {
+    if (signal?.aborted)
+      throw new TunnelDispatchError('tunnel request cancelled', FailureCode.CANCELLED);
+    throw error;
   });
 }
 
@@ -62,31 +90,14 @@ export class GrpcRunnerRequestAdapter implements RunnerRequestPort {
         deadlineAt,
         signal: request.signal,
       };
-      let retryDelayMs = 5;
       let exchange: ReturnType<RunnerGrpcTunnelDispatcher['dispatch']>;
-      for (;;) {
-        try {
-          exchange = this.dispatcher.dispatch(runnerId, dispatchRequest);
-          break;
-        } catch (error) {
-          if (
-            !(error instanceof TunnelDispatchError) ||
-            error.code !== FailureCode.RESOURCE_EXHAUSTED ||
-            !error.retryable
-          ) {
-            throw error;
-          }
-          const remainingMs = deadlineAt - Date.now();
-          if (remainingMs <= 0) {
-            throw new TunnelDispatchError(
-              'tunnel deadline exceeded while waiting for capacity',
-              FailureCode.DEADLINE_EXCEEDED,
-              true,
-            );
-          }
-          await waitForCapacity(Math.min(retryDelayMs, remainingMs), request.signal);
-          retryDelayMs = Math.min(retryDelayMs * 2, MAX_CAPACITY_RETRY_DELAY_MS);
-        }
+      const dispatch = () => this.dispatcher.dispatch(runnerId, dispatchRequest);
+      try {
+        // Fast path stays synchronous; only a saturated tunnel enters the backoff schedule.
+        exchange = dispatch();
+      } catch (error) {
+        if (!isCapacityError(error)) throw error;
+        exchange = await dispatchWithCapacityRetry(dispatch, error, deadlineAt, request.signal);
       }
       const head = await exchange.response;
       const chunks: Uint8Array[] = [];

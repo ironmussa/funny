@@ -1,3 +1,13 @@
+import {
+  stageFiles as gitStageFiles,
+  unstageFiles as gitUnstageFiles,
+  commit as gitCommit,
+  push as gitPush,
+  runHookCommand,
+  invalidateStatusCache,
+  gitRead,
+  gitWrite,
+} from '@funny/core/git';
 /**
  * @domain subdomain: Git Operations
  * @domain subdomain-type: core
@@ -18,17 +28,6 @@
  * The commit pipeline includes the full flow:
  *   unstage? → stage? → hooks → commit → review → fix (loop)
  */
-
-import {
-  stageFiles as gitStageFiles,
-  unstageFiles as gitUnstageFiles,
-  commit as gitCommit,
-  push as gitPush,
-  runHookCommand,
-  invalidateStatusCache,
-  gitRead,
-  gitWrite,
-} from '@funny/core/git';
 import {
   compose,
   definePipeline,
@@ -44,6 +43,7 @@ import type {
   PipelineVerdict,
   WSGitWorkflowProgressData,
 } from '@funny/shared';
+import { sleep as effectSleep } from '@funny/shared/async';
 
 import { log } from '../lib/logger.js';
 import {
@@ -1234,7 +1234,7 @@ async function waitForAgentCompletionPoll(threadId: string, timeoutMs = 300_000)
 
   while (Date.now() - start < timeoutMs) {
     if (!isAgentRunning(threadId)) return;
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    await effectSleep(pollInterval);
   }
 
   throw new Error(`Agent timed out after ${timeoutMs}ms`);

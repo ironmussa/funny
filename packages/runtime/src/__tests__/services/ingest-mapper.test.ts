@@ -20,9 +20,11 @@ const mocks = vi.hoisted(() => ({
     emitToUser: vi.fn(),
     emit: vi.fn(),
   },
-  getCurrentBranch: vi.fn(
-    async (): Promise<any> => ({ isOk: () => true, isErr: () => false, value: 'main' }),
-  ),
+  getCurrentBranch: vi.fn(async (): Promise<any> => ({
+    isOk: () => true,
+    isErr: () => false,
+    value: 'main',
+  })),
   getRemoteUrl: vi.fn(),
 }));
 
@@ -1291,5 +1293,27 @@ describe('sweepStaleExternalThreads', () => {
         data: { status: 'stopped' },
       }),
     );
+  });
+
+  test('a failed DB update does not abort the rest of the sweep and is retried later', async () => {
+    for (const request_id of ['req-stale-a', 'req-stale-b']) {
+      await handleIngestEvent(
+        baseEvent({ request_id, metadata: { projectId: 'p-1', userId: 'u-1' } }),
+      );
+    }
+
+    vi.advanceTimersByTime(11 * 60 * 1000);
+    mocks.tm.updateThread.mockClear();
+    mocks.wsBroker.emitToUser.mockClear();
+    mocks.tm.updateThread.mockRejectedValueOnce(new Error('data channel timeout'));
+
+    await expect(sweepStaleExternalThreads()).resolves.toBeUndefined();
+
+    expect(mocks.tm.updateThread).toHaveBeenCalledTimes(2);
+    expect(mocks.wsBroker.emitToUser).toHaveBeenCalledTimes(1);
+
+    mocks.tm.updateThread.mockClear();
+    await sweepStaleExternalThreads();
+    expect(mocks.tm.updateThread).toHaveBeenCalledTimes(1);
   });
 });

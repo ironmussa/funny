@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 
+import { runAsync } from '@funny/shared/async';
 import * as grpc from '@grpc/grpc-js';
 import { loadSync } from '@grpc/proto-loader';
 import { nanoid } from 'nanoid';
@@ -130,21 +131,10 @@ class RunnerStreamLimiter {
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(
-          () => reject(serviceError(grpc.status.DEADLINE_EXCEEDED, 'authentication timed out')),
-          timeoutMs,
-        );
-        timer.unref();
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  return runAsync(() => promise, {
+    timeoutMs,
+    timeoutError: () => serviceError(grpc.status.DEADLINE_EXCEEDED, 'authentication timed out'),
+  });
 }
 
 /**

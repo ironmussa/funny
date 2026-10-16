@@ -138,4 +138,25 @@ describe('local runtime adapter', () => {
     expect(captured[0].cwd).toBe('/workspace');
     expect(captured[0].spawnClaudeCodeProcess).toBeTypeOf('function');
   });
+
+  test('runCommand kills and reports a command that exceeds timeoutMs', async () => {
+    const runtime = createLocalRuntime();
+    const result = await runtime.runCommand!({
+      command: 'sleep 5',
+      cwd: process.cwd(),
+      timeoutMs: 50,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Command timed out');
+  });
+
+  test('runCommand cancels the timeout when the command exits first', async () => {
+    const runtime = createLocalRuntime();
+    const result = await runtime.runCommand!({
+      command: 'echo hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+    });
+    expect(result).toMatchObject({ ok: true, stdout: 'hi\n', exitCode: 0, error: undefined });
+  });
 });

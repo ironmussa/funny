@@ -1,5 +1,6 @@
 import { create, toBinary } from '@bufbuild/protobuf';
 import { timestampDate } from '@bufbuild/protobuf/wkt';
+import { runAsync } from '@funny/shared/async';
 import {
   BROWSER_V1_CARRIER_EVENTS,
   BROWSER_V1_SCHEMA_FINGERPRINT,
@@ -403,26 +404,18 @@ export function setupBrowserV1Operations(
                       : result.outcome,
                   )
               : execute();
-          const outcome = await Promise.race([
-            executionPromise,
-            new Promise<ReturnType<typeof operationStatus>>((resolve) => {
-              controller.signal.addEventListener(
-                'abort',
-                () => {
-                  resolve(
-                    controller.signal.reason === 'deadline'
-                      ? operationStatus(
-                          requestId,
-                          StatusCode.DEADLINE_EXCEEDED,
-                          'Operation deadline elapsed',
-                        )
-                      : operationStatus(requestId, StatusCode.CANCELLED, 'Operation cancelled'),
-                  );
-                },
-                { once: true },
-              );
-            }),
-          ]);
+          const outcome = await runAsync(() => executionPromise, {
+            signal: controller.signal,
+          }).catch((error) => {
+            if (!controller.signal.aborted) throw error;
+            return controller.signal.reason === 'deadline'
+              ? operationStatus(
+                  requestId,
+                  StatusCode.DEADLINE_EXCEEDED,
+                  'Operation deadline elapsed',
+                )
+              : operationStatus(requestId, StatusCode.CANCELLED, 'Operation cancelled');
+          });
           observeBrowserV1({
             event: 'operation',
             status:

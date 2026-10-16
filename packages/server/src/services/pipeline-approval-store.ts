@@ -1,3 +1,4 @@
+import { waitFor } from '@funny/shared/async';
 /**
  * Server-side pipeline approval store.
  *
@@ -17,7 +18,6 @@ export interface ApprovalDecisionPayload {
 interface PendingApproval {
   resolve: (payload: ApprovalDecisionPayload) => void;
   reject: (err: Error) => void;
-  timer?: ReturnType<typeof setTimeout>;
   meta: {
     threadId: string;
     userId: string;
@@ -34,37 +34,38 @@ class PipelineApprovalStore {
     meta: PendingApproval['meta'],
     timeoutMs?: number,
   ): Promise<ApprovalDecisionPayload> {
-    return new Promise((resolve, reject) => {
-      const entry: PendingApproval = {
-        resolve: (payload) => {
-          this.cleanup(approvalId);
-          resolve(payload);
-        },
-        reject: (err) => {
-          this.cleanup(approvalId);
-          reject(err);
-        },
-        meta,
-      };
+    return waitFor(
+      (resolve, reject) => {
+        const entry: PendingApproval = {
+          resolve: (payload) => {
+            this.cleanup(approvalId);
+            resolve(payload);
+          },
+          reject: (err) => {
+            this.cleanup(approvalId);
+            reject(err);
+          },
+          meta,
+        };
 
-      if (timeoutMs && timeoutMs > 0) {
-        entry.timer = setTimeout(() => {
-          if (this.pending.has(approvalId)) {
-            log.warn('Pipeline approval timed out', {
-              namespace: 'pipeline-approval-store',
-              approvalId,
-              gateId: meta.gateId,
-              timeoutMs,
-            });
-            entry.reject(
-              new Error(`Approval gate "${meta.gateId}" timed out after ${timeoutMs}ms`),
-            );
-          }
-        }, timeoutMs);
-      }
-
-      this.pending.set(approvalId, entry);
-    });
+        this.pending.set(approvalId, entry);
+        return () => {
+          if (this.pending.get(approvalId) === entry) this.pending.delete(approvalId);
+        };
+      },
+      {
+        timeoutMs: timeoutMs && timeoutMs > 0 ? timeoutMs : undefined,
+        timeoutError: () => {
+          log.warn('Pipeline approval timed out', {
+            namespace: 'pipeline-approval-store',
+            approvalId,
+            gateId: meta.gateId,
+            timeoutMs,
+          });
+          return new Error(`Approval gate "${meta.gateId}" timed out after ${timeoutMs}ms`);
+        },
+      },
+    );
   }
 
   respond(
@@ -98,8 +99,6 @@ class PipelineApprovalStore {
   }
 
   private cleanup(approvalId: string): void {
-    const entry = this.pending.get(approvalId);
-    if (entry?.timer) clearTimeout(entry.timer);
     this.pending.delete(approvalId);
   }
 }

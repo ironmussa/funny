@@ -71,6 +71,8 @@ const stateCleanupTimer = setInterval(() => {
     }
   }
 }, 60_000);
+// Housekeeping only: must not keep a process alive just because it imported this module.
+stateCleanupTimer.unref?.();
 
 // ── Self-register with ShutdownManager ──────────────────────
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';

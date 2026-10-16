@@ -1,3 +1,4 @@
+import { sleep } from '@funny/shared/async';
 /**
  * Pre-startup script: kills any process holding the server port.
  * Prevents ghost processes from causing dual-listener issues.
@@ -177,7 +178,7 @@ async function killPort(targetPort: number): Promise<void> {
 
   // Wait until port is actually bindable (up to 10s)
   for (let i = 0; i < 20; i++) {
-    await Bun.sleep(500);
+    await sleep(500);
     if (await isPortBindable(targetPort, host)) {
       console.log(`[kill-port] Port ${targetPort} is free`);
       return;
@@ -203,7 +204,7 @@ async function killPort(targetPort: number): Promise<void> {
       `Get-NetTCPConnection -LocalPort ${targetPort} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
     ]);
     for (let i = 0; i < 6; i++) {
-      await Bun.sleep(500);
+      await sleep(500);
       if (await isPortBindable(targetPort, host)) {
         console.log(`[kill-port] Port ${targetPort} is free (via PowerShell)`);
         return;
@@ -217,5 +218,3 @@ async function killPort(targetPort: number): Promise<void> {
 }
 
 await killPort(port);
-
-export {};

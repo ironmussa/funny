@@ -1,3 +1,4 @@
+import { hostname } from 'os';
 /**
  * @domain subdomain: Runner ↔ Server Communication
  * @domain type: app-service
@@ -15,8 +16,7 @@
  * this module uses a plain fetch rather than the authenticated centralFetch.
  */
 
-import { hostname } from 'os';
-
+import { sleep as effectSleep } from '@funny/shared/async';
 import type {
   EnrollStartRequest,
   EnrollStartResponse,
@@ -32,7 +32,7 @@ export interface EnrolledCredentials {
   forwardedSecret: string;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => effectSleep(ms);
 
 /** Print the user code as a prominent operator-facing banner (stdout + log). */
 function showUserCode(serverUrl: string, userCode: string): void {

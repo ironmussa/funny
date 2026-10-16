@@ -1,3 +1,4 @@
+import { sleep as effectSleep } from '@funny/shared/async';
 /**
  * @domain subdomain: Orchestration
  * @domain subdomain-type: core
@@ -69,7 +70,11 @@ export class HttpEventStream {
   start(): void {
     if (this.running) return;
     this.running = true;
-    this.loopPromise = this.loop();
+    this.abortCtrl = new AbortController();
+    const signal = this.abortCtrl.signal;
+    this.loopPromise = this.loop().catch((error) => {
+      if (!signal.aborted) throw error;
+    });
   }
 
   async stop(): Promise<void> {
@@ -107,14 +112,13 @@ export class HttpEventStream {
 
   private async loop(): Promise<void> {
     while (this.running) {
-      this.abortCtrl = new AbortController();
       try {
         const result = await this.client.request<{
           events: EventStreamEvent[];
           nextSeq: number;
         }>('GET', '/events', {
           query: { since: this.cursor, timeoutMs: this.timeoutMs },
-          signal: this.abortCtrl.signal,
+          signal: this.abortCtrl!.signal,
         });
         for (const event of result.events) {
           this.dispatch(event);
@@ -129,12 +133,12 @@ export class HttpEventStream {
           error: message,
           cursor: this.cursor,
         });
-        await new Promise((r) => setTimeout(r, this.backoffMs));
+        await effectSleep(this.backoffMs, this.abortCtrl!.signal);
       }
       // Always yield to the macrotask queue between iterations so other
       // timers (including the test's stop() trigger) get a chance to run
       // even when the fetch above resolves synchronously.
-      await new Promise((r) => setTimeout(r, 0));
+      await effectSleep(0, this.abortCtrl!.signal);
     }
   }
 

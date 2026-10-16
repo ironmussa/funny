@@ -1,3 +1,4 @@
+import { runAsync } from '@funny/shared/async';
 /**
  * @domain subdomain: Memory System (Paisley Park)
  * @domain type: infrastructure-service
@@ -65,45 +66,51 @@ export async function llmComplete(
     promptLength: prompt.length,
   });
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeout),
-  });
+  return runAsync(
+    async (signal) => {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      });
 
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`LLM request failed (${resp.status}): ${text}`);
-  }
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`LLM request failed (${resp.status}): ${text}`);
+      }
 
-  const run = (await resp.json()) as RunResponse;
+      const run = (await resp.json()) as RunResponse;
 
-  if (run.status === 'failed') {
-    throw new Error(`LLM run failed: ${run.error?.message ?? 'unknown error'}`);
-  }
+      if (run.status === 'failed') {
+        throw new Error(`LLM run failed: ${run.error?.message ?? 'unknown error'}`);
+      }
 
-  if (!run.result?.text) {
-    throw new Error('LLM returned empty result');
-  }
+      if (!run.result?.text) {
+        throw new Error('LLM returned empty result');
+      }
 
-  log.debug('LLM call completed', {
-    namespace: 'memory:llm',
-    model,
-    inputTokens: run.usage?.input_tokens,
-    outputTokens: run.usage?.output_tokens,
-  });
+      log.debug('LLM call completed', {
+        namespace: 'memory:llm',
+        model,
+        inputTokens: run.usage?.input_tokens,
+        outputTokens: run.usage?.output_tokens,
+      });
 
-  return run.result.text;
+      return run.result.text;
+    },
+    { timeoutMs: timeout },
+  );
 }
 
 // ─── Health check ──────────────────────────────────────
 
 export async function llmHealthCheck(config: LLMConfig): Promise<boolean> {
   try {
-    const resp = await fetch(`${config.baseUrl.replace(/\/$/, '')}/v1/models`, {
-      signal: AbortSignal.timeout(3000),
-    });
+    const resp = await runAsync(
+      (signal) => fetch(`${config.baseUrl.replace(/\/$/, '')}/v1/models`, { signal }),
+      { timeoutMs: 3000 },
+    );
     return resp.ok;
   } catch {
     return false;

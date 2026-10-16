@@ -1,3 +1,4 @@
+import { retryAsync, sleep as effectSleep } from '@funny/shared/async';
 import type { RunnerRegisterResponse } from '@funny/shared/runner-protocol';
 
 import { log } from '../lib/logger.js';
@@ -40,9 +41,16 @@ const defaultDependencies: RunnerEnrollmentClientDependencies = {
   loadCredentials: loadRunnerCredentials,
   saveCredentials: saveRunnerCredentials,
   clearCredentials: clearRunnerCredentials,
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep: (ms) => effectSleep(ms),
   env: process.env,
 };
+
+/** Internal retry signal: registration did not yield a session yet. */
+class RegistrationRetry extends Error {
+  constructor(readonly reenrolled: boolean) {
+    super('Runner registration did not yield a session');
+  }
+}
 
 /** Owns runner HTTP registration, credential resume, and device-link bootstrap. */
 export class RunnerEnrollmentClient {
@@ -64,29 +72,38 @@ export class RunnerEnrollmentClient {
 
   async bootstrap(): Promise<RunnerEnrollmentSession> {
     await this.maybeEnroll();
-    for (let attempt = 1; ; attempt++) {
-      const resumed = await this.resumeSession();
-      if (resumed) return resumed;
+    return retryAsync(() => this.bootstrapAttempt(), {
+      while: (error) => error instanceof RegistrationRetry,
+      // Re-enrollment already did its slow work; retry registration immediately.
+      delayMs: (retry, error) =>
+        (error as RegistrationRetry).reenrolled ? 0 : Math.min(2000 * retry, 15_000),
+      onRetry: (error, retry, delayMs) => {
+        if ((error as RegistrationRetry).reenrolled) return;
+        log.warn(`Registration failed, retrying in ${delayMs / 1000}s (attempt ${retry})`, {
+          namespace: 'runner',
+        });
+      },
+      sleep: (ms) => this.dependencies.sleep(ms),
+    });
+  }
 
-      const registered = await this.register();
-      if (registered.session) return registered.session;
+  private async bootstrapAttempt(): Promise<RunnerEnrollmentSession> {
+    const resumed = await this.resumeSession();
+    if (resumed) return resumed;
 
-      if (registered.authFailed) {
-        log.warn(
-          'Server rejected runner credentials (401/403) — falling back to device-link enrollment',
-          { namespace: 'runner' },
-        );
-        this.dependencies.clearCredentials();
-        await this.enrollAndPersist();
-        continue;
-      }
+    const registered = await this.register();
+    if (registered.session) return registered.session;
 
-      const delay = Math.min(2000 * attempt, 15_000);
-      log.warn(`Registration failed, retrying in ${delay / 1000}s (attempt ${attempt})`, {
-        namespace: 'runner',
-      });
-      await this.dependencies.sleep(delay);
+    if (registered.authFailed) {
+      log.warn(
+        'Server rejected runner credentials (401/403) — falling back to device-link enrollment',
+        { namespace: 'runner' },
+      );
+      this.dependencies.clearCredentials();
+      await this.enrollAndPersist();
+      throw new RegistrationRetry(true);
     }
+    throw new RegistrationRetry(false);
   }
 
   private async centralFetch(path: string, options: RequestInit = {}): Promise<Response> {

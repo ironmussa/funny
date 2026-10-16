@@ -27,8 +27,8 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 function makeRouter(state: AgentStateTracker): AgentEventRouter {
-  // The constructor calls subscribeOrchestrator / subscribeEventBus /
-  // startQueueCleanup — provide minimal mocks that satisfy those.
+  // The constructor calls subscribeOrchestrator / subscribeEventBus —
+  // provide minimal mocks that satisfy those.
   const orchestrator = { on: vi.fn() } as any;
   const messageHandler = {} as any;
   const threadManager = { getThread: vi.fn(), updateThread: vi.fn() } as any;

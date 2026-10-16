@@ -26,8 +26,6 @@ import { transitionStatus } from './thread-status-machine.js';
 export class AgentEventRouter {
   /** Per-thread message queue to serialize async message handling. */
   private messageQueues = new Map<string, Promise<void>>();
-  /** Interval that sweeps settled promises from messageQueues. */
-  private messageQueueCleanupTimer!: ReturnType<typeof setInterval>;
 
   private runSpans = new Map<string, ReturnType<typeof startSpan>>();
   private endRunSpanFn:
@@ -53,7 +51,6 @@ export class AgentEventRouter {
   ) {
     this.subscribeOrchestrator();
     this.subscribeEventBus();
-    this.startQueueCleanup();
   }
 
   /** Wire up the shared run spans and endRunSpan callback from the lifecycle manager */
@@ -83,6 +80,11 @@ export class AgentEventRouter {
           });
         });
       this.messageQueues.set(threadId, next);
+      // Drop the entry once the tail settles — but only if nothing was chained
+      // after it, otherwise the next message would skip the one still running.
+      void next.then(() => {
+        if (this.messageQueues.get(threadId) === next) this.messageQueues.delete(threadId);
+      });
     });
 
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
@@ -275,36 +277,13 @@ export class AgentEventRouter {
 
   // ── Queue management ───────────────────────────────────────────
 
-  private startQueueCleanup(): void {
-    const settledThreads = new Set<string>();
-    this.messageQueueCleanupTimer = setInterval(() => {
-      for (const threadId of settledThreads) {
-        const current = this.messageQueues.get(threadId);
-        if (current === undefined) {
-          settledThreads.delete(threadId);
-          continue;
-        }
-        this.messageQueues.delete(threadId);
-        settledThreads.delete(threadId);
-      }
-      for (const [threadId, promise] of this.messageQueues) {
-        void promise.then(
-          () => settledThreads.add(threadId),
-          () => settledThreads.add(threadId),
-        );
-      }
-    }, 5 * 60_000);
-    if (this.messageQueueCleanupTimer.unref) this.messageQueueCleanupTimer.unref();
-  }
-
   /** Clean up message queue for a thread */
   clearQueue(threadId: string): void {
     this.messageQueues.delete(threadId);
   }
 
-  /** Clear all queues and stop the cleanup timer */
+  /** Clear all queues */
   destroy(): void {
-    clearInterval(this.messageQueueCleanupTimer);
     this.messageQueues.clear();
     threadEventBus.off('agent:completed', this.agentCompletedListener);
   }

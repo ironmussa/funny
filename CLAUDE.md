@@ -365,3 +365,7 @@ Structured documentation for this repository lives in [openwiki/quickstart.md](o
 repository overview, architecture, agent-execution flow, pipelines/automation, thread & worktree
 domain rules, integrations/standalone services, operations/auth, and the development workflow.
 Consult it when searching for context about how this codebase works.
+
+<!-- fallow:agent-install v1 claude-import:start -->
+@AGENTS.md
+<!-- fallow:agent-install v1 claude-import:end -->

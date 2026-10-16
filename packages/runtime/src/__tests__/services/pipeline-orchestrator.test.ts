@@ -37,9 +37,6 @@ vi.mock('../../services/thread-manager.js', () => ({
   getThreadWithMessages: vi.fn(),
   updateThread: vi.fn(),
 }));
-vi.mock('../../services/project-manager.js', () => ({
-  getProject: vi.fn(),
-}));
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

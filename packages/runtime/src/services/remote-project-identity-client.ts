@@ -4,7 +4,7 @@ import { sendRemoteData } from './remote-data-channel.js';
 import type { RemoteDataRequest } from './remote-thread-data-client.js';
 
 /** Remote project, profile, credential, and provider-selection client. */
-export class RemoteProjectIdentityClient {
+class RemoteProjectIdentityClient {
   private readonly projectCache = new Map<string, { value: any; expiry: number }>();
   private readonly projectInflight = new Map<string, Promise<any>>();
 

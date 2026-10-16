@@ -38,7 +38,7 @@ export interface StopContainerOptions {
   remove?: boolean;
 }
 
-export interface ContainerStatus {
+interface ContainerStatus {
   containerName: string;
   exists: boolean;
   running: boolean;

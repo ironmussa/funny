@@ -19,7 +19,7 @@ export const FETCH_THROTTLE_MS = 30_000;
 const lastFetchTs = new Map<string, number>();
 const fetchInFlightByPath = new Set<string>();
 
-export interface BackgroundFetchOptions {
+interface BackgroundFetchOptions {
   projectId: string;
   projectPath: string;
   identity?: GitIdentityOptions;
@@ -27,12 +27,12 @@ export interface BackgroundFetchOptions {
   onFetched?: () => void | Promise<void>;
 }
 
-export interface ExplicitFetchOptions {
+interface ExplicitFetchOptions {
   cwd: string;
   identity?: GitIdentityOptions;
 }
 
-export class GitRuntimeService {
+class GitRuntimeService {
   scheduleBackgroundFetch(opts: BackgroundFetchOptions): boolean {
     const { projectId, projectPath, identity, attrs, onFetched } = opts;
     const lastFetch = lastFetchTs.get(projectId) ?? 0;

@@ -11,7 +11,7 @@ import { bundledCodexBinary } from '../utils/codex-binary.js';
 import { getAvailableProviders, resetProviderCache } from '../utils/provider-detection.js';
 
 // Only these packages can be installed by the UI. Never execute a client-supplied command.
-export const PROVIDER_INSTALLS = {
+const PROVIDER_INSTALLS = {
   claude: { package: '@anthropic-ai/claude-code', binary: 'claude', login: 'claude auth login' },
   codex: { package: '@openai/codex', binary: 'codex', login: 'codex login --device-auth' },
   pi: { package: '@earendil-works/pi-coding-agent', binary: 'pi', login: 'pi' },

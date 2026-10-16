@@ -475,7 +475,7 @@ export function listCodexSkillResources(projectPath?: string): AgentResource[] {
  * All Claude skills (model-invoked) from every filesystem source — lock file,
  * direct ~/.claude/skills, project .claude/skills, and plugin skills/ dirs.
  */
-export function listClaudeSkillResources(
+function listClaudeSkillResources(
   projectPath?: string,
   options: ClaudeResourceScanOptions = {},
 ): AgentResource[] {
@@ -505,7 +505,7 @@ export function listClaudeSkillResources(
  * plugin commands/ dirs. Built-in commands are NOT here — they come from the
  * live session, never the filesystem.
  */
-export function listClaudeCustomCommandResources(
+function listClaudeCustomCommandResources(
   projectPath?: string,
   options: ClaudeResourceScanOptions = {},
 ): AgentResource[] {

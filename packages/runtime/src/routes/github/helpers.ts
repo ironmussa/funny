@@ -198,7 +198,7 @@ export async function fetchRepoIssues(
   return { issues, hasMore };
 }
 
-export function emptyReactions(): PRReactionSummary {
+function emptyReactions(): PRReactionSummary {
   return {
     total: 0,
     plus1: 0,

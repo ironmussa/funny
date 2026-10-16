@@ -8,6 +8,10 @@
  * Constructs conversation history for session recovery.
  */
 
+import type { Message, ToolCall } from '@funny/shared';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { z } from 'zod';
+
 import * as tm from './thread-manager.js';
 
 /**
@@ -47,48 +51,8 @@ export async function buildThreadContext(threadId: string): Promise<string | nul
   parts.push('=== CONVERSATION HISTORY ===');
   parts.push('');
 
-  // Format each message in the conversation
   for (const msg of messages) {
-    if (msg.role === 'user') {
-      parts.push('USER:');
-      parts.push(msg.content);
-      if (msg.images && msg.images.length > 0) {
-        parts.push(`[User provided ${msg.images.length} image(s)]`);
-      }
-    } else if (msg.role === 'assistant') {
-      parts.push('');
-      parts.push('ASSISTANT:');
-      parts.push(msg.content);
-
-      // Include tool calls if any
-      if (msg.toolCalls && msg.toolCalls.length > 0) {
-        parts.push('');
-        parts.push('Tool calls made:');
-        for (const tc of msg.toolCalls) {
-          parts.push(`- ${tc.name}`);
-          if (tc.input) {
-            try {
-              const input = JSON.parse(tc.input);
-              // Show abbreviated input for readability
-              const inputStr = JSON.stringify(input, null, 2);
-              if (inputStr.length > 200) {
-                parts.push(`  Input: ${inputStr.slice(0, 200)}...`);
-              } else {
-                parts.push(`  Input: ${inputStr}`);
-              }
-            } catch {
-              // Input might not be JSON
-              const truncated = tc.input.length > 200 ? tc.input.slice(0, 200) + '...' : tc.input;
-              parts.push(`  Input: ${truncated}`);
-            }
-          }
-          if (tc.output) {
-            const truncated = tc.output.length > 200 ? tc.output.slice(0, 200) + '...' : tc.output;
-            parts.push(`  Output: ${truncated}`);
-          }
-        }
-      }
-    }
+    appendMessage(parts, msg);
     parts.push('');
   }
 
@@ -104,6 +68,39 @@ export async function buildThreadContext(threadId: string): Promise<string | nul
   }
 
   return result;
+}
+
+function abbreviateToolValue(value: string): string {
+  return value.length > 200 ? value.slice(0, 200) + '...' : value;
+}
+
+function formatToolInput(input: string): string {
+  const parsed = parseStoredJson(z.unknown(), input, 'tool input');
+  return abbreviateToolValue(parsed.ok ? JSON.stringify(parsed.value, null, 2) : input);
+}
+
+function appendToolCalls(parts: string[], toolCalls: ToolCall[]): void {
+  parts.push('', 'Tool calls made:');
+  for (const tc of toolCalls) {
+    parts.push(`- ${tc.name}`);
+    if (tc.input) parts.push(`  Input: ${formatToolInput(tc.input)}`);
+    if (tc.output) parts.push(`  Output: ${abbreviateToolValue(tc.output)}`);
+  }
+}
+
+function appendMessage(
+  parts: string[],
+  msg: Pick<Message, 'role' | 'content' | 'images'> & { toolCalls?: ToolCall[] },
+): void {
+  if (msg.role === 'user') {
+    parts.push('USER:', msg.content);
+    if (msg.images?.length) {
+      parts.push(`[User provided ${msg.images.length} image(s)]`);
+    }
+  } else if (msg.role === 'assistant') {
+    parts.push('', 'ASSISTANT:', msg.content);
+    if (msg.toolCalls?.length) appendToolCalls(parts, msg.toolCalls);
+  }
 }
 
 /**

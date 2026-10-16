@@ -38,7 +38,7 @@ export const _gitStatusCache = gitStatusCache;
 // `null` is a valid cached value meaning "no PR exists for this branch".
 const _prInfoCache = new Map<string, { data: BranchPRInfo | null; ts: number }>();
 const _prFetchInflight = new Set<string>();
-export const PR_INFO_CACHE_TTL_MS = 60_000; // 1 minute
+const PR_INFO_CACHE_TTL_MS = 60_000; // 1 minute
 
 function prCacheKey(projectPath: string, branch: string): string {
   return `${projectPath}::${branch}`;

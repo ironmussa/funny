@@ -2,7 +2,7 @@ import type { JsonObject } from '@bufbuild/protobuf';
 /**
  * Client-side helpers for talking to the runner's BrowserSessionManager.
  *
- * Fire-and-forget messages go through `getActiveWS().emit(...)`. Request-style
+ * Fire-and-forget messages go through the active realtime transport. Request-style
  * messages (`inspect-at`, `inspect-rect`, `screenshot`, `execute`) wait for a
  * matching `browser-session:result` with the supplied `requestId`.
  *
@@ -10,8 +10,8 @@ import type { JsonObject } from '@bufbuild/protobuf';
  */
 import { waitFor } from '@funny/shared/async';
 
-import { sendBrowserSessionRealtime } from '@/hooks/use-ws';
 import { createClientLogger } from '@/lib/client-logger';
+import { sendBrowserSessionRealtime } from '@/lib/realtime/browser-session-realtime';
 
 const log = createClientLogger('browser-session');
 

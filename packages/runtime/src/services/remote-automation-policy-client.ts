@@ -5,7 +5,7 @@ import { sendRemoteData } from './remote-data-channel.js';
 import type { RemoteDataRequest } from './remote-thread-data-client.js';
 
 /** Remote permissions, watcher, and detached-job persistence client. */
-export class RemoteAutomationPolicyClient {
+class RemoteAutomationPolicyClient {
   constructor(private readonly request: RemoteDataRequest) {}
 
   async createPendingPermissionRequest(
@@ -100,7 +100,7 @@ export class RemoteAutomationPolicyClient {
   }
 }
 
-export const remoteAutomationPolicyClient = new RemoteAutomationPolicyClient(sendRemoteData);
+const remoteAutomationPolicyClient = new RemoteAutomationPolicyClient(sendRemoteData);
 
 export const remoteCreatePendingPermissionRequest =
   remoteAutomationPolicyClient.createPendingPermissionRequest.bind(remoteAutomationPolicyClient);

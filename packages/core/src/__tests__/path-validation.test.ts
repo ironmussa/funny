@@ -163,10 +163,14 @@ describe('validateProjectPathLexical', () => {
 
 describe('validateProjectRootContainment / validateProjectRootPath', () => {
   const prevRoot = process.env.FUNNY_PROJECT_ROOT;
+  const prevPolicy = process.env.FUNNY_PROJECT_PATH_POLICY;
   beforeEach(() => {
     delete process.env.FUNNY_PROJECT_ROOT;
+    process.env.FUNNY_PROJECT_PATH_POLICY = 'restricted';
   });
   afterEach(() => {
+    if (prevPolicy === undefined) delete process.env.FUNNY_PROJECT_PATH_POLICY;
+    else process.env.FUNNY_PROJECT_PATH_POLICY = prevPolicy;
     if (prevRoot !== undefined) process.env.FUNNY_PROJECT_ROOT = prevRoot;
     else delete process.env.FUNNY_PROJECT_ROOT;
   });

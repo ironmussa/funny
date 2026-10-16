@@ -5,7 +5,7 @@ import { sendRemoteData } from './remote-data-channel.js';
 
 export type RemoteDataRequest = (eventType: string, payload: Record<string, any>) => Promise<any>;
 
-export interface RemoteThreadMessageMatch {
+interface RemoteThreadMessageMatch {
   threadId: string;
   threadTitle: string;
   messageId: string;
@@ -16,7 +16,7 @@ export interface RemoteThreadMessageMatch {
 }
 
 /** Cohesive remote client for threads, messages, tool calls, and message queues. */
-export class RemoteThreadDataClient {
+class RemoteThreadDataClient {
   private readonly threadCache = new Map<string, { value: any; expiry: number }>();
   private readonly threadInflight = new Map<string, Promise<any>>();
   private readonly pendingMessageUpdates = new Map<
@@ -222,7 +222,7 @@ export class RemoteThreadDataClient {
   }
 }
 
-export const remoteThreadDataClient = new RemoteThreadDataClient(sendRemoteData);
+const remoteThreadDataClient = new RemoteThreadDataClient(sendRemoteData);
 
 export const remoteInsertMessage =
   remoteThreadDataClient.insertMessage.bind(remoteThreadDataClient);

@@ -561,9 +561,9 @@ export function spawnPty(
  *  - "denied"     → session exists but belongs to a different user
  *  - "not_found"  → no such session
  */
-export type PtyOwnership = 'owner' | 'unowned' | 'denied' | 'not_found';
+type PtyOwnership = 'owner' | 'unowned' | 'denied' | 'not_found';
 
-export function checkSessionOwnership(ptyId: string, userId: string): PtyOwnership {
+function checkSessionOwnership(ptyId: string, userId: string): PtyOwnership {
   const session = activeSessions.get(ptyId);
   if (!session) return 'not_found';
   if (!session.userId) return 'unowned';
@@ -574,7 +574,7 @@ export function checkSessionOwnership(ptyId: string, userId: string): PtyOwnersh
  * Adopt an unowned session into the caller's name. Only safe in runner mode
  * (one user per runner) — `pty-message-handler.ts` gates the call.
  */
-export function adoptSession(ptyId: string, userId: string): void {
+function adoptSession(ptyId: string, userId: string): void {
   const session = activeSessions.get(ptyId);
   if (session && !session.userId) session.userId = userId;
 }

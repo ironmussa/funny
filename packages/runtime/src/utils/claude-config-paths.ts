@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import { normalize, resolve } from 'path';
 
 /** Claude Code user settings files that may be edited via the internal file editor. */
-export const CLAUDE_HOME_CONFIG_REL_PATHS = [
+const CLAUDE_HOME_CONFIG_REL_PATHS = [
   '.claude/settings.json',
   '.claude/settings.local.json',
 ] as const;

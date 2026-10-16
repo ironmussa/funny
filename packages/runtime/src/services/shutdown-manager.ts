@@ -17,7 +17,7 @@ export const ShutdownPhase = {
 } as const;
 
 export type ShutdownPhase = (typeof ShutdownPhase)[keyof typeof ShutdownPhase];
-export type ShutdownMode = 'hard' | 'hotReload';
+type ShutdownMode = 'hard' | 'hotReload';
 
 interface Registration {
   name: string;

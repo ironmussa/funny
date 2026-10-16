@@ -22,6 +22,28 @@ Team member A                    Team member B
 
 Each member's git operations and agent providers run **on their own machine** — the central server only coordinates; it never touches a team member's filesystem directly (that's what `packages/runtime`, running as the runner, is for).
 
+## Project path policy
+
+Local deployments accept repositories outside the process's home directory,
+including mounted Windows drives and external disks. Git repository checks,
+traversal guards, and system-directory checks (including symlink targets) still
+apply to creation and path changes.
+
+`FUNNY_PROJECT_PATH_POLICY` selects the filesystem policy for the process:
+
+- `local`: allow project locations outside `$HOME` without a per-folder allowlist.
+- `restricted`: require `$HOME` or an additional root in the comma-separated
+  `FUNNY_PROJECT_ROOT` setting. Use this for shared deployments.
+
+Without an explicit policy, only loopback deployments default to `local`.
+An existing `FUNNY_PROJECT_ROOT`, a non-loopback `HOST`, a remote
+`TEAM_SERVER_URL`, or a non-local `AUTH_MODE` selects `restricted`; unknown policy values also remain restricted. A shared
+server behind a loopback proxy or tunnel must explicitly select `restricted`.
+A personal installation exposed on the LAN can explicitly select `local`.
+Configure the policy on both the server and its filesystem-owning runner;
+clients cannot select it in a request. This policy does not sandbox agent
+processes or replace project authorization.
+
 ## Authentication and the admin bootstrap — a stale-doc fix
 
 The app always uses [Better Auth](https://www.better-auth.com/) with cookie-based sessions (`packages/runtime/src/lib/auth.ts`, initialized by the server at startup).

@@ -28,7 +28,7 @@ export type SessionStatus =
   | 'escalated'
   | 'cancelled';
 
-export const SESSION_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
+const SESSION_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   created: ['planning', 'cancelled', 'failed'],
   planning: ['implementing', 'escalated', 'cancelled', 'failed'],
   implementing: ['quality_check', 'pr_created', 'escalated', 'cancelled', 'failed'],

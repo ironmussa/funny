@@ -95,7 +95,7 @@ class BrowserSessionManager {
             sessionId: s.sessionId,
             idleMs: now - s.lastHeartbeat,
           });
-          this.close(s.sessionId, 'heartbeat').catch(() => {});
+          this.closeAndLog(s.sessionId, 'heartbeat');
         }
       }
     }, HEARTBEAT_INTERVAL_MS);
@@ -274,7 +274,7 @@ class BrowserSessionManager {
     proc.on('exit', (code, signal) => {
       log.info('Chromium exited', { namespace: NS, sessionId, code, signal });
       if (this.sessions.has(sessionId)) {
-        this.close(sessionId, 'error').catch(() => {});
+        this.closeAndLog(sessionId, 'error');
       } else if (code !== 0 && code !== null) {
         // Died during boot.
         bootFailed = true;
@@ -364,7 +364,7 @@ class BrowserSessionManager {
     chromeSession.on('disconnect', () => {
       log.warn('Chrome disconnected', { namespace: NS, sessionId });
       if (this.sessions.has(sessionId)) {
-        this.close(sessionId, 'error').catch(() => {});
+        this.closeAndLog(sessionId, 'error');
       }
     });
 
@@ -632,6 +632,19 @@ class BrowserSessionManager {
       type: 'browser-session:result',
       threadId: '',
       data: result,
+    });
+  }
+
+  /** Fire-and-forget close: the session is already gone from the map, so a
+   *  failure may leave Chrome running — make it visible instead of silent. */
+  private closeAndLog(sessionId: string, reason: BrowserSessionClosedReason): void {
+    this.close(sessionId, reason).catch((err) => {
+      log.warn('Failed to close browser session', {
+        namespace: NS,
+        sessionId,
+        reason,
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
   }
 

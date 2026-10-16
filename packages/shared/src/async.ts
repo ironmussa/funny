@@ -1,5 +1,5 @@
 /** Effect-backed orchestration at Promise and callback API boundaries. */
-import { Cause, Effect, Exit, Schedule, Semaphore, Stream } from 'effect';
+import { Cause, Clock, Duration, Effect, Exit, Schedule, Semaphore, Stream } from 'effect';
 
 export interface AsyncOptions {
   signal?: AbortSignal;
@@ -168,4 +168,53 @@ export function scheduleTask(task: () => void | PromiseLike<void>, delayMs: numb
     if (!controller.signal.aborted) throw error;
   });
   return { cancel: () => controller.abort(), done };
+}
+
+/** Clock whose timers do not keep the process alive (`setTimeout(...).unref()`). */
+function unrefSleep(duration: Duration.Duration): Effect.Effect<void> {
+  return Effect.callback<void>((resume) => {
+    const handle = setTimeout(() => resume(Effect.void), Duration.toMillis(duration));
+    (handle as { unref?: () => void }).unref?.();
+    return Effect.sync(() => clearTimeout(handle));
+  });
+}
+
+export interface RepeatOptions {
+  /** Let the process exit while only this timer is pending. */
+  unref?: boolean;
+  /** Task failures are reported here and the schedule keeps running. */
+  onError?: (error: unknown) => void;
+}
+
+/**
+ * Periodic task that never overlaps itself: the next run is scheduled `intervalMs`
+ * after the previous one finishes. Not for fixed-rate work such as heartbeats.
+ */
+export function scheduleRepeating(
+  task: () => void | PromiseLike<void>,
+  intervalMs: number,
+  options: RepeatOptions = {},
+) {
+  const controller = new AbortController();
+  const runOnce = Effect.catch(
+    Effect.tryPromise({ try: async () => task(), catch: (error) => error }),
+    (error) => Effect.sync(() => options.onError?.(error)),
+  );
+  const loop = Effect.andThen(
+    Effect.sleep(intervalMs),
+    Effect.repeat(runOnce, Schedule.spaced(intervalMs)),
+  );
+  const program = options.unref
+    ? Effect.clockWith((clock) =>
+        Effect.provideService(
+          loop,
+          Clock.Clock,
+          Object.assign(Object.create(clock) as Clock.Clock, { sleep: unrefSleep }),
+        ),
+      )
+    : loop;
+  const done = run(Effect.asVoid(program), { signal: controller.signal }).catch((error) => {
+    if (!controller.signal.aborted) throw error;
+  });
+  return { stop: () => controller.abort(), done };
 }

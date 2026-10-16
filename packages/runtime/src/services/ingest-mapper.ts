@@ -10,6 +10,7 @@
 
 import { getCurrentBranch, getRemoteUrl } from '@funny/core/git';
 import type { WSEvent, WSWorkflowStepData, WSWorkflowStatusData } from '@funny/shared';
+import { scheduleRepeating } from '@funny/shared/async';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 
@@ -833,7 +834,7 @@ const STALE_TTL_MS = 10 * 60 * 1000;
 /** Sweep interval — check every 2 minutes */
 const SWEEP_INTERVAL_MS = 2 * 60 * 1000;
 
-let sweepTimer: ReturnType<typeof setInterval> | null = null;
+let sweepSchedule: ReturnType<typeof scheduleRepeating> | null = null;
 
 /**
  * Clean up in-memory state for a single external thread.
@@ -872,9 +873,21 @@ export async function sweepStaleExternalThreads(): Promise<void> {
     }
   }
 
+  let swept = 0;
   for (const { key, state } of stale) {
     const isoNow = new Date().toISOString();
-    await tm.updateThread(state.threadId, { status: 'stopped', completedAt: isoNow });
+    try {
+      await tm.updateThread(state.threadId, { status: 'stopped', completedAt: isoNow });
+    } catch (err) {
+      // Keep the in-memory state so the next sweep retries; don't abandon the rest.
+      log.warn('Failed to stop stale external thread', {
+        namespace: 'ingest',
+        threadId: state.threadId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+    swept++;
     emitWS(state, { type: 'agent:status', threadId: state.threadId, data: { status: 'stopped' } });
     threadStates.delete(key);
     cliStates.delete(key);
@@ -885,15 +898,22 @@ export async function sweepStaleExternalThreads(): Promise<void> {
     });
   }
 
-  if (stale.length > 0) {
-    log.info(`Swept ${stale.length} stale external thread(s)`, { namespace: 'ingest' });
+  if (swept > 0) {
+    log.info(`Swept ${swept} stale external thread(s)`, { namespace: 'ingest' });
   }
 }
 
 /** Start the periodic sweep timer. Called once at server startup. */
 export function startExternalThreadSweep(): void {
-  if (sweepTimer) return;
-  sweepTimer = setInterval(() => void sweepStaleExternalThreads(), SWEEP_INTERVAL_MS);
+  if (sweepSchedule) return;
+  // Sequential schedule: a sweep stuck on the data channel never overlaps the next one.
+  sweepSchedule = scheduleRepeating(sweepStaleExternalThreads, SWEEP_INTERVAL_MS, {
+    onError: (err) =>
+      log.error('External thread sweep failed', {
+        namespace: 'ingest',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+  });
   log.info(
     `External thread sweep started (interval=${SWEEP_INTERVAL_MS}ms, ttl=${STALE_TTL_MS}ms)`,
     { namespace: 'ingest' },
@@ -904,10 +924,8 @@ export function startExternalThreadSweep(): void {
 shutdownManager.register(
   'ingest-sweep',
   async () => {
-    if (sweepTimer) {
-      clearInterval(sweepTimer);
-      sweepTimer = null;
-    }
+    sweepSchedule?.stop();
+    sweepSchedule = null;
   },
   ShutdownPhase.SERVICES,
 );

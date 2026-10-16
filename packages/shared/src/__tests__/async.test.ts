@@ -5,6 +5,7 @@ import {
   createPermitPool,
   retryAsync,
   runAsync,
+  scheduleRepeating,
   sleep,
   waitFor,
 } from '../async';
@@ -234,5 +235,60 @@ describe('retryAsync', () => {
     setTimeout(() => controller.abort(reason), 10);
     await expect(pending).rejects.toBe(reason);
     expect(Date.now() - started).toBeLessThan(1_000);
+  });
+});
+
+describe('scheduleRepeating', () => {
+  test('never overlaps a slow run and keeps running after failures', async () => {
+    let running = 0;
+    let maxConcurrent = 0;
+    let runs = 0;
+    const errors: unknown[] = [];
+    const boom = new Error('boom');
+    const repeating = scheduleRepeating(
+      async () => {
+        runs++;
+        running++;
+        maxConcurrent = Math.max(maxConcurrent, running);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        running--;
+        if (runs === 1) throw boom;
+      },
+      5,
+      { onError: (error) => errors.push(error) },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    repeating.stop();
+    await repeating.done;
+    expect(maxConcurrent).toBe(1);
+    expect(runs).toBeGreaterThan(1);
+    expect(errors).toEqual([boom]);
+  });
+
+  test('stop prevents further runs', async () => {
+    let runs = 0;
+    const repeating = scheduleRepeating(() => void runs++, 5);
+    repeating.stop();
+    await repeating.done;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(runs).toBe(0);
+  });
+
+  test('unref lets the process exit while only the schedule is pending', async () => {
+    const asyncModule = new URL('../async.ts', import.meta.url).pathname;
+    const script = (unref: boolean) =>
+      `import { scheduleRepeating } from ${JSON.stringify(asyncModule)};
+       scheduleRepeating(() => {}, 60_000, { unref: ${unref} });`;
+    const exitsWithin = async (unref: boolean) => {
+      const proc = Bun.spawn([process.execPath, '-e', script(unref)], { stdout: 'ignore' });
+      const exited = await Promise.race([
+        proc.exited.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3_000)),
+      ]);
+      proc.kill();
+      return exited;
+    };
+    expect(await exitsWithin(true)).toBe(true);
+    expect(await exitsWithin(false)).toBe(false);
   });
 });

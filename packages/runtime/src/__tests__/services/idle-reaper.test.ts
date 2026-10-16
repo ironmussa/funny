@@ -94,4 +94,38 @@ describe('IdleReaper start/stop', () => {
     reaper.start();
     expect(() => reaper.stop()).not.toThrow();
   });
+
+  test('a slow reap never overlaps the next scheduled sweep', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let reaps = 0;
+    const orch = {
+      getIdleCandidates: () => ['t1'],
+      async reapIdleAgent() {
+        reaps++;
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        inFlight--;
+      },
+    };
+    const reaper = new IdleReaper(orch, { policy, sweepMs: 5 });
+    reaper.start();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    reaper.stop();
+    expect(reaps).toBeGreaterThan(1);
+    expect(maxInFlight).toBe(1);
+  });
+
+  test('a new instance stops the previous schedule (watch-mode reload)', async () => {
+    const first = fakeOrch([['a']]);
+    const second = fakeOrch([['b']]);
+    new IdleReaper(first, { policy, sweepMs: 5 }).start();
+    const current = new IdleReaper(second, { policy, sweepMs: 5 });
+    current.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    current.stop();
+    expect(first.reaped).toEqual([]);
+    expect(second.reaped.length).toBeGreaterThan(0);
+  });
 });

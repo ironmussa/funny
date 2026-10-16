@@ -112,6 +112,52 @@ describe('auth-store', () => {
     expect(state.user?.username).toBe('dev');
   });
 
+  test('login polls until the session cookie is visible', async () => {
+    vi.useFakeTimers();
+    try {
+      mockAuth.signIn.mockResolvedValue({ error: null });
+      mockAuth.getSession
+        .mockResolvedValueOnce({ data: null })
+        .mockResolvedValueOnce({ data: null })
+        .mockResolvedValue({ data: { user: { id: 'u3', username: 'late', name: 'Late' } } });
+
+      const login = useAuthStore.getState().login('late', 'secret');
+      await vi.advanceTimersByTimeAsync(80 * 2);
+      await login;
+
+      expect(mockAuth.getSession).toHaveBeenCalledTimes(3);
+      expect(useAuthStore.getState().user?.username).toBe('late');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('login gives up after 10 retries when the session never appears', async () => {
+    vi.useFakeTimers();
+    try {
+      mockAuth.signIn.mockResolvedValue({ error: null });
+      mockAuth.getSession.mockResolvedValue({ data: null });
+
+      const login = useAuthStore.getState().login('ghost', 'secret');
+      const assertion = expect(login).rejects.toThrow('Session was not stored in the browser');
+      await vi.advanceTimersByTimeAsync(80 * 10);
+      await assertion;
+
+      expect(mockAuth.getSession).toHaveBeenCalledTimes(11);
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('login does not retry a failing getSession call', async () => {
+    mockAuth.signIn.mockResolvedValue({ error: null });
+    mockAuth.getSession.mockRejectedValue(new Error('network down'));
+
+    await expect(useAuthStore.getState().login('dev', 'secret')).rejects.toThrow('network down');
+    expect(mockAuth.getSession).toHaveBeenCalledTimes(1);
+  });
+
   test('logout clears user and org state', async () => {
     useAuthStore.setState({
       isAuthenticated: true,

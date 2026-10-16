@@ -53,6 +53,7 @@ and Git; `.gitignore` already excludes `.env.*` except `.env.example`.
 ## Verification
 
 - Always run `bun run lint` and `bun run typecheck` before considering code changes complete.
+- Format with oxfmt (`bun run format`, or `bunx oxfmt --write <files>`), never prettier: there is no prettier config, so it silently rewrites files to its own defaults. The pre-commit hook re-formats staged files with oxfmt.
 - Add or update a test when a change affects behavior, fixes a bug, or introduces enough risk that automated coverage is warranted.
 
 ## OpenWiki

@@ -57,19 +57,26 @@ export function retryAsync<A>(
     try: (signal) => operation(signal, ++attempt),
     catch: (error) => error,
   });
-  const { sleep: wait, onRetry } = options;
+  const { sleep: wait, onRetry, times } = options;
+  const retryable = options.while ?? (() => true);
+  // Decide to stop BEFORE computing/announcing a delay: an exhausted or
+  // non-retryable failure must propagate immediately, without onRetry or a wait.
+  const base = Schedule.while(
+    Schedule.spaced(0),
+    (meta) => (times === undefined || meta.attempt <= times) && retryable(meta.input),
+  );
   const delayFor = (meta: Schedule.InputMetadata<unknown>) => {
     const ms = Math.max(0, options.delayMs(meta.attempt, meta.input));
     onRetry?.(meta.input, meta.attempt, ms);
     return ms;
   };
   const schedule = wait
-    ? Schedule.tap(Schedule.spaced(0), (meta) => {
+    ? Schedule.tap(base, (meta) => {
         const ms = delayFor(meta);
         return ms > 0 ? Effect.promise(() => wait(ms)) : Effect.void;
       })
-    : Schedule.modifyDelay(Schedule.spaced(0), (meta) => Effect.succeed(delayFor(meta)));
-  return run(Effect.retry(once, { schedule, times: options.times, while: options.while }), options);
+    : Schedule.modifyDelay(base, (meta) => Effect.succeed(delayFor(meta)));
+  return run(Effect.retry(once, schedule), options);
 }
 
 /** Interruptible backoff/polling wait. UI animation timing should stay browser-native. */

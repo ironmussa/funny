@@ -222,6 +222,30 @@ describe('retryAsync', () => {
     expect(fatalCalls).toBe(1);
   });
 
+  test('retryAsync never announces or waits for a retry that will not happen', async () => {
+    const announced: number[] = [];
+    const waits: number[] = [];
+    const common = {
+      delayMs: () => 1_000,
+      onRetry: (_error: unknown, retry: number) => void announced.push(retry),
+      sleep: async (ms: number) => void waits.push(ms),
+    };
+    await expect(
+      retryAsync(() => Promise.reject(new Error('transient')), { ...common, times: 2 }),
+    ).rejects.toThrow('transient');
+    expect(announced).toEqual([1, 2]);
+    expect(waits).toEqual([1_000, 1_000]);
+
+    announced.length = 0;
+    waits.length = 0;
+    const fatal = new Error('fatal');
+    await expect(
+      retryAsync(() => Promise.reject(fatal), { ...common, while: (e) => e !== fatal }),
+    ).rejects.toBe(fatal);
+    expect(announced).toEqual([]);
+    expect(waits).toEqual([]);
+  });
+
   test('retryAsync backoff is interrupted by the abort signal', async () => {
     const controller = new AbortController();
     const reason = new Error('stop');

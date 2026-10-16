@@ -325,7 +325,12 @@ async function runLocalCommand(request: HarnessCommandRequest): Promise<HarnessC
             child.kill('SIGTERM');
           }, request.timeoutMs)
         : undefined;
-    if (timeout) void timeout.done.catch(() => {});
+    // If the kill itself fails the child may keep running: report it instead of hanging.
+    if (timeout)
+      void timeout.done.catch((err: unknown) => {
+        const reason = err instanceof Error ? err.message : String(err);
+        resolve({ ok: false, stdout, stderr, error: `Command timed out; kill failed: ${reason}` });
+      });
 
     child.stdout?.on('data', (chunk) => {
       stdout += String(chunk);

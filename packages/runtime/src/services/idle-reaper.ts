@@ -32,7 +32,7 @@ function nonNegInt(raw: string | undefined, def: number): number {
  * Read reaper config from the environment.
  * - `FUNNY_AGENT_IDLE_REAP_MS` (default 600000) — non-claude idle window.
  * - `FUNNY_AGENT_IDLE_REAP_MS_CLAUDE` (default 0 = disabled) — claude window.
- * - `FUNNY_AGENT_IDLE_SWEEP_MS` (default 60000) — sweep interval.
+ * - `FUNNY_AGENT_IDLE_SWEEP_MS` (default 60000) — sweep interval; `0` disables the reaper.
  * A window of `0` disables reaping for that class.
  */
 export function loadIdleReaperConfig(env: NodeJS.ProcessEnv = process.env): IdleReaperConfig {
@@ -61,6 +61,10 @@ export class IdleReaper {
   start(): void {
     if (this.config.policy.defaultIdleMs <= 0 && this.config.policy.claudeIdleMs <= 0) {
       log.info('Idle reaper disabled (both windows 0)', { namespace: 'agent' });
+      return;
+    }
+    if (this.config.sweepMs <= 0) {
+      log.info('Idle reaper disabled (sweep interval 0)', { namespace: 'agent' });
       return;
     }
     // Dedupe across bun --watch reloads: a fresh module instance stops the

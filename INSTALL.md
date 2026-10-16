@@ -510,7 +510,7 @@ DATABASE_URL=postgresql://user:pass@db.example.com/funny?sslmode=require
 | `OTLP_ENDPOINT`                   | OpenTelemetry collector endpoint                                                                         | —                 | No                    |
 | `FUNNY_AGENT_IDLE_REAP_MS`        | Idle window (ms) before a quiescent non-claude agent process tree is reaped to free memory; `0` disables | `600000` (10 min) | No                    |
 | `FUNNY_AGENT_IDLE_REAP_MS_CLAUDE` | Idle window (ms) for claude agents; off by default since SDK resume preserves prompt cache; `0` disables | `0` (disabled)    | No                    |
-| `FUNNY_AGENT_IDLE_SWEEP_MS`       | How often the idle reaper scans for reapable agents                                                      | `60000` (1 min)   | No                    |
+| `FUNNY_AGENT_IDLE_SWEEP_MS`       | How often the idle reaper scans for reapable agents; `0` disables the reaper                             | `60000` (1 min)   | No                    |
 
 ### `funny-server` (central server)
 

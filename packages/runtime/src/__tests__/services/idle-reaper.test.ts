@@ -128,4 +128,13 @@ describe('IdleReaper start/stop', () => {
     expect(first.reaped).toEqual([]);
     expect(second.reaped.length).toBeGreaterThan(0);
   });
+
+  test('a sweep interval of 0 disables the reaper instead of spinning', async () => {
+    const orch = fakeOrch([['t1']]);
+    const reaper = new IdleReaper(orch, { policy, sweepMs: 0 });
+    reaper.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    reaper.stop();
+    expect(orch.reaped).toEqual([]);
+  });
 });

@@ -303,16 +303,21 @@ describe('scheduleRepeating', () => {
     const script = (unref: boolean) =>
       `import { scheduleRepeating } from ${JSON.stringify(asyncModule)};
        scheduleRepeating(() => {}, 60_000, { unref: ${unref} });`;
-    const exitsWithin = async (unref: boolean) => {
+    const exitsWithin = async (unref: boolean, ms: number) => {
       const proc = Bun.spawn([process.execPath, '-e', script(unref)], { stdout: 'ignore' });
       const exited = await Promise.race([
         proc.exited.then(() => true),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3_000)),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
       ]);
       proc.kill();
       return exited;
     };
-    expect(await exitsWithin(true)).toBe(true);
-    expect(await exitsWithin(false)).toBe(false);
+    // Both run concurrently; the generous bound only matters on a slow machine.
+    const [unrefExits, refExits] = await Promise.all([
+      exitsWithin(true, 3_000),
+      exitsWithin(false, 750),
+    ]);
+    expect(unrefExits).toBe(true);
+    expect(refExits).toBe(false);
   });
 });

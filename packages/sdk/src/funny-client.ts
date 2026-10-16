@@ -1,3 +1,4 @@
+import { runAsync } from '@funny/shared/async';
 /**
  * FunnyClient — sends events to the funny server ingest webhook.
  *
@@ -54,25 +55,33 @@ export class FunnyClient {
   async send(event: IngestEvent): Promise<WebhookResponse> {
     const url = `${this.baseUrl}/api/ingest/webhook`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Webhook-Secret': this.secret,
+    return runAsync(
+      async (signal) => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Secret': this.secret,
+          },
+          body: JSON.stringify(event),
+          signal,
+        });
+
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as WebhookErrorResponse;
+          throw new FunnyClientError(
+            body.error ?? `HTTP ${response.status} ${response.statusText}`,
+            response.status,
+          );
+        }
+
+        return response.json() as Promise<WebhookResponse>;
       },
-      body: JSON.stringify(event),
-      signal: AbortSignal.timeout(this.timeoutMs),
-    });
-
-    if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as WebhookErrorResponse;
-      throw new FunnyClientError(
-        body.error ?? `HTTP ${response.status} ${response.statusText}`,
-        response.status,
-      );
-    }
-
-    return response.json() as Promise<WebhookResponse>;
+      {
+        timeoutMs: this.timeoutMs,
+        timeoutError: () => new DOMException('The operation timed out', 'TimeoutError'),
+      },
+    );
   }
 
   // ── Lifecycle methods ───────────────────────────────────────

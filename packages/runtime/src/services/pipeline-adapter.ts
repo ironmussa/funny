@@ -1,3 +1,4 @@
+import { gitRead, runHookCommand, invalidateStatusCache } from '@funny/core/git';
 /**
  * @domain subdomain: Pipeline
  * @domain subdomain-type: core
@@ -12,10 +13,9 @@
  * (spawn agents, run git commands, send notifications) using the runtime's
  * existing infrastructure without importing it directly.
  */
-
-import { gitRead, runHookCommand, invalidateStatusCache } from '@funny/core/git';
 import type { ProgressReporter, StepProgressData } from '@funny/pipelines';
 import type { AgentModel, PermissionMode, WSEvent, WorkflowNodeRunStatus } from '@funny/shared';
+import { sleep as effectSleep } from '@funny/shared/async';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
@@ -594,7 +594,7 @@ async function waitForAgentCompletionPoll(threadId: string, timeoutMs = 300_000)
 
   while (Date.now() - start < timeoutMs) {
     if (!isAgentRunning(threadId)) return;
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    await effectSleep(pollInterval);
   }
 
   throw new Error(`Agent timed out after ${timeoutMs}ms`);

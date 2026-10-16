@@ -1,4 +1,5 @@
 import type { SafeUser } from '@funny/shared';
+import { sleep as effectSleep } from '@funny/shared/async';
 import { create } from 'zustand';
 
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
@@ -103,7 +104,7 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     // Confirm the session cookie is visible to the client (same check as /api/profile).
     let session = await authClient.getSession();
     for (let i = 0; i < 10 && !session.data?.user; i++) {
-      await new Promise((r) => setTimeout(r, 80));
+      await effectSleep(80);
       session = await authClient.getSession();
     }
 

@@ -1,5 +1,7 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 
+import { scheduleTask } from '@funny/shared/async';
+
 import { HarnessError, toHarnessError } from '../errors.js';
 import type { HarnessEvent } from '../events.js';
 import { nowIso } from '../events.js';
@@ -318,11 +320,12 @@ async function runLocalCommand(request: HarnessCommandRequest): Promise<HarnessC
     let timedOut = false;
     const timeout =
       request.timeoutMs !== undefined
-        ? setTimeout(() => {
+        ? scheduleTask(() => {
             timedOut = true;
             child.kill('SIGTERM');
           }, request.timeoutMs)
         : undefined;
+    if (timeout) void timeout.done.catch(() => {});
 
     child.stdout?.on('data', (chunk) => {
       stdout += String(chunk);
@@ -331,11 +334,11 @@ async function runLocalCommand(request: HarnessCommandRequest): Promise<HarnessC
       stderr += String(chunk);
     });
     child.on('error', (err) => {
-      if (timeout) clearTimeout(timeout);
+      timeout?.cancel();
       resolve({ ok: false, stdout, stderr, error: err.message });
     });
     child.on('exit', (code) => {
-      if (timeout) clearTimeout(timeout);
+      timeout?.cancel();
       resolve({
         ok: code === 0 && !timedOut,
         stdout,

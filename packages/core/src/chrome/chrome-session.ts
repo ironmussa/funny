@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 
+import { sleep as effectSleep } from '@funny/shared/async';
 import CDP from 'chrome-remote-interface';
 
 export interface ScreencastFrame {
@@ -420,7 +421,7 @@ export async function waitForChrome(host: string, port: number, timeoutMs = 30_0
     } catch {
       // not ready yet
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await effectSleep(500);
   }
 
   throw new Error(`[waitForChrome] Timeout: Chrome not ready after ${timeoutMs}ms`);

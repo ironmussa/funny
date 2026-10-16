@@ -1,3 +1,4 @@
+import { runAsync } from '@funny/shared/async';
 /**
  * @domain subdomain: Process Management
  * @domain subdomain-type: supporting
@@ -10,7 +11,6 @@
  * Streams stdout/stderr to clients via WebSocket.
  * Supports auto-restart with exponential backoff for managed processes.
  */
-
 import { internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
@@ -312,17 +312,14 @@ export async function stopCommand(commandId: string): Promise<void> {
   } else {
     killProcessTree(entry.proc); // SIGTERM
 
-    await Promise.race([
-      entry.proc.exited,
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          if (!entry.exited) {
-            killProcessTree(entry.proc, 9); // SIGKILL
-          }
-          resolve();
-        }, KILL_GRACE_MS),
-      ),
-    ]);
+    const timeout = new Error('Command shutdown grace period expired');
+    await runAsync(() => entry.proc.exited, {
+      timeoutMs: KILL_GRACE_MS,
+      timeoutError: () => timeout,
+    }).catch((error) => {
+      if (error !== timeout) throw error;
+      if (!entry.exited) killProcessTree(entry.proc, 9);
+    });
   }
 
   entry.exited = true;

@@ -140,3 +140,26 @@ describe('executeResult', () => {
     }
   });
 });
+
+test('execute aborts an in-flight child and preserves the caller cancellation reason', async () => {
+  const controller = new AbortController();
+  const reason = new Error('stop requested');
+  const operation = execute('node', ['-e', 'setInterval(() => {}, 1000)'], {
+    signal: controller.signal,
+    timeout: 60_000,
+  });
+  setTimeout(() => controller.abort(reason), 20);
+  await expect(operation).rejects.toBe(reason);
+}, 2000);
+
+test('execute never spawns a child when already cancelled', async () => {
+  const controller = new AbortController();
+  const reason = new Error('cancelled before spawn');
+  controller.abort(reason);
+  // An attempted spawn would reject with ENOENT instead of the cancellation reason.
+  await expect(
+    execute('funny-nonexistent-cancelled-command', [], {
+      signal: controller.signal,
+    }),
+  ).rejects.toBe(reason);
+});

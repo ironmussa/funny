@@ -1,3 +1,4 @@
+import { sleep as effectSleep } from '@funny/shared/async';
 /**
  * Funny UI Annotator - Background Service Worker
  *
@@ -309,7 +310,7 @@ chrome.action.onClicked.addListener(async (tab) => {
         target: { tabId: tab.id },
         files: ['content.js'],
       });
-      await new Promise((r) => setTimeout(r, 200));
+      await effectSleep(200);
       await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_ANNOTATOR' });
     } catch {
       // Cannot inject — page may be restricted

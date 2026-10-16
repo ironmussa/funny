@@ -1,3 +1,4 @@
+import type { JsonObject } from '@bufbuild/protobuf';
 /**
  * Client-side helpers for talking to the runner's BrowserSessionManager.
  *
@@ -7,8 +8,7 @@
  *
  * Frame events are routed elsewhere — see `dispatch-browser-session-events.ts`.
  */
-
-import type { JsonObject } from '@bufbuild/protobuf';
+import { waitFor } from '@funny/shared/async';
 
 import { sendBrowserSessionRealtime } from '@/hooks/use-ws';
 import { createClientLogger } from '@/lib/client-logger';
@@ -19,8 +19,7 @@ const log = createClientLogger('browser-session');
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
-  reject: (err: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
+  reject: (err: unknown) => void;
 }
 
 const pending = new Map<string, PendingRequest>();
@@ -46,7 +45,6 @@ export function resolveBrowserSessionRequest(
   const entry = pending.get(requestId);
   if (!entry) return;
   pending.delete(requestId);
-  clearTimeout(entry.timer);
   if (ok) entry.resolve(value);
   else entry.reject(new Error(error ?? 'unknown error'));
 }
@@ -56,42 +54,47 @@ function sendRequest(
   sessionId: string,
   extra: Record<string, unknown>,
 ): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const requestId = newRequestId();
-    const timer = setTimeout(() => {
-      pending.delete(requestId);
-      reject(new Error('timeout'));
-    }, REQUEST_TIMEOUT_MS);
-    pending.set(requestId, { resolve, reject, timer });
-    const sent =
-      type === 'browser-session:inspect-at' || type === 'browser-session:inspect-rect'
-        ? sendBrowserSessionRealtime(sessionId, {
-            case: 'inspect',
-            requestId,
-            selector: {
-              kind: type === 'browser-session:inspect-rect' ? 'rect' : 'at',
-              ...extra,
-            },
-          })
-        : type === 'browser-session:execute'
-          ? sendBrowserSessionRealtime(sessionId, {
-              case: 'execute',
-              requestId,
-              expression: String(extra.expression ?? ''),
-            })
-          : type === 'browser-session:nav'
+  const requestId = newRequestId();
+  return waitFor(
+    (resolve, reject) => {
+      pending.set(requestId, { resolve, reject });
+      try {
+        const sent =
+          type === 'browser-session:inspect-at' || type === 'browser-session:inspect-rect'
             ? sendBrowserSessionRealtime(sessionId, {
-                case: 'historyNavigation',
+                case: 'inspect',
                 requestId,
-                action: String(extra.action ?? ''),
+                selector: {
+                  kind: type === 'browser-session:inspect-rect' ? 'rect' : 'at',
+                  ...extra,
+                },
               })
-            : sendBrowserSessionRealtime(sessionId, { case: 'screenshot', requestId });
-    if (!sent) {
-      pending.delete(requestId);
-      clearTimeout(timer);
-      reject(new Error('ws-not-connected'));
-    }
-  });
+            : type === 'browser-session:execute'
+              ? sendBrowserSessionRealtime(sessionId, {
+                  case: 'execute',
+                  requestId,
+                  expression: String(extra.expression ?? ''),
+                })
+              : type === 'browser-session:nav'
+                ? sendBrowserSessionRealtime(sessionId, {
+                    case: 'historyNavigation',
+                    requestId,
+                    action: String(extra.action ?? ''),
+                  })
+                : sendBrowserSessionRealtime(sessionId, { case: 'screenshot', requestId });
+        if (!sent) {
+          pending.delete(requestId);
+          reject(new Error('ws-not-connected'));
+        }
+      } catch (error) {
+        reject(error);
+      }
+      return () => {
+        pending.delete(requestId);
+      };
+    },
+    { timeoutMs: REQUEST_TIMEOUT_MS, timeoutError: () => new Error('timeout') },
+  );
 }
 
 function sendFireAndForget(

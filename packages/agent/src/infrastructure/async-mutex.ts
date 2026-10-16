@@ -1,3 +1,4 @@
+import { createPermitPool } from '@funny/shared/async';
 /**
  * AsyncMutex — single-holder async lock for protecting read-modify-write sequences.
  *
@@ -6,22 +7,19 @@
  */
 
 export class AsyncMutex {
-  private queue: Array<() => void> = [];
-  private locked = false;
+  private readonly permits = createPermitPool(1);
+  private holders = 0;
 
-  /**
-   * Acquire the lock. Returns a release function.
-   * If already locked, waits until the current holder releases.
-   */
   async acquire(): Promise<() => void> {
-    if (!this.locked) {
-      this.locked = true;
-      return this.createRelease();
-    }
-
-    return new Promise<() => void>((resolve) => {
-      this.queue.push(() => resolve(this.createRelease()));
-    });
+    const release = await this.permits.acquire();
+    this.holders++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.holders--;
+      release();
+    };
   }
 
   /**
@@ -38,21 +36,6 @@ export class AsyncMutex {
   }
 
   get isLocked(): boolean {
-    return this.locked;
-  }
-
-  private createRelease(): () => void {
-    let released = false;
-    return () => {
-      if (released) return; // idempotent
-      released = true;
-
-      const next = this.queue.shift();
-      if (next) {
-        next(); // pass lock to next waiter
-      } else {
-        this.locked = false;
-      }
-    };
+    return this.holders > 0;
   }
 }

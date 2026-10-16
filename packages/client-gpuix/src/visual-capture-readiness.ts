@@ -1,3 +1,4 @@
+import { sleep as effectSleep } from '@funny/shared/async';
 export interface StableRendererEvidenceOptions {
   marker: string;
   readEvidence(): string;
@@ -13,8 +14,7 @@ export interface StableRendererEvidence {
   observations: number;
 }
 
-const delay = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
+const delay = (milliseconds: number): Promise<void> => effectSleep(milliseconds);
 
 export async function waitForStableRendererEvidence({
   marker,

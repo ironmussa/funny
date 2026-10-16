@@ -2,9 +2,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter } from 'node:path';
 
+import { createConcurrencyLimiter, runAsync, waitFor } from '@funny/shared/async';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
-import pLimit from 'p-limit';
 
 /** Whether we're running under Bun (vs Node/vitest) */
 const hasBun = typeof globalThis.Bun !== 'undefined';
@@ -85,6 +85,8 @@ export async function executeShell(
 export interface ProcessOptions {
   cwd?: string;
   timeout?: number;
+  /** Cancel an in-flight process. */
+  signal?: AbortSignal;
   env?: Record<string, string>;
   reject?: boolean; // false = don't throw on non-zero exit
   stdin?: string; // data to write to stdin
@@ -127,14 +129,14 @@ export class ProcessExecutionError extends Error {
 // ─── Concurrency pools ──────────────────────────────────
 // Read-only git commands use --no-optional-locks and don't contend for
 // .git/index.lock, so they can safely run at high concurrency.
-const readPool = pLimit(20);
+const readPool = createConcurrencyLimiter(20);
 
 // Mutating git commands (add, commit, push, …) take locks and must be
 // limited to avoid contention and corruption.
-const writePool = pLimit(4);
+const writePool = createConcurrencyLimiter(4);
 
 // Non-git commands (shell, gh CLI, etc.) — unchanged from original.
-const processPool = pLimit(6);
+const processPool = createConcurrencyLimiter(6);
 
 /**
  * Execute a read-only git command with --no-optional-locks.
@@ -175,6 +177,7 @@ async function _executeRaw(
   args: string[],
   options: ProcessOptions,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  options.signal?.throwIfAborted();
   if (hasBun) return _executeRawBun(command, args, options);
   return _executeRawNode(command, args, options);
 }
@@ -231,15 +234,6 @@ async function _executeRawBun(
 
   const timeoutMs = options.timeout ?? 30_000;
   const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      proc.kill();
-      reject(new Error(`Command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`));
-    }, timeoutMs);
-  });
-
   try {
     // Read streams BEFORE awaiting exit to avoid race condition.
     // In Bun, once proc.exited resolves the ReadableStreams may already be
@@ -250,15 +244,28 @@ async function _executeRawBun(
             readStreamWithCap(stream, maxBytes, () => proc.kill())
         : (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
 
-    const [stdout, stderr, exitCode] = await Promise.race([
-      Promise.all([
-        readCapped(proc.stdout as ReadableStream<Uint8Array>),
-        readCapped(proc.stderr as ReadableStream<Uint8Array>),
-        proc.exited,
-      ]),
-      timeoutPromise,
-    ]);
-    clearTimeout(timeoutId);
+    const [stdout, stderr, exitCode] = await runAsync(
+      async (signal) => {
+        const abort = () => proc.kill();
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+        try {
+          return await Promise.all([
+            readCapped(proc.stdout as ReadableStream<Uint8Array>),
+            readCapped(proc.stderr as ReadableStream<Uint8Array>),
+            proc.exited,
+          ]);
+        } finally {
+          signal.removeEventListener('abort', abort);
+        }
+      },
+      {
+        signal: options.signal,
+        timeoutMs,
+        timeoutError: () =>
+          new Error(`Command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`),
+      },
+    );
 
     const shouldReject = options.reject ?? true;
     if (shouldReject && exitCode !== 0) {
@@ -273,10 +280,9 @@ async function _executeRawBun(
     }
 
     return { stdout, stderr, exitCode };
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof ProcessExecutionError) throw error;
-    throw error;
+  } finally {
+    // Also covers read failures and cancellation before the async body starts.
+    if (proc.exitCode === null) proc.kill();
   }
 }
 
@@ -289,73 +295,76 @@ async function _executeRawNode(
   const timeoutMs = options.timeout ?? 30_000;
   const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, {
-      cwd: options.cwd,
-      env: processEnvFor(command, options.env),
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+  return waitFor(
+    (resolve, reject) => {
+      const proc = spawn(command, args, {
+        cwd: options.cwd,
+        env: processEnvFor(command, options.env),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-    if (options.stdin != null) {
-      proc.stdin.write(options.stdin);
-      proc.stdin.end();
-    } else {
-      proc.stdin.end();
-    }
-
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-    let totalBytes = 0;
-    let overflowed = false;
-    const onChunk = (chunk: Buffer, chunks: Buffer[]) => {
-      if (overflowed) return;
-      chunks.push(chunk);
-      totalBytes += chunk.byteLength;
-      if (maxBytes > 0 && totalBytes > maxBytes) {
-        overflowed = true;
-        proc.kill();
-        clearTimeout(timer);
-        reject(new ProcessOutputTooLargeError(`${command} ${args.join(' ')}`, maxBytes));
-      }
-    };
-    proc.stdout.on('data', (chunk: Buffer) => onChunk(chunk, stdoutChunks));
-    proc.stderr.on('data', (chunk: Buffer) => onChunk(chunk, stderrChunks));
-
-    const timer = setTimeout(() => {
-      proc.kill();
-      reject(new Error(`Command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`));
-    }, timeoutMs);
-
-    proc.on('close', (code) => {
-      if (overflowed) return;
-      clearTimeout(timer);
-      const stdout = Buffer.concat(stdoutChunks).toString();
-      const stderr = Buffer.concat(stderrChunks).toString();
-      const exitCode = code ?? 1;
-
-      const shouldReject = options.reject ?? true;
-      if (shouldReject && exitCode !== 0) {
-        const reason = stderr.trim() || stdout.trim();
-        reject(
-          new ProcessExecutionError(
-            reason || `Command failed: ${command} ${args.join(' ')}`,
-            exitCode,
-            stdout,
-            stderr,
-            `${command} ${args.join(' ')}`,
-          ),
-        );
-        return;
+      if (options.stdin != null) {
+        proc.stdin.write(options.stdin);
+        proc.stdin.end();
+      } else {
+        proc.stdin.end();
       }
 
-      resolve({ stdout, stderr, exitCode });
-    });
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      let totalBytes = 0;
+      let overflowed = false;
+      const onChunk = (chunk: Buffer, chunks: Buffer[]) => {
+        if (overflowed) return;
+        chunks.push(chunk);
+        totalBytes += chunk.byteLength;
+        if (maxBytes > 0 && totalBytes > maxBytes) {
+          overflowed = true;
+          proc.kill();
+          reject(new ProcessOutputTooLargeError(`${command} ${args.join(' ')}`, maxBytes));
+        }
+      };
+      proc.stdout.on('data', (chunk: Buffer) => onChunk(chunk, stdoutChunks));
+      proc.stderr.on('data', (chunk: Buffer) => onChunk(chunk, stderrChunks));
 
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
+      proc.on('close', (code) => {
+        if (overflowed) return;
+        const stdout = Buffer.concat(stdoutChunks).toString();
+        const stderr = Buffer.concat(stderrChunks).toString();
+        const exitCode = code ?? 1;
+
+        const shouldReject = options.reject ?? true;
+        if (shouldReject && exitCode !== 0) {
+          const reason = stderr.trim() || stdout.trim();
+          reject(
+            new ProcessExecutionError(
+              reason || `Command failed: ${command} ${args.join(' ')}`,
+              exitCode,
+              stdout,
+              stderr,
+              `${command} ${args.join(' ')}`,
+            ),
+          );
+          return;
+        }
+
+        resolve({ stdout, stderr, exitCode });
+      });
+
+      proc.on('error', (err) => {
+        reject(err);
+      });
+      return () => {
+        if (proc.exitCode === null && !proc.killed) proc.kill();
+      };
+    },
+    {
+      signal: options.signal,
+      timeoutMs,
+      timeoutError: () =>
+        new Error(`Command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`),
+    },
+  );
 }
 
 /**

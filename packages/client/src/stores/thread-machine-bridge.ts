@@ -1,9 +1,9 @@
+import type { ThreadStatus } from '@funny/shared';
 /**
  * Thread state machine bridge — manages xstate actors per thread.
  * Extracted from thread-store.ts for testability and separation of concerns.
  */
-
-import type { ThreadStatus } from '@funny/shared';
+import { waitFor } from '@funny/shared/async';
 import {
   threadMachine,
   wsEventToMachineEvent,
@@ -210,58 +210,54 @@ export function loadThreadData(threadId: string): Promise<ThreadDataSnapshot> {
     actor.send({ type: 'INVALIDATE' });
   }
 
-  return new Promise<ThreadDataSnapshot>((resolve, reject) => {
-    let settled = false;
-    let reattempts = 0;
-    const subscription = actor.subscribe((snap) => {
-      if (settled) return;
-      if (snap.matches('loaded')) {
-        settled = true;
-        clearTimeout(timeoutHandle);
-        subscription.unsubscribe();
-        if (snap.context.data) resolve(snap.context.data);
-        else reject(new Error('thread data actor reached loaded state without data'));
-        return;
-      }
-      if (snap.matches('failed')) {
-        settled = true;
-        clearTimeout(timeoutHandle);
-        subscription.unsubscribe();
-        reject(new Error(snap.context.error ?? 'failed to load thread data'));
-        return;
-      }
-      if (snap.matches('unloaded')) {
-        // Either we just started observing and need to kick off the fetch,
-        // or an INVALIDATE just transitioned us back here mid-flight.
-        if (reattempts >= LOAD_THREAD_MAX_REATTEMPTS) {
+  return waitFor<ThreadDataSnapshot>(
+    (resolve, reject) => {
+      let settled = false;
+      let reattempts = 0;
+      const subscription = actor.subscribe((snap) => {
+        if (settled) return;
+        if (snap.matches('loaded')) {
           settled = true;
-          clearTimeout(timeoutHandle);
-          subscription.unsubscribe();
-          reject(
-            new Error(
-              `thread data actor for ${threadId} kept invalidating during fetch (${reattempts} retries)`,
-            ),
-          );
+          if (snap.context.data) resolve(snap.context.data);
+          else reject(new Error('thread data actor reached loaded state without data'));
           return;
         }
-        reattempts += 1;
-        actor.send({ type: 'LOAD' });
-      }
-      // `fetching` is a transient state — wait for the next snapshot.
-    });
+        if (snap.matches('failed')) {
+          settled = true;
+          reject(new Error(snap.context.error ?? 'failed to load thread data'));
+          return;
+        }
+        if (snap.matches('unloaded')) {
+          // Either we just started observing and need to kick off the fetch,
+          // or an INVALIDATE just transitioned us back here mid-flight.
+          if (reattempts >= LOAD_THREAD_MAX_REATTEMPTS) {
+            settled = true;
+            reject(
+              new Error(
+                `thread data actor for ${threadId} kept invalidating during fetch (${reattempts} retries)`,
+              ),
+            );
+            return;
+          }
+          reattempts += 1;
+          actor.send({ type: 'LOAD' });
+        }
+        // `fetching` is a transient state — wait for the next snapshot.
+      });
 
-    const timeoutHandle = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      subscription.unsubscribe();
-      reject(
+      // Kick off the load. The subscribe callback above also fires on the
+      // initial snapshot, so if the actor is already in `loaded` / `failed`,
+      // resolution happens synchronously without ever hitting `unloaded`.
+      actor.send({ type: 'LOAD' });
+      return () => {
+        settled = true;
+        subscription.unsubscribe();
+      };
+    },
+    {
+      timeoutMs: LOAD_THREAD_TIMEOUT_MS,
+      timeoutError: () =>
         new Error(`thread data actor for ${threadId} timed out after ${LOAD_THREAD_TIMEOUT_MS}ms`),
-      );
-    }, LOAD_THREAD_TIMEOUT_MS);
-
-    // Kick off the load. The subscribe callback above also fires on the
-    // initial snapshot, so if the actor is already in `loaded` / `failed`,
-    // resolution happens synchronously without ever hitting `unloaded`.
-    actor.send({ type: 'LOAD' });
-  });
+    },
+  );
 }

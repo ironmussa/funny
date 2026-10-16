@@ -357,6 +357,7 @@
       "dependencies": {
         "@funny/core": "workspace:*",
         "@funny/pipelines": "workspace:*",
+        "@funny/shared": "workspace:*",
         "zod": "^4.5.4",
       },
       "devDependencies": {
@@ -370,6 +371,7 @@
       "name": "@funny/memory",
       "version": "1.0.0",
       "dependencies": {
+        "@funny/shared": "workspace:*",
         "@libsql/client": "^0.17.4",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "hono": "^4.12.25",
@@ -532,6 +534,9 @@
     "packages/sdk": {
       "name": "@funny/sdk",
       "version": "0.1.0",
+      "dependencies": {
+        "@funny/shared": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "^1.4.0",
       },
@@ -582,6 +587,7 @@
       "dependencies": {
         "@bufbuild/protobuf": "2.14.0",
         "drizzle-orm": "^0.45.1",
+        "effect": "4.0.4",
         "nanoid": "^5.1.5",
         "pg": "^8.20.0",
         "semver": "^7.7.3",

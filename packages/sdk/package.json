@@ -11,6 +11,9 @@
   "scripts": {
     "test": "bun test"
   },
+  "dependencies": {
+    "@funny/shared": "workspace:*"
+  },
   "devDependencies": {
     "@types/bun": "^1.4.0"
   }

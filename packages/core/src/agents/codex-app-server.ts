@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { createInterface } from 'readline';
 
+import { waitFor } from '@funny/shared/async';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
@@ -119,19 +120,20 @@ export class CodexAppServer {
   async request(method: string, params: unknown): Promise<unknown> {
     if (this.failure) throw this.failure;
     const id = this.nextId++;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await new Promise((resolve, reject) => {
+    return waitFor(
+      (resolve, reject) => {
         this.pending.set(id, { resolve, reject });
-        timer = setTimeout(() => {
+        try {
+          this.write({ id, method, params });
+        } catch (error) {
+          reject(error);
+        }
+        return () => {
           this.pending.delete(id);
-          reject(new Error(`Codex ${method} timed out`));
-        }, 30_000);
-        this.write({ id, method, params });
-      });
-    } finally {
-      clearTimeout(timer);
-    }
+        };
+      },
+      { timeoutMs: 30_000, timeoutError: () => new Error(`Codex ${method} timed out`) },
+    );
   }
 
   /** Register before sending: completion can arrive before the RPC response. */
@@ -141,32 +143,41 @@ export class CodexAppServer {
   ): Promise<string> {
     let output = '';
     let listener: (event: CodexNotification) => void = () => {};
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const completion = new Promise<string>((resolve, reject) => {
-      listener = (event) => {
-        if (event.method === 'connection/error') return reject(event.params.error);
-        if (event.params?.threadId !== params.threadId) return;
-        if (event.method === 'item/completed') {
-          const item = event.params.item;
-          if (item?.type === 'agentMessage' && item.text) output += `${item.text}\n`;
-          if (item?.type === 'exitedReviewMode' && item.review) output += `${item.review}\n`;
-        }
-        if (event.method === 'turn/completed') {
-          const turn = event.params.turn;
-          if (!turn) return reject(new Error('Missing Codex turn result'));
-          if (turn.status !== 'completed')
-            reject(new Error(turn.error?.message ?? `Codex turn ${turn.status}`));
-          else resolve(output.trim());
-        }
-      };
-      this.listeners.add(listener);
-      timer = setTimeout(() => reject(new Error('Codex operation timed out')), 10 * 60_000);
-    });
+    const controller = new AbortController();
+    const completion = waitFor<string>(
+      (resolve, reject) => {
+        listener = (event) => {
+          if (event.method === 'connection/error') return reject(event.params.error);
+          if (event.params?.threadId !== params.threadId) return;
+          if (event.method === 'item/completed') {
+            const item = event.params.item;
+            if (item?.type === 'agentMessage' && item.text) output += `${item.text}\n`;
+            if (item?.type === 'exitedReviewMode' && item.review) output += `${item.review}\n`;
+          }
+          if (event.method === 'turn/completed') {
+            const turn = event.params.turn;
+            if (!turn) return reject(new Error('Missing Codex turn result'));
+            if (turn.status !== 'completed')
+              reject(new Error(turn.error?.message ?? `Codex turn ${turn.status}`));
+            else resolve(output.trim());
+          }
+        };
+        this.listeners.add(listener);
+        return () => {
+          this.listeners.delete(listener);
+        };
+      },
+      {
+        signal: controller.signal,
+        timeoutMs: 10 * 60_000,
+        timeoutError: () => new Error('Codex operation timed out'),
+      },
+    );
     try {
       const [, result] = await Promise.all([this.request(method, params), completion]);
       return result;
     } finally {
-      clearTimeout(timer);
+      controller.abort();
       this.listeners.delete(listener);
     }
   }

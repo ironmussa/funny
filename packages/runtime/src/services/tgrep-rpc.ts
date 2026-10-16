@@ -1,5 +1,6 @@
 import { createConnection } from 'node:net';
 
+import { waitFor } from '@funny/shared/async';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
@@ -18,44 +19,45 @@ export function tgrepRpc(
   signal: AbortSignal,
   limits = { timeoutMs: 10_000, maxBytes: 8 * 1_048_576 },
 ): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new Error('cancelled'));
-      return;
-    }
-    const socket = createConnection({ host: '127.0.0.1', port });
-    const chunks: Buffer[] = [];
-    let bytes = 0;
-    let settled = false;
-    const finish = (error?: Error, value?: unknown) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      signal.removeEventListener('abort', abort);
-      socket.destroy();
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const abort = () => finish(new Error('cancelled'));
-    const timer = setTimeout(() => finish(new Error('timeout')), limits.timeoutMs);
-    signal.addEventListener('abort', abort, { once: true });
-    socket.on('error', () => finish(new Error('transport')));
-    socket.on('close', () => finish(new Error('closed')));
-    socket.on('connect', () => {
-      socket.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })}\n`);
-    });
-    socket.on('data', (chunk: Buffer) => {
-      bytes += chunk.length;
-      if (bytes > limits.maxBytes) return finish(new Error('reply-limit'));
-      const newline = chunk.indexOf(10);
-      chunks.push(newline < 0 ? chunk : chunk.subarray(0, newline));
-      if (newline < 0) return;
-      const parsed = parseStoredJson(envelopeSchema, Buffer.concat(chunks).toString('utf8'));
-      if (!parsed.ok || parsed.value.error !== undefined || parsed.value.result === undefined) {
-        finish(new Error('protocol'));
-        return;
-      }
-      finish(undefined, parsed.value.result);
-    });
+  return waitFor(
+    (resolve, reject) => {
+      const socket = createConnection({ host: '127.0.0.1', port });
+      const chunks: Buffer[] = [];
+      let bytes = 0;
+      let settled = false;
+      const finish = (error?: Error, value?: unknown) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        if (error) reject(error);
+        else resolve(value);
+      };
+      socket.on('error', () => finish(new Error('transport')));
+      socket.on('close', () => finish(new Error('closed')));
+      socket.on('connect', () => {
+        socket.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })}\n`);
+      });
+      socket.on('data', (chunk: Buffer) => {
+        bytes += chunk.length;
+        if (bytes > limits.maxBytes) return finish(new Error('reply-limit'));
+        const newline = chunk.indexOf(10);
+        chunks.push(newline < 0 ? chunk : chunk.subarray(0, newline));
+        if (newline < 0) return;
+        const parsed = parseStoredJson(envelopeSchema, Buffer.concat(chunks).toString('utf8'));
+        if (!parsed.ok || parsed.value.error !== undefined || parsed.value.result === undefined) {
+          finish(new Error('protocol'));
+          return;
+        }
+        finish(undefined, parsed.value.result);
+      });
+      return () => {
+        settled = true;
+        socket.destroy();
+      };
+    },
+    { signal, timeoutMs: limits.timeoutMs, timeoutError: () => new Error('timeout') },
+  ).catch((error) => {
+    if (signal.aborted) throw new Error('cancelled');
+    throw error;
   });
 }

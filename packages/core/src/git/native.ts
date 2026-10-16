@@ -9,7 +9,7 @@
  * to avoid saturating the disk when many worktrees are polled simultaneously.
  */
 
-import pLimit from 'p-limit';
+import { createConcurrencyLimiter } from '@funny/shared/async';
 
 export interface NativeGitStatusSummary {
   dirtyFileCount: number;
@@ -135,9 +135,9 @@ export interface NativeGitModule {
 }
 
 // Heavy I/O ops (status scan, diff scan) — limit concurrent disk reads
-const heavyPool = pLimit(8);
+const heavyPool = createConcurrencyLimiter(8);
 // Lightweight ops (branch lookup, log) — higher concurrency since they're fast
-const lightPool = pLimit(20);
+const lightPool = createConcurrencyLimiter(20);
 
 let _native: NativeGitModule | null = null;
 let _pooled: PooledNativeGitModule | null = null;

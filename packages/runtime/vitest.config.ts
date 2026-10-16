@@ -52,6 +52,7 @@ export default defineConfig({
       '@funny/shared/lib/crypto': path.join(shared, 'lib/crypto.ts'),
       '@funny/shared/lib/canonical-json': path.join(shared, 'lib/canonical-json.ts'),
       '@funny/shared/lib/file-search': path.join(shared, 'lib/file-search.ts'),
+      '@funny/shared/async': path.join(shared, 'async.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/evflow': path.join(evflow, 'index.ts'),
       '@funny/pipelines/engine': path.join(pipelines, 'engine.ts'),

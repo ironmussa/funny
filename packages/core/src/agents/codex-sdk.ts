@@ -11,6 +11,7 @@ import { tmpdir } from 'os';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
 import { promisify } from 'util';
 
+import { consumeAsync } from '@funny/shared/async';
 import {
   CODEX_COMMANDS,
   CODEX_COMMAND_NAMES,
@@ -178,16 +179,20 @@ export class CodexSDKProcess extends BaseAgentProcess {
         const input = await this.buildInput(prompt, images, cleanupDirs);
         const { events } = await this.thread.runStreamed(input, { signal: turnAbort.signal });
 
-        for await (const event of events) {
-          if (this.isAborted) break;
-          const maybeText = await this.handleEvent(event);
-          if (maybeText) resultText = maybeText;
-          if (event.type === 'turn.failed') {
-            subtype = 'error_during_execution';
-            errors.push(event.error.message);
-            this.emitErrorToolCall(event.error.message);
-          }
-        }
+        await consumeAsync(
+          events,
+          async (event) => {
+            if (this.isAborted) return false;
+            const maybeText = await this.handleEvent(event);
+            if (maybeText) resultText = maybeText;
+            if (event.type === 'turn.failed') {
+              subtype = 'error_during_execution';
+              errors.push(event.error.message);
+              this.emitErrorToolCall(event.error.message);
+            }
+          },
+          { signal: turnAbort.signal },
+        );
       }
     } catch (err) {
       if (turnAbort.signal.aborted || this.isAborted) {

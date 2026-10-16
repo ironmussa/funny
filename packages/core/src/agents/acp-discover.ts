@@ -1,3 +1,4 @@
+import { spawn } from 'child_process';
 /**
  * Manifest-driven ACP model discovery. Spawns a provider's ACP CLI just long
  * enough to call `initialize` + `newSession`, reads the advertised
@@ -10,11 +11,10 @@
  * Never throws — every failure maps to a typed `{ ok: false }` result so callers
  * can decide between "show error" and "show empty + configure" UX.
  */
-
-import { spawn } from 'child_process';
 import { tmpdir } from 'os';
 import { Readable, Writable } from 'stream';
 
+import { runAsync } from '@funny/shared/async';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 
@@ -97,18 +97,6 @@ export async function discoverAcpModels(
     killProcessTree(child);
   };
 
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const timeoutPromise = new Promise<DiscoverAcpModelsResult>((resolve) => {
-    timer = setTimeout(() => {
-      cleanup();
-      resolve({
-        ok: false,
-        reason: 'timeout',
-        message: `${label} did not respond within ${timeoutMs}ms`,
-      });
-    }, timeoutMs);
-  });
-
   const work = (async (): Promise<DiscoverAcpModelsResult> => {
     const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
     const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
@@ -171,9 +159,15 @@ export async function discoverAcpModels(
   })();
 
   try {
-    return await Promise.race([work, timeoutPromise]);
+    return await runAsync(() => work, {
+      timeoutMs,
+      timeoutError: () => new Error('discovery timeout'),
+    }).catch((): DiscoverAcpModelsResult => ({
+      ok: false,
+      reason: 'timeout',
+      message: `${label} did not respond within ${timeoutMs}ms`,
+    }));
   } finally {
-    if (timer) clearTimeout(timer);
     cleanup();
   }
 }

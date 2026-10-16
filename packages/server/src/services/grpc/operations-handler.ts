@@ -1,3 +1,4 @@
+import { runAsync } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { log } from '../../lib/logger.js';
@@ -607,16 +608,7 @@ export function createOperationsHandler(
                 () => execute(context, { request: legacyRequest, signal: controller.signal }),
               )
             : execute(context, { request: legacyRequest, signal: controller.signal });
-          const result = await Promise.race([
-            execution,
-            new Promise<never>((_, reject) => {
-              controller.signal.addEventListener(
-                'abort',
-                () => reject(new Error(String(controller.signal.reason ?? 'operation cancelled'))),
-                { once: true },
-              );
-            }),
-          ]);
+          const result = await runAsync(() => execution, { signal: controller.signal });
           if (closed) return;
           if (persistentMutation && (result as any).kind === 'conflict') {
             sendFailure(

@@ -426,7 +426,16 @@ async function runSingleNode<T>(
       : 1;
 
     for (let attempt = 1; ; attempt++) {
-      const result = yield* Effect.result(invoke((abortSignal) => node.execute(ctx, abortSignal)));
+      const result = yield* Effect.result(
+        invoke((abortSignal) => {
+          const next = node.execute(ctx, abortSignal);
+          // A synchronous node can commit its result and request cancellation in
+          // the same call. Preserve that completed work, but never adopt a late
+          // Promise result after interruption.
+          if (!next || typeof (next as Promise<T>).then !== 'function') ctx = next as T;
+          return next;
+        }),
+      );
       if (Result.isSuccess(result)) {
         ctx = result.success;
         return 'completed' as const;

@@ -1,3 +1,4 @@
+import { query } from '@anthropic-ai/claude-agent-sdk';
 /**
  * /v1/runs — Agent run lifecycle endpoints.
  *
@@ -9,8 +10,7 @@
  * with an agent-oriented protocol that exposes lifecycle states,
  * tool calls, and proper cancellation.
  */
-
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { consumeAsync } from '@funny/shared/async';
 import { Hono } from 'hono';
 
 import { log, metric, startSpan } from '../lib/telemetry.js';
@@ -327,31 +327,35 @@ async function handleNonStreaming(
 
     registry.setQuery(run.id, gen);
 
-    for await (const msg of gen) {
-      dbg(
-        `[api-acp] SDK msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`,
-      );
-      if (msg.type === 'assistant') {
-        const raw = msg as any;
-        if (raw.message?.content) {
-          for (const block of raw.message.content) {
-            if (block.type === 'text') {
-              textParts.push(block.text);
+    await consumeAsync(
+      gen,
+      async (msg) => {
+        dbg(
+          `[api-acp] SDK msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`,
+        );
+        if (msg.type === 'assistant') {
+          const raw = msg as any;
+          if (raw.message?.content) {
+            for (const block of raw.message.content) {
+              if (block.type === 'text') {
+                textParts.push(block.text);
+              }
+            }
+            if (raw.message.usage) {
+              inputTokens += raw.message.usage.input_tokens ?? 0;
+              outputTokens += raw.message.usage.output_tokens ?? 0;
             }
           }
-          if (raw.message.usage) {
-            inputTokens += raw.message.usage.input_tokens ?? 0;
-            outputTokens += raw.message.usage.output_tokens ?? 0;
+        }
+        if (msg.type === 'result') {
+          const raw = msg as any;
+          if (textParts.length === 0 && raw.result) {
+            textParts.push(raw.result);
           }
         }
-      }
-      if (msg.type === 'result') {
-        const raw = msg as any;
-        if (textParts.length === 0 && raw.result) {
-          textParts.push(raw.result);
-        }
-      }
-    }
+      },
+      { signal: abortController.signal },
+    );
 
     const fullText = textParts.join('');
     const usage: RunUsage = { input_tokens: inputTokens, output_tokens: outputTokens };
@@ -442,42 +446,46 @@ function handleStreaming(
 
         registry.setQuery(run.id, gen);
 
-        for await (const msg of gen) {
-          dbg(`[api-acp] SDK stream msg type=${msg.type}`);
+        await consumeAsync(
+          gen,
+          async (msg) => {
+            dbg(`[api-acp] SDK stream msg type=${msg.type}`);
 
-          if (msg.type === 'assistant') {
-            const raw = msg as any;
-            if (raw.message?.content) {
-              for (const block of raw.message.content) {
-                if (block.type === 'text') {
-                  accumulatedText += block.text;
+            if (msg.type === 'assistant') {
+              const raw = msg as any;
+              if (raw.message?.content) {
+                for (const block of raw.message.content) {
+                  if (block.type === 'text') {
+                    accumulatedText += block.text;
 
-                  // In tool mode, buffer text to parse tool_calls at the end.
-                  // In normal mode, stream text deltas immediately.
-                  if (!hasTools) {
-                    controller.enqueue(
-                      encoder.encode(sseEvent('text.delta', { delta: block.text })),
-                    );
+                    // In tool mode, buffer text to parse tool_calls at the end.
+                    // In normal mode, stream text deltas immediately.
+                    if (!hasTools) {
+                      controller.enqueue(
+                        encoder.encode(sseEvent('text.delta', { delta: block.text })),
+                      );
+                    }
                   }
                 }
-              }
-              if (raw.message.usage) {
-                inputTokens += raw.message.usage.input_tokens ?? 0;
-                outputTokens += raw.message.usage.output_tokens ?? 0;
+                if (raw.message.usage) {
+                  inputTokens += raw.message.usage.input_tokens ?? 0;
+                  outputTokens += raw.message.usage.output_tokens ?? 0;
+                }
               }
             }
-          }
 
-          if (msg.type === 'result') {
-            const raw = msg as any;
-            if (raw.result && !accumulatedText) {
-              accumulatedText = raw.result;
-              if (!hasTools) {
-                controller.enqueue(encoder.encode(sseEvent('text.delta', { delta: raw.result })));
+            if (msg.type === 'result') {
+              const raw = msg as any;
+              if (raw.result && !accumulatedText) {
+                accumulatedText = raw.result;
+                if (!hasTools) {
+                  controller.enqueue(encoder.encode(sseEvent('text.delta', { delta: raw.result })));
+                }
               }
             }
-          }
-        }
+          },
+          { signal: abortController.signal },
+        );
 
         const usage: RunUsage = { input_tokens: inputTokens, output_tokens: outputTokens };
 

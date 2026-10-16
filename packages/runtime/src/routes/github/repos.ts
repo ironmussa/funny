@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { resolve, isAbsolute, join } from 'path';
 
 import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
+import { retryAsync } from '@funny/shared/async';
 import { badRequest, conflict, processError } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
@@ -250,27 +251,29 @@ repoRoutes.post('/clone', async (c) => {
   // transiently saturated or in the middle of a reconnect right after a slow
   // git clone, which causes `data:create_project` to time out even though a
   // retry a second later succeeds. Retry a few times before giving up.
+  const MAX_ATTEMPTS = 3;
   let result;
   let lastError: any = null;
-  const MAX_ATTEMPTS = 3;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      result = await getServices().projects.createProject(repoName, clonePath, userId);
-      lastError = null;
-      break;
-    } catch (error: any) {
-      lastError = error;
-      log.warn('createProject attempt failed', {
-        namespace: 'github-routes',
-        attempt,
-        maxAttempts: MAX_ATTEMPTS,
-        clonePath,
-        error: error?.message ?? String(error),
-      });
-      if (attempt < MAX_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 1_000 * attempt));
-      }
-    }
+  try {
+    result = await retryAsync(
+      async (_signal, attempt) => {
+        try {
+          return await getServices().projects.createProject(repoName, clonePath, userId);
+        } catch (error: any) {
+          log.warn('createProject attempt failed', {
+            namespace: 'github-routes',
+            attempt,
+            maxAttempts: MAX_ATTEMPTS,
+            clonePath,
+            error: error?.message ?? String(error),
+          });
+          throw error;
+        }
+      },
+      { times: MAX_ATTEMPTS - 1, delayMs: (retry) => 1_000 * retry },
+    );
+  } catch (error: any) {
+    lastError = error;
   }
 
   if (lastError) {

@@ -73,6 +73,7 @@ describe('RunnerEnrollmentClient', () => {
       token: 'token-enrolled',
     });
     expect(deps.clearCredentials).toHaveBeenCalledOnce();
+    expect(deps.sleep).not.toHaveBeenCalled();
     expect(deps.env.RUNNER_AUTH_SECRET).toBe('forwarded-secret');
   });
 
@@ -86,5 +87,23 @@ describe('RunnerEnrollmentClient', () => {
     const client = new RunnerEnrollmentClient('http://server.test', advertisement, deps);
 
     await expect(client.bootstrap()).resolves.toEqual({ runnerId: 'runner-1', token: 'token-1' });
+  });
+
+  test('retries failed registration with linear backoff capped at 15s', async () => {
+    let registerCalls = 0;
+    const deps = dependencies(async (input) => {
+      if (String(input).endsWith('/register')) {
+        registerCalls++;
+        return registerCalls < 4
+          ? new Response('unavailable', { status: 503 })
+          : Response.json({ runnerId: 'runner-1', token: 'token-1' });
+      }
+      return Response.json({ ok: true });
+    });
+    const client = new RunnerEnrollmentClient('http://server.test', advertisement, deps);
+
+    await expect(client.bootstrap()).resolves.toEqual({ runnerId: 'runner-1', token: 'token-1' });
+    expect(registerCalls).toBe(4);
+    expect(vi.mocked(deps.sleep).mock.calls.map(([ms]) => ms)).toEqual([2000, 4000, 6000]);
   });
 });

@@ -4,6 +4,7 @@ import type {
   TransportEnvironment,
   TransportService,
 } from '@funny/client-core';
+import { runAsync } from '@funny/shared/async';
 
 export interface WebEnvironmentInput {
   isTauri: boolean;
@@ -38,13 +39,17 @@ export function createBrowserTransportService(
       const stopCancellation = request.cancellation?.subscribe(() => controller.abort());
       if (request.cancellation?.aborted) controller.abort();
       try {
-        const response = await fetchImplementation(request.url, {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-          credentials: 'include',
-          signal: controller.signal,
-        });
+        const response = await runAsync(
+          () =>
+            fetchImplementation(request.url, {
+              method: request.method,
+              headers: request.headers,
+              body: request.body,
+              credentials: 'include',
+              signal: controller.signal,
+            }),
+          { signal: controller.signal },
+        );
         const headers: Record<string, string> = {};
         response.headers.forEach((value, key) => {
           headers[key] = value;

@@ -9,6 +9,7 @@ import type {
   WSTestActionData,
   TestActionBoundingBox,
 } from '@funny/shared';
+import { runAsync } from '@funny/shared/async';
 
 import { log } from '../lib/logger.js';
 import { wsBroker } from './ws-broker.js';
@@ -387,8 +388,9 @@ async function resolveBoundingBox(
 ): Promise<TestActionBoundingBox | undefined> {
   if (!chromeSession || !selector || !isCssSelector(selector)) return undefined;
   try {
-    const box = await Promise.race([
-      chromeSession.execute(`
+    const box = await runAsync(
+      () =>
+        chromeSession.execute(`
         (() => {
           const el = document.querySelector(${JSON.stringify(selector)});
           if (!el) return null;
@@ -396,8 +398,8 @@ async function resolveBoundingBox(
           return { x: r.x, y: r.y, width: r.width, height: r.height };
         })()
       `),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 150)),
-    ]);
+      { timeoutMs: 150, timeoutError: () => new Error('timeout') },
+    );
     if (box && typeof box === 'object' && 'x' in (box as any)) {
       return box as TestActionBoundingBox;
     }

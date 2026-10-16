@@ -11,6 +11,8 @@
 import { existsSync, readFileSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 
+import { sleep, waitFor } from '@funny/shared/async';
+
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 
@@ -93,35 +95,34 @@ export async function isDaemonRunning(): Promise<boolean> {
 
   // Try a quick ping/pong
   try {
-    const connected = await new Promise<boolean>((resolve) => {
-      let gotPong = false;
-      const timeout = setTimeout(() => resolve(false), 2000);
-
-      void Bun.connect({
-        unix: SOCKET_PATH,
-        socket: {
-          open(socket) {
-            socket.write(JSON.stringify({ cmd: 'ping' }) + '\n');
+    // Times out (rejects) after 2s; the catch below maps that to `false`.
+    const connected = await waitFor<boolean>(
+      (resolve) => {
+        void Bun.connect({
+          unix: SOCKET_PATH,
+          socket: {
+            open(socket) {
+              socket.write(JSON.stringify({ cmd: 'ping' }) + '\n');
+            },
+            data(socket, data) {
+              const str = data.toString();
+              if (str.includes('"pong"')) {
+                resolve(true);
+                socket.end();
+              }
+            },
+            close() {
+              resolve(false);
+            },
+            error() {
+              resolve(false);
+            },
           },
-          data(socket, data) {
-            const str = data.toString();
-            if (str.includes('"pong"')) {
-              gotPong = true;
-              clearTimeout(timeout);
-              socket.end();
-            }
-          },
-          close() {
-            clearTimeout(timeout);
-            resolve(gotPong);
-          },
-          error() {
-            clearTimeout(timeout);
-            resolve(false);
-          },
-        },
-      });
-    });
+        });
+        return () => {};
+      },
+      { timeoutMs: 2000 },
+    );
 
     return connected;
   } catch {
@@ -180,7 +181,7 @@ async function doEnsureDaemonRunning(): Promise<boolean> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
-      await Bun.sleep(200);
+      await sleep(200);
 
       // If the process already exited, no point waiting
       if (proc.exitCode !== null) {
@@ -233,30 +234,34 @@ export async function stopDaemon(): Promise<void> {
   // Try graceful shutdown via socket
   if (existsSync(SOCKET_PATH)) {
     try {
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => resolve(), 3000);
-
-        void Bun.connect({
-          unix: SOCKET_PATH,
-          socket: {
-            open(socket) {
-              socket.write(JSON.stringify({ cmd: 'shutdown' }) + '\n');
+      // A timed-out shutdown request is not an error: still check whether the process exited.
+      const timedOut = new Error('PTY daemon shutdown request timed out');
+      await waitFor<void>(
+        (resolve) => {
+          void Bun.connect({
+            unix: SOCKET_PATH,
+            socket: {
+              open(socket) {
+                socket.write(JSON.stringify({ cmd: 'shutdown' }) + '\n');
+              },
+              close() {
+                resolve();
+              },
+              error() {
+                resolve();
+              },
+              data() {},
             },
-            close() {
-              clearTimeout(timeout);
-              resolve();
-            },
-            error() {
-              clearTimeout(timeout);
-              resolve();
-            },
-            data() {},
-          },
-        });
+          });
+          return () => {};
+        },
+        { timeoutMs: 3000, timeoutError: () => timedOut },
+      ).catch((err) => {
+        if (err !== timedOut) throw err;
       });
 
       // Wait briefly for process to exit
-      await Bun.sleep(500);
+      await sleep(500);
 
       if (!isProcessAlive(pid)) {
         log.info('PTY daemon stopped gracefully', { namespace: 'pty-daemon-launcher' });
@@ -271,7 +276,7 @@ export async function stopDaemon(): Promise<void> {
   // Force kill
   try {
     process.kill(pid, 'SIGTERM');
-    await Bun.sleep(1000);
+    await sleep(1000);
 
     if (isProcessAlive(pid)) {
       process.kill(pid, 'SIGKILL');

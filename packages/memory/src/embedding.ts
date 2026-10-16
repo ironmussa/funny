@@ -1,3 +1,4 @@
+import { runAsync } from '@funny/shared/async';
 /**
  * @domain subdomain: Memory System (Paisley Park)
  * @domain subdomain-type: core
@@ -161,7 +162,9 @@ export async function createEmbeddingProvider(): Promise<EmbeddingProvider> {
     const model = process.env.MEMORY_OLLAMA_MODEL || 'nomic-embed-text';
 
     try {
-      const resp = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(2000) });
+      const resp = await runAsync((signal) => fetch(`${url}/api/tags`, { signal }), {
+        timeoutMs: 2000,
+      });
       if (resp.ok) {
         log.info(`Using Ollama embedding provider (${model})`, { namespace: 'memory' });
         return new OllamaEmbeddingProvider(model, url);

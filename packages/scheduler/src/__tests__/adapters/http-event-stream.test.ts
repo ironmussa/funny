@@ -88,3 +88,20 @@ describe('HttpEventStream', () => {
     expect(stream.currentCursor()).toBe(5);
   });
 });
+
+test('stop interrupts reconnect backoff instead of waiting for the next poll', async () => {
+  const attempted = Promise.withResolvers<void>();
+  const client = new HttpSchedulerClient({
+    baseUrl: 'http://srv',
+    authSecret: 'test-secret',
+    fetch: (async () => {
+      attempted.resolve();
+      throw new Error('offline');
+    }) as unknown as typeof fetch,
+  });
+  const stream = new HttpEventStream({ client, errorBackoffMs: 60_000 });
+  stream.start();
+  await attempted.promise;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await stream.stop();
+}, 1000);

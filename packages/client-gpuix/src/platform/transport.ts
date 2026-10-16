@@ -6,6 +6,7 @@ import {
   type TransportEnvironment,
   type TransportService,
 } from '@funny/client-core';
+import { runAsync } from '@funny/shared/async';
 
 import type { NativeSessionStore } from './session-store';
 
@@ -157,15 +158,19 @@ export class NativeTransportService implements TransportService {
     const unsubscribe = request.cancellation?.subscribe(() => controller.abort());
     const cookie = this.cookies.header();
     try {
-      const response = await this.fetch(target.toString(), {
-        method: request.method ?? 'GET',
-        headers: {
-          ...(cookie ? { Cookie: cookie } : {}),
-          ...request.headers,
-        },
-        ...(request.body === undefined ? {} : { body: request.body }),
-        signal: controller.signal,
-      });
+      const response = await runAsync(
+        () =>
+          this.fetch(target.toString(), {
+            method: request.method ?? 'GET',
+            headers: {
+              ...(cookie ? { Cookie: cookie } : {}),
+              ...request.headers,
+            },
+            ...(request.body === undefined ? {} : { body: request.body }),
+            signal: controller.signal,
+          }),
+        { signal: controller.signal },
+      );
       this.cookies.capture(response.headers);
       return {
         status: response.status,

@@ -1,5 +1,6 @@
 import type { ClientPlatform, StoreApi, AuthSessionState } from '@funny/client-core';
 import type { SafeUser } from '@funny/shared';
+import { retryAsync } from '@funny/shared/async';
 
 import type { NativeCookieJar } from '../platform/transport';
 import { NativeApiError, nativeJsonRequest } from './native-api';
@@ -71,12 +72,21 @@ export class NativeAuthService {
     this.options.state.getState().bootstrap();
     try {
       await this.request('/auth/sign-in/username', 'POST', { username, password });
-      let session: BetterAuthSession | null = null;
-      for (let attempt = 0; attempt < 10 && !session?.user; attempt += 1) {
-        session = await this.session();
-        if (!session?.user) await (this.options.delay ?? Bun.sleep)(80);
-      }
-      if (!session?.user) throw new Error('Authenticated session was not established');
+      const pending = new Error('Authenticated session was not established');
+      // The session cookie can lag the sign-in response; poll briefly for it.
+      const session = await retryAsync(
+        async () => {
+          const current = await this.session();
+          if (!current?.user) throw pending;
+          return current;
+        },
+        {
+          times: 9,
+          delayMs: () => 80,
+          while: (error) => error === pending,
+          sleep: this.options.delay,
+        },
+      );
       return await this.finishBootstrap(session);
     } catch (error) {
       this.report('auth.sign-in', error);

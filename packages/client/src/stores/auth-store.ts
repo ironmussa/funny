@@ -1,5 +1,5 @@
 import type { SafeUser } from '@funny/shared';
-import { sleep as effectSleep } from '@funny/shared/async';
+import { retryAsync } from '@funny/shared/async';
 import { create } from 'zustand';
 
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
@@ -102,13 +102,20 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     }
 
     // Confirm the session cookie is visible to the client (same check as /api/profile).
-    let session = await authClient.getSession();
-    for (let i = 0; i < 10 && !session.data?.user; i++) {
-      await effectSleep(80);
-      session = await authClient.getSession();
-    }
+    const pending = new Error('Session not visible yet');
+    const session = await retryAsync(
+      async () => {
+        const current = await authClient.getSession();
+        if (!current.data?.user) throw pending;
+        return current;
+      },
+      { times: 10, delayMs: () => 80, while: (error) => error === pending },
+    ).catch((error) => {
+      if (error === pending) return null;
+      throw error;
+    });
 
-    const u = session.data?.user as any;
+    const u = session?.data?.user as any;
     if (!u) {
       throw new Error(
         'Session was not stored in the browser. Use BETTER_AUTH_BASE_URL with the same origin you open in the address bar (e.g. http://localhost:5173 with Vite), add that origin to CORS_ORIGIN, and avoid https:// in BASE_URL when using http:// locally.',

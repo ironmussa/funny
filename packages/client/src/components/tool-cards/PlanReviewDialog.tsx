@@ -28,14 +28,7 @@ import {
 } from './plan-responses';
 
 // Re-export so existing importers (ExitPlanModeCard, stories) keep working.
-export type { PlanComment, AnnotationPosition } from './plan-annotations';
-export {
-  SelectionPopover,
-  MarginAnnotations,
-  collectTextNodes,
-  highlightTextInDom,
-  EMOJI_OPTIONS,
-} from './plan-annotations';
+export type { PlanComment } from './plan-annotations';
 
 const LazyEditor = lazy(async () => {
   // Side-effect import: configure Monaco workers + local ESM loader before

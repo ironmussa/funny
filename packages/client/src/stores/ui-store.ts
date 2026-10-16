@@ -17,7 +17,7 @@ const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
 const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 const GRID_SELECTED_THREAD_KEY = 'funny:grid-selected-thread:v1';
 
-export type RightPaneTab = 'review' | 'activity' | 'files' | 'comments';
+type RightPaneTab = 'review' | 'activity' | 'files' | 'comments';
 export type ReviewSubTab = 'changes' | 'graph' | 'stash' | 'prs' | 'ci' | 'issues';
 const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = ['changes', 'graph', 'stash', 'prs', 'ci', 'issues'];
 

@@ -16,13 +16,13 @@ export const ShutdownPhase = {
   FINAL: 3,
 } as const;
 
-export type ShutdownPhase = (typeof ShutdownPhase)[keyof typeof ShutdownPhase];
+type ShutdownPhaseValue = (typeof ShutdownPhase)[keyof typeof ShutdownPhase];
 type ShutdownMode = 'hard' | 'hotReload';
 
 interface Registration {
   name: string;
   fn: (mode: ShutdownMode) => void | Promise<void>;
-  phase: ShutdownPhase;
+  phase: ShutdownPhaseValue;
   /** If false, skipped during --watch restarts (default: true) */
   runOnHotReload: boolean;
 }
@@ -42,7 +42,7 @@ class ShutdownManager {
   register(
     name: string,
     fn: (mode: ShutdownMode) => void | Promise<void>,
-    phase: ShutdownPhase = ShutdownPhase.SERVICES,
+    phase: ShutdownPhaseValue = ShutdownPhase.SERVICES,
     runOnHotReload = true,
   ): void {
     this.registrations.push({ name, fn, phase, runOnHotReload });
@@ -57,7 +57,7 @@ class ShutdownManager {
     this.running = true;
 
     // Group by phase, filtering by mode
-    const byPhase = new Map<ShutdownPhase, Registration[]>();
+    const byPhase = new Map<ShutdownPhaseValue, Registration[]>();
     for (const reg of this.registrations) {
       if (mode === 'hotReload' && !reg.runOnHotReload) continue;
       const list = byPhase.get(reg.phase) ?? [];

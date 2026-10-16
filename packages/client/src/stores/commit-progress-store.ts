@@ -9,7 +9,7 @@ export interface CommitProgressEntry {
   workflowId?: string;
 }
 
-export interface FailedWorkflowEntry {
+interface FailedWorkflowEntry {
   title: string;
   steps: GitProgressStep[];
   action: string;

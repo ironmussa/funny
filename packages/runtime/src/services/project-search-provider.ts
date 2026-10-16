@@ -59,12 +59,6 @@ export type ProjectSearchFailureReason =
   | 'scan-progress'
   | 'file-picker';
 
-export interface ProjectSearchNativeHealth {
-  available: boolean;
-  version: string | null;
-  failureReason?: ProjectSearchFailureReason;
-}
-
 export interface ProjectSearchProvider {
   readonly cwd: string;
   readonly version: number;

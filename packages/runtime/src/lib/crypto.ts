@@ -28,9 +28,3 @@ const api: CryptoApi = createCrypto({
 
 export const encrypt = (plaintext: string) => api.encrypt(plaintext);
 export const decrypt = (encrypted: string) => api.decrypt(encrypted);
-export const rotateKey = () => api.rotateKey();
-export const reencrypt = (encrypted: string) => api.reencrypt(encrypted);
-export const isLegacyCiphertext = (encrypted: string) => api.isLegacyCiphertext(encrypted);
-export const isEncryptedWithActiveKey = (encrypted: string) =>
-  api.isEncryptedWithActiveKey(encrypted);
-export const __resetCryptoCacheForTests = () => api.__resetCryptoCacheForTests();

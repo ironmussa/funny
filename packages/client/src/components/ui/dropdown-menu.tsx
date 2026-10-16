@@ -192,6 +192,4 @@ export {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-  dropdownMenuContentVariants,
-  dropdownMenuItemVariants,
 };

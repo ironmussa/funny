@@ -5,7 +5,7 @@
  * @domain depends: ShutdownManager
  *
  * Database factory — dialect-agnostic.
- * Exports `db`, `schema`, and helpers for backward compatibility.
+ * Exports `db` and helpers for backward compatibility.
  *
  * In runner mode (TEAM_SERVER_URL set), the runtime is stateless —
  * no database is created. All data is proxied to the server via WebSocket.
@@ -19,11 +19,8 @@ import {
   type DatabaseProvider,
   type DbDialect,
   createSqliteDatabase,
-  dbAll as _dbAll,
-  dbGet as _dbGet,
   dbRun as _dbRun,
 } from '@funny/shared/db/connection';
-import * as sqliteSchema from '@funny/shared/db/schema-sqlite';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
@@ -71,17 +68,6 @@ export const db: AppDatabase = new Proxy({} as AppDatabase, {
   },
 });
 
-export const schema = sqliteSchema;
-export const sqlite = !isRunner ? (_legacyConnection?.sqlite ?? null) : null;
-
-/** @deprecated Use dbDialect instead. */
-export const dbMode = isRunner ? ('runner' as string) : 'sqlite';
-
-/** Get the active DatabaseProvider. Null in runner mode. */
-export function getProvider(): DatabaseProvider | null {
-  return _provider;
-}
-
 /** Get the underlying DatabaseConnection. Null in runner mode. */
 export function getConnection(): DatabaseConnection | null {
   return _legacyConnection;
@@ -89,21 +75,4 @@ export function getConnection(): DatabaseConnection | null {
 
 // ── Compat helpers ──────────────────────────────────────────────
 
-export const dbAll = _dbAll;
-export const dbGet = _dbGet;
 export const dbRun = _dbRun;
-
-/** @deprecated Use shutdown manager instead. */
-export function closeDatabase() {
-  if (_legacyConnection?.sqlite) {
-    try {
-      _legacyConnection.sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    } catch {}
-    try {
-      _legacyConnection.sqlite.close();
-      log.info('Database closed', { namespace: 'db' });
-    } catch (err) {
-      log.warn('Error closing database', { namespace: 'db', error: err });
-    }
-  }
-}

@@ -13,9 +13,9 @@
 
 import { and, desc, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { ResultAsync } from 'neverthrow';
 
-import { db, dbAll, dbGet, dbRun } from '../db/index.js';
+import { db, dbAll, dbRun } from '../db/index.js';
 import { permissionRules } from '../db/schema.js';
 import { log } from '../lib/logger.js';
 
@@ -163,45 +163,3 @@ export function listRules(input: {
     },
   );
 }
-
-export function deleteRule(input: { id: string; userId: string }): ResultAsync<void, Error> {
-  return ResultAsync.fromPromise(
-    (async () => {
-      const row = await dbGet(
-        db
-          .select()
-          .from(permissionRules)
-          .where(and(eq(permissionRules.id, input.id), eq(permissionRules.userId, input.userId))),
-      );
-      if (!row) return;
-      await dbRun(db.delete(permissionRules).where(eq(permissionRules.id, input.id)));
-      log.info('permission-rules.deleted', {
-        namespace: 'permission-rules',
-        ruleId: input.id,
-        userId: input.userId,
-      });
-    })(),
-    (err) => {
-      log.error('permission-rules.delete failed', {
-        namespace: 'permission-rules',
-        error: (err as Error)?.message,
-      });
-      return err instanceof Error ? err : new Error(String(err));
-    },
-  );
-}
-
-/**
- * Heuristic: derive a Bash command prefix to use as a permission pattern.
- * Takes the binary (first whitespace-separated token); enough for v1.
- */
-export function deriveBashPrefix(toolInput: string | undefined): string | null {
-  if (!toolInput) return null;
-  const trimmed = toolInput.trim();
-  if (!trimmed) return null;
-  const firstToken = trimmed.split(/\s+/)[0];
-  return firstToken || null;
-}
-
-// Allow ResultAsync's Err helper to be re-exported when callers need it
-export { errAsync, okAsync };

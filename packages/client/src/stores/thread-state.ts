@@ -48,7 +48,7 @@ export interface ThreadState {
    * Derived mirror of `threadDataById[selectedThreadId]`. Kept in sync by
    * the mutation helpers in `thread-mutations.ts` so legacy consumers that
    * read `s.activeThread` keep working. New code should prefer
-   * `useActiveThread()` / `getActiveThread(state)` from this module.
+   * `getActiveThread(state)` in `thread-store.ts`.
    * @deprecated read from `threadDataById[selectedThreadId]` directly.
    */
   activeThread: ThreadWithMessages | null;

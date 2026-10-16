@@ -649,7 +649,7 @@ async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContex
 }
 
 /** The review-fix sub-pipeline — used as a composable unit. */
-export const reviewFixSubPipeline = definePipeline<GitPipelineContext>({
+const reviewFixSubPipeline = definePipeline<GitPipelineContext>({
   name: 'review-fix',
   nodes: [
     node('review', reviewNode),

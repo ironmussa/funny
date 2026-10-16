@@ -27,12 +27,12 @@ export const SPAWN_TIMEOUT_MS = 5000;
 export const RESTORE_TIMEOUT_MS = 3000;
 export const MAX_SPAWN_ATTEMPTS = 3;
 
-export interface TerminalSpawnInput {
+interface TerminalSpawnInput {
   restored: boolean;
   wasAliveOnMount: boolean;
 }
 
-export interface TerminalSpawnContext {
+interface TerminalSpawnContext {
   restored: boolean;
   wasAliveOnMount: boolean;
   sessionsChecked: boolean;
@@ -42,7 +42,7 @@ export interface TerminalSpawnContext {
   error: string | null;
 }
 
-export type TerminalSpawnEvent =
+type TerminalSpawnEvent =
   | { type: 'TERM_READY' }
   | { type: 'SESSIONS_CHECKED' }
   | { type: 'SET_RESTORED' }

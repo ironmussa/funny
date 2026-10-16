@@ -7,7 +7,6 @@ const Drawer = DrawerPrimitive.Root;
 const DrawerTrigger = DrawerPrimitive.Trigger;
 const DrawerClose = DrawerPrimitive.Close;
 const DrawerTitle = DrawerPrimitive.Title;
-const DrawerDescription = DrawerPrimitive.Description;
 
 function DrawerContent({
   className,
@@ -34,4 +33,4 @@ function DrawerContent({
   );
 }
 
-export { Drawer, DrawerTrigger, DrawerClose, DrawerTitle, DrawerDescription, DrawerContent };
+export { Drawer, DrawerTrigger, DrawerClose, DrawerTitle, DrawerContent };

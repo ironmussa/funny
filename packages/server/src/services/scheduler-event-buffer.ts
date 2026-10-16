@@ -128,8 +128,3 @@ export function getSchedulerEventBuffer(): SchedulerEventBuffer {
   if (!_buffer) _buffer = createSchedulerEventBuffer();
   return _buffer;
 }
-
-/** Test seam. */
-export function setSchedulerEventBuffer(buffer: SchedulerEventBuffer | null): void {
-  _buffer = buffer;
-}

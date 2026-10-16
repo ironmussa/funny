@@ -16,7 +16,7 @@ import { wsBroker } from './ws-broker.js';
 type WorkflowEventType = ThreadEventType | `workflow:${string}`;
 
 /** Broadcast a thread event over WebSocket without persisting it. */
-export function broadcastThreadEvent(
+function broadcastThreadEvent(
   userId: string,
   threadId: string,
   type: WorkflowEventType,

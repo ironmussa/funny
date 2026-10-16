@@ -138,7 +138,7 @@ export class BrowserV1EventRetention {
   }
 }
 
-export const DEFAULT_BROWSER_V1_EVENT_RETENTION = {
+const DEFAULT_BROWSER_V1_EVENT_RETENTION = {
   maxAgeMs: 5 * 60_000,
   maxBytesPerScope: 4 * 1024 * 1024,
 } as const;

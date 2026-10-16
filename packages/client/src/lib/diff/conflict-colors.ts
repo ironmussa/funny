@@ -2,11 +2,11 @@ import type { ConflictRole, DiffLine } from './types';
 
 /* ── Conflict colors ── */
 
-export const CONFLICT_OURS_BG = 'hsl(210 80% 55% / 0.15)';
-export const CONFLICT_OURS_MARKER_BG = 'hsl(210 80% 55% / 0.30)';
-export const CONFLICT_THEIRS_BG = 'hsl(30 80% 55% / 0.15)';
-export const CONFLICT_THEIRS_MARKER_BG = 'hsl(30 80% 55% / 0.30)';
-export const CONFLICT_SEP_BG = 'hsl(0 0% 50% / 0.25)';
+const CONFLICT_OURS_BG = 'hsl(210 80% 55% / 0.15)';
+const CONFLICT_OURS_MARKER_BG = 'hsl(210 80% 55% / 0.30)';
+const CONFLICT_THEIRS_BG = 'hsl(30 80% 55% / 0.15)';
+const CONFLICT_THEIRS_MARKER_BG = 'hsl(30 80% 55% / 0.30)';
+const CONFLICT_SEP_BG = 'hsl(0 0% 50% / 0.25)';
 
 export function getConflictBg(role?: ConflictRole): string | undefined {
   switch (role) {

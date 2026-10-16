@@ -81,9 +81,6 @@ async function authorizedResourceBase64(url: string): Promise<string> {
   });
 }
 
-// Re-export for legacy callers that still import from `use-ws`.
-export { connectRemoteWS, disconnectRemoteWS };
-
 function connect() {
   setWSStopped(false);
 

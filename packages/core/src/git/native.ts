@@ -95,7 +95,7 @@ export interface NativeBranchSummaryResult {
   isMergedIntoBase: boolean;
 }
 
-export interface NativeGitModule {
+interface NativeGitModule {
   ping(): string;
   getStatusSummary(
     worktreeCwd: string,

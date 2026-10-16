@@ -84,7 +84,7 @@ function isUnderCaseInsensitive(normalizedTarget: string, scope: string): boolea
  * True if `normalizedTarget` is `scope` or a descendant of `scope`.
  * Uses `path + sep` to prevent sibling-prefix matches (e.g. `/a/bc` under `/a/b`).
  */
-export function isUnder(normalizedTarget: string, scope: string): boolean {
+function isUnder(normalizedTarget: string, scope: string): boolean {
   const normScope = normalize(resolve(scope));
   return normalizedTarget === normScope || normalizedTarget.startsWith(normScope + sep);
 }

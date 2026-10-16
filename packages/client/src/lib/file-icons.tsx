@@ -4,8 +4,6 @@ import { Icon, addCollection } from '@iconify/react/offline';
 addCollection(vscodeIcons);
 
 const DEFAULT_FILE_ICON = 'vscode-icons:default-file';
-const DEFAULT_FOLDER_ICON = 'vscode-icons:default-folder';
-const DEFAULT_FOLDER_OPEN_ICON = 'vscode-icons:default-folder-opened';
 
 const FILE_NAME_ICON_MAP: Record<string, string> = {
   '.dockerignore': 'vscode-icons:file-type-docker',
@@ -53,66 +51,7 @@ const FILE_EXTENSION_ICON_MAP: Record<string, string> = {
   yml: 'vscode-icons:file-type-yaml',
 };
 
-const FOLDER_ICON_MAP: Record<string, { closed: string; open: string }> = {
-  '.github': {
-    closed: 'vscode-icons:folder-type-github',
-    open: 'vscode-icons:folder-type-github-opened',
-  },
-  '.storybook': {
-    closed: 'vscode-icons:folder-type-config',
-    open: 'vscode-icons:folder-type-config-opened',
-  },
-  __tests__: {
-    closed: 'vscode-icons:folder-type-test',
-    open: 'vscode-icons:folder-type-test-opened',
-  },
-  config: {
-    closed: 'vscode-icons:folder-type-config',
-    open: 'vscode-icons:folder-type-config-opened',
-  },
-  dist: {
-    closed: 'vscode-icons:folder-type-dist',
-    open: 'vscode-icons:folder-type-dist-opened',
-  },
-  docs: {
-    closed: 'vscode-icons:folder-type-docs',
-    open: 'vscode-icons:folder-type-docs-opened',
-  },
-  images: {
-    closed: 'vscode-icons:folder-type-images',
-    open: 'vscode-icons:folder-type-images-opened',
-  },
-  node_modules: {
-    closed: 'vscode-icons:folder-type-node',
-    open: 'vscode-icons:folder-type-node-opened',
-  },
-  packages: {
-    closed: 'vscode-icons:folder-type-package',
-    open: 'vscode-icons:folder-type-package-opened',
-  },
-  public: {
-    closed: 'vscode-icons:folder-type-public',
-    open: 'vscode-icons:folder-type-public-opened',
-  },
-  scripts: {
-    closed: 'vscode-icons:folder-type-script',
-    open: 'vscode-icons:folder-type-script-opened',
-  },
-  src: {
-    closed: 'vscode-icons:folder-type-src',
-    open: 'vscode-icons:folder-type-src-opened',
-  },
-  test: {
-    closed: 'vscode-icons:folder-type-test',
-    open: 'vscode-icons:folder-type-test-opened',
-  },
-  tests: {
-    closed: 'vscode-icons:folder-type-test',
-    open: 'vscode-icons:folder-type-test-opened',
-  },
-};
-
-export function getFileIconName(filePath: string): string {
+function getFileIconName(filePath: string): string {
   const fileName = filePath.split('/').pop()?.toLowerCase() ?? '';
 
   if (fileName.startsWith('.env')) {
@@ -184,22 +123,6 @@ export function getFileIconName(filePath: string): string {
   return FILE_EXTENSION_ICON_MAP[extension] ?? DEFAULT_FILE_ICON;
 }
 
-export function getFolderIconName(folderPath: string, isOpen = false): string {
-  const segments = folderPath.split('/').flatMap((segment) => {
-    const lower = segment.toLowerCase();
-    return lower ? [lower] : [];
-  });
-
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    const match = FOLDER_ICON_MAP[segments[index]];
-    if (match) {
-      return isOpen ? match.open : match.closed;
-    }
-  }
-
-  return isOpen ? DEFAULT_FOLDER_OPEN_ICON : DEFAULT_FOLDER_ICON;
-}
-
 export function FileExtensionIcon({
   filePath,
   className,
@@ -208,18 +131,4 @@ export function FileExtensionIcon({
   className?: string;
 }) {
   return <Icon icon={getFileIconName(filePath)} className={className} aria-hidden="true" />;
-}
-
-export function FolderIcon({
-  folderPath,
-  isOpen = false,
-  className,
-}: {
-  folderPath: string;
-  isOpen?: boolean;
-  className?: string;
-}) {
-  return (
-    <Icon icon={getFolderIconName(folderPath, isOpen)} className={className} aria-hidden="true" />
-  );
 }

@@ -197,13 +197,6 @@ export class DaemonPtyBackend implements PtyBackend {
     });
   }
 
-  /**
-   * Whether we're currently connected to the daemon.
-   */
-  get isConnected(): boolean {
-    return this.connected;
-  }
-
   // ── Private ──────────────────────────────────────────────────────
 
   private async connectToDaemon(): Promise<void> {

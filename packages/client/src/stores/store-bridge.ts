@@ -8,8 +8,6 @@
 
 import type { StoreApi } from 'zustand';
 
-import { isScratch } from '@/lib/thread-variant';
-
 // ── Lazy references (set once per store creation) ────────────
 
 type LazyRef<T> = { current: StoreApi<T> | null };
@@ -87,15 +85,6 @@ export function findThreadById(threadId: string): any | null {
   // threadsById (race during selectThread). Return it so predicates still work.
   if (state.activeThread?.id === threadId) return state.activeThread;
   return null;
-}
-
-/**
- * Thin id-based wrapper around `isScratch`. Prefer passing the Thread
- * object directly to `isScratch` when you already have it; use this when
- * the call site only has the threadId.
- */
-export function isScratchThread(threadId: string): boolean {
-  return isScratch(findThreadById(threadId));
 }
 
 // ── Project → Thread operations ──────────────────────────────

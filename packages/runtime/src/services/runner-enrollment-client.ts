@@ -62,10 +62,6 @@ export class RunnerEnrollmentClient {
     private readonly dependencies: RunnerEnrollmentClientDependencies = defaultDependencies,
   ) {}
 
-  currentSession(): RunnerEnrollmentSession | null {
-    return this.session ? { ...this.session } : null;
-  }
-
   clearSession(): void {
     this.session = null;
   }

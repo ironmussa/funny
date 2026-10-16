@@ -142,7 +142,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
  * non-payload principal, applies a per-runner stream quota, and emits only safe
  * identifiers to logs.
  */
-export function createRunnerGrpcInterceptor(
+function createRunnerGrpcInterceptor(
   method: string,
   handler: RunnerGrpcHandler,
   dependencies: RunnerGrpcDependencies,

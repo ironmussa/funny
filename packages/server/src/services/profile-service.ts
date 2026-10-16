@@ -73,7 +73,7 @@ export async function getProviderKey(userId: string, provider: string): Promise<
 }
 
 /** Set (or clear) a provider key. */
-export async function setProviderKey(
+async function setProviderKey(
   userId: string,
   provider: string,
   value: string | null,
@@ -107,17 +107,6 @@ export async function setProviderKey(
       updatedAt: now,
     });
   }
-}
-
-// Thin wrappers kept for call-sites that still use the old names.
-export async function getGithubToken(userId: string): Promise<string | null> {
-  return getProviderKey(userId, 'github');
-}
-export async function getAssemblyaiApiKey(userId: string): Promise<string | null> {
-  return getProviderKey(userId, 'assemblyai');
-}
-export async function getMinimaxApiKey(userId: string): Promise<string | null> {
-  return getProviderKey(userId, 'minimax');
 }
 
 // ── Profile CRUD ─────────────────────────────────────────────
@@ -292,7 +281,7 @@ export async function setBuiltinProviderSettings(
  * convenience (setting up a new runner machine days after generating the
  * token) against the blast radius of a leaked token.
  */
-export const RUNNER_INVITE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const RUNNER_INVITE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Return the runner invite token for a user.

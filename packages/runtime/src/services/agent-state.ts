@@ -186,15 +186,4 @@ export class AgentStateTracker {
     }, intervalMs);
     if (this.sweepTimer.unref) this.sweepTimer.unref();
   }
-
-  stopAutoSweep(): void {
-    if (this.sweepTimer) {
-      clearInterval(this.sweepTimer);
-      this.sweepTimer = null;
-    }
-  }
-
-  get trackedThreadCount(): number {
-    return this.touchedAt.size;
-  }
 }

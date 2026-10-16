@@ -111,7 +111,7 @@ export function buildFileHistoryEntries({
   ];
 }
 
-export function formatBlameLineRange(range: BlameHistoryLineRange): string {
+function formatBlameLineRange(range: BlameHistoryLineRange): string {
   if (range.startLine === range.endLine) return `L${range.startLine}`;
   return `L${range.startLine}-L${range.endLine}`;
 }

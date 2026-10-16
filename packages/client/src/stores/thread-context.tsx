@@ -9,10 +9,10 @@
  * Hooks throw when used without a provider.
  */
 
-import { createContext, useContext, useMemo, useRef, type Context, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type Context, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { AgentInitInfo, ThreadWithMessages } from './thread-store';
+import type { ThreadWithMessages } from './thread-store';
 import { useThreadStore } from './thread-store';
 
 interface ThreadContextValue {
@@ -107,39 +107,7 @@ export function useCompactionEvents() {
   return useThreadStore((s) => resolveThread(s, ctx)?.compactionEvents);
 }
 
-/**
- * Subscribe to `initInfo` with ref stability — keep the previous reference
- * unless tools/cwd/model actually changed, so unrelated updates don't
- * cascade.
- */
-export function useThreadInitInfo(): AgentInitInfo | undefined {
-  const ctx = useThreadContext();
-  const prevRef = useRef<AgentInitInfo | undefined>(undefined);
-
-  return useThreadStore((s) => {
-    const next = resolveThread(s, ctx)?.initInfo;
-    if (!next) {
-      prevRef.current = undefined;
-      return undefined;
-    }
-    const prev = prevRef.current;
-    if (
-      prev &&
-      prev.cwd === next.cwd &&
-      prev.model === next.model &&
-      prev.tools.length === next.tools.length &&
-      prev.tools.every((t, i) => t === next.tools[i]) &&
-      (prev.slashCommands?.length ?? 0) === (next.slashCommands?.length ?? 0) &&
-      (prev.slashCommands ?? []).every((c, i) => c === next.slashCommands?.[i])
-    ) {
-      return prev;
-    }
-    prevRef.current = next;
-    return next;
-  });
-}
-
-/** Thread minus the high-churn arrays — see `useActiveThreadCore` for rationale. */
+/** Thread minus the high-churn arrays, so updates to messages/events don't re-render core consumers. */
 export type ThreadCore = Omit<ThreadWithMessages, 'messages' | 'threadEvents' | 'compactionEvents'>;
 
 export function useThreadCore(): ThreadCore | null {

@@ -18,9 +18,9 @@ import type {
  * re-render — even if they only read `status` or `initInfo`. To avoid
  * cascading re-renders:
  *
- * 1. **Use granular selectors** — prefer `useActiveThreadStatus()`,
- *    `useActiveInitInfo()` from `thread-selectors.ts` over subscribing to
- *    the full `activeThread` object.
+ * 1. **Use granular selectors** — prefer the context-aware hooks from
+ *    `thread-context.tsx` (`useThreadStatus()`, `useThreadCore()`, …) over
+ *    subscribing to the full `activeThread` object.
  *
  * 2. **Use `useStableNavigate()`** — never list `navigate` from
  *    `useNavigate()` as a `useCallback` dependency. It changes on every
@@ -242,16 +242,9 @@ function _evictIfUnreferenced(threadId: string): void {
  * WS refresh paths (`refreshActiveThread`) targeting the thread the user is
  * actually viewing even if `selectedThreadId` momentarily diverges.
  */
-export function getActiveThread(state: ThreadState): ThreadWithMessages | null {
+function getActiveThread(state: ThreadState): ThreadWithMessages | null {
   const id = getUrlThreadId() ?? state.selectedThreadId;
   return id ? (state.threadDataById[id] ?? null) : null;
-}
-
-/** Hook: subscribe to the currently selected thread. */
-export function useActiveThread(): ThreadWithMessages | null {
-  return useThreadStore((s) =>
-    s.selectedThreadId ? (s.threadDataById[s.selectedThreadId] ?? null) : null,
-  );
 }
 
 const _threadLoadPromises = new Map<string, Promise<void>>();
@@ -266,7 +259,7 @@ const DEQUEUED_MESSAGE_ID_PREFIX = 'dequeued-';
  *  The persisted copy of the same message arrives later under a server id, so
  *  merge/pagination must reconcile the two by content — the prefix is what
  *  tells them a local message is a reconcilable echo rather than history. */
-export const OPTIMISTIC_MESSAGE_ID_PREFIX = 'optimistic-';
+const OPTIMISTIC_MESSAGE_ID_PREFIX = 'optimistic-';
 
 /** True for local-only user messages (optimistic bubble or dequeued echo)
  *  that a server-persisted copy with the same content should supersede. */

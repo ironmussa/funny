@@ -399,11 +399,6 @@ function loadPtySessions(): PtySessionRow[] {
   return db.all<PtySessionRow>(sql`SELECT * FROM pty_sessions`);
 }
 
-function loadPtySessionsForUser(userId: string): PtySessionRow[] {
-  if (!getConnection()) return []; // No DB in runner mode
-  return db.all<PtySessionRow>(sql`SELECT * FROM pty_sessions WHERE user_id = ${userId}`);
-}
-
 // ── Venv activation ──────────────────────────────────────────────────
 // detectEnv() prepends the venv's bin to PATH so binaries resolve, but the
 // shell prompt only shows `(.venv)` if the shell-specific `activate` script
@@ -612,7 +607,7 @@ export function resizePty(id: string, cols: number, rows: number): void {
  * For persistent backends (tmux) uses native pane capture.
  * For non-persistent backends, returns the in-memory scrollback buffer.
  */
-export function capturePane(id: string): string | null {
+function capturePane(id: string): string | null {
   if (backend.capturePane) return backend.capturePane(id);
   // Fallback: return buffered output for non-persistent backends
   return drainScrollback(id);
@@ -658,7 +653,7 @@ export function killPty(id: string): void {
   }
 }
 
-export function killAllPtys(): void {
+function killAllPtys(): void {
   // Snapshot the keys: flushCoalesce mutates coalesceBuffers as it drains.
   for (const ptyId of [...coalesceBuffers.keys()]) {
     flushCoalesce(ptyId, 'close');
@@ -673,55 +668,6 @@ export function killAllPtys(): void {
   activeSessions.clear();
   scrollbackBuffers.clear();
   scrollbackSizes.clear();
-}
-
-/**
- * List active PTY sessions for a given user.
- * Returns sessions from the DB (for persistent backends) or from in-memory tracking.
- */
-export function listActiveSessions(
-  userId: string,
-): Array<{ ptyId: string; cwd: string; projectId?: string; label?: string; shell?: string }> {
-  // Always include in-memory sessions (running PTYs)
-  const result = new Map<
-    string,
-    { ptyId: string; cwd: string; projectId?: string; label?: string; shell?: string }
-  >();
-
-  for (const [id, meta] of activeSessions) {
-    // In runner mode, reattached sessions lose their userId (no DB to store it).
-    // Since there's only one user per runner, adopt the first requesting userId.
-    if (isRunnerMode && !meta.userId) {
-      meta.userId = userId;
-    }
-    if (meta.userId === userId) {
-      result.set(id, {
-        ptyId: id,
-        cwd: meta.cwd,
-        projectId: meta.projectId,
-        label: meta.label,
-        shell: meta.shell,
-      });
-    }
-  }
-
-  // For persistent backends, also include DB sessions (e.g. restored after server restart)
-  if (backend.persistent) {
-    const rows = loadPtySessionsForUser(userId);
-    for (const r of rows) {
-      if (!result.has(r.id)) {
-        result.set(r.id, {
-          ptyId: r.id,
-          cwd: r.cwd,
-          projectId: r.project_id ?? undefined,
-          label: r.label ?? undefined,
-          shell: r.shell ?? undefined,
-        });
-      }
-    }
-  }
-
-  return Array.from(result.values());
 }
 
 /**
@@ -831,9 +777,6 @@ export async function reattachSessions(): Promise<void> {
     );
   }
 }
-
-/** Whether the active backend supports persistent sessions. */
-export const isPersistent = backend.persistent ?? false;
 
 // ── Self-register with ShutdownManager ──────────────────────────────
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';

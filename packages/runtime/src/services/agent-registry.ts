@@ -30,19 +30,6 @@ export function resolveAgent(
   };
 }
 
-/**
- * Resolve the system prompt to a string, calling the function form if needed.
- */
-export function resolveSystemPrompt(
-  agent: AgentDefinition,
-  context?: Record<string, string>,
-): string {
-  if (typeof agent.systemPrompt === 'function') {
-    return agent.systemPrompt(context ?? {});
-  }
-  return agent.systemPrompt;
-}
-
 // ── Pipeline agent prompts ──────────────────────────────────
 
 function reviewerPrompt(ctx: Record<string, string>): string {

@@ -31,11 +31,11 @@ function bucket(kind: string): { created: number; terminated: number } {
   return fresh;
 }
 
-export function recordWorkerCreated(kind: string): void {
+function recordWorkerCreated(kind: string): void {
   bucket(kind).created++;
 }
 
-export function recordWorkerTerminated(kind: string): void {
+function recordWorkerTerminated(kind: string): void {
   bucket(kind).terminated++;
 }
 

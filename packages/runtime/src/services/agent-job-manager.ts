@@ -353,10 +353,6 @@ export async function cancelJob(jobId: string, userId: string): Promise<boolean>
   return true;
 }
 
-export function listJobsForUser(userId: string): Promise<Job[]> {
-  return getServices().jobs.listJobsByUser(userId) as Promise<Job[]>;
-}
-
 export async function readJobLog(
   jobId: string,
   userId: string,
@@ -400,10 +396,6 @@ export async function readJobLog(
     status: job.status,
     exitCode: job.exitCode,
   };
-}
-
-export async function removeThreadJobs(threadId: string): Promise<void> {
-  await getServices().jobs.deleteJobsByThread(threadId);
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────

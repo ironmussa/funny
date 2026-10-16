@@ -138,10 +138,6 @@ export const createProjectSchema = z.object({
   path: z.string().min(1, 'path is required'),
 });
 
-export const renameProjectSchema = z.object({
-  name: z.string().min(1, 'name is required'),
-});
-
 const followUpModeSchema = z.enum(['interrupt', 'queue', 'steer']);
 
 export const updateProjectSchema = z
@@ -169,10 +165,6 @@ export const updateProjectSchema = z
       ctx,
     );
   });
-
-export const reorderProjectsSchema = z.object({
-  projectIds: z.array(z.string().min(1)).min(1, 'projectIds must not be empty'),
-});
 
 const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -279,13 +271,6 @@ export const rewindCodeSchema = z.object({
 });
 
 export const forkAndRewindSchema = forkThreadSchema;
-
-export const updateThreadSchema = z.object({
-  title: z.string().min(1).max(500).optional(),
-  archived: z.boolean().optional(),
-  pinned: z.boolean().optional(),
-  stage: threadStageSchema.optional(),
-});
 
 export const convertToWorktreeSchema = z.object({
   baseBranch: z.string().optional(),
@@ -451,10 +436,6 @@ export const workflowSchema = z.object({
   // gitRefSchema: same flag-injection concern as mergeSchema.targetBranch.
   targetBranch: gitRefSchema.optional(),
   cleanup: z.boolean().default(true),
-});
-
-export const gitInitSchema = z.object({
-  path: z.string().min(1, 'path is required'),
 });
 
 // Security ME-4: leading-`-` rejection is the ACTUAL defense against

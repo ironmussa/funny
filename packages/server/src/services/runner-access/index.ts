@@ -14,14 +14,7 @@
  * `RunnerTerminalPort.dispatch/listSessions` call appears anywhere else.
  */
 
-export {
-  runnerActor,
-  type RunnerActor,
-  type RunnerActorInput,
-  type RunnerId,
-  type RunnerTarget,
-  type RunnerUnavailable,
-} from './runner-actor.js';
+export { runnerActor, type RunnerActor, type RunnerId, type RunnerTarget } from './runner-actor.js';
 export {
   createRunnerAccess,
   runnerAccess,
@@ -29,19 +22,10 @@ export {
   withRunnerFor,
   type OAuthCallbackRunner,
   type RunnerAccess,
-  type RunnerAccessDeps,
   type RunnerFor,
-  type RunnerSelection,
-  type RunnerVerification,
-  type Selected,
-  type WithOAuthCallbackRunner,
-  type WithRunnerFor,
 } from './runner-for.js';
 export {
-  AuthorizedRunnerRequests,
-  AuthorizedRunnerTerminal,
   authorizedRunnerRequests,
   authorizedRunnerTerminal,
-  stripIdentityHeaders,
   type UnsignedRunnerRequest,
 } from './authorized-runner-requests.js';

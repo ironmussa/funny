@@ -34,7 +34,7 @@ const HEARTBEAT_TIMEOUT_MS = 60_000;
 const advertisedByRunner = new Map<string, AdvertisedProvider[]>();
 
 /** Record (or clear) the providers a runner advertised. */
-export function setAdvertisedProviders(
+function setAdvertisedProviders(
   runnerId: string,
   providers: AdvertisedProvider[] | undefined,
 ): void {
@@ -64,7 +64,7 @@ export async function getAdvertisedProvidersForUser(userId: string): Promise<Adv
 const activeBuiltinsByRunner = new Map<string, string[]>();
 
 /** Record (or clear) the active built-in set a runner advertised. */
-export function setActiveBuiltins(runnerId: string, ids: string[] | undefined): void {
+function setActiveBuiltins(runnerId: string, ids: string[] | undefined): void {
   if (ids) activeBuiltinsByRunner.set(runnerId, ids);
   else activeBuiltinsByRunner.delete(runnerId);
 }
@@ -83,7 +83,7 @@ export async function getActiveBuiltinsForUser(userId: string): Promise<string[]
 const availableByRunner = new Map<string, string[]>();
 
 /** Record (or clear) the available-provider set a runner advertised. */
-export function setAvailableProviders(runnerId: string, ids: string[] | undefined): void {
+function setAvailableProviders(runnerId: string, ids: string[] | undefined): void {
   if (ids) availableByRunner.set(runnerId, ids);
   else availableByRunner.delete(runnerId);
 }
@@ -611,18 +611,6 @@ export async function markRunnerOnline(runnerId: string): Promise<void> {
     .update(runners)
     .set({ status: 'online', lastHeartbeatAt: new Date().toISOString() })
     .where(eq(runners.id, runnerId));
-}
-
-/**
- * Mark ALL runners as offline on server startup.
- * When the server restarts, no runner has an active gRPC connection,
- * so any "online" status from a previous session is stale.
- */
-export async function markAllRunnersOffline(): Promise<void> {
-  await db.update(runners).set({ status: 'offline', lastHeartbeatAt: new Date().toISOString() });
-  log.info('Marked all runners offline (server restart)', {
-    namespace: 'runner',
-  });
 }
 
 /**

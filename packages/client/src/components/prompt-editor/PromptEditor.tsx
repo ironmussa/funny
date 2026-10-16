@@ -109,7 +109,7 @@ export interface PromptSlashResource {
   threadMode?: 'local' | 'worktree';
 }
 
-export interface PromptWorkflowResource {
+interface PromptWorkflowResource {
   name: string;
   description?: string;
   source?: string;

@@ -68,7 +68,7 @@ const statement = {
   invitation: ['create', 'cancel'],
 } as const;
 
-export const ac = createAccessControl(statement);
+const ac = createAccessControl(statement);
 
 const member = ac.newRole({
   project: ['create'],

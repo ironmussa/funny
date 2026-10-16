@@ -15,11 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 
-export {
-  MergeStatus,
-  PRStateBadge,
-  ReviewDecisionBadge,
-} from '@/components/pull-requests/PRStatusBadges';
+export { MergeStatus, ReviewDecisionBadge } from '@/components/pull-requests/PRStatusBadges';
 
 const POLL_INTERVAL = 30_000;
 const MAX_VISIBLE_CHECKS = 6;

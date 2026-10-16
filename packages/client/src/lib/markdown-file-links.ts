@@ -80,7 +80,7 @@ export function getMarkdownFileLinkPath(
   return findLocalPathInText(String(text ?? ''));
 }
 
-export function isAbsoluteFilePath(path: string): boolean {
+function isAbsoluteFilePath(path: string): boolean {
   return path.startsWith('/') || WINDOWS_ABSOLUTE_PATH_RE.test(path);
 }
 

@@ -167,21 +167,6 @@ export function searchSymbols(
 }
 
 /**
- * Remove a single file from the project index (e.g., after file change).
- */
-export function invalidateFile(projectPath: string, filePath: string): void {
-  const index = projectIndexes.get(projectPath);
-  if (index) index.files.delete(filePath);
-}
-
-/**
- * Remove the entire project index.
- */
-export function clearProject(projectPath: string): void {
-  projectIndexes.delete(projectPath);
-}
-
-/**
  * Check if a project is currently being indexed.
  */
 export function isIndexing(projectPath: string): boolean {

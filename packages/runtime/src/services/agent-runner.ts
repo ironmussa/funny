@@ -19,14 +19,9 @@ import { AgentEventRouter } from './agent-event-router.js';
 import { AgentLifecycleManager } from './agent-lifecycle.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import {
-  cleanupThreadState,
   extractActiveAgentSnapshot,
-  extractActiveAgents,
-  getSupportedSlashCommands,
-  isAgentRunning,
   registerAgentRunnerControl,
   startAgent,
-  stopAgent,
   stopAllAgents,
 } from './agent-runner-control.js';
 import { AgentStateTracker } from './agent-state.js';
@@ -198,16 +193,7 @@ registerAgentRunnerControl({
   getPendingPermission: defaultRunner.getPendingPermission.bind(defaultRunner),
 });
 
-export {
-  startAgent,
-  stopAgent,
-  stopAllAgents,
-  isAgentRunning,
-  cleanupThreadState,
-  extractActiveAgentSnapshot,
-  extractActiveAgents,
-  getSupportedSlashCommands,
-};
+export { startAgent };
 
 // ── Bridge core debug logs to Winston/OTLP ──────────────────
 setLogSink((level, namespace, message, data) => {

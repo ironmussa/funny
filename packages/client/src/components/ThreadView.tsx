@@ -17,10 +17,6 @@ import { ThreadChatView } from './thread/ThreadChatView';
 import { ThreadIdleStarter } from './thread/ThreadIdleStarter';
 import { WorktreeSetupProgress } from './WorktreeSetupProgress';
 
-// Re-exports for backwards compatibility (used by MobilePage.tsx).
-export { MessageContent, CopyButton } from '@/components/thread/MessageContent';
-export { WaitingActions } from '@/components/thread/WaitingCards';
-
 export interface ThreadViewProps {
   /** Called once the primary route has enough data to paint its real view. */
   onReady?: () => void;

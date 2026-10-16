@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-export const EMOJI_OPTIONS = [
+const EMOJI_OPTIONS = [
   '\u{1F44D}',
   '\u{1F44E}',
   '\u{2764}\u{FE0F}',
@@ -144,7 +144,7 @@ export function SelectionPopover({
 
 /* ── DOM highlighting: find text in container and wrap with <mark> ────── */
 
-export function collectTextNodes(root: HTMLElement): Text[] {
+function collectTextNodes(root: HTMLElement): Text[] {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;

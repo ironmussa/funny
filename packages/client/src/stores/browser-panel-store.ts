@@ -32,7 +32,6 @@ import { metric } from '@/lib/telemetry';
 export type { AnnotationDomInfo };
 
 export const DRAW_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'] as const;
-export type DrawColor = (typeof DRAW_COLORS)[number];
 
 export interface AnnotationRegionDom {
   rect: { x: number; y: number; w: number; h: number };
@@ -53,13 +52,11 @@ export type Annotation =
     }
   | { id: string; kind: 'draw'; dataUrl: string; color: string; note: string };
 
-export type AnnotationKind = Annotation['kind'];
-
 /**
  * Distributive Omit — `Omit<Annotation, 'id'>` collapses the union to its
  * common keys; this preserves discrimination per variant.
  */
-export type AnnotationInput = Annotation extends infer T
+type AnnotationInput = Annotation extends infer T
   ? T extends { id: string }
     ? Omit<T, 'id'>
     : never
@@ -67,14 +64,14 @@ export type AnnotationInput = Annotation extends infer T
 
 export type Tool = 'browse' | 'pin' | 'region' | 'draw';
 
-export type SessionStatus =
+type SessionStatus =
   | 'idle' // No session
   | 'spawning' // Open request sent, waiting for `ready`
   | 'ready' // Receiving frames
   | 'disconnected' // Session ended (closed, error, runner restart)
   | 'too-many-sessions'; // Runner rejected — over the cap
 
-export interface SentHistoryEntry {
+interface SentHistoryEntry {
   threadId: string;
   title: string;
   projectId: string;

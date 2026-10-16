@@ -230,26 +230,7 @@ function renderFollowUp(w: Watcher): string {
   );
 }
 
-// ── Cancel / list (UI panel) ─────────────────────────────────────
-
-/** Cancel a watcher. Ownership-checked: only the owner may cancel. */
-export async function cancel(watcherId: string, userId: string): Promise<boolean> {
-  const w = (await getServices().watchers.getWatcher(watcherId)) as Watcher | undefined;
-  if (!w || w.userId !== userId) return false;
-  await setStatus(w, 'cancelled');
-  emit(userId, 'watcher:cancelled', { ...w, status: 'cancelled' });
-  log.info('Watcher cancelled', { namespace: NS, watcherId });
-  return true;
-}
-
-export function listForUser(userId: string): Promise<Watcher[]> {
-  return getServices().watchers.listWatchersByUser(userId) as Promise<Watcher[]>;
-}
-
-/** Remove a thread's watchers (called from the thread-delete path). */
-export async function removeThreadWatchers(threadId: string): Promise<void> {
-  await getServices().watchers.deleteWatchersByThread(threadId);
-}
+// ── Status ───────────────────────────────────────────────────────
 
 async function setStatus(watcher: Watcher, status: WatcherStatus): Promise<void> {
   await getServices().watchers.updateWatcher(watcher.id, { status });

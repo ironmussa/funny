@@ -14,13 +14,10 @@ import { applyWebFontSize } from '@/platform/web/font-size-effects';
 
 export type { ToolPermission };
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
-export type ThreadMode = 'local' | 'worktree';
-export type ClaudeModel = 'haiku' | 'sonnet' | 'opus';
-export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | 'ask';
 /** Shell ID — now dynamic, detected from the system. */
 export type TerminalShell = string;
 
-export interface DetectedShell {
+interface DetectedShell {
   id: string;
   label: string;
   path: string;
@@ -33,11 +30,6 @@ const editorLabels: Record<Editor, string> = {
   zed: 'Zed',
   sublime: 'Sublime Text',
   vim: 'Vim',
-};
-
-/** @deprecated Use availableShells from the store instead. Kept for backward compat. */
-const shellLabels: Record<string, string> = {
-  default: 'settings.shellDefault',
 };
 
 export const ALL_STANDARD_TOOLS = [
@@ -347,4 +339,4 @@ portablePreferences.subscribe((preferences, previous) => {
 // CSS mutation remains an intentionally renderer-specific effect.
 applyFontSize(initialPreferences.fontSize);
 
-export { editorLabels, shellLabels };
+export { editorLabels };

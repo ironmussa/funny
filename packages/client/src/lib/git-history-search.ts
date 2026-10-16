@@ -66,9 +66,7 @@ export function commitMatchesFilters(
 }
 
 /** Email distinguishes namesakes; name is the fallback for commits without email. */
-export function commitAuthorIdentity(
-  commit: Pick<SearchableCommit, 'author' | 'authorEmail'>,
-): string {
+function commitAuthorIdentity(commit: Pick<SearchableCommit, 'author' | 'authorEmail'>): string {
   return commit.authorEmail?.trim().toLowerCase() || commit.author?.trim() || '';
 }
 

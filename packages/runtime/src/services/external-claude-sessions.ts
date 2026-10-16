@@ -173,34 +173,6 @@ export function listExternalClaudeSessions(
   return runningSessions;
 }
 
-export async function listImportableExternalClaudeSessions(params: {
-  userId: string;
-  projectId?: string | null;
-}): Promise<ExternalClaudeSession[]> {
-  const services = getServices();
-  const allProjects = await services.projects.listProjects(params.userId);
-  const projects = params.projectId
-    ? allProjects.filter((project) => project.id === params.projectId)
-    : allProjects;
-  if (projects.length === 0) return [];
-
-  const sessions = listExternalClaudeSessions({ projects });
-  const importable = await Promise.all(
-    sessions.map(async (session) => {
-      if (!session.sessionId) return null;
-      const externalRequestId = `claude:${session.sessionId}`;
-      const existingByExternalId =
-        await services.threads.getThreadByExternalRequestId(externalRequestId);
-      if (existingByExternalId) return null;
-
-      const existingBySessionId = await services.threads.getThreadBySessionId(session.sessionId);
-      return existingBySessionId ? null : session;
-    }),
-  );
-
-  return importable.filter((session): session is ExternalClaudeSession => session !== null);
-}
-
 export async function syncExternalClaudeSessionThreads(
   params: {
     userId: string;

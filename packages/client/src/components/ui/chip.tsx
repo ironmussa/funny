@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 export type ChipVariant = 'default' | 'inverse';
 export type ChipSize = 'xs' | 'sm' | 'xxs';
-export type ChipIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+type ChipIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 const CHIP_BASE =
   'mx-0.5 inline-flex items-center gap-1 rounded align-middle font-mono leading-none whitespace-nowrap focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none';

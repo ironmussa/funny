@@ -114,7 +114,7 @@ export function selectScratchThreads(state: ThreadState): Thread[] {
 }
 
 /** Ordered "shared with me" thread array. */
-export function selectSharedThreads(state: ThreadState): Thread[] {
+function selectSharedThreads(state: ThreadState): Thread[] {
   return deriveProjectArray(state.threadsById, state.sharedThreadIds);
 }
 

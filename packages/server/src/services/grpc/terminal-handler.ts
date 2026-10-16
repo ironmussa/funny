@@ -13,8 +13,8 @@ type WireFrame = Record<string, any>;
 
 export type GrpcTerminalBrowserEvent = RunnerTerminalEvent;
 
-export class GrpcTerminalUnavailableError extends Error {}
-export class GrpcTerminalResourceExhaustedError extends Error {}
+class GrpcTerminalUnavailableError extends Error {}
+class GrpcTerminalResourceExhaustedError extends Error {}
 
 interface TerminalState {
   userId: string;

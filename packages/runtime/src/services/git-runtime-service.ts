@@ -14,7 +14,7 @@ import * as tm from './thread-manager.js';
 
 export const gitStatusCache = new Map<string, { data: any; ts: number }>();
 export const GIT_STATUS_CACHE_TTL_MS = 2_000;
-export const FETCH_THROTTLE_MS = 30_000;
+const FETCH_THROTTLE_MS = 30_000;
 
 const lastFetchTs = new Map<string, number>();
 const fetchInFlightByPath = new Set<string>();

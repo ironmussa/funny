@@ -144,9 +144,6 @@ export const remoteGetProviderKey = remoteProjectIdentityClient.getProviderKey.b
 export const remoteGetGithubToken = remoteProjectIdentityClient.getGithubToken.bind(
   remoteProjectIdentityClient,
 );
-export const remoteGetMinimaxApiKey = remoteProjectIdentityClient.getMinimaxApiKey.bind(
-  remoteProjectIdentityClient,
-);
 export const remoteUpdateProfile = remoteProjectIdentityClient.updateProfile.bind(
   remoteProjectIdentityClient,
 );
@@ -155,7 +152,5 @@ export const remoteResolveAgentExecutionProfile =
 export const remoteCreateProject = remoteProjectIdentityClient.createProject.bind(
   remoteProjectIdentityClient,
 );
-export const remoteGetActiveBuiltinProviders =
-  remoteProjectIdentityClient.getActiveBuiltinProviders.bind(remoteProjectIdentityClient);
 export const remoteSetActiveBuiltinProviders =
   remoteProjectIdentityClient.setActiveBuiltinProviders.bind(remoteProjectIdentityClient);

@@ -26,7 +26,7 @@ type ToolItemRendererProps = ToolRendererCommonProps & {
   item: ToolItem;
 };
 
-export function ToolItemRenderer({
+function ToolItemRenderer({
   item,
   snapshotMap,
   isWaiting,
@@ -111,7 +111,7 @@ type NonUserItemRendererProps = ToolRendererCommonProps & {
   item: RenderItem;
 };
 
-export function NonUserItemRenderer({
+function NonUserItemRenderer({
   item,
   snapshotMap,
   isWaiting,

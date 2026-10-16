@@ -435,11 +435,6 @@ function evictIfStale(projectId: string): void {
   }
 }
 
-export function isRunning(projectId: string): boolean {
-  evictIfStale(projectId);
-  return activeRuns.has(projectId);
-}
-
 export async function runTest(
   projectId: string,
   projectPath: string,

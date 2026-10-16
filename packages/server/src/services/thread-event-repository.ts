@@ -16,7 +16,7 @@ export interface ThreadEvent {
   timestamp?: number;
 }
 
-export async function createThreadEvent(event: ThreadEvent): Promise<void> {
+async function createThreadEvent(event: ThreadEvent): Promise<void> {
   try {
     const eventId = event.id || crypto.randomUUID();
     const createdAt = event.timestamp
@@ -65,13 +65,5 @@ export async function getThreadEvents(threadId: string): Promise<ThreadEvent[]> 
   } catch (error) {
     log.error('Failed to retrieve events', { namespace: 'thread-event', error, threadId });
     return [];
-  }
-}
-
-export async function deleteThreadEvents(threadId: string): Promise<void> {
-  try {
-    await db.delete(threadEvents).where(eq(threadEvents.threadId, threadId));
-  } catch (error) {
-    log.error('Failed to delete events', { namespace: 'thread-event', error, threadId });
   }
 }

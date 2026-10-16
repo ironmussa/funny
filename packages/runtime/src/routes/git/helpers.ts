@@ -18,7 +18,6 @@ import { err, ok, type Result } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 import { startSpan } from '../../lib/telemetry.js';
 import {
-  FETCH_THROTTLE_MS,
   GIT_STATUS_CACHE_TTL_MS,
   gitRuntimeService,
   gitStatusCache,
@@ -29,7 +28,7 @@ import { requireProject } from '../../utils/route-helpers.js';
 // computeBranchKey is imported from utils/git-status-helpers.ts
 
 // In-memory cache for bulk git status to avoid spawning excessive git processes.
-export { GIT_STATUS_CACHE_TTL_MS, FETCH_THROTTLE_MS };
+export { GIT_STATUS_CACHE_TTL_MS };
 export const _gitStatusCache = gitStatusCache;
 
 // Per-branch PR info cache. `gh pr list` averages ~320ms per call and is the
@@ -165,17 +164,6 @@ export function scheduleBackgroundFetch(
 export async function countUnpushedCommits(projectPath: string, branch: string): Promise<number> {
   try {
     const result = await git(['rev-list', '--count', `origin/${branch}..${branch}`], projectPath);
-    if (result.isOk()) return parseInt(result.value.trim(), 10) || 0;
-  } catch {
-    /* remote tracking branch may not exist */
-  }
-  return 0;
-}
-
-/** Count unpulled commits on a branch (commits on origin not yet in local). */
-export async function countUnpulledCommits(projectPath: string, branch: string): Promise<number> {
-  try {
-    const result = await git(['rev-list', '--count', `${branch}..origin/${branch}`], projectPath);
     if (result.isOk()) return parseInt(result.value.trim(), 10) || 0;
   } catch {
     /* remote tracking branch may not exist */

@@ -38,14 +38,6 @@ export interface StopContainerOptions {
   remove?: boolean;
 }
 
-interface ContainerStatus {
-  containerName: string;
-  exists: boolean;
-  running: boolean;
-  state?: string;
-  funnyUrl?: string;
-}
-
 // ── Public API ──────────────────────────────────────────────────
 
 /**
@@ -144,32 +136,4 @@ export function stopContainer(options: StopContainerOptions): ResultAsync<void, 
   ).map(() => {
     log.info(`Container stopped: ${containerName}`, { namespace: 'podman' });
   });
-}
-
-/**
- * Check the status of a container via the launcher API.
- */
-export function getContainerStatus(
-  containerName: string,
-  launcherUrl: string,
-): ResultAsync<ContainerStatus, DomainError> {
-  // Security HI-5: see launchContainer.
-  return ResultAsync.fromPromise(
-    safeFetchUserUrl(
-      `${launcherUrl}/status?containerName=${encodeURIComponent(containerName)}`,
-    ).then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text().catch(() => 'Unknown error');
-        throw new Error(`Launcher returned ${res.status}: ${text}`);
-      }
-      return res.json();
-    }),
-    (error) => internal(`Failed to get container status: ${error}`),
-  ).map((status: any) => ({
-    containerName: status.containerName ?? containerName,
-    exists: status.exists ?? false,
-    running: status.running ?? false,
-    state: status.state,
-    funnyUrl: status.funnyMachineUrl || status.funnyUrl,
-  }));
 }

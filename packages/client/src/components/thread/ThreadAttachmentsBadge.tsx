@@ -36,7 +36,7 @@ interface ThreadAttachmentsBadgeProps {
  * files. Used in thread list/card displays where the prompt was stored with
  * a `<referenced-files>` XML block.
  */
-export function ThreadAttachmentsBadge({
+function ThreadAttachmentsBadge({
   files,
   className,
   stopPropagation,

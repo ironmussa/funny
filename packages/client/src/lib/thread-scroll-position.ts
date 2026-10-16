@@ -66,10 +66,6 @@ function scheduleFlush(): void {
   flushTimer = setTimeout(flush, 250);
 }
 
-export function loadThreadScrollProgress(threadId: string): number | undefined {
-  return loadThreadScrollPosition(threadId)?.progress;
-}
-
 export function loadThreadScrollPosition(threadId: string): StoredThreadScrollPosition | undefined {
   const value = readAll()[threadId];
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -108,10 +104,6 @@ export function loadThreadScrollFetchOptions(threadId: string): ThreadScrollFetc
   return anchorKey
     ? { messageProgress: progress, messageAnchorId: anchorKey }
     : { messageProgress: progress };
-}
-
-export function saveThreadScrollProgress(threadId: string, progress: number): void {
-  saveThreadScrollPosition(threadId, { progress, anchor: null });
 }
 
 export function saveThreadScrollPosition(

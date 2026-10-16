@@ -22,7 +22,6 @@
  */
 
 import type { PipelineDefinition } from '@funny/pipelines';
-import type { AgentDefinition } from '@funny/shared';
 import {
   loadWorkflowCatalog,
   type ParsedWorkflow,
@@ -135,24 +134,6 @@ export async function loadPipelines(opts: LoadOptions): Promise<LoadResult> {
   return { pipelines: compiled, warnings };
 }
 
-/**
- * Convenience helper for the common case: load everything and return the
- * pipeline definition by name. Throws if the name is missing.
- */
-export async function getPipelineByName(
-  name: string,
-  opts: LoadOptions,
-): Promise<PipelineDefinition<YamlPipelineContext>> {
-  const { pipelines } = await loadPipelines(opts);
-  const found = pipelines.get(name);
-  if (!found) {
-    throw new Error(
-      `Pipeline "${name}" not found. Loaded: ${[...pipelines.keys()].join(', ') || '(none)'}`,
-    );
-  }
-  return found.definition;
-}
-
 // ── Internals ───────────────────────────────────────────────
 
 function collectPipelineRefs(p: ParsedWorkflow): string[] {
@@ -199,4 +180,3 @@ function topoSortByPipelineRefs(
 // ── Re-exports ──────────────────────────────────────────────
 
 export { type AgentResolver } from './yaml-compiler.js';
-export type { AgentDefinition };

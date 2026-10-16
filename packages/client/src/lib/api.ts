@@ -1,4 +1,4 @@
-import { getBaseUrlForThread, validateContainerUrl, type PullStrategy } from './api/_core';
+import { validateContainerUrl, type PullStrategy } from './api/_core';
 import { agentExecutionProfilesApi } from './api/agent-execution-profiles';
 import { agentTemplatesApi } from './api/agent-templates';
 import { analyticsApi } from './api/analytics';
@@ -23,7 +23,7 @@ import { workflowsApi } from './api/workflows';
 import { worktreesApi } from './api/worktrees';
 
 // Re-export shared helpers/types consumed outside api.ts
-export { getBaseUrlForThread, validateContainerUrl };
+export { validateContainerUrl };
 export type { PullStrategy };
 
 // Order preserves the original section layout in api.ts so method ordering

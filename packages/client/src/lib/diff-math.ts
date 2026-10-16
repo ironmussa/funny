@@ -57,18 +57,18 @@ export interface ThreePaneTriple {
 
 /* ── Parser ── */
 
-export const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 /**
  * Git's combined diff format for merge commits. It contains one old range per
  * parent and one new range for the merge result, e.g.
  * `@@@ -10,2 -12,2 +10,3 @@@`.
  */
-export const COMBINED_HUNK_RE = /^@@@ ((?:-\d+(?:,\d+)? )+)\+(\d+)(?:,\d+)? @@@/;
+const COMBINED_HUNK_RE = /^@@@ ((?:-\d+(?:,\d+)? )+)\+(\d+)(?:,\d+)? @@@/;
 
 /** Conflict marker patterns (match the text content after the diff prefix is stripped) */
-export const CONFLICT_START_RE = /^<{7}\s?(.*)/;
-export const CONFLICT_SEP_RE = /^={7}$/;
-export const CONFLICT_END_RE = /^>{7}\s?(.*)/;
+const CONFLICT_START_RE = /^<{7}\s?(.*)/;
+const CONFLICT_SEP_RE = /^={7}$/;
+const CONFLICT_END_RE = /^>{7}\s?(.*)/;
 
 export interface ParsedDiff {
   lines: DiffLine[];

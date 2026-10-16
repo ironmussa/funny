@@ -17,14 +17,11 @@
  * navigation on branch checkout or working-directory availability.
  *
  * @internal `selectThread` is the legacy hydrator. Do not call it from
- * components; go through `goToThread` / `useGoToThread`.
+ * components; go through `goToThread`.
  */
 
-import type { Thread } from '@funny/shared';
-import { useCallback } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 
-import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { isScratch } from '@/lib/thread-variant';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -86,18 +83,4 @@ export function goToThread(
   }
 }
 
-/**
- * Hook form of {@link goToThread}, bound to a referentially-stable navigate.
- * Prefer this in components.
- */
-export function useGoToThread(): (thread: ThreadRouteTarget, opts?: GoToThreadOptions) => void {
-  const navigate = useStableNavigate();
-  return useCallback(
-    (thread: ThreadRouteTarget, opts?: GoToThreadOptions) => goToThread(navigate, thread, opts),
-    [navigate],
-  );
-}
-
-/** Re-export so callers can `<Link to={buildThreadPath(thread)} />` from one module. */
-export { buildThreadPath };
-export type { ThreadRouteTarget, Thread };
+export type { ThreadRouteTarget };

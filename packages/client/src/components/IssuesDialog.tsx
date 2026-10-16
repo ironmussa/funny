@@ -28,7 +28,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
 
-export interface IssueThreadParams {
+interface IssueThreadParams {
   prompt: string;
   branchName: string;
   title: string;

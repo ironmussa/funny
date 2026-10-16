@@ -99,13 +99,6 @@ export interface CreateThreadPorts {
 /** `fork` → POST /:id/fork on the runner. `fork-and-rewind` → POST /:id/fork-and-rewind. */
 export type ForkVariant = 'fork' | 'fork-and-rewind';
 
-/** The source thread, as loaded and authorized by the owner middleware. */
-export interface ForkSource {
-  readonly id: ThreadId;
-  /** Stored on the forked thread's registration. Null for a scratch source. */
-  readonly projectId: string | null;
-}
-
 export interface ForkThreadCommand<U, T> {
   readonly actor: Named<U, ActorContext>;
   readonly variant: ForkVariant;

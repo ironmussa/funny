@@ -173,7 +173,7 @@ const MAX_TOTAL_DIFF_BYTES = 10 * 1024 * 1024;
 const MAX_UNTRACKED_NUMSTAT_BYTES = 512 * 1024;
 
 /** True when an untracked file should be skipped from `git diff --no-index` (too large or binary). */
-export function shouldSkipUntrackedDiff(cwd: string, relPath: string): boolean {
+function shouldSkipUntrackedDiff(cwd: string, relPath: string): boolean {
   const abs = join(cwd, relPath);
   try {
     const st = statSync(abs);

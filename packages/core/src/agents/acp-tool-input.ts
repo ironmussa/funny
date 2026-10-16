@@ -29,7 +29,7 @@ export interface ACPToolCallData {
 /** Cursor ACP / provider todo tool names → canonical `TodoWrite` for the UI. */
 const TODO_TOOL_ALIASES = new Set(['todowrite', 'updatetodos', 'todo_write', 'towrite']);
 
-export function isTodoToolName(name: string): boolean {
+function isTodoToolName(name: string): boolean {
   return TODO_TOOL_ALIASES.has(name.toLowerCase().replace(/[_-]/g, ''));
 }
 

@@ -41,7 +41,7 @@ export const dbDialect: DbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
 let _provider: DatabaseProvider | null = null;
 const transactionContext = new AsyncLocalStorage<any>();
 
-// Legacy compat — kept so `getConnection()` / `setConnection()` callers
+// Legacy compat — kept so `setConnection()` callers
 // (middleware/auth.ts, server/index.ts) continue to work.
 let _legacyConnection: DatabaseConnection | null = null;
 
@@ -116,19 +116,6 @@ export { schema };
 
 // ── Provider access ──────────────────────────────────────────────
 
-/** Get the active DatabaseProvider. Null before initDatabase(). */
-export function getProvider(): DatabaseProvider | null {
-  return _provider;
-}
-
-/**
- * Get the underlying DatabaseConnection (legacy API).
- * Returns null when using PostgreSQL (no legacy connection).
- */
-export function getConnection(): DatabaseConnection | null {
-  return _legacyConnection;
-}
-
 /** Set a pre-existing connection (e.g. shared from runtime). */
 export function setConnection(conn: DatabaseConnection): void {
   _legacyConnection = conn;
@@ -155,8 +142,6 @@ export function resetDatabaseForTests(): void {
 
 // ── Compat helpers ───────────────────────────────────────────────
 
-/** @deprecated Use dbDialect instead. */
-export const dbMode: string = dbDialect;
 export const dbAll = _dbAll;
 export const dbGet = _dbGet;
 export const dbRun = _dbRun;

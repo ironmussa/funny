@@ -101,9 +101,9 @@ export interface ProcessOptions {
 }
 
 /** 50MB default — protects against huge `git diff` outputs OOMing the runner. */
-export const DEFAULT_MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
+const DEFAULT_MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 
-export class ProcessOutputTooLargeError extends Error {
+class ProcessOutputTooLargeError extends Error {
   constructor(
     public command: string,
     public limit: number,

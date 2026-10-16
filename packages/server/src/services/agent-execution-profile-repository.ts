@@ -71,10 +71,7 @@ export async function listProfiles(userId: string): Promise<AgentExecutionProfil
   return rows.map((row) => toAgentExecutionProfileResponse(toProfile(row)));
 }
 
-export async function getProfile(
-  id: string,
-  userId: string,
-): Promise<AgentExecutionProfile | undefined> {
+async function getProfile(id: string, userId: string): Promise<AgentExecutionProfile | undefined> {
   const row = await getProfileRow(id, userId);
   return row ? toProfile(row) : undefined;
 }

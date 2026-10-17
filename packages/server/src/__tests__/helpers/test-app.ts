@@ -141,7 +141,14 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/invite-links', inviteLinkRoutes);
 
   // 6. Build helpers
+  // Module-level scope caches outlive the DB rows they were read from (30s TTL /
+  // no TTL), so a truncated table would otherwise keep serving the previous
+  // test's runner owner / role / thread scope.
+  const { __resetRunnerScopeCache } = await import('../../services/runner-scope.js');
+  const { __resetDataScopeCache } = await import('../../services/data-scope.js');
   const cleanup = () => {
+    __resetRunnerScopeCache();
+    __resetDataScopeCache();
     // Truncate all tables in reverse dependency order
     const tables = [
       'project_runner_grants',

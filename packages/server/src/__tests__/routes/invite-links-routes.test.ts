@@ -1,7 +1,10 @@
 /**
  * Integration tests for /api/invite-links routes (public + protected).
  */
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realAuthModule from '../../lib/auth.js';
+import { snapshotModule } from '../helpers/module-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
@@ -12,11 +15,17 @@ import {
   resetAuthMockUsers,
 } from '../helpers/auth-mock.js';
 
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realAuth = snapshotModule(realAuthModule);
 mock.module('../../lib/auth.js', () => ({
   auth: {
     api: createAuthApiMock(),
   },
 }));
+afterAll(() => {
+  mock.module('../../lib/auth.js', () => realAuth);
+});
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 

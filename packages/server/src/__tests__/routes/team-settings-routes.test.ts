@@ -1,10 +1,13 @@
 /**
  * Team settings routes — org settings, API key encryption, defaults.
  */
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+import * as realAuthModule from '../../lib/auth.js';
+import { snapshotModule } from '../helpers/module-mocks.js';
 
 const testDir = mkdtempSync(join(tmpdir(), 'funny-team-settings-'));
 process.env.FUNNY_DATA_DIR = testDir;
@@ -28,6 +31,9 @@ const mockOrg = {
   defaultPermissionMode: 'autoEdit',
 };
 
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realAuth = snapshotModule(realAuthModule);
 mock.module('../../lib/auth.js', () => ({
   auth: {
     api: createAuthApiMock({
@@ -41,6 +47,9 @@ mock.module('../../lib/auth.js', () => ({
     }),
   },
 }));
+afterAll(() => {
+  mock.module('../../lib/auth.js', () => realAuth);
+});
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 

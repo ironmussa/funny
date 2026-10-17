@@ -1,13 +1,19 @@
 /**
  * Integration tests for /api/scheduler/system/* (cross-tenant brain surface).
  */
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realAuthModule from '../../lib/auth.js';
+import { snapshotModule } from '../helpers/module-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 process.env.SCHEDULER_AUTH_SECRET = 'scheduler-test-secret';
 
 import { createAuthApiMock, resetAuthMiddlewareCache } from '../helpers/auth-mock.js';
 
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realAuth = snapshotModule(realAuthModule);
 mock.module('../../lib/auth.js', () => ({
   auth: {
     api: createAuthApiMock({
@@ -15,6 +21,9 @@ mock.module('../../lib/auth.js', () => ({
     }),
   },
 }));
+afterAll(() => {
+  mock.module('../../lib/auth.js', () => realAuth);
+});
 
 const relayCalls: Array<{ userId: string; event: Record<string, unknown> }> = [];
 let tunnelFetchImpl: (

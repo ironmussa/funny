@@ -5,19 +5,22 @@
  * runner invite token management, and setup completion tracking.
  */
 
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realNodemailerModule from 'nodemailer';
+
+import { mockCoreGitRepoChecks, snapshotModule } from '../helpers/module-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-}));
+mockCoreGitRepoChecks();
 
 const sendMailCalls: Array<Record<string, unknown>> = [];
 const createTransportCalls: Array<Record<string, unknown>> = [];
 
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realNodemailer = snapshotModule(realNodemailerModule);
 mock.module('nodemailer', () => ({
   createTransport: (opts: Record<string, unknown>) => {
     createTransportCalls.push(opts);
@@ -28,6 +31,9 @@ mock.module('nodemailer', () => ({
     };
   },
 }));
+afterAll(() => {
+  mock.module('nodemailer', () => realNodemailer);
+});
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 

@@ -7,16 +7,25 @@
  * broadcasts, and disconnect cleanup.
  */
 
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realThreadAccessModule from '../../services/thread-access-check.js';
+import { snapshotModule } from '../helpers/module-mocks.js';
 
 // Mutable fakes so each test can vary access/ownership.
 let _canView = true;
 let _isOwner = false;
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realThreadAccess = snapshotModule(realThreadAccessModule);
 mock.module('../../services/thread-access-check.js', () => ({
   canUserViewThread: async () => _canView,
   isThreadOwnedBy: async () => _isOwner,
   getUserDisplay: async () => ({ id: 'ana', name: 'Ana', image: 'https://img/ana.png' }),
 }));
+afterAll(() => {
+  mock.module('../../services/thread-access-check.js', () => realThreadAccess);
+});
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 

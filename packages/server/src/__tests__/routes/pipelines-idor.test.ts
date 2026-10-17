@@ -6,13 +6,9 @@
  * methods now require userId; route handlers thread it through; these
  * tests pin both ends of the contract.
  */
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-}));
+mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 

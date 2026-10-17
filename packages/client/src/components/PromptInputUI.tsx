@@ -1,47 +1,41 @@
 import type { GitStatusInfo, ImageAttachment, QueuedMessage, Thread } from '@funny/shared';
-import { parseCodexCommand } from '@funny/shared/codex-commands';
-import { getAttachmentLimits } from '@funny/shared/models';
-import {
-  ArrowUp,
-  Square,
-  Loader2,
-  Paperclip,
-  Mic,
-  MicOff,
-  X,
-  Inbox,
-  ListOrdered,
-  Pencil,
-  Trash2,
-  Check,
-} from 'lucide-react';
-import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
-import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { ProviderSetupDialog } from '@/components/ProviderSetupDialog';
-import { Button } from '@/components/ui/button';
-import { AttachmentChip } from '@/components/ui/chip';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCodexCommands } from '@/hooks/use-codex-commands';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { systemApi } from '@/lib/api/system';
-import { threadsApi } from '@/lib/api/threads';
-import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
-import { getLeadingSlashCommand, resolveSlashCommandThreadMode } from '@/lib/thread-payload';
-import { cn } from '@/lib/utils';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
 import { ImageLightbox } from './ImageLightbox';
 import type { PromptEditorHandle, PromptSlashResource } from './prompt-editor/PromptEditor';
 import { PromptEditor } from './prompt-editor/PromptEditor';
-import { serializeEditorContent } from './prompt-editor/serialize';
-import { ModeSelect, ModelSelect, TemplateSelect, type ModelSelectGroup } from './PromptSelectors';
-import { ContextUsageRing } from './thread/ContextUsageRing';
-import { ThreadPowerline } from './ThreadPowerline';
+import {
+  ImagePreviews,
+  TextFilePreviews,
+  toLightboxImages,
+} from './prompt-input/AttachmentPreviews';
+import {
+  CompactConfirmDialog,
+  PromptBox,
+  PromptContextBar,
+  PromptInputFrame,
+  ProviderSetupPrompt,
+} from './prompt-input/PromptChrome';
+import { PromptFooterBar } from './prompt-input/PromptFooterBar';
+import { PromptToolbar } from './prompt-input/PromptToolbar';
+import { QueueIndicator } from './prompt-input/QueueIndicator';
+import { TemplateVariableInputs } from './prompt-input/TemplateVariableInputs';
+import { useMessageHistory } from './prompt-input/use-message-history';
+import { usePromptAttachments } from './prompt-input/use-prompt-attachments';
+import { usePromptDrop } from './prompt-input/use-prompt-drop';
+import {
+  useLightbox,
+  usePromptDialogs,
+  usePromptEditorBindings,
+  useSelectorHandlers,
+} from './prompt-input/use-prompt-editor-bindings';
+import { usePromptSubmit, type PromptOnSubmit } from './prompt-input/use-prompt-submit';
+import { usePromptTemplate } from './prompt-input/use-prompt-template';
+import { useQueueEditing } from './prompt-input/use-queue-editing';
+import type { ModelSelectGroup } from './PromptSelectors';
 export { ModelSelect, type ModelSelectGroup } from './PromptSelectors';
 
 export { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
@@ -50,31 +44,7 @@ export { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 
 export interface PromptInputUIProps {
   // ── Submission ──
-  onSubmit: (
-    prompt: string,
-    opts: {
-      provider?: string;
-      model: string;
-      mode: string;
-      effort?: string;
-      threadMode?: string;
-      runtime?: string;
-      baseBranch?: string;
-      cwd?: string;
-      sendToBacklog?: boolean;
-      fileReferences?: { path: string; type?: 'file' | 'folder' }[];
-      symbolReferences?: {
-        path: string;
-        name: string;
-        kind: string;
-        line: number;
-        endLine?: number;
-      }[];
-      agentTemplateId?: string;
-      templateVariables?: Record<string, string>;
-    },
-    images?: ImageAttachment[],
-  ) => Promise<boolean | void> | boolean | void;
+  onSubmit: PromptOnSubmit;
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
@@ -195,1278 +165,311 @@ export interface PromptInputUIProps {
 
 // ── Component ────────────────────────────────────────────────────
 
-const RUNTIME_MODES = [
-  { value: 'local', label: 'Local' },
-  { value: 'remote', label: 'Remote' },
-];
 const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = [];
 const EMPTY_MESSAGE_HISTORY: string[] = [];
 
-export const PromptInputUI = memo(function PromptInputUI({
-  onSubmit,
-  onStop,
-  loading = false,
-  running = false,
-  queuedCount = 0,
-  isQueueMode = false,
-  queuedMessages: queuedMessagesProp = EMPTY_QUEUED_MESSAGES,
-  queueLoading = false,
-  onQueueEditSave,
-  onQueueDelete,
-  unifiedModel,
-  onUnifiedModelChange,
-  modelGroups,
-  mode,
-  onModeChange,
-  modes,
-  isNewThread = false,
-  isScratch = false,
-  newThreadContextBar,
-  threadId,
-  projectId,
-  createWorktree = false,
-  onCreateWorktreeChange,
-  runtime = 'local',
-  onRuntimeChange,
-  hasLauncher = false,
-  selectedBranch = '',
-  followUpSelectedBranch = '',
-  powerlineThread,
-  powerlineProjectName,
-  powerlineProjectColor,
-  powerlineProjectPath,
-  powerlineGitStatus,
-  onOpenReview,
-  showBacklog = false,
-  sendToBacklog = false,
-  onSendToBacklogChange,
-  hasDictation = false,
-  isRecording = false,
-  isTranscribing = false,
-  onToggleRecording,
-  onStopRecording,
-  placeholder,
-  editorCwd,
-  loadSkills,
-  slashSkills,
-  slashSkillsLoading,
-  sdkSlashCommands,
-  workflows,
-  workflowsLoading,
-  commandProvider,
-  setPromptRef,
-  editorRef: externalEditorRef,
-  editorContainerRef: externalEditorContainerRef,
-  messageHistory = EMPTY_MESSAGE_HISTORY,
-  initialPrompt: _initialPrompt,
-  initialImages,
-  onEditorChange,
-  onEditorPaste,
-  onCheckoutPreflight,
-  effort,
-  onEffortChange,
-  defaultTemplateId,
-  contextPct,
-  contextUsedTokens,
-  contextMaxTokens,
-  onCompact,
-}: PromptInputUIProps) {
+const PROP_DEFAULTS = {
+  loading: false,
+  running: false,
+  queuedCount: 0,
+  isQueueMode: false,
+  queuedMessages: EMPTY_QUEUED_MESSAGES,
+  queueLoading: false,
+  isNewThread: false,
+  isScratch: false,
+  createWorktree: false,
+  runtime: 'local' as 'local' | 'remote',
+  hasLauncher: false,
+  selectedBranch: '',
+  followUpSelectedBranch: '',
+  showBacklog: false,
+  sendToBacklog: false,
+  hasDictation: false,
+  isRecording: false,
+  isTranscribing: false,
+  messageHistory: EMPTY_MESSAGE_HISTORY as readonly string[],
+};
+
+type ResolvedProps = Omit<PromptInputUIProps, keyof typeof PROP_DEFAULTS> & typeof PROP_DEFAULTS;
+
+/** Applies {@link PROP_DEFAULTS} for every prop that is `undefined` (destructuring-default semantics). */
+function withDefaults(props: PromptInputUIProps): ResolvedProps {
+  const resolved: Record<string, unknown> = { ...props };
+  for (const [key, value] of Object.entries(PROP_DEFAULTS)) {
+    if (resolved[key] === undefined) resolved[key] = value;
+  }
+  return resolved as ResolvedProps;
+}
+
+function resolvePlaceholder(
+  t: (key: string) => string,
+  p: Pick<ResolvedProps, 'placeholder' | 'running' | 'isQueueMode'>,
+): string {
+  if (!p.running) return p.placeholder ?? t('thread.describeTaskDefault');
+  return p.isQueueMode ? t('thread.typeToQueue') : t('thread.typeToInterrupt');
+}
+
+/** Which optional controls are visible / enabled. */
+function newThreadVisibility(
+  p: Pick<ResolvedProps, 'isNewThread' | 'isScratch' | 'showBacklog' | 'loading' | 'running'>,
+  isDeepAgent: boolean,
+  templateCount: number,
+) {
+  const deepAgentNew = p.isNewThread && isDeepAgent;
+  return {
+    contextBar: p.isNewThread && !p.isScratch,
+    templateVars: deepAgentNew,
+    templates: deepAgentNew && templateCount > 0,
+    backlog: p.isNewThread && p.showBacklog,
+    fileInputDisabled: p.loading || p.running,
+  };
+}
+
+function splitUnifiedModel(unifiedModel: string) {
+  const [provider, ...rest] = unifiedModel.split(':');
+  return { provider, model: rest.join(':') };
+}
+
+export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUIProps) {
+  const props = withDefaults(rawProps);
+  const { isNewThread, loading, running, unifiedModel, mode, modes, onModeChange } = props;
   const { t } = useTranslation();
 
-  // ── Internal refs ──
-  const internalEditorRef = useRef<PromptEditorHandle>(null);
-  const editorRef = externalEditorRef ?? internalEditorRef;
-  const internalEditorContainerRef = useRef<HTMLDivElement>(null);
-  const editorContainerRef = externalEditorContainerRef ?? internalEditorContainerRef;
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const promptBoxRef = useRef<HTMLDivElement>(null);
+  const { compactConfirmOpen, setCompactConfirmOpen, needsProviderSetup, setNeedsProviderSetup } =
+    usePromptDialogs();
+  const lightbox = useLightbox();
 
-  // ── Local UI state ──
-  const [images, setImages] = useState<ImageAttachment[]>(initialImages ?? []);
-  // Compaction is irreversible (older messages get summarized), so confirm first.
-  const [compactConfirmOpen, setCompactConfirmOpen] = useState(false);
-  /**
-   * Attached files: small files are inlined (`mode: 'inline'`, content is
-   * embedded in the prompt on submit); larger files are uploaded to the
-   * runner (`mode: 'upload'`, sent as a fileReference for the server to
-   * resolve on disk). `uploading: true` marks an upload in flight.
-   */
-  const [attachedTextFiles, setAttachedTextFiles] = useState<
-    Array<
-      | { mode: 'inline'; name: string; content: string; size: number }
-      | { mode: 'upload'; name: string; path: string; size: number }
-      | { mode: 'uploading'; name: string; size: number }
-    >
-  >([]);
-  const [editorEmpty, setEditorEmpty] = useState(true);
-  const [isDragging, setIsDragging] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
-  const historyDraftRef = useRef<ReturnType<PromptEditorHandle['getJSON']>>(undefined);
-
-  // ── Queue editing state ──
-  const [editingQueuedMessageId, setEditingQueuedMessageId] = useState<string | null>(null);
-  const [editingQueuedMessageContent, setEditingQueuedMessageContent] = useState('');
-  const [queueActionMessageId, setQueueActionMessageId] = useState<string | null>(null);
-
-  // ── Expose setPrompt to parent ──
-  if (setPromptRef) {
-    setPromptRef.current = (text: string) => {
-      editorRef.current?.setContent(text);
-    };
-  }
-
-  // ── Agent template (Deep Agent only) ──
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(
-    defaultTemplateId,
-  );
-  const [templateVarValues, setTemplateVarValues] = useState<Record<string, string>>({});
-  const { templates, initialized: templatesLoaded, loadTemplates } = useAgentTemplateStore();
-  const selectedTemplate = useMemo(
-    () => (selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : undefined),
-    [selectedTemplateId, templates],
-  );
-  const templateVars = useMemo(() => selectedTemplate?.variables ?? [], [selectedTemplate]);
+  const {
+    editorRef,
+    editorContainerRef,
+    promptBoxRef,
+    editorEmpty,
+    setEditorEmpty,
+    handleEditorChange,
+    handlePromptBoxClick,
+  } = usePromptEditorBindings(props);
 
   // ── Provider/model from unified string ──
-  const provider = useMemo(() => unifiedModel.split(':')[0], [unifiedModel]);
-  const model = useMemo(() => unifiedModel.split(':').slice(1).join(':'), [unifiedModel]);
-
-  // Load templates when provider is deepagent and creating a new thread
+  const { provider, model } = useMemo(() => splitUnifiedModel(unifiedModel), [unifiedModel]);
   const isDeepAgent = provider === 'deepagent';
-  useEffect(() => {
-    if (isDeepAgent && isNewThread && !templatesLoaded) loadTemplates();
-  }, [isDeepAgent, isNewThread, templatesLoaded, loadTemplates]);
+
+  const template = usePromptTemplate({
+    defaultTemplateId: props.defaultTemplateId,
+    isDeepAgent,
+    isNewThread,
+  });
+  const visible = newThreadVisibility(props, isDeepAgent, template.templates.length);
 
   const executeCodexCommand = useCodexCommands({
-    threadId,
+    threadId: props.threadId,
     model,
     mode,
-    effort,
+    effort: props.effort,
     running,
-    modelGroups,
+    modelGroups: props.modelGroups,
     modes,
-    onModelChange: onUnifiedModelChange,
+    onModelChange: props.onUnifiedModelChange,
     onModeChange,
-    onEffortChange,
-    onStop,
-    onOpenReview,
+    onEffortChange: props.onEffortChange,
+    onStop: props.onStop,
+    onOpenReview: props.onOpenReview,
   });
 
-  const [needsProviderSetup, setNeedsProviderSetup] = useState(false);
-  const checkingProvider = useRef(false);
-
-  // ── Submit handler ──
-  const handleSubmit = useCallback(async () => {
-    if (loading) return;
-    if (isRecording && onStopRecording) onStopRecording();
-
-    const editorJSON = editorRef.current?.getJSON();
-    const isEmpty = editorRef.current?.isEmpty() ?? true;
-    if (isEmpty) {
-      toast.warning(t('prompt.emptyPrompt', 'Please enter a prompt before sending'));
-      return;
-    }
-
-    const serialized = editorJSON
-      ? serializeEditorContent(editorJSON)
-      : { text: '', fileReferences: [], symbolReferences: [] };
-    if (provider === 'codex' && parseCodexCommand(serialized.text)) {
-      if (
-        images.length ||
-        attachedTextFiles.length ||
-        serialized.fileReferences.length ||
-        serialized.symbolReferences.length
-      ) {
-        toast.error('Send attachments in a separate message from Codex commands.');
-        return;
-      }
-      try {
-        if (await executeCodexCommand(serialized.text)) {
-          editorRef.current?.clear();
-          setEditorEmpty(true);
-          return;
-        }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Codex command failed');
-        return;
-      }
-    }
-    if (!running && !sendToBacklog && projectId) {
-      if (checkingProvider.current) return;
-      checkingProvider.current = true;
-      try {
-        const setup = await systemApi.providerSetupStatus(provider, projectId);
-        if (setup.isErr()) {
-          toast.error(setup.error.message);
-          return;
-        }
-        if (
-          ['missing', 'failed', 'installing'].includes(setup.value.state) ||
-          setup.value.auth === 'required' ||
-          (setup.value.state === 'bundled' &&
-            setup.value.auth !== 'configured' &&
-            provider === 'claude')
-        ) {
-          setNeedsProviderSetup(true);
-          return;
-        }
-      } finally {
-        checkingProvider.current = false;
-      }
-    }
-    const leadingSlashCommand = getLeadingSlashCommand(serialized.text);
-    const slashResources = leadingSlashCommand && loadSkills ? await loadSkills() : undefined;
-    const commandThreadMode =
-      isNewThread && !isScratch && leadingSlashCommand && slashResources
-        ? resolveSlashCommandThreadMode(serialized.text, slashResources)
-        : undefined;
-    const effectiveThreadMode =
-      commandThreadMode ?? (createWorktree ? ('worktree' as const) : ('local' as const));
-    const effectiveCreateWorktree = effectiveThreadMode === 'worktree';
-
-    // Checkout preflight for local mode
-    if (isNewThread && !effectiveCreateWorktree && onCheckoutPreflight && selectedBranch) {
-      const canProceed = await onCheckoutPreflight(selectedBranch);
-      if (!canProceed) return;
-    }
-
-    // Block submit while any upload is still in flight.
-    if (attachedTextFiles.some((f) => f.mode === 'uploading')) {
-      toast.warning(
-        t('prompt.uploadInProgress', {
-          defaultValue: 'Wait for uploads to finish before sending.',
-        }),
-      );
-      return;
-    }
-
-    // Inline-tier files: embed contents in a <referenced-files> block prepended
-    // to the prompt (browsers can't expose paths for these small dropped files).
-    const inlineFiles = attachedTextFiles.filter(
-      (f): f is Extract<typeof f, { mode: 'inline' }> => f.mode === 'inline',
-    );
-    const inlineFilesBlock =
-      inlineFiles.length > 0
-        ? `<referenced-files>\n${inlineFiles
-            .map((f) => `<file path="${f.name.replace(/"/g, '&quot;')}">\n${f.content}\n</file>`)
-            .join('\n')}\n</referenced-files>\n\n`
-        : '';
-    const submittedPrompt = inlineFilesBlock + serialized.text;
-    const submittedImages = images.length > 0 ? images : undefined;
-    // Upload-tier files: send their on-disk path as a fileReference so the
-    // server can resolve them via augmentPromptWithFiles (which falls back to
-    // a "use Read tool" note when the file exceeds the inline cap).
-    const uploadedRefs = attachedTextFiles
-      .filter((f): f is Extract<typeof f, { mode: 'upload' }> => f.mode === 'upload')
-      .map((f) => ({ path: f.path, type: 'file' as const }));
-    const mergedFileRefs = [...serialized.fileReferences, ...uploadedRefs];
-    const submittedFiles = mergedFileRefs.length > 0 ? mergedFileRefs : undefined;
-    const submittedSymbols =
-      serialized.symbolReferences.length > 0 ? serialized.symbolReferences : undefined;
-    const submittedTextFiles = attachedTextFiles;
-    editorRef.current?.clear();
-    setImages([]);
-    setAttachedTextFiles([]);
-    setEditorEmpty(true);
-    editorRef.current?.focus();
-
-    const result = await onSubmit(
-      submittedPrompt,
-      {
-        provider,
-        model,
-        mode,
-        effort,
-        ...(isNewThread
-          ? {
-              threadMode: effectiveThreadMode,
-              runtime,
-              baseBranch: selectedBranch || undefined,
-              sendToBacklog,
-              agentTemplateId: isDeepAgent ? selectedTemplateId : undefined,
-              templateVariables:
-                isDeepAgent && selectedTemplateId && templateVars.length > 0
-                  ? Object.fromEntries(
-                      templateVars.map((v) => [
-                        v.name,
-                        templateVarValues[v.name] || v.defaultValue || '',
-                      ]),
-                    )
-                  : undefined,
-            }
-          : { baseBranch: followUpSelectedBranch || undefined }),
-        fileReferences: submittedFiles,
-        symbolReferences: submittedSymbols,
-      },
-      submittedImages,
-    );
-    if (result === false) {
-      if (editorJSON) editorRef.current?.setContent(editorJSON);
-      setImages(submittedImages ?? []);
-      setAttachedTextFiles(submittedTextFiles);
-    }
-  }, [
-    loading,
-    executeCodexCommand,
-    projectId,
-    running,
-    isRecording,
-    onStopRecording,
-    images,
-    attachedTextFiles,
+  const attachments = usePromptAttachments({
+    initialImages: props.initialImages,
+    provider,
+    threadId: props.threadId,
     t,
-    isNewThread,
-    isScratch,
-    createWorktree,
-    loadSkills,
-    onCheckoutPreflight,
-    selectedBranch,
-    onSubmit,
+  });
+  const { images, attachedTextFiles } = attachments;
+
+  const handleSubmit = usePromptSubmit({
+    ...props,
+    t,
+    editorRef,
     provider,
     model,
-    mode,
-    effort,
-    runtime,
-    sendToBacklog,
-    followUpSelectedBranch,
-    editorRef,
+    executeCodexCommand,
+    images,
+    setImages: attachments.setImages,
+    attachedTextFiles,
+    setAttachedTextFiles: attachments.setAttachedTextFiles,
+    setEditorEmpty: setEditorEmpty,
+    setNeedsProviderSetup,
     isDeepAgent,
-    selectedTemplateId,
-    templateVars,
-    templateVarValues,
-  ]);
+    selectedTemplateId: template.selectedTemplateId,
+    templateVars: template.templateVars,
+    templateVarValues: template.templateVarValues,
+  });
 
-  // ── Editor callbacks ──
-  const handleEditorChange = useCallback(() => {
-    setEditorEmpty(editorRef.current?.isEmpty() ?? true);
-    onEditorChange?.();
-  }, [onEditorChange, editorRef]);
+  const handleHistoryNavigate = useMessageHistory({
+    editorRef,
+    threadId: props.threadId,
+    messageHistory: props.messageHistory,
+    onContentChange: handleEditorChange,
+  });
 
-  // Only the current thread's messages belong in its history. Keep a draft
-  // snapshot so ↓ after the newest historical message returns the composer to
-  // exactly what the user was writing before pressing ↑.
-  useEffect(() => {
-    setHistoryIndex(null);
-    historyDraftRef.current = undefined;
-  }, [threadId]);
+  const selectors = useSelectorHandlers({ ...props, editorRef });
 
-  const handleHistoryNavigate = useCallback(
-    (direction: 'previous' | 'next') => {
-      if (messageHistory.length === 0) return false;
+  const {
+    fileInputRef,
+    isDragging,
+    endDrag,
+    openFilePicker,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleFileSelect,
+    handleEditorPaste,
+  } = usePromptDrop({
+    editorRef,
+    loading,
+    addFiles: attachments.addFiles,
+    addImageFile: attachments.addImageFile,
+    onEditorPaste: props.onEditorPaste,
+  });
 
-      if (direction === 'previous') {
-        const nextIndex = historyIndex === null ? messageHistory.length - 1 : historyIndex - 1;
-        if (nextIndex < 0) return true;
-        if (historyIndex === null) historyDraftRef.current = editorRef.current?.getJSON();
-        editorRef.current?.setContent(messageHistory[nextIndex]);
-        setHistoryIndex(nextIndex);
-        handleEditorChange();
-        return true;
-      }
-
-      if (historyIndex === null) return false;
-      if (historyIndex < messageHistory.length - 1) {
-        const nextIndex = historyIndex + 1;
-        editorRef.current?.setContent(messageHistory[nextIndex]);
-        setHistoryIndex(nextIndex);
-      } else if (historyDraftRef.current) {
-        editorRef.current?.setContent(historyDraftRef.current);
-        historyDraftRef.current = undefined;
-        setHistoryIndex(null);
-      } else {
-        editorRef.current?.clear();
-        setHistoryIndex(null);
-      }
-      handleEditorChange();
-      return true;
-    },
-    [editorRef, handleEditorChange, historyIndex, messageHistory],
-  );
-
-  const isMobile = useIsMobile();
-
-  const handleTemplateChange = useCallback((v: string | undefined) => {
-    setSelectedTemplateId(v);
-    setTemplateVarValues({});
-  }, []);
-
-  const handleRuntimeChange = useCallback(
-    (v: string) => onRuntimeChange?.(v as 'local' | 'remote'),
-    [onRuntimeChange],
-  );
-
-  // On desktop, return focus to the editor after picking a model. On mobile,
-  // let the drawer restore its trigger so selection does not summon the keyboard.
-  const handleUnifiedModelChange = useCallback(
-    (v: string) => {
-      onUnifiedModelChange(v);
-      if (!isMobile) requestAnimationFrame(() => editorRef.current?.focus());
-    },
-    [onUnifiedModelChange, editorRef, isMobile],
-  );
-
-  const handleEffortChange = useCallback(
-    (v: string) => {
-      onEffortChange?.(v);
-      if (!isMobile) requestAnimationFrame(() => editorRef.current?.focus());
-    },
-    [onEffortChange, editorRef, isMobile],
-  );
-
-  const handleCycleMode = useCallback(() => {
-    onModeChange(
-      (() => {
-        const idx = modes.findIndex((m) => m.value === mode);
-        return modes[(idx + 1) % modes.length].value;
-      })(),
-    );
-  }, [modes, mode, onModeChange]);
-
-  // ── Image handling ──
-  const addImageFile = useCallback(async (file: File): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const mediaType = file.type as ImageAttachment['source']['media_type'];
-        setImages((prev) => [
-          ...prev,
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: base64 },
-          },
-        ]);
-        resolve();
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }, []);
-
-  const removeImage = useCallback((index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  // Browsers do not expose absolute paths for dropped files, so we cannot
-  // send a path the runtime can resolve. Instead we use a tiered strategy:
-  //   - inline (size ≤ inlineMaxBytes): read contents and embed in prompt.
-  //   - upload (size ≤ uploadMaxBytes): POST to /threads/:id/upload, which
-  //     writes the file under .funny/uploads/<threadId>/ on the runner; we
-  //     then send the path as a fileReference and the agent reads on demand.
-  //   - reject (size > uploadMaxBytes): toast error.
-  //
-  // Limits per provider live in PROVIDER_ATTACHMENT_LIMITS (@funny/shared/models).
-  const attachmentLimits = useMemo(
-    () => getAttachmentLimits(provider as Parameters<typeof getAttachmentLimits>[0]),
-    [provider],
-  );
-
-  const fileToBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const idx = dataUrl.indexOf(',');
-        resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl);
-      };
-      reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
-      reader.readAsDataURL(file);
-    });
-
-  const addTextFile = useCallback(
-    async (file: File): Promise<void> => {
-      const { inlineMaxBytes, uploadMaxBytes } = attachmentLimits;
-
-      // Reject: above the upload tier.
-      if (file.size > uploadMaxBytes) {
-        toast.error(
-          t('prompt.fileTooLarge', {
-            defaultValue: '{{name}} is too large ({{size}} MB). Max {{max}} MB.',
-            name: file.name,
-            size: (file.size / (1024 * 1024)).toFixed(1),
-            max: (uploadMaxBytes / (1024 * 1024)).toFixed(0),
-          }),
-        );
-        return;
-      }
-
-      // Inline tier: small enough to embed directly in the prompt.
-      if (file.size <= inlineMaxBytes) {
-        try {
-          const content = await file.text();
-          setAttachedTextFiles((prev) => [
-            ...prev,
-            { mode: 'inline', name: file.name, content, size: file.size },
-          ]);
-        } catch {
-          toast.error(
-            t('prompt.fileReadError', {
-              defaultValue: 'Could not read {{name}}',
-              name: file.name,
-            }),
-          );
-        }
-        return;
-      }
-
-      // Upload tier: requires an existing thread (path is `.funny/uploads/<threadId>/`).
-      if (!threadId) {
-        toast.error(
-          t('prompt.fileUploadNeedsThread', {
-            defaultValue:
-              '{{name}} is too large to inline. Send a first message to start the thread, then attach larger files.',
-            name: file.name,
-          }),
-        );
-        return;
-      }
-
-      // Optimistically add a "uploading" chip so the user sees progress.
-      const tempKey = `${file.name}__${Date.now()}__${Math.random()}`;
-      setAttachedTextFiles((prev) => [
-        ...prev,
-        { mode: 'uploading', name: tempKey, size: file.size },
-      ]);
-      try {
-        const contentBase64 = await fileToBase64(file);
-        const result = await threadsApi.uploadFile(threadId, {
-          provider,
-          filename: file.name,
-          contentBase64,
-        });
-        if (result.isErr()) {
-          setAttachedTextFiles((prev) =>
-            prev.filter((f) => !(f.mode === 'uploading' && f.name === tempKey)),
-          );
-          toast.error(
-            t('prompt.fileUploadError', {
-              defaultValue: 'Upload failed for {{name}}: {{error}}',
-              name: file.name,
-              error: result.error.message,
-            }),
-          );
-          return;
-        }
-        const uploaded = result.value;
-        setAttachedTextFiles((prev) =>
-          prev.map((f) =>
-            f.mode === 'uploading' && f.name === tempKey
-              ? {
-                  mode: 'upload',
-                  name: file.name,
-                  path: uploaded.path,
-                  size: uploaded.size,
-                }
-              : f,
-          ),
-        );
-      } catch (e) {
-        setAttachedTextFiles((prev) =>
-          prev.filter((f) => !(f.mode === 'uploading' && f.name === tempKey)),
-        );
-        toast.error(
-          t('prompt.fileUploadError', {
-            defaultValue: 'Upload failed for {{name}}: {{error}}',
-            name: file.name,
-            error: e instanceof Error ? e.message : String(e),
-          }),
-        );
-      }
-    },
-    [attachmentLimits, provider, t, threadId],
-  );
-
-  const removeTextFile = useCallback((index: number) => {
-    setAttachedTextFiles((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleEditorPaste = useCallback(
-    (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) addImageFile(file);
-        }
-      }
-      onEditorPaste?.(e);
-    },
-    [addImageFile, onEditorPaste],
-  );
-
-  // ── Drag & Drop ──
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer.types.includes('Files') || dragHasFileMention(e.dataTransfer)) {
-      setIsDragging(true);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.currentTarget === e.target) setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (loading) return;
-
-    const mention = readFileMentionDragData(e.dataTransfer);
-    if (mention) {
-      editorRef.current?.insertFileMention(mention.path, mention.fileType);
-      editorRef.current?.focus();
-      return;
-    }
-
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith('image/')) {
-        await addImageFile(file);
-      } else {
-        await addTextFile(file);
-      }
-    }
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith('image/')) {
-        await addImageFile(file);
-      } else {
-        await addTextFile(file);
-      }
-    }
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  // ── Queue handlers ──
-  const handleQueueEditStart = useCallback((message: QueuedMessage) => {
-    setEditingQueuedMessageId(message.id);
-    setEditingQueuedMessageContent(message.content);
-  }, []);
-
-  const handleQueueEditCancel = useCallback(() => {
-    setEditingQueuedMessageId(null);
-    setEditingQueuedMessageContent('');
-  }, []);
-
-  const handleQueueEditSave = useCallback(
-    (messageId: string) => {
-      const nextContent = editingQueuedMessageContent.trim();
-      if (!nextContent) {
-        toast.warning(t('prompt.emptyPrompt', 'Please enter a prompt before sending'));
-        return;
-      }
-      setQueueActionMessageId(messageId);
-      onQueueEditSave?.(messageId, editingQueuedMessageContent);
-      setEditingQueuedMessageId(null);
-      setEditingQueuedMessageContent('');
-      setQueueActionMessageId((current) => (current === messageId ? null : current));
-    },
-    [editingQueuedMessageContent, onQueueEditSave, t],
-  );
-
-  const handleQueueDelete = useCallback(
-    (messageId: string) => {
-      setQueueActionMessageId(messageId);
-      onQueueDelete?.(messageId);
-      if (editingQueuedMessageId === messageId) {
-        setEditingQueuedMessageId(null);
-        setEditingQueuedMessageContent('');
-      }
-      setQueueActionMessageId((current) => (current === messageId ? null : current));
-    },
-    [editingQueuedMessageId, onQueueDelete],
-  );
-
-  // ── Derived values ──
-  const defaultPlaceholder = placeholder ?? t('thread.describeTaskDefault');
-  const editorPlaceholder = running
-    ? isQueueMode
-      ? t('thread.typeToQueue')
-      : t('thread.typeToInterrupt')
-    : defaultPlaceholder;
-
-  // ── Click-to-focus: click anywhere on the prompt box (except interactive elements) to focus editor ──
-  const handlePromptBoxClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const target = e.target as HTMLElement;
-      // Don't steal focus from interactive elements
-      if (
-        target.closest(
-          'button, a, input, select, textarea, [role="switch"], [role="combobox"], [role="listbox"], [role="option"], [data-vaul-drawer], [data-vaul-overlay], [data-radix-popper-content-wrapper]',
-        )
-      ) {
-        return;
-      }
-      editorRef.current?.focus();
-    },
-    [editorRef],
-  );
+  const queue = useQueueEditing({
+    t,
+    onQueueEditSave: props.onQueueEditSave,
+    onQueueDelete: props.onQueueDelete,
+  });
 
   // ── Render ──
   return (
-    <div className={cn(!isNewThread && 'px-3 sm:px-4')}>
-      <div className={cn('mx-auto w-full max-w-3xl min-w-0', isNewThread ? 'pb-0' : 'pb-4')}>
-        {/* Image lightbox */}
-        <ImageLightbox
-          images={images.map((img, idx) => ({
-            src: `data:${img.source.media_type};base64,${img.source.data}`,
-            alt: `Attachment ${idx + 1}`,
-          }))}
-          initialIndex={lightboxIndex}
-          open={lightboxOpen}
-          onClose={() => setLightboxOpen(false)}
-        />
-
-        {/* Queue indicator */}
-        {(queuedCount > 0 || queuedMessagesProp.length > 0) && (
-          <div
-            data-testid="queue-indicator"
-            className="border-border/40 mb-2 space-y-2 rounded-md border px-2.5 py-2"
-          >
-            <div className="flex items-center gap-1.5">
-              <ListOrdered className="icon-xs text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground text-xs">
-                {(queuedMessagesProp.length > 0 ? queuedMessagesProp.length : queuedCount) === 1
-                  ? t('prompt.queuedOne', '1 message in queue')
-                  : t('prompt.queuedMany', '{{count}} messages in queue', {
-                      count:
-                        queuedMessagesProp.length > 0 ? queuedMessagesProp.length : queuedCount,
-                    })}
-              </span>
-            </div>
-
-            {queueLoading && queuedMessagesProp.length === 0 ? (
-              <div className="border-border/60 bg-background/60 text-muted-foreground flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs">
-                <Loader2 className="icon-xs animate-spin" />
-                {t('prompt.loadingQueuedMessages', 'Loading queued messages...')}
-              </div>
-            ) : (
-              <div className="divide-border divide-y *:bg-transparent">
-                {queuedMessagesProp.map((message, index) => {
-                  const isEditing = editingQueuedMessageId === message.id;
-                  const isBusy = queueActionMessageId === message.id;
-                  const isPreviewOnly = message.id.startsWith('preview-queued-message:');
-
-                  return (
-                    <div
-                      key={message.id}
-                      data-testid={`queue-item-${message.id}`}
-                      className="bg-transparent px-1 py-1 first:pt-0 last:pb-0"
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground shrink-0 text-[10px] font-medium tracking-wide uppercase">
-                            #{index + 1}
-                          </span>
-                          <Input
-                            data-testid={`queue-edit-textarea-${message.id}`}
-                            value={editingQueuedMessageContent}
-                            onChange={(event) => setEditingQueuedMessageContent(event.target.value)}
-                            disabled={isBusy}
-                            className="bg-background h-7 flex-1 text-xs"
-                          />
-                          <div className="flex shrink-0 items-center gap-0.5">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  data-testid={`queue-save-${message.id}`}
-                                  type="button"
-                                  size="icon-xs"
-                                  onClick={() => handleQueueEditSave(message.id)}
-                                  disabled={isBusy}
-                                  aria-label={t('prompt.saveQueuedMessage', 'Save')}
-                                  className="text-muted-foreground hover:text-foreground"
-                                >
-                                  {isBusy ? (
-                                    <Loader2 className="icon-xs animate-spin" />
-                                  ) : (
-                                    <Check className="icon-xs" />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {t('prompt.saveQueuedMessage', 'Save')}
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  data-testid={`queue-cancel-edit-${message.id}`}
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={handleQueueEditCancel}
-                                  disabled={isBusy}
-                                  aria-label={t('prompt.cancelQueuedEdit', 'Cancel')}
-                                  className="text-muted-foreground hover:text-foreground"
-                                >
-                                  <X className="icon-xs" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {t('prompt.cancelQueuedEdit', 'Cancel')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground shrink-0 text-[10px] font-medium tracking-wide uppercase">
-                            #{index + 1}
-                          </span>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-                                {message.content}
-                              </p>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] break-words">
-                              {message.content}
-                            </TooltipContent>
-                          </Tooltip>
-                          <div className="flex shrink-0 items-center gap-0.5">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  data-testid={`queue-edit-${message.id}`}
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => handleQueueEditStart(message)}
-                                  disabled={isBusy || isPreviewOnly}
-                                  aria-label={t('prompt.editQueuedMessage', 'Edit')}
-                                  className="text-muted-foreground hover:text-foreground"
-                                >
-                                  <Pencil className="icon-xs" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {t('prompt.editQueuedMessage', 'Edit')}
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  data-testid={`queue-delete-${message.id}`}
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  onClick={() => handleQueueDelete(message.id)}
-                                  disabled={isBusy || isPreviewOnly}
-                                  aria-label={t('prompt.deleteQueuedMessage', 'Delete')}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  {isBusy ? (
-                                    <Loader2 className="icon-xs animate-spin" />
-                                  ) : (
-                                    <Trash2 className="icon-xs" />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {t('prompt.deleteQueuedMessage', 'Delete')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Top context bar — project / repo / branch + worktree switch. Sits
-            visually OUTSIDE the bordered prompt box (new threads only).
-            Reserve the loaded controls' height while repo/branch data loads. */}
-        {isNewThread && !isScratch && (
-          <div
-            className="text-muted-foreground mb-3 flex min-h-6 items-center gap-2 px-1 text-sm"
-            data-testid="new-thread-context-bar"
-          >
-            <div className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto">
-              {newThreadContextBar}
-            </div>
-            <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
-              <Switch
-                data-testid="prompt-worktree-switch"
-                checked={createWorktree}
-                onCheckedChange={onCreateWorktreeChange ?? (() => {})}
-                tabIndex={-1}
-                className="scale-90"
-              />
-              <span>{t('thread.mode.worktree')}</span>
-            </label>
-          </div>
-        )}
-
-        {/* Editor + bottom toolbar */}
-        {/* This wrapper only forwards blank-area clicks to the nested editor; it is not a separate control. */}
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-        {/* react-doctor-disable-next-line react-doctor/no-static-element-interactions */}
-        <div
-          ref={promptBoxRef}
-          className={cn(
-            'relative cursor-text rounded-md border bg-input/80',
-            isDragging
-              ? 'border-primary border-2 ring-2 ring-primary/20'
-              : 'border-border/80 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50',
-          )}
-          onClick={handlePromptBoxClick}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {/* Image previews */}
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-2">
-              {images.map((img, idx) => (
-                <div key={`${img.source.media_type}-${img.source.data}`} className="group relative">
-                  <button
-                    type="button"
-                    aria-label={`Preview attachment ${idx + 1}`}
-                    onClick={() => {
-                      setLightboxIndex(idx);
-                      setLightboxOpen(true);
-                    }}
-                  >
-                    <img
-                      src={`data:${img.source.media_type};base64,${img.source.data}`}
-                      alt={`Attachment ${idx + 1}`}
-                      className="border-foreground max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer rounded border-2 object-cover transition-opacity hover:opacity-80"
-                    />
-                  </button>
-                  <button
-                    onClick={() => removeImage(idx)}
-                    aria-label={t('prompt.removeImage', 'Remove image')}
-                    className="bg-destructive text-destructive-foreground absolute -top-1 -right-1 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-                    disabled={loading}
-                  >
-                    <X className="icon-xs" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Attached text file previews */}
-          {attachedTextFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-2">
-              {attachedTextFiles.map((f, idx) => {
-                const isUploading = f.mode === 'uploading';
-                const sizeKb = Math.round(f.size / 1024) || '<1';
-                const sizeLabel =
-                  f.size >= 1024 * 1024
-                    ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
-                    : `${sizeKb} KB`;
-                return (
-                  <AttachmentChip
-                    key={`${f.name}-${f.size}-${f.mode}-${f.mode === 'upload' ? f.path : ''}`}
-                    data-testid={`prompt-attached-file-${idx}`}
-                    name={f.name}
-                    size={sizeLabel}
-                    loading={isUploading}
-                    onRemove={() => removeTextFile(idx)}
-                    removeDisabled={loading || isUploading}
-                    removeLabel={t('prompt.removeFile', 'Remove file')}
-                    title={`${f.name} (${sizeLabel})${
-                      f.mode === 'upload' ? ` — uploaded to ${f.path}` : ''
-                    }`}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          {/* TipTap Editor */}
-          <div ref={editorContainerRef} className="px-3 pt-2">
-            <PromptEditor
-              ref={editorRef}
-              placeholder={editorPlaceholder}
-              disabled={loading}
-              onSubmit={handleSubmit}
-              onCycleMode={handleCycleMode}
-              onHistoryNavigate={handleHistoryNavigate}
-              onChange={handleEditorChange}
-              onPaste={handleEditorPaste}
-              onFileMentionDrop={() => setIsDragging(false)}
-              cwd={editorCwd}
-              slashSkills={slashSkills}
-              slashSkillsLoading={slashSkillsLoading}
-              sdkSlashCommands={sdkSlashCommands}
-              workflows={workflows}
-              workflowsLoading={workflowsLoading}
-              commandProvider={commandProvider}
-              containerRef={promptBoxRef}
-            />
-          </div>
-          {/* Template variable inputs */}
-          {isNewThread && isDeepAgent && templateVars.length > 0 && (
-            <div className="border-t px-3 py-2">
-              <div className="flex flex-wrap gap-2">
-                {templateVars.map((v) => (
-                  <div key={v.name} className="flex items-center gap-1.5">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <label
-                          htmlFor={`template-variable-${v.name}`}
-                          className="text-muted-foreground text-[10px] font-medium"
-                        >
-                          {v.name}
-                        </label>
-                      </TooltipTrigger>
-                      <TooltipContent>{v.description || v.name}</TooltipContent>
-                    </Tooltip>
-                    <Input
-                      id={`template-variable-${v.name}`}
-                      value={templateVarValues[v.name] ?? v.defaultValue ?? ''}
-                      onChange={(e) =>
-                        setTemplateVarValues((prev) => ({
-                          ...prev,
-                          [v.name]: e.target.value,
-                        }))
-                      }
-                      placeholder={v.description || v.name}
-                      className="h-6 w-40 text-xs"
-                      data-testid={`prompt-template-var-${v.name}`}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* Bottom toolbar */}
-          <input
-            ref={fileInputRef}
-            data-testid="prompt-file-input"
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileSelect}
-            disabled={loading || running}
+    <PromptInputFrame
+      isNewThread={isNewThread}
+      overlays={
+        <>
+          <ProviderSetupPrompt
+            open={needsProviderSetup}
+            provider={provider}
+            modelGroups={props.modelGroups}
+            projectId={props.projectId}
+            onClose={() => setNeedsProviderSetup(false)}
           />
-          {/* Bottom toolbar wraps touch-sized selectors on mobile. */}
-          <div className="px-2 py-2.5">
-            <div className="no-scrollbar flex min-h-[48px] flex-wrap items-center gap-1 px-px md:h-9 md:min-h-0 md:flex-nowrap md:overflow-x-auto">
-              <ModelSelect
-                value={unifiedModel}
-                effort={effort}
-                onChange={handleUnifiedModelChange}
-                onEffortChange={handleEffortChange}
-                groups={modelGroups}
-                projectId={projectId}
-              />
-              {isNewThread && isDeepAgent && templates.length > 0 && (
-                <TemplateSelect
-                  value={selectedTemplateId}
-                  onChange={handleTemplateChange}
-                  templates={templates}
-                />
-              )}
-              <ModeSelect value={mode} onChange={onModeChange} modes={modes} />
-              {isNewThread && showBacklog && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      data-testid="prompt-backlog-toggle"
-                      onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
-                      tabIndex={-1}
-                      className={cn(
-                        'flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-                        sendToBacklog
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                      )}
-                      aria-label={t('prompt.sendToBacklog')}
-                    >
-                      <Inbox className="icon-xs" />
-                      {t('prompt.backlog')}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('prompt.sendToBacklog')}</TooltipContent>
-                </Tooltip>
-              )}
-              {/* Attachment + dictation + send — always visible, pushed right */}
-              <div className="ml-auto flex shrink-0 items-center gap-1">
-                <Button
-                  data-testid="prompt-attach"
-                  onClick={() => fileInputRef.current?.click()}
-                  variant="ghost"
-                  size="icon-sm"
-                  tabIndex={-1}
-                  aria-label={t('prompt.attach')}
-                  disabled={loading}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Paperclip className="icon-base" />
-                </Button>
-                {hasDictation && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-testid="prompt-dictate"
-                        onClick={onToggleRecording}
-                        variant="ghost"
-                        size="icon-sm"
-                        tabIndex={-1}
-                        aria-label={
-                          isRecording
-                            ? t('prompt.stopDictation', 'Stop dictation')
-                            : t('prompt.startDictation', 'Start dictation')
-                        }
-                        disabled={loading || isTranscribing}
-                        className={cn(
-                          'text-muted-foreground hover:text-foreground',
-                          isRecording && 'text-destructive hover:text-destructive',
-                        )}
-                      >
-                        {isTranscribing ? (
-                          <Loader2 className="icon-sm animate-spin" />
-                        ) : isRecording ? (
-                          <MicOff className="icon-sm" />
-                        ) : (
-                          <Mic className="icon-sm" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isTranscribing
-                        ? t('prompt.transcribing', 'Transcribing...')
-                        : isRecording
-                          ? t('prompt.stopDictation', 'Stop dictation')
-                          : t('prompt.startDictationPtt', 'Voice dictation (hold Ctrl+Alt)')}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {running && editorEmpty ? (
-                  <Button
-                    data-testid="prompt-stop"
-                    onClick={onStop}
-                    variant="destructive"
-                    size="icon-sm"
-                    tabIndex={-1}
-                    aria-label={t('prompt.stopAgent')}
-                  >
-                    <Square className="icon-sm" />
-                  </Button>
-                ) : (
-                  <Button
-                    data-testid="prompt-send"
-                    onClick={handleSubmit}
-                    disabled={loading}
-                    size="icon-sm"
-                    tabIndex={-1}
-                    aria-label={
-                      running && isQueueMode
-                        ? t('prompt.queueMessage')
-                        : t('prompt.send', 'Send message')
-                    }
-                  >
-                    {loading ? (
-                      <Loader2 className="icon-sm animate-spin" />
-                    ) : (
-                      <ArrowUp className="icon-sm" />
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Bottom bar — powerline / new-thread controls + context usage. Sits
-            visually OUTSIDE the bordered prompt box. Skipped entirely when it
-            would be empty (e.g. a new thread with no launcher / context ring),
-            so the box stays tight against whatever follows (MCP list). */}
-        {(typeof contextPct === 'number' || (isNewThread ? hasLauncher : !!powerlineThread)) && (
-          <div className="mt-1.5 flex items-center gap-2 px-2">
-            <div className="min-w-0 flex-1">
-              {isNewThread ? (
-                <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                  {hasLauncher && (
-                    <ModeSelect
-                      value={runtime}
-                      onChange={handleRuntimeChange}
-                      modes={RUNTIME_MODES}
-                    />
-                  )}
-                </div>
-              ) : (
-                // min-h matches the compact powerline row height so the row stays
-                // vertically centered whether or not the diff-stats chip is present.
-                <div className="no-scrollbar flex min-h-[15px] items-center gap-2 overflow-x-auto">
-                  {powerlineThread && (
-                    <ThreadPowerline
-                      thread={powerlineThread}
-                      projectName={powerlineProjectName}
-                      projectColor={powerlineProjectColor}
-                      projectTooltip={powerlineProjectPath}
-                      gitStatus={powerlineGitStatus}
-                      diffStatsSize="xs"
-                      prBadgeTestId="prompt-powerline-pr"
-                      copyable
-                      onDiffStatsClick={onOpenReview}
-                      data-testid="prompt-powerline"
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-            {typeof contextPct === 'number' && (
-              <div className="shrink-0">
-                <ContextUsageRing
-                  pct={contextPct}
-                  usedTokens={contextUsedTokens}
-                  maxTokens={contextMaxTokens}
-                  onCompact={onCompact ? () => setCompactConfirmOpen(true) : undefined}
-                  disabled={!onCompact}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      {needsProviderSetup && (
-        <ProviderSetupDialog
-          key={provider}
-          provider={provider}
-          label={
-            modelGroups.find((group) => group.provider === provider)?.providerLabel ?? provider
-          }
-          projectId={projectId}
-          onClose={() => setNeedsProviderSetup(false)}
-        />
-      )}
-      <ConfirmDialog
-        open={compactConfirmOpen}
-        onOpenChange={setCompactConfirmOpen}
-        title={t('prompt.compactConfirmTitle', 'Compact conversation?')}
-        description={t(
-          'prompt.compactConfirmBody',
-          'This summarizes the current conversation to free up context. Earlier messages are condensed and the full detail is no longer available to the agent.',
-        )}
-        cancelLabel={t('common.cancel', 'Cancel')}
-        confirmLabel={t('prompt.compactConfirmAction', 'Compact')}
-        variant="default"
-        onCancel={() => setCompactConfirmOpen(false)}
-        onConfirm={() => {
-          setCompactConfirmOpen(false);
-          onCompact?.();
-        }}
+          <CompactConfirmDialog
+            open={compactConfirmOpen}
+            onOpenChange={setCompactConfirmOpen}
+            onCompact={props.onCompact}
+          />
+        </>
+      }
+    >
+      <ImageLightbox
+        images={toLightboxImages(images)}
+        initialIndex={lightbox.index}
+        open={lightbox.open}
+        onClose={lightbox.close}
       />
-    </div>
+
+      <QueueIndicator
+        queuedCount={props.queuedCount}
+        queuedMessages={props.queuedMessages}
+        queueLoading={props.queueLoading}
+        queue={queue}
+      />
+
+      <PromptContextBar
+        show={visible.contextBar}
+        createWorktree={props.createWorktree}
+        onCreateWorktreeChange={props.onCreateWorktreeChange}
+      >
+        {props.newThreadContextBar}
+      </PromptContextBar>
+
+      <PromptBox
+        boxRef={promptBoxRef}
+        isDragging={isDragging}
+        onClick={handlePromptBoxClick}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <ImagePreviews
+          images={images}
+          loading={loading}
+          onPreview={lightbox.openAt}
+          onRemove={attachments.removeImage}
+        />
+        <TextFilePreviews
+          files={attachedTextFiles}
+          loading={loading}
+          onRemove={attachments.removeTextFile}
+        />
+
+        {/* TipTap Editor */}
+        <div ref={editorContainerRef} className="px-3 pt-2">
+          <PromptEditor
+            ref={editorRef}
+            placeholder={resolvePlaceholder(t, props)}
+            disabled={loading}
+            onSubmit={handleSubmit}
+            onCycleMode={selectors.handleCycleMode}
+            onHistoryNavigate={handleHistoryNavigate}
+            onChange={handleEditorChange}
+            onPaste={handleEditorPaste}
+            onFileMentionDrop={endDrag}
+            cwd={props.editorCwd}
+            slashSkills={props.slashSkills}
+            slashSkillsLoading={props.slashSkillsLoading}
+            sdkSlashCommands={props.sdkSlashCommands}
+            workflows={props.workflows}
+            workflowsLoading={props.workflowsLoading}
+            commandProvider={props.commandProvider}
+            containerRef={promptBoxRef}
+          />
+        </div>
+        <TemplateVariableInputs
+          show={visible.templateVars}
+          variables={template.templateVars}
+          values={template.templateVarValues}
+          onChange={template.setTemplateVar}
+        />
+        <input
+          ref={fileInputRef}
+          data-testid="prompt-file-input"
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
+          disabled={visible.fileInputDisabled}
+        />
+        <PromptToolbar
+          unifiedModel={unifiedModel}
+          effort={props.effort}
+          onUnifiedModelChange={selectors.handleUnifiedModelChange}
+          onEffortChange={selectors.handleEffortChange}
+          modelGroups={props.modelGroups}
+          projectId={props.projectId}
+          showTemplates={visible.templates}
+          templates={template.templates}
+          selectedTemplateId={template.selectedTemplateId}
+          onTemplateChange={template.handleTemplateChange}
+          mode={mode}
+          onModeChange={onModeChange}
+          modes={modes}
+          showBacklog={visible.backlog}
+          sendToBacklog={props.sendToBacklog}
+          onSendToBacklogChange={props.onSendToBacklogChange}
+          onAttach={openFilePicker}
+          hasDictation={props.hasDictation}
+          isRecording={props.isRecording}
+          isTranscribing={props.isTranscribing}
+          onToggleRecording={props.onToggleRecording}
+          loading={loading}
+          running={running}
+          editorEmpty={editorEmpty}
+          isQueueMode={props.isQueueMode}
+          onStop={props.onStop}
+          onSend={handleSubmit}
+        />
+      </PromptBox>
+      <PromptFooterBar
+        {...props}
+        onRuntimeChange={selectors.handleRuntimeChange}
+        onRequestCompact={() => setCompactConfirmOpen(true)}
+      />
+    </PromptInputFrame>
   );
 });

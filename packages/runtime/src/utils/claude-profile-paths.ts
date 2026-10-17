@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-export function expandHomePath(path: string | undefined): string | undefined {
+function expandHomePath(path: string | undefined): string | undefined {
   const trimmed = path?.trim();
   if (!trimmed) return undefined;
   if (trimmed === '~') return homedir();

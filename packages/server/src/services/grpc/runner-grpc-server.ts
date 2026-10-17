@@ -56,6 +56,8 @@ export interface RunnerGrpcDependencies {
   getRunnerUserId(runnerId: string): Promise<string | null>;
   markRunnerOnline?(runnerId: string): Promise<void>;
   markRunnerOffline?(runnerId: string): Promise<void>;
+  /** Expire durable permission requests whose in-memory continuation died with the runner. */
+  expirePendingPermissions?(runnerId: string): Promise<unknown>;
 }
 
 export type RunnerGrpcHandlers = Record<
@@ -142,7 +144,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
  * non-payload principal, applies a per-runner stream quota, and emits only safe
  * identifiers to logs.
  */
-export function createRunnerGrpcInterceptor(
+function createRunnerGrpcInterceptor(
   method: string,
   handler: RunnerGrpcHandler,
   dependencies: RunnerGrpcDependencies,
@@ -326,6 +328,26 @@ function bind(server: grpc.Server, address: string): Promise<number> {
   });
 }
 
+/**
+ * Expire before reporting offline so a stale permission card can never be
+ * submitted after the runner reconnects with fresh in-memory state.
+ */
+async function expireThenMarkOffline(
+  dependencies: RunnerGrpcDependencies,
+  runnerId: string,
+): Promise<void> {
+  try {
+    await dependencies.expirePendingPermissions?.(runnerId);
+  } catch (error) {
+    log.error('Failed to expire pending permissions for offline runner', {
+      namespace: 'runner-grpc',
+      runnerId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  await dependencies.markRunnerOffline?.(runnerId);
+}
+
 export async function startRunnerGrpcEndpoint(
   options?: RunnerGrpcEndpointOptions,
 ): Promise<RunnerGrpcEndpoint | null> {
@@ -341,6 +363,10 @@ export async function startRunnerGrpcEndpoint(
     getRunnerUserId: runnerManager!.getRunnerUserId,
     markRunnerOnline: runnerManager!.markRunnerOnline,
     markRunnerOffline: runnerManager!.markRunnerOffline,
+    expirePendingPermissions: async (runnerId) => {
+      const { expirePendingPermissionRequestsForRunner } = await import('../data-handler.js');
+      return expirePendingPermissionRequestsForRunner(runnerId);
+    },
   };
   const sessions =
     options?.sessionRegistry ??
@@ -359,7 +385,7 @@ export async function startRunnerGrpcEndpoint(
         if (userId && !sessions.userHasAvailableRunner(userId)) {
           relayToUser(userId, { type: 'runner:status', status: 'offline', runnerId });
         }
-        await dependencies.markRunnerOffline?.(runnerId);
+        await expireThenMarkOffline(dependencies, runnerId);
       },
       onTransitionError: (error, runnerId) => {
         log.error('Runner gRPC presence transition failed', {

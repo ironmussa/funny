@@ -26,7 +26,7 @@ const log = createClientLogger('ThreadChatHandlers');
 type ActiveThread = ThreadCore;
 
 /** PromptInput-shape opts. `mode` here is the API's permissionMode. */
-export interface SendOpts extends SendMessageOpts {
+interface SendOpts extends SendMessageOpts {
   model: string;
   mode: string;
 }

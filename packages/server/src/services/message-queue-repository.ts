@@ -123,7 +123,3 @@ export async function queueCount(threadId: string): Promise<number> {
   );
   return rows.length;
 }
-
-export async function clearQueue(threadId: string): Promise<void> {
-  await dbRun(db.delete(messageQueue).where(eq(messageQueue.threadId, threadId)));
-}

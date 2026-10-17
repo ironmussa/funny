@@ -2,7 +2,7 @@ import type { Design, DesignFidelity, DesignType } from '@funny/shared';
 
 import { request } from './_core';
 
-export interface CreateDesignInput {
+interface CreateDesignInput {
   name: string;
   type: DesignType;
   fidelity?: DesignFidelity | null;

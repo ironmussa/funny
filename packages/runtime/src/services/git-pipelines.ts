@@ -192,7 +192,7 @@ async function stageNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   return ctx;
 }
 
-export const stageNodes: PipelineNode<GitPipelineContext>[] = [
+const stageNodes: PipelineNode<GitPipelineContext>[] = [
   node('unstage', unstageNode, {
     when: (ctx) => !!(ctx.filesToUnstage && ctx.filesToUnstage.length > 0),
   }),
@@ -370,7 +370,7 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
   return ctx;
 }
 
-export const commitNodes: PipelineNode<GitPipelineContext>[] = [
+const commitNodes: PipelineNode<GitPipelineContext>[] = [
   node('hooks', hooksNode),
   node('commit', commitNode),
 ];
@@ -649,7 +649,7 @@ async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContex
 }
 
 /** The review-fix sub-pipeline — used as a composable unit. */
-export const reviewFixSubPipeline = definePipeline<GitPipelineContext>({
+const reviewFixSubPipeline = definePipeline<GitPipelineContext>({
   name: 'review-fix',
   nodes: [
     node('review', reviewNode),
@@ -810,7 +810,7 @@ async function testFixerNode(ctx: GitPipelineContext): Promise<GitPipelineContex
 }
 
 /** The test-fix sub-pipeline — runs tests then fixes failures in a loop. */
-export const testFixSubPipeline = definePipeline<GitPipelineContext>({
+const testFixSubPipeline = definePipeline<GitPipelineContext>({
   name: 'test-fix',
   nodes: [
     node('test-run', testRunnerNode),
@@ -920,9 +920,9 @@ async function mergeNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   return ctx;
 }
 
-export const pushNodes: PipelineNode<GitPipelineContext>[] = [node('push', pushNode)];
-export const prNodes: PipelineNode<GitPipelineContext>[] = [node('pr', prNode)];
-export const mergeNodes: PipelineNode<GitPipelineContext>[] = [node('merge', mergeNode)];
+const pushNodes: PipelineNode<GitPipelineContext>[] = [node('push', pushNode)];
+const prNodes: PipelineNode<GitPipelineContext>[] = [node('pr', prNode)];
+const mergeNodes: PipelineNode<GitPipelineContext>[] = [node('merge', mergeNode)];
 
 // ── Pipeline definitions (one per action) ────────────────────
 
@@ -944,22 +944,22 @@ function commitPipelineWith(name: string, ...tail: PipelineNode<GitPipelineConte
   });
 }
 
-export const commitPipeline = commitPipelineWith('git:commit');
-export const commitPushPipeline = commitPipelineWith('git:commit-push', pushNodes);
-export const commitPrPipeline = commitPipelineWith('git:commit-pr', pushNodes, prNodes);
-export const commitMergePipeline = commitPipelineWith('git:commit-merge', mergeNodes);
+const commitPipeline = commitPipelineWith('git:commit');
+const commitPushPipeline = commitPipelineWith('git:commit-push', pushNodes);
+const commitPrPipeline = commitPipelineWith('git:commit-pr', pushNodes, prNodes);
+const commitMergePipeline = commitPipelineWith('git:commit-merge', mergeNodes);
 
-export const pushPipeline = definePipeline<GitPipelineContext>({
+const pushPipeline = definePipeline<GitPipelineContext>({
   name: 'git:push',
   nodes: pushNodes,
 });
 
-export const mergePipeline = definePipeline<GitPipelineContext>({
+const mergePipeline = definePipeline<GitPipelineContext>({
   name: 'git:merge',
   nodes: mergeNodes,
 });
 
-export const createPrPipeline = definePipeline<GitPipelineContext>({
+const createPrPipeline = definePipeline<GitPipelineContext>({
   name: 'git:create-pr',
   nodes: compose(pushNodes, prNodes),
 });

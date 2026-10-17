@@ -3,7 +3,7 @@ import { join } from 'path';
 
 import type { BenchmarkMetrics, QuestionResult } from '../types.js';
 
-export interface FullReport {
+interface FullReport {
   metadata: {
     timestamp: string;
     version: string;

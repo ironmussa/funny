@@ -42,7 +42,7 @@ export interface MockToolCall {
   author?: string;
 }
 
-export function mockToolCall(overrides: Partial<MockToolCall> = {}): MockToolCall {
+function mockToolCall(overrides: Partial<MockToolCall> = {}): MockToolCall {
   const id = overrides.id ?? mockId();
   return {
     id,
@@ -54,7 +54,7 @@ export function mockToolCall(overrides: Partial<MockToolCall> = {}): MockToolCal
   };
 }
 
-export function mockBashToolCall(command = 'ls -la', output = 'total 42\ndrwxr-xr-x ...') {
+function mockBashToolCall(command = 'ls -la', output = 'total 42\ndrwxr-xr-x ...') {
   return mockToolCall({
     name: 'Bash',
     input: JSON.stringify({ command }),
@@ -62,7 +62,7 @@ export function mockBashToolCall(command = 'ls -la', output = 'total 42\ndrwxr-x
   });
 }
 
-export function mockEditToolCall(path = '/src/app.ts', oldStr = 'foo', newStr = 'bar') {
+function mockEditToolCall(path = '/src/app.ts', oldStr = 'foo', newStr = 'bar') {
   return mockToolCall({
     name: 'Edit',
     input: JSON.stringify({ file_path: path, old_string: oldStr, new_string: newStr }),
@@ -70,15 +70,7 @@ export function mockEditToolCall(path = '/src/app.ts', oldStr = 'foo', newStr = 
   });
 }
 
-export function mockWriteToolCall(path = '/src/new-file.ts', content = 'export const x = 1;') {
-  return mockToolCall({
-    name: 'Write',
-    input: JSON.stringify({ file_path: path, content }),
-    output: 'File written successfully.',
-  });
-}
-
-export function mockReadToolCall(path = '/src/index.ts', content = 'const app = express();') {
+function mockReadToolCall(path = '/src/index.ts', content = 'const app = express();') {
   return mockToolCall({
     name: 'Read',
     input: JSON.stringify({ file_path: path }),
@@ -86,7 +78,7 @@ export function mockReadToolCall(path = '/src/index.ts', content = 'const app = 
   });
 }
 
-export function mockThreadEvent(
+function mockThreadEvent(
   overrides: Partial<{
     id: string;
     threadId: string;

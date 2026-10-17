@@ -93,7 +93,7 @@ export function onRunnerScopeChange(listener: ScopeChangeListener): () => void {
 }
 
 /** Drop cached scope data. Must run synchronously in the request that changed it. */
-export function invalidateRunnerScope(change: { runnerId?: string; projectId?: string } = {}) {
+function invalidateRunnerScope(change: { runnerId?: string; projectId?: string } = {}) {
   if (change.runnerId) runnerCache.delete(change.runnerId);
   if (change.projectId) policyCache.delete(change.projectId);
   if (!change.runnerId && !change.projectId) {
@@ -120,7 +120,7 @@ export function __resetRunnerScopeCache() {
 
 // ── Reads ──────────────────────────────────────────────────
 
-export async function getRunnerScopeRecord(runnerId: string): Promise<RunnerScopeRecord | null> {
+async function getRunnerScopeRecord(runnerId: string): Promise<RunnerScopeRecord | null> {
   const cached = runnerCache.get(runnerId);
   if (fresh(cached)) return cached.value;
   const [row] = await db
@@ -138,9 +138,7 @@ export async function getRunnerScopeRecord(runnerId: string): Promise<RunnerScop
   return value;
 }
 
-export async function getProjectRunnerPolicy(
-  projectId: string,
-): Promise<ProjectRunnerPolicy | null> {
+async function getProjectRunnerPolicy(projectId: string): Promise<ProjectRunnerPolicy | null> {
   const cached = policyCache.get(projectId);
   if (fresh(cached)) return cached.value;
   const [project] = await db
@@ -182,18 +180,6 @@ export async function canRunnerAccessProject(runnerId: string, projectId: string
 export async function canRunnerServeProjectless(runnerId: string) {
   const runner = await getRunnerScopeRecord(runnerId);
   return runner?.role === 'general';
-}
-
-/** Filter a list of project ids down to those `runnerId` may access. */
-export async function filterAccessibleProjectIds(
-  runnerId: string,
-  projectIds: string[],
-): Promise<Set<string>> {
-  const allowed = new Set<string>();
-  for (const id of new Set(projectIds)) {
-    if (await canRunnerAccessProject(runnerId, id)) allowed.add(id);
-  }
-  return allowed;
 }
 
 /**
@@ -257,7 +243,7 @@ export async function getProjectRunnerSettings(
 }
 
 /** Encrypted project GitHub token, or null when the project inherits the user's. */
-export async function getProjectGithubTokenCiphertext(projectId: string): Promise<string | null> {
+async function getProjectGithubTokenCiphertext(projectId: string): Promise<string | null> {
   const [settings] = await db
     .select({ githubToken: projectRunnerSettings.githubToken })
     .from(projectRunnerSettings)
@@ -394,7 +380,7 @@ export async function revokeProjectRunner(
 }
 
 /** Store (encrypted) or clear the project's GitHub token override. */
-export async function setProjectGithubTokenCiphertext(
+async function setProjectGithubTokenCiphertext(
   projectId: string,
   ciphertext: string | null,
 ): Promise<void> {
@@ -405,7 +391,7 @@ export async function setProjectGithubTokenCiphertext(
  * The single project a dedicated runner is pinned to, if exactly one. Used when
  * a runner asks for project-scoped credentials without naming the project.
  */
-export async function soleDedicatedProject(runnerId: string): Promise<string | null> {
+async function soleDedicatedProject(runnerId: string): Promise<string | null> {
   const runner = await getRunnerScopeRecord(runnerId);
   if (runner?.role !== 'dedicated') return null;
   const rows = await db

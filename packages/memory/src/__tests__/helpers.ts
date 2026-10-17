@@ -5,26 +5,14 @@
 import { createClient, type Client } from '@libsql/client';
 
 import { initSchema } from '../storage.js';
-import type { EmbeddingProvider, MemoryFact, StorageConfig } from '../types.js';
+import type { EmbeddingProvider, MemoryFact } from '../types.js';
 
 // ─── In-memory DB ─────────────────────────────────────
-
-let dbCounter = 0;
 
 export async function createTestDb(): Promise<Client> {
   const db = createClient({ url: ':memory:' });
   await initSchema(db);
   return db;
-}
-
-export function testConfig(overrides: Partial<StorageConfig> = {}): StorageConfig {
-  dbCounter++;
-  return {
-    url: ':memory:',
-    projectId: `test-project-${dbCounter}`,
-    projectName: `Test Project ${dbCounter}`,
-    ...overrides,
-  };
 }
 
 // ─── Fake fact factory ────────────────────────────────

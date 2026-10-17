@@ -27,8 +27,8 @@ Options:
   --help                 Show this help
 
 Environment variables:
-  OPENAI_API_BASE_URL    API base URL (default: http://localhost:4010/v1)
-  OPENAI_API_KEY         API key (not required for local api-acp)
+  OPENAI_API_BASE_URL    API base URL (default: http://localhost:8317/v1)
+  OPENAI_API_KEY         API key (not required for local OpenAI-compatible API)
   BENCH_MODEL            Default extraction model
   BENCH_JUDGE_MODEL      Default judge model
 

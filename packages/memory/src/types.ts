@@ -87,7 +87,7 @@ export interface MemoryRecallResult {
 // ─── LLM configuration (for consolidation agent) ──────
 
 export interface LLMConfig {
-  /** api-acp base URL (e.g. http://localhost:4010) */
+  /** OpenAI-compatible API base URL (e.g. http://localhost:8317/v1) */
   baseUrl: string;
   /** Model ID (default: claude-haiku) */
   model?: string;
@@ -162,15 +162,6 @@ export interface OperatorProfile {
   languages?: string[];
   preferences?: string[];
   notes?: string[];
-}
-
-export interface TeamRoster {
-  members: Array<{
-    operator: string;
-    role: string;
-    expertise: string[];
-    modules: string[];
-  }>;
 }
 
 // ─── GC config ─────────────────────────────────────────

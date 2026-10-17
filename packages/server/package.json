@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@abbacchio/transport": "^0.2.0",
+    "@bufbuild/protobuf": "2.14.0",
     "@funny/core": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/thread-scheduler": "workspace:*",

@@ -31,11 +31,11 @@ import { log } from '../lib/logger.js';
 import * as rm from './runner-manager.js';
 
 /** How long a pending enrollment stays valid before it must be restarted. */
-export const ENROLLMENT_TTL_MS = 15 * 60 * 1000;
+const ENROLLMENT_TTL_MS = 15 * 60 * 1000;
 /** Suggested seconds between runner poll attempts. */
-export const ENROLLMENT_POLL_INTERVAL_S = 3;
+const ENROLLMENT_POLL_INTERVAL_S = 3;
 /** Reject a code after this many failed approval attempts (anti-brute-force). */
-export const ENROLLMENT_MAX_FAILED_ATTEMPTS = 5;
+const ENROLLMENT_MAX_FAILED_ATTEMPTS = 5;
 
 /**
  * User-code alphabet: uppercase + digits with visually ambiguous characters

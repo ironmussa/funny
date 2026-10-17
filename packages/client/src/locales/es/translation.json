@@ -777,7 +777,7 @@
   "allThreads": {
     "title": "Todos los hilos",
     "threads": "hilos",
-    "searchPlaceholder": "Buscar hilos por título, rama o estado...",
+    "searchPlaceholder": "Buscar hilos y mensajes...",
     "noMatch": "Ningún hilo coincide con tu búsqueda",
     "noThreads": "No hay hilos aún",
     "found": "encontrados",
@@ -790,7 +790,7 @@
     "clearFilters": "Limpiar filtros",
     "archived": "Archivado",
     "globalTitle": "Buscar todos los hilos",
-    "globalSearchPlaceholder": "Buscar por título, rama, proyecto o estado...",
+    "globalSearchPlaceholder": "Buscar hilos y mensajes...",
     "projects": "proyectos",
     "sortLabel": "Orden",
     "sortUpdated": "Última actualización",

@@ -8,7 +8,7 @@
 
 import { log } from './logger.js';
 
-export type AuditAction =
+type AuditAction =
   | 'user.create'
   | 'user.delete'
   | 'user.login'

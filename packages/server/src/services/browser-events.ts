@@ -294,31 +294,6 @@ export function relayToThreadStream(threadId: string, event: Record<string, unkn
   browserEvents?.toThreadStream(threadId, event);
 }
 
-/** Broadcast a presence event to every viewer of a thread. */
-export function relayToThreadPresence(threadId: string, event: Record<string, unknown>): void {
-  browserEvents?.toThreadPresence(threadId, event);
-}
-
-/**
- * Broadcast a non-stream, all-viewers event (e.g. a new/deleted comment) to
- * every current viewer of a thread. Targets the presence room because that is
- * exactly the "all current viewers" audience (owner + sharees) with single
- * delivery — unlike the stream room, the owner IS in the presence room, so this
- * reaches them too without the double-delivery the stream room avoids.
- */
-export function relayToThreadViewers(threadId: string, event: Record<string, unknown>): void {
-  browserEvents?.toThreadViewers(threadId, event);
-}
-
-/**
- * Evict a user from a thread's rooms (on share revoke). Makes every one of the
- * user's browser sockets leave the stream + presence rooms, so they stop
- * receiving live data immediately even before their next HTTP request 404s.
- */
-export function evictUserFromThread(userId: string, threadId: string): void {
-  browserEvents?.evictFromThread(userId, threadId);
-}
-
 /**
  * Get all connected browser user IDs.
  * Uses Socket.IO rooms to find user rooms.

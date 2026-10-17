@@ -13,7 +13,6 @@
  *   REVIEW_WEBHOOK_SECRET   — GitHub webhook secret for auth
  *   FUNNY_BASE_URL          — funny server URL (default: http://localhost:3001)
  *   INGEST_WEBHOOK_SECRET   — Secret for funny's Ingest API
- *   ACP_BASE_URL            — ACP server URL (default: http://localhost:4010)
  *   REVIEWBOT_MODEL         — LLM model to use (default: claude-sonnet-4-5-20250929)
  *   REVIEWBOT_REPOS         — Repo mappings: owner/repo:/path,owner/repo2:/path2
  */
@@ -34,7 +33,6 @@ const repoMappings = parseRepoMappings(process.env.REVIEWBOT_REPOS);
 const funnyBaseUrl = process.env.FUNNY_BASE_URL ?? 'http://localhost:3001';
 const ingestSecret = process.env.INGEST_WEBHOOK_SECRET ?? '';
 const funnyClient = new FunnyClient({ baseUrl: funnyBaseUrl, secret: ingestSecret });
-const acpBaseUrl = process.env.ACP_BASE_URL;
 const model = process.env.REVIEWBOT_MODEL;
 const MAX_WEBHOOK_BYTES = 1024 * 1024;
 
@@ -108,7 +106,6 @@ app.post('/webhook', async (c) => {
     const result = await handlePRWebhook(body, {
       funnyClient,
       repoMappings,
-      acpBaseUrl,
       model,
     });
 
@@ -142,7 +139,6 @@ console.log(`  funny server: ${process.env.FUNNY_BASE_URL ?? 'http://localhost:3
 console.log(
   `  Ingest auth:  ${process.env.INGEST_WEBHOOK_SECRET ? 'configured' : 'NOT SET (set INGEST_WEBHOOK_SECRET)'}`,
 );
-console.log(`  ACP server:   ${acpBaseUrl ?? 'http://localhost:4010 (default)'}`);
 console.log(`  Model:        ${model ?? 'claude-sonnet-4-5-20250929 (default)'}`);
 console.log(`  Repos:`);
 if (repoMappings.length === 0) {

@@ -15,7 +15,7 @@ import {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export interface Project {
+interface Project {
   id: string;
   name: string;
   path: string;
@@ -40,7 +40,7 @@ export interface Thread {
 /*  API helper class                                                   */
 /* ------------------------------------------------------------------ */
 
-export class ApiHelper {
+class ApiHelper {
   constructor(
     private request: APIRequestContext,
     private baseURL: string,
@@ -326,16 +326,4 @@ export async function seedProject(
   await page.reload();
   await waitForSidebar(page);
   return project;
-}
-
-/** Click a sidebar navigation icon */
-export async function clickSidebarNav(page: Page, testId: string) {
-  // Icons are visible on hover of the header area
-  const btn = page.getByTestId(testId);
-  await btn.click();
-}
-
-/** Open the "new thread" dialog for a project */
-export async function openNewThreadDialog(page: Page, projectId: string) {
-  await page.getByTestId(`project-new-thread-${projectId}`).click();
 }

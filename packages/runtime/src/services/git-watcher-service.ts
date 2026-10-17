@@ -215,7 +215,7 @@ function closeWatcher(projectId: string, pw: ProjectWatcher): void {
 }
 
 /** Close all watchers — called during shutdown */
-export function closeAllWatchers(): void {
+function closeAllWatchers(): void {
   for (const [projectId, pw] of projectWatchers) {
     closeWatcher(projectId, pw);
   }

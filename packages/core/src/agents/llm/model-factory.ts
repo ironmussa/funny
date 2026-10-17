@@ -2,8 +2,8 @@
  * Model Factory — resolves provider + model into connection details.
  *
  * Returns { baseURL, apiKey, modelId } for direct HTTP calls.
- * baseURL is the server root (e.g. http://localhost:4010) — callers
- * append the endpoint path (e.g. /v1/runs).
+ * baseURL includes the API prefix (e.g. http://localhost:8317/v1) — callers
+ * append the endpoint path (e.g. /chat/completions).
  */
 
 // ── Provider Config ───────────────────────────────────────────
@@ -14,10 +14,6 @@ export interface LLMProviderConfig {
     baseURL?: string;
   };
   openai?: {
-    apiKey?: string;
-    baseURL?: string;
-  };
-  'funny-api-acp'?: {
     apiKey?: string;
     baseURL?: string;
   };
@@ -64,27 +60,12 @@ const OPENAI_MODEL_ALIASES: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
 };
 
-const FUNNY_API_ACP_ALIASES: Record<string, string> = {
-  opus: 'claude-opus-4-6',
-  'opus-4.7': 'claude-opus-4-7',
-  'opus-4.8': 'claude-opus-4-8',
-  'opus-5': 'claude-opus-5',
-  'opus-5.5': 'claude-opus-5-5',
-  'fable-5': 'claude-fable-5',
-  'fable-5.1': 'claude-fable-5-1',
-  sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001',
-};
-
 function resolveModelId(provider: string, modelId: string): string {
   if (provider === 'anthropic' && ANTHROPIC_MODEL_ALIASES[modelId]) {
     return ANTHROPIC_MODEL_ALIASES[modelId];
   }
   if (provider === 'openai' && OPENAI_MODEL_ALIASES[modelId]) {
     return OPENAI_MODEL_ALIASES[modelId];
-  }
-  if (provider === 'funny-api-acp' && FUNNY_API_ACP_ALIASES[modelId]) {
-    return FUNNY_API_ACP_ALIASES[modelId];
   }
   return modelId;
 }
@@ -104,7 +85,7 @@ export class ModelFactory {
    * Returns { baseURL, apiKey, modelId } for direct HTTP calls.
    *
    * Examples:
-   *   resolve('funny-api-acp', 'sonnet')
+   *   resolve('openai', 'sonnet')
    *   resolve('ollama', 'llama3:70b')
    *   resolve('openai', 'gpt-4-turbo')
    */
@@ -132,16 +113,6 @@ export class ModelFactory {
         return { baseURL, apiKey, modelId: resolvedId };
       }
 
-      case 'funny-api-acp': {
-        const baseURL =
-          overrides?.baseURL ??
-          this.config['funny-api-acp']?.baseURL ??
-          process.env.API_ACP_URL ??
-          'http://localhost:4010';
-        const apiKey = overrides?.apiKey ?? this.config['funny-api-acp']?.apiKey;
-        return { baseURL, apiKey, modelId: resolvedId };
-      }
-
       case 'ollama': {
         const baseURL =
           overrides?.baseURL ??
@@ -165,7 +136,7 @@ export class ModelFactory {
       default:
         throw new Error(
           `Unknown LLM provider: '${provider}'. ` +
-            `Supported: anthropic, funny-api-acp, openai, ollama, openai-compatible`,
+            `Supported: anthropic, openai, ollama, openai-compatible`,
         );
     }
   }

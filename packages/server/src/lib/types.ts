@@ -3,7 +3,7 @@
  * auth middleware so that a value leaking in from an untrusted source cannot
  * silently grant elevated privileges.
  */
-export const USER_ROLES = ['admin', 'user'] as const;
+const USER_ROLES = ['admin', 'user'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 /** Narrow an untrusted value to a known UserRole, defaulting to 'user'. */

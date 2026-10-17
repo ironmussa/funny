@@ -44,7 +44,7 @@ function normalizeTaskOutput(output: string): string {
   return output;
 }
 
-export type RenderChildToolCall = (item: ToolItem, idx: number) => ReactNode;
+type RenderChildToolCall = (item: ToolItem, idx: number) => ReactNode;
 
 interface TaskCardProps {
   parsed: Record<string, unknown>;

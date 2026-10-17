@@ -72,11 +72,6 @@ export class IngestWebhookAdapter {
     this.unsubscribe = null;
   }
 
-  /** Expose the underlying FunnyClient for direct use. */
-  getClient(): FunnyClient {
-    return this.client;
-  }
-
   private async forward(event: PipelineEvent): Promise<void> {
     try {
       await this.client.send({

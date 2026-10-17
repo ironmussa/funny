@@ -2,11 +2,7 @@ import type { HarnessAgentDefinition, HarnessAgentOptions } from './contracts.js
 import { HarnessError } from './errors.js';
 import { sandbox } from './sandbox.js';
 
-export type {
-  HarnessAgentDefinition,
-  HarnessAgentOptions,
-  HarnessPermissionMode,
-} from './contracts.js';
+export type { HarnessAgentDefinition, HarnessAgentOptions } from './contracts.js';
 
 export function createAgent(options: HarnessAgentOptions): HarnessAgentDefinition {
   if (!options || typeof options !== 'object') {

@@ -14,12 +14,12 @@ import * as tm from './thread-manager.js';
 
 export const gitStatusCache = new Map<string, { data: any; ts: number }>();
 export const GIT_STATUS_CACHE_TTL_MS = 2_000;
-export const FETCH_THROTTLE_MS = 30_000;
+const FETCH_THROTTLE_MS = 30_000;
 
 const lastFetchTs = new Map<string, number>();
 const fetchInFlightByPath = new Set<string>();
 
-export interface BackgroundFetchOptions {
+interface BackgroundFetchOptions {
   projectId: string;
   projectPath: string;
   identity?: GitIdentityOptions;
@@ -27,12 +27,12 @@ export interface BackgroundFetchOptions {
   onFetched?: () => void | Promise<void>;
 }
 
-export interface ExplicitFetchOptions {
+interface ExplicitFetchOptions {
   cwd: string;
   identity?: GitIdentityOptions;
 }
 
-export class GitRuntimeService {
+class GitRuntimeService {
   scheduleBackgroundFetch(opts: BackgroundFetchOptions): boolean {
     const { projectId, projectPath, identity, attrs, onFetched } = opts;
     const lastFetch = lastFetchTs.get(projectId) ?? 0;

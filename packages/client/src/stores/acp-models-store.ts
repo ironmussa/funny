@@ -12,7 +12,7 @@ const log = createClientLogger('acp-models-store');
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
 
-export interface ProviderModelsState {
+interface ProviderModelsState {
   status: Status;
   models: AcpModelEntry[];
   currentModelId: string | null;

@@ -1,5 +1,5 @@
 export type BrowserV1QueueClass = 'operations' | 'events' | 'terminal' | 'browserSession';
-export type BrowserV1QueuePriority = 'control' | 'normal' | 'bulk';
+type BrowserV1QueuePriority = 'control' | 'normal' | 'bulk';
 
 interface QueuedMessage {
   byteLength: number;

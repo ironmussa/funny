@@ -89,10 +89,6 @@ vi.mock('@/stores/settings-store', async (importOriginal) => {
   };
 });
 
-vi.mock('@/components/thread/TodoPanel', () => ({
-  TodoPanel: () => null,
-}));
-
 vi.mock('@/components/ToolCallCard', () => ({
   ToolCallCard: ({ name }: any) => <div data-testid="tool-call-card">{name}</div>,
 }));

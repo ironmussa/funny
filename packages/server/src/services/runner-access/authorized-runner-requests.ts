@@ -58,7 +58,7 @@ const IDENTITY_HEADERS = new Set(
 );
 
 /** Drop every caller-supplied identity header (case-insensitively). */
-export function stripIdentityHeaders(headers: Record<string, string> = {}): Record<string, string> {
+function stripIdentityHeaders(headers: Record<string, string> = {}): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     if (!IDENTITY_HEADERS.has(key.toLowerCase())) out[key] = value;
@@ -98,7 +98,7 @@ function signedIdentityHeaders(identity: ForwardedIdentity): Record<string, stri
 }
 
 /** Wraps the raw request transport; only reachable with a proof. */
-export class AuthorizedRunnerRequests {
+class AuthorizedRunnerRequests {
   constructor(private readonly port: RunnerRequestPort | undefined) {}
 
   isAvailable<R>(runner: Named<R, RunnerId>): boolean {
@@ -169,7 +169,7 @@ export class AuthorizedRunnerRequests {
 }
 
 /** Wraps the raw terminal transport; only reachable with a proof. */
-export class AuthorizedRunnerTerminal {
+class AuthorizedRunnerTerminal {
   constructor(private readonly port: RunnerTerminalPort | undefined) {}
 
   isAvailable<R>(runner: Named<R, RunnerId>): boolean {

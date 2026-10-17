@@ -1,4 +1,4 @@
-import { create, type JsonObject } from '@bufbuild/protobuf';
+import { create } from '@bufbuild/protobuf';
 import {
   createEndpointPolicy,
   createRealtimeController,
@@ -9,7 +9,6 @@ import {
   BrowserCapability,
   DeliveryClass,
   DeliveryMetadataSchema,
-  RequestMetadataSchema,
   ScopeKind,
   ScopeReferenceSchema,
 } from '@funny/shared/browser-v1/common';
@@ -22,6 +21,7 @@ import { io, type Socket } from 'socket.io-client';
 
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
+import { setBrowserSessionTransport } from '@/lib/realtime/browser-session-realtime';
 import { SocketIoClientRealtimePort } from '@/lib/realtime/socketio-realtime-port';
 import { metric } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
@@ -67,8 +67,6 @@ let lastOpenThreadId: string | undefined;
 // refresh path on every Vite HMR update.
 let teardownTimer: ReturnType<typeof setTimeout> | null = null;
 const terminalInputOrdinals = new Map<string, bigint>();
-const browserInputOrdinals = new Map<string, bigint>();
-const browserHeartbeatOrdinals = new Map<string, bigint>();
 const TEARDOWN_DEFER_MS = 100;
 
 async function authorizedResourceBase64(url: string): Promise<string> {
@@ -82,9 +80,6 @@ async function authorizedResourceBase64(url: string): Promise<string> {
     reader.readAsDataURL(blob);
   });
 }
-
-// Re-export for legacy callers that still import from `use-ws`.
-export { connectRemoteWS, disconnectRemoteWS };
 
 function connect() {
   setWSStopped(false);
@@ -102,6 +97,10 @@ function connect() {
   activeSocket = socket;
   const realtimePort = new SocketIoClientRealtimePort(socket);
   activeRealtimePort = realtimePort;
+  setBrowserSessionTransport({
+    connected: () => socket.connected,
+    sendInteractive: (message) => realtimePort.sendInteractive(message),
+  });
   realtimePort.start();
   realtimePort.onApplicationEvent((event) => {
     const payload = event.payload;
@@ -378,6 +377,7 @@ function teardown() {
   setWSStopped(true);
   disconnectAllRemote();
   clearWSDispatchState();
+  setBrowserSessionTransport(null);
   if (activeSocket) {
     activeRealtimePort?.stop();
     activeRealtimePort = null;
@@ -632,87 +632,6 @@ export function sendTerminalRealtime(
     create(InteractiveEnvelopeSchema, {
       delivery: create(DeliveryMetadataSchema, { deliveryClass }),
       payload: { case: 'terminal', value: { terminalId, payload } },
-    }),
-  );
-  return true;
-}
-
-export type BrowserSessionRealtimeCommand =
-  | { case: 'open'; targetUrl: string; projectId?: string }
-  | { case: 'navigate'; targetUrl: string }
-  | { case: 'input'; action: JsonObject }
-  | { case: 'inspect'; selector: JsonObject; requestId: string }
-  | { case: 'execute'; expression: string; requestId: string }
-  | { case: 'historyNavigation'; action: string; requestId: string }
-  | { case: 'screenshot'; requestId: string }
-  | { case: 'heartbeat' }
-  | { case: 'close'; reason?: string };
-
-/** Send browser-session commands through their independently negotiated traffic class. */
-export function sendBrowserSessionRealtime(
-  browserSessionId: string,
-  command: BrowserSessionRealtimeCommand,
-): boolean {
-  if (!activeRealtimePort || !activeSocket?.connected) return false;
-  let deliveryClass: DeliveryClass;
-  let payload: any;
-  let requestId: string | undefined;
-  switch (command.case) {
-    case 'open':
-      deliveryClass = DeliveryClass.SNAPSHOT_RECOVERABLE;
-      payload = {
-        case: 'open',
-        value: { targetUrl: command.targetUrl, projectId: command.projectId },
-      };
-      break;
-    case 'navigate':
-      deliveryClass = DeliveryClass.COALESCIBLE;
-      payload = { case: 'navigate', value: { targetUrl: command.targetUrl } };
-      break;
-    case 'input': {
-      deliveryClass = DeliveryClass.AT_MOST_ONCE;
-      const ordinal = (browserInputOrdinals.get(browserSessionId) ?? 0n) + 1n;
-      browserInputOrdinals.set(browserSessionId, ordinal);
-      payload = { case: 'input', value: { inputOrdinal: ordinal, action: command.action } };
-      break;
-    }
-    case 'inspect':
-      deliveryClass = DeliveryClass.SNAPSHOT_RECOVERABLE;
-      requestId = command.requestId;
-      payload = { case: 'inspect', value: { selector: command.selector } };
-      break;
-    case 'execute':
-      deliveryClass = DeliveryClass.AT_MOST_ONCE;
-      requestId = command.requestId;
-      payload = { case: 'execute', value: { expression: command.expression } };
-      break;
-    case 'historyNavigation':
-      deliveryClass = DeliveryClass.AT_MOST_ONCE;
-      requestId = command.requestId;
-      payload = { case: 'historyNavigation', value: { action: command.action } };
-      break;
-    case 'screenshot':
-      deliveryClass = DeliveryClass.AT_MOST_ONCE;
-      requestId = command.requestId;
-      payload = { case: 'screenshot', value: {} };
-      break;
-    case 'heartbeat': {
-      deliveryClass = DeliveryClass.VOLATILE;
-      const ordinal = (browserHeartbeatOrdinals.get(browserSessionId) ?? 0n) + 1n;
-      browserHeartbeatOrdinals.set(browserSessionId, ordinal);
-      payload = { case: 'heartbeat', value: { ordinal } };
-      break;
-    }
-    case 'close':
-      deliveryClass = DeliveryClass.SNAPSHOT_RECOVERABLE;
-      payload = { case: 'close', value: { reason: command.reason ?? 'user' } };
-      break;
-  }
-  activeRealtimePort.sendInteractive(
-    create(InteractiveEnvelopeSchema, {
-      metadata: requestId ? create(RequestMetadataSchema, { requestId }) : undefined,
-      delivery: create(DeliveryMetadataSchema, { deliveryClass }),
-      payload: { case: 'browserSession', value: { browserSessionId, payload } },
     }),
   );
   return true;

@@ -1,13 +1,13 @@
 /**
- * AgentExecutor — runs an agentic loop via direct HTTP calls to api-acp.
+ * AgentExecutor — runs an agentic loop via direct HTTP calls to the LLM endpoint.
  *
  * Loop:
- *   1. Send system prompt + prompt to api-acp /v1/runs
- *   2. If run result contains tool_calls → execute tools locally → build new prompt
+ *   1. Send system prompt + prompt to the LLM endpoint /chat/completions
+ *   2. If the response contains tool_calls → execute tools locally → append tool messages
  *   3. Repeat until no tool_calls or maxTurns reached
  *   4. Parse final text as structured AgentResult JSON
  *
- * Uses the agent run protocol (POST /v1/runs) instead of OpenAI format.
+ * Uses the OpenAI-compatible Chat Completions protocol.
  */
 
 import { lookup } from 'dns/promises';
@@ -15,6 +15,7 @@ import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { isIP } from 'net';
 import { join } from 'path';
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -31,7 +32,7 @@ import { loadContextDocs } from './context-loader.js';
  * exploit class we care about is cloud-metadata exfiltration via
  * attacker-controlled `baseURL`: a model config that points at
  * `http://169.254.169.254/...` would let the runner's IAM credentials leak
- * to whoever set the config. Local providers (Ollama, api-acp) legitimately
+ * to whoever set the config. Local providers (Ollama, CLIProxyAPI) legitimately
  * use loopback, so we don't refuse RFC1918/loopback here — only the always-
  * blocked ranges (link-local incl. IMDS, IPv4 "this-network", IPv6
  * link-local + v4-mapped wrappers around the same).
@@ -110,21 +111,16 @@ interface ToolCallInfo {
   function: { name: string; arguments: string };
 }
 
-/** Run result from the agent API */
-interface RunResult {
-  text: string;
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
   tool_calls?: ToolCallInfo[];
+  tool_call_id?: string;
 }
 
-/** Run response from POST /v1/runs */
-interface RunResponse {
-  id: string;
-  status: string;
-  model: string;
-  created_at: number;
-  completed_at?: number;
-  usage?: { input_tokens: number; output_tokens: number };
-  result?: RunResult;
+interface ChatResponse {
+  choices?: Array<{ message: ChatMessage }>;
+  usage?: { prompt_tokens: number; completion_tokens: number };
   error?: { message: string };
 }
 
@@ -149,6 +145,62 @@ export interface StepInfo {
 // browser-tools (which needs the type but is consumed by this file).
 export type { ToolDef } from './types.js';
 import { defineTool, type ToolDef } from './types.js';
+
+type ChatCompletionTool = ReturnType<typeof toChatCompletionTools>[number];
+
+/** Load project-specific docs for progressive disclosure. */
+async function loadProjectKnowledge(role: AgentRole, cwd: string): Promise<string> {
+  if (!role.contextDocs?.length) return '';
+  return loadContextDocs({ cwd, patterns: role.contextDocs });
+}
+
+function toStepUsage(usage: ChatResponse['usage']): StepInfo['usage'] {
+  if (!usage) return undefined;
+  return { input_tokens: usage.prompt_tokens ?? 0, output_tokens: usage.completion_tokens ?? 0 };
+}
+
+/** Convert local tool definitions into Chat Completions `tools` entries. */
+function toChatCompletionTools(tools: Record<string, ToolDef>) {
+  return Object.entries(tools).map(([name, def]) => ({
+    type: 'function' as const,
+    function: {
+      name,
+      description: def.description,
+      parameters: zodToJsonSchema(def.parameters as any),
+    },
+  }));
+}
+
+/** Run each requested tool locally and append its `tool` message. */
+async function executeToolCalls(
+  toolCalls: ToolCallInfo[],
+  tools: Record<string, ToolDef>,
+  messages: ChatMessage[],
+): Promise<ToolResult[]> {
+  const toolResults: ToolResult[] = [];
+  for (const tc of toolCalls) {
+    const toolName = tc.function.name;
+    const result = await runToolCall(tools[toolName], toolName, tc.function.arguments);
+    toolResults.push({ toolCallId: tc.id, toolName, result });
+    messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+  }
+  return toolResults;
+}
+
+async function runToolCall(
+  toolDef: ToolDef | undefined,
+  toolName: string,
+  rawArgs: string,
+): Promise<string> {
+  if (!toolDef) return `Error: Unknown tool "${toolName}"`;
+  const args = parseStoredJson(toolDef.parameters, rawArgs, `${toolName} arguments`);
+  if (!args.ok) return `Error executing ${toolName}: ${args.error}`;
+  try {
+    return await toolDef.execute(args.value);
+  } catch (err: any) {
+    return `Error executing ${toolName}: ${err.message}`;
+  }
+}
 
 // ── Options ───────────────────────────────────────────────────
 
@@ -177,32 +229,15 @@ export class AgentExecutor {
 
     const { tools, browserHandle } = createTools(context.worktreePath, role, context);
 
-    // Load project-specific docs for progressive disclosure
-    let projectKnowledge = '';
-    if (role.contextDocs && role.contextDocs.length > 0) {
-      projectKnowledge = await loadContextDocs({
-        cwd: context.worktreePath,
-        patterns: role.contextDocs,
-      });
-    }
-
-    // Build tool map and run-format definitions
-    const toolMap = tools;
-    const runTools = Object.entries(tools).map(([name, def]) => ({
-      type: 'function' as const,
-      function: {
-        name,
-        description: def.description,
-        parameters: zodToJsonSchema(def.parameters as any),
-      },
-    }));
+    const projectKnowledge = await loadProjectKnowledge(role, context.worktreePath);
+    const runTools = toChatCompletionTools(tools);
 
     const systemPrompt = this.buildSystemPrompt(role, context, projectKnowledge);
 
-    // Build conversation history as text prompt.
-    // On the first turn it's just the user prompt; on subsequent turns
-    // we append assistant text + tool results so the model has context.
-    const conversationParts: string[] = [this.buildUserPrompt(context)];
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: this.buildUserPrompt(context) },
+    ];
 
     let steps = 0;
     let totalInputTokens = 0;
@@ -215,52 +250,17 @@ export class AgentExecutor {
           return this.makeErrorResult(role, startTime, 'Aborted');
         }
 
-        // Call api-acp runs endpoint
-        const url = `${this.baseURL}/v1/runs`;
-        const prompt = conversationParts.join('\n\n');
-        // Security HI-5: block cloud-metadata / link-local destinations
-        // before connecting; baseURL is user-config'd via model overrides.
-        await assertNotImds(url);
-        // debug: POST ${url} model=${this.modelId} tools=${runTools.length} step=${steps}
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-          },
-          body: JSON.stringify({
-            model: this.modelId,
-            system_prompt: systemPrompt,
-            prompt,
-            tools: runTools.length > 0 ? runTools : undefined,
-            max_turns: 1,
-          }),
-          signal: options.signal,
-        });
+        const data = await this.requestCompletion(messages, runTools, options.signal);
 
-        if (!response.ok) {
-          const errBody = await response.text().catch(() => 'Unknown error');
-          console.error(
-            `[AgentExecutor] ERROR ${response.status} from ${url}: ${errBody.slice(0, 500)}`,
-          );
-          throw new Error(`api-acp returned ${response.status}: ${errBody}`);
-        }
+        const usage = toStepUsage(data.usage);
+        totalInputTokens += usage?.input_tokens ?? 0;
+        totalOutputTokens += usage?.output_tokens ?? 0;
 
-        const data = (await response.json()) as RunResponse;
-
-        if (data.status === 'failed') {
-          throw new Error(data.error?.message ?? 'Run failed');
-        }
-
-        // Track tokens
-        if (data.usage) {
-          totalInputTokens += data.usage.input_tokens ?? 0;
-          totalOutputTokens += data.usage.output_tokens ?? 0;
-        }
-
-        const assistantText = data.result?.text ?? '';
+        const message = data.choices?.[0]?.message;
+        if (!message) throw new Error('LLM returned no completion');
+        const assistantText = message.content ?? '';
         lastText = assistantText;
-        const runToolCalls = data.result?.tool_calls;
+        const runToolCalls = message.tool_calls;
 
         // If no tool calls → done
         if (!runToolCalls?.length) {
@@ -271,42 +271,13 @@ export class AgentExecutor {
             toolCalls: [],
             toolResults: [],
             finishReason: 'stop',
-            usage: data.usage,
+            usage,
           });
           break;
         }
 
-        // Execute tools locally
-        const toolResults: ToolResult[] = [];
-        const toolResultParts: string[] = [];
-        for (const tc of runToolCalls) {
-          const toolName = tc.function.name;
-          const toolDef = toolMap[toolName];
-
-          let result: string;
-          if (!toolDef) {
-            result = `Error: Unknown tool "${toolName}"`;
-          } else {
-            try {
-              const args = JSON.parse(tc.function.arguments);
-              result = await toolDef.execute(args);
-            } catch (err: any) {
-              result = `Error executing ${toolName}: ${err.message}`;
-            }
-          }
-
-          toolResults.push({ toolCallId: tc.id, toolName, result });
-          toolResultParts.push(`Tool result (${tc.id} / ${toolName}):\n${result}`);
-        }
-
-        // Append assistant text + tool results to conversation for next turn
-        const assistantPart = assistantText
-          ? `Assistant: ${assistantText}\n${runToolCalls.map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n')}`
-          : runToolCalls
-              .map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`)
-              .join('\n');
-        conversationParts.push(assistantPart);
-        conversationParts.push(toolResultParts.join('\n\n'));
+        messages.push({ role: 'assistant', content: message.content, tool_calls: runToolCalls });
+        const toolResults = await executeToolCalls(runToolCalls, tools, messages);
 
         steps++;
 
@@ -317,7 +288,7 @@ export class AgentExecutor {
           toolCalls: runToolCalls,
           toolResults,
           finishReason: 'tool-calls',
-          usage: data.usage,
+          usage,
         });
       }
 
@@ -336,6 +307,46 @@ export class AgentExecutor {
         await browserHandle.dispose();
       }
     }
+  }
+
+  /** POST one turn to the external Chat Completions endpoint. */
+  private async requestCompletion(
+    messages: ChatMessage[],
+    runTools: ChatCompletionTool[],
+    signal: AbortSignal | undefined,
+  ): Promise<ChatResponse> {
+    const url = `${this.baseURL.replace(/\/$/, '')}/chat/completions`;
+    // Security HI-5: block cloud-metadata / link-local destinations
+    // before connecting; baseURL is user-config'd via model overrides.
+    await assertNotImds(url);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: this.modelId,
+        messages,
+        tools: runTools.length > 0 ? runTools : undefined,
+        stream: false,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => 'Unknown error');
+      console.error(
+        `[AgentExecutor] ERROR ${response.status} from ${url}: ${errBody.slice(0, 500)}`,
+      );
+      throw new Error(`the LLM endpoint returned ${response.status}: ${errBody}`);
+    }
+
+    const data = (await response.json()) as ChatResponse;
+    if (data.error) {
+      throw new Error(data.error?.message ?? 'Completion failed');
+    }
+    return data;
   }
 
   // ── Prompt construction ─────────────────────────────────────

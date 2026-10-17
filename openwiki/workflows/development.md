@@ -13,7 +13,6 @@ bun run dev:server       # cd packages/server && bun --watch src/index.ts
 bun run dev:runtime       # packages/runtime/src/dev-watch.ts
 bun run dev:client        # cd packages/client && npx vite
 bun run dev:scheduler     # packages/scheduler/src/bin/scheduler.ts, --watch
-bun run dev:api-acp       # packages/api-acp, --watch (standalone service, see integrations page)
 ```
 
 **Agent safety rule — do not violate this in an automated session:** never run `bun run dev`, any `--watch` command, or `vite` directly. These are long-running dev servers; running them headlessly hangs the session and can interfere with the human's own dev server via `kill-port.ts`. To verify a change compiles, use:

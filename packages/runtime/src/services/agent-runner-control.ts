@@ -69,10 +69,6 @@ export function cleanupThreadState(threadId: string): void {
   currentControl().cleanupThreadState(threadId);
 }
 
-export function extractActiveAgents(): Map<string, unknown> {
-  return currentControl().extractActiveAgents();
-}
-
 export function extractActiveAgentSnapshot(): ActiveAgentSnapshot {
   return currentControl().extractActiveAgentSnapshot();
 }

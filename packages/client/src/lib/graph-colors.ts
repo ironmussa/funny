@@ -23,7 +23,7 @@ const GRAPH_LANE_HEX = GRAPH_LANE_HSL.map(([h, s, l]) => hslToHex(h, s, l));
  * Hex color for a graph lane index, cycling through the 8-slot palette (and
  * handling negative indices). This is the saturated hue source.
  */
-export function graphLaneColor(index: number): string {
+function graphLaneColor(index: number): string {
   const n = GRAPH_LANE_HEX.length;
   return GRAPH_LANE_HEX[((index % n) + n) % n];
 }

@@ -19,7 +19,7 @@ export function bindSocketIOServer(
   allowedOrigins = corsOrigins;
 }
 
-export function clearSocketIOServer(): void {
+function clearSocketIOServer(): void {
   io = null;
   engine = null;
   authInstance = null;

@@ -15,7 +15,7 @@ import { getTelemetryConfig } from './telemetry-config.js';
 
 const cfg = getTelemetryConfig();
 
-export const telemetry: AbbacchioClient = createClient({
+const telemetry: AbbacchioClient = createClient({
   endpoint: cfg.endpoint,
   serviceName: cfg.serverServiceName,
   enabled: cfg.enabled,

@@ -49,9 +49,7 @@ function getSnapshot(key: string) {
 // in one pass (the synced threads then arrive via the `thread:created` WS
 // event). So there is no need to poll per project — one global poll covers them
 // all. The `projectId` arg is retained only so callers can scope a refresh.
-export function loadExternalClaudeSessions(
-  opts: { force?: boolean; projectId?: string | null } = {},
-) {
+function loadExternalClaudeSessions(opts: { force?: boolean; projectId?: string | null } = {}) {
   const key = snapshotKey(opts.projectId);
   const snapshot = getSnapshot(key);
   const inflight = inflightByKey.get(key);

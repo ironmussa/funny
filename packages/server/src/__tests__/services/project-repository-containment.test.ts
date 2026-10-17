@@ -39,8 +39,11 @@ import { resolve } from 'path';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 
 let originalProjectRoot: string | undefined;
+let originalPolicy: string | undefined;
 
 beforeAll(() => {
+  originalPolicy = process.env.FUNNY_PROJECT_PATH_POLICY;
+  process.env.FUNNY_PROJECT_PATH_POLICY = 'restricted';
   originalProjectRoot = process.env.FUNNY_PROJECT_ROOT;
   // For this test we want to validate against the actual $HOME containment
   // — not the `/tmp` opt-in used elsewhere.
@@ -48,6 +51,8 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  if (originalPolicy === undefined) delete process.env.FUNNY_PROJECT_PATH_POLICY;
+  else process.env.FUNNY_PROJECT_PATH_POLICY = originalPolicy;
   if (originalProjectRoot !== undefined) process.env.FUNNY_PROJECT_ROOT = originalProjectRoot;
   else delete process.env.FUNNY_PROJECT_ROOT;
 });
@@ -64,6 +69,24 @@ describe('createProject — path containment (security HI-3)', () => {
 
   beforeEach(() => {
     t.cleanup();
+  });
+
+  test('local policy accepts creating and changing a path outside HOME', async () => {
+    process.env.FUNNY_PROJECT_PATH_POLICY = 'local';
+    try {
+      const created = await createProject('External', '/mnt/external/repo', 'user-1');
+      expect(created.isOk()).toBe(true);
+      if (created.isErr()) return;
+      const { updateProject } = await import('../../services/project-repository.js');
+      const updated = await updateProject(created.value.id, { path: '/mnt/another/repo' });
+      expect(updated.isOk()).toBe(true);
+      if (updated.isOk()) expect(updated.value.path).toBe('/mnt/another/repo');
+      process.env.FUNNY_PROJECT_PATH_POLICY = 'restricted';
+      const rejected = await updateProject(created.value.id, { path: '/mnt/third/repo' });
+      expect(rejected.isErr()).toBe(true);
+    } finally {
+      process.env.FUNNY_PROJECT_PATH_POLICY = 'restricted';
+    }
   });
 
   test('rejects /etc', async () => {

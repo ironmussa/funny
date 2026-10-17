@@ -23,8 +23,6 @@ export const ICON_SIZE = {
   xl: 'icon-xl', // 24px
 } as const;
 
-export type IconSize = keyof typeof ICON_SIZE;
-
 /**
  * Derive the git branch name from a worktree path.
  * Worktree folder: `<projectSlug>-<titleSlug>-<id6>` (hyphens)

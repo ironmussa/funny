@@ -1,7 +1,6 @@
 import {
   createApiClient,
   createEndpointPolicy,
-  resolveApiBaseForThread,
   validateRemoteOrigin,
   type ApiClientError,
   type ClientCancellation,
@@ -19,14 +18,9 @@ import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
 
 const endpointPolicy = createEndpointPolicy(clientComposition.platform.transport.environment);
-export const BASE = endpointPolicy.apiBase;
 
 export function validateContainerUrl(raw: unknown): string | null {
   return validateRemoteOrigin(raw, endpointPolicy.remoteOriginAllowlist);
-}
-
-export function getBaseUrlForThread(thread?: { runtime?: string; containerUrl?: string }): string {
-  return resolveApiBaseForThread(endpointPolicy, thread);
 }
 
 const apiClient = createApiClient({

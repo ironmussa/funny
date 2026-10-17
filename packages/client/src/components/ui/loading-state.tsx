@@ -74,6 +74,3 @@ export function LoadingState({
     </div>
   );
 }
-
-/** Alias for {@link LoadingState}. */
-export { LoadingState as Loading };

@@ -25,7 +25,7 @@ import { log } from '../../lib/logger.js';
 /** Serve cached without any network call within this window. */
 export const FRESH_TTL_MS = 12_000;
 /** Default cooldown when GitHub gives no Retry-After / reset hint. */
-export const DEFAULT_COOLDOWN_MS = 60_000;
+const DEFAULT_COOLDOWN_MS = 60_000;
 /** Bound the store so a long-lived runner can't grow it without limit. */
 const MAX_ENTRIES = 1_000;
 

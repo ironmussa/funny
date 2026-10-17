@@ -42,7 +42,7 @@ import { serializeEditorContent } from './prompt-editor/serialize';
 import { ModeSelect, ModelSelect, TemplateSelect, type ModelSelectGroup } from './PromptSelectors';
 import { ContextUsageRing } from './thread/ContextUsageRing';
 import { ThreadPowerline } from './ThreadPowerline';
-export { ModeSelect, ModelSelect, TemplateSelect, type ModelSelectGroup } from './PromptSelectors';
+export { ModelSelect, type ModelSelectGroup } from './PromptSelectors';
 
 export { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 

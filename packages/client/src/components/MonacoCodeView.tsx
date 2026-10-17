@@ -146,5 +146,3 @@ export function MonacoCodeView({
     />
   );
 }
-
-export default MonacoCodeView;

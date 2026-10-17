@@ -24,7 +24,7 @@ Output a JSON array. If there are no extractable facts, return [].`;
 /**
  * Extract facts from a single conversation chunk using an LLM.
  */
-export async function extractFactsFromChunk(
+async function extractFactsFromChunk(
   config: BenchmarkConfig,
   chunk: ConversationChunk,
   conversationDate?: string,
@@ -95,19 +95,14 @@ function parseFactsResponse(raw: string): ExtractedFact[] {
         (f: Record<string, unknown>) =>
           typeof f.content === 'string' && f.content.length > 0 && typeof f.type === 'string',
       )
-      .map(
-        (f: Record<string, unknown>): ExtractedFact => ({
-          content: f.content as string,
-          type: validateFactType(f.type as string),
-          tags: Array.isArray(f.tags)
-            ? (f.tags as string[]).map((t) => String(t).toLowerCase())
-            : [],
-          confidence:
-            typeof f.confidence === 'number' ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
-          validFrom: typeof f.validFrom === 'string' ? (f.validFrom as string) : undefined,
-          supersedes: typeof f.supersedes === 'string' ? (f.supersedes as string) : undefined,
-        }),
-      );
+      .map((f: Record<string, unknown>): ExtractedFact => ({
+        content: f.content as string,
+        type: validateFactType(f.type as string),
+        tags: Array.isArray(f.tags) ? (f.tags as string[]).map((t) => String(t).toLowerCase()) : [],
+        confidence: typeof f.confidence === 'number' ? Math.max(0, Math.min(1, f.confidence)) : 0.8,
+        validFrom: typeof f.validFrom === 'string' ? (f.validFrom as string) : undefined,
+        supersedes: typeof f.supersedes === 'string' ? (f.supersedes as string) : undefined,
+      }));
   } catch {
     // Try to extract JSON array from mixed content
     const arrayMatch = cleaned.match(/\[[\s\S]*\]/);

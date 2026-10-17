@@ -1,7 +1,7 @@
 import DOMPurify from 'dompurify';
 
 /** Maximum source + sanitized HTML retained by the shared markdown cache. */
-export const SATTERI_MARKDOWN_CACHE_MAX_BYTES = 2 * 1024 * 1024;
+const SATTERI_MARKDOWN_CACHE_MAX_BYTES = 2 * 1024 * 1024;
 
 const encoder = new TextEncoder();
 
@@ -61,11 +61,6 @@ export class ByteLruCache {
     }
   }
 
-  clear(): void {
-    this.entries.clear();
-    this.retainedBytes = 0;
-  }
-
   get size(): number {
     return this.entries.size;
   }
@@ -80,7 +75,7 @@ function byteLength(value: string): number {
 }
 
 /** A fast, stable FNV-1a 64-bit key; the source check in ByteLruCache handles collisions. */
-export function hashMarkdownContent(content: string): string {
+function hashMarkdownContent(content: string): string {
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < content.length; index++) {
     hash ^= BigInt(content.charCodeAt(index));
@@ -162,7 +157,3 @@ export const renderMarkdownToSafeHtml = createSafeMarkdownRenderer({
   compile: async (content) => (await loadSatteriCompiler())(content),
   cache: productionCache,
 });
-
-export function clearSatteriMarkdownCache(): void {
-  productionCache.clear();
-}

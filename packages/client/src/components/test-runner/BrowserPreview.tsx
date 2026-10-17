@@ -34,27 +34,6 @@ const CDP_VIEWPORT_HEIGHT = 720;
 // Module-level frame ref to avoid re-renders on each frame
 let latestFrameData: string | null = null;
 
-/** Subscribe to test:frame events and render on canvas. */
-export function useBrowserFrameRenderer(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
-  const drawFrame = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !latestFrameData) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = `data:image/jpeg;base64,${latestFrameData}`;
-  }, [canvasRef]);
-
-  return { drawFrame };
-}
-
 /** Render a frame onto the canvas (called from WS handler). */
 export function renderFrame(data: string) {
   latestFrameData = data;

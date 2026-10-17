@@ -23,9 +23,3 @@ export async function openAnnotator(url: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('open_annotator', { url });
 }
-
-export async function closeAnnotator(): Promise<void> {
-  if (!isTauri) return;
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('close_annotator');
-}

@@ -2,7 +2,7 @@ import { highlightLine } from '@/hooks/use-highlight';
 import { escapeRegExp } from '@/lib/diff-math';
 import { metric } from '@/lib/telemetry';
 
-export { countTextMatches, escapeRegExp } from '@/lib/diff-math';
+export { countTextMatches } from '@/lib/diff-math';
 
 /* ── Highlight cache ── */
 
@@ -31,7 +31,7 @@ function flushHighlightMetrics(): void {
   hCalls = 0;
 }
 
-export function getCachedHighlight(text: string, lang: string): string {
+function getCachedHighlight(text: string, lang: string): string {
   const key = `${lang}:${text}`;
   let cached = highlightCache.get(key);
   if (cached === undefined) {
@@ -62,7 +62,7 @@ export function getCachedHighlight(text: string, lang: string): string {
  * `globalOffset` is the number of matches before this text span.
  * `currentIdx` is the global index of the "current" match (-1 for none).
  */
-export function injectSearchMarks(
+function injectSearchMarks(
   html: string,
   query: string,
   globalOffset: number,

@@ -30,4 +30,4 @@ function Textarea({
 }: TextareaProps & { ref?: React.Ref<HTMLTextAreaElement> }) {
   return <textarea className={cn(textareaVariants({ size }), className)} ref={ref} {...props} />;
 }
-export { Textarea, textareaVariants };
+export { Textarea };

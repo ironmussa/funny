@@ -1,6 +1,6 @@
 import type { PlanComment } from './plan-annotations';
 
-export const PLAN_ACCEPTED_RESPONSE = 'Plan accepted';
+const PLAN_ACCEPTED_RESPONSE = 'Plan accepted';
 export const PLAN_REJECTED_RESPONSE = 'Plan rejected. Do not proceed with this plan.';
 
 export function formatPlanAcceptedResponse(plan: string, originalPlan?: string) {

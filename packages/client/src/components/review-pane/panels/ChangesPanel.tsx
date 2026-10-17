@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
 import { CommitGraphTab } from '@/components/CommitGraphTab';
-import { CommitHistoryTab } from '@/components/CommitHistoryTab';
 import { IssuesTab } from '@/components/IssuesTab';
 import { PullRequestsTab } from '@/components/PullRequestsTab';
 
@@ -145,15 +144,6 @@ export function ChangesPanel() {
           readOnly: ctx.viewerReadOnly,
         }}
       />
-    </div>
-  );
-}
-
-/** Dockview panel: History — self-contained, just renders CommitHistoryTab. */
-export function HistoryPanel() {
-  return (
-    <div className="flex h-full w-full flex-col text-xs">
-      <CommitHistoryTab visible />
     </div>
   );
 }

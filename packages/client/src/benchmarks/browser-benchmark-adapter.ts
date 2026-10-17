@@ -11,7 +11,7 @@ import {
   type RendererFeatureInventory,
 } from '@funny/client-benchmark';
 
-export const BROWSER_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
+const BROWSER_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
   schemaVersion: BENCHMARK_CAPABILITY_SCHEMA_VERSION,
   renderer: 'react-dom-chromium',
   capabilities: {

@@ -191,14 +191,6 @@ async function updateRun(id: string, updates: Record<string, unknown>) {
   return getServices().pipelines.updateRun(id, updates);
 }
 
-export function getRunById(id: string) {
-  return getServices().pipelines.getRunById(id);
-}
-
-export function getRunsForThread(threadId: string) {
-  return getServices().pipelines.getRunsForThread(threadId);
-}
-
 // ── WS emission helpers ─────────────────────────────────────
 
 function emitPipelineEvent(userId: string, event: WSEvent) {

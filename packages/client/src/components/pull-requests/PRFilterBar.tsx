@@ -39,7 +39,7 @@ const SORT_KEYS: PRSortKey[] = [
 ];
 
 /** Open/closed/all state filter — mirrors the GitHub `state` query param. */
-export type PRStateFilter = 'open' | 'closed' | 'all';
+type PRStateFilter = 'open' | 'closed' | 'all';
 
 const STATE_KEYS: PRStateFilter[] = ['open', 'closed', 'all'];
 

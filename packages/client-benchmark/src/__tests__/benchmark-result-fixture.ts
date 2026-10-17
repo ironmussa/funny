@@ -11,7 +11,7 @@ import {
   type WorkloadResult,
 } from '../result-schema';
 
-export function testSummary(
+function testSummary(
   metric: string,
   value: number,
   options: { unit?: MetricSummary['unit']; p95?: number; overBudget?: number } = {},

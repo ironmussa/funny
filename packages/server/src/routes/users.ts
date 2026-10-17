@@ -18,7 +18,7 @@ import type { ServerEnv } from '../lib/types.js';
 
 export const userRoutes = new Hono<ServerEnv>();
 
-export interface UserSearchResult {
+interface UserSearchResult {
   id: string;
   username: string | null;
   name: string;

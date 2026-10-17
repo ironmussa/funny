@@ -175,25 +175,11 @@ export class ThreadStoreInternals {
   clearThreadSelection(): void {
     this.clearThreadSelectionFn?.();
   }
-
-  // ── Reset (for tests) ─────────────────────────────────────────
-
-  reset(): void {
-    this.selectGeneration = 0;
-    this.selectingThreadId = null;
-    this.initInfoBuffer.clear();
-    this.wsEventBuffer.clear();
-    this.threadProjectIndex.clear();
-    this.navigateFn = null;
-    this.threadSelectListener = null;
-    this.clearThreadSelectionFn = null;
-    this.urlThreadId = null;
-  }
 }
 
 // ── Default singleton ────────────────────────────────────────────
 
-export const internals = new ThreadStoreInternals();
+const internals = new ThreadStoreInternals();
 
 // ── Backward-compatible function exports ─────────────────────────
 

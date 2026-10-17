@@ -81,10 +81,6 @@ export class SessionStore {
     return this.list().filter((s) => s.isActive);
   }
 
-  terminal(): Session[] {
-    return this.list().filter((s) => s.isTerminal);
-  }
-
   activeCount(): number {
     return this.active().length;
   }
@@ -179,23 +175,5 @@ export class SessionStore {
     } catch {
       // Directory doesn't exist or is empty — fine
     }
-  }
-
-  // ── Cleanup ───────────────────────────────────────────────────
-
-  /** Remove all terminal sessions older than the given age in milliseconds */
-  purgeOlderThan(maxAgeMs: number): number {
-    const cutoff = Date.now() - maxAgeMs;
-    let purged = 0;
-
-    for (const session of this.terminal()) {
-      const completedAt = session.toJSON().completedAt;
-      if (completedAt && new Date(completedAt).getTime() < cutoff) {
-        this.remove(session.id);
-        purged++;
-      }
-    }
-
-    return purged;
   }
 }

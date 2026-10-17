@@ -18,16 +18,6 @@ import { pipelines, pipelineRuns, threads } from '../db/schema.js';
 // row doesn't belong to that user. The `pipelines.userId` column is set
 // at creation time (see `createPipeline`).
 
-export async function getPipelineForProject(projectId: string, userId: string) {
-  const rows = await dbAll(
-    db
-      .select()
-      .from(pipelines)
-      .where(and(eq(pipelines.projectId, projectId), eq(pipelines.userId, userId))),
-  );
-  return rows.find((r: any) => r.enabled) ?? null;
-}
-
 export async function createPipeline(data: {
   projectId: string;
   userId: string;
@@ -114,37 +104,6 @@ export async function deletePipeline(id: string, userId: string) {
 }
 
 // ── Pipeline Run CRUD ────────────────────────────────────────
-
-export async function createRun(data: {
-  pipelineId: string;
-  threadId: string;
-  maxIterations: number;
-  commitSha?: string;
-}): Promise<string> {
-  const id = nanoid();
-  await dbRun(
-    db.insert(pipelineRuns).values({
-      id,
-      pipelineId: data.pipelineId,
-      threadId: data.threadId,
-      status: 'reviewing',
-      currentStage: 'reviewer',
-      iteration: 1,
-      maxIterations: data.maxIterations,
-      commitSha: data.commitSha,
-      createdAt: new Date().toISOString(),
-    }),
-  );
-  return id;
-}
-
-export async function updateRun(id: string, updates: Record<string, unknown>) {
-  await dbRun(db.update(pipelineRuns).set(updates).where(eq(pipelineRuns.id, id)));
-}
-
-export async function getRunById(id: string) {
-  return dbGet(db.select().from(pipelineRuns).where(eq(pipelineRuns.id, id)));
-}
 
 export async function getRunsForThread(threadId: string, userId: string) {
   // Security CR-5: pipeline_runs has no userId column. Verify ownership

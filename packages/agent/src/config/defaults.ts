@@ -15,14 +15,14 @@ export const DEFAULT_CONFIG = {
       api_key_env: 'ANTHROPIC_API_KEY',
       base_url: '',
     },
-    funny_api_acp: {
-      api_key_env: 'FUNNY_API_ACP_KEY',
-      base_url: 'http://localhost:4010',
+    openai: {
+      api_key_env: 'OPENAI_API_KEY',
+      base_url: 'http://localhost:8317/v1',
     },
     ollama: {
-      base_url: 'http://localhost:11434',
+      base_url: 'http://localhost:11434/v1',
     },
-    default_provider: 'funny-api-acp',
+    default_provider: 'openai',
     fallback_provider: undefined as string | undefined,
   },
 
@@ -46,7 +46,7 @@ export const DEFAULT_CONFIG = {
 
   orchestrator: {
     model: 'claude-sonnet-4-5-20250929',
-    provider: 'funny-api-acp',
+    provider: 'openai',
     auto_decompose: true,
     plan_approval: false,
     max_planning_turns: 30,

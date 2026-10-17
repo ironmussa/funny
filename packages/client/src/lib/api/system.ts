@@ -62,12 +62,12 @@ export type AcpModelsResponse =
       discoveredAt: number;
     };
 
-export interface OpenCodeModelEntry {
+interface OpenCodeModelEntry {
   modelId: string;
   name: string;
 }
 
-export type OpenCodeModelsResponse =
+type OpenCodeModelsResponse =
   | {
       ok: true;
       models: OpenCodeModelEntry[];

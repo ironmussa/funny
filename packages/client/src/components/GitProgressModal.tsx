@@ -10,10 +10,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { GitProgressStep, GitProgressSubItem, SubItemStatus } from '@/lib/git-progress-types';
+import type { GitProgressStep, GitProgressSubItem } from '@/lib/git-progress-types';
 import { cn } from '@/lib/utils';
 
-export type { GitProgressStep, GitProgressSubItem, SubItemStatus };
+export type { GitProgressStep, GitProgressSubItem };
 
 interface GitProgressModalProps {
   open: boolean;

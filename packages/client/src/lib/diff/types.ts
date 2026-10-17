@@ -2,8 +2,6 @@ export type {
   ConflictBlock,
   ConflictRole,
   DiffLine,
-  DiffSection,
-  ParsedDiff,
   SplitPair,
   ThreePaneTriple,
   VirtualRow,

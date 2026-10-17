@@ -29,9 +29,9 @@ import {
 
 import { DATA_DIR } from './data-dir.js';
 
-export { parseGitSpec, type GitSpec, type GitSpecResult } from '@funny/core/extensions';
+export { parseGitSpec } from '@funny/core/extensions';
 
-export const EXTENSIONS_DIR = join(DATA_DIR, 'extensions');
+const EXTENSIONS_DIR = join(DATA_DIR, 'extensions');
 
 /** Loader manifest entry (what the client dynamically imports). */
 export interface ExtensionManifestEntry {

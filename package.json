@@ -35,7 +35,6 @@
     "dev:client:renderer": "bun scripts/start-client-renderer.ts",
     "dev:client:gpuix": "bun scripts/start-client-renderer.ts --renderer=gpuix",
     "dev:scheduler": "bun --env-file ./.env --watch packages/scheduler/src/bin/scheduler.ts",
-    "dev:api-acp": "bun --watch --cwd packages/api-acp src/index.ts",
     "run": "concurrently --kill-others -n server,runner,client -c blue,green,yellow \"bun run run:server\" \"bun run run:runtime\" \"bun run run:client\"",
     "run:server": "cd packages/server && bun --env-file ../../.env src/index.ts",
     "run:runtime": "bun --env-file ../../.env --cwd packages/runtime src/index.ts",
@@ -133,8 +132,7 @@
     "hono": "^4.12.25",
     "nanoid": "^5.0.9",
     "neverthrow": "^8.2.0",
-    "nodemailer": "^9.0.1",
-    "undici": "^8.5.0"
+    "nodemailer": "^9.0.1"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.72.0",
@@ -144,16 +142,12 @@
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.4",
-    "@tauri-apps/plugin-shell": "^2.3.5",
     "concurrently": "^10.0.3",
-    "cross-env": "^10.1.0",
     "eslint-plugin-zod": "4.7.1",
     "husky": "^9.1.7",
     "oxfmt": "^0.66.0",
     "oxlint": "1.86.0",
-    "react-doctor": "^0.7.2",
     "secretlint": "^13.0.2",
-    "tailwindcss-animate": "^1.0.7",
     "typescript": "^7.0.2",
     "vitepress": "^2.0.0-alpha.17"
   },

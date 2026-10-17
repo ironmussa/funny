@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 
 const log = createClientLogger('notifications');
 
-export type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
+type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 
 function readPermission(): NotificationPermissionState {
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';

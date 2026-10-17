@@ -1,4 +1,4 @@
-export const FILE_MENTION_MIME = 'application/x-funny-file-mention';
+const FILE_MENTION_MIME = 'application/x-funny-file-mention';
 
 export type FileMentionPayload = {
   path: string;

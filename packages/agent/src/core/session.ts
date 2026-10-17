@@ -28,7 +28,7 @@ export type SessionStatus =
   | 'escalated'
   | 'cancelled';
 
-export const SESSION_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
+const SESSION_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   created: ['planning', 'cancelled', 'failed'],
   planning: ['implementing', 'escalated', 'cancelled', 'failed'],
   implementing: ['quality_check', 'pr_created', 'escalated', 'cancelled', 'failed'],
@@ -145,7 +145,7 @@ export class Session {
       completedAt: null,
       events: [],
       model: opts?.model ?? 'claude-sonnet-4-5-20250929',
-      provider: opts?.provider ?? 'funny-api-acp',
+      provider: opts?.provider ?? 'openai',
       metadata: opts?.metadata ?? {},
     };
 
@@ -186,35 +186,14 @@ export class Session {
   get worktreePath(): string | null {
     return this.data.worktreePath;
   }
-  get threadId(): string | null {
-    return this.data.threadId;
-  }
   get prNumber(): number | null {
     return this.data.prNumber;
-  }
-  get prUrl(): string | null {
-    return this.data.prUrl;
-  }
-  get ciAttempts(): number {
-    return this.data.ciAttempts;
-  }
-  get reviewAttempts(): number {
-    return this.data.reviewAttempts;
-  }
-  get events(): readonly SessionEvent[] {
-    return this.data.events;
   }
   get model(): string {
     return this.data.model;
   }
-  get provider(): string {
-    return this.data.provider;
-  }
   get updatedAt(): string {
     return this.data.updatedAt;
-  }
-  get createdAt(): string {
-    return this.data.createdAt;
   }
 
   /** Check if session is in a terminal state */
@@ -264,11 +243,6 @@ export class Session {
     this.data.worktreePath = worktreePath;
     this.data.updatedAt = new Date().toISOString();
     this.addEvent('session.branch_set', { branch, worktreePath });
-  }
-
-  setThread(threadId: string): void {
-    this.data.threadId = threadId;
-    this.data.updatedAt = new Date().toISOString();
   }
 
   setPR(prNumber: number, prUrl: string): void {

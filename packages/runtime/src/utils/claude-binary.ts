@@ -88,7 +88,7 @@ function findInCommonLocations(): string | null {
  *   2. PATH lookup (where/which)
  *   3. Common installation locations
  */
-export function resolveClaudeBinary(): string {
+function resolveClaudeBinary(): string {
   // 1. Explicit env var
   const envPath = process.env.CLAUDE_BINARY_PATH;
   if (envPath) {

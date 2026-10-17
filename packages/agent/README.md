@@ -9,7 +9,7 @@ Think of it as an AI project manager: it reads your backlog, decomposes features
 - [Bun](https://bun.sh/) >= 1.2
 - Git
 - [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login`) for GitHub issue tracking
-- `api-acp` running on port 4010 (agent API — `/v1/runs` protocol)
+- An external OpenAI-compatible API (for example [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)), configured with credentials and the requested models
 - [Hatchet](https://hatchet.run/) (optional — enables durable workflows and batch processing)
 
 ## Quick Start
@@ -123,7 +123,7 @@ tracker:
 # ── Orchestrator Agent ─────────────────────────────────────────
 orchestrator:
   model: claude-sonnet-4-5-20250929
-  provider: funny-api-acp
+  provider: openai
   auto_decompose: true # split complex issues into sub-tasks
   plan_approval: false # require human approval before implementing
   max_planning_turns: 30
@@ -225,7 +225,7 @@ Starts the full issue-to-PR pipeline for a single issue. The orchestrator agent 
   "issueNumber": 42,
   "projectPath": "/path/to/repo",
   "model": "claude-sonnet-4-5-20250929",
-  "provider": "funny-api-acp",
+  "provider": "openai",
   "baseBranch": "main"
 }
 ```
@@ -410,3 +410,19 @@ The `bruno/` directory contains a [Bruno](https://www.usebruno.com/) collection 
 
 - [SAD.md](SAD.md) — Full architecture document
 - [TECH-STACK.md](TECH-STACK.md) — Technology choices
+
+### External LLM API
+
+Funny does not bundle or start an LLM proxy. Run CLIProxyAPI separately only when needed. The orchestrator uses Chat Completions, including standard tool-call messages. Configure `.pipeline/config.yaml`:
+
+```yaml
+llm_providers:
+  openai:
+    base_url: http://localhost:8317/v1
+    api_key_env: OPENAI_API_KEY
+orchestrator:
+  provider: openai
+  model: your-advertised-model
+```
+
+Set `OPENAI_API_KEY` to the external server's client key. Base URLs include the API prefix (`/v1`). Existing configurations using `funny_api_acp` / `funny-api-acp` must switch to `openai`; the former run-based protocol is no longer supported.

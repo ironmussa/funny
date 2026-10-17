@@ -1,10 +1,4 @@
-import type {
-  LayoutResult,
-  LayoutLinesResult,
-  PreparedText,
-  PrepareOptions,
-} from '@chenglou/pretext';
-import { useEffect, useState } from 'react';
+import type { LayoutResult, PreparedText, PrepareOptions } from '@chenglou/pretext';
 
 /* ── Module-level singleton state ── */
 
@@ -25,9 +19,7 @@ const fontReadyPromises = new Map<string, Promise<boolean>>();
 /* ── Font strings (must match CSS exactly) ── */
 
 /** Sans-serif font used for prose / chat messages (text-sm = 14px) */
-export const PROSE_FONT = '14px "Geist Sans", sans-serif';
-/** Monospace font used for code / diffs (text-[11px]) */
-export const MONO_FONT = '11px "JetBrains Mono", ui-monospace, monospace';
+const PROSE_FONT = '14px "Geist Sans", sans-serif';
 
 /** Build a monospace canvas-font string for a given pixel size. */
 export function makeMonoFont(sizePx: number): string {
@@ -38,11 +30,6 @@ export function makeMonoFont(sizePx: number): string {
 export function makeProseFont(sizePx: number): string {
   return `${sizePx}px "Geist Sans", sans-serif`;
 }
-
-/** leading-relaxed = 1.625 × 14px */
-export const PROSE_LINE_HEIGHT = 22.75;
-/** Diff row height */
-export const MONO_LINE_HEIGHT = 20;
 
 /* ── Cache key ── */
 
@@ -74,7 +61,7 @@ export async function preloadPretext(): Promise<void> {
 
 /* ── Font readiness ── */
 
-export async function ensureFontReady(font: string): Promise<boolean> {
+async function ensureFontReady(font: string): Promise<boolean> {
   if (fontReadySet.has(font)) return true;
 
   // Synchronous check first
@@ -120,7 +107,7 @@ function evictIfNeeded() {
  * pretext module and ensures the font is available. The result is cached
  * globally so subsequent calls with the same text+font are instant.
  */
-export async function prepareText(
+async function prepareText(
   text: string,
   font: string,
   options?: PrepareOptions,
@@ -149,19 +136,6 @@ export function layoutSync(
 ): LayoutResult {
   if (!pretextModule) throw new Error('pretext not loaded — call ensurePretextLoaded() first');
   return pretextModule.layout(prepared, maxWidth, lineHeight);
-}
-
-/**
- * Synchronous layout with per-line details.
- * Requires prepareWithSegments — use prepareTextWithSegments() instead of prepareText().
- */
-export function layoutWithLinesSync(
-  prepared: PreparedText,
-  maxWidth: number,
-  lineHeight: number,
-): LayoutLinesResult {
-  if (!pretextModule) throw new Error('pretext not loaded — call ensurePretextLoaded() first');
-  return pretextModule.layoutWithLines(prepared as any, maxWidth, lineHeight);
 }
 
 /**
@@ -200,44 +174,4 @@ export async function prepareBatch(
   }
 
   return prepared;
-}
-
-/* ── React hook ── */
-
-/**
- * React hook that provides access to pretext measurement functions.
- * Handles lazy loading — `ready` becomes true once the module is loaded.
- */
-export function usePretext(): {
-  ready: boolean;
-  prepare: typeof prepareText;
-  layout: typeof layoutSync;
-  layoutWithLines: typeof layoutWithLinesSync;
-  getCached: typeof getCachedPrepared;
-  prepareBatch: typeof prepareBatch;
-} {
-  const [ready, setReady] = useState(pretextModule !== null);
-
-  useEffect(() => {
-    if (pretextModule) {
-      setReady(true);
-      return;
-    }
-    let cancelled = false;
-    ensurePretextLoaded().then(() => {
-      if (!cancelled) setReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return {
-    ready,
-    prepare: prepareText,
-    layout: layoutSync,
-    layoutWithLines: layoutWithLinesSync,
-    getCached: getCachedPrepared,
-    prepareBatch,
-  };
 }

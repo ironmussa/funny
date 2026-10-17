@@ -28,5 +28,3 @@ githubRoutes.route('/', issueRoutes);
 githubRoutes.route('/', prRoutes);
 githubRoutes.route('/', prThreadRoutes);
 githubRoutes.route('/', prFileRoutes);
-
-export default githubRoutes;

@@ -185,14 +185,7 @@ export function getToolLabel(name: string, t: (key: string) => string): string {
   return labels[name] ?? name;
 }
 
-export {
-  toEditorUri,
-  toEditorUriWithLine,
-  hasEditorUri,
-  openFileInEditor,
-  openFileInInternalEditor,
-  getEditorLabel,
-} from '@/lib/editor-utils';
+export { toEditorUri, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
 
 export function getFileExtension(filePath: string): string {
   const parts = filePath.split('.');

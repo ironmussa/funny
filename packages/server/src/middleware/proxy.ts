@@ -30,7 +30,6 @@ import {
   authorizedRunnerRequests,
   runnerAccess,
   runnerActor,
-  type AuthorizedRunnerRequests,
   type RunnerAccess,
   type UnsignedRunnerRequest,
 } from '../services/runner-access/index.js';
@@ -305,5 +304,3 @@ function filterSafeRunnerResponseHeaders(source: Headers): Headers {
   });
   return out;
 }
-
-export type { AuthorizedRunnerRequests };

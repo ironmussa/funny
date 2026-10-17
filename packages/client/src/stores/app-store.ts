@@ -11,9 +11,6 @@ import { useProjectStore } from './project-store';
 import { useThreadStore } from './thread-store';
 import { useUIStore } from './ui-store';
 
-export { setAppNavigate } from './thread-store';
-export type { ThreadWithMessages, AgentInitInfo, AgentResultInfo } from './thread-store';
-
 // Combined state type for backward compatibility
 type CombinedState = ReturnType<typeof useProjectStore.getState> &
   ReturnType<typeof useThreadStore.getState> &

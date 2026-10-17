@@ -38,8 +38,3 @@ export function getSchedulerPipelineDispatcher(): RuntimeSchedulerPipelineDispat
   });
   return _instance;
 }
-
-/** Test seam — replace the singleton in unit tests. */
-export function setSchedulerPipelineDispatcher(d: RuntimeSchedulerPipelineDispatcher | null): void {
-  _instance = d;
-}

@@ -25,7 +25,7 @@ export interface RegisteredElement {
  *   <variable>.readModel('CartView', { ... })
  *   <variable>.automation('TriggerPayment', { ... })
  */
-export function buildRegistry(
+function buildRegistry(
   ts: typeof import('typescript/lib/tsserverlibrary'),
   sourceFile: ts.SourceFile,
 ): Map<string, RegisteredElement> {

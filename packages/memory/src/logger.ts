@@ -34,7 +34,7 @@ export function setMemoryLogSink(sink: LogSink | null): void {
   logSink = sink;
 }
 
-export function createMemoryLogger(namespace: string): MemoryLogger {
+function createMemoryLogger(namespace: string): MemoryLogger {
   const prefix = `[memory:${namespace}]`;
 
   const fmt = (msg: string, data?: Record<string, unknown>): string => {

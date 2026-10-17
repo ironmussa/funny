@@ -80,7 +80,7 @@ const rgbaFromState = ({ hue, saturation, lightness, alpha }: ColorState) => {
 
 const ColorPickerContext = createContext<ColorPickerContextValue | undefined>(undefined);
 
-export const useColorPicker = () => {
+const useColorPicker = () => {
   const context = use(ColorPickerContext);
   if (!context) {
     throw new Error('useColorPicker must be used within a ColorPickerProvider');

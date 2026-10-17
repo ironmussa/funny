@@ -25,7 +25,7 @@ const rpcMessageSchema = z.object({
   result: z.unknown().optional(),
   error: z.object({ message: z.string() }).optional(),
 });
-export interface CodexNotification {
+interface CodexNotification {
   method: string;
   params: NonNullable<z.infer<typeof rpcMessageSchema>['params']>;
 }

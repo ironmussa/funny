@@ -339,34 +339,12 @@ export async function stopCommand(commandId: string): Promise<void> {
   );
 }
 
-export function getRunningCommands(): string[] {
-  return Array.from(activeCommands.keys());
-}
-
-export function isCommandRunning(commandId: string): boolean {
-  return activeCommands.has(commandId);
-}
-
 export function isCommandRunningForProject(commandId: string, projectId: string): boolean {
   const entry = activeCommands.get(commandId);
   return !!entry && !entry.exited && entry.projectId === projectId;
 }
 
 // ── Process Health Metrics ─────────────────────────────────
-
-export function getCommandMetrics(commandId: string): {
-  uptime: number;
-  restartCount: number;
-  memoryUsageKB: number;
-} | null {
-  const entry = activeCommands.get(commandId);
-  if (!entry || entry.exited) return null;
-  return {
-    uptime: Date.now() - entry.startedAt,
-    restartCount: entry.restartCount,
-    memoryUsageKB: entry.memoryUsageKB,
-  };
-}
 
 export function getCommandMetricsForProject(
   commandId: string,

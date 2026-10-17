@@ -40,55 +40,11 @@
  * `routes/threads.ts` and do not depend on this module. This is not full CQRS.
  */
 
-export {
-  normalizeCreationRequest,
-  type CreationRejection,
-  type CreationRejectionCode,
-  type CreationTarget,
-  type NormalizedCreation,
-} from './domain/creation-target.js';
-export {
-  authenticatedUserId,
-  authorizedThreadId,
-  createdThreadId,
-  resolvedRunnerId,
-  type RunnerId,
-  type ThreadId,
-  type UserId,
-} from './domain/ids.js';
-export {
-  DEFAULT_RUNNER_ID,
-  makeCreateThread,
-  type CreateThread,
-  type CreateThreadFailure,
-  type CreateThreadSuccess,
-} from './application/create-thread.js';
-export {
-  makeForkThread,
-  type ForkThread,
-  type ForkThreadFailure,
-  type ForkThreadSuccess,
-} from './application/fork-thread.js';
-export type {
-  ActorContext,
-  CreateThreadCommand,
-  CreateThreadPorts,
-  CreationIntent,
-  ForkSource,
-  ForkThreadCommand,
-  ForkThreadPorts,
-  ForkVariant,
-  RemoteCreationResponse,
-  RemoteThreadCreationPort,
-  RemoteThreadForkPort,
-  RunnerResolution,
-  RunnerResolutionPort,
-  RunnerUnavailableReason,
-  SourceRunnerResolutionPort,
-  ThreadRegistration,
-  ThreadRegistryPort,
-  ThreadRoutingCachePort,
-} from './application/ports.js';
+export { normalizeCreationRequest } from './domain/creation-target.js';
+export { authenticatedUserId, authorizedThreadId } from './domain/ids.js';
+export { makeCreateThread } from './application/create-thread.js';
+export { makeForkThread, type ForkThread } from './application/fork-thread.js';
+export type { ActorContext, CreationIntent, ForkVariant } from './application/ports.js';
 
 export { withForkInputs, type OwnershipForkSource } from './domain/fork-input.js';
 export { threadOwnedBy, type ThreadOwnedBy } from './domain/proofs/thread-owned-by.js';

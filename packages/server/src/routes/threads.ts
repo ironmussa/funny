@@ -130,15 +130,16 @@ const pendingPermissionRepo = repos.pendingPermissions();
 // `requireThreadOwner` is also exported so the git-route gate in index.ts can
 // reuse the same owner check (git ops must stay owner-only — a sharee never
 // reaches another user's runner; see thread-sharing design).
-export const { requireThreadView, requireThreadOwner, requireThreadSteer } =
-  createThreadAccessMiddleware(
-    (id) => threadRepo.getThread(id),
-    // View: effective role with thread→project→org inheritance (unified-rbac).
-    (thread, userId) => authorizer.authorize(userId, 'thread', thread.id, 'view'),
-    // Steer: owner OR explicit thread steer grant ONLY — inheritance must NOT
-    // cross runner isolation, so this stays `canSteerThread` (unchanged behavior).
-    (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
-  );
+const threadAccess = createThreadAccessMiddleware(
+  (id) => threadRepo.getThread(id),
+  // View: effective role with thread→project→org inheritance (unified-rbac).
+  (thread, userId) => authorizer.authorize(userId, 'thread', thread.id, 'view'),
+  // Steer: owner OR explicit thread steer grant ONLY — inheritance must NOT
+  // cross runner isolation, so this stays `canSteerThread` (unchanged behavior).
+  (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
+);
+const { requireThreadView } = threadAccess;
+export const { requireThreadOwner, requireThreadSteer } = threadAccess;
 
 export const threadRoutes = new Hono<ServerEnv>();
 

@@ -10,7 +10,7 @@ import {
   type RendererFeatureInventory,
 } from '@funny/client-benchmark';
 
-export const GPUIX_PRODUCT_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
+const GPUIX_PRODUCT_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
   schemaVersion: 1,
   renderer: 'react-gpuix-gpui-product',
   capabilities: {

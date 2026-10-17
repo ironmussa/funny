@@ -7,13 +7,13 @@ import {
   markConsolidated,
   trackCompletion,
 } from '../consolidator.js';
-import type { LLMConfig } from '../llm.js';
 import { setMeta } from '../storage.js';
+import type { LLMConfig } from '../types.js';
 import { createTestDb } from './helpers.js';
 
 describe('consolidator', () => {
   const llmConfig: LLMConfig = {
-    baseUrl: 'http://localhost:4010',
+    baseUrl: 'http://localhost:8317/v1',
     model: 'test-model',
   };
 
@@ -72,7 +72,7 @@ describe('consolidator', () => {
 
     it('calls LLM for non-obvious content', async () => {
       vi.mocked(fetch).mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'r', status: 'completed', result: { text: 'ACCEPT' } }), {
+        new Response(JSON.stringify({ choices: [{ message: { content: 'ACCEPT' } }] }), {
           status: 200,
         }),
       );
@@ -86,7 +86,7 @@ describe('consolidator', () => {
 
     it('rejects when LLM says REJECT', async () => {
       vi.mocked(fetch).mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'r', status: 'completed', result: { text: 'REJECT' } }), {
+        new Response(JSON.stringify({ choices: [{ message: { content: 'REJECT' } }] }), {
           status: 200,
         }),
       );

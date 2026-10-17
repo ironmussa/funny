@@ -17,15 +17,15 @@ describe('PipelineServiceConfigSchema', () => {
 
   it('defaults have correct LLM provider config', () => {
     const config = PipelineServiceConfigSchema.parse({});
-    expect(config.llm_providers.default_provider).toBe('funny-api-acp');
+    expect(config.llm_providers.default_provider).toBe('openai');
     expect(config.llm_providers.anthropic.api_key_env).toBe('ANTHROPIC_API_KEY');
-    expect(config.llm_providers.ollama.base_url).toBe('http://localhost:11434');
+    expect(config.llm_providers.ollama.base_url).toBe('http://localhost:11434/v1');
   });
 
   it('defaults have correct orchestrator config', () => {
     const config = PipelineServiceConfigSchema.parse({});
     expect(config.orchestrator.model).toBe('claude-sonnet-4-5-20250929');
-    expect(config.orchestrator.provider).toBe('funny-api-acp');
+    expect(config.orchestrator.provider).toBe('openai');
     expect(config.orchestrator.auto_decompose).toBe(true);
     expect(config.orchestrator.plan_approval).toBe(false);
   });

@@ -767,7 +767,7 @@
   "allThreads": {
     "title": "Todas as threads",
     "threads": "threads",
-    "searchPlaceholder": "Buscar threads por título, branch ou status...",
+    "searchPlaceholder": "Buscar threads e mensagens...",
     "noMatch": "Nenhuma thread corresponde à sua busca",
     "noThreads": "Nenhuma thread ainda",
     "found": "encontradas",
@@ -780,7 +780,7 @@
     "clearFilters": "Limpar filtros",
     "archived": "Arquivada",
     "globalTitle": "Buscar todas as threads",
-    "globalSearchPlaceholder": "Buscar por título, branch, projeto ou status...",
+    "globalSearchPlaceholder": "Buscar threads e mensagens...",
     "projects": "projetos",
     "sortLabel": "Ordem",
     "sortUpdated": "Última atualização",

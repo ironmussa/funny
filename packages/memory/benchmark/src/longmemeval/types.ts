@@ -1,3 +1,11 @@
+/**
+ * Complexity level descriptions:
+ * 1 — Single-session fact extraction (simple semantic search)
+ * 2 — Multi-session reasoning (requires info from multiple sessions)
+ * 3 — Knowledge update (facts change across sessions, must use latest)
+ * 4 — Temporal reasoning (time-dependent queries)
+ * 5 — Abstention (question cannot be answered from memory)
+ */
 export type ComplexityLevel = 1 | 2 | 3 | 4 | 5;
 
 export interface LongMemSession {
@@ -29,19 +37,3 @@ export interface LongMemEvalDataset {
   questions: LongMemQuestion[];
   totalTokens: number;
 }
-
-/**
- * Complexity level descriptions:
- * 1 — Single-session fact extraction (simple semantic search)
- * 2 — Multi-session reasoning (requires info from multiple sessions)
- * 3 — Knowledge update (facts change across sessions, must use latest)
- * 4 — Temporal reasoning (time-dependent queries)
- * 5 — Abstention (question cannot be answered from memory)
- */
-export const LEVEL_DESCRIPTIONS: Record<ComplexityLevel, string> = {
-  1: 'Single-session extraction',
-  2: 'Multi-session reasoning',
-  3: 'Knowledge update',
-  4: 'Temporal reasoning',
-  5: 'Abstention',
-};

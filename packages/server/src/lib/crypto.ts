@@ -26,4 +26,3 @@ export const reencrypt = (encrypted: string) => api.reencrypt(encrypted);
 export const isLegacyCiphertext = (encrypted: string) => api.isLegacyCiphertext(encrypted);
 export const isEncryptedWithActiveKey = (encrypted: string) =>
   api.isEncryptedWithActiveKey(encrypted);
-export const __resetCryptoCacheForTests = () => api.__resetCryptoCacheForTests();

@@ -169,18 +169,6 @@ export async function listMemberProjects(
   }));
 }
 
-export async function isProjectInOrg(projectId: string, orgId: string): Promise<boolean> {
-  const row = await dbGet(
-    db
-      .select()
-      .from(schema.teamProjects)
-      .where(
-        and(eq(schema.teamProjects.teamId, orgId), eq(schema.teamProjects.projectId, projectId)),
-      ),
-  );
-  return !!row;
-}
-
 export async function getProject(id: string): Promise<Project | undefined> {
   const row = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
   return row ? toProject(row) : undefined;
@@ -544,8 +532,4 @@ export async function reorderProjects(
   } catch (e) {
     return err(internal(`Failed to reorder projects: ${e}`));
   }
-}
-
-export function renameProject(id: string, name: string) {
-  return updateProject(id, { name });
 }

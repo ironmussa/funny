@@ -59,15 +59,13 @@ function makeLoader(
 
 function makeContextBuilder(provider: ActionProvider): ContextBuilder<YamlPipelineContext> {
   return {
-    build: vi.fn(
-      (input: DispatchInput, progress: ProgressReporter): YamlPipelineContext => ({
-        provider,
-        progress,
-        cwd: input.cwd,
-        inputs: input.inputs ?? { prompt: input.prompt, threadId: input.threadId },
-        outputs: {},
-      }),
-    ),
+    build: vi.fn((input: DispatchInput, progress: ProgressReporter): YamlPipelineContext => ({
+      provider,
+      progress,
+      cwd: input.cwd,
+      inputs: input.inputs ?? { prompt: input.prompt, threadId: input.threadId },
+      outputs: {},
+    })),
   };
 }
 

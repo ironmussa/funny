@@ -25,18 +25,18 @@ export const PipelineServiceConfigSchema = z.object({
           base_url: z.string().default(''),
         })
         .prefault({}),
-      funny_api_acp: z
+      openai: z
         .object({
-          api_key_env: z.string().default('FUNNY_API_ACP_KEY'),
-          base_url: z.string().default('http://localhost:4010'),
+          api_key_env: z.string().default('OPENAI_API_KEY'),
+          base_url: z.string().default('http://localhost:8317/v1'),
         })
         .prefault({}),
       ollama: z
         .object({
-          base_url: z.string().default('http://localhost:11434'),
+          base_url: z.string().default('http://localhost:11434/v1'),
         })
         .prefault({}),
-      default_provider: z.string().default('funny-api-acp'),
+      default_provider: z.string().default('openai'),
       fallback_provider: z.string().optional(),
     })
     .prefault({}),
@@ -76,7 +76,7 @@ export const PipelineServiceConfigSchema = z.object({
   orchestrator: z
     .object({
       model: z.string().default('claude-sonnet-4-5-20250929'),
-      provider: z.string().default('funny-api-acp'),
+      provider: z.string().default('openai'),
       /** Auto-decompose complex issues into sub-tasks */
       auto_decompose: z.boolean().default(true),
       /** Require human approval of the plan before implementing */

@@ -24,7 +24,7 @@ function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
 }
 
 export const threadModeSchema = z.enum(['local', 'worktree']);
-export const threadRuntimeSchema = z.enum(['local', 'remote']);
+const threadRuntimeSchema = z.enum(['local', 'remote']);
 // Open at the boundary: any non-empty provider id is accepted so a
 // runtime-registered / runner-advertised provider (provider-manifest-loader)
 // is not blocked by a compile-time enum. Resolution falls through the runtime
@@ -33,20 +33,20 @@ export const threadRuntimeSchema = z.enum(['local', 'remote']);
 // advertised set exists (provider-manifest-loader §3). Output is `string`,
 // which is assignable to the widened `AgentProvider`.
 export const agentProviderSchema = z.string().min(1);
-export const claudeModelSchema = registryEnum('claude');
-export const codexModelSchema = registryEnum('codex');
-export const geminiModelSchema = registryEnum('gemini');
+const claudeModelSchema = registryEnum('claude');
+const codexModelSchema = registryEnum('codex');
+const geminiModelSchema = registryEnum('gemini');
 // Pi's catalog is discovered at runtime from the Pi SDK (see pi-sdk.ts), so
 // the static registry only carries a `default` sentinel. Accept any non-empty
 // string here — `resolveModelId` already passes pi values through unchanged
 // and the Pi SDK itself rejects unknown model IDs at session time.
-export const piModelSchema = z.string().min(1);
+const piModelSchema = z.string().min(1);
 // Cursor's catalog is dynamic too (see cursor-discover.ts) — same shape as pi.
-export const cursorModelSchema = z.string().min(1);
+const cursorModelSchema = z.string().min(1);
 // opencode's catalog is dynamic too (see opencode-discover.ts) — same shape as pi.
-export const opencodeModelSchema = z.string().min(1);
-export const deepagentModelSchema = registryEnum('deepagent');
-export const agentModelSchema = z.union([
+const opencodeModelSchema = z.string().min(1);
+const deepagentModelSchema = registryEnum('deepagent');
+const agentModelSchema = z.union([
   claudeModelSchema,
   codexModelSchema,
   geminiModelSchema,
@@ -91,13 +91,7 @@ export const threadStageSchema = z.enum([
   'done',
   'archived',
 ]);
-export const threadSourceSchema = z.enum([
-  'web',
-  'chrome_extension',
-  'api',
-  'automation',
-  'ingest',
-]);
+const threadSourceSchema = z.enum(['web', 'chrome_extension', 'api', 'automation', 'ingest']);
 
 // ── Image attachment ─────────────────────────────────────────────
 
@@ -144,11 +138,7 @@ export const createProjectSchema = z.object({
   path: z.string().min(1, 'path is required'),
 });
 
-export const renameProjectSchema = z.object({
-  name: z.string().min(1, 'name is required'),
-});
-
-export const followUpModeSchema = z.enum(['interrupt', 'queue', 'steer']);
+const followUpModeSchema = z.enum(['interrupt', 'queue', 'steer']);
 
 export const updateProjectSchema = z
   .object({
@@ -176,11 +166,7 @@ export const updateProjectSchema = z
     );
   });
 
-export const reorderProjectsSchema = z.object({
-  projectIds: z.array(z.string().min(1)).min(1, 'projectIds must not be empty'),
-});
-
-export const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
 export const createThreadSchema = z
   .object({
@@ -286,13 +272,6 @@ export const rewindCodeSchema = z.object({
 
 export const forkAndRewindSchema = forkThreadSchema;
 
-export const updateThreadSchema = z.object({
-  title: z.string().min(1).max(500).optional(),
-  archived: z.boolean().optional(),
-  pinned: z.boolean().optional(),
-  stage: threadStageSchema.optional(),
-});
-
 export const convertToWorktreeSchema = z.object({
   baseBranch: z.string().optional(),
 });
@@ -354,7 +333,7 @@ export const createPRSchema = z.object({
   body: z.string().max(100_000),
 });
 
-export const pullStrategySchema = z.enum(['ff-only', 'merge', 'rebase']);
+const pullStrategySchema = z.enum(['ff-only', 'merge', 'rebase']);
 export const pullSchema = z.object({
   strategy: pullStrategySchema.default('ff-only'),
 });
@@ -366,7 +345,7 @@ export const createCommandSchema = z.object({
   portEnvVar: z.string().optional(),
 });
 
-export const hookTypeSchema = z.enum([
+const hookTypeSchema = z.enum([
   'pre-commit',
   'commit-msg',
   'pre-push',
@@ -457,10 +436,6 @@ export const workflowSchema = z.object({
   // gitRefSchema: same flag-injection concern as mergeSchema.targetBranch.
   targetBranch: gitRefSchema.optional(),
   cleanup: z.boolean().default(true),
-});
-
-export const gitInitSchema = z.object({
-  path: z.string().min(1, 'path is required'),
 });
 
 // Security ME-4: leading-`-` rejection is the ACTUAL defense against

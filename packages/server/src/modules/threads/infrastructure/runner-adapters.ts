@@ -59,7 +59,7 @@ const FORK_VARIANTS: Record<
   },
 };
 
-export const forkRunnerPathFor = (variant: ForkVariant, sourceId: ThreadId): string =>
+const forkRunnerPathFor = (variant: ForkVariant, sourceId: ThreadId): string =>
   FORK_VARIANTS[variant].path(sourceId);
 
 /** The identity signed into runner requests, from the authenticated actor. */

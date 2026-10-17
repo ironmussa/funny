@@ -587,6 +587,42 @@ describe('runner gRPC control negotiation', () => {
     },
   );
 
+  test.each([
+    ['expires pending permission requests before marking the runner offline', false],
+    ['still marks the runner offline when expiring permissions fails', true],
+  ] as const)('%s', async (_name, expireFails) => {
+    const calls: string[] = [];
+    let resolveOffline!: () => void;
+    const offline = new Promise<void>((resolve) => {
+      resolveOffline = resolve;
+    });
+    endpoint = await startRunnerGrpcEndpoint({
+      config: config(),
+      dependencies: {
+        authenticateRunner: async () => 'runner-1',
+        getRunnerUserId: async () => 'user-1',
+        expirePendingPermissions: async (runnerId) => {
+          calls.push(`expire:${runnerId}`);
+          if (expireFails) throw new Error('db unavailable');
+        },
+        markRunnerOffline: async (runnerId) => {
+          calls.push(`offline:${runnerId}`);
+          resolveOffline();
+        },
+      },
+    });
+    client = createClient(endpoint!.port);
+    const stream = client.control(metadata('good-token'));
+    const hello = nextMessage(stream);
+    stream.write({ hello: runnerHello() });
+    await hello;
+
+    stream.cancel();
+    await offline;
+
+    expect(calls).toEqual(['expire:runner-1', 'offline:runner-1']);
+  });
+
   test('supersedes the old control stream without stale offline cleanup', async () => {
     const unavailableEpochs: bigint[] = [];
     const sessions = new RunnerGrpcSessionRegistry({

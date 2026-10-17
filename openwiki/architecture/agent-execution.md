@@ -1,6 +1,6 @@
 # How a live agent run actually executes
 
-This traces what happens when a user sends a message to a thread in the running app (client + server + runner) — as opposed to the standalone issue-to-PR automation covered in [integrations/extensions-and-services.md](../integrations/extensions-and-services.md). Everything on this page lives in `packages/runtime`, `packages/core`, `packages/shared`, and `packages/client`; none of `packages/agent`, `packages/api-acp`, or `packages/harness` participate in it.
+This traces what happens when a user sends a message to a thread in the running app (client + server + runner) — as opposed to the standalone issue-to-PR automation covered in [integrations/extensions-and-services.md](../integrations/extensions-and-services.md). Everything on this page lives in `packages/runtime`, `packages/core`, `packages/shared`, and `packages/client`; none of `packages/agent` or `packages/harness` participate in it.
 
 ## Sequence
 

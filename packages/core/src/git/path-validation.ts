@@ -73,7 +73,7 @@ export function sanitizePath(basePath: string, userPath: string): Result<string,
 // files. These guards stop an authenticated user from registering `/etc`,
 // system repos, or another tree as their project.
 //
-// IMPORTANT: containment is checked against the CURRENT process's `$HOME`
+// Restricted deployments check containment against the CURRENT process's `$HOME`
 // (plus `FUNNY_PROJECT_ROOT`). That means this MUST run on the host that owns
 // the filesystem — the runner in team mode, or the server in single-node mode.
 // Running it on the server for a path that lives on a remote runner always
@@ -196,10 +196,40 @@ export function validateProjectPathLexical(rawPath: string): Result<string, Doma
 }
 
 /**
+ * Only an entirely local deployment defaults to unrestricted project locations.
+ * Operators can explicitly select a policy on the filesystem-owning process;
+ * request bodies and headers must never select it. Unknown values fail closed.
+ */
+export function resolveProjectPathPolicy(
+  env: Record<string, string | undefined> = process.env,
+): 'local' | 'restricted' {
+  const configured = env.FUNNY_PROJECT_PATH_POLICY?.trim().toLowerCase();
+  if (configured) return configured === 'local' ? 'local' : 'restricted';
+  // Preserve an operator's existing allowlist even on a loopback deployment.
+  if (env.FUNNY_PROJECT_ROOT?.trim()) return 'restricted';
+  const authMode = env.AUTH_MODE?.trim().toLowerCase();
+  if (authMode && authMode !== 'local') return 'restricted';
+
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+  if (env.HOST && !loopbackHosts.has(env.HOST.trim().toLowerCase())) return 'restricted';
+  if (env.TEAM_SERVER_URL) {
+    try {
+      const url = new URL(env.TEAM_SERVER_URL);
+      if (!['http:', 'https:'].includes(url.protocol) || !loopbackHosts.has(url.hostname)) {
+        return 'restricted';
+      }
+    } catch {
+      return 'restricted';
+    }
+  }
+  return 'local';
+}
+
+/**
  * Filesystem-aware containment: realpath the path (following symlinks),
- * re-check system prefixes against the realpath, and require it sits inside
- * the current process's `$HOME` — or an explicitly opted-in root via
- * `FUNNY_PROJECT_ROOT` (comma-separated). Returns the resolved realpath.
+ * re-check system prefixes against the realpath. Restricted deployments also
+ * require `$HOME` or `FUNNY_PROJECT_ROOT` (comma-separated); local deployments
+ * allow repositories on other disks and mounts. Returns the resolved realpath.
  *
  * MUST run on the host that owns the filesystem (see module note above).
  */
@@ -224,6 +254,8 @@ export function validateProjectRootContainment(rawPath: string): Result<string, 
       return err(badRequest(`Project path resolves to a restricted system directory: ${prefix}`));
     }
   }
+
+  if (resolveProjectPathPolicy() === 'local') return ok(real);
 
   const allowedRoots: string[] = [projectPathRealpathOrAnchor(homedir())];
   const extraRoots = process.env.FUNNY_PROJECT_ROOT;

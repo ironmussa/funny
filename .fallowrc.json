@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "workspaces": {
+    "patterns": ["packages/evflow/viewer"]
+  },
+  "ignorePatterns": ["packages/client/vendor/**"],
+  "ignoreDependencies": [
+    "@agentclientprotocol/sdk",
+    "@anthropic-ai/claude-agent-sdk",
+    "@langchain/google-genai",
+    "@langchain/openai",
+    "@xterm/addon-serialize",
+    "@xterm/headless",
+    "better-auth",
+    "deepagents-acp",
+    "hono",
+    "nanoid",
+    "nodemailer",
+    "node-pty",
+    "tree-sitter-wasms",
+    "web-tree-sitter",
+    "eslint-plugin-zod",
+    "pino-pretty",
+    "@gpuix/native",
+    "@storybook/addon-a11y",
+    "@storybook/addon-docs",
+    "@storybook/addon-onboarding",
+    "@chromatic-com/storybook",
+    "@funny/native-git-*"
+  ]
+}

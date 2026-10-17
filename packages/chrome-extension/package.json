@@ -9,7 +9,6 @@
     "package": "bun run build.ts && bun run package.ts"
   },
   "dependencies": {
-    "@funny/sdk": "workspace:*",
     "@funny/shared": "workspace:*"
   },
   "devDependencies": {

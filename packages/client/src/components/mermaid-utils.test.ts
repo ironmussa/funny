@@ -74,6 +74,61 @@ describe('sanitizeMermaidSvg', () => {
     expect(out).toContain('node label');
   });
 
+  it('removes obfuscated javascript: URLs and iframes nested in labels', () => {
+    const out = sanitizeMermaidSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<a href="java\tscript:steal()"><text>x</text></a>' +
+        '<a xlink:href="&#106;avascript:steal()"><text>y</text></a>' +
+        '<foreignObject width="10" height="10">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml">label<iframe src="https://evil.example"></iframe>' +
+        '<img src="x" onerror="boom()"></div>' +
+        '</foreignObject>' +
+        '</svg>',
+    );
+    expect(out).not.toMatch(/script:/i);
+    expect(out).not.toMatch(/<iframe/i);
+    expect(out).not.toMatch(/onerror/i);
+    expect(out).toContain('label');
+  });
+
+  it('drops HTML form controls and unknown elements anywhere in the SVG', () => {
+    const out = sanitizeMermaidSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<foreignObject width="10" height="10">' +
+        '<form xmlns="http://www.w3.org/1999/xhtml" action="/api/x"><button formaction="/api/y">go</button></form>' +
+        '</foreignObject>' +
+        '<animate attributeName="href" to="javascript:alert(1)"/>' +
+        '<use href="https://evil.example/sprite.svg#a"/>' +
+        '<use href="#local-symbol"/>' +
+        '</svg>',
+    );
+    expect(out).not.toMatch(/<form|<button|formaction|action=/i);
+    expect(out).not.toMatch(/<animate/i);
+    expect(out).not.toContain('evil.example');
+    expect(out).toContain('href="#local-symbol"');
+  });
+
+  it('keeps the structure mermaid emits for a flowchart', () => {
+    const out = sanitizeMermaidSvg(
+      '<svg id="m1" xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 100 50" class="flowchart" role="graphics-document document">' +
+        '<style>#m1 .node rect{fill:#eee;}</style>' +
+        '<defs><marker id="m1_arrow" viewBox="0 0 10 10" refX="5" refY="5"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1;"/></marker></defs>' +
+        '<g class="node default" transform="translate(10, 10)"><rect class="basic label-container" x="-5" y="-5" width="10" height="10"/>' +
+        '<g class="label" transform="translate(0, 0)"><foreignObject width="40" height="24">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap;">' +
+        '<span class="nodeLabel"><p>Start</p></span></div></foreignObject></g></g>' +
+        '<path d="M0,0L10,10" marker-end="url(#m1_arrow)" class="flowchart-link"/>' +
+        '</svg>',
+    );
+    expect(out).toContain('<style>');
+    expect(out).toMatch(/<marker id="m1_arrow"/);
+    expect(out).toContain('marker-end="url(#m1_arrow)"');
+    expect(out).toMatch(/<foreignObject/);
+    expect(out).toContain('class="nodeLabel"');
+    expect(out).toContain('<p>Start</p>');
+    expect(out).toContain('viewBox="0 0 100 50"');
+  });
+
   it('returns an empty string when no <svg> is present', () => {
     expect(sanitizeMermaidSvg('<div>not an svg</div>')).toBe('');
   });

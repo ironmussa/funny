@@ -480,7 +480,10 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => window.open(verificationUri, '_blank')}>
+          <Button
+            variant="outline"
+            onClick={() => window.open(verificationUri, '_blank', 'noopener,noreferrer')}
+          >
             <ExternalLink className="icon-base mr-2" />
             {t('github.deviceFlow.openGithub')}
           </Button>

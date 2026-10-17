@@ -96,17 +96,94 @@ const SATTERI_SANITIZE_CONFIG = {
   ADD_TAGS: ['details', 'summary'],
   ADD_ATTR: ['checked', 'disabled', 'open', 'start', 'type'],
   ALLOW_DATA_ATTR: false,
-  FORBID_ATTR: ['style'],
-  FORBID_TAGS: ['embed', 'iframe', 'object', 'script', 'style'],
+  // Security M11: agent output is attacker-influenced (prompt injection). Form
+  // controls and form-submission attributes would let it build same-origin
+  // POST forms or fake buttons; `style` would let it position overlays.
+  FORBID_ATTR: [
+    'style',
+    'action',
+    'form',
+    'formaction',
+    'formenctype',
+    'formmethod',
+    'formnovalidate',
+    'formtarget',
+    'method',
+  ],
+  FORBID_TAGS: [
+    'button',
+    'datalist',
+    'embed',
+    'fieldset',
+    'form',
+    'iframe',
+    'object',
+    'optgroup',
+    'option',
+    'output',
+    'script',
+    'select',
+    'style',
+    'textarea',
+  ],
   ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
 };
+
+/**
+ * Class names the Sätteri compiler itself emits (GFM task lists, footnotes,
+ * fenced-code languages). Anything else in a `class` attribute came from raw
+ * HTML in the message and is dropped — otherwise Tailwind utilities such as
+ * `fixed inset-0 z-50 opacity-0` could turn agent output into an invisible
+ * full-screen click trap. Classes added by the renderer's DOM post-processing
+ * are applied after sanitization and are unaffected.
+ */
+const SATTERI_ALLOWED_CLASSES = new Set([
+  'contains-task-list',
+  'task-list-item',
+  'footnotes',
+  'sr-only',
+  'data-footnote-backref',
+]);
+const SATTERI_LANGUAGE_CLASS = /^language-[\w#+.-]+$/;
+
+function filterSatteriClasses(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter((token) => SATTERI_ALLOWED_CLASSES.has(token) || SATTERI_LANGUAGE_CLASS.test(token))
+    .join(' ');
+}
+
+let satteriPurifier: ReturnType<typeof DOMPurify> | null = null;
+
+/**
+ * A dedicated DOMPurify instance so these hooks never leak into other
+ * sanitizer call sites that share the default instance.
+ */
+function getSatteriPurifier(): ReturnType<typeof DOMPurify> {
+  if (satteriPurifier) return satteriPurifier;
+  const purifier = DOMPurify(window);
+  purifier.addHook('uponSanitizeAttribute', (_node, event) => {
+    if (event.attrName !== 'class') return;
+    const filtered = filterSatteriClasses(event.attrValue);
+    if (filtered) event.attrValue = filtered;
+    else event.keepAttr = false;
+  });
+  purifier.addHook('afterSanitizeAttributes', (node) => {
+    // The only legitimate <input> is a read-only GFM task-list checkbox.
+    if (node.nodeName !== 'INPUT') return;
+    node.setAttribute('type', 'checkbox');
+    node.setAttribute('disabled', '');
+  });
+  satteriPurifier = purifier;
+  return purifier;
+}
 
 /**
  * The only sanitizer used for Sätteri output. Never insert raw compiler output
  * into the DOM: Sätteri intentionally preserves raw HTML from markdown.
  */
 export function sanitizeSatteriHtml(rawHtml: string): string {
-  return DOMPurify.sanitize(rawHtml, SATTERI_SANITIZE_CONFIG);
+  return getSatteriPurifier().sanitize(rawHtml, SATTERI_SANITIZE_CONFIG);
 }
 
 type MarkdownCompiler = (content: string) => string | Promise<string>;

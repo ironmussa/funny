@@ -1,6 +1,6 @@
 /**
  * Automation run completion. Called when a runner persists a terminal status
- * for a thread (`data-handler.ts` → `notifyTerminalStatusPersisted`) — the
+ * for a thread (`data-message-handlers.ts` → `notifyTerminalStatusPersisted`) — the
  * durable "thread finished" signal — so runs complete without polling and
  * without the owner having a browser open.
  *

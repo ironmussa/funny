@@ -6,7 +6,7 @@
  *
  * Project scope for the runner→server data channel (project-runner-binding).
  *
- * `assertDataOwnership` (data-handler.ts) answers "does this runner's USER own
+ * `assertDataOwnership` (data-ownership.ts) answers "does this runner's USER own
  * the entity?". This module answers the second question: "may THIS RUNNER touch
  * the project the entity belongs to?" — a dedicated runner must never read or
  * write another project's threads/messages/queues, even when both belong to the

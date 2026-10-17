@@ -188,240 +188,230 @@ function encodeStruct(value: unknown): Record<string, unknown> {
   };
 }
 
+type OperationKind = (typeof OPERATION_KINDS)[number];
+type LegacyMapper = (value: any, principalUserId: string | null) => Record<string, unknown>;
+
+const threadScoped =
+  (type: string): LegacyMapper =>
+  (value) => ({ type, threadId: value.threadId });
+const payloadOf =
+  (type: string): LegacyMapper =>
+  (value) => ({ type, payload: value });
+const threadPayloadOf =
+  (type: string): LegacyMapper =>
+  (value) => ({ type, threadId: value.threadId, payload: value });
+const spreadOf =
+  (type: string): LegacyMapper =>
+  (value) => ({ type, ...value });
+const principalScoped =
+  (type: string): LegacyMapper =>
+  (_value, principalUserId) => ({ type, userId: principalUserId });
+const principalPayload =
+  (type: string): LegacyMapper =>
+  (_value, principalUserId) => ({ type, payload: { userId: principalUserId } });
+const principalRulePayload =
+  (type: string): LegacyMapper =>
+  (value, principalUserId) => ({ type, payload: { ...value, userId: principalUserId } });
+const emptyPayload =
+  (type: string): LegacyMapper =>
+  () => ({ type, payload: {} });
+const threadIdPayload =
+  (type: string): LegacyMapper =>
+  (value) => ({ type, payload: { threadId: value.threadId } });
+const threadRowPayload =
+  (type: string, rowField: string): LegacyMapper =>
+  (value) => ({ type, payload: { threadId: value.threadId, row: decodeStruct(value[rowField]) } });
+const idPatchPayload =
+  (type: string, idField: string): LegacyMapper =>
+  (value) => ({ type, payload: { id: value[idField], patch: decodeStruct(value.patch) } });
+
+function legacyInsertMessage(value: any): Record<string, unknown> {
+  return {
+    type: 'data:insert_message',
+    threadId: value.threadId,
+    payload: {
+      threadId: value.threadId,
+      role: value.role,
+      // Proto3 omits non-optional scalar fields when they contain their
+      // default value. An empty assistant placeholder is valid application
+      // data, so restore the wire default instead of leaking `undefined`
+      // into the persistence boundary.
+      content: value.content ?? '',
+      images: value.imagesJson ?? null,
+      model: value.model ?? null,
+      permissionMode: value.permissionMode ?? null,
+      effort: value.effort ?? null,
+      author: value.author ?? null,
+      timestamp: value.timestamp ?? null,
+    },
+  };
+}
+
+function legacyMessagePageDirection(direction: unknown): 'after' | 'before' {
+  return direction === 2 || direction === 'MESSAGE_PAGE_DIRECTION_AFTER' ? 'after' : 'before';
+}
+
+const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
+  getThread: threadScoped('data:get_thread'),
+  getThreadByExternalRequestId: (value) => ({
+    type: 'data:get_thread_by_external_request_id',
+    externalRequestId: value.externalRequestId,
+  }),
+  getThreadByProviderSessionId: (value) => ({
+    type: 'data:get_thread_by_session_id',
+    sessionId: value.providerSessionId,
+  }),
+  getThreadWithMessages: spreadOf('data:get_thread_with_messages'),
+  getThreadMessages: (value) => ({
+    type: 'data:get_thread_messages',
+    ...value,
+    direction: legacyMessagePageDirection(value.direction),
+  }),
+  getToolCall: (value) => ({ type: 'data:get_tool_call', toolCallId: value.toolCallId }),
+  findToolCall: payloadOf('data:find_tool_call'),
+  insertMessage: legacyInsertMessage,
+  insertToolCall: payloadOf('data:insert_tool_call'),
+  updateThread: (value) => ({
+    type: 'data:update_thread',
+    threadId: value.threadId,
+    payload: { threadId: value.threadId, updates: decodeStruct(value.updates) },
+  }),
+  updateMessage: payloadOf('data:update_message'),
+  updateToolCallOutput: payloadOf('data:update_tool_call_output'),
+  saveThreadEvent: (value) => ({
+    type: 'data:save_thread_event',
+    threadId: value.threadId,
+    payload: { ...value, data: decodeStruct(value.data) },
+  }),
+  createPendingPermission: (value) => ({
+    type: 'data:create_pending_permission_request',
+    payload: decodeStruct(value.permission),
+  }),
+  resolvePendingPermission: (value) => ({
+    type: 'data:resolve_pending_permission_request',
+    payload: { requestId: value.permissionRequestId, decision: value.decision },
+  }),
+  expirePendingPermission: (value) => ({
+    type: 'data:expire_pending_permission_request',
+    payload: { requestId: value.permissionRequestId },
+  }),
+  insertComment: threadPayloadOf('data:insert_comment'),
+  deleteMessagesAfter: threadPayloadOf('data:delete_messages_after'),
+  searchThreads: spreadOf('data:search_threads'),
+  findLastUnansweredInteractiveToolCall: threadScoped(
+    'data:find_last_unanswered_interactive_tool_call',
+  ),
+  getProject: (value) => ({ type: 'data:get_project', projectId: value.projectId }),
+  getStartupCommand: (value) => ({
+    type: 'data:get_startup_command',
+    cmdId: value.commandId,
+    projectId: value.projectId,
+  }),
+  getAgentTemplate: (value) => ({ type: 'data:get_agent_template', templateId: value.templateId }),
+  listProjects: principalScoped('data:list_projects'),
+  listProjectThreads: (value) => ({
+    type: 'data:list_project_threads',
+    projectId: value.projectId,
+  }),
+  resolveProjectPath: (value, principalUserId) => ({
+    type: 'data:resolve_project_path',
+    projectId: value.projectId,
+    userId: principalUserId,
+  }),
+  createProject: (value, principalUserId) => ({
+    type: 'data:create_project',
+    name: value.name,
+    path: value.path,
+    userId: principalUserId,
+    orgId: value.organizationId ?? null,
+  }),
+  createThread: (value, principalUserId) => ({
+    type: 'data:create_thread',
+    payload: { ...decodeStruct(value.thread), userId: principalUserId },
+  }),
+  deleteThread: threadScoped('data:delete_thread'),
+  enqueueMessage: (value) => ({
+    type: 'data:enqueue_message',
+    threadId: value.threadId,
+    payload: decodeStruct(value.message),
+  }),
+  dequeueMessage: threadScoped('data:dequeue_message'),
+  peekMessage: threadScoped('data:peek_message'),
+  queueCount: threadScoped('data:queue_count'),
+  listQueue: threadScoped('data:list_queue'),
+  cancelQueuedMessage: (value) => ({
+    type: 'data:cancel_queued_message',
+    messageId: value.messageId,
+  }),
+  updateQueuedMessage: (value) => ({
+    type: 'data:update_queued_message',
+    messageId: value.messageId,
+    content: value.content,
+  }),
+  getProfile: principalScoped('data:get_profile'),
+  getProviderKey: (value, principalUserId) => ({
+    type: 'data:get_provider_key',
+    userId: principalUserId,
+    provider: value.provider,
+  }),
+  getGithubToken: (value, principalUserId) => ({
+    type: 'data:get_github_token',
+    userId: principalUserId,
+    ...(value.projectId ? { projectId: value.projectId } : {}),
+  }),
+  getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
+  updateProfile: (value, principalUserId) => ({
+    type: 'data:update_profile',
+    userId: principalUserId,
+    payload: decodeStruct(value.updates),
+  }),
+  resolveAgentExecutionProfile: (value, principalUserId) => ({
+    type: 'data:resolve_agent_execution_profile',
+    projectId: value.projectId,
+    userId: principalUserId,
+  }),
+  getBuiltinProviders: () => ({ type: 'data:get_builtin_providers' }),
+  setBuiltinProviders: (value) => ({
+    type: 'data:set_builtin_providers',
+    active: value.active ?? [],
+  }),
+  markAndListStaleThreads: () => ({ type: 'data:mark_and_list_stale_threads' }),
+  watcherInsert: threadRowPayload('data:watcher_insert', 'watcher'),
+  watcherGet: (value) => ({ type: 'data:watcher_get', payload: { id: value.watcherId } }),
+  watcherGetLiveByThreadKey: (value) => ({
+    type: 'data:watcher_get_live_by_thread_key',
+    payload: { threadId: value.threadId, key: value.key },
+  }),
+  watcherListPending: emptyPayload('data:watcher_list_pending'),
+  watcherListDue: (value) => ({
+    type: 'data:watcher_list_due',
+    payload: { now: Number(value.nowMs) },
+  }),
+  watcherListByUser: principalPayload('data:watcher_list_by_user'),
+  watcherUpdate: idPatchPayload('data:watcher_update', 'watcherId'),
+  watcherDeleteByThread: threadIdPayload('data:watcher_delete_by_thread'),
+  jobInsert: threadRowPayload('data:job_insert', 'job'),
+  jobGet: (value) => ({ type: 'data:job_get', payload: { id: value.jobId } }),
+  jobListRunning: emptyPayload('data:job_list_running'),
+  jobListByUser: principalPayload('data:job_list_by_user'),
+  jobUpdate: idPatchPayload('data:job_update', 'jobId'),
+  jobDeleteByThread: threadIdPayload('data:job_delete_by_thread'),
+  createPermissionRule: principalRulePayload('data:create_permission_rule'),
+  findPermissionRule: principalRulePayload('data:find_permission_rule'),
+  listPermissionRules: principalRulePayload('data:list_permission_rules'),
+};
+
+function isOperationKind(kind: string): kind is OperationKind {
+  return Object.hasOwn(LEGACY_MAPPERS, kind);
+}
+
 function toLegacyRequest(
   kind: string,
   request: WireRequest,
   principalUserId: string | null,
 ): Record<string, unknown> | null {
-  const value = request[kind] ?? {};
-  switch (kind) {
-    case 'getThread':
-      return { type: 'data:get_thread', threadId: value.threadId };
-    case 'getThreadByExternalRequestId':
-      return {
-        type: 'data:get_thread_by_external_request_id',
-        externalRequestId: value.externalRequestId,
-      };
-    case 'getThreadByProviderSessionId':
-      return { type: 'data:get_thread_by_session_id', sessionId: value.providerSessionId };
-    case 'getThreadWithMessages':
-      return { type: 'data:get_thread_with_messages', ...value };
-    case 'getThreadMessages':
-      return {
-        type: 'data:get_thread_messages',
-        ...value,
-        direction:
-          value.direction === 2 || value.direction === 'MESSAGE_PAGE_DIRECTION_AFTER'
-            ? 'after'
-            : 'before',
-      };
-    case 'getToolCall':
-      return { type: 'data:get_tool_call', toolCallId: value.toolCallId };
-    case 'findToolCall':
-      return { type: 'data:find_tool_call', payload: value };
-    case 'insertMessage':
-      return {
-        type: 'data:insert_message',
-        threadId: value.threadId,
-        payload: {
-          threadId: value.threadId,
-          role: value.role,
-          // Proto3 omits non-optional scalar fields when they contain their
-          // default value. An empty assistant placeholder is valid application
-          // data, so restore the wire default instead of leaking `undefined`
-          // into the persistence boundary.
-          content: value.content ?? '',
-          images: value.imagesJson ?? null,
-          model: value.model ?? null,
-          permissionMode: value.permissionMode ?? null,
-          effort: value.effort ?? null,
-          author: value.author ?? null,
-          timestamp: value.timestamp ?? null,
-        },
-      };
-    case 'insertToolCall':
-      return { type: 'data:insert_tool_call', payload: value };
-    case 'updateThread':
-      return {
-        type: 'data:update_thread',
-        threadId: value.threadId,
-        payload: { threadId: value.threadId, updates: decodeStruct(value.updates) },
-      };
-    case 'updateMessage':
-      return { type: 'data:update_message', payload: value };
-    case 'updateToolCallOutput':
-      return { type: 'data:update_tool_call_output', payload: value };
-    case 'saveThreadEvent':
-      return {
-        type: 'data:save_thread_event',
-        threadId: value.threadId,
-        payload: { ...value, data: decodeStruct(value.data) },
-      };
-    case 'createPendingPermission':
-      return {
-        type: 'data:create_pending_permission_request',
-        payload: decodeStruct(value.permission),
-      };
-    case 'resolvePendingPermission':
-      return {
-        type: 'data:resolve_pending_permission_request',
-        payload: { requestId: value.permissionRequestId, decision: value.decision },
-      };
-    case 'expirePendingPermission':
-      return {
-        type: 'data:expire_pending_permission_request',
-        payload: { requestId: value.permissionRequestId },
-      };
-    case 'insertComment':
-      return { type: 'data:insert_comment', threadId: value.threadId, payload: value };
-    case 'deleteMessagesAfter':
-      return { type: 'data:delete_messages_after', threadId: value.threadId, payload: value };
-    case 'searchThreads':
-      return { type: 'data:search_threads', ...value };
-    case 'findLastUnansweredInteractiveToolCall':
-      return { type: 'data:find_last_unanswered_interactive_tool_call', threadId: value.threadId };
-    case 'getProject':
-      return { type: 'data:get_project', projectId: value.projectId };
-    case 'getStartupCommand':
-      return {
-        type: 'data:get_startup_command',
-        cmdId: value.commandId,
-        projectId: value.projectId,
-      };
-    case 'getAgentTemplate':
-      return { type: 'data:get_agent_template', templateId: value.templateId };
-    case 'listProjects':
-      return { type: 'data:list_projects', userId: principalUserId };
-    case 'listProjectThreads':
-      return { type: 'data:list_project_threads', projectId: value.projectId };
-    case 'resolveProjectPath':
-      return {
-        type: 'data:resolve_project_path',
-        projectId: value.projectId,
-        userId: principalUserId,
-      };
-    case 'createProject':
-      return {
-        type: 'data:create_project',
-        name: value.name,
-        path: value.path,
-        userId: principalUserId,
-        orgId: value.organizationId ?? null,
-      };
-    case 'createThread':
-      return {
-        type: 'data:create_thread',
-        payload: { ...decodeStruct(value.thread), userId: principalUserId },
-      };
-    case 'deleteThread':
-      return { type: 'data:delete_thread', threadId: value.threadId };
-    case 'enqueueMessage':
-      return {
-        type: 'data:enqueue_message',
-        threadId: value.threadId,
-        payload: decodeStruct(value.message),
-      };
-    case 'dequeueMessage':
-      return { type: 'data:dequeue_message', threadId: value.threadId };
-    case 'peekMessage':
-      return { type: 'data:peek_message', threadId: value.threadId };
-    case 'queueCount':
-      return { type: 'data:queue_count', threadId: value.threadId };
-    case 'listQueue':
-      return { type: 'data:list_queue', threadId: value.threadId };
-    case 'cancelQueuedMessage':
-      return { type: 'data:cancel_queued_message', messageId: value.messageId };
-    case 'updateQueuedMessage':
-      return {
-        type: 'data:update_queued_message',
-        messageId: value.messageId,
-        content: value.content,
-      };
-    case 'getProfile':
-      return { type: 'data:get_profile', userId: principalUserId };
-    case 'getProviderKey':
-      return { type: 'data:get_provider_key', userId: principalUserId, provider: value.provider };
-    case 'getGithubToken':
-      return {
-        type: 'data:get_github_token',
-        userId: principalUserId,
-        ...(value.projectId ? { projectId: value.projectId } : {}),
-      };
-    case 'getMinimaxApiKey':
-      return { type: 'data:get_minimax_api_key', userId: principalUserId };
-    case 'updateProfile':
-      return {
-        type: 'data:update_profile',
-        userId: principalUserId,
-        payload: decodeStruct(value.updates),
-      };
-    case 'resolveAgentExecutionProfile':
-      return {
-        type: 'data:resolve_agent_execution_profile',
-        projectId: value.projectId,
-        userId: principalUserId,
-      };
-    case 'getBuiltinProviders':
-      return { type: 'data:get_builtin_providers' };
-    case 'setBuiltinProviders':
-      return { type: 'data:set_builtin_providers', active: value.active ?? [] };
-    case 'markAndListStaleThreads':
-      return { type: 'data:mark_and_list_stale_threads' };
-    case 'watcherInsert':
-      return {
-        type: 'data:watcher_insert',
-        payload: { threadId: value.threadId, row: decodeStruct(value.watcher) },
-      };
-    case 'watcherGet':
-      return { type: 'data:watcher_get', payload: { id: value.watcherId } };
-    case 'watcherGetLiveByThreadKey':
-      return {
-        type: 'data:watcher_get_live_by_thread_key',
-        payload: { threadId: value.threadId, key: value.key },
-      };
-    case 'watcherListPending':
-      return { type: 'data:watcher_list_pending', payload: {} };
-    case 'watcherListDue':
-      return { type: 'data:watcher_list_due', payload: { now: Number(value.nowMs) } };
-    case 'watcherListByUser':
-      return { type: 'data:watcher_list_by_user', payload: { userId: principalUserId } };
-    case 'watcherUpdate':
-      return {
-        type: 'data:watcher_update',
-        payload: { id: value.watcherId, patch: decodeStruct(value.patch) },
-      };
-    case 'watcherDeleteByThread':
-      return { type: 'data:watcher_delete_by_thread', payload: { threadId: value.threadId } };
-    case 'jobInsert':
-      return {
-        type: 'data:job_insert',
-        payload: { threadId: value.threadId, row: decodeStruct(value.job) },
-      };
-    case 'jobGet':
-      return { type: 'data:job_get', payload: { id: value.jobId } };
-    case 'jobListRunning':
-      return { type: 'data:job_list_running', payload: {} };
-    case 'jobListByUser':
-      return { type: 'data:job_list_by_user', payload: { userId: principalUserId } };
-    case 'jobUpdate':
-      return {
-        type: 'data:job_update',
-        payload: { id: value.jobId, patch: decodeStruct(value.patch) },
-      };
-    case 'jobDeleteByThread':
-      return { type: 'data:job_delete_by_thread', payload: { threadId: value.threadId } };
-    case 'createPermissionRule':
-      return {
-        type: 'data:create_permission_rule',
-        payload: { ...value, userId: principalUserId },
-      };
-    case 'findPermissionRule':
-      return { type: 'data:find_permission_rule', payload: { ...value, userId: principalUserId } };
-    case 'listPermissionRules':
-      return { type: 'data:list_permission_rules', payload: { ...value, userId: principalUserId } };
-    default:
-      return null;
-  }
+  if (!isOperationKind(kind)) return null;
+  return LEGACY_MAPPERS[kind](request[kind] ?? {}, principalUserId);
 }
 
 function failure(

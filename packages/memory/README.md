@@ -28,11 +28,11 @@ Runs as an independent process — no dependency on any specific agent framework
 └──────────────────────┬──────────────────────────────┘
                        │ HTTP (consolidation only)
                        ▼
-              ┌────────────────┐
-              │   api-acp      │
-              │  /v1/runs      │
-              │  (any LLM)     │
-              └────────────────┘
+              ┌────────────────────────┐
+              │ OpenAI-compatible API  │
+              │ /v1/chat/completions   │
+              │ (external service)     │
+              └────────────────────────┘
 ```
 
 ## Installation Guide
@@ -308,7 +308,7 @@ No dedicated daemon needed. No extra infrastructure.
 
 ## Consolidation agent
 
-The consolidation agent is an LLM-powered process that keeps memory clean. It runs inside Paisley Park and calls an external LLM via [api-acp](../api-acp/) (or any OpenAI-compatible endpoint).
+The consolidation agent is an LLM-powered process that keeps memory clean. It runs inside Paisley Park and calls an external LLM via an OpenAI-compatible endpoint such as [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI).
 
 ### What it does
 
@@ -319,19 +319,12 @@ The consolidation agent is an LLM-powered process that keeps memory clean. It ru
 
 ### How it connects to the LLM
 
-Paisley Park does NOT embed any LLM SDK. It makes plain HTTP calls to an api-acp server:
+Paisley Park does NOT embed any LLM SDK. It makes plain HTTP calls to an OpenAI-compatible API server:
 
-```
-PaisleyPark                            api-acp
-    │                                     │
-    ├── POST /v1/runs ───────────────────►│
-    │   { model: "claude-haiku",          │
-    │     prompt: "consolidate these...", │
-    │     system_prompt: "...",           │──► Claude/GPT/Ollama
-    │     max_turns: 1 }                  │
-    │                                     │
-    │◄── { result: { text: "..." } } ─────┤
-    │                                     │
+```text
+PaisleyPark → POST /v1/chat/completions → external LLM server
+Request:  { model, messages: [{ role: "user", content: "..." }] }
+Response: { choices: [{ message: { content: "..." } }] }
 ```
 
 Configure it via the `llm` option:
@@ -343,7 +336,7 @@ const memory = new PaisleyPark({
   projectName: 'My Project',
   // Optional — without this, only mechanical GC runs (decay + dedup)
   llm: {
-    baseUrl: 'http://localhost:4010', // api-acp URL
+    baseUrl: 'http://localhost:8317/v1', // OpenAI-compatible API URL
     model: 'claude-haiku', // cheap model for maintenance tasks
     apiKey: 'optional-key',
   },
@@ -402,15 +395,15 @@ For direct integration with Claude Code, Cursor, or any MCP-aware agent.
 
 ### Environment Variables
 
-| Variable          | Description                                       |
-| ----------------- | ------------------------------------------------- |
-| `PP_PROJECT_ID`   | Project identifier (default: `default`)           |
-| `PP_PROJECT_NAME` | Project display name (default: `default`)         |
-| `PP_DB_URL`       | libSQL connection URL (default: `file:memory.db`) |
-| `PP_SYNC_URL`     | Sync URL for embedded replicas                    |
-| `PP_AUTH_TOKEN`   | Auth token for remote connections                 |
-| `PP_LLM_URL`      | api-acp base URL (enables consolidation)          |
-| `PP_LLM_MODEL`    | Model for consolidation (default: `claude-haiku`) |
+| Variable          | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `PP_PROJECT_ID`   | Project identifier (default: `default`)                |
+| `PP_PROJECT_NAME` | Project display name (default: `default`)              |
+| `PP_DB_URL`       | libSQL connection URL (default: `file:memory.db`)      |
+| `PP_SYNC_URL`     | Sync URL for embedded replicas                         |
+| `PP_AUTH_TOKEN`   | Auth token for remote connections                      |
+| `PP_LLM_URL`      | OpenAI-compatible API base URL (enables consolidation) |
+| `PP_LLM_MODEL`    | Model for consolidation (default: `claude-haiku`)      |
 
 ## Architecture
 
@@ -458,7 +451,7 @@ Four-stage pipeline:
 
 ### Consolidation agent (`consolidator.ts`)
 
-LLM-powered memory maintenance. Calls api-acp for intelligent tasks:
+LLM-powered memory maintenance. Calls OpenAI-compatible API for intelligent tasks:
 
 1. **Cluster consolidation** — Groups similar facts, asks LLM to merge into one
 2. **Admission filter** — Rejects derivable information before storage
@@ -541,7 +534,7 @@ interface StorageConfig {
   projectName: string;
   /** LLM config for consolidation agent (optional) */
   llm?: {
-    /** api-acp base URL (e.g. http://localhost:4010) */
+    /** OpenAI-compatible API base URL (e.g. http://localhost:8317/v1) */
     baseUrl: string;
     /** Model ID (default: claude-haiku) */
     model?: string;
@@ -583,9 +576,7 @@ Paisley Park includes a benchmark suite to measure accuracy against published co
 
 ### Prerequisites
 
-- An LLM API server running. The benchmark supports two backends:
-  - **api-acp** (default) — the project's own LLM proxy at `http://localhost:4010`. Uses the `/v1/runs` endpoint. No API key needed.
-  - **OpenAI-compatible** — any server exposing `/v1/chat/completions` (OpenAI, Together, vLLM, etc.). Requires `OPENAI_API_KEY`.
+- An external OpenAI-compatible API server, such as CLIProxyAPI, exposing `/v1/chat/completions`. Set `OPENAI_API_KEY` to its client API key and select models it advertises.
 - (Optional) Ollama running with `nomic-embed-text` for semantic search — falls back to keyword-only without it
 
 ### Running
@@ -620,15 +611,15 @@ bun benchmark/src/cli.ts locomo
 bun benchmark/src/cli.ts longmemeval --size S
 ```
 
-#### Using api-acp (default)
+#### Using CLIProxyAPI
 
-If you have api-acp running on `http://localhost:4010`, benchmarks work out of the box:
+Run [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) separately when a CLI-backed API is needed. Funny does not bundle or start a proxy. Configure authentication and model names in that service, then run:
 
 ```bash
-bun run bench locomo
+OPENAI_API_BASE_URL=http://localhost:8317/v1 \
+OPENAI_API_KEY=your-proxy-client-key \
+bun run bench locomo --model your-model --judge-model your-judge-model
 ```
-
-Default models: `claude-haiku` (extraction/answers) and `claude-sonnet` (judge).
 
 #### Using OpenAI or other providers
 
@@ -698,12 +689,12 @@ This lets you validate extraction quality before committing to the full evaluati
 
 ### Environment variables
 
-| Variable              | Default                    | Description                              |
-| --------------------- | -------------------------- | ---------------------------------------- |
-| `OPENAI_API_BASE_URL` | `http://localhost:4010/v1` | LLM API base URL                         |
-| `OPENAI_API_KEY`      | `no-key-needed`            | API key (not required for local api-acp) |
-| `BENCH_MODEL`         | `claude-haiku`             | Default extraction/answer model          |
-| `BENCH_JUDGE_MODEL`   | `claude-sonnet`            | Default judge model                      |
+| Variable              | Default                    | Description                               |
+| --------------------- | -------------------------- | ----------------------------------------- |
+| `OPENAI_API_BASE_URL` | `http://localhost:8317/v1` | LLM API base URL                          |
+| `OPENAI_API_KEY`      | `no-key-needed`            | API key configured on the external server |
+| `BENCH_MODEL`         | `claude-haiku`             | Default extraction/answer model           |
+| `BENCH_JUDGE_MODEL`   | `claude-sonnet`            | Default judge model                       |
 
 ### Cost estimate
 
@@ -713,7 +704,7 @@ When using OpenAI, a full run costs approximately $15–25 in API calls:
 - Answer generation: ~$5–10 (~1,986 questions)
 - Evaluation: ~$3–5 (GPT-4o judge)
 
-When using api-acp with Anthropic models, costs depend on your Anthropic API pricing.
+When using OpenAI-compatible API with Anthropic models, costs depend on your Anthropic API pricing.
 
 Results are saved to `~/.funny/benchmark/data/results/` as JSON files with full per-question breakdowns.
 
@@ -727,4 +718,4 @@ Results are saved to `~/.funny/benchmark/data/results/` as JSON files with full 
 | `neverthrow`                | Result type for error handling        |
 | `zod`                       | Schema validation                     |
 
-No LLM SDK dependencies. Consolidation uses plain HTTP calls to api-acp.
+No LLM SDK dependencies. Consolidation uses plain HTTP calls to OpenAI-compatible API.

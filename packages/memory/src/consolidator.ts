@@ -4,7 +4,7 @@
  * @domain layer: application
  *
  * LLM-powered memory consolidation agent.
- * Runs inside PaisleyPark, calls api-acp for intelligent tasks.
+ * Runs inside PaisleyPark, calls OpenAI-compatible API for intelligent tasks.
  * Uses a distributed lock (in the meta table) so only one instance
  * consolidates at a time across a team.
  */

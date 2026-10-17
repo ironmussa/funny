@@ -105,7 +105,6 @@ const reviewer = new PRReviewer();
 export interface WebhookHandlerOptions {
   funnyClient: FunnyClient;
   repoMappings: RepoMapping[];
-  acpBaseUrl?: string;
   model?: string;
   log?: (msg: string) => void;
 }
@@ -187,7 +186,6 @@ async function runReview(
   try {
     const result = await reviewer.review(cwd, prNumber, {
       model: options.model,
-      acpBaseUrl: options.acpBaseUrl,
     });
 
     const duration = Date.now() - startTime;

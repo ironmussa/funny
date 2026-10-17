@@ -29,14 +29,14 @@ describe('DEFAULT_CONFIG', () => {
 
   // ── LLM Providers ────────────────────────────────────────────
 
-  it('has anthropic, funny_api_acp, and ollama providers', () => {
+  it('has anthropic, openai, and ollama providers', () => {
     expect(DEFAULT_CONFIG.llm_providers.anthropic).toBeDefined();
-    expect(DEFAULT_CONFIG.llm_providers.funny_api_acp).toBeDefined();
+    expect(DEFAULT_CONFIG.llm_providers.openai).toBeDefined();
     expect(DEFAULT_CONFIG.llm_providers.ollama).toBeDefined();
   });
 
-  it('default provider is funny-api-acp', () => {
-    expect(DEFAULT_CONFIG.llm_providers.default_provider).toBe('funny-api-acp');
+  it('default provider is openai', () => {
+    expect(DEFAULT_CONFIG.llm_providers.default_provider).toBe('openai');
   });
 
   // ── Tracker ──────────────────────────────────────────────────

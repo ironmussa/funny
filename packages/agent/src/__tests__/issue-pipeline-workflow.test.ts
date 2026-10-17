@@ -80,7 +80,7 @@ describe('IssuePipelineWorkflow', () => {
     } as unknown as OrchestratorAgent;
 
     const config = {
-      orchestrator: { model: 'claude-sonnet-4-5-20250929', provider: 'funny-api-acp' },
+      orchestrator: { model: 'claude-sonnet-4-5-20250929', provider: 'openai' },
       tracker: { repo: 'org/repo', max_parallel: 5 },
     } as unknown as PipelineServiceConfig;
 

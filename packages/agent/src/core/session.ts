@@ -145,7 +145,7 @@ export class Session {
       completedAt: null,
       events: [],
       model: opts?.model ?? 'claude-sonnet-4-5-20250929',
-      provider: opts?.provider ?? 'funny-api-acp',
+      provider: opts?.provider ?? 'openai',
       metadata: opts?.metadata ?? {},
     };
 

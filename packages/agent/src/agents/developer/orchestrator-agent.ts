@@ -69,8 +69,8 @@ export class OrchestratorAgent {
 
     const userPrompt = `Analyze this issue and create an implementation plan. Use the tools to explore the codebase at ${projectPath}, then output your plan as a JSON block.`;
 
-    // Direct LLM call via runs endpoint — no AgentExecutor wrapper
-    const url = `${resolved.baseURL}/v1/runs`;
+    // Direct LLM call via Chat Completions — no AgentExecutor wrapper
+    const url = `${resolved.baseURL.replace(/\/$/, '')}/chat/completions`;
     logger.info({ url, model: resolved.modelId }, 'Planning issue with direct LLM call');
 
     let allText = '';
@@ -139,9 +139,19 @@ export class OrchestratorAgent {
       },
     ];
 
-    // Build conversation as text prompt — on subsequent turns we append
-    // assistant text + tool results so the model has context.
-    const conversationParts: string[] = [userPrompt];
+    const messages: Array<{
+      role: 'system' | 'user' | 'assistant' | 'tool';
+      content: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      }>;
+      tool_call_id?: string;
+    }> = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
 
     const { readFileSync, existsSync } = await import('fs');
     const { join } = await import('path');
@@ -149,7 +159,6 @@ export class OrchestratorAgent {
     while (steps < maxTurns) {
       if (opts?.signal?.aborted) break;
 
-      const prompt = conversationParts.join('\n\n');
       logger.info(`[Planner] POST ${url} model=${resolved.modelId} step=${steps}`);
       const response = await fetch(url, {
         method: 'POST',
@@ -159,10 +168,9 @@ export class OrchestratorAgent {
         },
         body: JSON.stringify({
           model: resolved.modelId,
-          system_prompt: systemPrompt,
-          prompt,
+          messages,
           tools,
-          max_turns: 1,
+          stream: false,
         }),
         signal: opts?.signal,
       });
@@ -180,20 +188,22 @@ export class OrchestratorAgent {
 
       const data = (await response.json()) as any;
 
-      if (data.status === 'failed') {
+      if (data.error) {
         const errMsg = `Planner run failed: ${data.error?.message ?? 'Unknown error'}`;
         logger.error({ error: data.error?.message }, 'Planner run failed');
         opts?.onEvent?.({ type: 'error', message: errMsg });
         throw new Error(errMsg);
       }
 
-      const text = data.result?.text ?? '';
+      const message = data.choices?.[0]?.message;
+      if (!message) throw new Error('Planner returned no completion');
+      const text = message.content ?? '';
       if (text) {
         allText += '\n' + text;
         opts?.onEvent?.({ type: 'text', content: text, step: steps });
       }
 
-      const runToolCalls = data.result?.tool_calls;
+      const runToolCalls = message.tool_calls;
 
       // No tool calls → model is done
       if (!runToolCalls?.length) {
@@ -201,7 +211,7 @@ export class OrchestratorAgent {
       }
 
       // Execute tools locally
-      const toolResultParts: string[] = [];
+      messages.push({ role: 'assistant', content: message.content, tool_calls: runToolCalls });
       for (const tc of runToolCalls) {
         const args = JSON.parse(tc.function.arguments);
         opts?.onEvent?.({
@@ -280,17 +290,8 @@ export class OrchestratorAgent {
           result: result.slice(0, 2000),
           step: steps,
         });
-        toolResultParts.push(`Tool result (${tc.id} / ${tc.function.name}):\n${result}`);
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
       }
-
-      // Append assistant text + tool results to conversation for next turn
-      const assistantPart = text
-        ? `Assistant: ${text}\n${runToolCalls.map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n')}`
-        : runToolCalls
-            .map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`)
-            .join('\n');
-      conversationParts.push(assistantPart);
-      conversationParts.push(toolResultParts.join('\n\n'));
 
       steps++;
     }

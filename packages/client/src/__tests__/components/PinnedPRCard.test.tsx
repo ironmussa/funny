@@ -8,6 +8,10 @@ import { PinnedPRCard } from '@/components/PinnedPRCard';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
+// First render of a PR conversation loads the markdown pipeline, which can take
+// several seconds when the full suite runs in parallel.
+const MARKDOWN_RENDER_WAIT = { timeout: 10_000 };
+
 const apiMock = vi.hoisted(() => ({
   githubPRThreads: vi.fn(),
   githubPRConversation: vi.fn(),
@@ -155,14 +159,16 @@ describe('PinnedPRCard', () => {
 
     const { container } = renderWithProviders(<PinnedPRCard pr={makePR()} projectId="project-1" />);
 
-    expect(await screen.findByText('Run configuration')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Run configuration', {}, MARKDOWN_RENDER_WAIT),
+    ).toBeInTheDocument();
     expect(screen.getByText('Review profile:')).toBeInTheDocument();
     expect(container.querySelector('details')).toBeInTheDocument();
     expect(container.querySelector('br')).toBeInTheDocument();
     expect(container.querySelector('script')).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent('<details>');
     expect(container).not.toHaveTextContent('<!-- This is an auto-generated comment');
-  });
+  }, 20_000);
 
   test('does not render a redundant merged status badge', () => {
     renderWithProviders(

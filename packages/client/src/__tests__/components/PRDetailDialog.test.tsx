@@ -9,6 +9,10 @@ import { usePRDetailStore } from '@/stores/pr-detail-store';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
+// First render of a PR conversation loads the markdown pipeline, which can take
+// several seconds when the full suite runs in parallel.
+const MARKDOWN_RENDER_WAIT = { timeout: 10_000 };
+
 const apiMock = vi.hoisted(() => ({
   githubPRFiles: vi.fn(),
   githubPRCommits: vi.fn(),
@@ -163,6 +167,8 @@ describe('PRDetailDialog', () => {
     });
     expect(screen.getByTestId('pinned-pr-card-51')).toBeInTheDocument();
     expect(screen.getByTestId('pinned-pr-link-51')).not.toBeVisible();
-    expect(await screen.findByText('Can we verify this path?')).toBeInTheDocument();
-  });
+    expect(
+      await screen.findByText('Can we verify this path?', {}, MARKDOWN_RENDER_WAIT),
+    ).toBeInTheDocument();
+  }, 20_000);
 });

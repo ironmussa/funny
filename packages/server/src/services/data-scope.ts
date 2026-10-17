@@ -333,7 +333,8 @@ export async function assertRunnerDataScope(
   data: any,
 ): Promise<DataScopeDecision> {
   const type = data?.type;
-  const rule = DATA_SCOPE_RULES[type];
+  // Own keys only: a prototype name like `toString` must not count as a rule.
+  const rule = Object.hasOwn(DATA_SCOPE_RULES, type) ? DATA_SCOPE_RULES[type] : undefined;
   if (!rule) return { ok: false, reason: `no scope rule for ${String(type)}` };
 
   const isScratchCreate =

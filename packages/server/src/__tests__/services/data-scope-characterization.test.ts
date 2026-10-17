@@ -449,14 +449,16 @@ describe('assertRunnerDataScope characterization', () => {
     ).toEqual(OUT_PY);
   });
 
-  test('Object.prototype keys as type resolve no indirect references', async () => {
-    // Current behavior: DATA_SCOPE_RULES is a plain object, so a prototype key
-    // yields a truthy "rule" and only direct refs are checked. data-handler's
-    // switch refuses such types anyway; this pins that no lookup crashes.
-    const data = { type: 'toString', payload: { messageId: 'my', id: 'wy' } };
-    expect(await assertRunnerDataScope('rx', data)).toEqual(OK);
-    expect(await assertRunnerDataScope('rx', { type: 'toString', threadId: 'ty' })).toEqual(OUT_PY);
-  });
+  test.each(['toString', 'constructor', '__proto__', 'hasOwnProperty'])(
+    'Object.prototype key %s as type is refused as having no scope rule',
+    async (type) => {
+      const data = { type, payload: { messageId: 'my', id: 'wy' } };
+      expect(await assertRunnerDataScope('rx', data)).toEqual({
+        ok: false,
+        reason: `no scope rule for ${type}`,
+      });
+    },
+  );
 
   test('payload fallback when payload is null', async () => {
     expect(

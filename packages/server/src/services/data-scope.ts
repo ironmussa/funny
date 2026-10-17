@@ -147,14 +147,141 @@ export async function canRunnerActOnThread(
     : canRunnerAccessProject(runnerId, info.projectId);
 }
 
+/**
+ * First row's thread id, normalized so a missing row, a null id, or an empty
+ * id all mean "no reference".
+ */
 async function firstThreadId(
   query: Promise<Array<{ threadId: string | null }>>,
 ): Promise<string | undefined> {
   const [row] = await query;
-  return row?.threadId ?? undefined;
+  return row?.threadId || undefined;
+}
+
+/** Id of the first matching thread row; `undefined` when there is none. */
+async function firstRowId(query: Promise<Array<{ id: string }>>): Promise<string | undefined> {
+  const [row] = await query;
+  return row ? row.id : undefined;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+
+/**
+ * An indirect thread reference: `key` extracts the entity id from the request
+ * (`undefined` = not referenced) and `thread` resolves it to its thread id.
+ */
+interface IndirectThreadRef {
+  key: (data: any, payload: any) => string | undefined;
+  thread: (id: string) => Promise<string | undefined>;
+}
+
+const threadByExternalRequestId: IndirectThreadRef = {
+  key: (data) => str(data.externalRequestId),
+  thread: (id) =>
+    firstRowId(
+      db
+        .select({ id: schema.threads.id })
+        .from(schema.threads)
+        .where(eq(schema.threads.externalRequestId, id)),
+    ),
+};
+
+const threadBySessionId: IndirectThreadRef = {
+  key: (data) => str(data.sessionId),
+  thread: (id) =>
+    firstRowId(
+      db
+        .select({ id: schema.threads.id })
+        .from(schema.threads)
+        .where(eq(schema.threads.sessionId, id)),
+    ),
+};
+
+const threadByMessageId: IndirectThreadRef = {
+  key: (_data, payload) => str(payload.messageId),
+  thread: (id) =>
+    firstThreadId(
+      db
+        .select({ threadId: schema.messages.threadId })
+        .from(schema.messages)
+        .where(eq(schema.messages.id, id)),
+    ),
+};
+
+const threadOfToolCall = (id: string) =>
+  firstThreadId(
+    db
+      .select({ threadId: schema.messages.threadId })
+      .from(schema.toolCalls)
+      .innerJoin(schema.messages, eq(schema.messages.id, schema.toolCalls.messageId))
+      .where(eq(schema.toolCalls.id, id)),
+  );
+
+const threadByQueuedMessageId: IndirectThreadRef = {
+  key: (data) => str(data.messageId),
+  thread: (id) =>
+    firstThreadId(
+      db
+        .select({ threadId: schema.messageQueue.threadId })
+        .from(schema.messageQueue)
+        .where(eq(schema.messageQueue.id, id)),
+    ),
+};
+
+const threadByWatcherId: IndirectThreadRef = {
+  key: (_data, payload) => str(payload.id),
+  thread: (id) =>
+    firstThreadId(
+      db
+        .select({ threadId: schema.watchers.threadId })
+        .from(schema.watchers)
+        .where(eq(schema.watchers.id, id)),
+    ),
+};
+
+const threadByJobId: IndirectThreadRef = {
+  key: (_data, payload) => str(payload.id),
+  thread: (id) =>
+    firstThreadId(
+      db.select({ threadId: schema.jobs.threadId }).from(schema.jobs).where(eq(schema.jobs.id, id)),
+    ),
+};
+
+const threadByPermissionRequestId: IndirectThreadRef = {
+  key: (_data, payload) => str(payload.requestId),
+  thread: (id) =>
+    firstThreadId(
+      db
+        .select({ threadId: schema.pendingPermissionRequests.threadId })
+        .from(schema.pendingPermissionRequests)
+        .where(eq(schema.pendingPermissionRequests.requestId, id)),
+    ),
+};
+
+/**
+ * Data types whose thread is referenced indirectly (through another entity).
+ * A Map, not an object literal, so prototype keys (`toString`, …) never match.
+ */
+const INDIRECT_THREAD_REFS = new Map<string, IndirectThreadRef>([
+  ['data:get_thread_by_external_request_id', threadByExternalRequestId],
+  ['data:get_thread_by_session_id', threadBySessionId],
+  ['data:update_message', threadByMessageId],
+  ['data:find_tool_call', threadByMessageId],
+  ['data:insert_tool_call', threadByMessageId],
+  ['data:get_tool_call', { key: (data) => str(data.toolCallId), thread: threadOfToolCall }],
+  [
+    'data:update_tool_call_output',
+    { key: (_data, payload) => str(payload.toolCallId), thread: threadOfToolCall },
+  ],
+  ['data:cancel_queued_message', threadByQueuedMessageId],
+  ['data:update_queued_message', threadByQueuedMessageId],
+  ['data:watcher_update', threadByWatcherId],
+  ['data:watcher_get', threadByWatcherId],
+  ['data:job_update', threadByJobId],
+  ['data:job_get', threadByJobId],
+  ['data:resolve_pending_permission_request', threadByPermissionRequestId],
+  ['data:expire_pending_permission_request', threadByPermissionRequestId],
+]);
 
 /** Thread ids referenced (directly or indirectly) by a data request. */
 async function referencedThreadIds(data: any): Promise<string[]> {
@@ -163,99 +290,39 @@ async function referencedThreadIds(data: any): Promise<string[]> {
     (x): x is string => !!x,
   );
 
-  const type = data?.type;
-  if (type === 'data:get_thread_by_external_request_id' && str(data.externalRequestId)) {
-    const [row] = await db
-      .select({ id: schema.threads.id })
-      .from(schema.threads)
-      .where(eq(schema.threads.externalRequestId, data.externalRequestId));
-    if (row) ids.push(row.id);
-  }
-  if (type === 'data:get_thread_by_session_id' && str(data.sessionId)) {
-    const [row] = await db
-      .select({ id: schema.threads.id })
-      .from(schema.threads)
-      .where(eq(schema.threads.sessionId, data.sessionId));
-    if (row) ids.push(row.id);
-  }
-  const messageId =
-    type === 'data:update_message' ||
-    type === 'data:find_tool_call' ||
-    type === 'data:insert_tool_call'
-      ? str(payload.messageId)
-      : undefined;
-  if (messageId) {
-    const t = await firstThreadId(
-      db
-        .select({ threadId: schema.messages.threadId })
-        .from(schema.messages)
-        .where(eq(schema.messages.id, messageId)),
-    );
-    if (t) ids.push(t);
-  }
-  const toolCallId =
-    type === 'data:get_tool_call'
-      ? str(data.toolCallId)
-      : type === 'data:update_tool_call_output'
-        ? str(payload.toolCallId)
-        : undefined;
-  if (toolCallId) {
-    const t = await firstThreadId(
-      db
-        .select({ threadId: schema.messages.threadId })
-        .from(schema.toolCalls)
-        .innerJoin(schema.messages, eq(schema.messages.id, schema.toolCalls.messageId))
-        .where(eq(schema.toolCalls.id, toolCallId)),
-    );
-    if (t) ids.push(t);
-  }
-  if (
-    (type === 'data:cancel_queued_message' || type === 'data:update_queued_message') &&
-    str(data.messageId)
-  ) {
-    const t = await firstThreadId(
-      db
-        .select({ threadId: schema.messageQueue.threadId })
-        .from(schema.messageQueue)
-        .where(eq(schema.messageQueue.id, data.messageId)),
-    );
-    if (t) ids.push(t);
-  }
-  if ((type === 'data:watcher_update' || type === 'data:watcher_get') && str(payload.id)) {
-    const t = await firstThreadId(
-      db
-        .select({ threadId: schema.watchers.threadId })
-        .from(schema.watchers)
-        .where(eq(schema.watchers.id, payload.id)),
-    );
-    if (t) ids.push(t);
-  }
-  if ((type === 'data:job_update' || type === 'data:job_get') && str(payload.id)) {
-    const t = await firstThreadId(
-      db
-        .select({ threadId: schema.jobs.threadId })
-        .from(schema.jobs)
-        .where(eq(schema.jobs.id, payload.id)),
-    );
-    if (t) ids.push(t);
-  }
-  if (
-    (type === 'data:resolve_pending_permission_request' ||
-      type === 'data:expire_pending_permission_request') &&
-    str(payload.requestId)
-  ) {
-    const t = await firstThreadId(
-      db
-        .select({ threadId: schema.pendingPermissionRequests.threadId })
-        .from(schema.pendingPermissionRequests)
-        .where(eq(schema.pendingPermissionRequests.requestId, payload.requestId)),
-    );
-    if (t) ids.push(t);
+  const indirect = INDIRECT_THREAD_REFS.get(data?.type);
+  const key = indirect?.key(data, payload);
+  if (indirect && key) {
+    const threadId = await indirect.thread(key);
+    if (threadId !== undefined) ids.push(threadId);
   }
   return [...new Set(ids)];
 }
 
 export type DataScopeDecision = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Every project a request touches: explicit project ids first, then the
+ * projects of referenced threads. `projectless` = it references a scratch
+ * thread. Threads that do not exist are skipped (the ownership check handles
+ * not-found).
+ */
+async function referencedProjects(
+  data: any,
+): Promise<{ projectIds: Set<string>; projectless: boolean }> {
+  const payload = data?.payload ?? {};
+  const projectIds = new Set(
+    [str(data?.projectId), str(payload.projectId)].filter((x): x is string => !!x),
+  );
+  let projectless = false;
+  for (const threadId of await referencedThreadIds(data)) {
+    const projectId = await projectOfThread(threadId);
+    if (projectId === undefined) continue;
+    if (projectId === null) projectless = true;
+    else projectIds.add(projectId);
+  }
+  return { projectIds, projectless };
+}
 
 /**
  * Decide whether `runnerId` may perform `data` with respect to project scope.
@@ -280,18 +347,7 @@ export async function assertRunnerDataScope(
         };
   }
 
-  const payload = data?.payload ?? {};
-  const projectIds = new Set(
-    [str(data?.projectId), str(payload.projectId)].filter((x): x is string => !!x),
-  );
-  let projectless = false;
-  for (const threadId of await referencedThreadIds(data)) {
-    const projectId = await projectOfThread(threadId);
-    if (projectId === undefined) continue; // not-found is handled by the ownership check
-    if (projectId === null) projectless = true;
-    else projectIds.add(projectId);
-  }
-
+  const { projectIds, projectless } = await referencedProjects(data);
   for (const projectId of projectIds) {
     if (!(await canRunnerAccessProject(runnerId, projectId))) {
       return { ok: false, reason: `project ${projectId} outside runner scope` };

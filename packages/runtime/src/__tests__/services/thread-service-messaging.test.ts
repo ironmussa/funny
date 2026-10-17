@@ -873,6 +873,47 @@ describe('sendMessage — queue and interactive tool flows', () => {
     );
   });
 
+  test('runs in autoEdit after ExitPlanMode approval even if persisting the upgrade fails', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-waiting',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'waiting',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'plan',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+    mocks.tm.findLastUnansweredInteractiveToolCall.mockResolvedValue({
+      id: 'tc-plan',
+      name: 'ExitPlanMode',
+    });
+    mocks.tm.updateThread.mockImplementation(async (...args: unknown[]) => {
+      const updates = args[1] as { permissionMode?: string } | undefined;
+      if (updates?.permissionMode === 'autoEdit') throw new Error('db down');
+      return undefined;
+    });
+
+    let result;
+    try {
+      result = await sendMessage({
+        threadId: 't-waiting',
+        userId: 'u-1',
+        content: 'Approved plan',
+        permissionMode: 'plan',
+      });
+    } finally {
+      mocks.tm.updateThread.mockImplementation(async () => undefined);
+    }
+
+    expect(result.isOk()).toBe(true);
+    const call = vi.mocked(startAgent).mock.calls.at(-1) as unknown[] | undefined;
+    expect(call?.[4]).toBe('autoEdit');
+    expect(call?.[10]).toBe(true); // message already persisted
+  });
+
   test('clears sessionId when provider changes mid-thread', async () => {
     mocks.tm.getThread.mockResolvedValue({
       id: 't-completed',

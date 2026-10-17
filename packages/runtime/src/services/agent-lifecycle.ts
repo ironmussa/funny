@@ -10,12 +10,15 @@
  * memory injection, and process adoption across hot-reloads.
  */
 
-import { mkdirSync } from 'node:fs';
-
 import type { AgentOrchestrator } from '@funny/core/agents';
 import { reapOrphanedAgents, resolvePermissionApprovalCapability } from '@funny/core/agents';
-import { syncClaudeProjectAssets } from '@funny/core/ports';
-import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
+import type {
+  AgentProvider,
+  AgentModel,
+  PermissionMode,
+  Thread,
+  ThreadStatus,
+} from '@funny/shared';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
 
@@ -23,16 +26,72 @@ import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
 import { stripInlineReferencedContent } from '../utils/file-mentions.js';
 import type { AgentEventRouter } from './agent-event-router.js';
+import { buildAgentEnv } from './agent-startup/agent-env.js';
+import {
+  resolveActiveAgentProfile,
+  type ActiveAgentProfile,
+} from './agent-startup/agent-profile.js';
+import { resolveAgentTooling } from './agent-startup/agent-tooling.js';
 import { shouldForceColdPathRecovery } from './agent-startup/cold-path-guard.js';
-import { loadProjectMcpServers } from './agent-startup/load-mcp-servers.js';
+import {
+  buildBypassExecutor,
+  buildPermissionRuleLookup,
+} from './agent-startup/permission-hooks.js';
+import { ensureLazyCwd, syncWorktreeProjectAssets } from './agent-startup/prepare-workspace.js';
 import { recoverThreadContext } from './agent-startup/recover-context.js';
+import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { captureCodexCheckpoint } from './codex-git-checkpoints.js';
-import type { IThreadManager } from './server-interfaces.js';
+import type { IThreadManager, RuntimeThreadRecord } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
-import { resolveThreadCwd, tmpAssetsPathFor } from './thread-context.js';
+import { canDoGitOps, hasLazyCwd, resolveThreadCwd, tmpAssetsPathFor } from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
+
+type StartProject = Awaited<ReturnType<ReturnType<typeof getServices>['projects']['getProject']>>;
+
+type ResumeReason = Parameters<typeof getResumeSystemPrefix>[0];
+
+interface StartContext {
+  thread: RuntimeThreadRecord | undefined;
+  project: StartProject;
+  effectivePrompt: string;
+  effectiveSessionId: string | undefined;
+  needsRecovery: boolean;
+  isPostMerge: boolean;
+  resumePrefix: string | undefined;
+  projectSystemPrompt: string | undefined;
+}
+
+/** Project-level run flags forwarded to the orchestrator. */
+function projectRunFlags(project: StartProject): { fastMode: boolean; steerable: boolean } {
+  return {
+    fastMode: project?.fastMode ?? false,
+    steerable: project?.followUpMode === 'steer',
+  };
+}
+
+function logResumeContext(info: {
+  threadId: string;
+  newStatus: ThreadStatus;
+  resumeReason: ResumeReason | undefined;
+  ctx: StartContext;
+  systemPrefix: string | undefined;
+}): void {
+  const { ctx, systemPrefix } = info;
+  log.info('startAgent resume context', {
+    namespace: 'agent',
+    threadId: info.threadId,
+    newStatus: info.newStatus,
+    resumeReason: info.resumeReason ?? 'none',
+    isResume: !!ctx.effectiveSessionId,
+    isPostMerge: ctx.isPostMerge,
+    needsRecovery: ctx.needsRecovery,
+    effectiveSessionId: ctx.effectiveSessionId ?? 'none',
+    dbSessionId: ctx.thread?.sessionId ?? 'none',
+    systemPrefixPreview: systemPrefix ? systemPrefix.slice(0, 80) : 'none',
+  });
+}
 
 export class AgentLifecycleManager {
   private runSpans = new Map<string, ReturnType<typeof startSpan>>();
@@ -131,6 +190,161 @@ export class AgentLifecycleManager {
     // Clear stale DB-mapping state from previous runs
     this.state.clearRunState(threadId);
 
+    const { currentThread, newStatus, resumeReason } = await this.transitionToRunning(
+      threadId,
+      provider,
+    );
+    const ownerId = currentThread?.userId;
+
+    // Save user message in DB (skip when a draft message already exists).
+    // The `prompt` we receive here is the agent-ready prompt (with file/symbol
+    // contents inlined when references were used). Persist a path-only version
+    // so the UI renders chips instead of dumping the full source files.
+    if (!skipMessageInsert) {
+      await this.threadManager.insertMessage({
+        threadId,
+        role: 'user',
+        content: stripInlineReferencedContent(prompt),
+        images: images ? JSON.stringify(images) : null,
+        model,
+        permissionMode,
+        effort,
+      });
+    }
+
+    await this.guardColdPathSession(threadId, currentThread, provider);
+
+    const ctx = await this.loadStartContext(threadId, prompt, resumeReason);
+    const { thread, project } = ctx;
+
+    // Centralized cwd resolution — covers scratch / worktree / normal threads.
+    // The caller passes a best-effort cwd, but `resolveThreadCwd` is the source
+    // of truth (see scratch-threads design D3).
+    if (thread) {
+      const resolvedCwd = await this.resolveCwdOrFail(threadId, thread, project);
+      if (resolvedCwd === null) return;
+      cwd = resolvedCwd;
+      await this.prepareWorkspace(threadId, thread, project, cwd, provider);
+    }
+
+    const activeAgentProfile = await resolveActiveAgentProfile(thread, provider);
+    const tooling = await resolveAgentTooling({
+      threadId,
+      thread,
+      projectPath: project?.path,
+      provider,
+      mcpServers,
+      disallowedTools,
+      claudeConfigDir: activeAgentProfile.env.CLAUDE_CONFIG_DIR,
+    });
+
+    // Per-user browser-previewable assets dir. Computed here so we can tell the
+    // agent about it in the system prefix; the directory itself is created
+    // (0700) and exported as FUNNY_ASSETS_DIR by buildAgentEnv below.
+    const userId = thread?.userId;
+    const assetsDir = userId ? tmpAssetsPathFor(userId) : undefined;
+
+    const systemPrefix = buildSystemPrefix({
+      // For Deep Agent templates, add template prompt before project prompt
+      templateSystemPrompt: thread?.agentTemplateId ? tooling.systemPrompt : undefined,
+      projectSystemPrompt: ctx.projectSystemPrompt,
+      assetsDir,
+      resumePrefix: ctx.resumePrefix,
+    });
+
+    logResumeContext({ threadId, newStatus, resumeReason, ctx, systemPrefix });
+
+    this.emitRunningStatus(threadId, ownerId, provider);
+    this.beginRunSpan(threadId, model, provider, permissionMode);
+
+    // Resolve per-user API keys and git identity for agent subprocesses.
+    const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
+    const agentEnv = await this.applyAgentProfile(threadId, activeAgentProfile, baseEnv);
+
+    await this.launchAgent(
+      {
+        threadId,
+        prompt: ctx.effectivePrompt,
+        cwd,
+        model,
+        permissionMode,
+        images,
+        disallowedTools: tooling.disallowedTools,
+        allowedTools,
+        provider,
+        sessionId: ctx.effectiveSessionId,
+        systemPrefix,
+        mcpServers: tooling.mcpServers,
+        env: agentEnv,
+        effort,
+        ...projectRunFlags(project),
+        steer: !!steer,
+        builtinSkillsDisabled: tooling.builtinSkillsDisabled,
+        customSkillPaths: tooling.customSkillPaths,
+        agentName: tooling.agentName,
+        permissionRuleLookup: buildPermissionRuleLookup(
+          threadId,
+          userId,
+          thread?.worktreePath ?? cwd,
+        ),
+        bypassExecutor: buildBypassExecutor(cwd),
+      },
+      thread,
+      ownerId,
+    );
+  }
+
+  // ── Start phases ───────────────────────────────────────────────
+
+  /**
+   * Re-read the thread (for the session ID to resume), recover context and
+   * inject the project-level system prompt.
+   */
+  private async loadStartContext(
+    threadId: string,
+    prompt: string,
+    resumeReason: ResumeReason,
+  ): Promise<StartContext> {
+    // Read session ID from DB for resume
+    const thread = await this.threadManager.getThread(threadId);
+
+    // Context recovery (post-merge or model/provider change)
+    const recovered = await recoverThreadContext({
+      threadId,
+      prompt,
+      thread,
+      threadManager: this.threadManager,
+    });
+
+    // Derive system prefix from the machine's resumeReason
+    const isPostMerge = !!thread?.mergedAt;
+    const resumePrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
+
+    // Inject project-level system prompt
+    const project = thread?.projectId
+      ? await getServices().projects.getProject(thread.projectId)
+      : undefined;
+    const projectSystemPrompt = project?.systemPrompt;
+
+    let effectivePrompt = recovered.effectivePrompt;
+    if (projectSystemPrompt && !recovered.effectiveSessionId) {
+      effectivePrompt = `${projectInstructionsBlock(projectSystemPrompt)}\n\n${effectivePrompt}`;
+    }
+
+    return {
+      thread,
+      project,
+      effectivePrompt,
+      effectiveSessionId: recovered.effectiveSessionId,
+      needsRecovery: recovered.needsRecovery,
+      isPostMerge,
+      resumePrefix,
+      projectSystemPrompt,
+    };
+  }
+
+  /** Drive the thread status machine to its running state and persist it. */
+  private async transitionToRunning(threadId: string, provider: AgentProvider) {
     // Transition the thread status via the state machine
     const currentThread = await this.threadManager.getThread(threadId);
 
@@ -163,328 +377,153 @@ export class AgentLifecycleManager {
       completedAt: null,
     });
 
-    // Save user message in DB (skip when a draft message already exists).
-    // The `prompt` we receive here is the agent-ready prompt (with file/symbol
-    // contents inlined when references were used). Persist a path-only version
-    // so the UI renders chips instead of dumping the full source files.
-    if (!skipMessageInsert) {
-      await this.threadManager.insertMessage({
-        threadId,
-        role: 'user',
-        content: stripInlineReferencedContent(prompt),
-        images: images ? JSON.stringify(images) : null,
-        model,
-        permissionMode,
-        effort,
-      });
-    }
+    return { currentThread, newStatus, resumeReason };
+  }
 
-    // Cold-path session protection: if the thread has a persisted sessionId
-    // but the agent process for it is gone (server restart, crash, manual
-    // stop, watcher reload), force context recovery instead of letting ACP
-    // providers attempt `session/load`. Those providers can stream conversation
-    // history back as fire-and-forget notifications that race with the
-    // loadSession response promise; the late notifications
-    // get translated as new session updates and duplicate every prior
-    // assistant message and tool call in the DB. Rebuilding the prompt from
-    // DB-side context (via `recoverThreadContext` below) gives the agent
-    // equivalent continuity without triggering the replay race.
-    //
-    // The Claude and Pi SDK integrations resume without that race, so they are
-    // exempted — forcing recovery there invalidates the prompt cache on
-    // every follow-up and regenerates ~25k tokens of cache_creation per turn.
-    if (
-      shouldForceColdPathRecovery({
-        thread: currentThread,
-        isRunning: this.orchestrator.isRunning(threadId),
-        provider,
-      })
-    ) {
-      log.info('Cold-path session: forcing recovery to avoid loadSession replay race', {
-        namespace: 'agent',
-        threadId,
-        sessionId: currentThread!.sessionId,
-        provider,
-      });
-      await this.threadManager.updateThread(threadId, {
-        contextRecoveryReason: 'process_lost',
-      });
-    }
-
-    // Read session ID from DB for resume
-    const thread = await this.threadManager.getThread(threadId);
-
-    // Context recovery (post-merge or model/provider change)
-    let { effectivePrompt, effectiveSessionId, needsRecovery } = await recoverThreadContext({
-      threadId,
-      prompt,
-      thread,
-      threadManager: this.threadManager,
+  /**
+   * Cold-path session protection: if the thread has a persisted sessionId
+   * but the agent process for it is gone (server restart, crash, manual
+   * stop, watcher reload), force context recovery instead of letting ACP
+   * providers attempt `session/load`. Those providers can stream conversation
+   * history back as fire-and-forget notifications that race with the
+   * loadSession response promise; the late notifications
+   * get translated as new session updates and duplicate every prior
+   * assistant message and tool call in the DB. Rebuilding the prompt from
+   * DB-side context (via `recoverThreadContext`) gives the agent
+   * equivalent continuity without triggering the replay race.
+   *
+   * The Claude and Pi SDK integrations resume without that race, so they are
+   * exempted — forcing recovery there invalidates the prompt cache on
+   * every follow-up and regenerates ~25k tokens of cache_creation per turn.
+   */
+  private async guardColdPathSession(
+    threadId: string,
+    currentThread: RuntimeThreadRecord | undefined,
+    provider: AgentProvider,
+  ): Promise<void> {
+    const forceRecovery = shouldForceColdPathRecovery({
+      thread: currentThread,
+      isRunning: this.orchestrator.isRunning(threadId),
+      provider,
     });
+    if (!forceRecovery) return;
 
-    // Derive system prefix from the machine's resumeReason
-    const isPostMerge = !!thread?.mergedAt;
-    const resumePrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
+    log.info('Cold-path session: forcing recovery to avoid loadSession replay race', {
+      namespace: 'agent',
+      threadId,
+      sessionId: currentThread!.sessionId,
+      provider,
+    });
+    await this.threadManager.updateThread(threadId, {
+      contextRecoveryReason: 'process_lost',
+    });
+  }
 
-    // Inject project-level system prompt
-    const project = thread?.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : undefined;
-    const projectSystemPrompt = project?.systemPrompt;
+  /** Mark the thread failed and notify its owner. */
+  private async failStart(
+    threadId: string,
+    userId: string | undefined,
+    error: string,
+  ): Promise<void> {
+    await this.threadManager.updateThread(threadId, {
+      status: 'failed',
+      completedAt: new Date().toISOString(),
+    });
+    this.eventRouter.emitWSToUser(threadId, userId, 'agent:error', { error });
+    this.eventRouter.emitWSToUser(threadId, userId, 'agent:status', { status: 'failed' });
+  }
 
-    if (projectSystemPrompt && !effectiveSessionId) {
-      effectivePrompt = `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]\n\n${effectivePrompt}`;
-    }
+  /** Resolve the thread cwd; on failure marks the thread failed and returns null. */
+  private async resolveCwdOrFail(
+    threadId: string,
+    thread: RuntimeThreadRecord,
+    project: StartProject,
+  ): Promise<string | null> {
+    const cwdResult = resolveThreadCwd(
+      thread as unknown as Thread,
+      project ? { path: project.path } : null,
+    );
+    if (cwdResult.isOk()) return cwdResult.value;
 
-    // Centralized cwd resolution — covers scratch / worktree / normal threads.
-    // The caller passes a best-effort cwd, but `resolveThreadCwd` is the source
-    // of truth (see scratch-threads design D3).
-    if (thread) {
-      const cwdResult = resolveThreadCwd(
-        thread as unknown as import('@funny/shared').Thread,
-        project ? { path: project.path } : null,
-      );
-      if (cwdResult.isErr()) {
-        const errInfo = cwdResult.error;
-        log.error('Failed to resolve thread cwd', {
-          namespace: 'scratch-threads',
-          threadId,
-          kind: errInfo.kind,
-          message: errInfo.message,
-        });
-        await this.threadManager.updateThread(threadId, {
-          status: 'failed',
-          completedAt: new Date().toISOString(),
-        });
-        this.eventRouter.emitWSToUser(threadId, thread.userId, 'agent:error', {
-          error: errInfo.message,
-        });
-        this.eventRouter.emitWSToUser(threadId, thread.userId, 'agent:status', {
-          status: 'failed',
-        });
-        return;
-      }
-      cwd = cwdResult.value;
-    }
+    const errInfo = cwdResult.error;
+    log.error('Failed to resolve thread cwd', {
+      namespace: 'scratch-threads',
+      threadId,
+      kind: errInfo.kind,
+      message: errInfo.message,
+    });
+    await this.failStart(threadId, thread.userId, errInfo.message);
+    return null;
+  }
 
-    if (thread?.mode === 'worktree' && project?.path && cwd !== project.path) {
-      try {
-        syncClaudeProjectAssets(project.path, cwd);
-      } catch (err) {
-        log.warn('Failed to sync Claude project assets into worktree', {
-          namespace: 'agent',
-          threadId,
-          projectPath: project.path,
-          worktreePath: cwd,
-          error: (err as Error).message,
-        });
-      }
+  /** Get the working directory ready before the agent touches it. */
+  private async prepareWorkspace(
+    threadId: string,
+    thread: RuntimeThreadRecord,
+    project: StartProject,
+    cwd: string,
+    provider: AgentProvider,
+  ): Promise<void> {
+    const variant = thread as unknown as Thread;
+    if (thread.mode === 'worktree' && project?.path && cwd !== project.path) {
+      syncWorktreeProjectAssets(threadId, project.path, cwd);
     }
 
     // Ensure the scratch directory exists on disk before the agent starts.
-    if (thread?.isScratch) {
-      try {
-        mkdirSync(cwd, { recursive: true });
-        log.info('Scratch directory ready', {
-          namespace: 'scratch-threads',
-          threadId,
-          userId: thread.userId,
-          cwd,
-        });
-      } catch (mkErr) {
-        log.error('Failed to create scratch directory', {
-          namespace: 'scratch-threads',
-          threadId,
-          cwd,
-          error: (mkErr as Error).message,
-        });
-        throw mkErr;
-      }
+    if (hasLazyCwd(variant)) {
+      ensureLazyCwd(threadId, thread.userId, cwd);
     }
 
     // Codex has no native rewind API. Capture a Git snapshot for the latest
-    // user message immediately before it can modify the worktree. A failed
-    // capture must not block the agent; it simply keeps rewind disabled.
-    if (provider === 'codex' && thread && !thread.isScratch) {
-      try {
-        const detail = await this.threadManager.getThreadWithMessages(threadId);
-        const latestUserMessage = detail?.messages
-          ?.slice()
-          .reverse()
-          .find((message: any) => message.role === 'user');
-        if (!latestUserMessage?.id) {
-          throw new Error('No user message is available for checkpointing');
-        }
-        await captureCodexCheckpoint({ threadId, messageId: latestUserMessage.id, cwd });
-        await this.threadManager.updateThread(threadId, { fileCheckpointingEnabled: 1 });
-      } catch (err) {
-        await this.threadManager.updateThread(threadId, { fileCheckpointingEnabled: 0 });
-        log.warn('Failed to capture Codex Git checkpoint; rewind remains disabled', {
-          namespace: 'agent',
-          threadId,
-          cwd,
-          error: (err as Error).message,
-        });
-      }
+    // user message immediately before it can modify the worktree.
+    if (provider === 'codex' && canDoGitOps(variant)) {
+      await this.captureCodexRewindCheckpoint(threadId, cwd);
     }
+  }
 
-    const resolvedAgentProfile =
-      thread?.projectId && thread?.userId
-        ? await getServices().agentProfiles.resolveEffectiveProfile(thread.projectId, thread.userId)
-        : { profile: null, env: {} };
-    const activeAgentProfile =
-      resolvedAgentProfile.profile && resolvedAgentProfile.profile.provider === provider
-        ? resolvedAgentProfile
-        : { profile: null, env: {} };
-
-    // Load project MCP servers when none were explicitly provided.
-    // For scratch threads there is no project — skip MCP project context.
-    if (!mcpServers && project?.path) {
-      mcpServers = await loadProjectMcpServers(threadId, project.path, provider, {
-        claudeConfigDir: activeAgentProfile.env.CLAUDE_CONFIG_DIR,
+  /** A failed capture must not block the agent; it simply keeps rewind disabled. */
+  private async captureCodexRewindCheckpoint(threadId: string, cwd: string): Promise<void> {
+    try {
+      const detail = await this.threadManager.getThreadWithMessages(threadId);
+      const latestUserMessage = detail?.messages
+        ?.slice()
+        .reverse()
+        .find((message: any) => message.role === 'user');
+      if (!latestUserMessage?.id) {
+        throw new Error('No user message is available for checkpointing');
+      }
+      await captureCodexCheckpoint({ threadId, messageId: latestUserMessage.id, cwd });
+      await this.threadManager.updateThread(threadId, { fileCheckpointingEnabled: 1 });
+    } catch (err) {
+      await this.threadManager.updateThread(threadId, { fileCheckpointingEnabled: 0 });
+      log.warn('Failed to capture Codex Git checkpoint; rewind remains disabled', {
+        namespace: 'agent',
+        threadId,
+        cwd,
+        error: (err as Error).message,
       });
     }
+  }
 
-    // Resolve agent template (Deep Agent only)
-    let templateSystemPrompt: string | undefined;
-    let tplBuiltinSkillsDisabled: string[] | undefined;
-    let tplCustomSkillPaths: string[] | undefined;
-    let tplAgentName: string | undefined;
-    if (thread?.agentTemplateId && provider === 'deepagent') {
-      try {
-        // Check builtin templates first (no remote call needed)
-        const { BUILTIN_AGENT_TEMPLATES } = await import('@funny/shared');
-        const builtinTpl = BUILTIN_AGENT_TEMPLATES.find(
-          (t: { id: string }) => t.id === thread.agentTemplateId,
-        );
-        const { remoteGetAgentTemplate } = await import('./remote-thread-data-client.js');
-        const tpl = builtinTpl ?? (await remoteGetAgentTemplate(thread.agentTemplateId));
-        if (tpl) {
-          // Helper to parse JSON text columns that may already be parsed
-          const parseJsonCol = <T>(val: unknown): T[] =>
-            val ? ((typeof val === 'string' ? JSON.parse(val) : val) as T[]) : [];
-
-          const tplDisallowed = parseJsonCol<string>(tpl.disallowedTools);
-          const tplMcpServers = parseJsonCol<any>(tpl.mcpServers);
-
-          // Merge template disallowed tools
-          if (tplDisallowed.length > 0) {
-            disallowedTools = [...(disallowedTools ?? []), ...tplDisallowed];
-          }
-
-          // Merge template MCP servers (additive)
-          if (tplMcpServers.length > 0) {
-            mcpServers = { ...(mcpServers ?? {}) };
-            for (const srv of tplMcpServers) {
-              mcpServers[srv.name] = srv;
-            }
-          }
-
-          // Template system prompt (mode: replace | prepend | append)
-          if (tpl.systemPrompt) {
-            let resolvedPrompt = tpl.systemPrompt;
-
-            // Interpolate template variables: replace {{VAR_NAME}} with values
-            const rawVars = thread.templateVariables;
-            const varValues: Record<string, string> =
-              typeof rawVars === 'string'
-                ? JSON.parse(rawVars)
-                : rawVars && typeof rawVars === 'object'
-                  ? rawVars
-                  : {};
-            if (Object.keys(varValues).length > 0) {
-              resolvedPrompt = resolvedPrompt.replace(
-                /\{\{(\w+)\}\}/g,
-                (match: string, name: string) => varValues[name] ?? match,
-              );
-            }
-            templateSystemPrompt = resolvedPrompt;
-            // prepend/append are handled below in systemPrefix assembly
-          }
-
-          // Phase 2: Parse remaining template fields for runtime wiring
-          tplBuiltinSkillsDisabled = parseJsonCol<string>(tpl.builtinSkillsDisabled);
-          tplCustomSkillPaths = parseJsonCol<string>(tpl.customSkillPaths);
-          tplAgentName = tpl.agentName ?? undefined;
-
-          log.info('Agent template resolved', {
-            namespace: 'agent',
-            threadId,
-            templateId: tpl.id,
-            templateName: tpl.name,
-            systemPromptMode: tpl.systemPromptMode,
-            disallowedToolsCount: tplDisallowed.length,
-            mcpServersCount: tplMcpServers.length,
-            builtinSkillsDisabled: tplBuiltinSkillsDisabled,
-            customSkillPaths: tplCustomSkillPaths?.length ?? 0,
-            agentName: tplAgentName,
-          });
-        }
-      } catch (err) {
-        log.warn('Failed to resolve agent template', {
-          namespace: 'agent',
-          threadId,
-          templateId: thread.agentTemplateId,
-          error: (err as Error).message,
-        });
-      }
-    }
-
-    // Inject the always-present funny_watch tool (deferred-wake "snooze") on
-    // EVERY spawn. In-process MCP so the handler runs here with the spawn's
-    // threadId/userId. Server name `funny` → tool `mcp__funny__funny_watch`,
-    // auto-allowed by the `mcp__funny__*` wildcard in sdk-claude.
-    if (thread?.userId) {
-      const { buildWatchMcpServer } = await import('./agent-watch-tool.js');
-      mcpServers = {
-        ...(mcpServers ?? {}),
-        funny: buildWatchMcpServer(threadId, thread.userId),
-      };
-    }
-
-    // Per-user browser-previewable assets dir. Computed here so we can tell the
-    // agent about it in the system prefix; the directory itself is created
-    // (0700) and exported as FUNNY_ASSETS_DIR in the agentEnv block below.
-    const assetsDir = thread?.userId ? tmpAssetsPathFor(thread.userId) : undefined;
-
-    const systemPrefix =
-      [
-        // For Deep Agent templates with 'prepend' mode, add template prompt before project prompt
-        templateSystemPrompt && thread?.agentTemplateId
-          ? `[AGENT TEMPLATE]\n${templateSystemPrompt}\n[/AGENT TEMPLATE]`
-          : undefined,
-        projectSystemPrompt
-          ? `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]`
-          : undefined,
-        assetsDir
-          ? `[PREVIEWABLE ASSETS]\nWrite any images, videos, or other media you want the user to preview inline to ${assetsDir} (also available as the $FUNNY_ASSETS_DIR environment variable). Files there are served to the UI for inline preview even though they live outside the project tree. Reference them in your replies by their absolute path.\n[/PREVIEWABLE ASSETS]`
-          : undefined,
-        resumePrefix,
-      ]
-        .filter(Boolean)
-        .join('\n\n') || undefined;
-
-    log.info('startAgent resume context', {
-      namespace: 'agent',
-      threadId,
-      newStatus,
-      resumeReason: resumeReason ?? 'none',
-      isResume: !!effectiveSessionId,
-      isPostMerge,
-      needsRecovery,
-      effectiveSessionId: effectiveSessionId ?? 'none',
-      dbSessionId: thread?.sessionId ?? 'none',
-      systemPrefixPreview: systemPrefix ? systemPrefix.slice(0, 80) : 'none',
-    });
-
-    this.eventRouter.emitWSToUser(threadId, currentThread?.userId, 'agent:status', {
+  private emitRunningStatus(
+    threadId: string,
+    userId: string | undefined,
+    provider: AgentProvider,
+  ): void {
+    const permissionApprovalCapability = resolvePermissionApprovalCapability(provider);
+    this.eventRouter.emitWSToUser(threadId, userId, 'agent:status', {
       status: 'running',
-      ...(resolvePermissionApprovalCapability(provider)
-        ? { permissionApprovalCapability: resolvePermissionApprovalCapability(provider) }
-        : {}),
+      ...(permissionApprovalCapability ? { permissionApprovalCapability } : {}),
     });
+  }
 
-    // Start a trace span for the entire agent run
+  /** Start a trace span for the entire agent run. */
+  private beginRunSpan(
+    threadId: string,
+    model: AgentModel,
+    provider: AgentProvider,
+    permissionMode: PermissionMode,
+  ): void {
     const runSpan = startSpan('agent.run', {
       attributes: { threadId, model, provider, permissionMode },
     });
@@ -492,138 +531,40 @@ export class AgentLifecycleManager {
     setThreadTrace(threadId, { traceId: runSpan.traceId, spanId: runSpan.spanId });
     metric('agents.running', this.runSpans.size, { type: 'gauge' });
     metric('threads.started', 1, { type: 'sum', attributes: { model, provider } });
+  }
 
-    // Resolve per-user API keys and git identity for agent subprocesses.
-    let agentEnv: Record<string, string> | undefined;
-    if (thread?.userId) {
-      const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');
-      const relevantKeys = PROVIDER_KEY_REGISTRY.filter(
-        (k) => k.envVar && k.requiredByProviders?.includes(provider),
-      );
-      for (const keyConfig of relevantKeys) {
-        const keyValue = await getServices().profile.getProviderKey(thread.userId, keyConfig.id);
-        if (keyValue && keyConfig.envVar) {
-          agentEnv ??= {};
-          agentEnv[keyConfig.envVar] = keyValue;
-        }
-      }
-
-      const gitIdentity = await getServices().profile.getGitIdentity(thread.userId);
-      if (gitIdentity) {
-        agentEnv ??= {};
-        agentEnv.GIT_AUTHOR_NAME = gitIdentity.name;
-        agentEnv.GIT_AUTHOR_EMAIL = gitIdentity.email;
-        agentEnv.GIT_COMMITTER_NAME = gitIdentity.name;
-        agentEnv.GIT_COMMITTER_EMAIL = gitIdentity.email;
-      }
-
-      // Per-user temp assets dir — a browser-previewable scratch space OUTSIDE
-      // the project tree for dev assets the agent generates (screenshots,
-      // renders, clips). Authorized for media serving by resolveProjectScope
-      // (routes/files.ts) and announced to the agent in systemPrefix above.
-      // Created 0700 because the OS tmpdir parent is world-writable; reads stay
-      // gated by the realpath/scope re-check.
-      if (assetsDir) {
-        try {
-          mkdirSync(assetsDir, { recursive: true, mode: 0o700 });
-          agentEnv ??= {};
-          agentEnv.FUNNY_ASSETS_DIR = assetsDir;
-        } catch (assetsErr) {
-          log.warn('Failed to prepare per-user assets dir', {
-            namespace: 'media',
-            threadId,
-            userId: thread.userId,
-            error: (assetsErr as Error).message,
-          });
-        }
-      }
-    }
-
-    if (activeAgentProfile.profile) {
-      agentEnv = { ...(agentEnv ?? {}), ...activeAgentProfile.env };
-      await this.threadManager.updateThread(threadId, {
-        agentProfileId: activeAgentProfile.profile.id,
-        agentProfileName: activeAgentProfile.profile.name,
-        agentProfileProvider: activeAgentProfile.profile.provider,
-      });
-    } else {
+  /** Merge the active agent profile env and record (or clear) it on the thread. */
+  private async applyAgentProfile(
+    threadId: string,
+    activeAgentProfile: ActiveAgentProfile,
+    agentEnv: Record<string, string> | undefined,
+  ): Promise<Record<string, string> | undefined> {
+    const { profile } = activeAgentProfile;
+    if (!profile) {
       await this.threadManager.updateThread(threadId, {
         agentProfileId: null,
         agentProfileName: null,
         agentProfileProvider: null,
       });
+      return agentEnv;
     }
+    await this.threadManager.updateThread(threadId, {
+      agentProfileId: profile.id,
+      agentProfileName: profile.name,
+      agentProfileProvider: profile.provider,
+    });
+    return { ...(agentEnv ?? {}), ...activeAgentProfile.env };
+  }
 
-    // Build a permission rule lookup bound to this thread's user + project.
-    // The hook in core uses it to short-circuit prompts on persisted
-    // "always allow / always deny" decisions. Returns null on transport
-    // failure so the hook falls through to the interactive prompt.
-    const ruleLookupUserId = thread?.userId;
-    const ruleLookupProjectPath = thread?.worktreePath ?? cwd;
-    const permissionRuleLookup = ruleLookupUserId
-      ? async (query: { toolName: string; toolInput?: string }) => {
-          try {
-            const { findPermissionRule } = await import('./permission-rules-client.js');
-            const rule = await findPermissionRule({
-              userId: ruleLookupUserId,
-              projectPath: ruleLookupProjectPath,
-              toolName: query.toolName,
-              toolInput: query.toolInput,
-            });
-            if (!rule) return null;
-            return { decision: rule.decision };
-          } catch (err) {
-            log.warn('permissionRuleLookup failed', {
-              namespace: 'agent',
-              threadId,
-              toolName: query.toolName,
-              error: (err as Error)?.message,
-            });
-            return null;
-          }
-        }
-      : undefined;
-
-    // Bypass executor for sensitive-path operations (e.g. ~/.claude/) when
-    // the user has saved an "always allow" rule. Performs the file/bash
-    // operation directly and returns the synthetic tool_result text the
-    // hook surfaces — the SDK's hardcoded sensitive-path block ignores the
-    // hook's allow decision, so we have to do the work ourselves.
-    const bypassExecutor = async (query: {
-      toolName: string;
-      toolInput: unknown;
-      cwd?: string;
-    }) => {
-      const { runSensitivePathBypass } = await import('./sensitive-path-bypass.js');
-      return runSensitivePathBypass({ ...query, cwd: query.cwd ?? cwd });
-    };
-
-    // Delegate lifecycle to orchestrator
+  /** Delegate the process lifecycle to the orchestrator. */
+  private async launchAgent(
+    options: Parameters<AgentOrchestrator['startAgent']>[0],
+    thread: RuntimeThreadRecord | undefined,
+    ownerId: string | undefined,
+  ): Promise<void> {
+    const { threadId, provider, cwd, model } = options;
     try {
-      await this.orchestrator.startAgent({
-        threadId,
-        prompt: effectivePrompt,
-        cwd,
-        model,
-        permissionMode,
-        images,
-        disallowedTools,
-        allowedTools,
-        provider,
-        sessionId: effectiveSessionId,
-        systemPrefix,
-        mcpServers,
-        env: agentEnv,
-        effort,
-        fastMode: project?.fastMode ?? false,
-        steerable: project?.followUpMode === 'steer',
-        steer: steer ?? false,
-        builtinSkillsDisabled: tplBuiltinSkillsDisabled,
-        customSkillPaths: tplCustomSkillPaths,
-        agentName: tplAgentName,
-        permissionRuleLookup,
-        bypassExecutor,
-      });
+      await this.orchestrator.startAgent(options);
 
       threadEventBus.emit('agent:started', {
         threadId,
@@ -641,16 +582,11 @@ export class AgentLifecycleManager {
         threadId,
         error: err.message,
       });
-      await this.threadManager.updateThread(threadId, {
-        status: 'failed',
-        completedAt: new Date().toISOString(),
-      });
-      this.eventRouter.emitWSToUser(threadId, currentThread?.userId, 'agent:error', {
-        error: err.message || `Failed to start ${provider} agent process`,
-      });
-      this.eventRouter.emitWSToUser(threadId, currentThread?.userId, 'agent:status', {
-        status: 'failed',
-      });
+      await this.failStart(
+        threadId,
+        ownerId,
+        err.message || `Failed to start ${provider} agent process`,
+      );
       throw err;
     }
   }

@@ -25,10 +25,10 @@ packages/orchestrator/src/adapters/http-client.ts	#1	return JSON.parse(text) as 
 packages/runtime/src/pipelines/yaml-compiler.ts	#1	return JSON.parse(fenced[1]);	direct JSON.parse without boundary parser helper
 packages/runtime/src/pipelines/yaml-compiler.ts	#1	return JSON.parse(text.slice(start, i + 1));	direct JSON.parse without boundary parser helper
 packages/runtime/src/routes/mcp.ts	#1	const status = JSON.parse(el.textContent || '{}');	direct JSON.parse without boundary parser helper
-packages/runtime/src/services/agent-lifecycle.ts	#1	? JSON.parse(rawVars)	direct JSON.parse without boundary parser helper
-packages/runtime/src/services/agent-lifecycle.ts	#1	val ? ((typeof val === 'string' ? JSON.parse(val) : val) as T[]) : [];	direct JSON.parse without boundary parser helper
 packages/runtime/src/services/agent-message-handler.ts	#1	parsedInput = tc.input ? JSON.parse(tc.input) : undefined;	direct JSON.parse without boundary parser helper
 packages/runtime/src/services/agent-message-handler.ts	#1	tools: thread?.initTools ? (JSON.parse(thread.initTools) as string[]) : [],	direct JSON.parse without boundary parser helper
+packages/runtime/src/services/agent-startup/resolve-agent-template.ts	#1	if (typeof rawVars === 'string') return JSON.parse(rawVars);	direct JSON.parse without boundary parser helper
+packages/runtime/src/services/agent-startup/resolve-agent-template.ts	#1	return val ? ((typeof val === 'string' ? JSON.parse(val) : val) as T[]) : [];	direct JSON.parse without boundary parser helper
 packages/runtime/src/services/handlers/agent-completed-queue-handler.ts	#1	dequeuedImages: next.images ? JSON.parse(next.images) : undefined,	direct JSON.parse without boundary parser helper
 packages/runtime/src/services/handlers/agent-completed-queue-handler.ts	#1	next.allowedTools ? JSON.parse(next.allowedTools) : undefined,	direct JSON.parse without boundary parser helper
 packages/runtime/src/services/handlers/agent-completed-queue-handler.ts	#1	next.disallowedTools ? JSON.parse(next.disallowedTools) : undefined,	direct JSON.parse without boundary parser helper

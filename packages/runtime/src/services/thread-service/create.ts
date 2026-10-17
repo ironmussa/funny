@@ -231,10 +231,52 @@ export function createAndStartThread(
   );
 }
 
+interface ResolvedRunDefaults {
+  provider: AgentProvider;
+  model: AgentModel;
+  permissionMode: PermissionMode;
+}
+
+type StartProject = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getServices>['projects']['getProject']>>
+>;
+
+/** Everything the project-thread creation phases share. */
+interface ProjectThreadContext {
+  params: CreateAndStartThreadParams;
+  projectId: string;
+  project: StartProject;
+  projectPath: string;
+  threadId: string;
+  resolvedBaseBranch: string | undefined;
+  defaults: ResolvedRunDefaults;
+  titleSource: string;
+}
+
 async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
   if (params.isScratch) {
     return createAndStartScratchThread(params);
   }
+  const ctx = await resolveProjectThreadContext(params);
+
+  const shellCommand = extractShellEscapeCommand(params.prompt);
+  if (shellCommand !== null) {
+    return createShellEscapeProjectThread(ctx, shellCommand);
+  }
+
+  // ── Worktree mode (new worktree) ──────────────────────────────
+  if (params.mode === 'worktree' && !params.worktreePath) {
+    return createNewWorktreeThread(ctx);
+  }
+
+  // ── Non-worktree paths (local mode, or reusing an existing worktree) ──
+  return createLocalThread(ctx);
+}
+
+/** Validate the project, resolve the per-user path and run defaults. */
+async function resolveProjectThreadContext(
+  params: CreateAndStartThreadParams,
+): Promise<ProjectThreadContext> {
   if (!params.projectId) {
     throw new ThreadServiceError('projectId is required for non-scratch threads', 400);
   }
@@ -247,9 +289,23 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
     params.userId,
   );
   if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
-  const projectPath = pathResult.value;
 
   const threadId = nanoid();
+  logCreateAndStart(params, threadId);
+
+  return {
+    params,
+    projectId: params.projectId,
+    project,
+    projectPath: pathResult.value,
+    threadId,
+    resolvedBaseBranch: params.baseBranch?.trim() || undefined,
+    defaults: resolveRunDefaults(params, project),
+    titleSource: titleSourceFor(params),
+  };
+}
+
+function logCreateAndStart(params: CreateAndStartThreadParams, threadId: string): void {
   log.info('createAndStartThread called', {
     namespace: 'thread-service',
     threadId,
@@ -260,331 +316,354 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
     provider: params.provider ?? 'default',
     promptPreview: params.prompt.slice(0, 120),
   });
-  const resolvedBaseBranch = params.baseBranch?.trim() || undefined;
+}
 
-  // Resolve defaults: explicit value > project default > hardcoded fallback
-  const resolvedProvider = (params.provider ||
-    project.defaultProvider ||
-    'claude') as AgentProvider;
-  const resolvedModel = (params.model || project.defaultModel || DEFAULT_MODEL) as AgentModel;
-  const resolvedPermissionMode = (params.permissionMode ||
-    project.defaultPermissionMode ||
-    'autoEdit') as PermissionMode;
+/**
+ * Strip any leading `<referenced-files>` XML block so titles, slugs, and
+ * forwarded prompts don't show raw markup when files were attached inline.
+ */
+function titleSourceFor(params: CreateAndStartThreadParams): string {
+  return params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
+}
 
-  const emitSetupProgress = createSetupProgressEmitter(params.userId, threadId);
+/** Resolve defaults: explicit value > project default > hardcoded fallback. */
+function resolveRunDefaults(
+  params: CreateAndStartThreadParams,
+  project: StartProject,
+): ResolvedRunDefaults {
+  return {
+    provider: (params.provider || project.defaultProvider || 'claude') as AgentProvider,
+    model: (params.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
+    permissionMode: (params.permissionMode ||
+      project.defaultPermissionMode ||
+      'autoEdit') as PermissionMode,
+  };
+}
 
-  // Strip any leading `<referenced-files>` XML block so titles, slugs, and
-  // forwarded prompts don't show raw markup when files were attached inline.
-  const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
-  const shellCommand = extractShellEscapeCommand(params.prompt);
-  if (shellCommand !== null) {
-    if (!shellCommand) {
-      throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
-    }
-
-    const branchResult = await getCurrentBranch(projectPath);
-    const thread = {
-      id: threadId,
-      projectId: params.projectId,
-      userId: params.userId,
-      title: titleSource,
-      mode: 'local' as const,
-      runtime: 'local' as const,
-      provider: resolvedProvider,
-      permissionMode: resolvedPermissionMode,
-      model: resolvedModel,
-      source: params.source || 'web',
-      status: 'completed' as const,
-      branch: branchResult.isOk() ? branchResult.value : undefined,
-      baseBranch: resolvedBaseBranch || (branchResult.isOk() ? branchResult.value : undefined),
-      worktreePath: undefined as string | undefined,
-      parentThreadId: params.parentThreadId,
-      designId: params.designId,
-      agentTemplateId: params.agentTemplateId,
-      templateVariables: params.templateVariables
-        ? JSON.stringify(params.templateVariables)
-        : undefined,
-      fileCheckpointingEnabled: 0,
-      cost: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await createCompletedShellEscapeThread({
-      thread,
-      threadId,
-      projectId: params.projectId,
-      userId: params.userId,
-      cwd: projectPath,
-      command: shellCommand,
-      prompt: params.prompt,
-      images: params.images,
-      model: resolvedModel,
-      permissionMode: resolvedPermissionMode,
-      effort: params.effort,
-    });
-
-    return thread;
-  }
-
-  // ── Worktree mode (new worktree) ──────────────────────────────
-  if (params.mode === 'worktree' && !params.worktreePath) {
-    const slug = slugifyTitle(titleSource);
-    const projectSlug = slugifyTitle(project.name);
-    const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
-
-    const thread = {
-      id: threadId,
-      projectId: params.projectId,
-      userId: params.userId,
-      title: titleSource,
-      mode: params.mode,
-      runtime: (params.runtime || 'local') as 'local' | 'remote',
-      provider: resolvedProvider,
-      permissionMode: resolvedPermissionMode,
-      model: resolvedModel,
-      source: params.source || 'web',
-      status: 'setting_up' as const,
-      branch: branchName,
-      baseBranch: resolvedBaseBranch,
-      worktreePath: undefined as string | undefined,
-      parentThreadId: params.parentThreadId,
-      designId: params.designId,
-      agentTemplateId: params.agentTemplateId,
-      templateVariables: params.templateVariables
-        ? JSON.stringify(params.templateVariables)
-        : undefined,
-      fileCheckpointingEnabled: resolvedProvider === 'claude' ? 1 : 0,
-      cost: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await tm.createThread(thread as any);
-
-    if (params.prompt) {
-      // The agent gets the fully augmented prompt (with file contents inlined)
-      // when startAgent runs; what we persist for display is the path-only
-      // metadata version. See stripInlineReferencedContent.
-      let storedContent = await augmentPromptWithFiles(
-        params.prompt,
-        params.fileReferences,
-        projectPath,
-      );
-      storedContent = await augmentPromptWithSymbols(
-        storedContent,
-        params.symbolReferences,
-        projectPath,
-      );
-      await tm.insertMessage({
-        threadId,
-        role: 'user',
-        content: stripInlineReferencedContent(storedContent),
-        images: params.images?.length ? JSON.stringify(params.images) : null,
-        model: params.model ?? null,
-        permissionMode: params.permissionMode ?? null,
-        effort: params.effort ?? null,
-      });
-    }
-
-    threadEventBus.emit('thread:created', {
-      threadId,
-      projectId: params.projectId,
-      userId: params.userId,
-      cwd: projectPath,
-      worktreePath: null,
-      stage: 'in_progress' as const,
-      status: 'setting_up',
-    });
-
-    // Background: create worktree, run post-create commands, start agent
-    void (async () => {
-      try {
-        const wtResult = await createWorktree(
-          projectPath,
-          branchName,
-          resolvedBaseBranch,
-          emitSetupProgress,
-        );
-        if (wtResult.isErr()) {
-          await tm.updateThread(threadId, { status: 'failed' });
-          emitThreadUpdated(params.userId, threadId, { status: 'failed' });
-          return;
-        }
-        const wtPath = wtResult.value;
-
-        const setupResult = await setupWorktree(projectPath, wtPath, emitSetupProgress);
-        if (setupResult.isOk() && setupResult.value.postCreateErrors.length) {
-          log.warn('Worktree postCreate errors', {
-            threadId,
-            errors: setupResult.value.postCreateErrors,
-          });
-        } else if (setupResult.isErr()) {
-          log.warn('Failed to setup worktree', { threadId, error: setupResult.error.message });
-        }
-
-        // Update thread with worktree info and transition to pending
-        await tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
-        wsBroker.emitToUser(params.userId, {
-          type: 'worktree:setup_complete',
-          threadId,
-          data: { branch: branchName, worktreePath: wtPath },
-        } as WSEvent);
-        emitThreadUpdated(params.userId, threadId, {
-          status: 'pending',
-          branch: branchName,
-          worktreePath: wtPath,
-        });
-
-        // Start agent — use projectPath (not wtPath) because file references
-        // were selected from the main repo; untracked/gitignored files won't
-        // exist in the freshly created worktree.
-        let augmentedPrompt = await augmentPromptWithFiles(
-          params.prompt,
-          params.fileReferences,
-          projectPath,
-        );
-        augmentedPrompt = await augmentPromptWithSymbols(
-          augmentedPrompt,
-          params.symbolReferences,
-          projectPath,
-        );
-        try {
-          const allowedToolsForRun = await augmentAllowedToolsWithRules(
-            params.userId,
-            wtPath,
-            params.allowedTools,
-          );
-          await startAgent(
-            threadId,
-            augmentedPrompt,
-            wtPath,
-            resolvedModel,
-            resolvedPermissionMode,
-            params.images,
-            params.disallowedTools,
-            allowedToolsForRun,
-            resolvedProvider,
-            undefined,
-            true, // skipMessageInsert — already inserted at thread creation
-            params.effort,
-          );
-        } catch (err: any) {
-          log.error('Failed to start agent after worktree setup', { threadId, error: err });
-          await tm.updateThread(threadId, { status: 'failed' });
-          emitThreadUpdated(params.userId, threadId, { status: 'failed' });
-        }
-      } catch (err) {
-        log.error('Background worktree setup failed', { threadId, error: String(err) });
-        await tm.updateThread(threadId, { status: 'failed' });
-        emitThreadUpdated(params.userId, threadId, { status: 'failed' });
-      }
-    })();
-
-    return thread;
-  }
-
-  // ── Non-worktree paths (local mode, or reusing an existing worktree) ──
-  let worktreePath: string | undefined;
-  let threadBranch: string | undefined;
-  let needsBranchCheckout = false;
-
-  if (params.worktreePath) {
-    // Security CR-4: client-supplied worktreePath becomes the cwd for
-    // browse/file-index/text-search/agent-spawn. An attacker who supplies
-    // an arbitrary path — `/etc`, another user's HOME, etc. — would
-    // otherwise pivot downstream file/command ops into that scope. Accept
-    // only paths registered by Git as worktrees for this project, including
-    // externally-created worktrees outside `.funny-worktrees`.
-    const registeredResult = await isRegisteredWorktreePath(projectPath, params.worktreePath);
-    if (registeredResult.isErr()) {
-      throw new ThreadServiceError(registeredResult.error.message, 400);
-    }
-    if (!registeredResult.value) {
-      throw new ThreadServiceError('worktreePath is not registered for this project', 400);
-    }
-    worktreePath = params.worktreePath;
-    const branchResult = await getCurrentBranch(params.worktreePath);
-    if (branchResult.isOk()) {
-      threadBranch = branchResult.value;
-      needsBranchCheckout = !!(resolvedBaseBranch && resolvedBaseBranch !== threadBranch);
-      if (needsBranchCheckout) {
-        const existingWorktree = await findWorktreeForBranch(projectPath, resolvedBaseBranch!);
-        if (existingWorktree.isOk() && existingWorktree.value) {
-          worktreePath = existingWorktree.value;
-          needsBranchCheckout = false;
-        }
-        threadBranch = resolvedBaseBranch;
-      }
-    }
-  } else {
-    const branchResult = await getCurrentBranch(projectPath);
-    if (branchResult.isOk()) {
-      threadBranch = branchResult.value;
-      needsBranchCheckout = !!(resolvedBaseBranch && resolvedBaseBranch !== threadBranch);
-      if (needsBranchCheckout) {
-        const existingWorktree = await findWorktreeForBranch(projectPath, resolvedBaseBranch!);
-        if (existingWorktree.isOk() && existingWorktree.value) {
-          worktreePath = existingWorktree.value;
-          needsBranchCheckout = false;
-        }
-        threadBranch = resolvedBaseBranch;
-      }
-    }
-  }
-
-  // ── Local mode with branch checkout (synchronous, no setting_up UI) ──
-  if (needsBranchCheckout) {
-    const checkoutCwd = worktreePath ?? projectPath;
-    const fetchResult = await git(['fetch', 'origin', resolvedBaseBranch!], checkoutCwd);
-    if (fetchResult.isErr()) {
-      log.warn('Failed to fetch branch before checkout (non-fatal)', {
-        namespace: 'thread-service',
-        threadId,
-        branch: resolvedBaseBranch,
-        error: fetchResult.error.message,
-      });
-    }
-
-    const checkoutResult = await git(['checkout', resolvedBaseBranch!], checkoutCwd);
-    if (checkoutResult.isErr()) {
-      throw new ThreadServiceError(
-        `Failed to checkout branch "${resolvedBaseBranch}": ${checkoutResult.error.message}`,
-        400,
-      );
-    }
-
-    threadBranch = resolvedBaseBranch;
-    needsBranchCheckout = false;
-    // Falls through to normal path below (status: 'pending')
-  }
-
-  // ── Normal path (no branch checkout needed) ──
-  const thread = {
-    id: threadId,
-    projectId: params.projectId,
+/** Columns shared by every project-thread row variant. */
+function baseProjectThreadRow(ctx: ProjectThreadContext) {
+  const { params, defaults } = ctx;
+  return {
+    id: ctx.threadId,
+    projectId: ctx.projectId,
     userId: params.userId,
-    title: titleSource,
-    mode: params.mode,
-    provider: resolvedProvider,
-    permissionMode: resolvedPermissionMode,
-    model: resolvedModel,
+    title: ctx.titleSource,
+    provider: defaults.provider,
+    permissionMode: defaults.permissionMode,
+    model: defaults.model,
     source: params.source || 'web',
-    status: 'pending' as const,
-    runtime: (params.runtime || 'local') as 'local' | 'remote',
-    branch: threadBranch,
-    baseBranch: resolvedBaseBranch || (params.mode === 'local' ? threadBranch : undefined),
-    worktreePath,
     parentThreadId: params.parentThreadId,
     designId: params.designId,
     agentTemplateId: params.agentTemplateId,
     templateVariables: params.templateVariables
       ? JSON.stringify(params.templateVariables)
       : undefined,
-    fileCheckpointingEnabled: resolvedProvider === 'claude' ? 1 : 0,
     cost: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function checkpointingFor(provider: AgentProvider): number {
+  return provider === 'claude' ? 1 : 0;
+}
+
+async function augmentPromptReferences(
+  params: CreateAndStartThreadParams,
+  cwd: string,
+): Promise<string> {
+  const withFiles = await augmentPromptWithFiles(params.prompt, params.fileReferences, cwd);
+  return augmentPromptWithSymbols(withFiles, params.symbolReferences, cwd);
+}
+
+/** `!cmd` initial prompts run locally and produce an already-completed thread. */
+async function createShellEscapeProjectThread(ctx: ProjectThreadContext, shellCommand: string) {
+  if (!shellCommand) {
+    throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
+  }
+  const { params, defaults } = ctx;
+
+  const branchResult = await getCurrentBranch(ctx.projectPath);
+  const currentBranch = branchResult.isOk() ? branchResult.value : undefined;
+  const thread = {
+    ...baseProjectThreadRow(ctx),
+    mode: 'local' as const,
+    runtime: 'local' as const,
+    status: 'completed' as const,
+    branch: currentBranch,
+    baseBranch: ctx.resolvedBaseBranch || currentBranch,
+    worktreePath: undefined as string | undefined,
+    fileCheckpointingEnabled: 0,
+  };
+
+  await createCompletedShellEscapeThread({
+    thread,
+    threadId: ctx.threadId,
+    projectId: ctx.projectId,
+    userId: params.userId,
+    cwd: ctx.projectPath,
+    command: shellCommand,
+    prompt: params.prompt,
+    images: params.images,
+    model: defaults.model,
+    permissionMode: defaults.permissionMode,
+    effort: params.effort,
+  });
+
+  return thread;
+}
+
+/**
+ * Create the thread row in `setting_up`, persist the first message and kick
+ * off worktree creation + agent start in the background.
+ */
+async function createNewWorktreeThread(ctx: ProjectThreadContext) {
+  const { params, defaults, threadId, projectPath } = ctx;
+  const slug = slugifyTitle(ctx.titleSource);
+  const projectSlug = slugifyTitle(ctx.project.name);
+  const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
+
+  const thread = {
+    ...baseProjectThreadRow(ctx),
+    mode: params.mode,
+    runtime: (params.runtime || 'local') as 'local' | 'remote',
+    status: 'setting_up' as const,
+    branch: branchName,
+    baseBranch: ctx.resolvedBaseBranch,
+    worktreePath: undefined as string | undefined,
+    fileCheckpointingEnabled: checkpointingFor(defaults.provider),
+  };
+
+  await tm.createThread(thread as any);
+
+  if (params.prompt) {
+    // The agent gets the fully augmented prompt (with file contents inlined)
+    // when startAgent runs; what we persist for display is the path-only
+    // metadata version. See stripInlineReferencedContent.
+    const storedContent = await augmentPromptReferences(params, projectPath);
+    await tm.insertMessage({
+      threadId,
+      role: 'user',
+      content: stripInlineReferencedContent(storedContent),
+      images: params.images?.length ? JSON.stringify(params.images) : null,
+      model: params.model ?? null,
+      permissionMode: params.permissionMode ?? null,
+      effort: params.effort ?? null,
+    });
+  }
+
+  threadEventBus.emit('thread:created', {
+    threadId,
+    projectId: ctx.projectId,
+    userId: params.userId,
+    cwd: projectPath,
+    worktreePath: null,
+    stage: 'in_progress' as const,
+    status: 'setting_up',
+  });
+
+  // Background: create worktree, run post-create commands, start agent
+  void setupWorktreeAndStartAgent(ctx, branchName);
+
+  return thread;
+}
+
+async function markThreadFailed(userId: string, threadId: string): Promise<void> {
+  await tm.updateThread(threadId, { status: 'failed' });
+  emitThreadUpdated(userId, threadId, { status: 'failed' });
+}
+
+async function setupWorktreeAndStartAgent(
+  ctx: ProjectThreadContext,
+  branchName: string,
+): Promise<void> {
+  const { params, threadId, projectPath } = ctx;
+  const emitSetupProgress = createSetupProgressEmitter(params.userId, threadId);
+  try {
+    const wtResult = await createWorktree(
+      projectPath,
+      branchName,
+      ctx.resolvedBaseBranch,
+      emitSetupProgress,
+    );
+    if (wtResult.isErr()) {
+      await markThreadFailed(params.userId, threadId);
+      return;
+    }
+    const wtPath = wtResult.value;
+
+    logWorktreeSetupResult(threadId, await setupWorktree(projectPath, wtPath, emitSetupProgress));
+    await markWorktreeReady(params.userId, threadId, branchName, wtPath);
+    await startAgentInNewWorktree(ctx, wtPath);
+  } catch (err) {
+    log.error('Background worktree setup failed', { threadId, error: String(err) });
+    await markThreadFailed(params.userId, threadId);
+  }
+}
+
+/** Post-create setup problems are logged but never block the thread. */
+function logWorktreeSetupResult(
+  threadId: string,
+  setupResult: Awaited<ReturnType<typeof setupWorktree>>,
+): void {
+  if (setupResult.isErr()) {
+    log.warn('Failed to setup worktree', { threadId, error: setupResult.error.message });
+    return;
+  }
+  const { postCreateErrors } = setupResult.value;
+  if (postCreateErrors.length) {
+    log.warn('Worktree postCreate errors', { threadId, errors: postCreateErrors });
+  }
+}
+
+/** Record the worktree on the thread, transition it to pending and notify the user. */
+async function markWorktreeReady(
+  userId: string,
+  threadId: string,
+  branch: string,
+  worktreePath: string,
+): Promise<void> {
+  await tm.updateThread(threadId, { worktreePath, status: 'pending' });
+  wsBroker.emitToUser(userId, {
+    type: 'worktree:setup_complete',
+    threadId,
+    data: { branch, worktreePath },
+  } as WSEvent);
+  emitThreadUpdated(userId, threadId, { status: 'pending', branch, worktreePath });
+}
+
+async function startAgentInNewWorktree(ctx: ProjectThreadContext, wtPath: string): Promise<void> {
+  const { params, defaults, threadId } = ctx;
+  // Use projectPath (not wtPath) because file references were selected from
+  // the main repo; untracked/gitignored files won't exist in the freshly
+  // created worktree.
+  const augmentedPrompt = await augmentPromptReferences(params, ctx.projectPath);
+  try {
+    const allowedToolsForRun = await augmentAllowedToolsWithRules(
+      params.userId,
+      wtPath,
+      params.allowedTools,
+    );
+    await startAgent(
+      threadId,
+      augmentedPrompt,
+      wtPath,
+      defaults.model,
+      defaults.permissionMode,
+      params.images,
+      params.disallowedTools,
+      allowedToolsForRun,
+      defaults.provider,
+      undefined,
+      true, // skipMessageInsert — already inserted at thread creation
+      params.effort,
+    );
+  } catch (err: any) {
+    log.error('Failed to start agent after worktree setup', { threadId, error: err });
+    await markThreadFailed(params.userId, threadId);
+  }
+}
+
+interface LocalPlacement {
+  worktreePath: string | undefined;
+  threadBranch: string | undefined;
+  needsBranchCheckout: boolean;
+}
+
+/**
+ * Security CR-4: client-supplied worktreePath becomes the cwd for
+ * browse/file-index/text-search/agent-spawn. An attacker who supplies an
+ * arbitrary path — `/etc`, another user's HOME, etc. — would otherwise pivot
+ * downstream file/command ops into that scope. Accept only paths registered
+ * by Git as worktrees for this project, including externally-created
+ * worktrees outside `.funny-worktrees`.
+ */
+async function assertRegisteredWorktree(projectPath: string, worktreePath: string): Promise<void> {
+  const registeredResult = await isRegisteredWorktreePath(projectPath, worktreePath);
+  if (registeredResult.isErr()) {
+    throw new ThreadServiceError(registeredResult.error.message, 400);
+  }
+  if (!registeredResult.value) {
+    throw new ThreadServiceError('worktreePath is not registered for this project', 400);
+  }
+}
+
+/**
+ * Decide where a local / existing-worktree thread runs and on which branch.
+ * When a different base branch is requested, prefer an existing worktree
+ * already on it; otherwise flag that a checkout is needed.
+ */
+async function resolveLocalPlacement(ctx: ProjectThreadContext): Promise<LocalPlacement> {
+  const { params, projectPath, resolvedBaseBranch } = ctx;
+  let worktreePath: string | undefined;
+  if (params.worktreePath) {
+    await assertRegisteredWorktree(projectPath, params.worktreePath);
+    worktreePath = params.worktreePath;
+  }
+
+  const branchResult = await getCurrentBranch(params.worktreePath || projectPath);
+  if (branchResult.isErr()) {
+    return { worktreePath, threadBranch: undefined, needsBranchCheckout: false };
+  }
+  const currentBranch = branchResult.value;
+  if (!resolvedBaseBranch || resolvedBaseBranch === currentBranch) {
+    return { worktreePath, threadBranch: currentBranch, needsBranchCheckout: false };
+  }
+
+  const existingWorktree = await findWorktreeForBranch(projectPath, resolvedBaseBranch);
+  if (existingWorktree.isOk() && existingWorktree.value) {
+    return {
+      worktreePath: existingWorktree.value,
+      threadBranch: resolvedBaseBranch,
+      needsBranchCheckout: false,
+    };
+  }
+  return { worktreePath, threadBranch: resolvedBaseBranch, needsBranchCheckout: true };
+}
+
+/** Local mode with branch checkout (synchronous, no setting_up UI). */
+async function checkoutBaseBranch(
+  ctx: ProjectThreadContext,
+  branch: string,
+  checkoutCwd: string,
+): Promise<void> {
+  const fetchResult = await git(['fetch', 'origin', branch], checkoutCwd);
+  if (fetchResult.isErr()) {
+    log.warn('Failed to fetch branch before checkout (non-fatal)', {
+      namespace: 'thread-service',
+      threadId: ctx.threadId,
+      branch,
+      error: fetchResult.error.message,
+    });
+  }
+
+  const checkoutResult = await git(['checkout', branch], checkoutCwd);
+  if (checkoutResult.isErr()) {
+    throw new ThreadServiceError(
+      `Failed to checkout branch "${branch}": ${checkoutResult.error.message}`,
+      400,
+    );
+  }
+}
+
+async function createLocalThread(ctx: ProjectThreadContext) {
+  const { params, defaults, threadId, projectPath, resolvedBaseBranch } = ctx;
+  const { worktreePath, threadBranch, needsBranchCheckout } = await resolveLocalPlacement(ctx);
+
+  if (needsBranchCheckout) {
+    // Falls through to the normal path below (status: 'pending')
+    await checkoutBaseBranch(ctx, resolvedBaseBranch!, worktreePath ?? projectPath);
+  }
+
+  const thread = {
+    ...baseProjectThreadRow(ctx),
+    mode: params.mode,
+    status: 'pending' as const,
+    runtime: (params.runtime || 'local') as 'local' | 'remote',
+    branch: threadBranch,
+    baseBranch: resolvedBaseBranch || (params.mode === 'local' ? threadBranch : undefined),
+    worktreePath,
+    fileCheckpointingEnabled: checkpointingFor(defaults.provider),
   };
 
   await tm.createThread(thread as any);
@@ -593,7 +672,7 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
 
   threadEventBus.emit('thread:created', {
     threadId,
-    projectId: params.projectId,
+    projectId: ctx.projectId,
     userId: params.userId,
     cwd,
     worktreePath: worktreePath ?? null,
@@ -602,82 +681,11 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
   });
 
   // Augment prompt with file/symbol contents if references were provided
-  let augmentedPrompt = await augmentPromptWithFiles(params.prompt, params.fileReferences, cwd);
-  augmentedPrompt = await augmentPromptWithSymbols(augmentedPrompt, params.symbolReferences, cwd);
+  const augmentedPrompt = await augmentPromptReferences(params, cwd);
 
   // ── Remote runtime: launch container instead of local agent ──
   if (params.runtime === 'remote') {
-    if (!project.launcherUrl) {
-      throw new ThreadServiceError('Project has no launcher URL configured', 400);
-    }
-
-    const branch = threadBranch || 'main';
-    const githubToken = await getServices().profile.getGithubToken(params.userId);
-
-    // Launch container in background
-    void (async () => {
-      await tm.updateThread(threadId, { status: 'setting_up' });
-      emitThreadUpdated(params.userId, threadId, { status: 'setting_up' });
-
-      const result = await launchContainer({
-        threadId,
-        projectPath: project.path,
-        launcherUrl: project.launcherUrl!,
-        branch,
-        githubToken: githubToken ?? undefined,
-      });
-
-      if (result.isErr()) {
-        log.error('Failed to launch container', { threadId, error: result.error.message });
-        await tm.updateThread(threadId, { status: 'failed' });
-        emitThreadUpdated(params.userId, threadId, { status: 'failed' });
-        return;
-      }
-
-      const { containerUrl, containerName } = result.value;
-      await tm.updateThread(threadId, {
-        containerUrl,
-        containerName,
-        status: 'running',
-      });
-      emitThreadUpdated(params.userId, threadId, {
-        status: 'running',
-        containerUrl,
-        containerName,
-      });
-
-      // Forward the initial prompt to the container's Funny server.
-      //
-      // Security HI-5: `containerUrl` is returned by the project's launcher
-      // (a project-config'd URL), so a compromised launcher response could
-      // point at a cloud-metadata endpoint. `safeFetchUserUrl` blocks IMDS
-      // ranges while allowing legitimate LAN container URLs.
-      try {
-        const res = await safeFetchUserUrl(`${containerUrl}/api/threads`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId: params.projectId,
-            title: titleSource,
-            mode: params.mode,
-            provider: resolvedProvider,
-            model: resolvedModel,
-            permissionMode: resolvedPermissionMode,
-            prompt: augmentedPrompt,
-            images: params.images,
-            allowedTools: params.allowedTools,
-            disallowedTools: params.disallowedTools,
-          }),
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => 'Unknown error');
-          log.error('Container rejected thread creation', { threadId, status: res.status, text });
-        }
-      } catch (err) {
-        log.error('Failed to forward prompt to container', { threadId, error: String(err) });
-      }
-    })();
-
+    await startRemoteContainerThread(ctx, threadBranch, augmentedPrompt);
     return thread;
   }
 
@@ -691,18 +699,118 @@ async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
     threadId,
     augmentedPrompt,
     cwd,
-    resolvedModel,
-    resolvedPermissionMode,
+    defaults.model,
+    defaults.permissionMode,
     params.images,
     params.disallowedTools,
     allowedToolsForRun,
-    resolvedProvider,
+    defaults.provider,
     undefined,
     undefined,
     params.effort,
   );
 
   return thread;
+}
+
+/** Validate the launcher config and launch the container in the background. */
+async function startRemoteContainerThread(
+  ctx: ProjectThreadContext,
+  threadBranch: string | undefined,
+  augmentedPrompt: string,
+): Promise<void> {
+  const { project, params } = ctx;
+  if (!project.launcherUrl) {
+    throw new ThreadServiceError('Project has no launcher URL configured', 400);
+  }
+
+  const branch = threadBranch || 'main';
+  const githubToken = await getServices().profile.getGithubToken(params.userId);
+
+  // Launch container in background
+  void launchRemoteContainer(ctx, {
+    launcherUrl: project.launcherUrl,
+    branch,
+    githubToken: githubToken ?? undefined,
+    augmentedPrompt,
+  });
+}
+
+async function launchRemoteContainer(
+  ctx: ProjectThreadContext,
+  launch: { launcherUrl: string; branch: string; githubToken?: string; augmentedPrompt: string },
+): Promise<void> {
+  const { params, threadId } = ctx;
+  await tm.updateThread(threadId, { status: 'setting_up' });
+  emitThreadUpdated(params.userId, threadId, { status: 'setting_up' });
+
+  const result = await launchContainer({
+    threadId,
+    projectPath: ctx.project.path,
+    launcherUrl: launch.launcherUrl,
+    branch: launch.branch,
+    githubToken: launch.githubToken,
+  });
+
+  if (result.isErr()) {
+    log.error('Failed to launch container', { threadId, error: result.error.message });
+    await markThreadFailed(params.userId, threadId);
+    return;
+  }
+
+  const { containerUrl, containerName } = result.value;
+  await tm.updateThread(threadId, {
+    containerUrl,
+    containerName,
+    status: 'running',
+  });
+  emitThreadUpdated(params.userId, threadId, {
+    status: 'running',
+    containerUrl,
+    containerName,
+  });
+
+  await forwardPromptToContainer(ctx, containerUrl, launch.augmentedPrompt);
+}
+
+/**
+ * Forward the initial prompt to the container's Funny server.
+ *
+ * Security HI-5: `containerUrl` is returned by the project's launcher (a
+ * project-config'd URL), so a compromised launcher response could point at a
+ * cloud-metadata endpoint. `safeFetchUserUrl` blocks IMDS ranges while
+ * allowing legitimate LAN container URLs.
+ */
+async function forwardPromptToContainer(
+  ctx: ProjectThreadContext,
+  containerUrl: string,
+  augmentedPrompt: string,
+): Promise<void> {
+  const { params, defaults, threadId } = ctx;
+  try {
+    const res = await safeFetchUserUrl(`${containerUrl}/api/threads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: ctx.projectId,
+        title: ctx.titleSource,
+        mode: params.mode,
+        provider: defaults.provider,
+        model: defaults.model,
+        permissionMode: defaults.permissionMode,
+        prompt: augmentedPrompt,
+        images: params.images,
+        allowedTools: params.allowedTools,
+        disallowedTools: params.disallowedTools,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => 'Unknown error');
+      log.error('Container rejected thread creation', { threadId, status: res.status, text });
+    }
+  } catch (err) {
+    log.error('Failed to forward prompt to container', { threadId, error: String(err) });
+  }
 }
 
 // ── Create and Start Scratch Thread ─────────────────────────────

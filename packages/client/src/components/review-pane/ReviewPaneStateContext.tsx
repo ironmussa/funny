@@ -1,39 +1,13 @@
-import { FileCode, FilePlus, FileWarning, FileX } from 'lucide-react';
-import { type ReactNode, createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { type ReactNode, createContext, useContext, useMemo } from 'react';
 
-import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
-import { useReviewState } from '@/hooks/use-review-state';
-import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
-import { useThreadById } from '@/lib/thread-selectors';
-import { canLoadGitHistory } from '@/lib/thread-variant';
-import { resolveThreadBranch } from '@/lib/utils';
-import { useAuthStore } from '@/stores/auth-store';
-import {
-  useGitStatusStore,
-  useGitStatusForThread,
-  type ProjectGitStatus,
-} from '@/stores/git-status-store';
-import { usePRDetail } from '@/stores/pr-detail-store';
-import { useProjectStore } from '@/stores/project-store';
-import {
-  useThreadProjectId,
-  useThreadSelector,
-  useThreadStatus,
-  useThreadWorktreePath,
-} from '@/stores/thread-context';
-import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
+import type { useReviewState } from '@/hooks/use-review-state';
+import type { useGitStatusForThread, ProjectGitStatus } from '@/stores/git-status-store';
+import type { usePRDetail } from '@/stores/pr-detail-store';
+import type { ReviewSubTab } from '@/stores/ui-store';
 
 import { ExpandedDiffPresenter } from './ExpandedDiffPresenter';
 import { ReviewDialogs, type ConfirmDialogState } from './ReviewDialogs';
-
-const fileStatusIcons: Record<string, typeof FileCode> = {
-  added: FilePlus,
-  modified: FileCode,
-  deleted: FileX,
-  renamed: FileCode,
-  conflicted: FileWarning,
-};
+import { useReviewPaneModel } from './use-review-pane-model';
 
 /**
  * Context that exposes all the state ReviewPane used to own. Lifted out of the
@@ -96,134 +70,38 @@ export function useReviewPaneContext(): ReviewPaneContextValue {
  * Radix-portal to document.body and therefore can live anywhere in the tree.
  */
 export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
-  const navigate = useNavigate();
-  const { pathname, search: locationSearch } = useLocation();
-
-  // ── Stores ──
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
-  const reviewSubTab = useUIStore((s) => s.reviewSubTab);
-  const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
-  const selectedProjectId = useRightPaneProjectId();
-
-  const selectedThreadId = useRightPaneThreadId();
-  const effectiveThreadId = selectedThreadId || undefined;
-  const projectModeId = !effectiveThreadId ? selectedProjectId : null;
-
-  const worktreePath = useThreadWorktreePath();
-  const threadProjectId = useThreadProjectId();
-  const projectsForPath = useProjectStore((s) => s.projects);
-  const lightThread = useThreadById(selectedThreadId ?? undefined);
-  const threadIsScratch = useThreadSelector((t) => t?.isScratch);
-  const gitThread = effectiveThreadId
-    ? {
-        projectId: threadProjectId ?? lightThread?.projectId ?? '',
-        isScratch: threadIsScratch ?? lightThread?.isScratch,
-      }
-    : null;
-  const hasGitContext = !!projectModeId || canLoadGitHistory(gitThread);
-  const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${
-    gitThread?.projectId ?? projectModeId ?? ''
-  }`;
-  const basePath = useMemo(
-    () =>
-      resolveBasePath({
-        worktreePath,
-        lightThread,
-        threadProjectId,
-        selectedProjectId,
-        projects: projectsForPath,
-      }),
-    [worktreePath, lightThread, threadProjectId, selectedProjectId, projectsForPath],
-  );
-
-  const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
-  const baseBranch = useThreadSelector((t) => t?.baseBranch);
-  const threadBranch = useThreadSelector((t) => {
-    if (!t) return undefined;
-    if (t.mode !== 'worktree') return undefined;
-    return resolveThreadBranch(t);
-  });
-  const projectBranch = useProjectStore((s) => {
-    const pid = projectModeId ?? gitThread?.projectId;
-    return pid ? s.branchByProject[pid] : undefined;
-  });
-  const currentBranch = threadBranch || projectBranch;
-
-  const isAgentRunning = useThreadStatus() === 'running';
-  const threadGitStatus = useGitStatusForThread(effectiveThreadId);
-  const projectGitStatus = useGitStatusStore((s) =>
-    projectModeId ? s.statusByProject[projectModeId] : undefined,
-  );
-  const gitStatus = threadGitStatus ?? projectGitStatus;
-  const prProjectId = projectModeId ?? gitThread?.projectId ?? '';
-  const { threads: prThreads } = usePRDetail(
-    prProjectId || undefined,
-    gitStatus?.prNumber ?? undefined,
-  );
-  const unpushedCommitCount = gitStatus?.unpushedCommitCount ?? 0;
-  const remoteCheckProjectId = projectModeId ?? gitThread?.projectId ?? null;
-
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
-
-  // A non-owner viewer (necessarily a `steer` sharee — `view` sharees can't open
-  // the pane) gets a read-only review pane. In project-mode (no thread owner) or
-  // while auth loads, this is false, so the owner never loses write controls.
-  const selfUserId = useAuthStore((s) => s.user?.id ?? null);
-  const threadOwnerId = useThreadSelector((t) => t?.userId ?? null);
-  const viewerReadOnly = !!selfUserId && !!threadOwnerId && threadOwnerId !== selfUserId;
-
-  const review = useReviewState({
+  const {
     effectiveThreadId,
-    projectModeId,
-    hasGitContext,
-    gitContextKey,
     threadProjectId,
     selectedProjectId,
+    basePath,
+    isWorktree,
     baseBranch,
     threadBranch,
     currentBranch,
-    basePath,
-    isAgentRunning: !!isAgentRunning,
+    isAgentRunning,
     gitStatus,
+    prThreads,
     unpushedCommitCount,
     remoteCheckProjectId,
     reviewPaneOpen,
     reviewSubTab,
     setReviewPaneOpen,
+    confirmDialog,
     setConfirmDialog,
-  });
-  const refreshReview = review.refresh;
-
-  const refreshAll = useCallback(async () => {
-    const gitStore = useGitStatusStore.getState();
-    if (effectiveThreadId) {
-      void gitStore.fetchForThread(effectiveThreadId, true);
-      if (threadProjectId) void gitStore.fetchForProject(threadProjectId, true);
-    } else if (projectModeId) {
-      void gitStore.fetchProjectStatus(projectModeId, true);
-      void gitStore.fetchForProject(projectModeId, true);
-    }
-    await refreshReview();
-  }, [effectiveThreadId, projectModeId, threadProjectId, refreshReview]);
-
-  // Sync the active sub-tab with the URL query param. Kept here rather than in
-  // a hook so that dockview tab clicks (which call this) and URL navigation
-  // share one source of truth.
-  const setReviewSubTab = useCallback(
-    (tab: ReviewSubTab) => {
-      setReviewSubTabStore(tab);
-      const params = new URLSearchParams(locationSearch);
-      if (tab === 'changes') {
-        params.delete('tab');
-      } else {
-        params.set('tab', tab);
-      }
-      const search = params.toString();
-      navigate(`${pathname}${search ? `?${search}` : ''}`, { replace: true });
-    },
-    [setReviewSubTabStore, pathname, locationSearch, navigate],
-  );
+    review,
+    refreshAll,
+    // Sync the active sub-tab with the URL query param. Kept in the shared
+    // model so that dockview tab clicks (which call this) and URL navigation
+    // share one source of truth.
+    setReviewSubTab,
+    // A non-owner viewer (necessarily a `steer` sharee — `view` sharees can't
+    // open the pane) gets a read-only review pane. In project-mode (no thread
+    // owner) or while auth loads, this is false, so the owner never loses
+    // write controls.
+    viewerReadOnly,
+    expanded,
+  } = useReviewPaneModel();
 
   const value = useMemo<ReviewPaneContextValue>(
     () => ({
@@ -236,7 +114,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       baseBranch,
       threadBranch,
       currentBranch,
-      isAgentRunning: !!isAgentRunning,
+      isAgentRunning,
       gitStatus,
       prThreads,
       unpushedCommitCount,
@@ -271,29 +149,10 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       setReviewSubTab,
       refreshAll,
       confirmDialog,
+      setConfirmDialog,
       viewerReadOnly,
     ],
   );
-
-  // Compute expanded-diff helpers needed by the global DiffViewerModal.
-  const expandedFile = review.expandedFile;
-  const expandedSummary = expandedFile
-    ? review.summaries.find((s) => s.path === expandedFile)
-    : undefined;
-  const expandedDiffContent = expandedFile ? review.diffCache.get(expandedFile) : undefined;
-  const ExpandedIcon = expandedSummary
-    ? fileStatusIcons[expandedSummary.status] || FileCode
-    : FileCode;
-
-  const handleExpandedFileSelect = useCallback(
-    (path: string) => {
-      review.setExpandedFile(path);
-      review.setSelectedFile(path);
-      review.loadDiffForFile(path);
-    },
-    [review],
-  );
-  const handleExpandedClose = useCallback(() => review.setExpandedFile(null), [review]);
 
   return (
     <ReviewPaneContext.Provider value={value}>
@@ -301,12 +160,12 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       {/* Both overlays Radix-portal to document.body, so positioning them here
           is fine regardless of where the tabs render. */}
       <ExpandedDiffPresenter
-        expandedFile={expandedFile}
-        expandedSummary={expandedSummary}
-        expandedDiffContent={expandedDiffContent}
-        ExpandedIcon={ExpandedIcon}
-        onClose={handleExpandedClose}
-        onFileSelect={handleExpandedFileSelect}
+        expandedFile={review.expandedFile}
+        expandedSummary={expanded.summary}
+        expandedDiffContent={expanded.diffContent}
+        ExpandedIcon={expanded.Icon}
+        onClose={expanded.onClose}
+        onFileSelect={expanded.onFileSelect}
         fileSearch={review.fileSearch}
         setFileSearch={review.setFileSearch}
         fileSearchCaseSensitive={review.fileSearchCaseSensitive}

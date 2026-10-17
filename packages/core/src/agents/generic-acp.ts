@@ -50,6 +50,23 @@ type ACPRequestPermissionRequest = import('@agentclientprotocol/sdk').RequestPer
 type ACPRequestPermissionResponse = import('@agentclientprotocol/sdk').RequestPermissionResponse;
 type ACPConnection = import('@agentclientprotocol/sdk').ClientSideConnection;
 
+type ACPUpdateOf<K extends ACPSessionUpdate['sessionUpdate']> = Extract<
+  ACPSessionUpdate,
+  { sessionUpdate: K }
+>;
+type ACPContentBlock = ACPUpdateOf<'agent_message_chunk'>['content'];
+type ACPToolCallUpdateLike = ACPUpdateOf<'tool_call'> | ACPUpdateOf<'tool_call_update'>;
+type ACPPlanUpdate = ACPUpdateOf<'plan'>;
+
+/** The ACP fields `buildACPToolInput` / `inferACPToolName` read from a tool call event. */
+interface ACPToolCallFields {
+  kind: string | undefined;
+  title: string;
+  rawInput: unknown;
+  locations: Array<{ path: string; line?: number | null }> | undefined;
+  content: unknown[] | undefined;
+}
+
 export class GenericACPProcess extends BaseAgentProcess {
   protected readonly manifest: ProviderManifest;
   private readonly dlog: DebugLogger;
@@ -879,292 +896,315 @@ export class GenericACPProcess extends BaseAgentProcess {
     if (this.handleAcpUsageUpdate(update)) return;
 
     switch (update.sessionUpdate) {
-      case 'agent_thought_chunk': {
-        const content = update.content;
-        if (content.type === 'text' && content.text) {
-          if (!this.pendingThought) {
-            this.pendingThought = { id: randomUUID(), text: '' };
-          }
-          this.pendingThought.text += content.text;
-        }
+      case 'agent_thought_chunk':
+        this.handleThoughtChunk(update.content);
         return;
-      }
-
-      case 'agent_message_chunk': {
-        this.flushPendingThought();
-        const content = update.content;
-        if (content.type === 'text' && content.text) {
-          // codex emits several distinct status messages within one turn as
-          // separate chunks with no tool call between them; concatenating with
-          // no separator produces run-ons (`…render.Aviso…`). Re-insert the
-          // dropped boundary ONLY at the exact glue signature: accumulated text
-          // ends with terminal punctuation and the incoming chunk starts with an
-          // uppercase letter, with no whitespace at the junction. Real token
-          // streaming keeps the model's own spacing, so a single streamed
-          // message never matches and is never split.
-          if (
-            this.manifest.quirks.splitGluedAgentMessages &&
-            /[.!?:]$/.test(this.accumulatedText) &&
-            /^\p{Lu}/u.test(content.text)
-          ) {
-            this.accumulatedText += '\n\n';
-          }
-          this.accumulatedText += content.text;
-          // pi prefixes its agent message with a banner — strip it (data regex
-          // from the manifest) so the user never sees the boilerplate. The
-          // regex is anchored at ^, so stripping every emission is idempotent.
-          // When the stripped text is empty (banner only, no real text yet),
-          // emit nothing.
-          const bannerSrc = this.manifest.quirks.stripFirstMessageBanner;
-          const visible = bannerSrc
-            ? stripBanner(this.accumulatedText, bannerSrc)
-            : this.accumulatedText;
-          if (visible) {
-            this.emitMessage({
-              type: 'assistant',
-              message: {
-                id: this.assistantMsgId,
-                content: [{ type: 'text', text: visible }],
-              },
-            } as CLIMessage);
-            this.lastAssistantText = visible;
-          }
-        }
+      case 'agent_message_chunk':
+        this.handleAgentMessageChunk(update.content);
         return;
-      }
-
-      case 'tool_call': {
-        const toolCallId = update.toolCallId;
-        const acpKind = (update as any).kind as string | undefined;
-        const title = update.title || '';
-
-        // codex/gemini emit "preamble" tool_calls whose title is just
-        // `[cwd …] (reason)` — narration before the next real tool. Buffer them
-        // as Think text so they collapse into one Think card instead of a stack
-        // of broken tool cards; the matching completion is swallowed below.
-        if (this.manifest.quirks.bufferPreambleAsThink) {
-          const preamble = parseACPPreambleTitle(title);
-          if (preamble) {
-            if (!this.pendingThought) this.pendingThought = { id: randomUUID(), text: '' };
-            this.pendingThought.text += (this.pendingThought.text ? '\n' : '') + preamble;
-            this.toolCallsSeen.set(toolCallId, 'preamble');
-            return;
-          }
-        }
-
-        this.flushPendingThought();
-        if (this.toolCallsSeen.has(toolCallId)) return;
-
-        const locations = (update as any).locations as
-          | Array<{ path: string; line?: number | null }>
-          | undefined;
-        const updateContent = (update as any).content as unknown[] | undefined;
-        const toolName = inferACPToolName(acpKind, title, undefined, update.rawInput);
-
-        let input = buildACPToolInput(toolName, {
-          kind: acpKind,
-          title,
-          rawInput: update.rawInput,
-          locations,
-          content: updateContent,
-        });
-        if (toolName === 'TodoWrite') {
-          input = enrichTodoWriteInputFromOutput(input, update.rawOutput);
-          const clean = buildTodoWriteInputFromRaw(input);
-          if (clean) input = { todos: clean.todos };
-        }
-
-        const tcStatus = (update as any).status as string | undefined;
-        const isTerminal = tcStatus === 'completed' || tcStatus === 'failed';
-
-        // Defer when the card isn't renderable yet (deferUnrenderableToolInput
-        // providers). A non-terminal call waits for a later tool_call_update; a
-        // terminal call that still lacks the field is dropped, not emitted empty.
-        if (
-          this.manifest.quirks.deferUnrenderableToolInput &&
-          !isRenderableToolInput(toolName, input)
-        ) {
-          if (!isTerminal) {
-            this.deferredToolInputs.set(toolCallId, { name: toolName, input });
-          } else {
-            this.deferredToolInputs.delete(toolCallId);
-          }
-          return;
-        }
-
-        this.emitToolUse(toolCallId, toolName, input);
-        if (isTerminal) {
-          const tcOutput = extractACPToolOutput(update.rawOutput, updateContent, title);
-          this.emitToolResult(toolCallId, tcOutput);
-        }
+      case 'tool_call':
+        this.handleToolCall(update);
         return;
-      }
-
-      case 'tool_call_update': {
-        const toolCallId = update.toolCallId;
-        // Swallow the completion of a buffered preamble tool_call (codex/gemini)
-        // — its text already went into the Think buffer; no stray tool_result.
-        if (this.toolCallsSeen.get(toolCallId) === 'preamble') return;
-        this.flushPendingThought();
-        const updateContent = (update as any).content as unknown[] | undefined;
-        const isTerminal = update.status === 'completed' || update.status === 'failed';
-
-        // An update for a tool call we never emitted: either the agent skipped
-        // the initial event, or we deferred it. Synthesize the tool_use from the
-        // richer update data. Only for synthToolUseFromOrphanUpdate providers.
-        if (!this.toolCallsSeen.has(toolCallId)) {
-          if (!this.manifest.quirks.synthToolUseFromOrphanUpdate) {
-            if (isTerminal) {
-              const output = extractACPToolOutput(
-                update.rawOutput,
-                updateContent,
-                update.title || '',
-              );
-              this.emitToolResult(toolCallId, output);
-            }
-            return;
-          }
-          const buffered = this.deferredToolInputs.get(toolCallId);
-          const acpKind = (update as any).kind as string | undefined;
-          const title = update.title || '';
-          const locations = (update as any).locations as
-            | Array<{ path: string; line?: number | null }>
-            | undefined;
-          const rawInput = (update as any).rawInput;
-          // Trust the original tool name from the deferred tool_call — an update
-          // often omits kind/title, which would degrade to 'Tool'.
-          const toolName = buffered?.name ?? inferACPToolName(acpKind, title, undefined, rawInput);
-          const built = buildACPToolInput(toolName, {
-            kind: acpKind,
-            title,
-            rawInput,
-            locations,
-            content: updateContent,
-          });
-          let input = buffered ? mergeToolInput(buffered.input, built) : built;
-          if (toolName === 'TodoWrite') {
-            input = enrichTodoWriteInputFromOutput(input, update.rawOutput);
-            const clean = buildTodoWriteInputFromRaw(input);
-            if (clean) input = { todos: clean.todos };
-          }
-
-          if (
-            this.manifest.quirks.deferUnrenderableToolInput &&
-            !isRenderableToolInput(toolName, input)
-          ) {
-            if (!isTerminal) {
-              this.deferredToolInputs.set(toolCallId, { name: toolName, input });
-            } else {
-              this.deferredToolInputs.delete(toolCallId);
-            }
-            return;
-          }
-
-          this.emitToolUse(toolCallId, toolName, input);
-        }
-
-        if (isTerminal) {
-          const output = extractACPToolOutput(update.rawOutput, updateContent, update.title || '');
-          this.emitToolResult(toolCallId, output);
-        }
+      case 'tool_call_update':
+        this.handleToolCallUpdate(update);
         return;
-      }
-
-      case 'plan': {
-        this.flushPendingThought();
-        if (this.manifest.quirks.planRender === 'todoCard') {
-          const input = buildTodoWriteInputFromPlanEntries(update.entries);
-          if (input.todos.length > 0) {
-            const planText = input.todos
-              .map((todo, i) => {
-                const status =
-                  todo.status === 'completed'
-                    ? '[x]'
-                    : todo.status === 'in_progress'
-                      ? '[~]'
-                      : '[ ]';
-                return `${status} ${i + 1}. ${todo.content}`;
-              })
-              .join('\n');
-            this.closeInFlightTaskToolCalls(planText);
-
-            // ACP replaces the whole plan on each update, so each emission is its
-            // own card with a fresh id — matching how the Claude SDK surfaces
-            // successive TodoWrite calls.
-            const toolCallId = randomUUID();
-            this.emitMessage({
-              type: 'assistant',
-              message: {
-                id: randomUUID(),
-                content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
-              },
-            } as CLIMessage);
-            this.emitMessage({
-              type: 'user',
-              message: {
-                content: [
-                  { type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' },
-                ],
-              },
-            } as CLIMessage);
-            this.accumulatedText = '';
-            this.assistantMsgId = randomUUID();
-          }
-        } else {
-          // planRender 'text': render as a numbered markdown checklist under a
-          // `**Plan:**` header (completed → [x], in_progress → [~], else [ ]).
-          // Reuses the live assistant message id; does NOT rotate it.
-          const entries = ((update as any).entries ?? []) as Array<Record<string, any>>;
-          if (entries.length > 0) {
-            const planText = entries
-              .map((e, i) => {
-                const status =
-                  e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
-                return `${status} ${i + 1}. ${e.content ?? e.title ?? e.description ?? 'Task'}`;
-              })
-              .join('\n');
-
-            // codex: a `plan` arrives while a Task (switch_mode) tool_call is
-            // still in flight — close it out with the rendered plan as its
-            // tool_result. Harmless for providers with no open Task call.
-            this.closeInFlightTaskToolCalls(planText);
-
-            this.emitMessage({
-              type: 'assistant',
-              message: {
-                id: this.assistantMsgId,
-                content: [{ type: 'text', text: `**Plan:**\n${planText}` }],
-              },
-            } as CLIMessage);
-          }
-        }
+      case 'plan':
+        this.handlePlan(update);
         return;
-      }
-
       // Built-in / dynamic slash commands the ACP agent advertises. Surface them
       // through the same `commands_changed` channel the Claude SDK uses, so the
       // send-boundary guard and the composer autocomplete see this provider's
       // commands instead of nothing. (Previously dropped on the floor.)
-      case 'available_commands_update': {
-        const commands = (((update as any).availableCommands ?? []) as Array<{ name?: string }>)
-          .map((c) => c.name)
-          .filter((n): n is string => typeof n === 'string' && n.length > 0);
-        this.emitMessage({
-          type: 'commands_changed',
-          commands,
-          sessionId: this.activeSessionId ?? '',
-        } as CLIMessage);
+      case 'available_commands_update':
+        this.handleAvailableCommands(update);
         return;
-      }
-
       // Ignore other update types (current_mode_update, etc.)
       default:
         return;
     }
   }
+
+  private handleThoughtChunk(content: ACPContentBlock): void {
+    if (content.type !== 'text' || !content.text) return;
+    if (!this.pendingThought) {
+      this.pendingThought = { id: randomUUID(), text: '' };
+    }
+    this.pendingThought.text += content.text;
+  }
+
+  private handleAgentMessageChunk(content: ACPContentBlock): void {
+    this.flushPendingThought();
+    if (content.type !== 'text' || !content.text) return;
+    if (this.isGluedMessageBoundary(content.text)) {
+      this.accumulatedText += '\n\n';
+    }
+    this.accumulatedText += content.text;
+    // pi prefixes its agent message with a banner — strip it (data regex
+    // from the manifest) so the user never sees the boilerplate. The
+    // regex is anchored at ^, so stripping every emission is idempotent.
+    // When the stripped text is empty (banner only, no real text yet),
+    // emit nothing.
+    const bannerSrc = this.manifest.quirks.stripFirstMessageBanner;
+    const visible = bannerSrc ? stripBanner(this.accumulatedText, bannerSrc) : this.accumulatedText;
+    if (!visible) return;
+    this.emitMessage({
+      type: 'assistant',
+      message: {
+        id: this.assistantMsgId,
+        content: [{ type: 'text', text: visible }],
+      },
+    } as CLIMessage);
+    this.lastAssistantText = visible;
+  }
+
+  /**
+   * codex emits several distinct status messages within one turn as separate
+   * chunks with no tool call between them; concatenating with no separator
+   * produces run-ons (`…render.Aviso…`). Re-insert the dropped boundary ONLY at
+   * the exact glue signature: accumulated text ends with terminal punctuation
+   * and the incoming chunk starts with an uppercase letter, with no whitespace
+   * at the junction. Real token streaming keeps the model's own spacing, so a
+   * single streamed message never matches and is never split.
+   */
+  private isGluedMessageBoundary(nextText: string): boolean {
+    return (
+      Boolean(this.manifest.quirks.splitGluedAgentMessages) &&
+      /[.!?:]$/.test(this.accumulatedText) &&
+      /^\p{Lu}/u.test(nextText)
+    );
+  }
+
+  /**
+   * codex/gemini emit "preamble" tool_calls whose title is just
+   * `[cwd …] (reason)` — narration before the next real tool. Buffer them as
+   * Think text so they collapse into one Think card instead of a stack of
+   * broken tool cards; the matching completion is swallowed in
+   * {@link handleToolCallUpdate}. Returns true when the call was buffered.
+   */
+  private bufferPreambleToolCall(toolCallId: string, title: string): boolean {
+    if (!this.manifest.quirks.bufferPreambleAsThink) return false;
+    const preamble = parseACPPreambleTitle(title);
+    if (!preamble) return false;
+    if (!this.pendingThought) this.pendingThought = { id: randomUUID(), text: '' };
+    this.pendingThought.text += (this.pendingThought.text ? '\n' : '') + preamble;
+    this.toolCallsSeen.set(toolCallId, 'preamble');
+    return true;
+  }
+
+  private handleToolCall(update: ACPToolCallUpdateLike): void {
+    const toolCallId = update.toolCallId;
+    const fields = readToolCallFields(update);
+    if (this.bufferPreambleToolCall(toolCallId, fields.title)) return;
+
+    this.flushPendingThought();
+    if (this.toolCallsSeen.has(toolCallId)) return;
+
+    const toolName = inferACPToolName(fields.kind, fields.title, undefined, fields.rawInput);
+    const input = finalizeTodoInput(
+      toolName,
+      buildACPToolInput(toolName, fields),
+      update.rawOutput,
+    );
+    const isTerminal = isTerminalToolStatus(update.status);
+
+    if (this.deferIfUnrenderable(toolCallId, toolName, input, isTerminal)) return;
+
+    this.emitToolUse(toolCallId, toolName, input);
+    if (isTerminal) {
+      const tcOutput = extractACPToolOutput(update.rawOutput, fields.content, fields.title);
+      this.emitToolResult(toolCallId, tcOutput);
+    }
+  }
+
+  private handleToolCallUpdate(update: ACPToolCallUpdateLike): void {
+    const toolCallId = update.toolCallId;
+    // Swallow the completion of a buffered preamble tool_call (codex/gemini)
+    // — its text already went into the Think buffer; no stray tool_result.
+    if (this.toolCallsSeen.get(toolCallId) === 'preamble') return;
+    this.flushPendingThought();
+    const fields = readToolCallFields(update);
+    const isTerminal = isTerminalToolStatus(update.status);
+
+    if (!this.toolCallsSeen.has(toolCallId)) {
+      const done = this.handleOrphanToolCallUpdate(update, fields, isTerminal);
+      if (done) return;
+    }
+
+    if (isTerminal) {
+      const output = extractACPToolOutput(update.rawOutput, fields.content, fields.title);
+      this.emitToolResult(toolCallId, output);
+    }
+  }
+
+  /**
+   * An update for a tool call we never emitted: either the agent skipped the
+   * initial event, or we deferred it. Synthesize the tool_use from the richer
+   * update data (only for synthToolUseFromOrphanUpdate providers). Returns true
+   * when the caller must stop (no trailing tool_result emission).
+   */
+  private handleOrphanToolCallUpdate(
+    update: ACPToolCallUpdateLike,
+    fields: ACPToolCallFields,
+    isTerminal: boolean,
+  ): boolean {
+    const toolCallId = update.toolCallId;
+    if (!this.manifest.quirks.synthToolUseFromOrphanUpdate) {
+      if (isTerminal) {
+        const output = extractACPToolOutput(update.rawOutput, fields.content, fields.title);
+        this.emitToolResult(toolCallId, output);
+      }
+      return true;
+    }
+    const buffered = this.deferredToolInputs.get(toolCallId);
+    // Trust the original tool name from the deferred tool_call — an update
+    // often omits kind/title, which would degrade to 'Tool'.
+    const toolName =
+      buffered?.name ?? inferACPToolName(fields.kind, fields.title, undefined, fields.rawInput);
+    const built = buildACPToolInput(toolName, fields);
+    const merged = buffered ? mergeToolInput(buffered.input, built) : built;
+    const input = finalizeTodoInput(toolName, merged, update.rawOutput);
+
+    if (this.deferIfUnrenderable(toolCallId, toolName, input, isTerminal)) return true;
+
+    this.emitToolUse(toolCallId, toolName, input);
+    return false;
+  }
+
+  /**
+   * Defer when the card isn't renderable yet (deferUnrenderableToolInput
+   * providers). A non-terminal call waits for a later tool_call_update; a
+   * terminal call that still lacks the field is dropped, not emitted empty.
+   * Returns true when the tool call was deferred or dropped.
+   */
+  private deferIfUnrenderable(
+    toolCallId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+    isTerminal: boolean,
+  ): boolean {
+    if (!this.manifest.quirks.deferUnrenderableToolInput) return false;
+    if (isRenderableToolInput(toolName, input)) return false;
+    if (isTerminal) {
+      this.deferredToolInputs.delete(toolCallId);
+    } else {
+      this.deferredToolInputs.set(toolCallId, { name: toolName, input });
+    }
+    return true;
+  }
+
+  private handlePlan(update: ACPPlanUpdate): void {
+    this.flushPendingThought();
+    if (this.manifest.quirks.planRender === 'todoCard') {
+      this.emitPlanAsTodoCard(update.entries);
+    } else {
+      this.emitPlanAsText(((update as any).entries ?? []) as Array<Record<string, any>>);
+    }
+  }
+
+  private emitPlanAsTodoCard(entries: unknown[] | undefined): void {
+    const input = buildTodoWriteInputFromPlanEntries(entries);
+    if (input.todos.length === 0) return;
+    const planText = formatPlanChecklist(input.todos.map((todo) => [todo.status, todo.content]));
+    this.closeInFlightTaskToolCalls(planText);
+
+    // ACP replaces the whole plan on each update, so each emission is its
+    // own card with a fresh id — matching how the Claude SDK surfaces
+    // successive TodoWrite calls.
+    const toolCallId = randomUUID();
+    this.emitMessage({
+      type: 'assistant',
+      message: {
+        id: randomUUID(),
+        content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
+      },
+    } as CLIMessage);
+    this.emitMessage({
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
+      },
+    } as CLIMessage);
+    this.accumulatedText = '';
+    this.assistantMsgId = randomUUID();
+  }
+
+  /**
+   * planRender 'text': render as a numbered markdown checklist under a
+   * `**Plan:**` header (completed → [x], in_progress → [~], else [ ]).
+   * Reuses the live assistant message id; does NOT rotate it.
+   */
+  private emitPlanAsText(entries: Array<Record<string, any>>): void {
+    if (entries.length === 0) return;
+    const planText = formatPlanChecklist(
+      entries.map((e) => [e.status, e.content ?? e.title ?? e.description ?? 'Task']),
+    );
+
+    // codex: a `plan` arrives while a Task (switch_mode) tool_call is
+    // still in flight — close it out with the rendered plan as its
+    // tool_result. Harmless for providers with no open Task call.
+    this.closeInFlightTaskToolCalls(planText);
+
+    this.emitMessage({
+      type: 'assistant',
+      message: {
+        id: this.assistantMsgId,
+        content: [{ type: 'text', text: `**Plan:**\n${planText}` }],
+      },
+    } as CLIMessage);
+  }
+
+  private handleAvailableCommands(update: ACPSessionUpdate): void {
+    const commands = (((update as any).availableCommands ?? []) as Array<{ name?: string }>)
+      .map((c) => c.name)
+      .filter((n): n is string => typeof n === 'string' && n.length > 0);
+    this.emitMessage({
+      type: 'commands_changed',
+      commands,
+      sessionId: this.activeSessionId ?? '',
+    } as CLIMessage);
+  }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
+
+function readToolCallFields(update: ACPToolCallUpdateLike): ACPToolCallFields {
+  const u = update as any;
+  return {
+    kind: u.kind as string | undefined,
+    title: update.title || '',
+    rawInput: u.rawInput,
+    locations: u.locations as ACPToolCallFields['locations'],
+    content: u.content as unknown[] | undefined,
+  };
+}
+
+function isTerminalToolStatus(status: unknown): boolean {
+  return status === 'completed' || status === 'failed';
+}
+
+/** TodoWrite: pull todos from the tool output when missing and normalize to `{ todos }`. */
+function finalizeTodoInput(
+  toolName: string,
+  input: Record<string, unknown>,
+  rawOutput: unknown,
+): Record<string, unknown> {
+  if (toolName !== 'TodoWrite') return input;
+  const enriched = enrichTodoWriteInputFromOutput(input, rawOutput);
+  const clean = buildTodoWriteInputFromRaw(enriched);
+  return clean ? { todos: clean.todos } : enriched;
+}
+
+/** Plan entry status → markdown checkbox (completed → [x], in_progress → [~], else [ ]). */
+function planStatusMark(status: unknown): string {
+  if (status === 'completed') return '[x]';
+  if (status === 'in_progress') return '[~]';
+  return '[ ]';
+}
+
+/** Render `[status, text]` pairs as a numbered checklist, one entry per line. */
+function formatPlanChecklist(items: Array<[unknown, unknown]>): string {
+  return items.map(([status, text], i) => `${planStatusMark(status)} ${i + 1}. ${text}`).join('\n');
+}
 
 /**
  * Whether a built tool input has the primary field its client card needs to

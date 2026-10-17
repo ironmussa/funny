@@ -115,127 +115,166 @@ export function buildACPToolInput(
       ? { ...(data.rawInput as Record<string, unknown>) }
       : {};
 
-  const { title, locations, content } = data;
   const input: Record<string, unknown> = { ...raw };
 
-  switch (toolName) {
-    case 'Read':
-    case 'Write':
-    case 'Edit': {
-      // Cursor reports edits as a `diff` content block carrying the path plus
-      // the before/after text — the only place the path appears for an edit.
-      const diff = extractDiffBlock(content);
-      if (!input.file_path) {
-        const path =
-          (input.path as string) ??
-          (input.filePath as string) ??
-          (input.filename as string) ??
-          (input.file as string) ??
-          // Cursor-specific aliases
-          (input.target_file as string) ??
-          (input.abs_path as string) ??
-          (input.absolute_path as string) ??
-          (input.relative_workspace_path as string);
-        if (path) {
-          input.file_path = path;
-        } else if (locations?.length) {
-          input.file_path = locations[0].path;
-        } else if (diff?.path) {
-          input.file_path = diff.path;
-        } else {
-          const fromContent = extractPathFromContent(content);
-          if (fromContent) {
-            input.file_path = fromContent;
-          } else if (title) {
-            const extracted = extractPathFromTitle(title);
-            if (extracted) {
-              input.file_path = extracted;
-            }
-          }
-        }
-      }
-      // Surface the diff's before/after text so the EditFileCard can render an
-      // inline diff (it needs file_path + old_string + new_string).
-      if (toolName !== 'Read' && diff) {
-        if (input.old_string == null && typeof diff.oldText === 'string') {
-          input.old_string = diff.oldText;
-        }
-        if (input.new_string == null && typeof diff.newText === 'string') {
-          input.new_string = diff.newText;
-        }
-      }
-      break;
-    }
-    case 'Bash': {
-      if (!input.command) {
-        input.command =
-          (input.cmd as string) ??
-          (input.shell_command as string) ??
-          (input.script as string) ??
-          title;
-      }
-      break;
-    }
-    case 'Glob': {
-      if (!input.pattern) {
-        input.pattern = (input.glob as string) ?? extractGlobFromTitle(title) ?? title;
-      }
-      break;
-    }
-    case 'Grep': {
-      if (!input.pattern) {
-        const searchMatch = title.match(
-          /(?:for|searching)\s+['"]?([^'"]+)['"]?(?:\s+in\s+(\S+))?/i,
-        );
-        if (searchMatch) {
-          input.pattern = searchMatch[1].trim();
-          if (searchMatch[2]) input.path = searchMatch[2];
-        } else {
-          input.pattern = (input.query as string) ?? (input.search as string) ?? title;
-        }
-      }
-      break;
-    }
-    case 'WebFetch': {
-      if (!input.url) {
-        input.url = (input.href as string) ?? title;
-      }
-      break;
-    }
-    case 'WebSearch': {
-      if (!input.query) {
-        input.query = (input.search as string) ?? title;
-      }
-      break;
-    }
-    case 'Task': {
-      if (!input.description && title) {
-        input.description = title;
-      }
-      break;
-    }
-    case 'Think': {
-      if (!input.content && title) {
-        input.content = title;
-      }
-      break;
-    }
-    case 'TodoWrite': {
-      const todoInput = buildTodoWriteInputFromRaw(input);
-      if (todoInput) {
-        return { todos: todoInput.todos };
-      }
-      break;
-    }
-  }
+  const replacement = TOOL_INPUT_FILLERS.get(toolName)?.(input, data, toolName);
+  if (replacement) return replacement;
 
   // Always include the ACP title as description fallback
-  if (title && !input.description) {
-    input.description = title;
+  if (data.title && !input.description) {
+    input.description = data.title;
   }
 
   return input;
 }
+
+/**
+ * Per-tool filler: mutates `input` in place to add the canonical fields the
+ * client card expects. Returning an object replaces the whole input (and skips
+ * the description fallback) — used by TodoWrite.
+ */
+type ToolInputFiller = (
+  input: Record<string, unknown>,
+  data: ACPToolCallData,
+  toolName: string,
+) => Record<string, unknown> | undefined;
+
+/** First value among `keys` that is not null/undefined (mirrors a `??` chain). */
+function firstDefined(input: Record<string, unknown>, keys: readonly string[]): unknown {
+  for (const key of keys) {
+    if (input[key] != null) return input[key];
+  }
+  return undefined;
+}
+
+/** Provider aliases for the file path, in priority order (last four are Cursor-specific). */
+const FILE_PATH_ALIASES = [
+  'path',
+  'filePath',
+  'filename',
+  'file',
+  'target_file',
+  'abs_path',
+  'absolute_path',
+  'relative_workspace_path',
+] as const;
+
+type DiffBlock = { path?: string; oldText?: string; newText?: string };
+
+/** Set `file_path` (when missing) from the first source that resolves one. */
+function fillFilePath(
+  input: Record<string, unknown>,
+  data: ACPToolCallData,
+  diff: DiffBlock | null,
+): void {
+  if (input.file_path) return;
+  const resolved = resolveFilePath(input, data, diff);
+  if (resolved) input.file_path = resolved.value;
+}
+
+/**
+ * Resolve the file path from raw aliases, locations, diff, content blocks, then
+ * title. Boxed so a location is used as-is even when its path is empty.
+ */
+function resolveFilePath(
+  input: Record<string, unknown>,
+  data: ACPToolCallData,
+  diff: DiffBlock | null,
+): { value: unknown } | null {
+  const alias = firstDefined(input, FILE_PATH_ALIASES);
+  if (alias) return { value: alias };
+  if (data.locations?.length) return { value: data.locations[0].path };
+  const fallback =
+    diff?.path || extractPathFromContent(data.content) || extractPathFromTitle(data.title ?? '');
+  return fallback ? { value: fallback } : null;
+}
+
+/**
+ * Surface the diff's before/after text so the EditFileCard can render an
+ * inline diff (it needs file_path + old_string + new_string).
+ */
+function fillDiffText(input: Record<string, unknown>, diff: DiffBlock): void {
+  if (input.old_string == null && typeof diff.oldText === 'string') {
+    input.old_string = diff.oldText;
+  }
+  if (input.new_string == null && typeof diff.newText === 'string') {
+    input.new_string = diff.newText;
+  }
+}
+
+const fillFileTool: ToolInputFiller = (input, data, toolName) => {
+  // Cursor reports edits as a `diff` content block carrying the path plus
+  // the before/after text — the only place the path appears for an edit.
+  const diff = extractDiffBlock(data.content);
+  fillFilePath(input, data, diff);
+  if (toolName !== 'Read' && diff) fillDiffText(input, diff);
+  return undefined;
+};
+
+const fillBash: ToolInputFiller = (input, data) => {
+  if (!input.command) {
+    input.command = firstDefined(input, ['cmd', 'shell_command', 'script']) ?? data.title;
+  }
+  return undefined;
+};
+
+const fillGlob: ToolInputFiller = (input, data) => {
+  if (!input.pattern) {
+    input.pattern = (input.glob as string) ?? extractGlobFromTitle(data.title) ?? data.title;
+  }
+  return undefined;
+};
+
+const fillGrep: ToolInputFiller = (input, data) => {
+  if (input.pattern) return undefined;
+  const searchMatch = data.title.match(/(?:for|searching)\s+['"]?([^'"]+)['"]?(?:\s+in\s+(\S+))?/i);
+  if (searchMatch) {
+    input.pattern = searchMatch[1].trim();
+    if (searchMatch[2]) input.path = searchMatch[2];
+  } else {
+    input.pattern = firstDefined(input, ['query', 'search']) ?? data.title;
+  }
+  return undefined;
+};
+
+const fillWebFetch: ToolInputFiller = (input, data) => {
+  if (!input.url) input.url = (input.href as string) ?? data.title;
+  return undefined;
+};
+
+const fillWebSearch: ToolInputFiller = (input, data) => {
+  if (!input.query) input.query = (input.search as string) ?? data.title;
+  return undefined;
+};
+
+const fillTask: ToolInputFiller = (input, data) => {
+  if (!input.description && data.title) input.description = data.title;
+  return undefined;
+};
+
+const fillThink: ToolInputFiller = (input, data) => {
+  if (!input.content && data.title) input.content = data.title;
+  return undefined;
+};
+
+const fillTodoWrite: ToolInputFiller = (input) => {
+  const todoInput = buildTodoWriteInputFromRaw(input);
+  return todoInput ? { todos: todoInput.todos } : undefined;
+};
+
+const TOOL_INPUT_FILLERS = new Map<string, ToolInputFiller>([
+  ['Read', fillFileTool],
+  ['Write', fillFileTool],
+  ['Edit', fillFileTool],
+  ['Bash', fillBash],
+  ['Glob', fillGlob],
+  ['Grep', fillGrep],
+  ['WebFetch', fillWebFetch],
+  ['WebSearch', fillWebSearch],
+  ['Task', fillTask],
+  ['Think', fillThink],
+  ['TodoWrite', fillTodoWrite],
+]);
 
 /** True when a built TodoWrite input has a non-empty checklist for the client card. */
 export function hasRenderableTodoInput(input: Record<string, unknown>): boolean {

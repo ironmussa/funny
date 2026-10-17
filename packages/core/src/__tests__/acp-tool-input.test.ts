@@ -135,3 +135,119 @@ describe('Cursor updateTodos → TodoWrite', () => {
     expect(built).toEqual({ todos: [{ content: 'Ship it', status: 'completed' }] });
   });
 });
+
+describe('buildACPToolInput — per-tool canonical fields', () => {
+  test('file path priority: raw alias > locations > diff > content > title', () => {
+    expect(
+      buildACPToolInput('Read', {
+        title: 'Reading /t.ts',
+        rawInput: { path: '/alias.ts', filePath: '/other.ts' },
+        locations: [{ path: '/loc.ts' }],
+      }).file_path,
+    ).toBe('/alias.ts');
+    expect(
+      buildACPToolInput('Read', {
+        title: 'Reading /t.ts',
+        locations: [{ path: '/loc.ts' }],
+        content: [{ type: 'diff', path: 'file:///diff.ts', newText: 'x' }],
+      }).file_path,
+    ).toBe('/loc.ts');
+    expect(
+      buildACPToolInput('Read', {
+        title: 'Reading /t.ts',
+        content: [{ type: 'diff', path: 'file:///diff.ts', newText: 'x' }],
+      }).file_path,
+    ).toBe('/diff.ts');
+    expect(buildACPToolInput('Read', { title: 'Reading /t.ts and more' }).file_path).toBe('/t.ts');
+    expect(buildACPToolInput('Read', { title: '~/notes.md' }).file_path).toBe('~/notes.md');
+  });
+
+  test('existing file_path is kept untouched', () => {
+    const input = buildACPToolInput('Write', {
+      title: 'Write',
+      rawInput: { file_path: '/keep.ts', path: '/ignored.ts' },
+    });
+    expect(input.file_path).toBe('/keep.ts');
+  });
+
+  test('Edit surfaces diff old/new text; Read does not; explicit values win', () => {
+    const content = [{ type: 'diff', path: '/a.ts', oldText: 'old', newText: 'new' }];
+    expect(buildACPToolInput('Edit', { title: 'Edit', content })).toMatchObject({
+      file_path: '/a.ts',
+      old_string: 'old',
+      new_string: 'new',
+    });
+    const read = buildACPToolInput('Read', { title: 'Read', content });
+    expect(read.old_string).toBeUndefined();
+    expect(read.new_string).toBeUndefined();
+    const kept = buildACPToolInput('Edit', {
+      title: 'Edit',
+      rawInput: { old_string: 'mine' },
+      content,
+    });
+    expect(kept.old_string).toBe('mine');
+    expect(kept.new_string).toBe('new');
+  });
+
+  test('Bash command falls back through cmd / shell_command / script / title', () => {
+    const cmd = (rawInput: unknown, title = 't') =>
+      buildACPToolInput('Bash', { title, rawInput }).command;
+    expect(cmd({ cmd: 'a', script: 'c' })).toBe('a');
+    expect(cmd({ shell_command: 'b' })).toBe('b');
+    expect(cmd({ script: 'c' })).toBe('c');
+    expect(cmd(undefined, 'ls -la')).toBe('ls -la');
+    expect(cmd({ command: 'keep' })).toBe('keep');
+  });
+
+  test('Glob pattern from raw glob, title keyword, title token, then title', () => {
+    const pat = (title: string, rawInput?: unknown) =>
+      buildACPToolInput('Glob', { title, rawInput }).pattern;
+    expect(pat('x', { glob: '*.md' })).toBe('*.md');
+    expect(pat('Files matching src/**')).toBe('src/**');
+    expect(pat('list *.ts now')).toBe('*.ts');
+    expect(pat('list all')).toBe('list all');
+  });
+
+  test('Grep pattern parses title, else query / search / title', () => {
+    const fromTitle = buildACPToolInput('Grep', { title: "Search for 'TODO' in src/" });
+    expect(fromTitle).toMatchObject({ pattern: 'TODO', path: 'src/' });
+    const noPath = buildACPToolInput('Grep', { title: 'search for foo' });
+    expect(noPath.pattern).toBe('foo');
+    expect(noPath.path).toBeUndefined();
+    const pat = (rawInput?: unknown) =>
+      buildACPToolInput('Grep', { title: 'grep', rawInput }).pattern;
+    expect(pat({ query: 'q', search: 's' })).toBe('q');
+    expect(pat({ search: 's' })).toBe('s');
+    expect(pat()).toBe('grep');
+  });
+
+  test('WebFetch / WebSearch / Task / Think fill their primary field', () => {
+    expect(buildACPToolInput('WebFetch', { title: 'u', rawInput: { href: 'h' } }).url).toBe('h');
+    expect(buildACPToolInput('WebFetch', { title: 'https://x' }).url).toBe('https://x');
+    expect(buildACPToolInput('WebSearch', { title: 't', rawInput: { search: 's' } }).query).toBe(
+      's',
+    );
+    expect(buildACPToolInput('WebSearch', { title: 'cats' }).query).toBe('cats');
+    expect(buildACPToolInput('Task', { title: 'do it' }).description).toBe('do it');
+    expect(buildACPToolInput('Think', { title: 'hmm' })).toEqual({
+      content: 'hmm',
+      description: 'hmm',
+    });
+    expect(buildACPToolInput('Think', { title: '' })).toEqual({});
+  });
+
+  test('TodoWrite without todos keeps the raw input plus description fallback', () => {
+    expect(buildACPToolInput('TodoWrite', { title: 'Plan', rawInput: { merge: true } })).toEqual({
+      merge: true,
+      description: 'Plan',
+    });
+  });
+
+  test('unknown tool names only get the description fallback', () => {
+    expect(buildACPToolInput('Tool', { title: 'x', rawInput: { a: 1 } })).toEqual({
+      a: 1,
+      description: 'x',
+    });
+    expect(buildACPToolInput('constructor', { title: 'x' })).toEqual({ description: 'x' });
+  });
+});

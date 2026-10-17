@@ -1,10 +1,16 @@
 /**
  * Auth route wiring — verifies /api/auth/* is forwarded to Better Auth.
  */
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realAuthModule from '../../lib/auth.js';
+import { snapshotModule } from '../helpers/module-mocks.js';
 
 const handlerCalls: Array<{ url: string; method: string }> = [];
 
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realAuth = snapshotModule(realAuthModule);
 mock.module('../../lib/auth.js', () => ({
   auth: {
     handler: (req: Request) => {
@@ -16,6 +22,9 @@ mock.module('../../lib/auth.js', () => ({
     },
   },
 }));
+afterAll(() => {
+  mock.module('../../lib/auth.js', () => realAuth);
+});
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 

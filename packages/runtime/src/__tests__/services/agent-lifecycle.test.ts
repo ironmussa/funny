@@ -378,6 +378,49 @@ describe('AgentLifecycleManager', () => {
     });
   });
 
+  describe('startAgent — agent execution profile', () => {
+    const workProfile = {
+      id: 'profile-1',
+      name: 'Work',
+      provider: 'claude',
+      config: { claude: { configDir: '/tmp/claude-work' } },
+      createdAt: '2026-06-24T00:00:00.000Z',
+      updatedAt: '2026-06-24T00:00:00.000Z',
+    };
+
+    test('merges the matching profile env and records it on the thread', async () => {
+      mocks.resolveEffectiveProfile.mockResolvedValue({
+        profile: workProfile,
+        env: { CLAUDE_CONFIG_DIR: '/tmp/claude-work' },
+      });
+
+      const call = await startWithStatus('pending', { id: 'thread-profile-match' }, 'claude');
+
+      expect(call.env).toEqual(expect.objectContaining({ CLAUDE_CONFIG_DIR: '/tmp/claude-work' }));
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith('thread-profile-match', {
+        agentProfileId: 'profile-1',
+        agentProfileName: 'Work',
+        agentProfileProvider: 'claude',
+      });
+    });
+
+    test('ignores a profile for another provider and clears the recorded profile', async () => {
+      mocks.resolveEffectiveProfile.mockResolvedValue({
+        profile: workProfile,
+        env: { CLAUDE_CONFIG_DIR: '/tmp/claude-work' },
+      });
+
+      const call = await startWithStatus('pending', { id: 'thread-profile-other' }, 'gemini');
+
+      expect((call.env as Record<string, string> | undefined)?.CLAUDE_CONFIG_DIR).toBeUndefined();
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith('thread-profile-other', {
+        agentProfileId: null,
+        agentProfileName: null,
+        agentProfileProvider: null,
+      });
+    });
+  });
+
   describe('startAgent — project MCP profile', () => {
     test('loads project MCP servers from the active Claude profile config directory', async () => {
       seedProjectThread();
@@ -677,6 +720,31 @@ describe('AgentLifecycleManager', () => {
 
       expect(call.prompt).toBe('hello');
       expect(mocks.orchestrator.startAgent).toHaveBeenCalled();
+    });
+
+    test('keeps already-merged template tools when template variables are malformed', async () => {
+      mocks.remoteGetAgentTemplate.mockResolvedValue({
+        id: 'custom-template',
+        name: 'Custom Agent',
+        systemPrompt: 'Hello {{NAME}}',
+        disallowedTools: JSON.stringify(['bash']),
+        builtinSkillsDisabled: JSON.stringify(['search']),
+      });
+
+      const call = await startWithStatus(
+        'pending',
+        {
+          agentTemplateId: 'custom-template',
+          templateVariables: '{not-json',
+          id: 'thread-deep-bad-vars',
+        },
+        'deepagent',
+      );
+
+      expect(mocks.orchestrator.startAgent).toHaveBeenCalled();
+      expect(call.disallowedTools).toEqual(['bash']);
+      expect(call.systemPrefix ?? '').not.toMatch(/\[AGENT TEMPLATE\]/);
+      expect(call.builtinSkillsDisabled).toBeUndefined();
     });
 
     test('ignores template resolution for non-deepagent providers', async () => {

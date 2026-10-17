@@ -699,6 +699,26 @@ describe('createAndStartThread', () => {
     );
   });
 
+  test('starts a local thread without branch info when the current branch cannot be read', async () => {
+    mocks.getCurrentBranch.mockResolvedValue(err(new Error('not a git repo')));
+
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      baseBranch: 'develop',
+      prompt: 'Work anyway',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.git).not.toHaveBeenCalled();
+    expect(mocks.findWorktreeForBranch).not.toHaveBeenCalled();
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: undefined, baseBranch: 'develop', status: 'pending' }),
+    );
+    expect(mocks.startAgent).toHaveBeenCalled();
+  });
+
   test('checks out baseBranch in local mode when it differs from current branch', async () => {
     mocks.getCurrentBranch.mockResolvedValue(ok('main'));
     mocks.git.mockResolvedValue(ok(undefined));

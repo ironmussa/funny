@@ -94,12 +94,7 @@ function flushBatch() {
     fallbackFlushTimer = null;
   }
 
-  const msgs = Array.from(pendingMessages.values());
-  const toolOutputs = pendingToolOutputs.slice();
-  const statuses = Array.from(pendingStatuses.values());
-  pendingMessages.clear();
-  pendingToolOutputs = [];
-  pendingStatuses.clear();
+  const { msgs, toolOutputs, statuses } = drainPendingBatch();
 
   const total = msgs.length + toolOutputs.length + statuses.length;
   if (total === 0) return;
@@ -230,461 +225,543 @@ export function dispatchRealtimeEvent(type: string, threadId: string, data: unkn
   dispatchEvent(type, threadId, data);
 }
 
-function applyWebEvent(type: string, threadId: string, data: any): void {
-  switch (type) {
-    case 'agent:message': {
-      const key = pendingMessageKey(threadId, data);
-      const collapsed = pendingMessages.has(key);
-      wsLog.info('agent:message received', {
-        threadId,
-        messageId: data?.messageId ?? '',
-        role: data?.role ?? '',
-        contentChars: String(data?.content?.length ?? 0),
-        collapsedPrevious: String(collapsed),
-      });
-      pendingMessages.set(key, { threadId, data });
-      scheduleFlush();
-      break;
-    }
-    case 'agent:tool_output':
-      pendingToolOutputs.push({ threadId, data });
-      scheduleFlush();
-      break;
+// ── Web event handlers (table-driven dispatch) ──────────────────
 
-    case 'agent:init':
-      startTransition(() => {
-        useThreadStore.getState().handleWSInit(threadId, data);
-      });
-      break;
-    case 'agent:status': {
-      const statusKey = `${data.status}|${data.waitingReason ?? ''}|${data.permissionRequest?.toolName ?? ''}|${data.pendingPermissionRequest?.requestId ?? ''}|${data.permissionApprovalCapability?.kind ?? ''}|${data.permissionApprovalCapability?.transport ?? data.permissionApprovalCapability?.reason ?? ''}|${data.stage ?? ''}|${data.permissionMode ?? ''}`;
-      const prev = lastStatusByThread.get(threadId);
-      if (prev === statusKey) break;
-      lastStatusByThread.set(threadId, statusKey);
+type WebEventType = (typeof ALL_EVENT_TYPES)[number];
+type WebEventHandler = (threadId: string, data: any, type: string) => void;
+type ThreadStoreState = ReturnType<typeof useThreadStore.getState>;
 
-      wsLog.info('agent:status', {
-        threadId,
-        status: data.status,
-        waitingReason: data.waitingReason ?? '',
-        permissionRequest: data.permissionRequest?.toolName ?? '',
-      });
+function noop(): void {}
 
-      if (data.status === 'waiting' || data.permissionRequest || data.pendingPermissionRequest) {
-        startTransition(() => {
-          useThreadStore.getState().handleWSStatus(threadId, data);
-        });
-      } else {
-        pendingStatuses.set(threadId, { threadId, data });
-        scheduleFlush();
-      }
-      break;
-    }
-    case 'agent:result': {
-      lastStatusByThread.delete(threadId);
+/** Run a thread-store action inside a React transition (store read lazily). */
+function inTransition(
+  apply: (store: ThreadStoreState, threadId: string, data: any) => void,
+): WebEventHandler {
+  return (threadId, data) => {
+    startTransition(() => {
+      apply(useThreadStore.getState(), threadId, data);
+    });
+  };
+}
 
-      const resultStatus = String(data.status ?? '');
-      wsLog.info('agent:result', {
-        threadId,
-        status: resultStatus,
-        cost: String(data.cost ?? ''),
-        errorReason: data.errorReason ?? '',
-        isWaiting: String(data.status === 'waiting'),
-      });
-      // Permanent counter: lets us see in Abbacchio whether the result event
-      // even reached the client. A stuck "loading" thread with no `ws.result`
-      // sample means the event was dropped at the transport layer.
-      metric('ws.result_received', 1, { attributes: { status: resultStatus } });
-      // Permanent span: covers the gap between "event arrived" and "store
-      // applied final state" — surfaces React 19 transition lag under load.
-      const dispatchSpan = startSpan('ws.dispatch_result', {
-        attributes: { status: resultStatus },
-      });
+function notifyReviewDirty(threadId: string): void {
+  import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
+    useReviewPaneStore.getState().notifyDirty(threadId);
+  });
+}
 
-      cancelScheduledFlush();
-      const msgs = Array.from(pendingMessages.values());
-      const toolOutputs = pendingToolOutputs.slice();
-      const statuses2 = Array.from(pendingStatuses.values());
-      pendingMessages.clear();
-      pendingToolOutputs = [];
-      pendingStatuses.clear();
+/** True when `threadId` is the thread the user is currently viewing. */
+function isViewingThread(store: ThreadStoreState, threadId: string): boolean {
+  return (getUrlThreadId() ?? store.selectedThreadId) === threadId;
+}
 
-      if (statuses2.length > 0 || msgs.length > 0 || toolOutputs.length > 0) {
-        const store = useThreadStore.getState();
-        for (const entry of statuses2) store.handleWSStatus(entry.threadId, entry.data);
-        for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
-        for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
-      }
+function drainPendingBatch(): {
+  msgs: BufferedMessage[];
+  toolOutputs: Array<{ threadId: string; data: any }>;
+  statuses: BufferedMessage[];
+} {
+  const msgs = Array.from(pendingMessages.values());
+  const toolOutputs = pendingToolOutputs.slice();
+  const statuses = Array.from(pendingStatuses.values());
+  pendingMessages.clear();
+  pendingToolOutputs = [];
+  pendingStatuses.clear();
+  return { msgs, toolOutputs, statuses };
+}
 
-      startTransition(() => {
-        useThreadStore.getState().handleWSResult(threadId, data);
-        dispatchSpan.end('OK');
-      });
+function handleAgentMessage(threadId: string, data: any): void {
+  const key = pendingMessageKey(threadId, data);
+  const collapsed = pendingMessages.has(key);
+  wsLog.info('agent:message received', {
+    threadId,
+    messageId: data?.messageId ?? '',
+    role: data?.role ?? '',
+    contentChars: String(data?.content?.length ?? 0),
+    collapsedPrevious: String(collapsed),
+  });
+  pendingMessages.set(key, { threadId, data });
+  scheduleFlush();
+}
 
-      import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
-        useReviewPaneStore.getState().notifyDirty(threadId);
-      });
+function handleAgentToolOutput(threadId: string, data: any): void {
+  pendingToolOutputs.push({ threadId, data });
+  scheduleFlush();
+}
 
-      break;
-    }
-    case 'agent:tool_call': {
-      if (data.name === 'AskUserQuestion' || data.name === 'ExitPlanMode') {
-        wsLog.info('interactive tool_call received', {
-          threadId,
-          toolName: data.name,
-          toolCallId: data.toolCallId ?? '',
-        });
-      }
-      const hasPendingTC = pendingMessages.size > 0;
-      if (hasPendingTC) cancelScheduledFlush();
-      startTransition(() => {
-        if (hasPendingTC) {
-          const msgs2 = Array.from(pendingMessages.values());
-          pendingMessages.clear();
-          const store = useThreadStore.getState();
-          for (const entry of msgs2) store.handleWSMessage(entry.threadId, entry.data);
-        }
-        useThreadStore.getState().handleWSToolCall(threadId, data);
-      });
-      if (FILE_MODIFYING_TOOLS.has(data.name)) {
-        import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
-          useReviewPaneStore.getState().notifyDirty(threadId);
-        });
-      }
-      break;
-    }
-    case 'agent:error':
-      wsLog.error('agent:error', { threadId, error: data.error ?? 'unknown' });
-      startTransition(() => {
-        useThreadStore.getState().handleWSError(threadId, data);
-      });
-      break;
-    case 'agent:compact_boundary':
-      startTransition(() => {
-        useThreadStore.getState().handleWSCompactBoundary(threadId, data);
-      });
-      break;
-    case 'agent:context_usage':
-      startTransition(() => {
-        useThreadStore.getState().handleWSContextUsage(threadId, data);
-      });
-      break;
-    case 'command:output': {
-      useTerminalStore.getState().appendCommandOutput(data.commandId, data.data);
-      break;
-    }
-    case 'command:status': {
-      if (data.status === 'exited' || data.status === 'stopped') {
-        useTerminalStore.getState().markCommandExited(data.commandId);
-        closePreviewForCommand(data.commandId);
-      }
-      break;
-    }
-    case 'command:metrics': {
-      useTerminalStore.getState().updateCommandMetrics(data);
-      break;
-    }
-    case 'native-git:build_output':
-    case 'native-git:build_status': {
-      import('@/stores/native-git-store').then(({ useNativeGitStore }) => {
-        const store = useNativeGitStore.getState();
-        if (type === 'native-git:build_output') {
-          store.appendBuildOutput(data.text);
-        } else {
-          store.setBuildStatus(data.status, data.exitCode);
-        }
-      });
-      break;
-    }
-    case 'automation:run_started':
-      import('@/stores/automation-store').then(({ useAutomationStore }) => {
-        useAutomationStore.getState().handleRunStarted({ ...data, threadId });
-      });
-      break;
-    case 'automation:run_completed':
-      import('@/stores/automation-store').then(({ useAutomationStore }) => {
-        useAutomationStore.getState().handleRunCompleted(data);
-      });
-      break;
-    case 'automation:run_updated':
-      import('@/stores/automation-store').then(({ useAutomationStore }) => {
-        useAutomationStore.getState().loadInbox();
-      });
-      break;
-    case 'watcher:created':
-    case 'watcher:fired':
-    case 'watcher:rescheduled':
-    case 'watcher:completed':
-    case 'watcher:cancelled':
-      import('@/stores/watcher-store').then(({ useWatcherStore }) => {
-        if (data?.watcher) useWatcherStore.getState().upsert(data.watcher);
-      });
-      break;
-    case 'job:created':
-    case 'job:exited':
-    case 'job:killed':
-    case 'job:cancelled':
-      import('@/stores/job-store').then(({ useJobStore }) => {
-        if (data?.job) useJobStore.getState().upsert(data.job);
-      });
-      break;
-    case 'pipeline:run_started':
-    case 'pipeline:stage_update':
-    case 'pipeline:run_completed': {
-      import('@/stores/pipeline-store').then(({ usePipelineStore }) => {
-        const store = usePipelineStore.getState();
-        if (type === 'pipeline:run_started') store.handlePipelineStarted(data);
-        else if (type === 'pipeline:stage_update') store.handlePipelineStageUpdate(data);
-        else if (type === 'pipeline:run_completed') store.handlePipelineCompleted(data);
-      });
-      break;
-    }
-    case 'pipeline:approval_requested':
-    case 'pipeline:approval_resolved': {
-      import('@/stores/pipeline-approval-store').then(({ usePipelineApprovalStore }) => {
-        const store = usePipelineApprovalStore.getState();
-        if (type === 'pipeline:approval_requested') store.handleApprovalRequested(data);
-        else store.handleApprovalResolved(data);
-      });
-      break;
-    }
-    case 'workflow:node_state': {
-      import('@/stores/workflow-run-store').then(({ useWorkflowRunStore }) => {
-        useWorkflowRunStore.getState().handleNodeState(data);
-      });
-      break;
-    }
-    case 'thread:claimed': {
-      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
-        useSchedulerStore.getState().handleClaimed(threadId, data);
-      });
-      break;
-    }
-    case 'thread:dispatched': {
-      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
-        useSchedulerStore.getState().handleDispatched(threadId, data);
-      });
-      break;
-    }
-    case 'thread:retry-queued': {
-      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
-        useSchedulerStore.getState().handleRetryQueued(threadId, data);
-      });
-      break;
-    }
-    case 'thread:released': {
-      import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
-        useSchedulerStore.getState().handleReleased(threadId);
-      });
-      break;
-    }
-    case 'thread:created':
-      // Scratch threads have no project (projectId is '' / null). Calling
-      // loadThreadsForProject('') would fall through to api.listThreads()
-      // with no filter, leaking every user thread into threadsByProject['']
-      // and duplicating the sidebar Activity section. Scratch threads are
-      // handled separately via addScratchThread on the create path.
-      if (data.projectId) {
-        useThreadStore.getState().loadThreadsForProject(data.projectId);
-      }
-      break;
-    case 'thread:comment': {
-      // A new comment was posted — append it live for every current viewer and
-      // bump the header badge. See thread-sharing design D9.
-      if (data.comment) {
-        import('@/stores/comment-store').then(({ useCommentStore }) => {
-          useCommentStore.getState().applyAdded(threadId, data.comment);
-        });
-        adjustCommentCount(threadId, +1);
-      }
-      break;
-    }
-    case 'thread:comment_deleted': {
-      if (data.commentId) {
-        import('@/stores/comment-store').then(({ useCommentStore }) => {
-          useCommentStore.getState().applyDeleted(threadId, data.commentId);
-        });
-        adjustCommentCount(threadId, -1);
-      } else {
-        // Legacy payload without an id — fall back to a refetch.
-        const store = useThreadStore.getState();
-        if ((getUrlThreadId() ?? store.selectedThreadId) === threadId) {
-          store.refreshActiveThread();
-        }
-      }
-      break;
-    }
-    case 'thread:stage-changed': {
-      useThreadStore.getState().handleWSStageChanged(threadId, {
-        fromStage: data.fromStage ?? null,
-        toStage: data.toStage,
-        projectId: data.projectId,
-      });
-      break;
-    }
-    case 'thread:updated': {
-      const store2 = useThreadStore.getState();
-      if (data.resync && (getUrlThreadId() ?? store2.selectedThreadId) === threadId) {
-        store2.refreshActiveThread();
-      }
-      if (data.status) {
-        store2.handleWSStatus(threadId, { status: data.status });
-      }
-      if (data.archived) {
-        store2.refreshAllLoadedThreads();
-      }
-      if (data.branch || data.worktreePath || data.containerUrl || data.mergedAt || data.mode) {
-        store2.refreshAllLoadedThreads();
-        if ((getUrlThreadId() ?? store2.selectedThreadId) === threadId) {
-          store2.refreshActiveThread();
-        }
-      }
-      if (data.permissionMode) {
-        useThreadStore.setState((state) => ({
-          ...threadMutations.patchThread(state, threadId, (thread) => ({
-            ...thread,
-            permissionMode: data.permissionMode,
-          })),
-          ...threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
-            ...thread,
-            permissionMode: data.permissionMode,
-          })),
-          // A very early event can arrive before either cache is hydrated.
-          // Keep the active mirror coherent in that narrow window as well.
-          ...(state.activeThread?.id === threadId &&
-          !state.threadsById[threadId] &&
-          !state.threadDataById[threadId]
-            ? { activeThread: { ...state.activeThread, permissionMode: data.permissionMode } }
-            : {}),
-        }));
-      }
-      break;
-    }
-    // ── Thread sharing: presence + revoke ──────────────────────
-    case 'presence:sync': {
-      import('@/stores/presence-store').then(({ usePresenceStore }) => {
-        usePresenceStore.getState().setRoster(threadId, data.viewers ?? []);
-      });
-      break;
-    }
-    case 'presence:join': {
-      if (data.viewer) {
-        import('@/stores/presence-store').then(({ usePresenceStore }) => {
-          usePresenceStore.getState().upsertViewer(threadId, data.viewer);
-        });
-      }
-      break;
-    }
-    case 'presence:leave': {
-      import('@/stores/presence-store').then(({ usePresenceStore }) => {
-        usePresenceStore.getState().removeViewer(threadId, data.clientId);
-      });
-      break;
-    }
-    case 'thread:share-revoked': {
-      // The owner revoked our access — drop the thread + its presence.
-      import('@/stores/presence-store').then(({ usePresenceStore }) => {
-        usePresenceStore.getState().clearThread(threadId);
-      });
-      useThreadStore.getState().handleShareRevoked(threadId);
-      break;
-    }
-    case 'thread:share-granted': {
-      // A thread was just shared WITH us — pull it into "Shared with me".
-      void useThreadStore.getState().loadSharedThreads();
-      break;
-    }
-    case 'git:status': {
-      useGitStatusStore.getState().updateFromWS(data.statuses);
-      const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
-      if (updatedKeys.length > 0) invalidateCooldownsForKeys(updatedKeys);
-      import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
-        useReviewPaneStore.getState().notifyDirty(threadId);
-      });
-      break;
-    }
-    case 'git:refs-updated': {
-      // A background `git fetch` advanced the remote-tracking refs (origin may
-      // have new commits). Re-fetch status through the normal — now cache-fresh
-      // — path so the incoming-commit count surfaces without a second manual
-      // refresh. The store's staleness guard keeps a late stale response from
-      // overwriting this fresh one.
-      //
-      // Refresh the bulk slice for the project that emitted the event. The
-      // thread/project-mode slices are only relevant when that same project is
-      // active; refreshing them for unrelated repositories created a second
-      // startup wave and repeatedly recomputed the same active-thread status.
-      const gitStore = useGitStatusStore.getState();
-      // Clear cooldowns so the bulk sidebar refetch isn't swallowed by its window.
-      invalidateCooldownsForKeys([data.projectId]);
-      const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
-      const activeThreadProjectId = activeThreadId
-        ? getProjectIdForThread(activeThreadId)
-        : undefined;
-      if (activeThreadId && activeThreadProjectId === data.projectId) {
-        void gitStore.fetchForThread(activeThreadId, true); // thread-mode pane
-      }
-      if (useProjectStore.getState().selectedProjectId === data.projectId) {
-        void gitStore.fetchProjectStatus(data.projectId, true); // project-mode pane slice
-      }
-      void gitStore.fetchForProject(data.projectId); // sidebar bulk badges
-      break;
-    }
-    case 'git:workflow_progress': {
-      handleGitWorkflowProgress(threadId, data);
-      break;
-    }
-    case 'thread:event':
-      handleThreadEvent(threadId, data);
-      break;
-    case 'pty:data': {
-      useTerminalStore.getState().emitPtyData(data.ptyId, data.data);
-      break;
-    }
-    case 'pty:exit': {
-      useTerminalStore.getState().removeTab(data.ptyId);
-      break;
-    }
-    case 'pty:error': {
-      useTerminalStore
-        .getState()
-        .setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
-      break;
-    }
-    case 'runner:status':
-      handleRunnerStatus(data);
-      break;
-    case 'pty:env_activated': {
-      break;
-    }
-    case 'thread:queue_update':
-      useThreadStore.getState().handleWSQueueUpdate(threadId, data);
-      break;
-    case 'test:frame':
-    case 'test:output':
-    case 'test:status':
-    case 'test:console':
-    case 'test:network':
-    case 'test:error':
-    case 'test:action':
-      dispatchTestEvent(type, data);
-      break;
-    case 'browser-session:frame':
-    case 'browser-session:ready':
-    case 'browser-session:result':
-    case 'browser-session:console':
-    case 'browser-session:error':
-    case 'browser-session:closed':
-      dispatchBrowserSessionEvent(type, data);
-      break;
-    case 'clone:progress':
-      break;
-    case 'worktree:setup':
-      useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
-      break;
-    case 'worktree:setup_complete':
-      useThreadStore.getState().handleWSWorktreeSetupComplete(threadId, data);
-      break;
+function permissionCapabilityKey(data: any): string {
+  const capability = data.permissionApprovalCapability;
+  return `${capability?.kind ?? ''}|${capability?.transport ?? capability?.reason ?? ''}`;
+}
+
+function agentStatusKey(data: any): string {
+  return `${data.status}|${data.waitingReason ?? ''}|${data.permissionRequest?.toolName ?? ''}|${data.pendingPermissionRequest?.requestId ?? ''}|${permissionCapabilityKey(data)}|${data.stage ?? ''}|${data.permissionMode ?? ''}`;
+}
+
+function handleAgentStatus(threadId: string, data: any): void {
+  const statusKey = agentStatusKey(data);
+  const prev = lastStatusByThread.get(threadId);
+  if (prev === statusKey) return;
+  lastStatusByThread.set(threadId, statusKey);
+
+  wsLog.info('agent:status', {
+    threadId,
+    status: data.status,
+    waitingReason: data.waitingReason ?? '',
+    permissionRequest: data.permissionRequest?.toolName ?? '',
+  });
+
+  if (data.status === 'waiting' || data.permissionRequest || data.pendingPermissionRequest) {
+    startTransition(() => {
+      useThreadStore.getState().handleWSStatus(threadId, data);
+    });
+  } else {
+    pendingStatuses.set(threadId, { threadId, data });
+    scheduleFlush();
   }
+}
+
+function logAgentResult(threadId: string, data: any, resultStatus: string): void {
+  wsLog.info('agent:result', {
+    threadId,
+    status: resultStatus,
+    cost: String(data.cost ?? ''),
+    errorReason: data.errorReason ?? '',
+    isWaiting: String(data.status === 'waiting'),
+  });
+}
+
+/** Cancel the scheduled flush and apply everything pending synchronously. */
+function flushPendingBatchNow(): void {
+  cancelScheduledFlush();
+  const { msgs, toolOutputs, statuses } = drainPendingBatch();
+  if (statuses.length === 0 && msgs.length === 0 && toolOutputs.length === 0) return;
+  const store = useThreadStore.getState();
+  for (const entry of statuses) store.handleWSStatus(entry.threadId, entry.data);
+  for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
+  for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
+}
+
+function handleAgentResult(threadId: string, data: any): void {
+  lastStatusByThread.delete(threadId);
+
+  const resultStatus = String(data.status ?? '');
+  logAgentResult(threadId, data, resultStatus);
+  // Permanent counter: lets us see in Abbacchio whether the result event
+  // even reached the client. A stuck "loading" thread with no `ws.result`
+  // sample means the event was dropped at the transport layer.
+  metric('ws.result_received', 1, { attributes: { status: resultStatus } });
+  // Permanent span: covers the gap between "event arrived" and "store
+  // applied final state" — surfaces React 19 transition lag under load.
+  const dispatchSpan = startSpan('ws.dispatch_result', {
+    attributes: { status: resultStatus },
+  });
+
+  flushPendingBatchNow();
+
+  startTransition(() => {
+    useThreadStore.getState().handleWSResult(threadId, data);
+    dispatchSpan.end('OK');
+  });
+
+  notifyReviewDirty(threadId);
+}
+
+function handleAgentToolCall(threadId: string, data: any): void {
+  if (data.name === 'AskUserQuestion' || data.name === 'ExitPlanMode') {
+    wsLog.info('interactive tool_call received', {
+      threadId,
+      toolName: data.name,
+      toolCallId: data.toolCallId ?? '',
+    });
+  }
+  const hasPendingTC = pendingMessages.size > 0;
+  if (hasPendingTC) cancelScheduledFlush();
+  startTransition(() => {
+    if (hasPendingTC) {
+      const msgs = Array.from(pendingMessages.values());
+      pendingMessages.clear();
+      const store = useThreadStore.getState();
+      for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
+    }
+    useThreadStore.getState().handleWSToolCall(threadId, data);
+  });
+  if (FILE_MODIFYING_TOOLS.has(data.name)) {
+    notifyReviewDirty(threadId);
+  }
+}
+
+function handleAgentError(threadId: string, data: any): void {
+  wsLog.error('agent:error', { threadId, error: data.error ?? 'unknown' });
+  startTransition(() => {
+    useThreadStore.getState().handleWSError(threadId, data);
+  });
+}
+
+function handleCommandStatus(_threadId: string, data: any): void {
+  if (data.status === 'exited' || data.status === 'stopped') {
+    useTerminalStore.getState().markCommandExited(data.commandId);
+    closePreviewForCommand(data.commandId);
+  }
+}
+
+function handleNativeGitBuild(_threadId: string, data: any, type: string): void {
+  import('@/stores/native-git-store').then(({ useNativeGitStore }) => {
+    const store = useNativeGitStore.getState();
+    if (type === 'native-git:build_output') {
+      store.appendBuildOutput(data.text);
+    } else {
+      store.setBuildStatus(data.status, data.exitCode);
+    }
+  });
+}
+
+function upsertWatcher(_threadId: string, data: any): void {
+  import('@/stores/watcher-store').then(({ useWatcherStore }) => {
+    if (data?.watcher) useWatcherStore.getState().upsert(data.watcher);
+  });
+}
+
+function upsertJob(_threadId: string, data: any): void {
+  import('@/stores/job-store').then(({ useJobStore }) => {
+    if (data?.job) useJobStore.getState().upsert(data.job);
+  });
+}
+
+type AutomationStoreState = ReturnType<
+  (typeof import('@/stores/automation-store'))['useAutomationStore']['getState']
+>;
+function withAutomationStore(apply: (store: AutomationStoreState) => void): void {
+  import('@/stores/automation-store').then(({ useAutomationStore }) => {
+    apply(useAutomationStore.getState());
+  });
+}
+
+type PipelineStoreState = ReturnType<
+  (typeof import('@/stores/pipeline-store'))['usePipelineStore']['getState']
+>;
+function withPipelineStore(apply: (store: PipelineStoreState) => void): void {
+  import('@/stores/pipeline-store').then(({ usePipelineStore }) => {
+    apply(usePipelineStore.getState());
+  });
+}
+
+type PipelineApprovalStoreState = ReturnType<
+  (typeof import('@/stores/pipeline-approval-store'))['usePipelineApprovalStore']['getState']
+>;
+function withPipelineApprovalStore(apply: (store: PipelineApprovalStoreState) => void): void {
+  import('@/stores/pipeline-approval-store').then(({ usePipelineApprovalStore }) => {
+    apply(usePipelineApprovalStore.getState());
+  });
+}
+
+type SchedulerStoreState = ReturnType<
+  (typeof import('@/stores/scheduler-store'))['useSchedulerStore']['getState']
+>;
+function withSchedulerStore(apply: (store: SchedulerStoreState) => void): void {
+  import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
+    apply(useSchedulerStore.getState());
+  });
+}
+
+type PresenceStoreState = ReturnType<
+  (typeof import('@/stores/presence-store'))['usePresenceStore']['getState']
+>;
+function withPresenceStore(apply: (store: PresenceStoreState) => void): void {
+  import('@/stores/presence-store').then(({ usePresenceStore }) => {
+    apply(usePresenceStore.getState());
+  });
+}
+
+type CommentStoreState = ReturnType<
+  (typeof import('@/stores/comment-store'))['useCommentStore']['getState']
+>;
+function withCommentStore(apply: (store: CommentStoreState) => void): void {
+  import('@/stores/comment-store').then(({ useCommentStore }) => {
+    apply(useCommentStore.getState());
+  });
+}
+
+function handleThreadCreated(_threadId: string, data: any): void {
+  // Scratch threads have no project (projectId is '' / null). Calling
+  // loadThreadsForProject('') would fall through to api.listThreads()
+  // with no filter, leaking every user thread into threadsByProject['']
+  // and duplicating the sidebar Activity section. Scratch threads are
+  // handled separately via addScratchThread on the create path.
+  if (data.projectId) {
+    useThreadStore.getState().loadThreadsForProject(data.projectId);
+  }
+}
+
+function handleThreadComment(threadId: string, data: any): void {
+  // A new comment was posted — append it live for every current viewer and
+  // bump the header badge. See thread-sharing design D9.
+  if (data.comment) {
+    withCommentStore((store) => store.applyAdded(threadId, data.comment));
+    adjustCommentCount(threadId, +1);
+  }
+}
+
+function handleThreadCommentDeleted(threadId: string, data: any): void {
+  if (data.commentId) {
+    withCommentStore((store) => store.applyDeleted(threadId, data.commentId));
+    adjustCommentCount(threadId, -1);
+    return;
+  }
+  // Legacy payload without an id — fall back to a refetch.
+  const store = useThreadStore.getState();
+  if (isViewingThread(store, threadId)) {
+    store.refreshActiveThread();
+  }
+}
+
+function handleThreadStageChanged(threadId: string, data: any): void {
+  useThreadStore.getState().handleWSStageChanged(threadId, {
+    fromStage: data.fromStage ?? null,
+    toStage: data.toStage,
+    projectId: data.projectId,
+  });
+}
+
+function hasLocationChange(data: any): boolean {
+  return !!(data.branch || data.worktreePath || data.containerUrl || data.mergedAt || data.mode);
+}
+
+function patchPermissionMode(threadId: string, permissionMode: any): void {
+  useThreadStore.setState((state) => ({
+    ...threadMutations.patchThread(state, threadId, (thread) => ({
+      ...thread,
+      permissionMode,
+    })),
+    ...threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
+      ...thread,
+      permissionMode,
+    })),
+    // A very early event can arrive before either cache is hydrated.
+    // Keep the active mirror coherent in that narrow window as well.
+    ...(state.activeThread?.id === threadId &&
+    !state.threadsById[threadId] &&
+    !state.threadDataById[threadId]
+      ? { activeThread: { ...state.activeThread, permissionMode } }
+      : {}),
+  }));
+}
+
+function handleThreadUpdated(threadId: string, data: any): void {
+  const store = useThreadStore.getState();
+  if (data.resync && isViewingThread(store, threadId)) {
+    store.refreshActiveThread();
+  }
+  if (data.status) {
+    store.handleWSStatus(threadId, { status: data.status });
+  }
+  if (data.archived) {
+    store.refreshAllLoadedThreads();
+  }
+  if (hasLocationChange(data)) {
+    store.refreshAllLoadedThreads();
+    if (isViewingThread(store, threadId)) {
+      store.refreshActiveThread();
+    }
+  }
+  if (data.permissionMode) {
+    patchPermissionMode(threadId, data.permissionMode);
+  }
+}
+
+function handlePresenceJoin(threadId: string, data: any): void {
+  if (data.viewer) {
+    withPresenceStore((store) => store.upsertViewer(threadId, data.viewer));
+  }
+}
+
+function handleShareRevoked(threadId: string): void {
+  // The owner revoked our access — drop the thread + its presence.
+  withPresenceStore((store) => store.clearThread(threadId));
+  useThreadStore.getState().handleShareRevoked(threadId);
+}
+
+function handleGitStatus(threadId: string, data: any): void {
+  useGitStatusStore.getState().updateFromWS(data.statuses);
+  const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
+  if (updatedKeys.length > 0) invalidateCooldownsForKeys(updatedKeys);
+  notifyReviewDirty(threadId);
+}
+
+function handleGitRefsUpdated(_threadId: string, data: any): void {
+  // A background `git fetch` advanced the remote-tracking refs (origin may
+  // have new commits). Re-fetch status through the normal — now cache-fresh
+  // — path so the incoming-commit count surfaces without a second manual
+  // refresh. The store's staleness guard keeps a late stale response from
+  // overwriting this fresh one.
+  //
+  // Refresh the bulk slice for the project that emitted the event. The
+  // thread/project-mode slices are only relevant when that same project is
+  // active; refreshing them for unrelated repositories created a second
+  // startup wave and repeatedly recomputed the same active-thread status.
+  const gitStore = useGitStatusStore.getState();
+  // Clear cooldowns so the bulk sidebar refetch isn't swallowed by its window.
+  invalidateCooldownsForKeys([data.projectId]);
+  const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
+  const activeThreadProjectId = activeThreadId ? getProjectIdForThread(activeThreadId) : undefined;
+  if (activeThreadId && activeThreadProjectId === data.projectId) {
+    void gitStore.fetchForThread(activeThreadId, true); // thread-mode pane
+  }
+  if (useProjectStore.getState().selectedProjectId === data.projectId) {
+    void gitStore.fetchProjectStatus(data.projectId, true); // project-mode pane slice
+  }
+  void gitStore.fetchForProject(data.projectId); // sidebar bulk badges
+}
+
+const testEventHandler: WebEventHandler = (_threadId, data, type) => {
+  dispatchTestEvent(type, data);
+};
+
+const browserSessionEventHandler: WebEventHandler = (_threadId, data, type) => {
+  dispatchBrowserSessionEvent(type, data);
+};
+
+/**
+ * One handler per event type. Typed as a full `Record` over `ALL_EVENT_TYPES`
+ * so registering a new Socket.IO event without a handler is a compile error.
+ */
+const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
+  'agent:message': handleAgentMessage,
+  'agent:tool_output': handleAgentToolOutput,
+  'agent:init': inTransition((store, threadId, data) => store.handleWSInit(threadId, data)),
+  'agent:status': handleAgentStatus,
+  'agent:result': handleAgentResult,
+  'agent:tool_call': handleAgentToolCall,
+  'agent:error': handleAgentError,
+  'agent:compact_boundary': inTransition((store, threadId, data) =>
+    store.handleWSCompactBoundary(threadId, data),
+  ),
+  'agent:context_usage': inTransition((store, threadId, data) =>
+    store.handleWSContextUsage(threadId, data),
+  ),
+  'command:output': (_threadId, data) => {
+    useTerminalStore.getState().appendCommandOutput(data.commandId, data.data);
+  },
+  'command:status': handleCommandStatus,
+  'command:metrics': (_threadId, data) => {
+    useTerminalStore.getState().updateCommandMetrics(data);
+  },
+  'native-git:build_output': handleNativeGitBuild,
+  'native-git:build_status': handleNativeGitBuild,
+  'automation:run_started': (threadId, data) => {
+    withAutomationStore((store) => store.handleRunStarted({ ...data, threadId }));
+  },
+  'automation:run_completed': (_threadId, data) => {
+    withAutomationStore((store) => store.handleRunCompleted(data));
+  },
+  'automation:run_updated': () => {
+    withAutomationStore((store) => store.loadInbox());
+  },
+  'watcher:created': upsertWatcher,
+  'watcher:fired': upsertWatcher,
+  'watcher:rescheduled': upsertWatcher,
+  'watcher:completed': upsertWatcher,
+  'watcher:cancelled': upsertWatcher,
+  'job:created': upsertJob,
+  'job:exited': upsertJob,
+  'job:killed': upsertJob,
+  'job:cancelled': upsertJob,
+  'pipeline:run_started': (_threadId, data) => {
+    withPipelineStore((store) => store.handlePipelineStarted(data));
+  },
+  'pipeline:stage_update': (_threadId, data) => {
+    withPipelineStore((store) => store.handlePipelineStageUpdate(data));
+  },
+  'pipeline:run_completed': (_threadId, data) => {
+    withPipelineStore((store) => store.handlePipelineCompleted(data));
+  },
+  'pipeline:approval_requested': (_threadId, data) => {
+    withPipelineApprovalStore((store) => store.handleApprovalRequested(data));
+  },
+  'pipeline:approval_resolved': (_threadId, data) => {
+    withPipelineApprovalStore((store) => store.handleApprovalResolved(data));
+  },
+  'workflow:node_state': (_threadId, data) => {
+    import('@/stores/workflow-run-store').then(({ useWorkflowRunStore }) => {
+      useWorkflowRunStore.getState().handleNodeState(data);
+    });
+  },
+  'thread:claimed': (threadId, data) => {
+    withSchedulerStore((store) => store.handleClaimed(threadId, data));
+  },
+  'thread:dispatched': (threadId, data) => {
+    withSchedulerStore((store) => store.handleDispatched(threadId, data));
+  },
+  'thread:retry-queued': (threadId, data) => {
+    withSchedulerStore((store) => store.handleRetryQueued(threadId, data));
+  },
+  'thread:released': (threadId) => {
+    withSchedulerStore((store) => store.handleReleased(threadId));
+  },
+  'thread:created': handleThreadCreated,
+  'thread:comment': handleThreadComment,
+  'thread:comment_deleted': handleThreadCommentDeleted,
+  'thread:stage-changed': handleThreadStageChanged,
+  'thread:updated': handleThreadUpdated,
+  // ── Thread sharing: presence + revoke ──────────────────────
+  'presence:sync': (threadId, data) => {
+    withPresenceStore((store) => store.setRoster(threadId, data.viewers ?? []));
+  },
+  'presence:join': handlePresenceJoin,
+  'presence:leave': (threadId, data) => {
+    withPresenceStore((store) => store.removeViewer(threadId, data.clientId));
+  },
+  'thread:share-revoked': handleShareRevoked,
+  'thread:share-granted': () => {
+    // A thread was just shared WITH us — pull it into "Shared with me".
+    void useThreadStore.getState().loadSharedThreads();
+  },
+  'git:status': handleGitStatus,
+  'git:refs-updated': handleGitRefsUpdated,
+  'git:workflow_progress': (threadId, data) => handleGitWorkflowProgress(threadId, data),
+  'thread:event': (threadId, data) => handleThreadEvent(threadId, data),
+  'pty:data': (_threadId, data) => {
+    useTerminalStore.getState().emitPtyData(data.ptyId, data.data);
+  },
+  'pty:exit': (_threadId, data) => {
+    useTerminalStore.getState().removeTab(data.ptyId);
+  },
+  'pty:error': (_threadId, data) => {
+    useTerminalStore.getState().setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
+  },
+  'runner:status': (_threadId, data) => handleRunnerStatus(data),
+  'pty:env_activated': noop,
+  'thread:queue_update': (threadId, data) => {
+    useThreadStore.getState().handleWSQueueUpdate(threadId, data);
+  },
+  'test:frame': testEventHandler,
+  'test:output': testEventHandler,
+  'test:status': testEventHandler,
+  'test:console': testEventHandler,
+  'test:network': testEventHandler,
+  'test:error': testEventHandler,
+  'test:action': testEventHandler,
+  'browser-session:frame': browserSessionEventHandler,
+  'browser-session:ready': browserSessionEventHandler,
+  'browser-session:result': browserSessionEventHandler,
+  'browser-session:console': browserSessionEventHandler,
+  'browser-session:error': browserSessionEventHandler,
+  'browser-session:closed': browserSessionEventHandler,
+  'clone:progress': noop,
+  'worktree:setup': (threadId, data) => {
+    useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
+  },
+  'worktree:setup_complete': (threadId, data) => {
+    useThreadStore.getState().handleWSWorktreeSetupComplete(threadId, data);
+  },
+};
+
+function isWebEventType(type: string): type is WebEventType {
+  return Object.hasOwn(WEB_EVENT_HANDLERS, type);
+}
+
+function applyWebEvent(type: string, threadId: string, data: any): void {
+  if (!isWebEventType(type)) return;
+  WEB_EVENT_HANDLERS[type](threadId, data, type);
 }
 
 function findThread(threadId: string): {
@@ -923,7 +1000,7 @@ const ALL_EVENT_TYPES = [
   'browser-session:console',
   'browser-session:error',
   'browser-session:closed',
-];
+] as const;
 
 // Tracks Socket.IO listeners we attached, so HMR (or any future dispose path)
 // can detach them. Without this, every HMR replacement of this module leaves

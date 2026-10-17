@@ -1,24 +1,11 @@
 /**
  * Integration tests for /api/pipelines CRUD happy paths.
  */
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-import {
-  validateProjectPathLexical,
-  validateProjectRootContainment,
-  validateProjectRootPath,
-} from '@funny/core/git/path-validation';
-
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-  validateProjectPathLexical,
-  validateProjectRootContainment,
-  validateProjectRootPath,
-}));
+mockCoreGitRepoChecks();
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 

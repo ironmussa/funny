@@ -6,13 +6,9 @@
  * would have leaked every user's automations. The handler now refuses 401
  * when userId is missing, matching the `/inbox` and `/:id` siblings.
  */
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-}));
+mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 

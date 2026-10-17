@@ -125,3 +125,20 @@ export function collectAllFolderPaths(files: FileDiffSummary[]): Set<string> {
   }
   return paths;
 }
+
+/** Ignore-pattern candidates for every ancestor folder of a path, deepest first. */
+export function getParentFolders(filePath: string): string[] {
+  const parts = filePath.split('/');
+  const folders: string[] = [];
+  for (let i = parts.length - 1; i > 0; i--) {
+    folders.push('/' + parts.slice(0, i).join('/'));
+  }
+  return folders;
+}
+
+/** File extension including the dot, or `null` when there is none. */
+export function getFileExtension(filePath: string): string | null {
+  const lastDot = filePath.lastIndexOf('.');
+  if (lastDot === -1 || lastDot === filePath.length - 1) return null;
+  return filePath.substring(lastDot);
+}

@@ -2,18 +2,28 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:
 
 import webpush from 'web-push';
 
+import { setConnection } from '../../db/index.js';
 import { createTestDb, seedThread } from '../helpers/test-db.js';
 
-const { sqlite, db } = createTestDb();
+const testDb = createTestDb();
+const { sqlite, db } = testDb;
 sqlite.exec(
   'CREATE TABLE push_subscriptions (endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL)',
 );
-mock.module('../../db/index.js', () => ({
-  db,
-  dbAll: async (q: any) => q.all(),
-  dbRun: async (q: any) => q.run(),
-  dbGet: async (q: any) => q.get(),
-}));
+// Point the real (process-wide) DB singleton at this file's in-memory DB before
+// every test. A `mock.module('../../db/index.js')` here would replace the module
+// for every later test file in the same `bun test` process (bun never restores
+// module mocks), breaking any suite that calls `setConnection` on the real module.
+function useTestConnection() {
+  setConnection({
+    db: db as any,
+    schema: testDb.schema,
+    sqlite,
+    mode: 'sqlite',
+    close: async () => sqlite.close(),
+  });
+}
+useTestConnection();
 const { pushRoutes } = await import('../../routes/push.js');
 const { isPushEndpoint, saveSubscription, sendPush, removeSubscription, pushAgentResult } =
   await import('../../services/web-push.js');
@@ -35,6 +45,7 @@ const originalEnv = {
   subject: process.env.WEB_PUSH_SUBJECT,
 };
 beforeEach(() => {
+  useTestConnection();
   sqlite.exec('DELETE FROM push_subscriptions; DELETE FROM threads');
   process.env.WEB_PUSH_PUBLIC_KEY = 'public';
   process.env.WEB_PUSH_PRIVATE_KEY = 'private';

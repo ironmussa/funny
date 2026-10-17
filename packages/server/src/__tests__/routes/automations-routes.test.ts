@@ -1,15 +1,11 @@
 /**
  * Integration tests for /api/automations CRUD + tenant isolation.
  */
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-}));
+mockCoreGitRepoChecks();
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 

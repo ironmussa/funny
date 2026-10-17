@@ -1,4 +1,4 @@
-import type { Message, ToolCall, ThreadStatus } from '@funny/shared';
+import type { ThreadStatus } from '@funny/shared';
 import {
   ListTodo,
   MessageCircleQuestion,
@@ -12,23 +12,13 @@ import { useMemo, useRef, useEffect, type RefObject } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import {
+  buildPromptMilestones,
+  type MilestoneType,
+  type PromptMilestone,
+  type TimelineMessage,
+} from '@/lib/prompt-timeline-milestones';
 import { cn } from '@/lib/utils';
-
-type MilestoneType = 'prompt' | 'todo' | 'question' | 'plan' | 'start' | 'end';
-
-interface PromptMilestone {
-  id: string;
-  content: string;
-  timestamp: string;
-  index: number;
-  type: MilestoneType;
-  /** Tool call ID for scrolling to tool call elements */
-  toolCallId?: string;
-  /** Whether this individual todo task is completed */
-  completed?: boolean;
-  /** Whether this individual todo task is currently in progress */
-  inProgress?: boolean;
-}
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -68,37 +58,8 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max).trimEnd() + '…';
 }
 
-function parseToolInput(input: string): Record<string, unknown> | null {
-  try {
-    return typeof input === 'string' ? JSON.parse(input) : input;
-  } catch {
-    return null;
-  }
-}
-
-/** Extract a short summary for non-todo tool call milestones */
-function getToolCallSummary(name: string, parsed: Record<string, unknown>): string | null {
-  if (name === 'AskUserQuestion') {
-    const questions = parsed.questions;
-    if (!Array.isArray(questions) || questions.length === 0) return null;
-    return (questions[0].question as string) ?? 'Question';
-  }
-
-  if (name === 'ExitPlanMode') {
-    return 'Plan ready for review';
-  }
-
-  return null;
-}
-
-const TOOL_CALL_TYPES: Record<string, MilestoneType> = {
-  TodoWrite: 'todo',
-  AskUserQuestion: 'question',
-  ExitPlanMode: 'plan',
-};
-
 interface PromptTimelineProps {
-  messages: (Message & { toolCalls?: ToolCall[] })[];
+  messages: TimelineMessage[];
   activeMessageId?: string | null;
   threadStatus?: ThreadStatus;
   onScrollToMessage?: (messageId: string, toolCallId?: string) => void;
@@ -165,205 +126,10 @@ export function PromptTimeline({
     };
   }, [messagesScrollRef]);
 
-  const milestones = useMemo<PromptMilestone[]>(() => {
-    let idx = 0;
-    const result: PromptMilestone[] = [];
-
-    // First pass: collect all TodoWrite snapshots to track per-task history
-    const todoSnapshots: { todos: any[]; toolCallId: string; timestamp: string }[] = [];
-    for (const m of messages) {
-      if (m.role === 'assistant' && m.toolCalls) {
-        for (const tc of m.toolCalls) {
-          if (tc.name === 'TodoWrite') {
-            const parsed = parseToolInput(tc.input);
-            if (parsed) {
-              const todos = parsed.todos;
-              if (Array.isArray(todos) && todos.length > 0) {
-                todoSnapshots.push({ todos, toolCallId: tc.id, timestamp: m.timestamp });
-              }
-            }
-          }
-        }
-      }
-    }
-    const lastTodoSnapshot =
-      todoSnapshots.length > 0 ? todoSnapshots[todoSnapshots.length - 1] : null;
-
-    // Build a map of each todo's first-appearance timestamp and latest status.
-    // Key = todo content string. We track when a todo first appeared in any snapshot
-    // and its most recent status from the last snapshot that contains it.
-    const todoFirstSeen = new Map<
-      string,
-      { timestamp: string; toolCallId: string; snapshotIdx: number }
-    >();
-    const todoLatestStatus = new Map<
-      string,
-      { status: string; activeForm?: string; content?: string }
-    >();
-
-    for (let si = 0; si < todoSnapshots.length; si++) {
-      const snap = todoSnapshots[si];
-      for (const todo of snap.todos) {
-        const key = todo.content || todo.activeForm || '';
-        if (!todoFirstSeen.has(key)) {
-          todoFirstSeen.set(key, {
-            timestamp: snap.timestamp,
-            toolCallId: snap.toolCallId,
-            snapshotIdx: si,
-          });
-        }
-        // Always update to latest status
-        todoLatestStatus.set(key, {
-          status: todo.status,
-          activeForm: todo.activeForm,
-          content: todo.content,
-        });
-      }
-    }
-
-    // Group todos by the snapshot where they first appeared, preserving order
-    const todosByFirstSnapshot = new Map<number, string[]>();
-    if (lastTodoSnapshot) {
-      for (const todo of lastTodoSnapshot.todos) {
-        const key = todo.content || todo.activeForm || '';
-        const firstSeen = todoFirstSeen.get(key);
-        if (!firstSeen) continue;
-        const si = firstSeen.snapshotIdx;
-        if (!todosByFirstSnapshot.has(si)) todosByFirstSnapshot.set(si, []);
-        todosByFirstSnapshot.get(si)!.push(key);
-      }
-    }
-
-    // Start marker — first message timestamp
-    if (messages.length > 0) {
-      const first = messages[0];
-      result.push({
-        id: 'timeline-start',
-        content: 'Start',
-        timestamp: first.timestamp,
-        index: idx++,
-        type: 'start',
-      });
-    }
-
-    // Track which TodoWrite snapshots we've already emitted todos for
-    let nextSnapshotToEmit = 0;
-    // Total number of todos from the latest snapshot (for step numbering)
-    const totalTodos = lastTodoSnapshot ? lastTodoSnapshot.todos.length : 0;
-    // Track global todo index for step numbering
-    let todoIndex = 0;
-    const todoSnapshotIndexByToolCallId = new Map(
-      todoSnapshots.map((snapshot, index) => [snapshot.toolCallId, index]),
-    );
-
-    for (const m of messages) {
-      // User messages become prompt milestones
-      if (m.role === 'user' && m.content?.trim()) {
-        result.push({
-          id: m.id,
-          content: m.content,
-          timestamp: m.timestamp,
-          index: idx++,
-          type: 'prompt',
-        });
-      }
-
-      // Scan assistant tool calls for questions, plans, and TodoWrites
-      if (m.role === 'assistant' && m.toolCalls) {
-        for (const tc of m.toolCalls) {
-          if (tc.name === 'TodoWrite') {
-            // Emit todos that first appeared in snapshots up to and including this one
-            while (
-              nextSnapshotToEmit < todoSnapshots.length &&
-              todoSnapshots[nextSnapshotToEmit].toolCallId === tc.id
-            ) {
-              break;
-            }
-            // Find which snapshot index this tool call corresponds to
-            const snapIdx = todoSnapshotIndexByToolCallId.get(tc.id) ?? -1;
-            if (snapIdx < 0) continue;
-
-            // Emit all pending snapshot groups up to this one
-            for (let si = nextSnapshotToEmit; si <= snapIdx; si++) {
-              const todoKeys = todosByFirstSnapshot.get(si);
-              if (!todoKeys) continue;
-              for (const key of todoKeys) {
-                const latest = todoLatestStatus.get(key);
-                const firstSeen = todoFirstSeen.get(key);
-                if (!latest || !firstSeen) continue;
-                const isFinishedThread =
-                  threadStatus === 'completed' ||
-                  threadStatus === 'failed' ||
-                  threadStatus === 'stopped';
-                const isInProgress = latest.status === 'in_progress' && !isFinishedThread;
-                const isCompleted =
-                  latest.status === 'completed' ||
-                  (latest.status === 'in_progress' && isFinishedThread);
-                const step = `${todoIndex + 1}/${totalTodos}`;
-                const label =
-                  isInProgress && latest.activeForm
-                    ? latest.activeForm
-                    : latest.content || latest.activeForm || `Task ${todoIndex + 1}`;
-                result.push({
-                  id: `todo-${tc.id}-${todoIndex}`,
-                  content: `${step} · ${label}`,
-                  timestamp: firstSeen.timestamp,
-                  index: idx++,
-                  type: 'todo',
-                  toolCallId: firstSeen.toolCallId,
-                  completed: isCompleted,
-                  inProgress: isInProgress,
-                });
-                todoIndex++;
-              }
-            }
-            nextSnapshotToEmit = snapIdx + 1;
-            continue;
-          }
-
-          const milestoneType = TOOL_CALL_TYPES[tc.name];
-          if (!milestoneType) continue;
-
-          const parsed = parseToolInput(tc.input);
-          if (!parsed) continue;
-
-          const summary = getToolCallSummary(tc.name, parsed);
-          if (!summary) continue;
-
-          result.push({
-            id: `tc-${tc.id}`,
-            content: summary,
-            timestamp: m.timestamp,
-            index: idx++,
-            type: milestoneType,
-            toolCallId: tc.id,
-          });
-        }
-      }
-    }
-
-    // End marker — only for finished threads
-    const isFinished =
-      threadStatus === 'completed' || threadStatus === 'failed' || threadStatus === 'stopped';
-    if (messages.length > 0 && isFinished) {
-      const last = messages[messages.length - 1];
-      const endLabel =
-        threadStatus === 'completed'
-          ? 'Completed'
-          : threadStatus === 'failed'
-            ? 'Failed'
-            : 'Stopped';
-      result.push({
-        id: 'timeline-end',
-        content: endLabel,
-        timestamp: last.timestamp,
-        index: idx++,
-        type: 'end',
-      });
-    }
-
-    return result;
-  }, [messages, threadStatus]);
+  const milestones = useMemo(
+    () => buildPromptMilestones(messages, threadStatus),
+    [messages, threadStatus],
+  );
 
   if (milestones.length === 0) return null;
 

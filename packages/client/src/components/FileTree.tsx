@@ -32,7 +32,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FileName } from '@/components/ui/file-name';
 import { HighlightText } from '@/components/ui/highlight-text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { browseApi as api } from '@/lib/api/browse';
 import { createClientLogger } from '@/lib/client-logger';
 import {
@@ -42,12 +41,13 @@ import {
 } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { setFileMentionDragData } from '@/lib/file-mention-dnd';
-import { buildTreeRows, type TreeRow } from '@/lib/file-tree';
+import { buildTreeRows, getFileExtension, getParentFolders, type TreeRow } from '@/lib/file-tree';
 import { cn } from '@/lib/utils';
 
 const log = createClientLogger('file-tree');
 
 import { DiffStats } from './DiffStats';
+import { SubmoduleBadge } from './SubmoduleBadge';
 
 export type { TreeRow } from '@/lib/file-tree';
 
@@ -55,21 +55,6 @@ const INDENT_PX = 12;
 const ROW_HEIGHT = 24; // h-6 = 1.5rem = 24px
 
 /* ── Helpers ── */
-
-function getParentFolders(filePath: string): string[] {
-  const parts = filePath.split('/');
-  const folders: string[] = [];
-  for (let i = parts.length - 1; i > 0; i--) {
-    folders.push('/' + parts.slice(0, i).join('/'));
-  }
-  return folders;
-}
-
-function getFileExtension(filePath: string): string | null {
-  const lastDot = filePath.lastIndexOf('.');
-  if (lastDot === -1 || lastDot === filePath.length - 1) return null;
-  return filePath.substring(lastDot);
-}
 
 function statusColor(status: string): string {
   switch (status) {
@@ -515,63 +500,11 @@ export function FileTree({
             className={cn('font-mono-explorer', fontSize)}
           />
           {isSubmodule && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    'shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300',
-                  )}
-                  data-testid={`${testIdPrefix}-submodule-badge-${f.path}`}
-                >
-                  {nested && nested.dirtyFileCount > 0
-                    ? t('review.submoduleDirtyCount', {
-                        count: nested.dirtyFileCount,
-                        defaultValue: 'submodule · {{count}}',
-                      })
-                    : t('review.submodule', { defaultValue: 'submodule' })}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs text-xs">
-                <div className="font-medium">
-                  {t('review.submoduleTooltip', {
-                    defaultValue: 'Nested git repository (gitlink)',
-                  })}
-                </div>
-                {nested && (
-                  <div className="mt-1 space-y-0.5 font-mono">
-                    {nested.pointerMoved && (
-                      <div>
-                        {t('review.submodulePointerMoved', {
-                          defaultValue: 'Gitlink pointer moved (parent-visible change).',
-                        })}
-                      </div>
-                    )}
-                    <div>
-                      {t('review.submoduleDirtyLine', {
-                        count: nested.dirtyFileCount,
-                        defaultValue: '{{count}} file(s) dirty inside',
-                      })}
-                    </div>
-                    {(nested.linesAdded > 0 || nested.linesDeleted > 0) && (
-                      <div>
-                        <span className="text-diff-added">+{nested.linesAdded}</span>{' '}
-                        <span className="text-diff-removed">-{nested.linesDeleted}</span>{' '}
-                        <span className="text-muted-foreground">
-                          {t('review.submoduleLines', { defaultValue: 'lines' })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {canExpandSubmodule && (
-                  <div className="text-muted-foreground mt-1">
-                    {t('review.submoduleExpandHint', {
-                      defaultValue: 'Click the arrow to expand inner files.',
-                    })}
-                  </div>
-                )}
-              </TooltipContent>
-            </Tooltip>
+            <SubmoduleBadge
+              nested={nested}
+              testId={`${testIdPrefix}-submodule-badge-${f.path}`}
+              showExpandHint={canExpandSubmodule}
+            />
           )}
           {!hideDiffStats &&
             (() => {

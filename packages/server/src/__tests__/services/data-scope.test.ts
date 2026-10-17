@@ -25,8 +25,11 @@ const FORBIDDEN = { type: 'data:ack', success: false, error: 'Forbidden' };
 
 describe('DATA_SCOPE_RULES coverage', () => {
   test('every data:* type handled by data-handler has a scope rule', () => {
-    const source = readFileSync(join(import.meta.dir, '../../services/data-handler.ts'), 'utf8');
-    const handled = [...source.matchAll(/case '(data:[a-z_]+)'/g)].map((m) => m[1]);
+    const source = readFileSync(
+      join(import.meta.dir, '../../services/data-message-handlers.ts'),
+      'utf8',
+    );
+    const handled = [...source.matchAll(/^ {2}'(data:[a-z_]+)': async /gm)].map((m) => m[1]);
     expect(handled.length).toBeGreaterThan(40);
     const missing = handled.filter((type) => !DATA_SCOPE_RULES[type]);
     expect(missing).toEqual([]);

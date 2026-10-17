@@ -1,11 +1,20 @@
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realThreadAccessModule from '../../services/thread-access-check.js';
+import { snapshotModule } from '../helpers/module-mocks.js';
 
 let canView = true;
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realThreadAccess = snapshotModule(realThreadAccessModule);
 mock.module('../../services/thread-access-check.js', () => ({
   canUserViewThread: async () => canView,
   isThreadOwnedBy: async () => true,
   getUserDisplay: async (userId: string) => ({ id: userId, name: userId, image: null }),
 }));
+afterAll(() => {
+  mock.module('../../services/thread-access-check.js', () => realThreadAccess);
+});
 
 import { beforeEach, describe, expect, test } from 'bun:test';
 

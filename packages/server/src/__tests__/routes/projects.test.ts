@@ -5,27 +5,11 @@
  * against an in-memory SQLite database with real route handlers.
  */
 
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
-// Keep the REAL path-validation (HI-3 route tests below rely on it) while
-// stubbing only the git-repo filesystem checks. Both live in the same
-// `@funny/core/git` barrel, so re-export the real validation from the concrete
-// source module so the mock does not clobber it.
-import {
-  validateProjectPathLexical,
-  validateProjectRootContainment,
-  validateProjectRootPath,
-} from '@funny/core/git/path-validation';
-
-// Mock git operations before any service imports
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-  validateProjectPathLexical,
-  validateProjectRootContainment,
-  validateProjectRootPath,
-}));
+// Stub only the git-repo filesystem checks; the REAL path validation (HI-3
+// route tests below rely on it) stays in place. See helpers/module-mocks.ts.
+mockCoreGitRepoChecks();
 
 // Security HI-3: createProject now requires the path to live under $HOME
 // or an explicitly opted-in root via FUNNY_PROJECT_ROOT. The integration

@@ -4,7 +4,7 @@
  * surfaced with a same-origin entryUrl, malformed packages are skipped, install/
  * remove round-trip, and path traversal / symlink escape are refused.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -130,8 +130,17 @@ describe('install + remove round-trip', () => {
   let target: string;
   let srcPkg: string;
 
-  beforeAll(() => {
+  // Fresh install target per test so each test stands alone (no reliance on
+  // the install test having run first — `bun test --randomize` reorders them).
+  beforeEach(() => {
     target = mkdtempSync(join(tmpdir(), 'funny-ext-target-'));
+  });
+
+  afterEach(() => {
+    rmSync(target, { recursive: true, force: true });
+  });
+
+  beforeAll(() => {
     srcPkg = mkdtempSync(join(tmpdir(), 'funny-ext-src-'));
     mkdirSync(join(srcPkg, 'dist'), { recursive: true });
     writeFileSync(
@@ -147,7 +156,6 @@ describe('install + remove round-trip', () => {
   });
 
   afterAll(() => {
-    rmSync(target, { recursive: true, force: true });
     rmSync(srcPkg, { recursive: true, force: true });
   });
 
@@ -170,6 +178,7 @@ describe('install + remove round-trip', () => {
   });
 
   test('removes an installed extension by its dir name', () => {
+    expect(installExtensionFromPath(srcPkg, target).ok).toBe(true);
     expect(listInstalledExtensions(target).length).toBeGreaterThan(0);
     expect(removeExtension('acme-funny-visualizer-json', target)).toEqual({ ok: true });
     expect(listInstalledExtensions(target)).toEqual([]);

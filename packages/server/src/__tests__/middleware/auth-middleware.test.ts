@@ -2,7 +2,10 @@
  * Integration tests for authMiddleware — public paths, sessions, runner invite
  * tokens, scheduler auth, and requirePermission.
  */
-import { mock } from 'bun:test';
+import { afterAll, mock } from 'bun:test';
+
+import * as realAuthModule from '../../lib/auth.js';
+import { mockCoreGitRepoChecks, snapshotModule } from '../helpers/module-mocks.js';
 
 process.env.RUNNER_AUTH_SECRET = 'auth-mw-secret';
 process.env.SCHEDULER_AUTH_SECRET = 'orch-mw-secret';
@@ -15,6 +18,9 @@ import {
 
 const sessionUserId = 'session-user-1';
 
+// mock.module is process-global and never undone by mock.restore(); put the
+// real module back once this file finishes so later files are unaffected.
+const realAuth = snapshotModule(realAuthModule);
 mock.module('../../lib/auth.js', () => ({
   auth: {
     api: createAuthApiMock({
@@ -37,12 +43,11 @@ mock.module('../../lib/auth.js', () => ({
     }),
   },
 }));
+afterAll(() => {
+  mock.module('../../lib/auth.js', () => realAuth);
+});
 
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-}));
+mockCoreGitRepoChecks();
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 

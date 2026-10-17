@@ -7,30 +7,15 @@
  * containing directory as their "project" and then read it via the file /
  * search / agent-spawn surfaces that trust `project.path`.
  */
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
 // The repository runs `isGitRepoSync` on the path — stub it so the FS check
 // always succeeds. The containment check (HI-3) is what we want to assert,
 // independent of whether the path is actually a git repo on the test
 // runner's filesystem.
-// Keep the REAL path-validation (that's what this suite exercises) while
-// stubbing only the git-repo filesystem checks. The validation lives in the
-// same `@funny/core/git` barrel, so re-export the real implementations from
-// the concrete source module to avoid clobbering them with the mock.
-import {
-  validateProjectPathLexical,
-  validateProjectRootContainment,
-  validateProjectRootPath,
-} from '@funny/core/git/path-validation';
-
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-  validateProjectPathLexical,
-  validateProjectRootContainment,
-  validateProjectRootPath,
-}));
+// The real path validators (what this suite exercises) stay in place; the
+// mock is scoped to this file (see helpers/module-mocks.ts).
+mockCoreGitRepoChecks();
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { homedir } from 'os';

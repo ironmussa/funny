@@ -203,161 +203,144 @@ const persistentMutations = new Set([
   'createPermissionRule',
 ]);
 
+type OperationValue = Record<string, any>;
+type OperationValueMapper = (input: OperationValue, payload: OperationValue) => OperationValue;
+type OperationMapping = readonly [kind: string, toValue: OperationValueMapper];
+
+const asInput: OperationValueMapper = (input) => input;
+const asPayload: OperationValueMapper = (_input, payload) => payload;
+const noValue: OperationValueMapper = () => ({});
+const inputThreadId: OperationValueMapper = (input) => ({ threadId: input.threadId });
+const inputProjectId: OperationValueMapper = (input) => ({ projectId: input.projectId });
+const payloadThreadId: OperationValueMapper = (_input, payload) => ({
+  threadId: payload.threadId,
+});
+
+const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
+  'data:get_thread': ['getThread', inputThreadId],
+  'data:get_thread_by_external_request_id': [
+    'getThreadByExternalRequestId',
+    (input) => ({ externalRequestId: input.externalRequestId }),
+  ],
+  'data:get_thread_by_session_id': [
+    'getThreadByProviderSessionId',
+    (input) => ({ providerSessionId: input.sessionId }),
+  ],
+  'data:get_thread_with_messages': ['getThreadWithMessages', asInput],
+  'data:get_thread_messages': [
+    'getThreadMessages',
+    (input) => ({ ...input, direction: input.direction === 'after' ? 2 : 1 }),
+  ],
+  'data:get_tool_call': ['getToolCall', (input) => ({ toolCallId: input.toolCallId })],
+  'data:find_tool_call': ['findToolCall', asPayload],
+  'data:insert_message': ['insertMessage', asPayload],
+  'data:insert_tool_call': ['insertToolCall', asPayload],
+  'data:update_thread': [
+    'updateThread',
+    (_input, payload) => ({ threadId: payload.threadId, updates: payload.updates }),
+  ],
+  'data:update_message': ['updateMessage', asPayload],
+  'data:update_tool_call_output': ['updateToolCallOutput', asPayload],
+  'data:save_thread_event': ['saveThreadEvent', asPayload],
+  'data:create_pending_permission_request': [
+    'createPendingPermission',
+    (_input, payload) => ({ permission: payload }),
+  ],
+  'data:resolve_pending_permission_request': [
+    'resolvePendingPermission',
+    (_input, payload) => ({ permissionRequestId: payload.requestId, decision: payload.decision }),
+  ],
+  'data:expire_pending_permission_request': [
+    'expirePendingPermission',
+    (_input, payload) => ({ permissionRequestId: payload.requestId }),
+  ],
+  'data:insert_comment': ['insertComment', asPayload],
+  'data:delete_messages_after': ['deleteMessagesAfter', asPayload],
+  'data:search_threads': ['searchThreads', asInput],
+  'data:find_last_unanswered_interactive_tool_call': [
+    'findLastUnansweredInteractiveToolCall',
+    inputThreadId,
+  ],
+  'data:get_project': ['getProject', inputProjectId],
+  'data:get_startup_command': [
+    'getStartupCommand',
+    (input) => ({ commandId: input.cmdId, projectId: input.projectId }),
+  ],
+  'data:get_agent_template': ['getAgentTemplate', (input) => ({ templateId: input.templateId })],
+  'data:list_projects': ['listProjects', noValue],
+  'data:list_project_threads': ['listProjectThreads', inputProjectId],
+  'data:resolve_project_path': ['resolveProjectPath', inputProjectId],
+  'data:create_project': [
+    'createProject',
+    (input) => ({ name: input.name, path: input.path, organizationId: input.orgId }),
+  ],
+  'data:create_thread': ['createThread', (_input, payload) => ({ thread: payload })],
+  'data:delete_thread': ['deleteThread', inputThreadId],
+  'data:enqueue_message': [
+    'enqueueMessage',
+    (input, payload) => ({ threadId: input.threadId, message: payload }),
+  ],
+  'data:dequeue_message': ['dequeueMessage', inputThreadId],
+  'data:peek_message': ['peekMessage', inputThreadId],
+  'data:queue_count': ['queueCount', inputThreadId],
+  'data:list_queue': ['listQueue', inputThreadId],
+  'data:cancel_queued_message': [
+    'cancelQueuedMessage',
+    (input) => ({ messageId: input.messageId }),
+  ],
+  'data:update_queued_message': [
+    'updateQueuedMessage',
+    (input) => ({ messageId: input.messageId, content: input.content }),
+  ],
+  'data:get_profile': ['getProfile', noValue],
+  'data:get_provider_key': ['getProviderKey', (input) => ({ provider: input.provider })],
+  'data:get_github_token': ['getGithubToken', (input) => ({ projectId: input.projectId ?? '' })],
+  'data:get_minimax_api_key': ['getMinimaxApiKey', noValue],
+  'data:update_profile': ['updateProfile', (_input, payload) => ({ updates: payload })],
+  'data:resolve_agent_execution_profile': ['resolveAgentExecutionProfile', inputProjectId],
+  'data:get_builtin_providers': ['getBuiltinProviders', noValue],
+  'data:set_builtin_providers': ['setBuiltinProviders', (input) => ({ active: input.active })],
+  'data:mark_and_list_stale_threads': ['markAndListStaleThreads', noValue],
+  'data:watcher_insert': [
+    'watcherInsert',
+    (_input, payload) => ({ threadId: payload.threadId, watcher: payload.row }),
+  ],
+  'data:watcher_get': ['watcherGet', (_input, payload) => ({ watcherId: payload.id })],
+  'data:watcher_get_live_by_thread_key': ['watcherGetLiveByThreadKey', asPayload],
+  'data:watcher_list_pending': ['watcherListPending', noValue],
+  'data:watcher_list_due': [
+    'watcherListDue',
+    (_input, payload) => ({ nowMs: String(payload.now) }),
+  ],
+  'data:watcher_list_by_user': ['watcherListByUser', noValue],
+  'data:watcher_update': [
+    'watcherUpdate',
+    (_input, payload) => ({ watcherId: payload.id, patch: payload.patch }),
+  ],
+  'data:watcher_delete_by_thread': ['watcherDeleteByThread', payloadThreadId],
+  'data:job_insert': [
+    'jobInsert',
+    (_input, payload) => ({ threadId: payload.threadId, job: payload.row }),
+  ],
+  'data:job_get': ['jobGet', (_input, payload) => ({ jobId: payload.id })],
+  'data:job_list_running': ['jobListRunning', noValue],
+  'data:job_list_by_user': ['jobListByUser', noValue],
+  'data:job_update': [
+    'jobUpdate',
+    (_input, payload) => ({ jobId: payload.id, patch: payload.patch }),
+  ],
+  'data:job_delete_by_thread': ['jobDeleteByThread', payloadThreadId],
+  'data:create_permission_rule': ['createPermissionRule', asPayload],
+  'data:find_permission_rule': ['findPermissionRule', asPayload],
+  'data:list_permission_rules': ['listPermissionRules', asPayload],
+};
+
 export function mapRunnerOperation(
   eventType: RunnerOperationEventType,
   input: Record<string, any>,
 ): { kind: string; value: Record<string, any> } {
-  const payload = input.payload ?? input;
-  switch (eventType) {
-    case 'data:get_thread':
-      return { kind: 'getThread', value: { threadId: input.threadId } };
-    case 'data:get_thread_by_external_request_id':
-      return {
-        kind: 'getThreadByExternalRequestId',
-        value: { externalRequestId: input.externalRequestId },
-      };
-    case 'data:get_thread_by_session_id':
-      return {
-        kind: 'getThreadByProviderSessionId',
-        value: { providerSessionId: input.sessionId },
-      };
-    case 'data:get_thread_with_messages':
-      return { kind: 'getThreadWithMessages', value: input };
-    case 'data:get_thread_messages':
-      return {
-        kind: 'getThreadMessages',
-        value: { ...input, direction: input.direction === 'after' ? 2 : 1 },
-      };
-    case 'data:get_tool_call':
-      return { kind: 'getToolCall', value: { toolCallId: input.toolCallId } };
-    case 'data:find_tool_call':
-      return { kind: 'findToolCall', value: payload };
-    case 'data:insert_message':
-      return { kind: 'insertMessage', value: payload };
-    case 'data:insert_tool_call':
-      return { kind: 'insertToolCall', value: payload };
-    case 'data:update_thread':
-      return {
-        kind: 'updateThread',
-        value: { threadId: payload.threadId, updates: payload.updates },
-      };
-    case 'data:update_message':
-      return { kind: 'updateMessage', value: payload };
-    case 'data:update_tool_call_output':
-      return { kind: 'updateToolCallOutput', value: payload };
-    case 'data:save_thread_event':
-      return { kind: 'saveThreadEvent', value: payload };
-    case 'data:create_pending_permission_request':
-      return { kind: 'createPendingPermission', value: { permission: payload } };
-    case 'data:resolve_pending_permission_request':
-      return {
-        kind: 'resolvePendingPermission',
-        value: { permissionRequestId: payload.requestId, decision: payload.decision },
-      };
-    case 'data:expire_pending_permission_request':
-      return { kind: 'expirePendingPermission', value: { permissionRequestId: payload.requestId } };
-    case 'data:insert_comment':
-      return { kind: 'insertComment', value: payload };
-    case 'data:delete_messages_after':
-      return { kind: 'deleteMessagesAfter', value: payload };
-    case 'data:search_threads':
-      return { kind: 'searchThreads', value: input };
-    case 'data:find_last_unanswered_interactive_tool_call':
-      return { kind: 'findLastUnansweredInteractiveToolCall', value: { threadId: input.threadId } };
-    case 'data:get_project':
-      return { kind: 'getProject', value: { projectId: input.projectId } };
-    case 'data:get_startup_command':
-      return {
-        kind: 'getStartupCommand',
-        value: { commandId: input.cmdId, projectId: input.projectId },
-      };
-    case 'data:get_agent_template':
-      return { kind: 'getAgentTemplate', value: { templateId: input.templateId } };
-    case 'data:list_projects':
-      return { kind: 'listProjects', value: {} };
-    case 'data:list_project_threads':
-      return { kind: 'listProjectThreads', value: { projectId: input.projectId } };
-    case 'data:resolve_project_path':
-      return { kind: 'resolveProjectPath', value: { projectId: input.projectId } };
-    case 'data:create_project':
-      return {
-        kind: 'createProject',
-        value: { name: input.name, path: input.path, organizationId: input.orgId },
-      };
-    case 'data:create_thread':
-      return { kind: 'createThread', value: { thread: payload } };
-    case 'data:delete_thread':
-      return { kind: 'deleteThread', value: { threadId: input.threadId } };
-    case 'data:enqueue_message':
-      return { kind: 'enqueueMessage', value: { threadId: input.threadId, message: payload } };
-    case 'data:dequeue_message':
-      return { kind: 'dequeueMessage', value: { threadId: input.threadId } };
-    case 'data:peek_message':
-      return { kind: 'peekMessage', value: { threadId: input.threadId } };
-    case 'data:queue_count':
-      return { kind: 'queueCount', value: { threadId: input.threadId } };
-    case 'data:list_queue':
-      return { kind: 'listQueue', value: { threadId: input.threadId } };
-    case 'data:cancel_queued_message':
-      return { kind: 'cancelQueuedMessage', value: { messageId: input.messageId } };
-    case 'data:update_queued_message':
-      return {
-        kind: 'updateQueuedMessage',
-        value: { messageId: input.messageId, content: input.content },
-      };
-    case 'data:get_profile':
-      return { kind: 'getProfile', value: {} };
-    case 'data:get_provider_key':
-      return { kind: 'getProviderKey', value: { provider: input.provider } };
-    case 'data:get_github_token':
-      return { kind: 'getGithubToken', value: { projectId: input.projectId ?? '' } };
-    case 'data:get_minimax_api_key':
-      return { kind: 'getMinimaxApiKey', value: {} };
-    case 'data:update_profile':
-      return { kind: 'updateProfile', value: { updates: payload } };
-    case 'data:resolve_agent_execution_profile':
-      return { kind: 'resolveAgentExecutionProfile', value: { projectId: input.projectId } };
-    case 'data:get_builtin_providers':
-      return { kind: 'getBuiltinProviders', value: {} };
-    case 'data:set_builtin_providers':
-      return { kind: 'setBuiltinProviders', value: { active: input.active } };
-    case 'data:mark_and_list_stale_threads':
-      return { kind: 'markAndListStaleThreads', value: {} };
-    case 'data:watcher_insert':
-      return { kind: 'watcherInsert', value: { threadId: payload.threadId, watcher: payload.row } };
-    case 'data:watcher_get':
-      return { kind: 'watcherGet', value: { watcherId: payload.id } };
-    case 'data:watcher_get_live_by_thread_key':
-      return { kind: 'watcherGetLiveByThreadKey', value: payload };
-    case 'data:watcher_list_pending':
-      return { kind: 'watcherListPending', value: {} };
-    case 'data:watcher_list_due':
-      return { kind: 'watcherListDue', value: { nowMs: String(payload.now) } };
-    case 'data:watcher_list_by_user':
-      return { kind: 'watcherListByUser', value: {} };
-    case 'data:watcher_update':
-      return { kind: 'watcherUpdate', value: { watcherId: payload.id, patch: payload.patch } };
-    case 'data:watcher_delete_by_thread':
-      return { kind: 'watcherDeleteByThread', value: { threadId: payload.threadId } };
-    case 'data:job_insert':
-      return { kind: 'jobInsert', value: { threadId: payload.threadId, job: payload.row } };
-    case 'data:job_get':
-      return { kind: 'jobGet', value: { jobId: payload.id } };
-    case 'data:job_list_running':
-      return { kind: 'jobListRunning', value: {} };
-    case 'data:job_list_by_user':
-      return { kind: 'jobListByUser', value: {} };
-    case 'data:job_update':
-      return { kind: 'jobUpdate', value: { jobId: payload.id, patch: payload.patch } };
-    case 'data:job_delete_by_thread':
-      return { kind: 'jobDeleteByThread', value: { threadId: payload.threadId } };
-    case 'data:create_permission_rule':
-      return { kind: 'createPermissionRule', value: payload };
-    case 'data:find_permission_rule':
-      return { kind: 'findPermissionRule', value: payload };
-    case 'data:list_permission_rules':
-      return { kind: 'listPermissionRules', value: payload };
-  }
+  const [kind, toValue] = OPERATION_MAPPINGS[eventType];
+  return { kind, value: toValue(input, input.payload ?? input) };
 }
 
 export function mapRunnerOperationOutcome(kind: string, success: Record<string, any>): unknown {

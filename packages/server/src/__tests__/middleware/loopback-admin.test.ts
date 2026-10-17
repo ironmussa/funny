@@ -4,13 +4,9 @@
  * `FUNNY_LOOPBACK_RUNNER_USERNAME`; without it the request is refused
  * with guidance to use the invite-token flow.
  */
-import { mock } from 'bun:test';
+import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
-mock.module('@funny/core/git', () => ({
-  isGitRepoSync: () => true,
-  isGitRepoRootSync: () => true,
-  ensureWeaveConfigured: () => Promise.resolve(),
-}));
+mockCoreGitRepoChecks();
 
 // Required for the X-Runner-Auth branch to evaluate.
 process.env.RUNNER_AUTH_SECRET = 'loopback-test-secret';

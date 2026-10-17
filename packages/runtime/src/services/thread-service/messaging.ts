@@ -114,6 +114,9 @@ export function sendMessage(
   return ResultAsync.fromPromise(sendMessageImpl(params), toThreadServiceError);
 }
 
+type SendThread = NonNullable<Awaited<ReturnType<typeof tm.getThread>>>;
+type SendProject = Awaited<ReturnType<ReturnType<typeof getServices>['projects']['getProject']>>;
+
 async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageResult> {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
@@ -150,268 +153,55 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
     thread.provider ||
     DEFAULT_PROVIDER) as AgentProvider;
   const effectiveModel = (params.model || thread.model || DEFAULT_MODEL) as AgentModel;
-  // Use the composer's provider-scoped catalog as well as live session commands.
-  // A previous provider's session list cannot validate a newly selected provider.
-  let agentContent = params.content;
-  if (isPureSlashCommand(params.content)) {
-    const name = extractSlashCommandName(params.content)!;
-    const known =
-      effectiveProvider === thread.provider
-        ? getSupportedSlashCommands(params.threadId)
-        : undefined;
-    if (!known?.has(name)) {
-      const profile =
-        effectiveProvider === 'claude' && thread.projectId
-          ? await getServices().agentProfiles.resolveEffectiveProfile(
-              thread.projectId,
-              params.userId,
-            )
-          : undefined;
-      const resolved = await resolveAgentResources({
-        provider: effectiveProvider,
-        model: effectiveModel,
-        phase: 'composer',
-        projectPath: cwd,
-        projectId: thread.projectId,
-        claudeConfigDir:
-          profile?.profile?.provider === 'claude' ? profile.env.CLAUDE_CONFIG_DIR : undefined,
-      });
-      if (resolved.isErr()) throw new ThreadServiceError(resolved.error.message, 500);
-      const resource = resolved.value.resources.find(
-        (r) => r.name === name && (r.kind === 'skill' || r.kind === 'slash-command'),
-      );
-      if (resource?.kind === 'skill' && effectiveProvider === 'codex') {
-        const args = params.content
-          .trimStart()
-          .slice(name.length + 1)
-          .trimStart();
-        agentContent = `Use the ${name} skill.${args ? `\n\n${args}` : ''}`;
-      } else if (!resource && known && known.size > 0) {
-        throw new ThreadServiceError(
-          `Unknown slash command "/${name}". It is not available in this session, so it was not sent.`,
-          400,
-        );
-      }
-    }
-  }
+  const agentContent = await resolveSlashCommandContent(
+    params,
+    thread,
+    cwd,
+    effectiveProvider,
+    effectiveModel,
+  );
 
   let effectivePermission = (params.permissionMode ||
     thread.permissionMode ||
     'autoEdit') as PermissionMode;
 
-  // Update thread's permission mode, model, provider, and baseBranch if they changed
-  const updates: Record<string, any> = {};
-  const modelChanged = !!(params.model && params.model !== thread.model);
-  const providerChanged = !!(params.provider && params.provider !== thread.provider);
+  await applyThreadSettingChanges(params, thread);
+  let hasDraftMessage = await promoteBacklogThread(params, thread);
 
-  if (params.permissionMode && params.permissionMode !== thread.permissionMode) {
-    updates.permissionMode = params.permissionMode;
-  }
-  if (modelChanged) {
-    updates.model = params.model;
-  }
-  if (providerChanged) {
-    updates.provider = params.provider;
-  }
-  if (params.baseBranch && params.baseBranch !== thread.baseBranch) {
-    updates.baseBranch = params.baseBranch;
-  }
-  // Clear sessionId when model or provider changes — the old session is incompatible
-  if ((modelChanged || providerChanged) && thread.sessionId) {
-    updates.sessionId = null;
-    updates.contextRecoveryReason = providerChanged ? 'provider_changed' : 'model_changed';
-  }
-  if (Object.keys(updates).length > 0) {
-    await tm.updateThread(params.threadId, updates);
-  }
+  const { augmentedContent, persistedContent } = await buildMessageContents(
+    params,
+    agentContent,
+    cwd,
+  );
 
-  // Auto-move idle backlog threads to in_progress when a message is sent.
-  // Detect a pre-existing user draft so the persistence step below updates it
-  // instead of inserting a duplicate.
-  let hasDraftMessage = false;
-  if (thread.status === 'idle' && thread.stage === 'backlog') {
-    const stageUpdates: Record<string, any> = { stage: 'in_progress' };
-    if (!thread.initialPrompt || params.content !== thread.initialPrompt) {
-      stageUpdates.title = params.content.slice(0, 200);
-      stageUpdates.initialPrompt = params.content;
-    }
-    await tm.updateThread(params.threadId, stageUpdates);
-
-    const { messages: draftMessages } = await tm.getThreadMessages({
-      threadId: params.threadId,
-      limit: 1,
-    });
-    const draftMsg = draftMessages[0];
-    if (draftMsg && draftMsg.role === 'user') {
-      hasDraftMessage = true;
-    }
-  }
-
-  // Augment prompt with file/symbol contents — this is what the agent sees.
-  let augmentedContent = await augmentPromptWithFiles(params.content, params.fileReferences, cwd);
-  augmentedContent = await augmentPromptWithSymbols(augmentedContent, params.symbolReferences, cwd);
-  // What we persist in the messages table is the path-only metadata version,
-  // so the UI shows file chips instead of inlining the entire source.
-  const persistedContent = stripInlineReferencedContent(augmentedContent);
-  if (agentContent !== params.content) {
-    augmentedContent = await augmentPromptWithFiles(agentContent, params.fileReferences, cwd);
-    augmentedContent = await augmentPromptWithSymbols(
-      augmentedContent,
-      params.symbolReferences,
-      cwd,
-    );
-  }
-
-  // Decide whether this send will be queued. When queued, we deliberately
-  // skip persisting the user message to `messages` here — the message lives
-  // only in the queue table until dequeue, where startAgent inserts it with
-  // a timestamp that matches when the agent actually starts processing it.
-  // This avoids the double-render bug where the stored message and the
-  // client-side dequeue buffer both surface the same content twice.
-  const agentRunning = isAgentRunning(params.threadId);
-  const followUpMode = project?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
-  const isWaitingResponse = thread.status === 'waiting';
-  const threadIsTerminal =
-    thread.status === 'stopped' || thread.status === 'completed' || thread.status === 'failed';
-  // A turn is genuinely in flight only when the agent is running and not
-  // paused on an interactive answer (waiting) or already terminal.
-  const turnInFlight = agentRunning && !isWaitingResponse && !threadIsTerminal;
-
-  // Interrupting a Claude turn mid-thinking (steer's query.interrupt() or
-  // interrupt mode's kill+respawn) leaves a partial `thinking` block that
-  // poisons session resume — the Anthropic 400 "thinking blocks ... cannot be
-  // modified". The risk scales with thinking depth, so for heavy-thinking
-  // efforts we queue the follow-up instead, letting the turn finish cleanly
-  // rather than being cut. (Lighter efforts keep steer/interrupt; the session
-  // self-recovers via isThinkingBlockError if a poison still slips through.)
-  const heavyThinking =
-    effectiveProvider === 'claude' && (params.effort === 'xhigh' || params.effort === 'max');
-  const avoidInterrupt = turnInFlight && heavyThinking;
-  if (avoidInterrupt && followUpMode !== 'queue') {
-    log.info('Queuing follow-up to avoid interrupting a heavy-thinking turn', {
-      namespace: 'thread-service',
-      threadId: params.threadId,
-      followUpMode,
-      effort: params.effort ?? '',
-    });
-  }
-
-  const willQueue =
-    turnInFlight && (followUpMode === 'queue' || params.forceQueue || avoidInterrupt);
-
-  // Steer: only when the agent is actively mid-turn (not waiting on an
-  // interactive answer, not terminal). When the thread is idle the message is
-  // a normal follow-up (warm-continue on the live session, or resume).
-  const steer = followUpMode === 'steer' && turnInFlight && !avoidInterrupt;
-
-  if (!willQueue) {
-    // Persist the user's message BEFORE any remote/long-running call. If a later
-    // step (e.g. findLastUnansweredInteractiveToolCall) times out or throws, the
-    // user's content is already saved — refresh shows the message instead of
-    // appearing to lose it silently. Downstream code (startAgent) is told the
-    // message already exists via hasDraftMessage=true.
-    if (hasDraftMessage) {
-      const { messages: draftMsgs } = await tm.getThreadMessages({
-        threadId: params.threadId,
-        limit: 1,
-      });
-      if (draftMsgs[0]) {
-        await tm.updateMessage(draftMsgs[0].id, {
-          content: persistedContent,
-          images: params.images?.length ? JSON.stringify(params.images) : null,
-        });
-      }
-    } else {
-      await tm.insertMessage({
-        threadId: params.threadId,
-        role: 'user',
-        content: persistedContent,
-        images: params.images?.length ? JSON.stringify(params.images) : null,
-        model: effectiveModel,
-        permissionMode: effectivePermission,
-        effort: params.effort ?? null,
-      });
-      hasDraftMessage = true;
-    }
-
-    // Persist the user's answer in the tool call output.
-    // Always attempt this (not just when status === 'waiting') because the thread
-    // status may have already transitioned away from 'waiting' by the time the
-    // user's response arrives — e.g. due to interruption or race conditions.
-    // Without this, the tool call output stays NULL and the UI re-shows
-    // accept/reject buttons on refresh.
-    // Wrapped so a failure here doesn't lose the user's message (already persisted above).
-    try {
-      const pendingTC = await tm.findLastUnansweredInteractiveToolCall(params.threadId);
-      if (pendingTC) {
-        log.info('sendMessage: resolving unanswered interactive tool call', {
-          namespace: 'thread-service',
-          threadId: params.threadId,
-          userId: thread.userId ?? 'unknown',
-          projectId: thread.projectId,
-          threadStatus: thread.status,
-          pendingToolCallId: pendingTC.id,
-          pendingToolCallName: pendingTC.name,
-        });
-        await tm.updateToolCallOutput(pendingTC.id, params.content);
-
-        // When the user accepts a plan (ExitPlanMode), switch from plan-only mode
-        // to autoEdit so the agent can actually execute. Without this, the agent
-        // restarts in plan mode and immediately calls ExitPlanMode again — an
-        // infinite loop.
-        if (pendingTC.name === 'ExitPlanMode' && effectivePermission === 'plan') {
-          effectivePermission = 'autoEdit';
-          await tm.updateThread(params.threadId, { permissionMode: 'autoEdit' });
-          emitThreadUpdated(thread.userId, params.threadId, { permissionMode: 'autoEdit' });
-          log.info(
-            'sendMessage: upgrading permissionMode from plan to autoEdit after ExitPlanMode',
-            {
-              namespace: 'thread-service',
-              threadId: params.threadId,
-            },
-          );
-        }
-      }
-    } catch (err) {
-      log.warn('sendMessage: failed to resolve pending interactive tool call (continuing)', {
-        namespace: 'thread-service',
-        threadId: params.threadId,
-        error: (err as Error).message,
-      });
-    }
-  }
+  const { willQueue, steer } = decideFollowUpDelivery(params, thread, project, effectiveProvider);
 
   if (willQueue) {
-    const queued = await getServices().messageQueue.enqueue(params.threadId, {
+    return enqueueFollowUp(params, thread, {
       content: augmentedContent,
       provider: effectiveProvider,
       model: effectiveModel,
       permissionMode: effectivePermission,
-      images: params.images ? JSON.stringify(params.images) : undefined,
-      allowedTools: params.allowedTools ? JSON.stringify(params.allowedTools) : undefined,
-      disallowedTools: params.disallowedTools ? JSON.stringify(params.disallowedTools) : undefined,
-      fileReferences: params.fileReferences ? JSON.stringify(params.fileReferences) : undefined,
     });
-
-    const qCount = await getServices().messageQueue.queueCount(params.threadId);
-    const nextMsg = await getServices().messageQueue.peek(params.threadId);
-    const queueEvent = {
-      type: 'thread:queue_update' as const,
-      threadId: params.threadId,
-      data: {
-        threadId: params.threadId,
-        queuedCount: qCount,
-        nextMessage: nextMsg?.content?.slice(0, 100),
-      },
-    } as WSEvent;
-    if (thread.userId) {
-      wsBroker.emitToUser(thread.userId, queueEvent);
-    } else {
-      wsBroker.emit(queueEvent);
-    }
-
-    return { ok: true, queued: true, queuedCount: qCount, queuedMessageId: queued.id };
   }
+
+  // Persist the user's message BEFORE any remote/long-running call. If a later
+  // step (e.g. findLastUnansweredInteractiveToolCall) times out or throws, the
+  // user's content is already saved — refresh shows the message instead of
+  // appearing to lose it silently. Downstream code (startAgent) is told the
+  // message already exists via hasDraftMessage=true.
+  await persistFollowUpMessage(params, {
+    hasDraftMessage,
+    content: persistedContent,
+    model: effectiveModel,
+    permissionMode: effectivePermission,
+  });
+  hasDraftMessage = true;
+  effectivePermission = await resolvePendingInteractiveToolCall(
+    params,
+    thread,
+    effectivePermission,
+  );
 
   // Default interrupt behavior — start agent (throws on failure)
   log.info('sendMessage: calling startAgent', {
@@ -450,6 +240,392 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   });
 
   return { ok: true };
+}
+
+/**
+ * Validate a pure slash command against the provider's known commands and
+ * rewrite it into the prompt the agent should receive. Uses the composer's
+ * provider-scoped catalog as well as live session commands — a previous
+ * provider's session list cannot validate a newly selected provider.
+ */
+async function resolveSlashCommandContent(
+  params: SendMessageParams,
+  thread: SendThread,
+  cwd: string,
+  effectiveProvider: AgentProvider,
+  effectiveModel: AgentModel,
+): Promise<string> {
+  if (!isPureSlashCommand(params.content)) return params.content;
+  const name = extractSlashCommandName(params.content)!;
+  const known = liveSlashCommands(params.threadId, thread, effectiveProvider);
+  if (known?.has(name)) return params.content;
+
+  const resource = await findComposerResource(params, thread, cwd, {
+    name,
+    provider: effectiveProvider,
+    model: effectiveModel,
+  });
+  if (resource?.kind === 'skill' && effectiveProvider === 'codex') {
+    return codexSkillPrompt(params.content, name);
+  }
+  if (!resource) assertNotKnownToSession(name, known);
+  return params.content;
+}
+
+/** Live session commands — only valid for the provider that owns the session. */
+function liveSlashCommands(
+  threadId: string,
+  thread: SendThread,
+  effectiveProvider: AgentProvider,
+): Set<string> | undefined {
+  return effectiveProvider === thread.provider ? getSupportedSlashCommands(threadId) : undefined;
+}
+
+/** Codex has no slash skills — rewrite `/skill args` into a natural prompt. */
+function codexSkillPrompt(content: string, name: string): string {
+  const args = content
+    .trimStart()
+    .slice(name.length + 1)
+    .trimStart();
+  return `Use the ${name} skill.${args ? `\n\n${args}` : ''}`;
+}
+
+/** Refuse to send a command the live session reports it doesn't support. */
+function assertNotKnownToSession(name: string, known: Set<string> | undefined): void {
+  if (known && known.size > 0) {
+    throw new ThreadServiceError(
+      `Unknown slash command "/${name}". It is not available in this session, so it was not sent.`,
+      400,
+    );
+  }
+}
+
+/** Look up a skill / slash-command resource by name in the composer catalog. */
+async function findComposerResource(
+  params: SendMessageParams,
+  thread: SendThread,
+  cwd: string,
+  query: { name: string; provider: AgentProvider; model: AgentModel },
+) {
+  const profile =
+    query.provider === 'claude' && thread.projectId
+      ? await getServices().agentProfiles.resolveEffectiveProfile(thread.projectId, params.userId)
+      : undefined;
+  const resolved = await resolveAgentResources({
+    provider: query.provider,
+    model: query.model,
+    phase: 'composer',
+    projectPath: cwd,
+    projectId: thread.projectId,
+    claudeConfigDir:
+      profile?.profile?.provider === 'claude' ? profile.env.CLAUDE_CONFIG_DIR : undefined,
+  });
+  if (resolved.isErr()) throw new ThreadServiceError(resolved.error.message, 500);
+  return resolved.value.resources.find(
+    (r) => r.name === query.name && (r.kind === 'skill' || r.kind === 'slash-command'),
+  );
+}
+
+/** True when the caller supplied a value that differs from the stored one. */
+function isChanged(next: string | undefined, current: unknown): boolean {
+  return !!(next && next !== current);
+}
+
+/** Collect permission mode, model, provider, and baseBranch changes. */
+function collectThreadSettingUpdates(
+  params: SendMessageParams,
+  thread: SendThread,
+): Record<string, any> {
+  const updates: Record<string, any> = {};
+  const modelChanged = isChanged(params.model, thread.model);
+  const providerChanged = isChanged(params.provider, thread.provider);
+
+  if (isChanged(params.permissionMode, thread.permissionMode)) {
+    updates.permissionMode = params.permissionMode;
+  }
+  if (modelChanged) {
+    updates.model = params.model;
+  }
+  if (providerChanged) {
+    updates.provider = params.provider;
+  }
+  if (isChanged(params.baseBranch, thread.baseBranch)) {
+    updates.baseBranch = params.baseBranch;
+  }
+  // Clear sessionId when model or provider changes — the old session is incompatible
+  if ((modelChanged || providerChanged) && thread.sessionId) {
+    updates.sessionId = null;
+    updates.contextRecoveryReason = providerChanged ? 'provider_changed' : 'model_changed';
+  }
+  return updates;
+}
+
+/** Persist permission mode, model, provider, and baseBranch if they changed. */
+async function applyThreadSettingChanges(
+  params: SendMessageParams,
+  thread: SendThread,
+): Promise<void> {
+  const updates = collectThreadSettingUpdates(params, thread);
+  if (Object.keys(updates).length > 0) {
+    await tm.updateThread(params.threadId, updates);
+  }
+}
+
+/**
+ * Auto-move idle backlog threads to in_progress when a message is sent.
+ * Returns true when a pre-existing user draft was detected, so the
+ * persistence step updates it instead of inserting a duplicate.
+ */
+async function promoteBacklogThread(
+  params: SendMessageParams,
+  thread: SendThread,
+): Promise<boolean> {
+  if (thread.status !== 'idle' || thread.stage !== 'backlog') return false;
+
+  const stageUpdates: Record<string, any> = { stage: 'in_progress' };
+  if (!thread.initialPrompt || params.content !== thread.initialPrompt) {
+    stageUpdates.title = params.content.slice(0, 200);
+    stageUpdates.initialPrompt = params.content;
+  }
+  await tm.updateThread(params.threadId, stageUpdates);
+
+  const { messages: draftMessages } = await tm.getThreadMessages({
+    threadId: params.threadId,
+    limit: 1,
+  });
+  const draftMsg = draftMessages[0];
+  return !!draftMsg && draftMsg.role === 'user';
+}
+
+/**
+ * Augment the prompt with file/symbol contents — this is what the agent sees.
+ * What we persist in the messages table is the path-only metadata version
+ * (derived from the user's original text), so the UI shows file chips instead
+ * of inlining the entire source.
+ */
+async function buildMessageContents(
+  params: SendMessageParams,
+  agentContent: string,
+  cwd: string,
+): Promise<{ augmentedContent: string; persistedContent: string }> {
+  const augmentReferences = async (text: string) => {
+    const withFiles = await augmentPromptWithFiles(text, params.fileReferences, cwd);
+    return augmentPromptWithSymbols(withFiles, params.symbolReferences, cwd);
+  };
+  let augmentedContent = await augmentReferences(params.content);
+  const persistedContent = stripInlineReferencedContent(augmentedContent);
+  if (agentContent !== params.content) {
+    augmentedContent = await augmentReferences(agentContent);
+  }
+  return { augmentedContent, persistedContent };
+}
+
+/**
+ * Decide whether this send will be queued or steer the live turn. When
+ * queued, the user message is deliberately NOT persisted to `messages` — it
+ * lives only in the queue table until dequeue, where startAgent inserts it
+ * with a timestamp that matches when the agent actually starts processing it.
+ * This avoids the double-render bug where the stored message and the
+ * client-side dequeue buffer both surface the same content twice.
+ */
+function decideFollowUpDelivery(
+  params: SendMessageParams,
+  thread: SendThread,
+  project: SendProject | null,
+  effectiveProvider: AgentProvider,
+): { willQueue: boolean; steer: boolean } {
+  const followUpMode = followUpModeFor(project);
+  const turnInFlight = isTurnInFlight(params.threadId, thread.status);
+
+  // Interrupting a Claude turn mid-thinking (steer's query.interrupt() or
+  // interrupt mode's kill+respawn) leaves a partial `thinking` block that
+  // poisons session resume — the Anthropic 400 "thinking blocks ... cannot be
+  // modified". The risk scales with thinking depth, so for heavy-thinking
+  // efforts we queue the follow-up instead, letting the turn finish cleanly
+  // rather than being cut. (Lighter efforts keep steer/interrupt; the session
+  // self-recovers via isThinkingBlockError if a poison still slips through.)
+  const avoidInterrupt = turnInFlight && isHeavyThinking(effectiveProvider, params.effort);
+  if (avoidInterrupt) logQueuedToAvoidInterrupt(params, followUpMode);
+
+  const willQueue =
+    turnInFlight && (followUpMode === 'queue' || !!params.forceQueue || avoidInterrupt);
+
+  // Steer: only when the agent is actively mid-turn (not waiting on an
+  // interactive answer, not terminal). When the thread is idle the message is
+  // a normal follow-up (warm-continue on the live session, or resume).
+  const steer = followUpMode === 'steer' && turnInFlight && !avoidInterrupt;
+  return { willQueue, steer };
+}
+
+const TERMINAL_THREAD_STATUSES = new Set(['stopped', 'completed', 'failed']);
+
+function followUpModeFor(project: SendProject | null): string {
+  return project?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
+}
+
+/**
+ * A turn is genuinely in flight only when the agent is running and not paused
+ * on an interactive answer (waiting) or already terminal.
+ */
+function isTurnInFlight(threadId: string, status: string | null | undefined): boolean {
+  const agentRunning = isAgentRunning(threadId);
+  return agentRunning && status !== 'waiting' && !TERMINAL_THREAD_STATUSES.has(status ?? '');
+}
+
+function isHeavyThinking(provider: AgentProvider, effort: string | undefined): boolean {
+  return provider === 'claude' && (effort === 'xhigh' || effort === 'max');
+}
+
+function logQueuedToAvoidInterrupt(params: SendMessageParams, followUpMode: string): void {
+  if (followUpMode === 'queue') return;
+  log.info('Queuing follow-up to avoid interrupting a heavy-thinking turn', {
+    namespace: 'thread-service',
+    threadId: params.threadId,
+    followUpMode,
+    effort: params.effort ?? '',
+  });
+}
+
+function jsonOrUndefined(value: unknown): string | undefined {
+  return value ? JSON.stringify(value) : undefined;
+}
+
+/** Broadcast the current queue size + next message preview; returns the size. */
+async function broadcastQueueUpdate(threadId: string, userId: string | undefined): Promise<number> {
+  const qCount = await getServices().messageQueue.queueCount(threadId);
+  const nextMsg = await getServices().messageQueue.peek(threadId);
+  const queueEvent = {
+    type: 'thread:queue_update' as const,
+    threadId,
+    data: { threadId, queuedCount: qCount, nextMessage: nextMsg?.content?.slice(0, 100) },
+  } as WSEvent;
+  if (userId) {
+    wsBroker.emitToUser(userId, queueEvent);
+  } else {
+    wsBroker.emit(queueEvent);
+  }
+  return qCount;
+}
+
+/** Queue the follow-up for the running turn and broadcast the new queue state. */
+async function enqueueFollowUp(
+  params: SendMessageParams,
+  thread: SendThread,
+  run: {
+    content: string;
+    provider: AgentProvider;
+    model: AgentModel;
+    permissionMode: PermissionMode;
+  },
+): Promise<SendMessageResult> {
+  const queued = await getServices().messageQueue.enqueue(params.threadId, {
+    content: run.content,
+    provider: run.provider,
+    model: run.model,
+    permissionMode: run.permissionMode,
+    images: jsonOrUndefined(params.images),
+    allowedTools: jsonOrUndefined(params.allowedTools),
+    disallowedTools: jsonOrUndefined(params.disallowedTools),
+    fileReferences: jsonOrUndefined(params.fileReferences),
+  });
+
+  const qCount = await broadcastQueueUpdate(params.threadId, thread.userId);
+  return { ok: true, queued: true, queuedCount: qCount, queuedMessageId: queued.id };
+}
+
+/**
+ * Save the user's follow-up message — updating the existing draft when there
+ * is one. Afterwards the message always exists, so startAgent must skip its
+ * own insert.
+ */
+async function persistFollowUpMessage(
+  params: SendMessageParams,
+  msg: {
+    hasDraftMessage: boolean;
+    content: string;
+    model: AgentModel;
+    permissionMode: PermissionMode;
+  },
+): Promise<void> {
+  const images = params.images?.length ? JSON.stringify(params.images) : null;
+  if (msg.hasDraftMessage) {
+    const { messages: draftMsgs } = await tm.getThreadMessages({
+      threadId: params.threadId,
+      limit: 1,
+    });
+    if (draftMsgs[0]) {
+      await tm.updateMessage(draftMsgs[0].id, { content: msg.content, images });
+    }
+    return;
+  }
+  await tm.insertMessage({
+    threadId: params.threadId,
+    role: 'user',
+    content: msg.content,
+    images,
+    model: msg.model,
+    permissionMode: msg.permissionMode,
+    effort: params.effort ?? null,
+  });
+}
+
+/**
+ * Persist the user's answer in the tool call output and return the permission
+ * mode to run with.
+ *
+ * Always attempted (not just when status === 'waiting') because the thread
+ * status may have already transitioned away from 'waiting' by the time the
+ * user's response arrives — e.g. due to interruption or race conditions.
+ * Without this, the tool call output stays NULL and the UI re-shows
+ * accept/reject buttons on refresh. Failures are logged and never lose the
+ * user's message (already persisted).
+ */
+async function resolvePendingInteractiveToolCall(
+  params: SendMessageParams,
+  thread: SendThread,
+  permissionMode: PermissionMode,
+): Promise<PermissionMode> {
+  let effectivePermission = permissionMode;
+  try {
+    const pendingTC = await tm.findLastUnansweredInteractiveToolCall(params.threadId);
+    if (pendingTC) {
+      log.info('sendMessage: resolving unanswered interactive tool call', {
+        namespace: 'thread-service',
+        threadId: params.threadId,
+        userId: thread.userId ?? 'unknown',
+        projectId: thread.projectId,
+        threadStatus: thread.status,
+        pendingToolCallId: pendingTC.id,
+        pendingToolCallName: pendingTC.name,
+      });
+      await tm.updateToolCallOutput(pendingTC.id, params.content);
+
+      // When the user accepts a plan (ExitPlanMode), switch from plan-only mode
+      // to autoEdit so the agent can actually execute. Without this, the agent
+      // restarts in plan mode and immediately calls ExitPlanMode again — an
+      // infinite loop.
+      if (pendingTC.name === 'ExitPlanMode' && effectivePermission === 'plan') {
+        effectivePermission = 'autoEdit';
+        await upgradePlanToAutoEdit(params.threadId, thread.userId);
+      }
+    }
+  } catch (err) {
+    log.warn('sendMessage: failed to resolve pending interactive tool call (continuing)', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      error: (err as Error).message,
+    });
+  }
+  return effectivePermission;
+}
+
+async function upgradePlanToAutoEdit(threadId: string, userId: string): Promise<void> {
+  await tm.updateThread(threadId, { permissionMode: 'autoEdit' });
+  emitThreadUpdated(userId, threadId, { permissionMode: 'autoEdit' });
+  log.info('sendMessage: upgrading permissionMode from plan to autoEdit after ExitPlanMode', {
+    namespace: 'thread-service',
+    threadId,
+  });
 }
 
 async function handleShellEscapeMessage(
@@ -584,14 +760,32 @@ function deriveBashPrefix(toolInput: string | undefined): string | null {
   return firstToken || null;
 }
 
-export function approveToolCall(params: ApproveToolParams): ResultAsync<void, ThreadServiceError> {
-  return ResultAsync.fromPromise(approveToolCallImpl(params), toThreadServiceError);
+type ThreadRecord = NonNullable<Awaited<ReturnType<typeof tm.getThread>>>;
+type PendingPermission = NonNullable<ReturnType<typeof getPendingPermission>>;
+
+/** Tools granted on approval when the caller does not supply its own list. */
+const DEFAULT_APPROVAL_TOOLS = [
+  'Read',
+  'Edit',
+  'Write',
+  'Bash',
+  'Glob',
+  'Grep',
+  'WebSearch',
+  'WebFetch',
+  'Task',
+  'TodoWrite',
+  'NotebookEdit',
+];
+
+async function requireThread(threadId: string): Promise<ThreadRecord> {
+  const thread = await tm.getThread(threadId);
+  if (!thread) throw new ThreadServiceError('Thread not found', 404);
+  return thread;
 }
 
-async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
-  const thread = await tm.getThread(params.threadId);
-  if (!thread) throw new ThreadServiceError('Thread not found', 404);
-
+/** Resolve the thread's working directory via the scratch-aware predicate. */
+async function resolveWorkdir(thread: ThreadRecord): Promise<string> {
   const project = thread.projectId
     ? await getServices().projects.getProject(thread.projectId)
     : null;
@@ -600,95 +794,98 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
     project ? { path: project.path } : null,
   );
   if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
-  const cwd = cwdResult.value;
+  return cwdResult.value;
+}
 
-  const tools = params.allowedTools
-    ? [...params.allowedTools]
-    : [
-        'Read',
-        'Edit',
-        'Write',
-        'Bash',
-        'Glob',
-        'Grep',
-        'WebSearch',
-        'WebFetch',
-        'Task',
-        'TodoWrite',
-        'NotebookEdit',
-      ];
+interface ApprovalRun {
+  message: string;
+  disallowedTools?: string[];
+  allowedTools?: string[];
+}
 
-  const threadProvider = (thread.provider || DEFAULT_PROVIDER) as AgentProvider;
+export function approveToolCall(params: ApproveToolParams): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(approveToolCallImpl(params), toThreadServiceError);
+}
 
-  if (params.approved) {
-    if (!tools.includes(params.toolName)) {
-      tools.push(params.toolName);
-    }
+async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
+  const thread = await requireThread(params.threadId);
+  const cwd = await resolveWorkdir(thread);
+  const run = params.approved
+    ? await buildApprovedRun(params, thread, cwd)
+    : buildDeniedRun(params);
+  await startAgent(
+    params.threadId,
+    run.message,
+    cwd,
+    (thread.model as AgentModel) || DEFAULT_MODEL,
+    (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
+    undefined,
+    run.disallowedTools,
+    run.allowedTools,
+    (thread.provider || DEFAULT_PROVIDER) as AgentProvider,
+  );
+}
 
-    // Persist "always allow in this project" rule when requested.
-    if (params.scope === 'always') {
-      const pattern =
-        params.pattern ?? (params.toolName === 'Bash' ? deriveBashPrefix(params.toolInput) : null);
-      const projectPath = thread.worktreePath ?? cwd;
-      try {
-        const { createPermissionRule } = await import('../permission-rules-client.js');
-        await createPermissionRule({
-          userId: params.userId,
-          projectPath,
-          toolName: params.toolName,
-          pattern,
-          decision: 'allow',
-        });
-        log.info('approveToolCall: persisted always-allow rule', {
-          namespace: 'thread-service',
-          threadId: params.threadId,
-          userId: params.userId,
-          projectPath,
-          toolName: params.toolName,
-          pattern: pattern ?? '',
-        });
-      } catch (err) {
-        // Don't block the approve flow on persistence failure; the
-        // user can still re-approve next time.
-        log.warn('approveToolCall: failed to persist always-allow rule', {
-          namespace: 'thread-service',
-          threadId: params.threadId,
-          error: (err as Error)?.message,
-        });
-      }
-    }
-    const disallowed = params.disallowedTools?.filter((t) => t !== params.toolName);
-    const projectPathForRules = thread.worktreePath ?? cwd;
-    const augmentedTools = await augmentAllowedToolsWithRules(
-      params.userId,
-      projectPathForRules,
-      tools,
-    );
-    const message = `The user has approved the use of ${params.toolName}. Please proceed with using it.`;
-    await startAgent(
-      params.threadId,
-      message,
-      cwd,
-      (thread.model as AgentModel) || DEFAULT_MODEL,
-      (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
-      undefined,
-      disallowed,
-      augmentedTools,
-      threadProvider,
-    );
-  } else {
-    const message = `The user denied permission to use ${params.toolName}. Please continue without it.`;
-    await startAgent(
-      params.threadId,
-      message,
-      cwd,
-      (thread.model as AgentModel) || DEFAULT_MODEL,
-      (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
-      undefined,
-      params.disallowedTools,
-      params.allowedTools,
-      threadProvider,
-    );
+function buildDeniedRun(params: ApproveToolParams): ApprovalRun {
+  return {
+    message: `The user denied permission to use ${params.toolName}. Please continue without it.`,
+    disallowedTools: params.disallowedTools,
+    allowedTools: params.allowedTools,
+  };
+}
+
+async function buildApprovedRun(
+  params: ApproveToolParams,
+  thread: ThreadRecord,
+  cwd: string,
+): Promise<ApprovalRun> {
+  const tools = params.allowedTools ? [...params.allowedTools] : [...DEFAULT_APPROVAL_TOOLS];
+  if (!tools.includes(params.toolName)) {
+    tools.push(params.toolName);
+  }
+  const projectPath = thread.worktreePath ?? cwd;
+  // Persist "always allow in this project" rule when requested.
+  if (params.scope === 'always') {
+    await persistApprovalRule(params, projectPath);
+  }
+  return {
+    message: `The user has approved the use of ${params.toolName}. Please proceed with using it.`,
+    disallowedTools: params.disallowedTools?.filter((t) => t !== params.toolName),
+    allowedTools: await augmentAllowedToolsWithRules(params.userId, projectPath, tools),
+  };
+}
+
+function approvalRulePattern(params: ApproveToolParams): string | null {
+  return params.pattern ?? (params.toolName === 'Bash' ? deriveBashPrefix(params.toolInput) : null);
+}
+
+async function persistApprovalRule(params: ApproveToolParams, projectPath: string): Promise<void> {
+  const pattern = approvalRulePattern(params);
+  try {
+    const { createPermissionRule } = await import('../permission-rules-client.js');
+    await createPermissionRule({
+      userId: params.userId,
+      projectPath,
+      toolName: params.toolName,
+      pattern,
+      decision: 'allow',
+    });
+    log.info('approveToolCall: persisted always-allow rule', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      userId: params.userId,
+      projectPath,
+      toolName: params.toolName,
+      pattern: pattern ?? '',
+    });
+  } catch (err) {
+    // Don't block the approve flow on persistence failure; the
+    // user can still re-approve next time.
+    log.warn('approveToolCall: failed to persist always-allow rule', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      error: (err as Error)?.message,
+    });
   }
 }
 
@@ -704,8 +901,7 @@ export function respondPermissionRequest(
 }
 
 async function respondPermissionRequestImpl(params: RespondPermissionRequestParams): Promise<void> {
-  const thread = await tm.getThread(params.threadId);
-  if (!thread) throw new ThreadServiceError('Thread not found', 404);
+  const thread = await requireThread(params.threadId);
   if (thread.userId !== params.userId) throw new ThreadServiceError('Access denied', 403);
 
   // The process lookup binds this decision to the current live request id and
@@ -714,36 +910,42 @@ async function respondPermissionRequestImpl(params: RespondPermissionRequestPara
   if (!pending) throw new ThreadServiceError('This permission request is no longer active.', 409);
 
   if (params.decision === 'allow_always') {
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
-    if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
-    const pattern = pending.toolName === 'Bash' ? deriveBashPrefix(pending.toolInput) : null;
-    const { createPermissionRule } = await import('../permission-rules-client.js');
-    const rule = await createPermissionRule({
-      userId: params.userId,
-      projectPath: thread.worktreePath ?? cwdResult.value,
-      toolName: pending.toolName,
-      pattern,
-      decision: 'allow',
-    });
-    // The continuation is deliberately left live when persistence fails so
-    // the card can offer a truthful one-time approval instead.
-    if (!rule) {
-      throw new ThreadServiceError(
-        'Permanent approval could not be saved. You can still allow this action once.',
-        503,
-      );
-    }
+    await persistStructuredAllowRule(params, thread, pending);
   }
 
   const accepted = await respondToPermission(params.threadId, params.requestId, params.decision);
   if (!accepted) throw new ThreadServiceError('This permission request is no longer active.', 409);
 
+  await recordPermissionResolution(params);
+  await markPermissionTurnResumed(params);
+}
+
+async function persistStructuredAllowRule(
+  params: RespondPermissionRequestParams,
+  thread: ThreadRecord,
+  pending: PendingPermission,
+): Promise<void> {
+  const cwd = await resolveWorkdir(thread);
+  const pattern = pending.toolName === 'Bash' ? deriveBashPrefix(pending.toolInput) : null;
+  const { createPermissionRule } = await import('../permission-rules-client.js');
+  const rule = await createPermissionRule({
+    userId: params.userId,
+    projectPath: thread.worktreePath ?? cwd,
+    toolName: pending.toolName,
+    pattern,
+    decision: 'allow',
+  });
+  // The continuation is deliberately left live when persistence fails so
+  // the card can offer a truthful one-time approval instead.
+  if (!rule) {
+    throw new ThreadServiceError(
+      'Permanent approval could not be saved. You can still allow this action once.',
+      503,
+    );
+  }
+}
+
+async function recordPermissionResolution(params: RespondPermissionRequestParams): Promise<void> {
   const persisted = await tm.resolvePendingPermissionRequest?.(params.requestId, params.decision);
   // The process accepts a request only once. Storage follows immediately so
   // reloads cannot revive the just-resolved card. A failed durable transition
@@ -756,7 +958,9 @@ async function respondPermissionRequestImpl(params: RespondPermissionRequestPara
       requestId: params.requestId,
     });
   }
+}
 
+async function markPermissionTurnResumed(params: RespondPermissionRequestParams): Promise<void> {
   // The provider is resuming the same live turn. Clear the actionable card
   // immediately instead of leaving the thread visibly waiting until its next
   // tool/result event arrives.
@@ -791,19 +995,7 @@ async function cancelQueuedMessageImpl(
   if (!cancelled) throw new ThreadServiceError('Queued message not found', 404);
 
   const thread = await tm.getThread(threadId);
-  const qCount = await getServices().messageQueue.queueCount(threadId);
-  const nextMsg = await getServices().messageQueue.peek(threadId);
-
-  const queueEvent = {
-    type: 'thread:queue_update' as const,
-    threadId,
-    data: { threadId, queuedCount: qCount, nextMessage: nextMsg?.content?.slice(0, 100) },
-  } as WSEvent;
-  if (thread?.userId) {
-    wsBroker.emitToUser(thread.userId, queueEvent);
-  } else {
-    wsBroker.emit(queueEvent);
-  }
+  const qCount = await broadcastQueueUpdate(threadId, thread?.userId);
 
   return { queuedCount: qCount };
 }
@@ -828,19 +1020,7 @@ async function updateQueuedMessageImpl(
   if (!queuedMessage) throw new ThreadServiceError('Queued message not found', 404);
 
   const thread = await tm.getThread(threadId);
-  const qCount = await getServices().messageQueue.queueCount(threadId);
-  const nextMsg = await getServices().messageQueue.peek(threadId);
-
-  const queueEvent = {
-    type: 'thread:queue_update' as const,
-    threadId,
-    data: { threadId, queuedCount: qCount, nextMessage: nextMsg?.content?.slice(0, 100) },
-  } as WSEvent;
-  if (thread?.userId) {
-    wsBroker.emitToUser(thread.userId, queueEvent);
-  } else {
-    wsBroker.emit(queueEvent);
-  }
+  const qCount = await broadcastQueueUpdate(threadId, thread?.userId);
 
   return { queuedCount: qCount, queuedMessage };
 }

@@ -361,6 +361,146 @@ prRoutes.get('/pr-filter-options', async (c) => {
 
 // ── GET /pr-detail — rich PR data with CI checks and review decision ──────
 
+interface PRDetailTarget {
+  owner: string;
+  repo: string;
+  token: string;
+}
+
+/** Collapse reviews to the latest decisive state per author, then rank them. */
+function deriveReviewDecision(reviews: any[]): ReviewDecision {
+  const latestByAuthor = new Map<string, string>();
+  for (const r of reviews) {
+    if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') {
+      latestByAuthor.set(r.user?.login ?? '', r.state);
+    }
+  }
+  const states = [...latestByAuthor.values()];
+  if (states.includes('CHANGES_REQUESTED')) return 'CHANGES_REQUESTED';
+  if (states.includes('APPROVED')) return 'APPROVED';
+  return reviews.length > 0 ? 'REVIEW_REQUIRED' : null;
+}
+
+async function readReviewDecision(reviewsRes: Response): Promise<ReviewDecision> {
+  if (!reviewsRes.ok) return null;
+  return deriveReviewDecision((await reviewsRes.json()) as any[]);
+}
+
+function mapCheckRun(cr: any): CICheck {
+  return {
+    id: cr.id,
+    name: cr.name,
+    status: cr.status,
+    conclusion: cr.conclusion,
+    html_url: cr.html_url ?? null,
+    started_at: cr.started_at ?? null,
+    completed_at: cr.completed_at ?? null,
+    app_name: cr.app?.name ?? null,
+  };
+}
+
+const PASSING_CONCLUSIONS = new Set(['success', 'neutral', 'skipped']);
+
+function tallyChecks(checks: CICheck[]): {
+  passed: number;
+  failed: number;
+  pending: number;
+} {
+  const tally = { passed: 0, failed: 0, pending: 0 };
+  for (const ck of checks) {
+    if (ck.status !== 'completed') tally.pending++;
+    else if (PASSING_CONCLUSIONS.has(ck.conclusion as string)) tally.passed++;
+    else tally.failed++;
+  }
+  return tally;
+}
+
+function mapMergeableState(mergeable: unknown): MergeableState {
+  if (mergeable === true) return 'mergeable';
+  if (mergeable === false) return 'conflicting';
+  return 'unknown';
+}
+
+/**
+ * Fetch check runs + commit metadata for the PR's actual head SHA. Without a
+ * head SHA (or when the per-SHA checks fail), fall back to the HEAD check runs
+ * fetched up front.
+ */
+async function readHeadCommitData(
+  target: PRDetailTarget,
+  headSha: string | undefined,
+  fallbackChecksRes: Response,
+): Promise<{ checksData: any; lastCommit: PRCommit | null }> {
+  const { owner, repo, token } = target;
+  let checksData: any = null;
+  let lastCommit: PRCommit | null = null;
+  if (headSha) {
+    const [realChecksRes, commitRes] = await Promise.all([
+      githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`, token),
+      githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}`, token),
+    ]);
+    if (realChecksRes.ok) checksData = await realChecksRes.json();
+    if (commitRes.ok) lastCommit = mapCommitToPRCommit(await commitRes.json());
+  }
+  if (!checksData && fallbackChecksRes.ok) {
+    checksData = await fallbackChecksRes.json();
+  }
+  return { checksData, lastCommit };
+}
+
+function mapPRDetailHeader(prData: any) {
+  return {
+    number: prData.number,
+    title: prData.title ?? '',
+    body: prData.body ?? '',
+    state: prData.state ?? 'open',
+    draft: prData.draft ?? false,
+    merged: prData.merged ?? false,
+  };
+}
+
+function mapPRDetailStats(prData: any) {
+  return {
+    html_url: prData.html_url ?? '',
+    additions: prData.additions ?? 0,
+    deletions: prData.deletions ?? 0,
+    changed_files: prData.changed_files ?? 0,
+    commits: prData.commits ?? 0,
+  };
+}
+
+function mapPRDetailRefs(prData: any) {
+  return {
+    head: { ref: prData.head?.ref ?? '', sha: prData.head?.sha ?? '' },
+    base: { ref: prData.base?.ref ?? '' },
+    user: prData.user ? { login: prData.user.login, avatar_url: prData.user.avatar_url } : null,
+  };
+}
+
+function buildPRDetail(
+  prData: any,
+  extras: { reviewDecision: ReviewDecision; checksData: any; lastCommit: PRCommit | null },
+): PRDetail {
+  const checks: CICheck[] = extras.checksData
+    ? ((extras.checksData as any).check_runs ?? []).map(mapCheckRun)
+    : [];
+  const tally = tallyChecks(checks);
+  return {
+    ...mapPRDetailHeader(prData),
+    mergeable_state: mapMergeableState(prData.mergeable),
+    ...mapPRDetailStats(prData),
+    ...mapPRDetailRefs(prData),
+    review_decision: extras.reviewDecision,
+    checks,
+    checks_passed: tally.passed,
+    checks_failed: tally.failed,
+    checks_pending: tally.pending,
+    created_at: prData.created_at ?? '',
+    updated_at: prData.updated_at ?? '',
+    last_commit: extras.lastCommit,
+  };
+}
+
 prRoutes.get('/pr-detail', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
@@ -369,22 +509,10 @@ prRoutes.get('/pr-detail', async (c) => {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
 
-  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-
-  const remoteResult = await getRemoteUrl(project.path);
-  if (remoteResult.isErr() || !remoteResult.value) {
-    return c.json({ error: 'Could not determine remote URL' }, 400);
-  }
-
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) return c.json({ error: 'Not a GitHub project' }, 400);
-
-  const resolved = await resolveGithubToken(userId);
-  if (!resolved) return c.json({ error: 'No GitHub token available' }, 401);
-
-  const { owner, repo } = parsed;
-  const { token } = resolved;
+  const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
+  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const target: PRDetailTarget = { owner: ctx.owner, repo: ctx.repo, token: ctx.token };
+  const { owner, repo, token } = target;
 
   try {
     // Fetch PR metadata, reviews, and check runs in parallel
@@ -399,111 +527,13 @@ prRoutes.get('/pr-detail', async (c) => {
     }
 
     const prData = (await prRes.json()) as any;
-
-    // Derive review decision from latest reviews per author
-    let reviewDecision: ReviewDecision = null;
-    if (reviewsRes.ok) {
-      const reviews = (await reviewsRes.json()) as any[];
-      // Keep only the latest review per author
-      const latestByAuthor = new Map<string, string>();
-      for (const r of reviews) {
-        const author = r.user?.login ?? '';
-        if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') {
-          latestByAuthor.set(author, r.state);
-        }
-      }
-      const states = [...latestByAuthor.values()];
-      if (states.some((s) => s === 'CHANGES_REQUESTED')) {
-        reviewDecision = 'CHANGES_REQUESTED';
-      } else if (states.some((s) => s === 'APPROVED')) {
-        reviewDecision = 'APPROVED';
-      } else if (reviews.length > 0) {
-        reviewDecision = 'REVIEW_REQUIRED';
-      }
-    }
-
-    // Parse CI check runs
-    let checks: CICheck[] = [];
-    let checksPassed = 0;
-    let checksFailed = 0;
-    let checksPending = 0;
-
-    // Re-fetch check runs for the actual head SHA
-    const headSha = prData.head?.sha;
-    let checksData: any = null;
-    let lastCommit: PRCommit | null = null;
-    if (headSha) {
-      const [realChecksRes, commitRes] = await Promise.all([
-        githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`, token),
-        githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}`, token),
-      ]);
-      if (realChecksRes.ok) {
-        checksData = await realChecksRes.json();
-      }
-      if (commitRes.ok) {
-        lastCommit = mapCommitToPRCommit(await commitRes.json());
-      }
-    }
-    if (!checksData && checksRes.ok) {
-      checksData = await checksRes.json();
-    }
-
-    if (checksData) {
-      checks = ((checksData as any).check_runs ?? []).map((cr: any) => ({
-        id: cr.id,
-        name: cr.name,
-        status: cr.status,
-        conclusion: cr.conclusion,
-        html_url: cr.html_url ?? null,
-        started_at: cr.started_at ?? null,
-        completed_at: cr.completed_at ?? null,
-        app_name: cr.app?.name ?? null,
-      }));
-
-      for (const ck of checks) {
-        if (ck.status !== 'completed') checksPending++;
-        else if (
-          ck.conclusion === 'success' ||
-          ck.conclusion === 'neutral' ||
-          ck.conclusion === 'skipped'
-        )
-          checksPassed++;
-        else checksFailed++;
-      }
-    }
-
-    // Map mergeable state
-    let mergeableState: MergeableState = 'unknown';
-    if (prData.mergeable === true) mergeableState = 'mergeable';
-    else if (prData.mergeable === false) mergeableState = 'conflicting';
-
-    const detail: PRDetail = {
-      number: prData.number,
-      title: prData.title ?? '',
-      body: prData.body ?? '',
-      state: prData.state ?? 'open',
-      draft: prData.draft ?? false,
-      merged: prData.merged ?? false,
-      mergeable_state: mergeableState,
-      html_url: prData.html_url ?? '',
-      additions: prData.additions ?? 0,
-      deletions: prData.deletions ?? 0,
-      changed_files: prData.changed_files ?? 0,
-      commits: prData.commits ?? 0,
-      head: { ref: prData.head?.ref ?? '', sha: prData.head?.sha ?? '' },
-      base: { ref: prData.base?.ref ?? '' },
-      user: prData.user ? { login: prData.user.login, avatar_url: prData.user.avatar_url } : null,
-      review_decision: reviewDecision,
-      checks,
-      checks_passed: checksPassed,
-      checks_failed: checksFailed,
-      checks_pending: checksPending,
-      created_at: prData.created_at ?? '',
-      updated_at: prData.updated_at ?? '',
-      last_commit: lastCommit,
-    };
-
-    return c.json(detail);
+    const reviewDecision = await readReviewDecision(reviewsRes);
+    const { checksData, lastCommit } = await readHeadCommitData(
+      target,
+      prData.head?.sha,
+      checksRes,
+    );
+    return c.json(buildPRDetail(prData, { reviewDecision, checksData, lastCommit }));
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }

@@ -760,14 +760,32 @@ function deriveBashPrefix(toolInput: string | undefined): string | null {
   return firstToken || null;
 }
 
-export function approveToolCall(params: ApproveToolParams): ResultAsync<void, ThreadServiceError> {
-  return ResultAsync.fromPromise(approveToolCallImpl(params), toThreadServiceError);
+type ThreadRecord = NonNullable<Awaited<ReturnType<typeof tm.getThread>>>;
+type PendingPermission = NonNullable<ReturnType<typeof getPendingPermission>>;
+
+/** Tools granted on approval when the caller does not supply its own list. */
+const DEFAULT_APPROVAL_TOOLS = [
+  'Read',
+  'Edit',
+  'Write',
+  'Bash',
+  'Glob',
+  'Grep',
+  'WebSearch',
+  'WebFetch',
+  'Task',
+  'TodoWrite',
+  'NotebookEdit',
+];
+
+async function requireThread(threadId: string): Promise<ThreadRecord> {
+  const thread = await tm.getThread(threadId);
+  if (!thread) throw new ThreadServiceError('Thread not found', 404);
+  return thread;
 }
 
-async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
-  const thread = await tm.getThread(params.threadId);
-  if (!thread) throw new ThreadServiceError('Thread not found', 404);
-
+/** Resolve the thread's working directory via the scratch-aware predicate. */
+async function resolveWorkdir(thread: ThreadRecord): Promise<string> {
   const project = thread.projectId
     ? await getServices().projects.getProject(thread.projectId)
     : null;
@@ -776,95 +794,98 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
     project ? { path: project.path } : null,
   );
   if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
-  const cwd = cwdResult.value;
+  return cwdResult.value;
+}
 
-  const tools = params.allowedTools
-    ? [...params.allowedTools]
-    : [
-        'Read',
-        'Edit',
-        'Write',
-        'Bash',
-        'Glob',
-        'Grep',
-        'WebSearch',
-        'WebFetch',
-        'Task',
-        'TodoWrite',
-        'NotebookEdit',
-      ];
+interface ApprovalRun {
+  message: string;
+  disallowedTools?: string[];
+  allowedTools?: string[];
+}
 
-  const threadProvider = (thread.provider || DEFAULT_PROVIDER) as AgentProvider;
+export function approveToolCall(params: ApproveToolParams): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(approveToolCallImpl(params), toThreadServiceError);
+}
 
-  if (params.approved) {
-    if (!tools.includes(params.toolName)) {
-      tools.push(params.toolName);
-    }
+async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
+  const thread = await requireThread(params.threadId);
+  const cwd = await resolveWorkdir(thread);
+  const run = params.approved
+    ? await buildApprovedRun(params, thread, cwd)
+    : buildDeniedRun(params);
+  await startAgent(
+    params.threadId,
+    run.message,
+    cwd,
+    (thread.model as AgentModel) || DEFAULT_MODEL,
+    (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
+    undefined,
+    run.disallowedTools,
+    run.allowedTools,
+    (thread.provider || DEFAULT_PROVIDER) as AgentProvider,
+  );
+}
 
-    // Persist "always allow in this project" rule when requested.
-    if (params.scope === 'always') {
-      const pattern =
-        params.pattern ?? (params.toolName === 'Bash' ? deriveBashPrefix(params.toolInput) : null);
-      const projectPath = thread.worktreePath ?? cwd;
-      try {
-        const { createPermissionRule } = await import('../permission-rules-client.js');
-        await createPermissionRule({
-          userId: params.userId,
-          projectPath,
-          toolName: params.toolName,
-          pattern,
-          decision: 'allow',
-        });
-        log.info('approveToolCall: persisted always-allow rule', {
-          namespace: 'thread-service',
-          threadId: params.threadId,
-          userId: params.userId,
-          projectPath,
-          toolName: params.toolName,
-          pattern: pattern ?? '',
-        });
-      } catch (err) {
-        // Don't block the approve flow on persistence failure; the
-        // user can still re-approve next time.
-        log.warn('approveToolCall: failed to persist always-allow rule', {
-          namespace: 'thread-service',
-          threadId: params.threadId,
-          error: (err as Error)?.message,
-        });
-      }
-    }
-    const disallowed = params.disallowedTools?.filter((t) => t !== params.toolName);
-    const projectPathForRules = thread.worktreePath ?? cwd;
-    const augmentedTools = await augmentAllowedToolsWithRules(
-      params.userId,
-      projectPathForRules,
-      tools,
-    );
-    const message = `The user has approved the use of ${params.toolName}. Please proceed with using it.`;
-    await startAgent(
-      params.threadId,
-      message,
-      cwd,
-      (thread.model as AgentModel) || DEFAULT_MODEL,
-      (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
-      undefined,
-      disallowed,
-      augmentedTools,
-      threadProvider,
-    );
-  } else {
-    const message = `The user denied permission to use ${params.toolName}. Please continue without it.`;
-    await startAgent(
-      params.threadId,
-      message,
-      cwd,
-      (thread.model as AgentModel) || DEFAULT_MODEL,
-      (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
-      undefined,
-      params.disallowedTools,
-      params.allowedTools,
-      threadProvider,
-    );
+function buildDeniedRun(params: ApproveToolParams): ApprovalRun {
+  return {
+    message: `The user denied permission to use ${params.toolName}. Please continue without it.`,
+    disallowedTools: params.disallowedTools,
+    allowedTools: params.allowedTools,
+  };
+}
+
+async function buildApprovedRun(
+  params: ApproveToolParams,
+  thread: ThreadRecord,
+  cwd: string,
+): Promise<ApprovalRun> {
+  const tools = params.allowedTools ? [...params.allowedTools] : [...DEFAULT_APPROVAL_TOOLS];
+  if (!tools.includes(params.toolName)) {
+    tools.push(params.toolName);
+  }
+  const projectPath = thread.worktreePath ?? cwd;
+  // Persist "always allow in this project" rule when requested.
+  if (params.scope === 'always') {
+    await persistApprovalRule(params, projectPath);
+  }
+  return {
+    message: `The user has approved the use of ${params.toolName}. Please proceed with using it.`,
+    disallowedTools: params.disallowedTools?.filter((t) => t !== params.toolName),
+    allowedTools: await augmentAllowedToolsWithRules(params.userId, projectPath, tools),
+  };
+}
+
+function approvalRulePattern(params: ApproveToolParams): string | null {
+  return params.pattern ?? (params.toolName === 'Bash' ? deriveBashPrefix(params.toolInput) : null);
+}
+
+async function persistApprovalRule(params: ApproveToolParams, projectPath: string): Promise<void> {
+  const pattern = approvalRulePattern(params);
+  try {
+    const { createPermissionRule } = await import('../permission-rules-client.js');
+    await createPermissionRule({
+      userId: params.userId,
+      projectPath,
+      toolName: params.toolName,
+      pattern,
+      decision: 'allow',
+    });
+    log.info('approveToolCall: persisted always-allow rule', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      userId: params.userId,
+      projectPath,
+      toolName: params.toolName,
+      pattern: pattern ?? '',
+    });
+  } catch (err) {
+    // Don't block the approve flow on persistence failure; the
+    // user can still re-approve next time.
+    log.warn('approveToolCall: failed to persist always-allow rule', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      error: (err as Error)?.message,
+    });
   }
 }
 
@@ -880,8 +901,7 @@ export function respondPermissionRequest(
 }
 
 async function respondPermissionRequestImpl(params: RespondPermissionRequestParams): Promise<void> {
-  const thread = await tm.getThread(params.threadId);
-  if (!thread) throw new ThreadServiceError('Thread not found', 404);
+  const thread = await requireThread(params.threadId);
   if (thread.userId !== params.userId) throw new ThreadServiceError('Access denied', 403);
 
   // The process lookup binds this decision to the current live request id and
@@ -890,36 +910,42 @@ async function respondPermissionRequestImpl(params: RespondPermissionRequestPara
   if (!pending) throw new ThreadServiceError('This permission request is no longer active.', 409);
 
   if (params.decision === 'allow_always') {
-    const project = thread.projectId
-      ? await getServices().projects.getProject(thread.projectId)
-      : null;
-    const cwdResult = resolveThreadCwd(
-      thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-      project ? { path: project.path } : null,
-    );
-    if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
-    const pattern = pending.toolName === 'Bash' ? deriveBashPrefix(pending.toolInput) : null;
-    const { createPermissionRule } = await import('../permission-rules-client.js');
-    const rule = await createPermissionRule({
-      userId: params.userId,
-      projectPath: thread.worktreePath ?? cwdResult.value,
-      toolName: pending.toolName,
-      pattern,
-      decision: 'allow',
-    });
-    // The continuation is deliberately left live when persistence fails so
-    // the card can offer a truthful one-time approval instead.
-    if (!rule) {
-      throw new ThreadServiceError(
-        'Permanent approval could not be saved. You can still allow this action once.',
-        503,
-      );
-    }
+    await persistStructuredAllowRule(params, thread, pending);
   }
 
   const accepted = await respondToPermission(params.threadId, params.requestId, params.decision);
   if (!accepted) throw new ThreadServiceError('This permission request is no longer active.', 409);
 
+  await recordPermissionResolution(params);
+  await markPermissionTurnResumed(params);
+}
+
+async function persistStructuredAllowRule(
+  params: RespondPermissionRequestParams,
+  thread: ThreadRecord,
+  pending: PendingPermission,
+): Promise<void> {
+  const cwd = await resolveWorkdir(thread);
+  const pattern = pending.toolName === 'Bash' ? deriveBashPrefix(pending.toolInput) : null;
+  const { createPermissionRule } = await import('../permission-rules-client.js');
+  const rule = await createPermissionRule({
+    userId: params.userId,
+    projectPath: thread.worktreePath ?? cwd,
+    toolName: pending.toolName,
+    pattern,
+    decision: 'allow',
+  });
+  // The continuation is deliberately left live when persistence fails so
+  // the card can offer a truthful one-time approval instead.
+  if (!rule) {
+    throw new ThreadServiceError(
+      'Permanent approval could not be saved. You can still allow this action once.',
+      503,
+    );
+  }
+}
+
+async function recordPermissionResolution(params: RespondPermissionRequestParams): Promise<void> {
   const persisted = await tm.resolvePendingPermissionRequest?.(params.requestId, params.decision);
   // The process accepts a request only once. Storage follows immediately so
   // reloads cannot revive the just-resolved card. A failed durable transition
@@ -932,7 +958,9 @@ async function respondPermissionRequestImpl(params: RespondPermissionRequestPara
       requestId: params.requestId,
     });
   }
+}
 
+async function markPermissionTurnResumed(params: RespondPermissionRequestParams): Promise<void> {
   // The provider is resuming the same live turn. Clear the actionable card
   // immediately instead of leaving the thread visibly waiting until its next
   // tool/result event arrives.

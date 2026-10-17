@@ -82,6 +82,7 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
+import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
 import { ok } from 'neverthrow';
 
 import {
@@ -209,6 +210,111 @@ describe('respondPermissionRequest', () => {
     );
     expect(respondToPermission).toHaveBeenCalledWith('t-permission', 'request-1', 'allow_always');
     expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the thread is missing', async () => {
+    mocks.tm.getThread.mockResolvedValue(undefined);
+    const result = await respondPermissionRequest({
+      threadId: 'missing',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_once',
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(404);
+  });
+
+  test('returns 403 when the caller does not own the thread', async () => {
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'someone-else',
+      requestId: 'request-1',
+      decision: 'allow_once',
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(403);
+    expect(getPendingPermission).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the live process no longer accepts the request', async () => {
+    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Read', toolInput: '' });
+    vi.mocked(respondToPermission).mockResolvedValue(false);
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'deny',
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(409);
+    expect(mocks.tm.resolvePendingPermissionRequest).not.toHaveBeenCalled();
+    expect(mocks.tm.updateThread).not.toHaveBeenCalled();
+  });
+
+  test('still resumes and emits running when storage reports the request stale', async () => {
+    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Read', toolInput: '' });
+    vi.mocked(respondToPermission).mockResolvedValue(true);
+    mocks.tm.resolvePendingPermissionRequest.mockResolvedValueOnce(false);
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_once',
+    });
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith('t-permission', { status: 'running' });
+    expect(wsBroker.emitToUser).toHaveBeenCalledWith('u-1', {
+      type: 'agent:status',
+      threadId: 't-permission',
+      data: {
+        status: 'running',
+        permissionApprovalCapability: { kind: 'structured', transport: 'codex-acp' },
+      },
+    });
+  });
+
+  test('always-allow uses the worktree path and no pattern for non-Bash tools', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-permission',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'waiting',
+      provider: 'codex',
+      mode: 'worktree',
+      worktreePath: '/wt/one',
+    });
+    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Edit', toolInput: 'x' });
+    vi.mocked(createPermissionRule).mockResolvedValue({ id: 'rule-1' } as any);
+    vi.mocked(respondToPermission).mockResolvedValue(true);
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_always',
+    });
+    expect(result.isOk()).toBe(true);
+    expect(createPermissionRule).toHaveBeenCalledWith({
+      userId: 'u-1',
+      projectPath: '/wt/one',
+      toolName: 'Edit',
+      pattern: null,
+      decision: 'allow',
+    });
+  });
+
+  test('always-allow returns 400 when the thread cwd cannot be resolved', async () => {
+    mocks.projects.getProject.mockResolvedValue(null);
+    vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Bash', toolInput: 'ls' });
+    const result = await respondPermissionRequest({
+      threadId: 't-permission',
+      userId: 'u-1',
+      requestId: 'request-1',
+      decision: 'allow_always',
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(createPermissionRule).not.toHaveBeenCalled();
+    expect(respondToPermission).not.toHaveBeenCalled();
   });
 });
 
@@ -1244,6 +1350,150 @@ describe('approveToolCall', () => {
       expect.arrayContaining(['Read', 'Bash']),
       'claude',
     );
+  });
+
+  test('returns 400 when the thread cwd cannot be resolved', async () => {
+    mocks.projects.getProject.mockResolvedValue(null);
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(startAgent).not.toHaveBeenCalled();
+  });
+
+  test('uses the full default tool list when allowedTools is omitted', async () => {
+    vi.mocked(listPermissionRules).mockResolvedValue([]);
+    await approveToolCall({ threadId: 't-1', userId: 'u-1', toolName: 'Bash', approved: true });
+    expect(vi.mocked(startAgent).mock.calls[0][7]).toEqual([
+      'Read',
+      'Edit',
+      'Write',
+      'Bash',
+      'Glob',
+      'Grep',
+      'WebSearch',
+      'WebFetch',
+      'Task',
+      'TodoWrite',
+      'NotebookEdit',
+    ]);
+  });
+
+  test('approved: appends tool once, filters it from disallowed, applies defaults', async () => {
+    vi.mocked(listPermissionRules).mockResolvedValue([]);
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-1',
+      userId: 'u-1',
+      projectId: 'p-1',
+      mode: 'worktree',
+      worktreePath: '/wt/t-1',
+    });
+    const allowedTools = ['Read'];
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'mcp__x__y',
+      approved: true,
+      allowedTools,
+      disallowedTools: ['mcp__x__y', 'Write'],
+    });
+    expect(result.isOk()).toBe(true);
+    expect(allowedTools).toEqual(['Read']);
+    expect(listPermissionRules).toHaveBeenCalledWith({ userId: 'u-1', projectPath: '/wt/t-1' });
+    expect(startAgent).toHaveBeenCalledWith(
+      't-1',
+      'The user has approved the use of mcp__x__y. Please proceed with using it.',
+      '/wt/t-1',
+      DEFAULT_MODEL,
+      DEFAULT_PERMISSION_MODE,
+      undefined,
+      ['Write'],
+      ['Read', 'mcp__x__y'],
+      'claude',
+    );
+  });
+
+  test('always scope: explicit pattern wins, non-Bash tools get null pattern', async () => {
+    await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+      scope: 'always',
+      pattern: 'git status',
+      toolInput: 'npm test',
+    });
+    expect(createPermissionRule).toHaveBeenLastCalledWith({
+      userId: 'u-1',
+      projectPath: '/projects/test',
+      toolName: 'Bash',
+      pattern: 'git status',
+      decision: 'allow',
+    });
+
+    await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Edit',
+      approved: true,
+      scope: 'always',
+      toolInput: 'npm test',
+    });
+    expect(createPermissionRule).toHaveBeenLastCalledWith(
+      expect.objectContaining({ toolName: 'Edit', pattern: null }),
+    );
+
+    await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: true,
+      scope: 'always',
+      toolInput: '   ',
+    });
+    expect(createPermissionRule).toHaveBeenLastCalledWith(
+      expect.objectContaining({ toolName: 'Bash', pattern: null }),
+    );
+  });
+
+  test('denied: passes allowed/disallowed through untouched and skips rule lookups', async () => {
+    await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: false,
+      scope: 'always',
+      allowedTools: ['Read'],
+    });
+    expect(createPermissionRule).not.toHaveBeenCalled();
+    expect(listPermissionRules).not.toHaveBeenCalled();
+    expect(startAgent).toHaveBeenCalledWith(
+      't-1',
+      'The user denied permission to use Bash. Please continue without it.',
+      '/projects/test',
+      'sonnet',
+      'autoEdit',
+      undefined,
+      undefined,
+      ['Read'],
+      'claude',
+    );
+  });
+
+  test('propagates startAgent failures as a 500 error', async () => {
+    vi.mocked(startAgent).mockRejectedValueOnce(new Error('spawn failed'));
+    const result = await approveToolCall({
+      threadId: 't-1',
+      userId: 'u-1',
+      toolName: 'Bash',
+      approved: false,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(500);
   });
 });
 
